@@ -28,6 +28,9 @@ COPY apps/*/package.json apps/
 # Copy all source code first (needed for workspace dependencies)
 COPY . .
 
+# Ensure devDependencies are installed during build (override any NODE_ENV=production)
+ENV NODE_ENV=development
+
 # Install all dependencies with proper workspace resolution
 # Using --no-frozen-lockfile temporarily due to new services not in lockfile
 RUN pnpm install --no-frozen-lockfile
