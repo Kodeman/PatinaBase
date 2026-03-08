@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-canvas: #ede9e4;
+  --color-card: #f7f3ed;
+  --color-border: #d7cec7;
+  --color-text: #1f1a17;
+  --color-muted: #6f6259;
+  --color-accent: #c49a6c;
+  --color-success: #2f855a;
+  --color-info: #2563eb;
+  --color-warning: #f18f01;
+  --color-danger: #c53030;
+
+  /* Design system tokens (HSL values) */
+  --background: 33.3 20% 91.2%;
+  --foreground: 22.5 14.8% 10.6%;
+  --card: 36 38.5% 94.9%;
+  --card-foreground: 22.5 14.8% 12%;
+  --popover: 36 38.5% 94.9%;
+  --popover-foreground: 22.5 14.8% 12%;
+  --primary: 31.4 42.7% 59.6%;
+  --primary-foreground: 33.3 20% 97%;
+  --secondary: 26.3 16.7% 81.2%;
+  --secondary-foreground: 22.5 14.8% 18%;
+  --muted: 26.3 16.7% 81.2%;
+  --muted-foreground: 24.5 11% 39.2%;
+  --accent: 221.2 83.2% 53.3%;
+  --accent-foreground: 33.3 20% 97%;
+  --destructive: 0 60.8% 48%;
+  --destructive-foreground: 33.3 20% 97%;
+  --border: 26.3 16.7% 81.2%;
+  --input: 26.3 16.7% 81.2%;
+  --ring: 31.4 42.7% 59.6%;
+  --radius: 0.75rem;
+
+  --sidebar: 26.3 16.7% 81.2%;
+  --sidebar-foreground: 22.5 14.8% 10.6%;
+  --sidebar-primary: 31.4 42.7% 59.6%;
+  --sidebar-primary-foreground: 33.3 20% 97%;
+  --sidebar-accent: 221.2 83.2% 53.3%;
+  --sidebar-accent-foreground: 33.3 20% 97%;
+  --sidebar-border: 26.3 16.7% 81.2%;
+  --sidebar-ring: 31.4 42.7% 59.6%;
+
+  color-scheme: light;
+}
+
+.dark {
+  --background: 24 18% 14%;
+  --foreground: 32 25% 92%;
+  --card: 24 16% 18%;
+  --card-foreground: 33.3 20% 91.2%;
+  --popover: 24 16% 18%;
+  --popover-foreground: 33.3 20% 91.2%;
+  --primary: 31.4 42.7% 59.6%;
+  --primary-foreground: 24 18% 14%;
+  --secondary: 26.3 16.7% 30%;
+  --secondary-foreground: 33.3 20% 91.2%;
+  --muted: 26.3 16.7% 30%;
+  --muted-foreground: 30 10% 78%;
+  --accent: 221.2 83.2% 70%;
+  --accent-foreground: 24 18% 14%;
+  --destructive: 0 60.8% 48%;
+  --destructive-foreground: 33.3 20% 97%;
+  --border: 26.3 16.7% 28%;
+  --input: 26.3 16.7% 28%;
+  --ring: 31.4 42.7% 59.6%;
+  --sidebar: 24 16% 18%;
+  --sidebar-foreground: 33.3 20% 91.2%;
+  --sidebar-primary: 31.4 42.7% 59.6%;
+  --sidebar-primary-foreground: 24 18% 14%;
+  --sidebar-accent: 221.2 83.2% 70%;
+  --sidebar-accent-foreground: 24 18% 14%;
+  --sidebar-border: 26.3 16.7% 30%;
+  --sidebar-ring: 221.2 83.2% 70%;
+}
+
+html {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: var(--color-canvas);
+}
+
+body {
+  min-height: 100vh;
+  background-color: var(--color-canvas);
+  color: var(--color-text);
+  overflow-x: hidden;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 9999px;
+}
+
+a {
+  @apply text-sky-800 underline-offset-2 transition-colors duration-150 ease-in-out;
+}
+
+a:hover {
+  @apply text-sky-600;
+}
+
+.focus-ring {
+  @apply outline-none ring-2 ring-offset-2 ring-offset-[#ede9e4] ring-sky-500;
+}
+
+.timeline-gradient {
+  background: linear-gradient(180deg, rgba(196, 154, 108, 0.35) 0%, rgba(70, 59, 52, 0.5) 100%);
+}

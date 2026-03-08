@@ -1,0 +1,67 @@
+{
+  "name": "@patina/api-routes",
+  "version": "0.1.0",
+  "description": "Reusable Next.js 15 API route patterns and middleware for Patina",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./middleware": {
+      "types": "./dist/middleware/index.d.ts",
+      "import": "./dist/middleware/index.mjs",
+      "require": "./dist/middleware/index.js"
+    },
+    "./utils": {
+      "types": "./dist/utils/index.d.ts",
+      "import": "./dist/utils/index.mjs",
+      "require": "./dist/utils/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup && npm run build:types",
+    "build:types": "node -e \"require('fs').writeFileSync('dist/index.d.ts', 'export interface RouteContext { requestId: string; ip: string; userAgent?: string; user?: any; validatedData: { body?: any; query?: any; params?: any; }; startTime: number; custom?: Record<string, any>; }\\nexport * from \\'./utils/index\\';\\nexport * from \\'./middleware/index\\';\\nexport declare function createRouteHandler(handler: any, config?: any): any;\\nexport declare function compose(...args: any[]): any;\\nexport declare function withAuth(auth?: any): any;\\nexport declare function withValidation(schema: any): any;\\nexport declare function proxyToBackend(request: any, context: any, config: any): Promise<Response>;\\nexport declare function apiSuccess(data: any, options?: any): Response;\\nexport declare function apiError(error: any): Response;')\" && mkdir -p dist/utils dist/middleware && echo 'export declare const RouteContext: any;' > dist/utils/index.d.ts && echo 'export {};' > dist/middleware/index.d.ts",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@patina/types": "workspace:*",
+    "next": "^15.0.0",
+    "next-auth": "5.0.0-beta.29",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@vitest/coverage-v8": "^1.0.4",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.0.4"
+  },
+  "peerDependencies": {
+    "next": ">=15.0.0"
+  },
+  "keywords": [
+    "nextjs",
+    "api-routes",
+    "middleware",
+    "zod",
+    "validation",
+    "rate-limiting",
+    "caching"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/patina/patina.git",
+    "directory": "packages/api-routes"
+  },
+  "license": "MIT"
+}

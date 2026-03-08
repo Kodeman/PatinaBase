@@ -1,0 +1,202 @@
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { useClients } from '@/hooks/use-clients';
+import { Card, CardContent } from '@patina/design-system';
+import { Input } from '@patina/design-system';
+import { Button } from '@patina/design-system';
+import { Skeleton } from '@patina/design-system';
+import { Badge } from '@patina/design-system';
+import { Search, Plus, Mail, Phone, Users, LayoutGrid, List } from 'lucide-react';
+import { formatCurrency, formatRelativeTime } from '@/lib/utils';
+import { ClientKanbanBoard } from '@/components/crm/ClientKanbanBoard';
+
+export default function ClientsPage() {
+  const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const { data: clients, isLoading } = useClients({ search });
+  const clientList = Array.isArray(clients)
+    ? clients
+    : clients?.data ?? [];
+  const priorityClients = clientList.filter((client: any) => client?.stage !== 'care').length;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
+          <p className="text-muted-foreground">
+            Manage your client relationships
+          </p>
+        </div>
+        <Link href="/clients/new">
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            New Client
+          </Button>
+        </Link>
+      </div>
+
+      {/* Search and View Toggle */}
+      <div className="flex items-center gap-4 justify-between">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Search clients..."
+            className="pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="flex gap-2 border rounded-lg p-1 bg-gray-50">
+          <Button
+            size="sm"
+            variant={viewMode === 'list' ? 'default' : 'ghost'}
+            onClick={() => setViewMode('list')}
+            className="gap-2"
+          >
+            <List className="h-4 w-4" />
+            List
+          </Button>
+          <Button
+            size="sm"
+            variant={viewMode === 'kanban' ? 'default' : 'ghost'}
+            onClick={() => setViewMode('kanban')}
+            className="gap-2"
+          >
+            <LayoutGrid className="h-4 w-4" />
+            Kanban
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-sm text-muted-foreground">Active clients</p>
+            <p className="text-2xl font-semibold">{clientList.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-sm text-muted-foreground">Priority accounts</p>
+            <p className="text-2xl font-semibold">{priorityClients}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-sm text-muted-foreground">In care cycle</p>
+            <p className="text-2xl font-semibold">
+              {clientList.filter((client: any) => client.stage === 'care').length}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* View Toggle */}
+      {viewMode === 'kanban' ? (
+        <ClientKanbanBoard clients={clientList} isLoading={isLoading} />
+      ) : (
+        <>
+          {/* Client List */}
+          {isLoading ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <Card key={i}>
+                  <CardContent className="p-6">
+                    <Skeleton className="h-6 w-3/4 mb-2" />
+                    <Skeleton className="h-4 w-1/2 mb-4" />
+                    <Skeleton className="h-4 w-full" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {clientList.map((client: any) => (
+                <Link key={client.id} href={`/clients/${client.id}`}>
+                  <Card className="group hover:border-primary transition-colors cursor-pointer">
+                    <CardContent className="p-6">
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h3 className="font-semibold text-lg group-hover:text-primary transition-colors">
+                              {client.name || `${client.firstName} ${client.lastName}`}
+                            </h3>
+                            <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                              <Mail className="h-3 w-3" />
+                              {client.email}
+                            </p>
+                            {client.phone && (
+                              <p className="text-sm text-muted-foreground flex items-center gap-1 mt-0.5">
+                                <Phone className="h-3 w-3" />
+                                {client.phone}
+                              </p>
+                            )}
+                          </div>
+                          <Badge variant="outline" className="uppercase">
+                            {client.stage || 'active'}
+                          </Badge>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          <span>{client.timezone || 'Local time'}</span>
+                          {client.tags?.map((tag: string) => (
+                            <Badge key={tag} variant="secondary">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+
+                        <div className="flex items-center justify-between text-sm border-t pt-3">
+                          <span className="text-muted-foreground">
+                            Total Spent
+                          </span>
+                          <span className="font-semibold">
+                            {formatCurrency(client.totalSpent)}
+                          </span>
+                        </div>
+
+                        <div className="text-xs text-muted-foreground flex items-center justify-between">
+                          <span>Added {formatRelativeTime(client.createdAt)}</span>
+                          {client.lastActivity && (
+                            <span className="flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              {formatRelativeTime(client.lastActivity)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          {!isLoading && clientList.length === 0 && (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <div className="mx-auto mb-4 h-12 w-12 text-muted-foreground">
+                  <Users className="h-full w-full" />
+                </div>
+                <h3 className="text-lg font-semibold mb-2">No clients yet</h3>
+                <p className="text-muted-foreground mb-4">
+                  Get started by adding your first client
+                </p>
+                <Link href="/clients/new">
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Client
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+    </div>
+  );
+}

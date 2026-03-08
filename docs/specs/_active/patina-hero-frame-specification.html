@@ -1,0 +1,2631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patina iOS — Hero Frame Rest State: Complete Specification</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+:root {
+    --patina-off-white: #EDE9E4;
+    --patina-clay-beige: #A3927C;
+    --patina-mocha-brown: #655B52;
+    --patina-charcoal: #3F3B37;
+    --patina-soft-cream: #F5F2ED;
+    --patina-warm-white: #FAF7F2;
+    
+    --font-display: 'Playfair Display', Georgia, serif;
+    --font-body: 'Inter', -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', Monaco, monospace;
+}
+
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    font-size: 16px;
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: var(--font-body);
+    background: var(--patina-charcoal);
+    color: var(--patina-off-white);
+    line-height: 1.6;
+}
+
+/* Slide System */
+.slide {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 4rem 2rem;
+    position: relative;
+}
+
+.slide--light {
+    background: var(--patina-off-white);
+    color: var(--patina-charcoal);
+}
+
+.slide--cream {
+    background: var(--patina-soft-cream);
+    color: var(--patina-charcoal);
+}
+
+.slide--clay {
+    background: var(--patina-clay-beige);
+    color: white;
+}
+
+.slide--gradient {
+    background: linear-gradient(180deg, var(--patina-charcoal) 0%, #2a2520 100%);
+}
+
+.slide--warm {
+    background: linear-gradient(180deg, #3a3530 0%, #2a2520 100%);
+}
+
+.slide--dark {
+    background: #1a1815;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.container--narrow {
+    max-width: 800px;
+}
+
+.container--wide {
+    max-width: 1400px;
+}
+
+/* Typography */
+.slide-number {
+    position: absolute;
+    top: 2rem;
+    right: 2rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    opacity: 0.4;
+}
+
+.eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--patina-clay-beige);
+    margin-bottom: 1rem;
+}
+
+.slide--clay .eyebrow {
+    color: rgba(255,255,255,0.7);
+}
+
+.display {
+    font-family: var(--font-display);
+    font-size: clamp(2.5rem, 6vw, 4rem);
+    font-weight: 500;
+    line-height: 1.1;
+    margin-bottom: 1.5rem;
+}
+
+.h1 {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 4vw, 3rem);
+    font-weight: 500;
+    line-height: 1.15;
+    margin-bottom: 1rem;
+}
+
+.h2 {
+    font-family: var(--font-display);
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    font-weight: 500;
+    line-height: 1.2;
+    margin-bottom: 1rem;
+}
+
+.h3 {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 500;
+    margin-bottom: 0.75rem;
+}
+
+.h4 {
+    font-family: var(--font-body);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--patina-clay-beige);
+    margin-bottom: 0.5rem;
+}
+
+.lead {
+    font-size: 1.25rem;
+    line-height: 1.7;
+    opacity: 0.85;
+    max-width: 600px;
+}
+
+em { font-style: italic; }
+
+/* Strata Mark */
+.strata {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 2rem;
+}
+
+.strata__line {
+    height: 4px;
+    border-radius: 4px;
+}
+
+.strata__line:nth-child(1) { width: 80px; background: var(--patina-off-white); }
+.strata__line:nth-child(2) { width: 60px; background: var(--patina-clay-beige); }
+.strata__line:nth-child(3) { width: 40px; background: var(--patina-clay-beige); opacity: 0.5; }
+
+/* Phone Frames */
+.phone-showcase {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 2rem;
+    margin: 3rem 0;
+    flex-wrap: wrap;
+}
+
+.phone-frame {
+    background: #1a1a1a;
+    border-radius: 44px;
+    padding: 12px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+    position: relative;
+    flex-shrink: 0;
+}
+
+.phone-frame::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 28px;
+    background: #1a1a1a;
+    border-radius: 0 0 16px 16px;
+    z-index: 10;
+}
+
+.phone-frame--large {
+    transform: scale(1.05);
+}
+
+.phone-frame--small {
+    transform: scale(0.85);
+    opacity: 0.85;
+}
+
+.phone-frame--mini {
+    transform: scale(0.7);
+    opacity: 0.75;
+}
+
+.phone-screen {
+    width: 280px;
+    height: 606px;
+    border-radius: 34px;
+    overflow: hidden;
+    position: relative;
+    background: var(--patina-charcoal);
+}
+
+/* Status Bar */
+.status-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px 0;
+    font-size: 11px;
+    font-weight: 500;
+    z-index: 20;
+}
+
+.status-bar--dark { color: white; }
+.status-bar--light { color: var(--patina-charcoal); }
+
+/* ═══════════════════════════════════════════════════════════════
+   HERO FRAME COMPONENTS
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Photo Background */
+.hero-photo {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+}
+
+/* Time-based backgrounds */
+.hero-photo--dawn {
+    background: linear-gradient(180deg,
+        rgba(120, 100, 90, 0.95) 0%,
+        rgba(140, 115, 100, 0.9) 30%,
+        rgba(130, 110, 95, 0.85) 70%,
+        rgba(90, 75, 65, 0.95) 100%
+    );
+}
+
+.hero-photo--morning {
+    background: linear-gradient(180deg,
+        rgba(180, 160, 140, 0.95) 0%,
+        rgba(170, 155, 135, 0.9) 30%,
+        rgba(150, 135, 118, 0.85) 70%,
+        rgba(110, 95, 82, 0.95) 100%
+    );
+}
+
+.hero-photo--day {
+    background: linear-gradient(180deg,
+        rgba(195, 185, 170, 0.92) 0%,
+        rgba(185, 175, 160, 0.88) 30%,
+        rgba(170, 160, 145, 0.85) 70%,
+        rgba(130, 118, 105, 0.92) 100%
+    );
+}
+
+.hero-photo--afternoon {
+    background: linear-gradient(180deg,
+        rgba(200, 185, 165, 0.93) 0%,
+        rgba(190, 175, 155, 0.89) 30%,
+        rgba(175, 160, 142, 0.85) 70%,
+        rgba(125, 112, 98, 0.93) 100%
+    );
+}
+
+.hero-photo--evening {
+    background: linear-gradient(180deg,
+        rgba(110, 90, 75, 0.95) 0%,
+        rgba(95, 80, 68, 0.92) 30%,
+        rgba(80, 68, 58, 0.88) 70%,
+        rgba(55, 48, 42, 0.95) 100%
+    );
+}
+
+.hero-photo--night {
+    background: linear-gradient(180deg,
+        rgba(45, 40, 38, 0.98) 0%,
+        rgba(40, 36, 34, 0.95) 30%,
+        rgba(35, 32, 30, 0.92) 70%,
+        rgba(28, 25, 23, 0.98) 100%
+    );
+}
+
+/* Room elements simulation */
+.room-sim {
+    position: absolute;
+    inset: 0;
+}
+
+.room-window {
+    position: absolute;
+    top: 70px;
+    right: 35px;
+    width: 75px;
+    height: 110px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+}
+
+.room-window__light {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, 
+        rgba(255, 248, 230, 0.25) 0%,
+        rgba(255, 248, 230, 0) 60%
+    );
+}
+
+.room-floor {
+    position: absolute;
+    bottom: 80px;
+    left: 0;
+    right: 0;
+    height: 160px;
+    background: linear-gradient(180deg,
+        rgba(110, 95, 78, 0.15) 0%,
+        rgba(95, 82, 68, 0.35) 100%
+    );
+}
+
+.room-chair {
+    position: absolute;
+    bottom: 190px;
+    left: 45px;
+    width: 58px;
+    height: 78px;
+    background: rgba(75, 65, 55, 0.55);
+    border-radius: 8px 8px 4px 4px;
+}
+
+.room-plant {
+    position: absolute;
+    bottom: 210px;
+    right: 55px;
+    width: 28px;
+    height: 48px;
+    background: rgba(85, 100, 75, 0.4);
+    border-radius: 50% 50% 8% 8%;
+}
+
+.room-lamp {
+    position: absolute;
+    bottom: 230px;
+    left: 120px;
+    width: 15px;
+    height: 55px;
+    background: rgba(200, 180, 140, 0.3);
+    border-radius: 50% 50% 2px 2px;
+}
+
+/* Time Overlays */
+.time-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    transition: opacity 0.8s ease;
+}
+
+.time-overlay--dawn {
+    background: linear-gradient(135deg,
+        rgba(255, 180, 140, 0.18) 0%,
+        rgba(255, 160, 100, 0.08) 40%,
+        transparent 70%
+    );
+}
+
+.time-overlay--morning {
+    background: linear-gradient(135deg,
+        rgba(255, 210, 160, 0.15) 0%,
+        rgba(255, 195, 130, 0.06) 50%,
+        transparent 80%
+    );
+}
+
+.time-overlay--afternoon {
+    background: linear-gradient(180deg,
+        rgba(255, 245, 220, 0.08) 0%,
+        transparent 30%,
+        rgba(200, 180, 150, 0.06) 100%
+    );
+}
+
+.time-overlay--evening {
+    background: linear-gradient(180deg,
+        rgba(80, 60, 45, 0.25) 0%,
+        rgba(50, 38, 30, 0.4) 100%
+    );
+}
+
+.time-overlay--night {
+    background: linear-gradient(180deg,
+        rgba(25, 22, 20, 0.45) 0%,
+        rgba(15, 12, 10, 0.55) 100%
+    );
+}
+
+/* Greeting */
+.greeting {
+    position: absolute;
+    top: 65px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    z-index: 5;
+}
+
+.greeting__text {
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 2px 24px rgba(0,0,0,0.35);
+}
+
+.greeting__room {
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.65);
+    margin-top: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    text-shadow: 0 1px 12px rgba(0,0,0,0.3);
+}
+
+/* Room Pagination */
+.room-pagination {
+    position: absolute;
+    top: 135px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    z-index: 5;
+}
+
+.room-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.3);
+    transition: all 0.3s ease;
+}
+
+.room-dot--active {
+    background: rgba(255,255,255,0.9);
+    width: 20px;
+}
+
+/* Stats Badge */
+.stats-badge {
+    position: absolute;
+    top: 165px;
+    right: 16px;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(20px);
+    border-radius: 14px;
+    padding: 10px 14px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+    z-index: 5;
+}
+
+.stats-badge__value {
+    font-family: var(--font-display);
+    font-size: 20px;
+    color: var(--patina-charcoal);
+    line-height: 1;
+}
+
+.stats-badge__label {
+    font-size: 8px;
+    font-weight: 600;
+    color: var(--patina-mocha-brown);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 2px;
+}
+
+/* Emergence Card */
+.emergence-card {
+    position: absolute;
+    bottom: 175px;
+    left: 16px;
+    right: 16px;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(24px);
+    border-radius: 18px;
+    padding: 16px 18px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.18);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    z-index: 5;
+}
+
+.emergence-card--glass {
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.emergence-card--glass .emergence-card__text {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.emergence-card--glass .emergence-card__arrow {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.emergence-pulse {
+    width: 12px;
+    height: 12px;
+    background: var(--patina-clay-beige);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+    flex-shrink: 0;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.25); }
+}
+
+.emergence-card__text {
+    font-size: 13px;
+    font-style: italic;
+    color: var(--patina-charcoal);
+    flex: 1;
+    line-height: 1.4;
+}
+
+.emergence-card__arrow {
+    color: var(--patina-clay-beige);
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+/* Companion Rest */
+.companion-rest {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 85px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(24px);
+    border-radius: 26px 26px 0 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 -6px 30px rgba(0,0,0,0.1);
+    z-index: 10;
+}
+
+.companion-rest--glass {
+    background: rgba(255, 255, 255, 0.12);
+    border-top: 1px solid rgba(255,255,255,0.18);
+}
+
+.companion-strata {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.companion-strata__line {
+    height: 3px;
+    border-radius: 1.5px;
+}
+
+.companion-strata__line:nth-child(1) { width: 22px; background: var(--patina-mocha-brown); }
+.companion-strata__line:nth-child(2) { width: 16px; background: var(--patina-clay-beige); }
+.companion-strata__line:nth-child(3) { width: 10px; background: var(--patina-clay-beige); opacity: 0.5; }
+
+.companion-rest--glass .companion-strata__line:nth-child(1) { background: rgba(255,255,255,0.9); }
+.companion-rest--glass .companion-strata__line:nth-child(2) { background: rgba(255,255,255,0.6); }
+.companion-rest--glass .companion-strata__line:nth-child(3) { background: rgba(255,255,255,0.35); }
+
+.companion-hint {
+    font-size: 9px;
+    color: var(--patina-clay-beige);
+    margin-top: 8px;
+    letter-spacing: 0.02em;
+}
+
+.companion-rest--glass .companion-hint {
+    color: rgba(255,255,255,0.55);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SPEC COMPONENTS
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Spec Table */
+.spec-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+    font-size: 0.875rem;
+}
+
+.spec-table th,
+.spec-table td {
+    padding: 0.875rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(163, 146, 124, 0.2);
+}
+
+.spec-table th {
+    font-weight: 600;
+    color: var(--patina-clay-beige);
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background: rgba(163, 146, 124, 0.08);
+}
+
+.spec-table td {
+    vertical-align: top;
+}
+
+.spec-table code {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    background: rgba(163, 146, 124, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* Code Block */
+.code-block {
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+    overflow-x: auto;
+}
+
+.slide--light .code-block,
+.slide--cream .code-block {
+    background: rgba(63, 59, 55, 0.06);
+}
+
+.code-block__title {
+    font-family: var(--font-body);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--patina-clay-beige);
+    margin-bottom: 1rem;
+}
+
+.code-block pre {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    color: var(--patina-off-white);
+    margin: 0;
+    white-space: pre-wrap;
+}
+
+.slide--light .code-block pre,
+.slide--cream .code-block pre {
+    color: var(--patina-charcoal);
+}
+
+.code-comment { color: rgba(163, 146, 124, 0.7); }
+.code-keyword { color: #c9a87c; }
+.code-string { color: #a3c9a8; }
+.code-number { color: #d4a574; }
+
+/* Analysis Grid */
+.analysis-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin: 2rem 0;
+}
+
+.analysis-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    padding: 1.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.slide--light .analysis-card,
+.slide--cream .analysis-card {
+    background: white;
+    border: 1px solid rgba(163, 146, 124, 0.15);
+    box-shadow: 0 4px 20px rgba(101, 91, 82, 0.06);
+}
+
+.analysis-card__title {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.analysis-card__list {
+    list-style: none;
+}
+
+.analysis-card__list li {
+    font-size: 0.875rem;
+    margin-bottom: 0.75rem;
+    padding-left: 1.5rem;
+    position: relative;
+    opacity: 0.85;
+}
+
+.analysis-card__list li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--patina-clay-beige);
+}
+
+/* Dimension Annotation */
+.dimension-line {
+    position: absolute;
+    background: rgba(163, 146, 124, 0.8);
+    z-index: 15;
+}
+
+.dimension-line--h {
+    height: 1px;
+}
+
+.dimension-line--v {
+    width: 1px;
+}
+
+.dimension-label {
+    position: absolute;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--patina-clay-beige);
+    background: rgba(42, 37, 32, 0.9);
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+    z-index: 16;
+}
+
+/* Feature Grid */
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1.5rem;
+    margin: 2rem 0;
+}
+
+.feature-item {
+    text-align: center;
+    padding: 1.5rem 1rem;
+}
+
+.feature-icon {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+}
+
+.feature-title {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.feature-desc {
+    font-size: 0.8125rem;
+    opacity: 0.75;
+    line-height: 1.5;
+}
+
+/* Timeline */
+.timeline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem 0;
+    margin: 2rem 0;
+    position: relative;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 2px;
+    background: linear-gradient(90deg, 
+        rgba(163, 146, 124, 0.3) 0%,
+        var(--patina-clay-beige) 50%,
+        rgba(163, 146, 124, 0.3) 100%
+    );
+}
+
+.timeline-item {
+    position: relative;
+    text-align: center;
+    background: var(--patina-charcoal);
+    padding: 0 1rem;
+    z-index: 1;
+}
+
+.slide--light .timeline-item,
+.slide--cream .timeline-item {
+    background: var(--patina-soft-cream);
+}
+
+.timeline-item__icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.timeline-item__label {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--patina-clay-beige);
+}
+
+.timeline-item__time {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+    opacity: 0.7;
+}
+
+/* Color Swatch */
+.color-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+.color-swatch {
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.color-swatch__preview {
+    height: 80px;
+}
+
+.color-swatch__info {
+    padding: 0.75rem;
+    background: white;
+}
+
+.color-swatch__name {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--patina-charcoal);
+}
+
+.color-swatch__value {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--patina-mocha-brown);
+    margin-top: 0.25rem;
+}
+
+/* Interaction Diagram */
+.interaction-diagram {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+    padding: 2rem;
+    margin: 2rem 0;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.slide--light .interaction-diagram,
+.slide--cream .interaction-diagram {
+    background: white;
+    border: 1px solid rgba(163, 146, 124, 0.15);
+}
+
+.interaction-state {
+    text-align: center;
+    padding: 1rem;
+}
+
+.interaction-state__icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.interaction-state__label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+}
+
+.interaction-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: var(--patina-clay-beige);
+}
+
+.interaction-arrow__icon {
+    font-size: 1.5rem;
+}
+
+.interaction-arrow__label {
+    font-size: 0.6875rem;
+    margin-top: 0.25rem;
+    opacity: 0.7;
+}
+
+/* Animation */
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
+.floating {
+    animation: float 6s ease-in-out infinite;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .slide { padding: 2rem 1rem; }
+    .phone-frame--large { transform: scale(1); }
+    .phone-frame--small { transform: scale(0.75); }
+    .phone-showcase { gap: 1rem; }
+}
+    </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 1: TITLE
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--gradient">
+    <span class="slide-number">01</span>
+    <div class="container" style="text-align: center;">
+        <div class="strata">
+            <div class="strata__line"></div>
+            <div class="strata__line"></div>
+            <div class="strata__line"></div>
+        </div>
+        <p class="eyebrow">Rest State Specification</p>
+        <h1 class="display">The Hero Frame</h1>
+        <p class="lead" style="margin: 0 auto;">
+            Complete wireframes and technical specification 
+            for the photo-based rest state that brings 
+            your scanned space to life.
+        </p>
+        <p style="margin-top: 3rem; font-size: 0.875rem; opacity: 0.5;">
+            Version 1.0 • January 2026
+        </p>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 2: OVERVIEW
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--light">
+    <span class="slide-number">02</span>
+    <div class="container">
+        <p class="eyebrow">Overview</p>
+        <h2 class="h1">Feature Summary</h2>
+        
+        <p style="color: var(--patina-mocha-brown); max-width: 700px; margin-bottom: 2rem;">
+            The Hero Frame rest state displays a full-bleed photograph of the user's scanned room, 
+            captured during their Walk. The photo responds to time of day with subtle color grading, 
+            creating an emotional connection to their space that evolves throughout the day.
+        </p>
+        
+        <div class="feature-grid">
+            <div class="feature-item">
+                <div class="feature-icon">📸</div>
+                <h4 class="feature-title">Auto-Selected Photo</h4>
+                <p class="feature-desc">Best frame chosen automatically from Walk capture</p>
+            </div>
+            <div class="feature-item">
+                <div class="feature-icon">🌅</div>
+                <h4 class="feature-title">Time Awareness</h4>
+                <p class="feature-desc">Color grading shifts with time of day</p>
+            </div>
+            <div class="feature-item">
+                <div class="feature-icon">👆</div>
+                <h4 class="feature-title">Multi-Room Swipe</h4>
+                <p class="feature-desc">Horizontal swipe navigates between spaces</p>
+            </div>
+            <div class="feature-item">
+                <div class="feature-icon">✨</div>
+                <h4 class="feature-title">Emergence Alerts</h4>
+                <p class="feature-desc">Floating card when pieces surface</p>
+            </div>
+            <div class="feature-item">
+                <div class="feature-icon">🔮</div>
+                <h4 class="feature-title">Companion Access</h4>
+                <p class="feature-desc">Pull-up sheet for full Companion</p>
+            </div>
+            <div class="feature-item">
+                <div class="feature-icon">📊</div>
+                <h4 class="feature-title">Subtle Stats</h4>
+                <p class="feature-desc">Non-intrusive saved count badge</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 3: COMPONENT ANATOMY
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--warm">
+    <span class="slide-number">03</span>
+    <div class="container container--wide">
+        <p class="eyebrow">Wireframe</p>
+        <h2 class="h2">Component Anatomy</h2>
+        
+        <div style="display: flex; gap: 4rem; align-items: flex-start; flex-wrap: wrap; justify-content: center; margin-top: 2rem;">
+            <!-- Annotated Phone -->
+            <div class="phone-frame" style="position: relative;">
+                <div class="phone-screen">
+                    <div class="hero-photo hero-photo--day">
+                        <div class="room-sim">
+                            <div class="room-window">
+                                <div class="room-window__light"></div>
+                            </div>
+                            <div class="room-floor"></div>
+                            <div class="room-chair"></div>
+                            <div class="room-plant"></div>
+                        </div>
+                        <div class="time-overlay time-overlay--afternoon"></div>
+                    </div>
+                    <div class="status-bar status-bar--dark">
+                        <span>2:45</span>
+                        <span>●●● 85%</span>
+                    </div>
+                    <div class="greeting">
+                        <p class="greeting__text">Good afternoon.</p>
+                        <p class="greeting__room">Living Room</p>
+                    </div>
+                    <div class="room-pagination">
+                        <div class="room-dot room-dot--active"></div>
+                        <div class="room-dot"></div>
+                        <div class="room-dot"></div>
+                    </div>
+                    <div class="stats-badge">
+                        <div class="stats-badge__value">6</div>
+                        <div class="stats-badge__label">saved</div>
+                    </div>
+                    <div class="emergence-card">
+                        <div class="emergence-pulse"></div>
+                        <span class="emergence-card__text">Something surfaced for this room</span>
+                        <span class="emergence-card__arrow">→</span>
+                    </div>
+                    <div class="companion-rest companion-rest--glass">
+                        <div class="companion-strata">
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                        </div>
+                        <p class="companion-hint">Pull up to explore</p>
+                    </div>
+                </div>
+                
+                <!-- Annotation Lines -->
+                <div class="dimension-label" style="top: 70px; left: -90px;">① Greeting</div>
+                <div class="dimension-label" style="top: 130px; left: -100px;">② Pagination</div>
+                <div class="dimension-label" style="top: 175px; right: -80px;">③ Stats</div>
+                <div class="dimension-label" style="top: 420px; right: -100px;">④ Emergence</div>
+                <div class="dimension-label" style="bottom: 30px; left: -90px;">⑤ Companion</div>
+            </div>
+            
+            <!-- Component List -->
+            <div style="flex: 1; min-width: 300px; max-width: 400px;">
+                <div style="margin-bottom: 2rem;">
+                    <h4 class="h4">① Time Greeting</h4>
+                    <p style="font-size: 0.875rem; opacity: 0.85; margin-bottom: 0.5rem;">
+                        Italicized greeting that changes based on current hour. 
+                        Room name displayed below in uppercase.
+                    </p>
+                    <code style="font-family: var(--font-mono); font-size: 0.75rem; opacity: 0.6;">top: 65px • centered</code>
+                </div>
+                
+                <div style="margin-bottom: 2rem;">
+                    <h4 class="h4">② Room Pagination</h4>
+                    <p style="font-size: 0.875rem; opacity: 0.85; margin-bottom: 0.5rem;">
+                        Horizontal dots indicating current room position. 
+                        Active dot is elongated pill shape.
+                    </p>
+                    <code style="font-family: var(--font-mono); font-size: 0.75rem; opacity: 0.6;">top: 135px • centered</code>
+                </div>
+                
+                <div style="margin-bottom: 2rem;">
+                    <h4 class="h4">③ Stats Badge</h4>
+                    <p style="font-size: 0.875rem; opacity: 0.85; margin-bottom: 0.5rem;">
+                        Compact badge showing saved piece count for current room. 
+                        White background with subtle shadow.
+                    </p>
+                    <code style="font-family: var(--font-mono); font-size: 0.75rem; opacity: 0.6;">top: 165px • right: 16px</code>
+                </div>
+                
+                <div style="margin-bottom: 2rem;">
+                    <h4 class="h4">④ Emergence Card</h4>
+                    <p style="font-size: 0.875rem; opacity: 0.85; margin-bottom: 0.5rem;">
+                        Contextual notification when pieces surface. 
+                        Pulsing indicator, italic text, tap to navigate.
+                    </p>
+                    <code style="font-family: var(--font-mono); font-size: 0.75rem; opacity: 0.6;">bottom: 175px • 16px inset</code>
+                </div>
+                
+                <div>
+                    <h4 class="h4">⑤ Companion Rest</h4>
+                    <p style="font-size: 0.875rem; opacity: 0.85; margin-bottom: 0.5rem;">
+                        Persistent bottom sheet with Strata mark. 
+                        Pull up to access full Companion.
+                    </p>
+                    <code style="font-family: var(--font-mono); font-size: 0.75rem; opacity: 0.6;">height: 85px • glass morphism</code>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 4: TIME OF DAY STATES
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--gradient">
+    <span class="slide-number">04</span>
+    <div class="container container--wide">
+        <p class="eyebrow">Time Awareness</p>
+        <h2 class="h2">Six Time-of-Day States</h2>
+        
+        <div class="phone-showcase" style="margin-top: 2rem;">
+            <!-- Dawn -->
+            <div class="phone-frame phone-frame--mini">
+                <div class="phone-screen">
+                    <div class="hero-photo hero-photo--dawn">
+                        <div class="room-sim">
+                            <div class="room-window"><div class="room-window__light" style="background: linear-gradient(135deg, rgba(255, 200, 160, 0.35) 0%, rgba(255, 180, 130, 0) 50%);"></div></div>
+                            <div class="room-floor"></div>
+                            <div class="room-chair"></div>
+                        </div>
+                        <div class="time-overlay time-overlay--dawn"></div>
+                    </div>
+                    <div class="status-bar status-bar--dark"><span>5:30</span><span>●●●</span></div>
+                    <div class="greeting">
+                        <p class="greeting__text">Early morning.</p>
+                        <p class="greeting__room">Living Room</p>
+                    </div>
+                    <div class="companion-rest companion-rest--glass">
+                        <div class="companion-strata">
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Morning -->
+            <div class="phone-frame phone-frame--mini">
+                <div class="phone-screen">
+                    <div class="hero-photo hero-photo--morning">
+                        <div class="room-sim">
+                            <div class="room-window"><div class="room-window__light"></div></div>
+                            <div class="room-floor"></div>
+                            <div class="room-chair"></div>
+                            <div class="room-plant"></div>
+                        </div>
+                        <div class="time-overlay time-overlay--morning"></div>
+                    </div>
+                    <div class="status-bar status-bar--dark"><span>7:45</span><span>●●●</span></div>
+                    <div class="greeting">
+                        <p class="greeting__text">Good morning.</p>
+                        <p class="greeting__room">Living Room</p>
+                    </div>
+                    <div class="companion-rest companion-rest--glass">
+                        <div class="companion-strata">
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Day -->
+            <div class="phone-frame phone-frame--small">
+                <div class="phone-screen">
+                    <div class="hero-photo hero-photo--day">
+                        <div class="room-sim">
+                            <div class="room-window"><div class="room-window__light" style="opacity: 0.7;"></div></div>
+                            <div class="room-floor"></div>
+                            <div class="room-chair"></div>
+                            <div class="room-plant"></div>
+                        </div>
+                    </div>
+                    <div class="status-bar status-bar--dark"><span>11:30</span><span>●●●</span></div>
+                    <div class="greeting">
+                        <p class="greeting__text">Good day.</p>
+                        <p class="greeting__room">Living Room</p>
+                    </div>
+                    <div class="companion-rest companion-rest--glass">
+                        <div class="companion-strata">
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Afternoon -->
+            <div class="phone-frame phone-frame--small">
+                <div class="phone-screen">
+                    <div class="hero-photo hero-photo--afternoon">
+                        <div class="room-sim">
+                            <div class="room-window"><div class="room-window__light" style="background: linear-gradient(135deg, rgba(255, 250, 220, 0.3) 0%, rgba(255, 245, 200, 0) 65%);"></div></div>
+                            <div class="room-floor"></div>
+                            <div class="room-chair"></div>
+                            <div class="room-plant"></div>
+                        </div>
+                        <div class="time-overlay time-overlay--afternoon"></div>
+                    </div>
+                    <div class="status-bar status-bar--dark"><span>3:15</span><span>●●●</span></div>
+                    <div class="greeting">
+                        <p class="greeting__text">Good afternoon.</p>
+                        <p class="greeting__room">Living Room</p>
+                    </div>
+                    <div class="companion-rest companion-rest--glass">
+                        <div class="companion-strata">
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Evening -->
+            <div class="phone-frame phone-frame--mini">
+                <div class="phone-screen">
+                    <div class="hero-photo hero-photo--evening">
+                        <div class="room-sim">
+                            <div class="room-window" style="background: rgba(50, 60, 80, 0.3);"></div>
+                            <div class="room-floor" style="opacity: 0.6;"></div>
+                            <div class="room-chair" style="background: rgba(55, 48, 42, 0.6);"></div>
+                            <div class="room-lamp" style="background: rgba(255, 220, 150, 0.5);"></div>
+                        </div>
+                        <div class="time-overlay time-overlay--evening"></div>
+                    </div>
+                    <div class="status-bar status-bar--dark"><span>7:30</span><span>●●●</span></div>
+                    <div class="greeting">
+                        <p class="greeting__text">Good evening.</p>
+                        <p class="greeting__room">Living Room</p>
+                    </div>
+                    <div class="companion-rest companion-rest--glass">
+                        <div class="companion-strata">
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Night -->
+            <div class="phone-frame phone-frame--mini">
+                <div class="phone-screen">
+                    <div class="hero-photo hero-photo--night">
+                        <div class="room-sim">
+                            <div class="room-window" style="background: rgba(30, 35, 50, 0.4);"></div>
+                            <div class="room-floor" style="opacity: 0.3;"></div>
+                            <div class="room-chair" style="background: rgba(35, 32, 30, 0.5);"></div>
+                        </div>
+                        <div class="time-overlay time-overlay--night"></div>
+                    </div>
+                    <div class="status-bar status-bar--dark"><span>10:45</span><span>●●●</span></div>
+                    <div class="greeting">
+                        <p class="greeting__text">Good night.</p>
+                        <p class="greeting__room">Living Room</p>
+                    </div>
+                    <div class="companion-rest companion-rest--glass">
+                        <div class="companion-strata">
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="timeline" style="margin-top: 3rem;">
+            <div class="timeline-item">
+                <div class="timeline-item__icon">🌅</div>
+                <div class="timeline-item__label">Dawn</div>
+                <div class="timeline-item__time">5:00 - 6:59</div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-item__icon">☀️</div>
+                <div class="timeline-item__label">Morning</div>
+                <div class="timeline-item__time">7:00 - 10:59</div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-item__icon">🌤</div>
+                <div class="timeline-item__label">Day</div>
+                <div class="timeline-item__time">11:00 - 13:59</div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-item__icon">🌇</div>
+                <div class="timeline-item__label">Afternoon</div>
+                <div class="timeline-item__time">14:00 - 17:59</div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-item__icon">🌆</div>
+                <div class="timeline-item__label">Evening</div>
+                <div class="timeline-item__time">18:00 - 20:59</div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-item__icon">🌙</div>
+                <div class="timeline-item__label">Night</div>
+                <div class="timeline-item__time">21:00 - 4:59</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 5: TIME GRADING SPEC
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--cream">
+    <span class="slide-number">05</span>
+    <div class="container">
+        <p class="eyebrow">Technical Specification</p>
+        <h2 class="h2">Time-Based Color Grading</h2>
+        
+        <p style="color: var(--patina-mocha-brown); max-width: 650px; margin-bottom: 2rem;">
+            Each time period applies a semi-transparent gradient overlay on top of the captured photo. 
+            The overlay uses Core Image filters for GPU-accelerated rendering.
+        </p>
+        
+        <table class="spec-table">
+            <thead>
+                <tr>
+                    <th>Time Period</th>
+                    <th>Greeting</th>
+                    <th>Overlay Style</th>
+                    <th>Color Temperature</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Dawn</strong> (5-7)</td>
+                    <td>"Early morning."</td>
+                    <td>Warm gradient from top-left</td>
+                    <td><code>+800K</code> • Peachy gold</td>
+                </tr>
+                <tr>
+                    <td><strong>Morning</strong> (7-11)</td>
+                    <td>"Good morning."</td>
+                    <td>Soft warm gradient</td>
+                    <td><code>+400K</code> • Golden</td>
+                </tr>
+                <tr>
+                    <td><strong>Day</strong> (11-14)</td>
+                    <td>"Good day."</td>
+                    <td>None (neutral)</td>
+                    <td><code>0K</code> • Neutral</td>
+                </tr>
+                <tr>
+                    <td><strong>Afternoon</strong> (14-18)</td>
+                    <td>"Good afternoon."</td>
+                    <td>Subtle warm wash</td>
+                    <td><code>+200K</code> • Warm</td>
+                </tr>
+                <tr>
+                    <td><strong>Evening</strong> (18-21)</td>
+                    <td>"Good evening."</td>
+                    <td>Amber darkening</td>
+                    <td><code>+600K</code> • -15% brightness</td>
+                </tr>
+                <tr>
+                    <td><strong>Night</strong> (21-5)</td>
+                    <td>"Good night."</td>
+                    <td>Cool dark overlay</td>
+                    <td><code>-200K</code> • -30% brightness</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div class="code-block">
+            <p class="code-block__title">SwiftUI Implementation</p>
+<pre><span class="code-keyword">enum</span> TimeOfDay {
+    <span class="code-keyword">case</span> dawn, morning, day, afternoon, evening, night
+    
+    <span class="code-keyword">static func</span> current() -> TimeOfDay {
+        <span class="code-keyword">let</span> hour = Calendar.current.component(.hour, from: Date())
+        <span class="code-keyword">switch</span> hour {
+        <span class="code-keyword">case</span> <span class="code-number">5</span>..<<span class="code-number">7</span>:  <span class="code-keyword">return</span> .dawn
+        <span class="code-keyword">case</span> <span class="code-number">7</span>..<<span class="code-number">11</span>: <span class="code-keyword">return</span> .morning
+        <span class="code-keyword">case</span> <span class="code-number">11</span>..<<span class="code-number">14</span>: <span class="code-keyword">return</span> .day
+        <span class="code-keyword">case</span> <span class="code-number">14</span>..<<span class="code-number">18</span>: <span class="code-keyword">return</span> .afternoon
+        <span class="code-keyword">case</span> <span class="code-number">18</span>..<<span class="code-number">21</span>: <span class="code-keyword">return</span> .evening
+        <span class="code-keyword">default</span>:     <span class="code-keyword">return</span> .night
+        }
+    }
+    
+    <span class="code-keyword">var</span> greeting: String {
+        <span class="code-keyword">switch self</span> {
+        <span class="code-keyword">case</span> .dawn:      <span class="code-keyword">return</span> <span class="code-string">"Early morning."</span>
+        <span class="code-keyword">case</span> .morning:   <span class="code-keyword">return</span> <span class="code-string">"Good morning."</span>
+        <span class="code-keyword">case</span> .day:       <span class="code-keyword">return</span> <span class="code-string">"Good day."</span>
+        <span class="code-keyword">case</span> .afternoon: <span class="code-keyword">return</span> <span class="code-string">"Good afternoon."</span>
+        <span class="code-keyword">case</span> .evening:   <span class="code-keyword">return</span> <span class="code-string">"Good evening."</span>
+        <span class="code-keyword">case</span> .night:     <span class="code-keyword">return</span> <span class="code-string">"Good night."</span>
+        }
+    }
+}</pre>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 6: MULTI-ROOM STATES
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--warm">
+    <span class="slide-number">06</span>
+    <div class="container container--wide">
+        <p class="eyebrow">Multi-Room Navigation</p>
+        <h2 class="h2">Room States & Swipe Behavior</h2>
+        
+        <div class="phone-showcase">
+            <!-- Single Room -->
+            <div class="phone-frame phone-frame--small">
+                <div class="phone-screen">
+                    <div class="hero-photo hero-photo--afternoon">
+                        <div class="room-sim">
+                            <div class="room-window"><div class="room-window__light"></div></div>
+                            <div class="room-floor"></div>
+                            <div class="room-chair"></div>
+                            <div class="room-plant"></div>
+                        </div>
+                        <div class="time-overlay time-overlay--afternoon"></div>
+                    </div>
+                    <div class="status-bar status-bar--dark"><span>2:45</span><span>●●●</span></div>
+                    <div class="greeting">
+                        <p class="greeting__text">Good afternoon.</p>
+                        <p class="greeting__room">Living Room</p>
+                    </div>
+                    <!-- No pagination for single room -->
+                    <div class="stats-badge">
+                        <div class="stats-badge__value">4</div>
+                        <div class="stats-badge__label">saved</div>
+                    </div>
+                    <div class="companion-rest companion-rest--glass">
+                        <div class="companion-strata">
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                        </div>
+                        <p class="companion-hint">Pull up to explore</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Three Rooms - Room 1 -->
+            <div class="phone-frame phone-frame--large floating">
+                <div class="phone-screen">
+                    <div class="hero-photo hero-photo--afternoon">
+                        <div class="room-sim">
+                            <div class="room-window"><div class="room-window__light"></div></div>
+                            <div class="room-floor"></div>
+                            <div class="room-chair"></div>
+                            <div class="room-plant"></div>
+                        </div>
+                        <div class="time-overlay time-overlay--afternoon"></div>
+                    </div>
+                    <div class="status-bar status-bar--dark"><span>2:45</span><span>●●●</span></div>
+                    <div class="greeting">
+                        <p class="greeting__text">Good afternoon.</p>
+                        <p class="greeting__room">Living Room</p>
+                    </div>
+                    <div class="room-pagination">
+                        <div class="room-dot room-dot--active"></div>
+                        <div class="room-dot"></div>
+                        <div class="room-dot"></div>
+                    </div>
+                    <div class="stats-badge">
+                        <div class="stats-badge__value">6</div>
+                        <div class="stats-badge__label">saved</div>
+                    </div>
+                    <div class="emergence-card">
+                        <div class="emergence-pulse"></div>
+                        <span class="emergence-card__text">Something surfaced for this room</span>
+                        <span class="emergence-card__arrow">→</span>
+                    </div>
+                    <div class="companion-rest companion-rest--glass">
+                        <div class="companion-strata">
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                        </div>
+                        <p class="companion-hint">Pull up to explore</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Three Rooms - Room 2 (Bedroom) -->
+            <div class="phone-frame phone-frame--small">
+                <div class="phone-screen">
+                    <div class="hero-photo" style="background: linear-gradient(180deg, rgba(175, 165, 155, 0.93) 0%, rgba(160, 150, 140, 0.89) 50%, rgba(130, 120, 110, 0.93) 100%);">
+                        <div class="room-sim">
+                            <!-- Bedroom elements -->
+                            <div style="position: absolute; top: 80px; left: 30px; width: 90px; height: 60px; background: rgba(255, 255, 255, 0.1); border-radius: 2px;"></div>
+                            <div style="position: absolute; bottom: 160px; left: 50%; transform: translateX(-50%); width: 120px; height: 70px; background: rgba(80, 72, 65, 0.5); border-radius: 6px;"></div>
+                            <div class="room-floor"></div>
+                        </div>
+                        <div class="time-overlay time-overlay--afternoon"></div>
+                    </div>
+                    <div class="status-bar status-bar--dark"><span>2:45</span><span>●●●</span></div>
+                    <div class="greeting">
+                        <p class="greeting__text">Good afternoon.</p>
+                        <p class="greeting__room">Bedroom</p>
+                    </div>
+                    <div class="room-pagination">
+                        <div class="room-dot"></div>
+                        <div class="room-dot room-dot--active"></div>
+                        <div class="room-dot"></div>
+                    </div>
+                    <div class="stats-badge">
+                        <div class="stats-badge__value">2</div>
+                        <div class="stats-badge__label">saved</div>
+                    </div>
+                    <div class="companion-rest companion-rest--glass">
+                        <div class="companion-strata">
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                        </div>
+                        <p class="companion-hint">Pull up to explore</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="display: flex; justify-content: center; gap: 4rem; margin-top: 2rem; flex-wrap: wrap;">
+            <div style="text-align: center;">
+                <p style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--patina-clay-beige); margin-bottom: 0.5rem;">Single Room</p>
+                <p style="font-size: 0.875rem; opacity: 0.8;">No pagination dots shown</p>
+            </div>
+            <div style="text-align: center;">
+                <p style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--patina-clay-beige); margin-bottom: 0.5rem;">Multi-Room</p>
+                <p style="font-size: 0.875rem; opacity: 0.8;">Swipe left/right to navigate</p>
+            </div>
+            <div style="text-align: center;">
+                <p style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--patina-clay-beige); margin-bottom: 0.5rem;">Priority</p>
+                <p style="font-size: 0.875rem; opacity: 0.8;">Rooms with emergence shown first</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 7: EMERGENCE STATES
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--gradient">
+    <span class="slide-number">07</span>
+    <div class="container container--wide">
+        <p class="eyebrow">Emergence States</p>
+        <h2 class="h2">Notification Variants</h2>
+        
+        <div class="phone-showcase">
+            <!-- No Emergence -->
+            <div class="phone-frame phone-frame--small">
+                <div class="phone-screen">
+                    <div class="hero-photo hero-photo--day">
+                        <div class="room-sim">
+                            <div class="room-window"><div class="room-window__light"></div></div>
+                            <div class="room-floor"></div>
+                            <div class="room-chair"></div>
+                        </div>
+                    </div>
+                    <div class="status-bar status-bar--dark"><span>11:30</span><span>●●●</span></div>
+                    <div class="greeting">
+                        <p class="greeting__text">Good day.</p>
+                        <p class="greeting__room">Living Room</p>
+                    </div>
+                    <div class="room-pagination">
+                        <div class="room-dot room-dot--active"></div>
+                        <div class="room-dot"></div>
+                    </div>
+                    <div class="stats-badge">
+                        <div class="stats-badge__value">6</div>
+                        <div class="stats-badge__label">saved</div>
+                    </div>
+                    <!-- No emergence card -->
+                    <div class="companion-rest companion-rest--glass">
+                        <div class="companion-strata">
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                        </div>
+                        <p class="companion-hint">Pull up to explore</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- With Emergence -->
+            <div class="phone-frame phone-frame--large floating">
+                <div class="phone-screen">
+                    <div class="hero-photo hero-photo--afternoon">
+                        <div class="room-sim">
+                            <div class="room-window"><div class="room-window__light"></div></div>
+                            <div class="room-floor"></div>
+                            <div class="room-chair"></div>
+                            <div class="room-plant"></div>
+                        </div>
+                        <div class="time-overlay time-overlay--afternoon"></div>
+                    </div>
+                    <div class="status-bar status-bar--dark"><span>2:45</span><span>●●●</span></div>
+                    <div class="greeting">
+                        <p class="greeting__text">Good afternoon.</p>
+                        <p class="greeting__room">Living Room</p>
+                    </div>
+                    <div class="room-pagination">
+                        <div class="room-dot room-dot--active"></div>
+                        <div class="room-dot"></div>
+                    </div>
+                    <div class="stats-badge">
+                        <div class="stats-badge__value">6</div>
+                        <div class="stats-badge__label">saved</div>
+                    </div>
+                    <div class="emergence-card">
+                        <div class="emergence-pulse"></div>
+                        <span class="emergence-card__text">Something surfaced for this room</span>
+                        <span class="emergence-card__arrow">→</span>
+                    </div>
+                    <div class="companion-rest companion-rest--glass">
+                        <div class="companion-strata">
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                        </div>
+                        <p class="companion-hint">Pull up to explore</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Evening with Glass Card -->
+            <div class="phone-frame phone-frame--small">
+                <div class="phone-screen">
+                    <div class="hero-photo hero-photo--evening">
+                        <div class="room-sim">
+                            <div class="room-window" style="background: rgba(50, 60, 80, 0.3);"></div>
+                            <div class="room-floor" style="opacity: 0.6;"></div>
+                            <div class="room-chair" style="background: rgba(55, 48, 42, 0.6);"></div>
+                            <div class="room-lamp" style="background: rgba(255, 220, 150, 0.5);"></div>
+                        </div>
+                        <div class="time-overlay time-overlay--evening"></div>
+                    </div>
+                    <div class="status-bar status-bar--dark"><span>7:30</span><span>●●●</span></div>
+                    <div class="greeting">
+                        <p class="greeting__text">Good evening.</p>
+                        <p class="greeting__room">Living Room</p>
+                    </div>
+                    <div class="room-pagination">
+                        <div class="room-dot room-dot--active"></div>
+                        <div class="room-dot"></div>
+                    </div>
+                    <div class="stats-badge" style="background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(20px);">
+                        <div class="stats-badge__value" style="color: white;">6</div>
+                        <div class="stats-badge__label" style="color: rgba(255,255,255,0.6);">saved</div>
+                    </div>
+                    <div class="emergence-card emergence-card--glass">
+                        <div class="emergence-pulse"></div>
+                        <span class="emergence-card__text">Something surfaced for this room</span>
+                        <span class="emergence-card__arrow">→</span>
+                    </div>
+                    <div class="companion-rest companion-rest--glass">
+                        <div class="companion-strata">
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                        </div>
+                        <p class="companion-hint">Pull up to explore</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="display: flex; justify-content: center; gap: 4rem; margin-top: 2rem; flex-wrap: wrap;">
+            <div style="text-align: center;">
+                <p style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--patina-clay-beige); margin-bottom: 0.5rem;">No Emergence</p>
+                <p style="font-size: 0.875rem; opacity: 0.8;">Card not shown, clean view</p>
+            </div>
+            <div style="text-align: center;">
+                <p style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--patina-clay-beige); margin-bottom: 0.5rem;">With Emergence</p>
+                <p style="font-size: 0.875rem; opacity: 0.8;">White card, tap to navigate</p>
+            </div>
+            <div style="text-align: center;">
+                <p style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--patina-clay-beige); margin-bottom: 0.5rem;">Dark Times</p>
+                <p style="font-size: 0.875rem; opacity: 0.8;">Glass morphism variant</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 8: FRAME CAPTURE SPEC
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--light">
+    <span class="slide-number">08</span>
+    <div class="container">
+        <p class="eyebrow">Technical Specification</p>
+        <h2 class="h2">Frame Capture During Walk</h2>
+        
+        <p style="color: var(--patina-mocha-brown); max-width: 650px; margin-bottom: 2rem;">
+            During the RoomPlan scan, we capture key frames from the AR session to use as 
+            hero photos. The best frame is selected automatically, but users can manually 
+            override in room settings.
+        </p>
+        
+        <div class="analysis-grid">
+            <div class="analysis-card">
+                <h3 class="analysis-card__title">📸 Capture Strategy</h3>
+                <ul class="analysis-card__list">
+                    <li>Sample frames every 2 seconds during scan</li>
+                    <li>Store maximum 20 candidate frames per room</li>
+                    <li>Include metadata: timestamp, orientation, light estimate</li>
+                    <li>Compress to HEIC at 80% quality (~200KB each)</li>
+                </ul>
+            </div>
+            
+            <div class="analysis-card">
+                <h3 class="analysis-card__title">⭐ Scoring Algorithm</h3>
+                <ul class="analysis-card__list">
+                    <li><strong>Sharpness (30%)</strong> — Laplacian variance score</li>
+                    <li><strong>Brightness (25%)</strong> — Histogram distribution</li>
+                    <li><strong>Composition (25%)</strong> — Feature point spread</li>
+                    <li><strong>Stability (20%)</strong> — Gyro motion during capture</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="code-block">
+            <p class="code-block__title">Frame Scoring Implementation</p>
+<pre><span class="code-keyword">struct</span> FrameScore {
+    <span class="code-keyword">let</span> sharpness: Float    <span class="code-comment">// 0-1, Laplacian variance normalized</span>
+    <span class="code-keyword">let</span> brightness: Float   <span class="code-comment">// 0-1, ideal is 0.5 (mid-range)</span>
+    <span class="code-keyword">let</span> composition: Float  <span class="code-comment">// 0-1, feature point distribution</span>
+    <span class="code-keyword">let</span> stability: Float    <span class="code-comment">// 0-1, inverse of motion blur risk</span>
+    
+    <span class="code-keyword">var</span> total: Float {
+        (sharpness * <span class="code-number">0.30</span>) +
+        (brightness * <span class="code-number">0.25</span>) +
+        (composition * <span class="code-number">0.25</span>) +
+        (stability * <span class="code-number">0.20</span>)
+    }
+}
+
+<span class="code-keyword">func</span> selectHeroFrame(from frames: [CapturedFrame]) -> CapturedFrame? {
+    frames
+        .map { ($0, scoreFrame($0)) }
+        .sorted { $0.1.total > $1.1.total }
+        .first?.0
+}</pre>
+        </div>
+        
+        <h3 class="h3" style="margin-top: 2rem;">Frame Quality Criteria</h3>
+        
+        <table class="spec-table">
+            <thead>
+                <tr>
+                    <th>Criteria</th>
+                    <th>Ideal</th>
+                    <th>Reject If</th>
+                    <th>Detection Method</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Sharpness</strong></td>
+                    <td>Variance > 500</td>
+                    <td>Variance < 100</td>
+                    <td>Laplacian filter</td>
+                </tr>
+                <tr>
+                    <td><strong>Brightness</strong></td>
+                    <td>Mean 0.35 - 0.65</td>
+                    <td>< 0.15 or > 0.85</td>
+                    <td>Histogram analysis</td>
+                </tr>
+                <tr>
+                    <td><strong>Motion Blur</strong></td>
+                    <td>Gyro < 0.1 rad/s</td>
+                    <td>Gyro > 0.5 rad/s</td>
+                    <td>CMMotionManager</td>
+                </tr>
+                <tr>
+                    <td><strong>Feature Spread</strong></td>
+                    <td>Features in all quadrants</td>
+                    <td>All features clustered</td>
+                    <td>ARFrame feature points</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 9: INTERACTION SPEC
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--cream">
+    <span class="slide-number">09</span>
+    <div class="container">
+        <p class="eyebrow">Interactions</p>
+        <h2 class="h2">Touch & Gesture Behaviors</h2>
+        
+        <div class="interaction-diagram">
+            <div class="interaction-state">
+                <div class="interaction-state__icon">📱</div>
+                <div class="interaction-state__label">Rest State</div>
+            </div>
+            <div class="interaction-arrow">
+                <div class="interaction-arrow__icon">👆</div>
+                <div class="interaction-arrow__label">Tap photo</div>
+            </div>
+            <div class="interaction-state">
+                <div class="interaction-state__icon">🏠</div>
+                <div class="interaction-state__label">Room Detail</div>
+            </div>
+        </div>
+        
+        <div class="interaction-diagram">
+            <div class="interaction-state">
+                <div class="interaction-state__icon">📱</div>
+                <div class="interaction-state__label">Rest State</div>
+            </div>
+            <div class="interaction-arrow">
+                <div class="interaction-arrow__icon">👆⬆️</div>
+                <div class="interaction-arrow__label">Pull up</div>
+            </div>
+            <div class="interaction-state">
+                <div class="interaction-state__icon">🔮</div>
+                <div class="interaction-state__label">Companion</div>
+            </div>
+        </div>
+        
+        <div class="interaction-diagram">
+            <div class="interaction-state">
+                <div class="interaction-state__icon">📱</div>
+                <div class="interaction-state__label">Room 1</div>
+            </div>
+            <div class="interaction-arrow">
+                <div class="interaction-arrow__icon">👈</div>
+                <div class="interaction-arrow__label">Swipe left</div>
+            </div>
+            <div class="interaction-state">
+                <div class="interaction-state__icon">📱</div>
+                <div class="interaction-state__label">Room 2</div>
+            </div>
+        </div>
+        
+        <h3 class="h3" style="margin-top: 2rem;">Gesture Specifications</h3>
+        
+        <table class="spec-table">
+            <thead>
+                <tr>
+                    <th>Gesture</th>
+                    <th>Target</th>
+                    <th>Action</th>
+                    <th>Animation</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Tap</strong></td>
+                    <td>Photo area</td>
+                    <td>Navigate to room detail view</td>
+                    <td>Cross-fade, 0.3s ease-out</td>
+                </tr>
+                <tr>
+                    <td><strong>Tap</strong></td>
+                    <td>Emergence card</td>
+                    <td>Navigate to emergence view</td>
+                    <td>Slide from right, 0.35s</td>
+                </tr>
+                <tr>
+                    <td><strong>Tap</strong></td>
+                    <td>Stats badge</td>
+                    <td>Navigate to room's saved items</td>
+                    <td>Cross-fade, 0.3s</td>
+                </tr>
+                <tr>
+                    <td><strong>Swipe Left/Right</strong></td>
+                    <td>Anywhere</td>
+                    <td>Change room (if multi-room)</td>
+                    <td>Parallax slide, 0.4s spring</td>
+                </tr>
+                <tr>
+                    <td><strong>Pull Up</strong></td>
+                    <td>Companion sheet</td>
+                    <td>Expand Companion</td>
+                    <td>Interactive spring, detents</td>
+                </tr>
+                <tr>
+                    <td><strong>Long Press</strong></td>
+                    <td>Photo area</td>
+                    <td>Show room options menu</td>
+                    <td>Haptic + scale down 0.97</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 10: LAYOUT DIMENSIONS
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--light">
+    <span class="slide-number">10</span>
+    <div class="container">
+        <p class="eyebrow">Layout Specification</p>
+        <h2 class="h2">Dimensions & Spacing</h2>
+        
+        <div style="display: flex; gap: 3rem; align-items: flex-start; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 280px;">
+                <h3 class="h3">Vertical Layout (Top to Bottom)</h3>
+                
+                <table class="spec-table">
+                    <thead>
+                        <tr>
+                            <th>Element</th>
+                            <th>Position</th>
+                            <th>Height</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Status Bar</td>
+                            <td><code>top: 0</code></td>
+                            <td><code>44px</code></td>
+                        </tr>
+                        <tr>
+                            <td>Greeting</td>
+                            <td><code>top: 65px</code></td>
+                            <td><code>~55px</code></td>
+                        </tr>
+                        <tr>
+                            <td>Pagination</td>
+                            <td><code>top: 135px</code></td>
+                            <td><code>6px</code></td>
+                        </tr>
+                        <tr>
+                            <td>Stats Badge</td>
+                            <td><code>top: 165px</code></td>
+                            <td><code>~48px</code></td>
+                        </tr>
+                        <tr>
+                            <td>Emergence Card</td>
+                            <td><code>bottom: 175px</code></td>
+                            <td><code>~60px</code></td>
+                        </tr>
+                        <tr>
+                            <td>Companion Sheet</td>
+                            <td><code>bottom: 0</code></td>
+                            <td><code>85px</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div style="flex: 1; min-width: 280px;">
+                <h3 class="h3">Horizontal Spacing</h3>
+                
+                <table class="spec-table">
+                    <thead>
+                        <tr>
+                            <th>Element</th>
+                            <th>Left/Right</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Screen edge padding</td>
+                            <td><code>16px</code></td>
+                        </tr>
+                        <tr>
+                            <td>Greeting text</td>
+                            <td>Centered</td>
+                        </tr>
+                        <tr>
+                            <td>Pagination dots</td>
+                            <td>Centered</td>
+                        </tr>
+                        <tr>
+                            <td>Stats badge</td>
+                            <td><code>right: 16px</code></td>
+                        </tr>
+                        <tr>
+                            <td>Emergence card</td>
+                            <td><code>16px</code> inset</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <h3 class="h3" style="margin-top: 2rem;">Corner Radii</h3>
+                
+                <table class="spec-table">
+                    <tbody>
+                        <tr>
+                            <td>Companion sheet</td>
+                            <td><code>26px 26px 0 0</code></td>
+                        </tr>
+                        <tr>
+                            <td>Emergence card</td>
+                            <td><code>18px</code></td>
+                        </tr>
+                        <tr>
+                            <td>Stats badge</td>
+                            <td><code>14px</code></td>
+                        </tr>
+                        <tr>
+                            <td>Active pagination dot</td>
+                            <td><code>3px</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 11: TYPOGRAPHY
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--cream">
+    <span class="slide-number">11</span>
+    <div class="container">
+        <p class="eyebrow">Typography</p>
+        <h2 class="h2">Text Styles</h2>
+        
+        <table class="spec-table">
+            <thead>
+                <tr>
+                    <th>Element</th>
+                    <th>Font</th>
+                    <th>Size</th>
+                    <th>Weight</th>
+                    <th>Style</th>
+                    <th>Color</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Greeting</strong></td>
+                    <td>Playfair Display</td>
+                    <td><code>26px</code></td>
+                    <td>Regular</td>
+                    <td>Italic</td>
+                    <td><code>rgba(255,255,255,0.95)</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Room Name</strong></td>
+                    <td>Inter</td>
+                    <td><code>11px</code></td>
+                    <td>Medium</td>
+                    <td>Uppercase</td>
+                    <td><code>rgba(255,255,255,0.65)</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Stats Value</strong></td>
+                    <td>Playfair Display</td>
+                    <td><code>20px</code></td>
+                    <td>Regular</td>
+                    <td>Normal</td>
+                    <td><code>#3F3B37</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Stats Label</strong></td>
+                    <td>Inter</td>
+                    <td><code>8px</code></td>
+                    <td>Semibold</td>
+                    <td>Uppercase</td>
+                    <td><code>#655B52</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Emergence Text</strong></td>
+                    <td>Inter</td>
+                    <td><code>13px</code></td>
+                    <td>Regular</td>
+                    <td>Italic</td>
+                    <td><code>#3F3B37</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Companion Hint</strong></td>
+                    <td>Inter</td>
+                    <td><code>9px</code></td>
+                    <td>Regular</td>
+                    <td>Normal</td>
+                    <td><code>#A3927C</code></td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <h3 class="h3" style="margin-top: 2rem;">Text Shadows</h3>
+        
+        <table class="spec-table">
+            <tbody>
+                <tr>
+                    <td><strong>Greeting</strong></td>
+                    <td><code>0 2px 24px rgba(0,0,0,0.35)</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Room Name</strong></td>
+                    <td><code>0 1px 12px rgba(0,0,0,0.30)</code></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 12: ANIMATIONS
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--warm">
+    <span class="slide-number">12</span>
+    <div class="container">
+        <p class="eyebrow">Motion Design</p>
+        <h2 class="h2">Animations & Transitions</h2>
+        
+        <div class="analysis-grid">
+            <div class="analysis-card">
+                <h3 class="analysis-card__title">⚡ Emergence Pulse</h3>
+                <ul class="analysis-card__list">
+                    <li>Duration: 2.0 seconds</li>
+                    <li>Timing: ease-in-out, infinite</li>
+                    <li>Scale: 1.0 → 1.25 → 1.0</li>
+                    <li>Opacity: 1.0 → 0.5 → 1.0</li>
+                </ul>
+            </div>
+            
+            <div class="analysis-card">
+                <h3 class="analysis-card__title">📱 Room Swipe</h3>
+                <ul class="analysis-card__list">
+                    <li>Duration: 0.4 seconds</li>
+                    <li>Timing: spring (damping: 0.85)</li>
+                    <li>Parallax: photo moves at 0.8x card speed</li>
+                    <li>Pagination: dot width animates 0.2s</li>
+                </ul>
+            </div>
+            
+            <div class="analysis-card">
+                <h3 class="analysis-card__title">⬆️ Companion Pull</h3>
+                <ul class="analysis-card__list">
+                    <li>Interactive: follows finger</li>
+                    <li>Detents: 85px, 400px, full screen</li>
+                    <li>Spring: response 0.3, damping 0.8</li>
+                    <li>Background dims on expand</li>
+                </ul>
+            </div>
+            
+            <div class="analysis-card">
+                <h3 class="analysis-card__title">🌅 Time Transition</h3>
+                <ul class="analysis-card__list">
+                    <li>Triggered on time period change</li>
+                    <li>Duration: 0.8 seconds</li>
+                    <li>Timing: ease-out</li>
+                    <li>Cross-fade between overlays</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="code-block">
+            <p class="code-block__title">SwiftUI Animation Definitions</p>
+<pre><span class="code-comment">// Emergence pulse</span>
+<span class="code-keyword">extension</span> Animation {
+    <span class="code-keyword">static let</span> emergencePulse = Animation
+        .easeInOut(duration: <span class="code-number">2.0</span>)
+        .repeatForever(autoreverses: <span class="code-keyword">true</span>)
+}
+
+<span class="code-comment">// Room swipe spring</span>
+<span class="code-keyword">static let</span> roomSwipe = Animation
+    .spring(response: <span class="code-number">0.4</span>, dampingFraction: <span class="code-number">0.85</span>)
+
+<span class="code-comment">// Time overlay transition</span>
+<span class="code-keyword">static let</span> timeTransition = Animation
+    .easeOut(duration: <span class="code-number">0.8</span>)
+
+<span class="code-comment">// Companion sheet</span>
+<span class="code-keyword">static let</span> companionSpring = Animation
+    .spring(response: <span class="code-number">0.3</span>, dampingFraction: <span class="code-number">0.8</span>)</pre>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 13: EMPTY STATES
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--gradient">
+    <span class="slide-number">13</span>
+    <div class="container container--wide">
+        <p class="eyebrow">Edge Cases</p>
+        <h2 class="h2">Empty & Error States</h2>
+        
+        <div class="phone-showcase">
+            <!-- No Rooms Yet -->
+            <div class="phone-frame phone-frame--small">
+                <div class="phone-screen" style="background: linear-gradient(180deg, #3F3B37 0%, #2a2520 100%);">
+                    <div class="status-bar status-bar--dark"><span>2:45</span><span>●●●</span></div>
+                    <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center;">
+                        <div style="font-size: 48px; margin-bottom: 24px; opacity: 0.4;">🏠</div>
+                        <p style="font-family: var(--font-display); font-size: 20px; font-style: italic; color: var(--patina-off-white); margin-bottom: 12px;">No rooms yet</p>
+                        <p style="font-size: 13px; color: var(--patina-clay-beige); line-height: 1.5; margin-bottom: 24px;">Walk through your space to capture your first room.</p>
+                        <div style="background: var(--patina-clay-beige); color: white; padding: 12px 24px; border-radius: 24px; font-size: 13px; font-weight: 500;">Start a Walk</div>
+                    </div>
+                    <div class="companion-rest companion-rest--glass">
+                        <div class="companion-strata">
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                        </div>
+                        <p class="companion-hint">Pull up to explore</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Photo Failed -->
+            <div class="phone-frame phone-frame--small">
+                <div class="phone-screen" style="background: linear-gradient(180deg, #4a4540 0%, #3a3530 100%);">
+                    <div class="status-bar status-bar--dark"><span>2:45</span><span>●●●</span></div>
+                    <div class="greeting">
+                        <p class="greeting__text">Good afternoon.</p>
+                        <p class="greeting__room">Living Room</p>
+                    </div>
+                    <div class="room-pagination">
+                        <div class="room-dot room-dot--active"></div>
+                        <div class="room-dot"></div>
+                    </div>
+                    <!-- Placeholder pattern instead of photo -->
+                    <div style="position: absolute; top: 150px; bottom: 85px; left: 0; right: 0; display: flex; align-items: center; justify-content: center;">
+                        <div style="text-align: center; opacity: 0.5;">
+                            <div style="font-size: 36px; margin-bottom: 12px;">📷</div>
+                            <p style="font-size: 11px; color: var(--patina-off-white);">Photo unavailable</p>
+                            <p style="font-size: 10px; color: var(--patina-clay-beige); margin-top: 4px;">Tap to rescan</p>
+                        </div>
+                    </div>
+                    <div class="stats-badge" style="background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(20px);">
+                        <div class="stats-badge__value" style="color: white;">2</div>
+                        <div class="stats-badge__label" style="color: rgba(255,255,255,0.6);">saved</div>
+                    </div>
+                    <div class="companion-rest companion-rest--glass">
+                        <div class="companion-strata">
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                        </div>
+                        <p class="companion-hint">Pull up to explore</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Zero Saved -->
+            <div class="phone-frame phone-frame--small">
+                <div class="phone-screen">
+                    <div class="hero-photo hero-photo--afternoon">
+                        <div class="room-sim">
+                            <div class="room-window"><div class="room-window__light"></div></div>
+                            <div class="room-floor"></div>
+                            <div class="room-chair"></div>
+                        </div>
+                        <div class="time-overlay time-overlay--afternoon"></div>
+                    </div>
+                    <div class="status-bar status-bar--dark"><span>2:45</span><span>●●●</span></div>
+                    <div class="greeting">
+                        <p class="greeting__text">Good afternoon.</p>
+                        <p class="greeting__room">Living Room</p>
+                    </div>
+                    <div class="room-pagination">
+                        <div class="room-dot room-dot--active"></div>
+                        <div class="room-dot"></div>
+                    </div>
+                    <!-- No stats badge when zero saved -->
+                    <!-- No emergence card -->
+                    <div class="companion-rest companion-rest--glass">
+                        <div class="companion-strata">
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                            <div class="companion-strata__line"></div>
+                        </div>
+                        <p class="companion-hint">Pull up to explore</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="display: flex; justify-content: center; gap: 4rem; margin-top: 2rem; flex-wrap: wrap;">
+            <div style="text-align: center;">
+                <p style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--patina-clay-beige); margin-bottom: 0.5rem;">No Rooms</p>
+                <p style="font-size: 0.875rem; opacity: 0.8;">CTA to start first Walk</p>
+            </div>
+            <div style="text-align: center;">
+                <p style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--patina-clay-beige); margin-bottom: 0.5rem;">Photo Failed</p>
+                <p style="font-size: 0.875rem; opacity: 0.8;">Graceful fallback, tap to rescan</p>
+            </div>
+            <div style="text-align: center;">
+                <p style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--patina-clay-beige); margin-bottom: 0.5rem;">Zero Saved</p>
+                <p style="font-size: 0.875rem; opacity: 0.8;">Stats badge hidden</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 14: ACCESSIBILITY
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--light">
+    <span class="slide-number">14</span>
+    <div class="container">
+        <p class="eyebrow">Accessibility</p>
+        <h2 class="h2">VoiceOver & Dynamic Type</h2>
+        
+        <div class="analysis-grid">
+            <div class="analysis-card">
+                <h3 class="analysis-card__title">🔊 VoiceOver Labels</h3>
+                <ul class="analysis-card__list">
+                    <li><strong>Photo:</strong> "Living Room, captured December 15"</li>
+                    <li><strong>Greeting:</strong> "Good afternoon"</li>
+                    <li><strong>Pagination:</strong> "Room 1 of 3, Living Room"</li>
+                    <li><strong>Stats:</strong> "6 pieces saved for this room"</li>
+                    <li><strong>Emergence:</strong> "New recommendation available, double tap to view"</li>
+                    <li><strong>Companion:</strong> "Companion, pull up to explore"</li>
+                </ul>
+            </div>
+            
+            <div class="analysis-card">
+                <h3 class="analysis-card__title">🔤 Dynamic Type</h3>
+                <ul class="analysis-card__list">
+                    <li>Greeting scales from 22-32px</li>
+                    <li>Room name scales from 10-14px</li>
+                    <li>Stats value scales from 18-24px</li>
+                    <li>Emergence text scales from 12-16px</li>
+                    <li>All text respects system text size</li>
+                </ul>
+            </div>
+            
+            <div class="analysis-card">
+                <h3 class="analysis-card__title">🎯 Touch Targets</h3>
+                <ul class="analysis-card__list">
+                    <li>Minimum 44x44pt for all tappable elements</li>
+                    <li>Stats badge: 48x48pt minimum</li>
+                    <li>Emergence card: full width, 60pt height</li>
+                    <li>Pagination dots: 44pt hit area each</li>
+                </ul>
+            </div>
+            
+            <div class="analysis-card">
+                <h3 class="analysis-card__title">🎨 Contrast</h3>
+                <ul class="analysis-card__list">
+                    <li>Text shadows ensure 4.5:1 minimum ratio</li>
+                    <li>Glass cards maintain readability</li>
+                    <li>Evening/night use lighter text</li>
+                    <li>Reduce Motion: disable pulse animation</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="code-block">
+            <p class="code-block__title">VoiceOver Implementation</p>
+<pre><span class="code-comment">// Greeting accessibility</span>
+Text(timeOfDay.greeting)
+    .accessibilityLabel(timeOfDay.greeting)
+    .accessibilityAddTraits(.isHeader)
+
+<span class="code-comment">// Stats badge accessibility</span>
+StatsView(count: savedCount)
+    .accessibilityLabel(<span class="code-string">"\(savedCount) pieces saved for this room"</span>)
+    .accessibilityHint(<span class="code-string">"Double tap to view saved items"</span>)
+
+<span class="code-comment">// Room pagination accessibility</span>
+RoomPagination(current: currentRoom, total: rooms.count)
+    .accessibilityLabel(<span class="code-string">"Room \(currentRoom + 1) of \(rooms.count), \(rooms[currentRoom].name)"</span>)
+    .accessibilityHint(<span class="code-string">"Swipe left or right to change rooms"</span>)</pre>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 15: DATA MODEL
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--cream">
+    <span class="slide-number">15</span>
+    <div class="container">
+        <p class="eyebrow">Data Model</p>
+        <h2 class="h2">Required State & Storage</h2>
+        
+        <div class="code-block">
+            <p class="code-block__title">Core Data Structures</p>
+<pre><span class="code-keyword">struct</span> Room: Identifiable, Codable {
+    <span class="code-keyword">let</span> id: UUID
+    <span class="code-keyword">var</span> name: String
+    <span class="code-keyword">var</span> heroFrameURL: URL?          <span class="code-comment">// Selected hero photo</span>
+    <span class="code-keyword">var</span> candidateFrameURLs: [URL]   <span class="code-comment">// All captured frames</span>
+    <span class="code-keyword">var</span> scannedAt: Date
+    <span class="code-keyword">var</span> roomPlanData: Data?         <span class="code-comment">// Serialized CapturedRoom</span>
+    <span class="code-keyword">var</span> savedPieceCount: Int
+    <span class="code-keyword">var</span> hasEmergence: Bool
+}
+
+<span class="code-keyword">struct</span> CapturedFrame: Codable {
+    <span class="code-keyword">let</span> id: UUID
+    <span class="code-keyword">let</span> imageURL: URL
+    <span class="code-keyword">let</span> capturedAt: Date
+    <span class="code-keyword">let</span> qualityScore: Float
+    <span class="code-keyword">let</span> lightEstimate: Float?       <span class="code-comment">// ARFrame.lightEstimate</span>
+    <span class="code-keyword">let</span> gyroMotion: Float?          <span class="code-comment">// Motion during capture</span>
+}
+
+<span class="code-keyword">struct</span> RestStateViewModel: ObservableObject {
+    @Published <span class="code-keyword">var</span> rooms: [Room] = []
+    @Published <span class="code-keyword">var</span> currentRoomIndex: Int = <span class="code-number">0</span>
+    @Published <span class="code-keyword">var</span> timeOfDay: TimeOfDay = .current()
+    
+    <span class="code-keyword">var</span> currentRoom: Room? {
+        rooms.indices.contains(currentRoomIndex) 
+            ? rooms[currentRoomIndex] 
+            : <span class="code-keyword">nil</span>
+    }
+    
+    <span class="code-keyword">func</span> refreshTimeOfDay() {
+        timeOfDay = .current()
+    }
+}</pre>
+        </div>
+        
+        <h3 class="h3" style="margin-top: 2rem;">Storage Requirements</h3>
+        
+        <table class="spec-table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Storage</th>
+                    <th>Size (est.)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Hero frame per room</td>
+                    <td>File system (HEIC)</td>
+                    <td>~200KB</td>
+                </tr>
+                <tr>
+                    <td>Candidate frames (20 max)</td>
+                    <td>File system (HEIC)</td>
+                    <td>~4MB per room</td>
+                </tr>
+                <tr>
+                    <td>Room metadata</td>
+                    <td>Core Data / SwiftData</td>
+                    <td>~2KB per room</td>
+                </tr>
+                <tr>
+                    <td>Frame quality scores</td>
+                    <td>Core Data / SwiftData</td>
+                    <td>~500B per frame</td>
+                </tr>
+                <tr>
+                    <td>User preferences</td>
+                    <td>UserDefaults</td>
+                    <td>~1KB</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 16: IMPLEMENTATION CHECKLIST
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--warm">
+    <span class="slide-number">16</span>
+    <div class="container">
+        <p class="eyebrow">Implementation</p>
+        <h2 class="h2">Development Checklist</h2>
+        
+        <div class="analysis-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
+            <div class="analysis-card">
+                <h3 class="analysis-card__title">Phase 1: Frame Capture</h3>
+                <ul class="analysis-card__list">
+                    <li>☐ Add ARFrame sampling to RoomCaptureSession</li>
+                    <li>☐ Implement frame quality scoring</li>
+                    <li>☐ Store candidate frames during Walk</li>
+                    <li>☐ Auto-select best hero frame</li>
+                    <li>☐ HEIC compression pipeline</li>
+                </ul>
+            </div>
+            
+            <div class="analysis-card">
+                <h3 class="analysis-card__title">Phase 2: Rest State View</h3>
+                <ul class="analysis-card__list">
+                    <li>☐ HeroFrameRestView SwiftUI component</li>
+                    <li>☐ Time-based greeting logic</li>
+                    <li>☐ Color grading overlay system</li>
+                    <li>☐ Stats badge component</li>
+                    <li>☐ Photo tap → room detail navigation</li>
+                </ul>
+            </div>
+            
+            <div class="analysis-card">
+                <h3 class="analysis-card__title">Phase 3: Multi-Room</h3>
+                <ul class="analysis-card__list">
+                    <li>☐ UIPageViewController wrapper</li>
+                    <li>☐ Pagination dots component</li>
+                    <li>☐ Swipe gesture handling</li>
+                    <li>☐ Parallax effect on swipe</li>
+                    <li>☐ Remember last-viewed room</li>
+                </ul>
+            </div>
+            
+            <div class="analysis-card">
+                <h3 class="analysis-card__title">Phase 4: Emergence</h3>
+                <ul class="analysis-card__list">
+                    <li>☐ Emergence card component</li>
+                    <li>☐ Pulse animation</li>
+                    <li>☐ Glass morphism variant for dark times</li>
+                    <li>☐ Tap → emergence navigation</li>
+                    <li>☐ Priority sorting (emergence rooms first)</li>
+                </ul>
+            </div>
+            
+            <div class="analysis-card">
+                <h3 class="analysis-card__title">Phase 5: Companion Integration</h3>
+                <ul class="analysis-card__list">
+                    <li>☐ Companion rest sheet component</li>
+                    <li>☐ Pull-up gesture with detents</li>
+                    <li>☐ Strata mark animation</li>
+                    <li>☐ Background dimming on expand</li>
+                    <li>☐ Companion full-screen transition</li>
+                </ul>
+            </div>
+            
+            <div class="analysis-card">
+                <h3 class="analysis-card__title">Phase 6: Polish</h3>
+                <ul class="analysis-card__list">
+                    <li>☐ VoiceOver labels</li>
+                    <li>☐ Dynamic Type support</li>
+                    <li>☐ Reduce Motion handling</li>
+                    <li>☐ Empty/error states</li>
+                    <li>☐ Performance profiling</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 17: CLOSE
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--gradient">
+    <span class="slide-number">17</span>
+    <div class="container container--narrow" style="text-align: center;">
+        <div class="strata">
+            <div class="strata__line"></div>
+            <div class="strata__line"></div>
+            <div class="strata__line"></div>
+        </div>
+        <h2 class="display">Your Space,<br><em>Always Home</em></h2>
+        <p class="lead" style="margin: 1rem auto 0;">
+            A rest state that breathes with your day.<br>
+            Your room, your light, your time.
+        </p>
+        <p style="margin-top: 3rem; font-size: 0.875rem; opacity: 0.5;">
+            Hero Frame Specification v1.0 • January 2026
+        </p>
+    </div>
+</section>
+
+</body>
+</html>

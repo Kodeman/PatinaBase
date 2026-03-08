@@ -1,0 +1,200 @@
+// Patina Aesthete Engine Service - Prisma Schema
+// AI recommendation engine with teaching, rules, and caching
+// Database: PostgreSQL 16 on OCI
+// Last updated: 2025-10-03
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// Rules for boosting/burying/blocking products
+model Rule {
+  id         String   @id @default(uuid())
+  scope      String   // user|designer|collection|category|global
+  scopeId    String?  // ID of user, designer, collection, or category
+  name       String
+  description String? @db.Text
+  predicate  Json     // Rule conditions (product attributes, tags, etc.)
+  effect     String   // boost|bury|block
+  weight     Float    @default(1.0)
+  status     String   @default("draft") // draft|in_review|staging|production|archived
+  version    Int      @default(1)
+  createdBy  String
+  updatedBy  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  activatedAt DateTime?
+
+  @@index([scope, scopeId])
+  @@index([status])
+  @@index([createdBy])
+  @@map("rules")
+}
+
+// Teaching actions from designers/clients
+model TeachingAction {
+  id           String   @id @default(uuid())
+  actorId      String   // User who performed the action
+  actorType    String   // designer|client|admin
+  type         String   // approve|reject|replace_with|similar_to|hide
+  productId    String
+  altProductId String?  // For replace_with/similar_to actions
+  context      Json?    // Context: styleProfileId, proposalId, etc.
+  reason       String?  @db.Text
+  weight       Float    @default(1.0)
+  applied      Boolean  @default(false)
+  ts           DateTime @default(now())
+  metadata     Json?
+
+  @@index([actorId, ts])
+  @@index([productId])
+  @@index([type, applied])
+  @@map("teaching_actions")
+}
+
+// Recommendation cache for frequently requested combinations
+model RecommendationCache {
+  id         String   @id @default(uuid())
+  key        String   @unique // Hash of profile/category/context
+  items      Json     // Array of {productId, score, reason}
+  model      String?  // Model version used
+  confidence Float?
+  expiresAt  DateTime?
+  hitCount   Int      @default(0)
+  lastHitAt  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@map("recommendation_caches")
+}
+
+// Recommendation requests for analytics and debugging
+model RecommendationRequest {
+  id            String   @id @default(uuid())
+  userId        String?
+  profileId     String?
+  context       Json     // Search context, filters, etc.
+  results       Json?    // Top N results returned
+  model         String   // Model version
+  latencyMs     Int?
+  cacheHit      Boolean  @default(false)
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([profileId, createdAt])
+  @@index([cacheHit])
+  @@map("recommendation_requests")
+}
+
+// A/B test experiments
+model Experiment {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?  @db.Text
+  hypothesis  String?  @db.Text
+  status      String   @default("draft") // draft|running|paused|completed|archived
+  variants    Json     // Array of {id, name, weight, config}
+  allocation  Json     // User allocation strategy
+  metrics     Json?    // KPIs to track
+  startedAt   DateTime?
+  endedAt     DateTime?
+  results     Json?    // Statistical results
+  winner      String?  // Winning variant ID
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assignments ExperimentAssignment[]
+
+  @@index([status])
+  @@index([startedAt, endedAt])
+  @@map("experiments")
+}
+
+model ExperimentAssignment {
+  id           String   @id @default(uuid())
+  experimentId String
+  userId       String
+  variantId    String
+  assignedAt   DateTime @default(now())
+
+  experiment   Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  @@unique([experimentId, userId])
+  @@index([userId])
+  @@map("experiment_assignments")
+}
+
+// Feature flags for gradual rollout
+model FeatureFlag {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  name        String
+  description String?  @db.Text
+  enabled     Boolean  @default(false)
+  rollout     Json?    // Rollout strategy: percentage, users, segments
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([key, enabled])
+  @@map("feature_flags")
+}
+
+// Model performance tracking
+model ModelMetrics {
+  id          String   @id @default(uuid())
+  modelId     String   // Model version identifier
+  metric      String   // precision|recall|ndcg|mrr|diversity|novelty
+  value       Float
+  context     Json?    // Context: category, budget band, etc.
+  window      Json     // Time window {start, end}
+  createdAt   DateTime @default(now())
+
+  @@index([modelId, metric, createdAt])
+  @@index([metric])
+  @@map("model_metrics")
+}
+
+// Outbox Pattern for Event Publishing (Transactional Outbox)
+model OutboxEvent {
+  id          String   @id @default(uuid())
+  type        String   // e.g., "aesthete.rec.issued", "teaching.feedback.recorded"
+  payload     Json     // Event payload
+  headers     Json?    // Additional headers (traceId, etc.)
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  publishedAt DateTime?
+  retryCount  Int      @default(0)
+  lastError   String?
+
+  @@index([type, published])
+  @@index([createdAt])
+  @@map("outbox_events")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  entityType String   // rule|teaching_action|experiment|feature_flag
+  entityId   String
+  action     String   // created|updated|deleted|activated|etc
+  actor      String?  // user ID
+  changes    Json?    // diff of changes
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

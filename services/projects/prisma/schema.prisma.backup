@@ -1,0 +1,418 @@
+// Patina Project Tracking Service - Prisma Schema
+// Database: PostgreSQL 16 on OCI
+// Last updated: 2025-10-03
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id          String    @id @default(uuid())
+  proposalId  String?   // Link to approved proposal
+  title       String
+  clientId    String
+  designerId  String
+  status      String    @default("draft") // draft|active|substantial_completion|closed
+  startDate   DateTime?
+  endDate     DateTime?
+  actualEnd   DateTime?
+  budget      Decimal?  @db.Decimal(12, 2)
+  currency    String    @default("USD")
+  description String?   @db.Text
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tasks             Task[]
+  rfis              RFI[]
+  changeOrders      ChangeOrder[]
+  issues            Issue[]
+  dailyLogs         DailyLog[]
+  documents         Document[]
+  milestones        Milestone[]
+  timelineSegments  TimelineSegment[]
+  clientActivities  ClientActivity[]
+  approvalRecords   ApprovalRecord[]
+  engagementMetrics EngagementMetrics?
+  notifications     Notification[]
+  activeConnections ActiveConnection[]
+
+  @@index([clientId, status])
+  @@index([designerId, status])
+  @@index([status, startDate])
+  @@map("projects")
+}
+
+model Task {
+  id          String    @id @default(uuid())
+  projectId   String
+  title       String
+  description String?   @db.Text
+  assigneeId  String?
+  dueDate     DateTime?
+  status      String    @default("todo") // todo|in_progress|blocked|done|cancelled
+  priority    String    @default("medium") // low|medium|high|urgent
+  order       Int       @default(0)
+  completedAt DateTime?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])
+  @@index([assigneeId, status])
+  @@index([dueDate])
+  @@map("tasks")
+}
+
+model RFI {
+  id          String    @id @default(uuid())
+  projectId   String
+  title       String
+  question    String    @db.Text
+  answer      String?   @db.Text
+  requestedBy String
+  assignedTo  String?
+  dueDate     DateTime?
+  status      String    @default("open") // open|answered|closed|cancelled
+  priority    String    @default("normal") // normal|urgent
+  answeredAt  DateTime?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])
+  @@index([assignedTo, status])
+  @@map("rfis")
+}
+
+model ChangeOrder {
+  id              String    @id @default(uuid())
+  projectId       String
+  title           String
+  description     String    @db.Text
+  requestedBy     String
+  costImpact      Decimal?  @db.Decimal(12, 2)
+  scheduleImpact  Int?      // Days
+  status          String    @default("draft") // draft|submitted|approved|rejected|implemented
+  reason          String?   @db.Text
+  approvedBy      String?
+  approvedAt      DateTime?
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  project         Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])
+  @@index([status, createdAt])
+  @@map("change_orders")
+}
+
+model Issue {
+  id          String    @id @default(uuid())
+  projectId   String
+  title       String
+  description String    @db.Text
+  reportedBy  String
+  assignedTo  String?
+  severity    String    @default("medium") // low|medium|high|critical
+  status      String    @default("open") // open|investigating|resolved|closed|wont_fix
+  resolution  String?   @db.Text
+  resolvedAt  DateTime?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])
+  @@index([assignedTo, status])
+  @@index([severity, status])
+  @@map("issues")
+}
+
+model DailyLog {
+  id        String   @id @default(uuid())
+  projectId String
+  authorId  String
+  date      DateTime @db.Date
+  notes     String?  @db.Text
+  weather   String?  // Good|Fair|Poor|N/A
+  photos    Json?    // Array of photo keys in object storage
+  attendees Json?    // Array of user IDs
+  activities Json?   // Array of activity descriptions
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, date])
+  @@index([projectId, date])
+  @@index([authorId])
+  @@map("daily_logs")
+}
+
+model Document {
+  id          String   @id @default(uuid())
+  projectId   String
+  title       String
+  key         String   // Object storage key
+  category    String   // contract|drawing|spec|photo|invoice|other
+  version     Int      @default(1)
+  size        Int?     // Bytes
+  mimeType    String?
+  uploadedBy  String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, category])
+  @@index([uploadedBy])
+  @@map("documents")
+}
+
+model Milestone {
+  id          String    @id @default(uuid())
+  projectId   String
+  title       String
+  description String?   @db.Text
+  targetDate  DateTime
+  completedAt DateTime?
+  status      String    @default("pending") // pending|completed|delayed|cancelled
+  order       Int       @default(0)
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, order])
+  @@index([targetDate])
+  @@map("milestones")
+}
+
+// Outbox Pattern for Event Publishing (Transactional Outbox)
+model OutboxEvent {
+  id          String   @id @default(uuid())
+  type        String   // e.g., "project.created", "task.completed", "change_order.approved"
+  payload     Json     // Event payload
+  headers     Json?    // Additional headers (traceId, etc.)
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  publishedAt DateTime?
+  retryCount  Int      @default(0)
+  lastError   String?
+
+  @@index([type, published])
+  @@index([createdAt])
+  @@map("outbox_events")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  entityType String   // project|task|rfi|change_order|issue|daily_log|document
+  entityId   String
+  action     String   // created|updated|deleted|status_changed|etc
+  actor      String?  // user ID
+  changes    Json?    // diff of changes
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// Timeline Segments for Client Portal
+model TimelineSegment {
+  id            String    @id @default(uuid())
+  projectId     String
+  title         String
+  description   String?   @db.Text
+  phase         String    // planning|design|procurement|construction|completion
+  startDate     DateTime
+  endDate       DateTime
+  status        String    @default("pending") // pending|in_progress|completed|delayed
+  progress      Int       @default(0) // 0-100
+  dependencies  Json?     // Array of dependent segment IDs
+  deliverables  Json?     // Array of deliverable descriptions
+  order         Int       @default(0)
+  metadata      Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  project       Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  activities    ClientActivity[]
+  approvals     ApprovalRecord[]
+
+  @@index([projectId, order])
+  @@index([phase, status])
+  @@index([startDate, endDate])
+  @@map("timeline_segments")
+}
+
+// Client Activity Tracking
+model ClientActivity {
+  id          String    @id @default(uuid())
+  projectId   String
+  segmentId   String?
+  userId      String    // Client user ID
+  activityType String   // view|comment|approve|reject|upload|download|discuss
+  entityType  String?   // segment|approval|document|task|milestone
+  entityId    String?
+  duration    Int?      // Seconds spent (for view activities)
+  metadata    Json?     // Additional context (page, action details, etc.)
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  segment     TimelineSegment? @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, userId, createdAt])
+  @@index([userId, activityType])
+  @@index([segmentId, activityType])
+  @@index([createdAt])
+  @@map("client_activities")
+}
+
+// Approval Workflow Records
+model ApprovalRecord {
+  id            String    @id @default(uuid())
+  projectId     String
+  segmentId     String?
+  title         String
+  description   String?   @db.Text
+  approvalType  String    // design|budget|material|milestone|change_order|final
+  status        String    @default("pending") // pending|approved|rejected|needs_discussion
+  priority      String    @default("normal") // low|normal|high|urgent
+  requestedBy   String    // Designer user ID
+  assignedTo    String    // Client user ID
+  dueDate       DateTime?
+  approvedAt    DateTime?
+  approvedBy    String?
+  rejectedAt    DateTime?
+  rejectedBy    String?
+  rejectionReason String? @db.Text
+  documents     Json?     // Array of document IDs/keys
+  comments      Json?     // Array of comment objects
+  signature     Json?     // Digital signature data
+  metadata      Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  project       Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  segment       TimelineSegment? @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([assignedTo, status, dueDate])
+  @@index([approvalType, status])
+  @@index([createdAt])
+  @@map("approval_records")
+}
+
+// Client Engagement Metrics
+model EngagementMetrics {
+  id                  String   @id @default(uuid())
+  projectId           String   @unique
+  clientId            String
+  totalViews          Int      @default(0)
+  totalTimeSpent      Int      @default(0) // Total seconds
+  lastActivity        DateTime?
+  approvalVelocity    Float?   @db.DoublePrecision // Avg days to approval
+  responseRate        Float?   @db.DoublePrecision // % of timely responses
+  satisfactionScore   Float?   @db.DoublePrecision // 1-5 scale
+  commentsCount       Int      @default(0)
+  approvalsCount      Int      @default(0)
+  rejectionsCount     Int      @default(0)
+  documentsViewed     Int      @default(0)
+  documentsDownloaded Int      @default(0)
+  metadata            Json?    // Additional custom metrics
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  project             Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([lastActivity])
+  @@map("engagement_metrics")
+}
+
+// Notification Preferences & Delivery
+model NotificationPreference {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  email       Boolean  @default(true)
+  emailAddress String?
+  sms         Boolean  @default(false)
+  phoneNumber String?
+  push        Boolean  @default(true)
+  pushTokens  Json?    // Array of device push tokens
+  channels    Json?    // Granular channel preferences by notification type
+  frequency   String   @default("immediate") // immediate|daily_digest|weekly_digest
+  quietHours  Json?    // {start: "22:00", end: "08:00"}
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("notification_preferences")
+}
+
+model Notification {
+  id          String    @id @default(uuid())
+  userId      String
+  projectId   String?
+  type        String    // approval_requested|status_update|comment|milestone|deadline|etc
+  priority    String    @default("normal") // low|normal|high|urgent
+  title       String
+  message     String    @db.Text
+  actionUrl   String?   // Deep link to relevant page
+  channels    Json      // {email: true, sms: false, push: true}
+  status      String    @default("pending") // pending|sent|failed|read
+  sentAt      DateTime?
+  readAt      DateTime?
+  deliveryStatus Json?  // Channel-specific delivery status
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status, createdAt])
+  @@index([projectId, type])
+  @@index([status, createdAt])
+  @@map("notifications")
+}
+
+// WebSocket Connection Tracking
+model ActiveConnection {
+  id          String   @id @default(uuid())
+  userId      String
+  projectId   String?
+  socketId    String   @unique
+  userAgent   String?
+  ipAddress   String?
+  connectedAt DateTime @default(now())
+  lastPingAt  DateTime @default(now())
+  metadata    Json?
+
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([lastPingAt])
+  @@map("active_connections")
+}

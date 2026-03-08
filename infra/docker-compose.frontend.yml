@@ -1,0 +1,150 @@
+# =============================================================================
+# PATINA FRONTEND APPLICATIONS FOR COOLIFY
+# Deploy this as a separate "Docker Compose" resource in Coolify
+# =============================================================================
+#
+# COOLIFY SETUP INSTRUCTIONS:
+# 1. In your "Patina Infrastructure" Project
+# 2. Add Resource -> Docker Compose
+# 3. Name it "Patina Frontend Apps"
+# 4. Configure environment variables in Coolify UI
+# 5. Connect to patina_network (same network as services)
+#
+# ALTERNATIVE: Deploy each app separately via Coolify's Git deployment
+# for automatic builds on push. This compose is for reference/manual deploy.
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # DESIGNER PORTAL - app.patina.cloud
+  # Next.js 15 with App Router (primary designer workspace)
+  # ===========================================================================
+  designer-portal:
+    container_name: patina-designer-portal
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.nextjs
+      args:
+        APP_NAME: designer-portal
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://api.patina.cloud}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+        NEXT_PUBLIC_APP_URL: ${DESIGNER_APP_URL:-https://app.patina.cloud}
+        NEXT_PUBLIC_POSTHOG_KEY: ${POSTHOG_KEY:-}
+        NEXT_PUBLIC_POSTHOG_HOST: ${POSTHOG_HOST:-}
+    image: patina-designer-portal:latest
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://api.patina.cloud}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      ORDERS_SERVICE_URL: http://orders:3015
+      MEDIA_SERVICE_URL: http://media:3014
+      PROJECTS_SERVICE_URL: http://projects:3016
+    ports:
+      - "3000:3000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.designer-portal.rule=Host(`app.patina.cloud`)"
+      - "traefik.http.routers.designer-portal.entrypoints=websecure"
+      - "traefik.http.routers.designer-portal.tls=true"
+      - "traefik.http.services.designer-portal.loadbalancer.server.port=3000"
+    networks:
+      - patina_network
+
+  # ===========================================================================
+  # ADMIN PORTAL - admin.patina.cloud
+  # Next.js 15 with App Router (platform administration)
+  # ===========================================================================
+  admin-portal:
+    container_name: patina-admin-portal
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.nextjs
+      args:
+        APP_NAME: admin-portal
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://api.patina.cloud}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+        NEXT_PUBLIC_APP_URL: ${ADMIN_APP_URL:-https://admin.patina.cloud}
+    image: patina-admin-portal:latest
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://api.patina.cloud}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      ORDERS_SERVICE_URL: http://orders:3015
+      MEDIA_SERVICE_URL: http://media:3014
+    ports:
+      - "3001:3000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.admin-portal.rule=Host(`admin.patina.cloud`)"
+      - "traefik.http.routers.admin-portal.entrypoints=websecure"
+      - "traefik.http.routers.admin-portal.tls=true"
+      - "traefik.http.services.admin-portal.loadbalancer.server.port=3000"
+    networks:
+      - patina_network
+
+  # ===========================================================================
+  # CLIENT PORTAL - client.patina.cloud
+  # Next.js 15 with App Router (client-facing project tracking)
+  # ===========================================================================
+  client-portal:
+    container_name: patina-client-portal
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.nextjs
+      args:
+        APP_NAME: client-portal
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://api.patina.cloud}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+        NEXT_PUBLIC_APP_URL: ${CLIENT_APP_URL:-https://client.patina.cloud}
+    image: patina-client-portal:latest
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://api.patina.cloud}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      ORDERS_SERVICE_URL: http://orders:3015
+      MEDIA_SERVICE_URL: http://media:3014
+      PROJECTS_SERVICE_URL: http://projects:3016
+    ports:
+      - "3002:3000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.client-portal.rule=Host(`client.patina.cloud`)"
+      - "traefik.http.routers.client-portal.entrypoints=websecure"
+      - "traefik.http.routers.client-portal.tls=true"
+      - "traefik.http.services.client-portal.loadbalancer.server.port=3000"
+    networks:
+      - patina_network
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  patina_network:
+    external: true

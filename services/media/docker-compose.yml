@@ -1,0 +1,106 @@
+version: '3.9'
+
+services:
+  # Media API Service
+  media-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://patina:patina@postgres:5432/patina_media
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: 3310
+      IMGPROXY_URL: http://imgproxy:8080
+    depends_on:
+      - postgres
+      - redis
+      - clamav
+      - imgproxy
+    volumes:
+      - ./src:/app/src
+    command: npm run start:dev
+
+  # Transform Worker
+  transform-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://patina:patina@postgres:5432/patina_media
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - postgres
+      - redis
+    command: node dist/workers/transform-worker.js
+    deploy:
+      replicas: 2
+
+  # 3D Processing Worker
+  3d-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://patina:patina@postgres:5432/patina_media
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - postgres
+      - redis
+    command: node dist/workers/3d-worker.js
+    deploy:
+      replicas: 1
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: patina
+      POSTGRES_PASSWORD: patina
+      POSTGRES_DB: patina_media
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Redis for BullMQ
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  # ClamAV for virus scanning
+  clamav:
+    image: clamav/clamav:latest
+    ports:
+      - "3310:3310"
+    volumes:
+      - clamav_data:/var/lib/clamav
+
+  # imgproxy for image transformations
+  imgproxy:
+    image: darthsim/imgproxy:latest
+    environment:
+      IMGPROXY_BIND: :8080
+      IMGPROXY_USE_ETAG: "true"
+      IMGPROXY_ENABLE_WEBP_DETECTION: "true"
+      IMGPROXY_ENFORCE_WEBP: "false"
+      IMGPROXY_ENABLE_AVIF_DETECTION: "true"
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:
+  redis_data:
+  clamav_data:

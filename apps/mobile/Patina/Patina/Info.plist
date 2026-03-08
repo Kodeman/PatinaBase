@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Inter-Medium.ttf</string>
+		<string>Inter-Regular.ttf</string>
+		<string>Inter-SemiBold.ttf</string>
+		<string>PlayfairDisplay-Italic.ttf</string>
+		<string>PlayfairDisplay-Medium.ttf</string>
+		<string>PlayfairDisplay-Regular.ttf</string>
+	</array>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Patina uses Face ID to securely confirm sign-in requests from the web</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Patina uses the camera to scan QR codes for secure sign-in and to capture your rooms</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.patina.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>patina</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

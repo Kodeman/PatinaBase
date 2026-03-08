@@ -1,0 +1,35 @@
+import { NextRequest } from 'next/server';
+import { createRouteHandler, proxyToBackend, apiError } from '@patina/api-routes';
+
+const USER_MANAGEMENT_URL = process.env.USER_MANAGEMENT_SERVICE_URL || 'http://localhost:3010';
+
+// GET /api/users/[id]/activity - Get user activity (audit logs)
+export const GET = createRouteHandler(
+  async (request: NextRequest, context: any) => {
+    const userId = context.params?.id;
+
+    if (!userId) {
+      return new Response(JSON.stringify({ error: 'User ID is required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    try {
+      return await proxyToBackend(request, context, {
+        service: {
+          name: 'user-management',
+          baseUrl: USER_MANAGEMENT_URL,
+          path: `/api/v1/audit/users/${userId}`,
+        },
+        requireAuth: true,
+        retry: { maxRetries: 3 },
+        timeout: { read: 10000 },
+        cache: { maxAge: 60 }, // 1 minute cache for activity
+      });
+    } catch (error) {
+      return apiError(error);
+    }
+  },
+  { method: 'GET' }
+);

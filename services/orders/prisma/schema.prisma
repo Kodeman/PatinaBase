@@ -1,0 +1,443 @@
+// Patina Orders & Payments - Prisma Schema
+// Database: PostgreSQL 16 on OCI
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+
+model Cart {
+  id                String      @id @default(uuid())
+  userId            String?
+  sessionToken      String?     // for anonymous carts
+  status            String      @default("active") // active|expired|converted|abandoned
+  currency          String      @default("USD")
+  discountCode      String?
+  discountAmount    Decimal?    @db.Decimal(10, 2)
+  subtotal          Decimal     @default(0) @db.Decimal(10, 2)
+  taxTotal          Decimal     @default(0) @db.Decimal(10, 2)
+  shippingTotal     Decimal     @default(0) @db.Decimal(10, 2)
+  total             Decimal     @default(0) @db.Decimal(10, 2)
+  metadata          Json?
+  expiresAt         DateTime?
+  convertedAt       DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  // Address references
+  shippingAddressId String?
+  billingAddressId  String?
+
+  items             CartItem[]
+  discount          Discount?   @relation(fields: [discountCode], references: [code])
+  shippingAddress   Address?    @relation("CartShippingAddress", fields: [shippingAddressId], references: [id])
+  billingAddress    Address?    @relation("CartBillingAddress", fields: [billingAddressId], references: [id])
+
+  @@index([userId, status])
+  @@index([sessionToken])
+  @@index([status, expiresAt])
+  @@index([discountCode])
+  @@map("carts")
+}
+
+model CartItem {
+  id            String   @id @default(uuid())
+  cartId        String
+  productId     String
+  variantId     String?
+  name          String
+  sku           String?
+  qty           Int
+  unitPrice     Decimal  @db.Decimal(10, 2)
+  currency      String   @default("USD")
+  discountAlloc Decimal? @db.Decimal(10, 2) // per-line discount allocation
+  taxAmount     Decimal? @db.Decimal(10, 2)
+  snapshot      Json?    // product/variant snapshot at add time
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  cart          Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  @@index([cartId])
+  @@index([productId])
+  @@map("cart_items")
+}
+
+model Discount {
+  id                String    @id @default(uuid())
+  code              String    @unique
+  name              String
+  description       String?
+  kind              String    // percent|fixed|bogo
+  value             Decimal   @db.Decimal(10, 2) // percent e.g. 10.00; fixed e.g. 25.00
+  currency          String?   @default("USD")
+  minPurchase       Decimal?  @db.Decimal(10, 2)
+  maxDiscount       Decimal?  @db.Decimal(10, 2)
+  usageLimit        Int?      // total usage limit
+  usageCount        Int       @default(0)
+  perUserLimit      Int?      // per-user limit
+  eligibleProducts  String[]  // product IDs
+  eligibleCategories String[] // category IDs
+  startsAt          DateTime?
+  endsAt            DateTime?
+  rules             Json?     // additional eligibility rules
+  active            Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  createdBy         String?
+
+  carts             Cart[]
+
+  @@index([code, active])
+  @@index([startsAt, endsAt])
+  @@map("discounts")
+}
+
+model Order {
+  id                String    @id @default(uuid())
+  orderNumber       String    @unique
+  userId            String
+  cartId            String?
+  status            String    @default("created") // created|paid|processing|fulfilled|closed|refunded|canceled
+  paymentStatus     String    @default("pending") // pending|authorized|captured|refunded|failed|canceled|partially_refunded
+  fulfillmentStatus String    @default("unfulfilled") // unfulfilled|partial|fulfilled
+  currency          String    @default("USD")
+  subtotal          Decimal   @db.Decimal(10, 2)
+  discountTotal     Decimal   @default(0) @db.Decimal(10, 2)
+  taxTotal          Decimal   @default(0) @db.Decimal(10, 2)
+  shippingTotal     Decimal   @default(0) @db.Decimal(10, 2)
+  total             Decimal   @db.Decimal(10, 2)
+
+  // Stripe references
+  paymentIntentId   String?   @unique
+  checkoutSessionId String?   @unique
+  customerId        String?   // Stripe customer ID
+
+  // Addresses
+  shippingAddressId String?
+  billingAddressId  String?
+
+  // Shipping
+  shippingMethod    String?   // standard|express|overnight
+
+  // Tax
+  taxLines          Json?     // [{jurisdiction, rate, amount}]
+
+  // Immutable snapshot
+  snapshot          Json      // complete order snapshot
+
+  // Notes and metadata
+  customerNotes     String?
+  internalNotes     String?
+  metadata          Json?
+
+  // Timestamps
+  paidAt            DateTime?
+  fulfilledAt       DateTime?
+  closedAt          DateTime?
+  canceledAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  items             OrderItem[]
+  payments          Payment[]
+  refunds           Refund[]
+  shipments         Shipment[]
+  shippingAddress   Address?  @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
+  billingAddress    Address?  @relation("BillingAddress", fields: [billingAddressId], references: [id])
+
+  @@index([userId, status])
+  @@index([orderNumber])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([fulfillmentStatus])
+  @@index([createdAt])
+  @@index([paymentIntentId])
+  @@index([checkoutSessionId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id            String   @id @default(uuid())
+  orderId       String
+  productId     String
+  variantId     String?
+  name          String
+  sku           String?
+  qty           Int
+  unitPrice     Decimal  @db.Decimal(10, 2)
+  currency      String   @default("USD")
+  taxLines      Json?    // [{jurisdiction, rate, amount}]
+  discountAlloc Decimal? @db.Decimal(10, 2)
+  subtotal      Decimal  @db.Decimal(10, 2)
+  total         Decimal  @db.Decimal(10, 2)
+  snapshot      Json?    // product/variant snapshot
+  metadata      Json?
+
+  // Fulfillment tracking
+  qtyFulfilled  Int      @default(0)
+  qtyRefunded   Int      @default(0)
+
+  createdAt     DateTime @default(now())
+
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model Payment {
+  id              String   @id @default(uuid())
+  orderId         String
+  provider        String   @default("stripe")
+  status          String   @default("pending") // pending|succeeded|failed|canceled|refunded
+  amount          Decimal  @db.Decimal(10, 2)
+  currency        String   @default("USD")
+
+  // Stripe references
+  paymentIntentId String?
+  chargeId        String?  @unique
+  paymentMethodId String?
+
+  // Details
+  last4           String?
+  brand           String?  // visa|mastercard|amex|etc
+  country         String?
+
+  // Risk & Fraud
+  riskScore       Int?
+  riskLevel       String?  // normal|elevated|highest
+
+  // Metadata
+  raw             Json?    // full Stripe response
+  metadata        Json?
+  failureCode     String?
+  failureMessage  String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([paymentIntentId])
+  @@index([status])
+  @@map("payments")
+}
+
+model Refund {
+  id               String   @id @default(uuid())
+  orderId          String
+  amount           Decimal  @db.Decimal(10, 2)
+  currency         String   @default("USD")
+  reason           String?  // duplicate|fraudulent|requested_by_customer
+  status           String   @default("pending") // pending|succeeded|failed|canceled
+  provider         String   @default("stripe")
+
+  // Stripe references
+  providerRefundId String?  @unique
+  chargeId         String?
+  paymentIntentId  String?
+
+  // Details
+  description      String?
+  metadata         Json?
+  raw              Json?    // full Stripe response
+
+  // Timestamps
+  processedAt      DateTime?
+  createdAt        DateTime @default(now())
+  createdBy        String?  // admin user who initiated
+
+  order            Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([providerRefundId])
+  @@index([status])
+  @@map("refunds")
+}
+
+model Shipment {
+  id             String    @id @default(uuid())
+  orderId        String
+  shipmentNumber String?   @unique
+  carrier        String?   // USPS|FedEx|UPS
+  service        String?   // Priority|Ground|Express
+  trackingNumber String?
+  trackingUrl    String?
+  status         String    @default("pending") // pending|in_transit|out_for_delivery|delivered|exception|returned
+  method         String?   // standard|express|overnight
+
+  // Items in this shipment
+  items          Json      // [{orderItemId, qty}]
+
+  // Carrier Integration
+  carrierShipmentId String?   // EasyPost shipment ID
+  labelUrl          String?   // URL to shipping label PDF/PNG
+  labelFormat       String?   // PDF|PNG|ZPL
+  labelSize         String?   // 4x6|4x8
+  commercialInvoiceUrl String? // For international shipments
+  rateId            String?   // Carrier rate ID used for purchase
+
+  // Tracking
+  trackingStatus    String?   // Carrier-specific status
+  trackingEvents    Json?     // Array of tracking events
+  publicTrackingUrl String?   // Public tracking URL
+
+  // Addresses (stored as JSON for historical record)
+  fromAddress    Json?     // Address snapshot
+  toAddress      Json?     // Address snapshot
+  addressId      String?   // Reference to Address table
+
+  // Parcel details
+  parcel         Json?     // {length, width, height, weight, predefinedPackage}
+
+  // Costs
+  cost           Decimal?  @db.Decimal(10, 2)
+  currency       String?   @default("USD")
+
+  // Timestamps
+  estimatedDelivery DateTime?
+  shippedAt         DateTime?
+  deliveredAt       DateTime?
+
+  // Notes and metadata
+  notes          String?
+  metadata       Json?     // Additional carrier-specific data
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String?
+
+  order          Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  address        Address?  @relation(fields: [addressId], references: [id])
+
+  @@index([orderId])
+  @@index([trackingNumber])
+  @@index([status])
+  @@index([carrier])
+  @@index([carrierShipmentId])
+  @@map("shipments")
+}
+
+model Address {
+  id        String   @id @default(uuid())
+  userId    String?
+  kind      String   // shipping|billing
+  firstName String?
+  lastName  String?
+  company   String?
+  line1     String
+  line2     String?
+  city      String
+  region    String?  // state/province
+  postal    String
+  country   String   // ISO-3166-1 alpha-2
+  phone     String?
+
+  // Validation
+  verified  Boolean  @default(false)
+
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ordersShipping     Order[]    @relation("ShippingAddress")
+  ordersBilling      Order[]    @relation("BillingAddress")
+  cartsShipping      Cart[]     @relation("CartShippingAddress")
+  cartsBilling       Cart[]     @relation("CartBillingAddress")
+  shipments          Shipment[]
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+model Reconciliation {
+  id             String    @id @default(uuid())
+  jobId          String    @unique
+  status         String    @default("running") // running|completed|failed
+  window         Json      // {start, end} timestamps
+
+  // Statistics
+  stripeCount    Int       @default(0)
+  patinaCount    Int       @default(0)
+  matchedCount   Int       @default(0)
+  discrepancies  Int       @default(0)
+
+  // Results
+  orphanStripe   Json?     // Stripe payments not in Patina
+  orphanPatina   Json?     // Patina orders not in Stripe
+  mismatches     Json?     // Amount/status mismatches
+
+  // Resolution
+  resolutionNotes String?
+  resolvedBy      String?
+  resolvedAt      DateTime?
+
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  @@index([status])
+  @@index([startedAt])
+  @@map("reconciliations")
+}
+
+model IdempotencyKey {
+  id         String   @id @default(uuid())
+  key        String   @unique
+  endpoint   String
+  statusCode Int?
+  response   Json?
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([key])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  entityType String   // cart|order|payment|refund|shipment
+  entityId   String
+  action     String   // created|updated|deleted|status_changed|etc
+  actor      String?  // user ID or system
+  actorType  String?  // user|system|admin|webhook
+  changes    Json?    // diff of changes
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// Outbox Pattern for Event Publishing (Transactional Outbox)
+model OutboxEvent {
+  id          String   @id @default(uuid())
+  type        String   // e.g., "order.created", "order.paid", "order.fulfilled"
+  payload     Json     // Event payload
+  headers     Json?    // Additional headers (traceId, etc.)
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  publishedAt DateTime?
+  retryCount  Int      @default(0)
+  lastError   String?
+
+  @@index([type, published])
+  @@index([createdAt])
+  @@map("outbox_events")
+}

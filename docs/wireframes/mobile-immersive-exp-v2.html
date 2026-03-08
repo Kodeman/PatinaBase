@@ -1,0 +1,1809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patina — Reimagined Experience Design</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   PATINA IMMERSIVE EXPERIENCE — DESIGN DOCUMENT
+   Breaking Convention, Embracing Companionship
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+    --patina-off-white: #EDE9E4;
+    --patina-clay-beige: #A3927C;
+    --patina-mocha-brown: #655B52;
+    --patina-charcoal: #3F3B37;
+    --patina-soft-cream: #F5F2ED;
+    --patina-warm-white: #FAF7F2;
+    
+    --font-display: 'Playfair Display', Georgia, serif;
+    --font-body: 'Inter', -apple-system, sans-serif;
+}
+
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    font-size: 16px;
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: var(--font-body);
+    background: var(--patina-off-white);
+    color: var(--patina-charcoal);
+    line-height: 1.6;
+}
+
+/* Section Styles */
+.section {
+    padding: 6rem 2rem;
+}
+
+.section--dark {
+    background: var(--patina-charcoal);
+    color: var(--patina-off-white);
+}
+
+.section--cream {
+    background: var(--patina-soft-cream);
+}
+
+.section--clay {
+    background: var(--patina-clay-beige);
+    color: white;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.container--narrow {
+    max-width: 800px;
+}
+
+/* Typography */
+.display {
+    font-family: var(--font-display);
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    font-weight: 500;
+    line-height: 1.1;
+}
+
+.h1 {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 4vw, 3rem);
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.h2 {
+    font-family: var(--font-display);
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    font-weight: 500;
+    line-height: 1.3;
+}
+
+.h3 {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 500;
+}
+
+.lead {
+    font-size: 1.25rem;
+    color: var(--patina-mocha-brown);
+    line-height: 1.7;
+}
+
+.eyebrow {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--patina-clay-beige);
+}
+
+em { font-style: italic; }
+
+/* Hero */
+.hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 4rem 2rem;
+    background: linear-gradient(135deg, var(--patina-warm-white) 0%, var(--patina-off-white) 50%, var(--patina-soft-cream) 100%);
+    position: relative;
+}
+
+.hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.03;
+    pointer-events: none;
+}
+
+.hero__content {
+    position: relative;
+    z-index: 1;
+}
+
+.strata {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 3rem;
+}
+
+.strata__line {
+    height: 3px;
+    border-radius: 3px;
+}
+
+.strata__line:nth-child(1) { width: 60px; background: var(--patina-mocha-brown); }
+.strata__line:nth-child(2) { width: 45px; background: var(--patina-clay-beige); }
+.strata__line:nth-child(3) { width: 30px; background: var(--patina-clay-beige); opacity: 0.5; }
+
+.hero__subtitle {
+    max-width: 600px;
+    margin: 2rem auto;
+    font-size: 1.125rem;
+    color: var(--patina-mocha-brown);
+}
+
+/* Manifesto */
+.manifesto {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 3rem;
+    margin-top: 4rem;
+}
+
+.manifesto__item {
+    text-align: left;
+}
+
+.manifesto__title {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 500;
+    margin-bottom: 0.75rem;
+    color: var(--patina-charcoal);
+}
+
+.manifesto__item--dark .manifesto__title {
+    color: var(--patina-off-white);
+}
+
+.manifesto__text {
+    font-size: 0.9375rem;
+    color: var(--patina-mocha-brown);
+    line-height: 1.7;
+}
+
+.manifesto__item--dark .manifesto__text {
+    color: rgba(237, 233, 228, 0.7);
+}
+
+/* Phone Frame */
+.phone-showcase {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 3rem;
+    margin: 3rem 0;
+}
+
+.phone-frame {
+    background: #1a1a1a;
+    border-radius: 44px;
+    padding: 12px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.35), inset 0 0 0 2px #333;
+    position: relative;
+}
+
+.phone-frame::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 28px;
+    background: #1a1a1a;
+    border-radius: 0 0 16px 16px;
+    z-index: 10;
+}
+
+.phone-screen {
+    width: 280px;
+    height: 606px;
+    border-radius: 34px;
+    overflow: hidden;
+    position: relative;
+}
+
+.screen-label {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    text-align: center;
+    margin-top: 1.5rem;
+    color: var(--patina-charcoal);
+}
+
+.screen-desc {
+    font-size: 0.8125rem;
+    color: var(--patina-mocha-brown);
+    text-align: center;
+    max-width: 280px;
+    margin-top: 0.5rem;
+}
+
+/* Section Headers */
+.section-header {
+    text-align: center;
+    margin-bottom: 4rem;
+}
+
+.section-header__title {
+    margin-top: 0.5rem;
+}
+
+.section-header__desc {
+    max-width: 600px;
+    margin: 1.5rem auto 0;
+    font-size: 1.0625rem;
+    color: var(--patina-mocha-brown);
+}
+
+.section--dark .section-header__desc {
+    color: rgba(237, 233, 228, 0.7);
+}
+
+/* Principle Cards */
+.principles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+}
+
+.principle-card {
+    background: white;
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 4px 20px rgba(101, 91, 82, 0.08);
+}
+
+.principle-card__icon {
+    width: 56px;
+    height: 56px;
+    background: linear-gradient(135deg, var(--patina-clay-beige), var(--patina-mocha-brown));
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.principle-card__title {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 500;
+    margin-bottom: 0.75rem;
+}
+
+.principle-card__text {
+    font-size: 0.9375rem;
+    color: var(--patina-mocha-brown);
+    line-height: 1.6;
+}
+
+/* Screen Content Styles */
+.screen--threshold {
+    background: linear-gradient(180deg, #2a2520 0%, #1a1714 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+
+.threshold-room {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, 
+        rgba(42, 37, 32, 0.3) 0%,
+        rgba(42, 37, 32, 0.1) 30%,
+        rgba(42, 37, 32, 0.6) 100%
+    );
+}
+
+.threshold-room::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, #8a7a68 0%, #5a4d42 100%);
+    opacity: 0.4;
+}
+
+.threshold-window {
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 160px;
+    height: 200px;
+    background: linear-gradient(180deg, 
+        #f4e8d9 0%,
+        #ffeedd 30%,
+        #ffe4c9 100%
+    );
+    border-radius: 80px 80px 0 0;
+    box-shadow: 0 0 60px rgba(255, 228, 180, 0.4);
+}
+
+.threshold-light {
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    height: 300px;
+    background: radial-gradient(ellipse at center top, 
+        rgba(255, 235, 200, 0.3) 0%,
+        transparent 70%
+    );
+}
+
+.threshold-content {
+    position: relative;
+    z-index: 2;
+    padding: 24px;
+    text-align: center;
+}
+
+.threshold-text {
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 400;
+    color: rgba(255,255,255,0.9);
+    line-height: 1.4;
+    margin-bottom: 40px;
+}
+
+.threshold-time {
+    font-size: 11px;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+
+.threshold-instruction {
+    font-size: 13px;
+    color: rgba(255,255,255,0.6);
+}
+
+/* Conversation Screen */
+.screen--conversation {
+    background: var(--patina-off-white);
+    display: flex;
+    flex-direction: column;
+    padding-top: 60px;
+}
+
+.conversation-container {
+    flex: 1;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+
+.conversation-message {
+    margin-bottom: 20px;
+    animation: fadeUp 0.6s ease-out;
+}
+
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.message--patina {
+    padding-right: 40px;
+}
+
+.message--user {
+    padding-left: 40px;
+    text-align: right;
+}
+
+.message__text {
+    font-family: var(--font-display);
+    font-size: 18px;
+    line-height: 1.5;
+    color: var(--patina-charcoal);
+}
+
+.message--patina .message__text {
+    font-style: italic;
+}
+
+.message--user .message__text {
+    font-family: var(--font-body);
+    font-size: 15px;
+    color: var(--patina-mocha-brown);
+}
+
+.message__author {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--patina-clay-beige);
+    margin-top: 8px;
+}
+
+.conversation-input {
+    padding: 20px;
+    border-top: 1px solid rgba(163, 146, 124, 0.15);
+}
+
+.input-field {
+    width: 100%;
+    padding: 14px 16px;
+    background: white;
+    border: 1px solid rgba(163, 146, 124, 0.3);
+    border-radius: 24px;
+    font-family: var(--font-body);
+    font-size: 14px;
+    color: var(--patina-charcoal);
+}
+
+.input-field::placeholder {
+    color: var(--patina-clay-beige);
+}
+
+/* Walk Screen */
+.screen--walk {
+    background: linear-gradient(180deg, #4a5568 0%, #2d3748 100%);
+}
+
+.walk-ar-view {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, 
+        rgba(237, 233, 228, 0.05) 0%,
+        rgba(237, 233, 228, 0.02) 100%
+    );
+}
+
+.walk-wall-detected {
+    position: absolute;
+    top: 100px;
+    left: 30px;
+    right: 30px;
+    height: 200px;
+    border: 2px dashed rgba(163, 146, 124, 0.5);
+    border-radius: 4px;
+}
+
+.walk-wall-label {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-size: 10px;
+    color: var(--patina-clay-beige);
+    letter-spacing: 0.05em;
+}
+
+.walk-narration {
+    position: absolute;
+    bottom: 140px;
+    left: 20px;
+    right: 20px;
+    text-align: center;
+}
+
+.walk-narration__text {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-style: italic;
+    color: white;
+    line-height: 1.5;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    margin-bottom: 12px;
+}
+
+.walk-narration__thinking {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+}
+
+.thinking-dot {
+    width: 6px;
+    height: 6px;
+    background: rgba(255,255,255,0.5);
+    border-radius: 3px;
+    animation: pulse 1.4s ease-in-out infinite;
+}
+
+.thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+}
+
+.walk-companion {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.companion-mark {
+    width: 56px;
+    height: 56px;
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(10px);
+    border-radius: 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    animation: breathe 4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.companion-line {
+    height: 2px;
+    background: white;
+    border-radius: 1px;
+}
+
+.companion-line:nth-child(1) { width: 20px; }
+.companion-line:nth-child(2) { width: 15px; opacity: 0.7; }
+.companion-line:nth-child(3) { width: 10px; opacity: 0.4; }
+
+/* Emergence Screen */
+.screen--emergence {
+    background: var(--patina-off-white);
+    display: flex;
+    flex-direction: column;
+}
+
+.emergence-header {
+    padding: 60px 20px 20px;
+    text-align: center;
+}
+
+.emergence-room-name {
+    font-family: var(--font-display);
+    font-size: 14px;
+    color: var(--patina-clay-beige);
+    margin-bottom: 4px;
+}
+
+.emergence-title {
+    font-family: var(--font-display);
+    font-size: 20px;
+    color: var(--patina-charcoal);
+}
+
+.emergence-piece {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.emergence-image {
+    width: 200px;
+    height: 200px;
+    background: linear-gradient(135deg, #d4a574 0%, #a3927c 100%);
+    border-radius: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 64px;
+    margin-bottom: 24px;
+    box-shadow: 0 20px 60px rgba(163, 146, 124, 0.3);
+    animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+.emergence-story {
+    text-align: center;
+    max-width: 240px;
+}
+
+.emergence-maker {
+    font-size: 11px;
+    color: var(--patina-clay-beige);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+
+.emergence-name {
+    font-family: var(--font-display);
+    font-size: 22px;
+    color: var(--patina-charcoal);
+    margin-bottom: 8px;
+}
+
+.emergence-provenance {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-style: italic;
+    color: var(--patina-mocha-brown);
+    line-height: 1.5;
+}
+
+.emergence-actions {
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+}
+
+.emergence-action {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.emergence-action__icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+
+.emergence-action--stay .emergence-action__icon {
+    background: var(--patina-clay-beige);
+    color: white;
+}
+
+.emergence-action--drift .emergence-action__icon {
+    background: rgba(163, 146, 124, 0.15);
+    color: var(--patina-mocha-brown);
+}
+
+.emergence-action__label {
+    font-size: 11px;
+    color: var(--patina-mocha-brown);
+}
+
+.emergence-hint {
+    text-align: center;
+    padding: 20px;
+    font-size: 12px;
+    color: var(--patina-clay-beige);
+}
+
+/* Table Screen */
+.screen--table {
+    background: linear-gradient(180deg, #3a3530 0%, #2a2520 100%);
+}
+
+.table-surface {
+    position: absolute;
+    inset: 60px 20px 100px;
+    background: linear-gradient(180deg, 
+        rgba(139, 119, 101, 0.3) 0%,
+        rgba(90, 77, 66, 0.5) 100%
+    );
+    border-radius: 8px;
+    border: 1px solid rgba(163, 146, 124, 0.2);
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    padding: 16px;
+    gap: 12px;
+}
+
+.table-item {
+    width: 70px;
+    height: 70px;
+    background: white;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    cursor: grab;
+}
+
+.table-item--aged {
+    filter: sepia(20%) saturate(90%);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    border: 1px solid rgba(163, 146, 124, 0.3);
+}
+
+.table-item--recent {
+    box-shadow: 0 4px 16px rgba(163, 146, 124, 0.3);
+}
+
+.table-header {
+    position: absolute;
+    top: 60px;
+    left: 0;
+    right: 0;
+    padding: 16px 20px;
+}
+
+.table-title {
+    font-family: var(--font-display);
+    font-size: 18px;
+    color: white;
+    text-align: center;
+}
+
+.table-subtitle {
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+    text-align: center;
+    margin-top: 4px;
+}
+
+.table-companion {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* Comparison: Before/After */
+.comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-top: 3rem;
+}
+
+.comparison__side {
+    background: white;
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 4px 20px rgba(101, 91, 82, 0.08);
+}
+
+.comparison__title {
+    font-family: var(--font-display);
+    font-size: 1.125rem;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(163, 146, 124, 0.2);
+}
+
+.comparison__list {
+    list-style: none;
+}
+
+.comparison__item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.75rem 0;
+    font-size: 0.9375rem;
+    color: var(--patina-mocha-brown);
+}
+
+.comparison__icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    border-radius: 10px;
+}
+
+.comparison__icon--old {
+    background: rgba(184, 121, 105, 0.15);
+    color: #B87969;
+}
+
+.comparison__icon--new {
+    background: rgba(122, 156, 133, 0.15);
+    color: #7A9C85;
+}
+
+/* Interaction Patterns */
+.patterns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 2rem;
+}
+
+.pattern-card {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(237, 233, 228, 0.1);
+    border-radius: 16px;
+    padding: 2rem;
+}
+
+.pattern-card__gesture {
+    width: 64px;
+    height: 64px;
+    background: rgba(163, 146, 124, 0.2);
+    border-radius: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    margin-bottom: 1.25rem;
+}
+
+.pattern-card__title {
+    font-family: var(--font-display);
+    font-size: 1.125rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    color: var(--patina-off-white);
+}
+
+.pattern-card__desc {
+    font-size: 0.875rem;
+    color: rgba(237, 233, 228, 0.6);
+    line-height: 1.6;
+}
+
+/* Quote Block */
+.quote-block {
+    background: white;
+    border-radius: 16px;
+    padding: 3rem;
+    margin: 3rem 0;
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(101, 91, 82, 0.08);
+}
+
+.quote-block__text {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-style: italic;
+    line-height: 1.6;
+    color: var(--patina-charcoal);
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.quote-block__author {
+    margin-top: 1.5rem;
+    font-size: 0.875rem;
+    color: var(--patina-clay-beige);
+}
+
+/* Flow Diagram */
+.flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 2rem;
+    background: rgba(163, 146, 124, 0.08);
+    border-radius: 16px;
+    margin: 2rem 0;
+}
+
+.flow__step {
+    background: white;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    font-size: 0.9375rem;
+    color: var(--patina-charcoal);
+    box-shadow: 0 2px 8px rgba(101, 91, 82, 0.06);
+}
+
+.flow__arrow {
+    color: var(--patina-clay-beige);
+    font-size: 1.5rem;
+}
+
+/* Footer */
+.footer {
+    padding: 4rem 2rem;
+    text-align: center;
+    background: var(--patina-charcoal);
+    color: var(--patina-off-white);
+}
+
+.footer__strata {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 2rem;
+}
+
+.footer__strata-line {
+    height: 3px;
+    border-radius: 3px;
+}
+
+.footer__strata-line:nth-child(1) { width: 60px; background: rgba(237, 233, 228, 0.8); }
+.footer__strata-line:nth-child(2) { width: 45px; background: var(--patina-clay-beige); }
+.footer__strata-line:nth-child(3) { width: 30px; background: var(--patina-clay-beige); opacity: 0.5; }
+
+.footer__tagline {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .comparison {
+        grid-template-columns: 1fr;
+    }
+    
+    .phone-showcase {
+        gap: 2rem;
+    }
+}
+    </style>
+</head>
+<body>
+
+<!-- Hero -->
+<section class="hero">
+    <div class="hero__content">
+        <div class="strata">
+            <div class="strata__line"></div>
+            <div class="strata__line"></div>
+            <div class="strata__line"></div>
+        </div>
+        <p class="eyebrow">Experience Design Manifesto</p>
+        <h1 class="display">Beyond the<br><em>Carousel</em></h1>
+        <p class="hero__subtitle">
+            Reimagining Patina as an immersive companion experience — 
+            breaking from conventional mobile patterns to create something 
+            that honors how discovery actually feels.
+        </p>
+    </div>
+</section>
+
+<!-- The Problem with Convention -->
+<section class="section">
+    <div class="container container--narrow">
+        <header class="section-header">
+            <p class="eyebrow">The Challenge</p>
+            <h2 class="h1 section-header__title">What We're Leaving Behind</h2>
+            <p class="section-header__desc">
+                Conventional mobile patterns treat discovery like a transaction. 
+                Swipe left, swipe right. Tap here, tap there. But finding furniture 
+                that will age with you isn't a transaction — it's a relationship.
+            </p>
+        </header>
+        
+        <div class="comparison">
+            <div class="comparison__side">
+                <h3 class="comparison__title">❌ Conventional Patterns</h3>
+                <ul class="comparison__list">
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--old">✕</span>
+                        <span>Carousels that rush you through "onboarding"</span>
+                    </li>
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--old">✕</span>
+                        <span>Multiple-choice quizzes that reduce taste to checkboxes</span>
+                    </li>
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--old">✕</span>
+                        <span>AR scanning that feels clinical and technical</span>
+                    </li>
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--old">✕</span>
+                        <span>Swipe cards that gamify decision-making</span>
+                    </li>
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--old">✕</span>
+                        <span>Product grids that commoditize craft</span>
+                    </li>
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--old">✕</span>
+                        <span>Tab bars that fragment the journey</span>
+                    </li>
+                </ul>
+            </div>
+            <div class="comparison__side">
+                <h3 class="comparison__title">✓ Patina Patterns</h3>
+                <ul class="comparison__list">
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--new">✓</span>
+                        <span>A single threshold moment that invites you in</span>
+                    </li>
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--new">✓</span>
+                        <span>A conversation that learns your language</span>
+                    </li>
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--new">✓</span>
+                        <span>A meditative walk that appreciates your space</span>
+                    </li>
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--new">✓</span>
+                        <span>Pieces that emerge and tell their stories</span>
+                    </li>
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--new">✓</span>
+                        <span>A craftsman's table where collections live</span>
+                    </li>
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--new">✓</span>
+                        <span>A companion presence, always available</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Core Philosophy -->
+<section class="section section--clay">
+    <div class="container">
+        <header class="section-header">
+            <p class="eyebrow" style="color: rgba(255,255,255,0.7);">Core Philosophy</p>
+            <h2 class="h1 section-header__title">Time Is the Medium</h2>
+            <p class="section-header__desc" style="color: rgba(255,255,255,0.8);">
+                If Patina believes that time adds value, then the app itself must 
+                honor time. Not rush it. Not compress it. Not gamify it away.
+            </p>
+        </header>
+        
+        <div class="manifesto">
+            <div class="manifesto__item manifesto__item--dark">
+                <h3 class="manifesto__title">Presence Over Progress</h3>
+                <p class="manifesto__text">
+                    No progress bars racing toward completion. Instead, 
+                    moments that reward your attention. The longer you look, 
+                    the more you see.
+                </p>
+            </div>
+            <div class="manifesto__item manifesto__item--dark">
+                <h3 class="manifesto__title">Conversation Over Selection</h3>
+                <p class="manifesto__text">
+                    Don't ask "which one?" Ask "tell me more." 
+                    Understanding isn't multiple choice — 
+                    it's an ongoing dialogue.
+                </p>
+            </div>
+            <div class="manifesto__item manifesto__item--dark">
+                <h3 class="manifesto__title">Emergence Over Discovery</h3>
+                <p class="manifesto__text">
+                    Products don't wait in a catalog. They surface 
+                    when the time is right, like memories, like 
+                    ideas that find you.
+                </p>
+            </div>
+            <div class="manifesto__item manifesto__item--dark">
+                <h3 class="manifesto__title">Accumulation Over Collection</h3>
+                <p class="manifesto__text">
+                    Your saved pieces aren't a checklist. 
+                    They're layers that develop character together, 
+                    like patina itself.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- The Threshold -->
+<section class="section">
+    <div class="container">
+        <header class="section-header">
+            <p class="eyebrow">Moment One</p>
+            <h2 class="h1 section-header__title">The Threshold</h2>
+            <p class="section-header__desc">
+                No carousel. No slides. No "next" buttons. 
+                Just a single moment of invitation — 
+                like stepping into a warmly lit room at dusk.
+            </p>
+        </header>
+        
+        <div class="phone-showcase">
+            <div>
+                <div class="phone-frame">
+                    <div class="phone-screen screen--threshold">
+                        <div class="threshold-room">
+                            <div class="threshold-window"></div>
+                            <div class="threshold-light"></div>
+                        </div>
+                        <div class="threshold-content">
+                            <div class="threshold-time">Dawn breaks</div>
+                            <p class="threshold-text">
+                                Every room<br>tells a story.
+                            </p>
+                            <p class="threshold-instruction">
+                                Hold gently to enter
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">The Threshold</p>
+                <p class="screen-desc">
+                    Light shifts as you watch. Time passes. 
+                    A gentle hold invites you forward.
+                </p>
+            </div>
+        </div>
+        
+        <div class="quote-block">
+            <p class="quote-block__text">
+                "The best first impressions don't explain themselves. 
+                They create a feeling that makes you want to stay."
+            </p>
+            <p class="quote-block__author">— Design principle</p>
+        </div>
+        
+        <div class="principles">
+            <div class="principle-card">
+                <div class="principle-card__icon">🌅</div>
+                <h3 class="principle-card__title">Living Scene</h3>
+                <p class="principle-card__text">
+                    The scene breathes. Light shifts from dawn to golden hour 
+                    as you hold the phone. You're not watching an animation — 
+                    you're witnessing time pass.
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">🤲</div>
+                <h3 class="principle-card__title">Hold to Enter</h3>
+                <p class="principle-card__text">
+                    No tap. No swipe. A gentle, sustained hold — 
+                    like cradling something precious — 
+                    opens the door. Patience is rewarded.
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">🚪</div>
+                <h3 class="principle-card__title">No Explanation</h3>
+                <p class="principle-card__text">
+                    There's no "Here's what we do" carousel. 
+                    The experience explains itself through feeling. 
+                    Mystery creates engagement.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- The Conversation -->
+<section class="section section--cream">
+    <div class="container">
+        <header class="section-header">
+            <p class="eyebrow">Understanding You</p>
+            <h2 class="h1 section-header__title">The Conversation</h2>
+            <p class="section-header__desc">
+                Not a quiz. Not a survey. A dialogue between you and 
+                a presence that genuinely wants to understand.
+            </p>
+        </header>
+        
+        <div class="phone-showcase">
+            <div>
+                <div class="phone-frame">
+                    <div class="phone-screen screen--conversation">
+                        <div class="conversation-container">
+                            <div class="conversation-message message--patina">
+                                <p class="message__text">
+                                    When you imagine yourself at home, 
+                                    truly at rest — what's around you?
+                                </p>
+                                <p class="message__author">Patina</p>
+                            </div>
+                            <div class="conversation-message message--user">
+                                <p class="message__text">
+                                    Natural light. Something warm underfoot. 
+                                    Books everywhere.
+                                </p>
+                            </div>
+                            <div class="conversation-message message--patina">
+                                <p class="message__text">
+                                    Books everywhere — I love that. Are they 
+                                    shelved and organized, or stacked in 
+                                    friendly piles?
+                                </p>
+                                <p class="message__author">Patina</p>
+                            </div>
+                        </div>
+                        <div class="conversation-input">
+                            <input type="text" class="input-field" placeholder="Speak your mind...">
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">The Conversation</p>
+                <p class="screen-desc">
+                    Open-ended questions. Your words, not checkboxes. 
+                    Follow-ups that show it's listening.
+                </p>
+            </div>
+        </div>
+        
+        <div class="flow">
+            <span class="flow__step">Patina asks</span>
+            <span class="flow__arrow">→</span>
+            <span class="flow__step">You respond freely</span>
+            <span class="flow__arrow">→</span>
+            <span class="flow__step">Patina follows up</span>
+            <span class="flow__arrow">→</span>
+            <span class="flow__step">Understanding deepens</span>
+        </div>
+        
+        <div class="principles">
+            <div class="principle-card">
+                <div class="principle-card__icon">💬</div>
+                <h3 class="principle-card__title">Natural Language</h3>
+                <p class="principle-card__text">
+                    You describe what you want in your own words. 
+                    "Cozy but not cluttered" tells us more than 
+                    selecting "Traditional" from a list.
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">🎯</div>
+                <h3 class="principle-card__title">Thoughtful Follow-ups</h3>
+                <p class="principle-card__text">
+                    Like a good friend, Patina picks up on details. 
+                    Mentions something you said earlier. 
+                    Asks what you meant.
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">🕰️</div>
+                <h3 class="principle-card__title">No Rush</h3>
+                <p class="principle-card__text">
+                    The conversation happens at your pace. 
+                    You can close the app and return. 
+                    Patina remembers where you were.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- The Walk -->
+<section class="section section--dark">
+    <div class="container">
+        <header class="section-header">
+            <p class="eyebrow" style="color: var(--patina-clay-beige);">Seeing Your Space</p>
+            <h2 class="h1 section-header__title">The Walk</h2>
+            <p class="section-header__desc">
+                Not "scanning." Not "capturing." Walking through your 
+                space together, noticing what's there, appreciating 
+                what could be.
+            </p>
+        </header>
+        
+        <div class="phone-showcase">
+            <div>
+                <div class="phone-frame">
+                    <div class="phone-screen screen--walk">
+                        <div class="walk-ar-view">
+                            <div class="walk-wall-detected">
+                                <span class="walk-wall-label">south wall</span>
+                            </div>
+                        </div>
+                        <div class="walk-narration">
+                            <p class="walk-narration__text">
+                                "I notice the light here... 
+                                afternoon sun from the south. 
+                                That changes things."
+                            </p>
+                            <div class="walk-narration__thinking">
+                                <span class="thinking-dot"></span>
+                                <span class="thinking-dot"></span>
+                                <span class="thinking-dot"></span>
+                            </div>
+                        </div>
+                        <div class="walk-companion">
+                            <div class="companion-mark">
+                                <div class="companion-line"></div>
+                                <div class="companion-line"></div>
+                                <div class="companion-line"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">The Walk</p>
+                <p class="screen-desc">
+                    Patina narrates what it sees. Pauses to appreciate. 
+                    You're exploring together.
+                </p>
+            </div>
+        </div>
+        
+        <div class="patterns">
+            <div class="pattern-card">
+                <div class="pattern-card__gesture">👁️</div>
+                <h3 class="pattern-card__title">Observational Narration</h3>
+                <p class="pattern-card__desc">
+                    "I see tall ceilings... that opens possibilities."
+                    Patina speaks what it notices, turning technical 
+                    scanning into shared observation.
+                </p>
+            </div>
+            <div class="pattern-card">
+                <div class="pattern-card__gesture">⏸️</div>
+                <h3 class="pattern-card__title">Meditative Pauses</h3>
+                <p class="pattern-card__desc">
+                    The walk includes moments of stillness. 
+                    "Let's stay here a moment." Not every second 
+                    needs to capture data.
+                </p>
+            </div>
+            <div class="pattern-card">
+                <div class="pattern-card__gesture">🫧</div>
+                <h3 class="pattern-card__title">The Companion Mark</h3>
+                <p class="pattern-card__desc">
+                    The breathing strata mark is always present — 
+                    a subtle companion. Pull it up to speak. 
+                    It pulses when Patina has something to say.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- The Emergence -->
+<section class="section">
+    <div class="container">
+        <header class="section-header">
+            <p class="eyebrow">Finding What Fits</p>
+            <h2 class="h1 section-header__title">The Emergence</h2>
+            <p class="section-header__desc">
+                Pieces don't appear in a grid waiting to be judged. 
+                They surface one at a time, like memories, 
+                like ideas that find you when you're ready.
+            </p>
+        </header>
+        
+        <div class="phone-showcase">
+            <div>
+                <div class="phone-frame">
+                    <div class="phone-screen screen--emergence">
+                        <div class="emergence-header">
+                            <p class="emergence-room-name">Your Living Room</p>
+                            <p class="emergence-title">Something emerged...</p>
+                        </div>
+                        <div class="emergence-piece">
+                            <div class="emergence-image">🪑</div>
+                            <div class="emergence-story">
+                                <p class="emergence-maker">Thos. Moser</p>
+                                <p class="emergence-name">The Edo Lounge Chair</p>
+                                <p class="emergence-provenance">
+                                    Hand-shaped in Auburn, Maine 
+                                    from sustainably harvested cherry
+                                </p>
+                            </div>
+                        </div>
+                        <div class="emergence-actions">
+                            <div class="emergence-action emergence-action--stay">
+                                <div class="emergence-action__icon">✓</div>
+                                <span class="emergence-action__label">Invite to stay</span>
+                            </div>
+                            <div class="emergence-action emergence-action--drift">
+                                <div class="emergence-action__icon">↓</div>
+                                <span class="emergence-action__label">Let it drift</span>
+                            </div>
+                        </div>
+                        <p class="emergence-hint">
+                            More will surface with time
+                        </p>
+                    </div>
+                </div>
+                <p class="screen-label">The Emergence</p>
+                <p class="screen-desc">
+                    One piece at a time. No swiping through a deck. 
+                    Each deserves your full attention.
+                </p>
+            </div>
+        </div>
+        
+        <div class="quote-block">
+            <p class="quote-block__text">
+                "We don't discover furniture. It surfaces when 
+                the conditions are right — when our understanding 
+                of you meets our knowledge of craft."
+            </p>
+            <p class="quote-block__author">— Product philosophy</p>
+        </div>
+        
+        <div class="principles">
+            <div class="principle-card">
+                <div class="principle-card__icon">🌊</div>
+                <h3 class="principle-card__title">One at a Time</h3>
+                <p class="principle-card__text">
+                    No grid. No carousel. One piece surfaces, 
+                    shares its story, and waits. Overwhelm is 
+                    the enemy of good decisions.
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">📖</div>
+                <h3 class="principle-card__title">Story First</h3>
+                <p class="principle-card__text">
+                    Before dimensions, before price — the provenance. 
+                    Where it was made, by whom, with what materials. 
+                    Context creates connection.
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">🌙</div>
+                <h3 class="principle-card__title">Time Between</h3>
+                <p class="principle-card__text">
+                    New pieces don't flood in. There's time between 
+                    emergences. A notification: "Something surfaced 
+                    for your living room."
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- The Table -->
+<section class="section section--cream">
+    <div class="container">
+        <header class="section-header">
+            <p class="eyebrow">Your Collection</p>
+            <h2 class="h1 section-header__title">The Table</h2>
+            <p class="section-header__desc">
+                Your saved pieces don't live in a list. They rest 
+                on a craftsman's table — a surface you can arrange, 
+                where older items develop visual character.
+            </p>
+        </header>
+        
+        <div class="phone-showcase">
+            <div>
+                <div class="phone-frame">
+                    <div class="phone-screen screen--table">
+                        <div class="table-header">
+                            <p class="table-title">Your Collection</p>
+                            <p class="table-subtitle">7 pieces gathering</p>
+                        </div>
+                        <div class="table-surface">
+                            <div class="table-item table-item--aged">🪑</div>
+                            <div class="table-item table-item--aged">🛋️</div>
+                            <div class="table-item">📚</div>
+                            <div class="table-item table-item--recent">🪴</div>
+                            <div class="table-item table-item--aged">🖼️</div>
+                            <div class="table-item table-item--recent">🕯️</div>
+                            <div class="table-item">🏺</div>
+                        </div>
+                        <div class="table-companion">
+                            <div class="companion-mark">
+                                <div class="companion-line"></div>
+                                <div class="companion-line"></div>
+                                <div class="companion-line"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">The Table</p>
+                <p class="screen-desc">
+                    Drag to arrange. Older pieces show wear — 
+                    visual patina that reflects time saved.
+                </p>
+            </div>
+        </div>
+        
+        <div class="principles">
+            <div class="principle-card">
+                <div class="principle-card__icon">🖐️</div>
+                <h3 class="principle-card__title">Physical Arrangement</h3>
+                <p class="principle-card__text">
+                    Drag pieces around the table. Stack them. 
+                    Group them. The spatial relationship matters — 
+                    just like on a real work surface.
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">🪵</div>
+                <h3 class="principle-card__title">Visual Aging</h3>
+                <p class="principle-card__text">
+                    Items saved longer develop visual character — 
+                    softer edges, warmer tones, a lived-in quality. 
+                    Time adds value, even here.
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">🤝</div>
+                <h3 class="principle-card__title">Resonance Hints</h3>
+                <p class="principle-card__text">
+                    Place two pieces near each other, and Patina 
+                    might whisper: "These speak to each other." 
+                    Or: "There's tension here."
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- The Companion -->
+<section class="section section--dark">
+    <div class="container">
+        <header class="section-header">
+            <p class="eyebrow" style="color: var(--patina-clay-beige);">Always Present</p>
+            <h2 class="h1 section-header__title">The Companion</h2>
+            <p class="section-header__desc">
+                No tab bar fragmenting your journey. No hamburger menu 
+                hiding options. Just a breathing presence — the Strata Mark — 
+                that's always there when you need guidance.
+            </p>
+        </header>
+        
+        <div class="phone-showcase">
+            <div style="text-align: center;">
+                <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 1rem; padding: 3rem; background: rgba(255,255,255,0.05); border-radius: 24px;">
+                    <div class="companion-mark" style="width: 80px; height: 80px; border-radius: 40px;">
+                        <div class="companion-line" style="width: 28px; height: 3px;"></div>
+                        <div class="companion-line" style="width: 21px; height: 3px;"></div>
+                        <div class="companion-line" style="width: 14px; height: 3px;"></div>
+                    </div>
+                    <p style="color: rgba(255,255,255,0.6); font-size: 0.875rem; margin-top: 0.5rem;">
+                        Pull up to speak with Patina
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="patterns">
+            <div class="pattern-card">
+                <div class="pattern-card__gesture">🫳</div>
+                <h3 class="pattern-card__title">Pull Up</h3>
+                <p class="pattern-card__desc">
+                    A gentle pull on the companion mark opens 
+                    conversation. Ask questions, request guidance, 
+                    or simply check in.
+                </p>
+            </div>
+            <div class="pattern-card">
+                <div class="pattern-card__gesture">💫</div>
+                <h3 class="pattern-card__title">Subtle Pulse</h3>
+                <p class="pattern-card__desc">
+                    When Patina has something to share — a new emergence, 
+                    an insight about your collection — the mark pulses 
+                    gently. Never intrusive.
+                </p>
+            </div>
+            <div class="pattern-card">
+                <div class="pattern-card__gesture">🏠</div>
+                <h3 class="pattern-card__title">Contextual Awareness</h3>
+                <p class="pattern-card__desc">
+                    Pull up while viewing a piece, and Patina knows 
+                    what you're looking at. "Tell me more about this." 
+                    "How would this fit?"
+                </p>
+            </div>
+            <div class="pattern-card">
+                <div class="pattern-card__gesture">🧭</div>
+                <h3 class="pattern-card__title">Natural Navigation</h3>
+                <p class="pattern-card__desc">
+                    "Show me my table." "Let's walk another room." 
+                    Navigation through conversation, not icons. 
+                    The app responds to intent.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Gesture Language -->
+<section class="section">
+    <div class="container">
+        <header class="section-header">
+            <p class="eyebrow">Interaction Design</p>
+            <h2 class="h1 section-header__title">A New Gesture Language</h2>
+            <p class="section-header__desc">
+                Every interaction should feel like handling materials — 
+                not pressing buttons. These gestures replace 
+                conventional taps and swipes.
+            </p>
+        </header>
+        
+        <div class="principles">
+            <div class="principle-card">
+                <div class="principle-card__icon">🤲</div>
+                <h3 class="principle-card__title">Hold</h3>
+                <p class="principle-card__text">
+                    Gentle, sustained contact. Like holding something 
+                    precious. Used to cross thresholds, to show 
+                    you're present and ready.
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">🫳</div>
+                <h3 class="principle-card__title">Pull</h3>
+                <p class="principle-card__text">
+                    Like opening a drawer. Reveals depth — 
+                    more information, the companion, hidden layers. 
+                    Feels physical, not digital.
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">🫴</div>
+                <h3 class="principle-card__title">Place</h3>
+                <p class="principle-card__text">
+                    Drag and release, like setting something down 
+                    on a table. Items settle with physics. 
+                    Position matters.
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">👆</div>
+                <h3 class="principle-card__title">Linger</h3>
+                <p class="principle-card__text">
+                    Rest your finger on something to reveal more. 
+                    The longer you linger, the more is revealed. 
+                    Patience is rewarded.
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">🤏</div>
+                <h3 class="principle-card__title">Pinch In</h3>
+                <p class="principle-card__text">
+                    Bring things together. Used to combine, to see 
+                    relationships, to ask "how do these work together?" 
+                    A gesture of synthesis.
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">🙌</div>
+                <h3 class="principle-card__title">Release</h3>
+                <p class="principle-card__text">
+                    Let something drift away. Not a rejection — 
+                    a gentle release. "Not now." The item fades 
+                    gracefully, might return later.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- The Journey -->
+<section class="section section--clay">
+    <div class="container container--narrow">
+        <header class="section-header">
+            <p class="eyebrow" style="color: rgba(255,255,255,0.7);">The Complete Journey</p>
+            <h2 class="h1 section-header__title">From Threshold to Home</h2>
+        </header>
+        
+        <div class="flow" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">
+            <span class="flow__step" style="background: rgba(255,255,255,0.95);">The Threshold</span>
+            <span class="flow__arrow" style="color: white;">→</span>
+            <span class="flow__step" style="background: rgba(255,255,255,0.95);">The Conversation</span>
+            <span class="flow__arrow" style="color: white;">→</span>
+            <span class="flow__step" style="background: rgba(255,255,255,0.95);">The Walk</span>
+            <span class="flow__arrow" style="color: white;">→</span>
+            <span class="flow__step" style="background: rgba(255,255,255,0.95);">The Emergence</span>
+            <span class="flow__arrow" style="color: white;">→</span>
+            <span class="flow__step" style="background: rgba(255,255,255,0.95);">The Table</span>
+        </div>
+        
+        <div style="margin-top: 3rem; text-align: center; color: rgba(255,255,255,0.8); line-height: 1.8;">
+            <p>
+                This isn't a linear flow you complete once.<br>
+                It's a space you inhabit over time.<br>
+                Return to the conversation. Walk another room.<br>
+                Watch new pieces emerge. Rearrange your table.<br>
+                <strong style="color: white;">The companion is always there.</strong>
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- What This Means -->
+<section class="section">
+    <div class="container container--narrow">
+        <header class="section-header">
+            <p class="eyebrow">Implementation Notes</p>
+            <h2 class="h1 section-header__title">What This Means for Development</h2>
+        </header>
+        
+        <div class="comparison">
+            <div class="comparison__side">
+                <h3 class="comparison__title">Technical Implications</h3>
+                <ul class="comparison__list">
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--new">→</span>
+                        <span>NLP-powered conversation engine (not branching quiz)</span>
+                    </li>
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--new">→</span>
+                        <span>Time-based UI elements (day/night cycles, aging effects)</span>
+                    </li>
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--new">→</span>
+                        <span>Physics-based collection interface (drag, settle, stack)</span>
+                    </li>
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--new">→</span>
+                        <span>Intent-based navigation ("Show me my rooms")</span>
+                    </li>
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--new">→</span>
+                        <span>Sophisticated emergence algorithm (timing, relevance)</span>
+                    </li>
+                </ul>
+            </div>
+            <div class="comparison__side">
+                <h3 class="comparison__title">UX Research Needs</h3>
+                <ul class="comparison__list">
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--new">→</span>
+                        <span>Gesture usability testing (hold, pull, linger)</span>
+                    </li>
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--new">→</span>
+                        <span>Pacing validation (how slow is too slow?)</span>
+                    </li>
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--new">→</span>
+                        <span>Conversation tone testing with target users</span>
+                    </li>
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--new">→</span>
+                        <span>Accessibility adaptations for new patterns</span>
+                    </li>
+                    <li class="comparison__item">
+                        <span class="comparison__icon comparison__icon--new">→</span>
+                        <span>A/B test conventional vs. companion navigation</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer class="footer">
+    <div class="footer__strata">
+        <div class="footer__strata-line"></div>
+        <div class="footer__strata-line"></div>
+        <div class="footer__strata-line"></div>
+    </div>
+    <p class="footer__tagline">"Where Time Adds Value"</p>
+    <p style="margin-top: 1rem; font-size: 0.875rem; opacity: 0.5;">
+        Patina Immersive Experience Design • Version 1.0 • January 2026
+    </p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,104 @@
+# =============================================================================
+# CLOUDFLARE TUNNEL CONFIGURATION
+# File: ~/.cloudflared/config.yml
+# =============================================================================
+#
+# SETUP INSTRUCTIONS:
+# 1. Install cloudflared on your Proxmox host or a dedicated LXC container
+# 2. Login: cloudflared tunnel login
+# 3. Create tunnel: cloudflared tunnel create patina
+# 4. Copy this config to ~/.cloudflared/config.yml
+# 5. Route DNS: cloudflared tunnel route dns patina *.patina.cloud
+# 6. Run: cloudflared tunnel run patina
+#
+# For running as a service:
+# sudo cloudflared service install
+# sudo systemctl start cloudflared
+# =============================================================================
+
+tunnel: <TUNNEL_ID>  # Replace with your tunnel ID from 'cloudflared tunnel list'
+credentials-file: /root/.cloudflared/<TUNNEL_ID>.json
+
+# Origin Server TLS Settings (for internal HTTPS)
+originRequest:
+  noTLSVerify: true  # Accept self-signed certs from internal services
+
+# =============================================================================
+# INGRESS RULES - Order matters! First match wins.
+# =============================================================================
+ingress:
+  # ---------------------------------------------------------------------------
+  # FRONTEND APPLICATIONS (Next.js portals)
+  # ---------------------------------------------------------------------------
+
+  # Designer Portal (primary workspace for interior designers)
+  - hostname: app.patina.cloud
+    service: http://localhost:3000
+    originRequest:
+      noTLSVerify: true
+
+  # Admin Portal (platform administration)
+  - hostname: admin.patina.cloud
+    service: http://localhost:3001
+    originRequest:
+      noTLSVerify: true
+
+  # Client Portal (client-facing project tracking)
+  - hostname: client.patina.cloud
+    service: http://localhost:3002
+    originRequest:
+      noTLSVerify: true
+
+  # ---------------------------------------------------------------------------
+  # SUPABASE SERVICES
+  # ---------------------------------------------------------------------------
+
+  # Kong API Gateway (main Supabase endpoint — Auth, REST, Storage, Functions)
+  - hostname: api.patina.cloud
+    service: http://localhost:8000
+    originRequest:
+      noTLSVerify: true
+      connectTimeout: 30s
+      noHappyEyeballs: true
+
+  # Supabase Studio (Admin UI)
+  - hostname: supabase.patina.cloud
+    service: http://localhost:3010
+    originRequest:
+      noTLSVerify: true
+
+  # Supabase Realtime (WebSockets)
+  - hostname: realtime.patina.cloud
+    service: http://localhost:4000
+    originRequest:
+      noTLSVerify: true
+      connectTimeout: 10s
+
+  # Supabase Storage (direct, bypassing Kong for large uploads)
+  - hostname: storage.patina.cloud
+    service: http://localhost:5000
+    originRequest:
+      noTLSVerify: true
+      connectTimeout: 60s  # For large file uploads
+
+  # ---------------------------------------------------------------------------
+  # INTERNAL TOOLS (Protect with Cloudflare Access)
+  # ---------------------------------------------------------------------------
+
+  # MinIO Console (Object Storage Admin)
+  - hostname: storage-admin.patina.cloud
+    service: http://localhost:9001
+    originRequest:
+      noTLSVerify: true
+
+  # ---------------------------------------------------------------------------
+  # DATABASE (TCP tunnel for CLI migrations/type generation)
+  # Client usage: cloudflared access tcp --hostname db.patina.cloud --url localhost:15432
+  # ---------------------------------------------------------------------------
+  - hostname: db.patina.cloud
+    service: tcp://localhost:5432
+
+  # ---------------------------------------------------------------------------
+  # CATCH-ALL (Required - returns 404 for unmatched routes)
+  # ---------------------------------------------------------------------------
+  - service: http_status:404

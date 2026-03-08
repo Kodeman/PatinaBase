@@ -1,0 +1,1 @@
+{"version":3,"file":"project-access.guard.d.ts","sourceRoot":"","sources":["project-access.guard.ts"],"names":[],"mappings":"AAAA,OAAO,EAAc,WAAW,EAAE,gBAAgB,EAAyC,MAAM,gBAAgB,CAAC;AAClH,OAAO,EAAE,aAAa,EAAE,MAAM,6BAA6B,CAAC;AAE5D,qBACa,kBAAmB,YAAW,WAAW;IACxC,OAAO,CAAC,MAAM;gBAAN,MAAM,EAAE,aAAa;IAEnC,WAAW,CAAC,OAAO,EAAE,gBAAgB,GAAG,OAAO,CAAC,OAAO,CAAC;CA4C/D"}

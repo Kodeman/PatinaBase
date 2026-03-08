@@ -1,0 +1,221 @@
+'use client';
+
+import { useState } from 'react';
+import { useAuth } from '@/hooks/use-auth';
+import { useChangePassword } from '@/hooks/use-profile';
+import { useSessions, useRevokeSession, useRevokeAllSessions } from '@/hooks/use-sessions';
+import { Button, Input, Alert } from '@patina/design-system';
+import { Monitor, Trash2 } from 'lucide-react';
+import { formatDate } from '@/lib/utils';
+
+export function SecurityTab() {
+  const { signOut } = useAuth();
+  const changePassword = useChangePassword();
+  const { data: sessions, isLoading: sessionsLoading } = useSessions();
+  const revokeSession = useRevokeSession();
+  const revokeAllSessions = useRevokeAllSessions();
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+
+  const handleChangePassword = async () => {
+    setPasswordError(null);
+    setPasswordSuccess(false);
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    if (newPassword.length < 12) {
+      setPasswordError('Password must be at least 12 characters');
+      return;
+    }
+
+    try {
+      await changePassword.mutateAsync({ currentPassword, newPassword });
+      setPasswordSuccess(true);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      setPasswordError(err.message || 'Failed to change password');
+    }
+  };
+
+  const handleRevokeSession = async (sessionId: string) => {
+    try {
+      await revokeSession.mutateAsync(sessionId);
+    } catch (err: any) {
+      console.error('Failed to revoke session:', err);
+    }
+  };
+
+  const handleRevokeAllSessions = async () => {
+    try {
+      await revokeAllSessions.mutateAsync();
+    } catch (err: any) {
+      console.error('Failed to revoke all sessions:', err);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Password Change Section */}
+      <div className="rounded-lg bg-white p-6 shadow">
+        <h2 className="text-lg font-semibold text-gray-900">Change Password</h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Update your password to keep your account secure
+        </p>
+
+        {passwordError && (
+          <Alert variant="destructive" className="mt-4">
+            {passwordError}
+          </Alert>
+        )}
+
+        {passwordSuccess && (
+          <Alert variant="success" className="mt-4">
+            Password changed successfully!
+          </Alert>
+        )}
+
+        <div className="mt-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Current Password</label>
+            <Input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              className="mt-1"
+              placeholder="Enter current password"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">New Password</label>
+            <Input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="mt-1"
+              placeholder="Enter new password (min 12 characters)"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Must contain uppercase, lowercase, number, and special character
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Confirm New Password</label>
+            <Input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="mt-1"
+              placeholder="Confirm new password"
+            />
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              onClick={handleChangePassword}
+              disabled={changePassword.isPending || !currentPassword || !newPassword}
+            >
+              {changePassword.isPending ? 'Changing...' : 'Change Password'}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Active Sessions Section */}
+      <div className="rounded-lg bg-white p-6 shadow">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Active Sessions</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Manage your active sessions across devices
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRevokeAllSessions}
+            disabled={revokeAllSessions.isPending}
+          >
+            Sign Out All Others
+          </Button>
+        </div>
+
+        <div className="mt-4">
+          {sessionsLoading ? (
+            <p className="text-sm text-gray-500">Loading sessions...</p>
+          ) : sessions && sessions.length > 0 ? (
+            <div className="space-y-3">
+              {sessions.map((session) => (
+                <div
+                  key={session.id}
+                  className="flex items-center justify-between rounded-md border p-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <Monitor className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {session.deviceInfo?.browser || 'Unknown Device'}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Last active: {formatDate(new Date(session.lastUsedAt))}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRevokeSession(session.id)}
+                    disabled={revokeSession.isPending}
+                  >
+                    <Trash2 className="h-4 w-4 text-red-500" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">No active sessions found</p>
+          )}
+        </div>
+      </div>
+
+      {/* Two-Factor Authentication */}
+      <div className="rounded-lg bg-white p-6 shadow">
+        <h2 className="text-lg font-semibold text-gray-900">Two-Factor Authentication</h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Managed through OCI Identity Domains
+        </p>
+        <a
+          href="#"
+          className="mt-2 inline-flex text-sm font-medium text-blue-600 hover:text-blue-500"
+        >
+          Configure in Identity Domains →
+        </a>
+      </div>
+
+      {/* Sign Out Current Session */}
+      <div className="rounded-lg bg-white p-6 shadow">
+        <h2 className="text-lg font-semibold text-gray-900">Sign Out</h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Sign out of your current session
+        </p>
+        <Button
+          variant="outline"
+          className="mt-4"
+          onClick={signOut}
+        >
+          Sign Out
+        </Button>
+      </div>
+    </div>
+  );
+}

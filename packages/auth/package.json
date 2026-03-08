@@ -1,0 +1,36 @@
+{
+  "name": "@patina/auth",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Auth stub - will be replaced with Supabase auth in Phase 2",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./nextjs": {
+      "types": "./dist/nextjs/index.d.ts",
+      "import": "./dist/nextjs/index.js",
+      "require": "./dist/nextjs/index.js",
+      "default": "./dist/nextjs/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@nestjs/common": "^10.4.20",
+    "@nestjs/core": "^10.4.20",
+    "@nestjs/passport": "^10.0.3",
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "next-auth": "5.0.0-beta.29",
+    "typescript": "^5.4.0"
+  }
+}

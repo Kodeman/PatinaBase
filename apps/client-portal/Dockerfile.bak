@@ -1,0 +1,71 @@
+# Build stage
+FROM node:20-alpine AS builder
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+WORKDIR /workspace
+
+# Copy root workspace files
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+
+# Copy all package.json files to preserve workspace structure
+COPY packages/*/package.json packages/
+COPY services/*/package.json services/
+COPY apps/*/package.json apps/
+
+# Copy all source code first (needed for workspace dependencies)
+COPY . .
+
+# Install all dependencies with proper workspace resolution
+# Using --no-frozen-lockfile temporarily due to new services not in lockfile
+RUN pnpm install --no-frozen-lockfile
+
+# Build shared packages in dependency order
+RUN pnpm --filter @patina/types build && \
+    pnpm --filter @patina/utils build && \
+    pnpm --filter @patina/cache build && \
+    pnpm --filter @patina/auth build && \
+    pnpm --filter @patina/database build && \
+    pnpm --filter @patina/events build && \
+    pnpm --filter @patina/schema-registry build || \
+    pnpm --filter './packages/*' run build
+
+# Build the app
+RUN pnpm --filter @patina/client-portal run build
+
+# Production stage
+FROM node:20-alpine
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+WORKDIR /workspace
+
+# Copy root workspace files
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+
+# Copy all package.json files
+COPY packages/*/package.json packages/
+COPY services/*/package.json services/
+COPY apps/*/package.json apps/
+
+# Install production dependencies only (skip lifecycle scripts to avoid husky)
+# Using --no-frozen-lockfile temporarily due to new services not in lockfile
+RUN pnpm install --no-frozen-lockfile --prod --ignore-scripts
+
+# Copy built outputs from builder stage
+COPY --from=builder /workspace/packages/*/dist packages/
+COPY --from=builder /workspace/apps/client-portal/.next apps/client-portal/.next
+COPY --from=builder /workspace/apps/client-portal/public apps/client-portal/public
+COPY --from=builder /workspace/apps/client-portal/next.config.js apps/client-portal/next.config.js
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
+USER nextjs
+
+WORKDIR /workspace/apps/client-portal
+
+EXPOSE 3000
+
+CMD ["pnpm", "start"]

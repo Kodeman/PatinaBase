@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.next/
+coverage/
+test/
+*.spec.ts
+*.spec.js
+*.lcov
+.nyc_output/
+.turbo/
+playwright-report/
+test-results/

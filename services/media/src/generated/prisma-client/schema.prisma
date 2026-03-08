@@ -1,0 +1,354 @@
+// Patina Media & 3D Pipeline - Prisma Schema
+// Database: PostgreSQL 16 on OCI Database
+// Last updated: 2025-10-03
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// Main media asset entity - images and 3D models
+model MediaAsset {
+  id        String     @id @default(uuid())
+  kind      AssetKind // image | model3d
+  productId String?
+  variantId String?
+  role      AssetRole? // hero | angle | lifestyle | detail | ar-preview
+
+  // Storage paths
+  rawKey    String      @unique
+  processed Boolean     @default(false)
+  status    AssetStatus @default(PENDING)
+
+  // Image metadata
+  width     Int?
+  height    Int?
+  format    String?
+  sizeBytes Int?
+  mimeType  String?
+
+  // Image analysis
+  phash    String? @db.VarChar(64)
+  palette  Json? // Color palette from k-means
+  blurhash String? @db.VarChar(100)
+  lqipKey  String? // Low quality image placeholder
+
+  // Licensing & rights
+  license Json? // {licenseType, attribution, expiresAt, usageScope, sourceVendorId}
+
+  // Quality control
+  qcIssues Json? // [{code, severity, message, autoFlag}]
+  qcScore  Float? @default(0)
+
+  // Virus scanning
+  scanStatus ScanStatus @default(PENDING)
+  scanResult Json?
+
+  // Access control
+  isPublic    Boolean @default(false)
+  permissions Json? // {users: string[], roles: string[]}
+
+  // Usage tracking
+  viewCount     Int @default(0)
+  downloadCount Int @default(0)
+
+  // Tags for categorization
+  tags String[] @default([])
+
+  // Sort order for display
+  sortOrder Int @default(0)
+
+  // Metadata
+  uploadedBy String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  renditions AssetRendition[]
+  threeD     ThreeDAsset?
+  jobs       ProcessJob[]
+
+  @@index([productId])
+  @@index([variantId])
+  @@index([kind, status])
+  @@index([phash])
+  @@index([createdAt])
+  @@index([uploadedBy])
+}
+
+// Image renditions - different sizes and formats
+model AssetRendition {
+  id      String     @id @default(uuid())
+  assetId String
+  asset   MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  // Rendition details
+  key       String           @unique
+  width     Int?
+  height    Int?
+  format    RenditionFormat
+  sizeBytes Int?
+  purpose   RenditionPurpose
+
+  // Transformation metadata
+  transform Json? // {resize, quality, filters, etc}
+
+  createdAt DateTime @default(now())
+
+  @@index([assetId])
+  @@index([purpose])
+}
+
+// 3D asset metadata - GLB/USDZ processing results
+model ThreeDAsset {
+  id      String     @id @default(uuid())
+  assetId String     @unique
+  asset   MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  // Output files
+  glbKey  String?
+  usdzKey String?
+
+  // Geometry stats
+  triCount      Int?
+  nodeCount     Int?
+  materialCount Int?
+  textureCount  Int?
+
+  // Physical dimensions (meters)
+  widthM   Float?
+  heightM  Float?
+  depthM   Float?
+  volumeM3 Float?
+
+  // Optimization levels
+  lods Json? // [{lod:0, triCount:..., key:...}, ...]
+
+  // Materials & textures
+  materials Json? // [{name, type, textures:[...]}]
+  textures  Json? // [{name, width, height, format, key}]
+
+  // AR readiness
+  arReady  Boolean @default(false)
+  arChecks Json? // Validation results for AR Quick Look
+
+  // Preview snapshots
+  snapshots Json? // {front, iso, top} -> keys
+
+  // Quality control
+  qcIssues Json?
+
+  // Performance metrics
+  drawCalls  Int?
+  perfBudget Json? // Estimated performance metrics
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Background job processing
+model ProcessJob {
+  id      String     @id @default(uuid())
+  assetId String
+  asset   MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  type     JobType
+  state    JobState @default(QUEUED)
+  priority Int      @default(0)
+
+  // Execution tracking
+  attempts   Int @default(0)
+  maxRetries Int @default(3)
+
+  // Error handling
+  error     String? @db.Text
+  errorCode String?
+
+  // Timing
+  queuedAt   DateTime  @default(now())
+  startedAt  DateTime?
+  finishedAt DateTime?
+
+  // Job metadata
+  meta   Json? // Job-specific configuration
+  result Json? // Job output data
+
+  // Worker tracking
+  workerId String?
+
+  @@index([assetId, state])
+  @@index([type, state])
+  @@index([state, queuedAt])
+  @@index([workerId])
+}
+
+// Upload sessions for tracking PAR-based uploads
+model UploadSession {
+  id      String  @id @default(uuid())
+  assetId String?
+
+  // Upload intent
+  filename String
+  fileSize Int?
+  mimeType String
+  kind     AssetKind
+
+  // PAR details
+  parUrl    String   @db.Text
+  targetKey String   @unique
+  expiresAt DateTime
+
+  // Upload tracking
+  status     UploadStatus @default(PENDING)
+  uploadedAt DateTime?
+
+  // User context
+  userId    String
+  productId String?
+  variantId String?
+  role      AssetRole?
+
+  // Idempotency
+  idempotencyKey String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+// License metadata and rights management
+model LicenseRecord {
+  id String @id @default(uuid())
+
+  // Asset association
+  assetIds String[] // Can apply to multiple assets
+
+  // License details
+  licenseType    String // stock | custom | royalty-free | rights-managed
+  sourceVendor   String?
+  sourceVendorId String?
+
+  // Terms
+  attribution String?   @db.Text
+  usageScope  String[] // web | ar | print | ads
+  territory   String? // Geographic restrictions
+  expiresAt   DateTime?
+
+  // Rights documents
+  proofDocKey String? // Link to rights proof in Object Storage
+
+  // Alerts
+  alertsSent Json? // Track expiry notifications
+
+  // Audit
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@index([licenseType])
+}
+
+// Enums
+enum AssetKind {
+  IMAGE
+  MODEL3D
+}
+
+enum AssetRole {
+  HERO
+  ANGLE
+  LIFESTYLE
+  DETAIL
+  AR_PREVIEW
+  TEXTURE
+  OTHER
+}
+
+enum AssetStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+  BLOCKED
+  QUARANTINED
+}
+
+enum ScanStatus {
+  PENDING
+  SCANNING
+  CLEAN
+  INFECTED
+  ERROR
+}
+
+enum RenditionFormat {
+  JPEG
+  PNG
+  WEBP
+  AVIF
+}
+
+enum RenditionPurpose {
+  THUMB // Small thumbnail
+  WEB // Web display
+  RETINA // High DPI
+  PREVIEW // LQIP/blurhash
+  ORIGINAL // Original format
+}
+
+enum JobType {
+  IMAGE_PROCESS
+  IMAGE_TRANSFORM
+  MODEL3D_CONVERT
+  MODEL3D_OPTIMIZE
+  SNAPSHOT_GENERATE
+  VIRUS_SCAN
+  METADATA_EXTRACT
+  ASSET_DELETE
+  BULK_DELETE
+  BULK_COPY
+  CLEANUP_ORPHANED
+}
+
+enum JobState {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  RETRY
+  CANCELED
+}
+
+enum UploadStatus {
+  PENDING
+  UPLOADED
+  FAILED
+  EXPIRED
+}
+
+// Outbox Pattern for Event Publishing (Transactional Outbox)
+model OutboxEvent {
+  id          String    @id @default(uuid())
+  type        String // e.g., "catalog.media.processed", "catalog.media.failed"
+  payload     Json // Event payload
+  headers     Json? // Additional headers (traceId, etc.)
+  published   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  publishedAt DateTime?
+  retryCount  Int       @default(0)
+  lastError   String?
+
+  @@index([type, published])
+  @@index([createdAt])
+  @@map("outbox_events")
+}

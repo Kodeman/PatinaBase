@@ -1,0 +1,423 @@
+/**
+ * Accessibility Utilities
+ * WCAG 2.1 Level AA Compliance Styles
+ */
+
+/* Screen Reader Only - Hide visually but keep for screen readers */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Screen Reader Focusable - Show when focused */
+.sr-only-focusable:focus,
+.sr-only-focusable:active {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* Focus Visible - Modern focus indicator */
+*:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* High Contrast Focus for better visibility */
+@media (prefers-contrast: high) {
+  *:focus-visible {
+    outline: 3px solid #000;
+    outline-offset: 3px;
+  }
+}
+
+/* Skip Link - Allow keyboard users to skip navigation */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: #000;
+  color: #fff;
+  padding: 8px 16px;
+  text-decoration: none;
+  z-index: 100;
+  font-weight: 600;
+  border-radius: 0 0 4px 0;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* Keyboard Only Focus - Hide focus for mouse users */
+.keyboard-focus-only:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Reduce Motion - Respect user preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* High Contrast Mode - Ensure visibility */
+@media (prefers-contrast: high) {
+  .border {
+    border-width: 2px !important;
+  }
+
+  .bg-gray-100,
+  .bg-gray-50 {
+    background-color: #fff !important;
+  }
+
+  .text-gray-500,
+  .text-gray-600 {
+    color: #000 !important;
+  }
+}
+
+/* Focus Within - Indicate when container has focus */
+.focus-within-ring:focus-within {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Visually Hidden but Readable */
+.visually-hidden {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+/* Focus Trap Container */
+.focus-trap-container {
+  /* Ensure focus stays within modals/dialogs */
+  isolation: isolate;
+}
+
+/* ARIA Live Region Styles */
+[aria-live="polite"],
+[aria-live="assertive"] {
+  /* Ensure live regions are positioned correctly */
+  position: relative;
+}
+
+/* Screen Reader Announcements */
+.sr-announcement {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* Interactive Element Minimum Size (WCAG 2.5.5) */
+button,
+a,
+[role="button"],
+[role="link"] {
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Exception for icon-only buttons with proper labels */
+button.icon-only,
+[role="button"].icon-only {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 8px;
+}
+
+/* Ensure adequate spacing for touch targets */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 12px;
+}
+
+/* Color Contrast Helpers */
+.contrast-high {
+  color: #000;
+  background-color: #fff;
+}
+
+.contrast-high-inverted {
+  color: #fff;
+  background-color: #000;
+}
+
+/* Focus Indicator for Complex Components */
+.custom-focus-indicator {
+  position: relative;
+}
+
+.custom-focus-indicator::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border: 2px solid transparent;
+  border-radius: inherit;
+  pointer-events: none;
+  transition: border-color 0.2s ease;
+}
+
+.custom-focus-indicator:focus-visible::before {
+  border-color: #3b82f6;
+}
+
+/* Dark Mode Support for Focus Indicators */
+@media (prefers-color-scheme: dark) {
+  *:focus-visible {
+    outline-color: #60a5fa;
+  }
+
+  .skip-link {
+    background: #1f2937;
+    color: #fff;
+  }
+}
+
+/* Accessible Tables */
+table {
+  border-collapse: collapse;
+}
+
+th {
+  font-weight: 600;
+  text-align: left;
+}
+
+/* Caption for Tables (Screen Reader Context) */
+caption {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+caption.visible {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  padding: 8px;
+  font-weight: 600;
+}
+
+/* Error States - Enhanced Visibility */
+[aria-invalid="true"] {
+  border-color: #dc2626 !important;
+  outline: 2px solid #dc2626;
+  outline-offset: 0;
+}
+
+[aria-invalid="true"]:focus-visible {
+  outline: 3px solid #dc2626;
+  outline-offset: 2px;
+}
+
+/* Success States */
+[aria-valid="true"] {
+  border-color: #16a34a !important;
+}
+
+/* Loading States - Accessible Indicators */
+[aria-busy="true"] {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+/* Disabled States - Clear Visual Indication */
+[aria-disabled="true"],
+:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Selected States */
+[aria-selected="true"] {
+  background-color: #dbeafe;
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  [aria-selected="true"] {
+    background-color: #1e3a8a;
+  }
+}
+
+/* Expanded/Collapsed States */
+[aria-expanded="false"] .expand-icon {
+  transform: rotate(0deg);
+  transition: transform 0.2s ease;
+}
+
+[aria-expanded="true"] .expand-icon {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [aria-expanded] .expand-icon {
+    transition: none;
+  }
+}
+
+/* Modal Overlay - Ensure proper stacking */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-content {
+  position: relative;
+  z-index: 9999;
+  background: white;
+  border-radius: 8px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+@media (prefers-color-scheme: dark) {
+  .modal-content {
+    background: #1f2937;
+    color: #fff;
+  }
+}
+
+/* Tooltips - Accessible Implementation */
+[role="tooltip"] {
+  position: absolute;
+  background: #1f2937;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+/* Progress Indicators */
+[role="progressbar"] {
+  background-color: #e5e7eb;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+[role="progressbar"]::before {
+  content: '';
+  display: block;
+  height: 100%;
+  background-color: #3b82f6;
+  transition: width 0.3s ease;
+}
+
+/* Status Indicators with Icons */
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-indicator-icon {
+  flex-shrink: 0;
+}
+
+/* Breadcrumbs Navigation */
+nav[aria-label="Breadcrumb"] ol {
+  display: flex;
+  flex-wrap: wrap;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* Pagination Navigation */
+nav[aria-label="Pagination"] {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Search Landmarks */
+[role="search"] {
+  width: 100%;
+}
+
+/* Form Validation Messages */
+.validation-message {
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.validation-message[role="alert"] {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+/* Ensure Proper Heading Hierarchy is Visually Distinguished */
+h1 {
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+/* Print Styles - Accessibility for Print */
+@media print {
+  .skip-link,
+  [aria-hidden="true"] {
+    display: none !important;
+  }
+
+  *:focus-visible {
+    outline: none;
+  }
+}

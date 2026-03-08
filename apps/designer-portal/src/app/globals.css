@@ -1,0 +1,290 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Brand Colors */
+    --patina-off-white: 237 233 228;
+    --clay-beige: 163 146 124;
+    --mocha-brown: 101 91 82;
+    --charcoal: 63 59 55;
+
+    /* Light Theme - OKLCH Color Space */
+    --background: 0.9582 0.0152 90.2357;
+    --foreground: 0.376 0.0225 64.3434;
+    --card: 0.9914 0.0098 87.4695;
+    --card-foreground: 0.376 0.0225 64.3434;
+    --popover: 0.9914 0.0098 87.4695;
+    --popover-foreground: 0.376 0.0225 64.3434;
+    --primary: 0.618 0.0778 65.5444;
+    --primary-foreground: 1 0 0;
+    --secondary: 0.8846 0.0302 85.5655;
+    --secondary-foreground: 0.4313 0.03 64.9288;
+    --muted: 0.9239 0.019 83.0636;
+    --muted-foreground: 0.5391 0.0387 71.1655;
+    --accent: 0.8348 0.0426 88.8064;
+    --accent-foreground: 0.376 0.0225 64.3434;
+    --destructive: 0.5471 0.1438 32.9149;
+    --destructive-foreground: 1 0 0;
+    --border: 0.8606 0.0321 84.5881;
+    --input: 0.8606 0.0321 84.5881;
+    --ring: 0.618 0.0778 65.5444;
+    --radius: 0.75rem;
+
+    /* Sidebar Tokens */
+    --sidebar: 0.9239 0.019 83.0636;
+    --sidebar-foreground: 0.376 0.0225 64.3434;
+    --sidebar-primary: 0.618 0.0778 65.5444;
+    --sidebar-primary-foreground: 1 0 0;
+    --sidebar-accent: 0.8348 0.0426 88.8064;
+    --sidebar-accent-foreground: 0.376 0.0225 64.3434;
+    --sidebar-border: 0.8606 0.0321 84.5881;
+    --sidebar-ring: 0.618 0.0778 65.5444;
+  }
+
+  .dark {
+    /* Dark Theme - OKLCH Color Space */
+    --background: 0.2747 0.0139 57.6523;
+    --foreground: 0.9239 0.019 83.0636;
+    --card: 0.3237 0.0155 59.0603;
+    --card-foreground: 0.9239 0.019 83.0636;
+    --popover: 0.3237 0.0155 59.0603;
+    --popover-foreground: 0.9239 0.019 83.0636;
+    --primary: 0.7264 0.0581 66.6967;
+    --primary-foreground: 0.2747 0.0139 57.6523;
+    --secondary: 0.3795 0.0181 57.128;
+    --secondary-foreground: 0.9239 0.019 83.0636;
+    --muted: 0.3237 0.0155 59.0603;
+    --muted-foreground: 0.7982 0.0243 82.1078;
+    --accent: 0.4186 0.0281 56.3404;
+    --accent-foreground: 0.9239 0.019 83.0636;
+    --destructive: 0.5471 0.1438 32.9149;
+    --destructive-foreground: 1 0 0;
+    --border: 0.3795 0.0181 57.128;
+    --input: 0.3795 0.0181 57.128;
+    --ring: 0.7264 0.0581 66.6967;
+
+    /* Sidebar Dark */
+    --sidebar: 0.2747 0.0139 57.6523;
+    --sidebar-foreground: 0.9239 0.019 83.0636;
+    --sidebar-primary: 0.7264 0.0581 66.6967;
+    --sidebar-primary-foreground: 0.2747 0.0139 57.6523;
+    --sidebar-accent: 0.4186 0.0281 56.3404;
+    --sidebar-accent-foreground: 0.9239 0.019 83.0636;
+    --sidebar-border: 0.3795 0.0181 57.128;
+    --sidebar-ring: 0.7264 0.0581 66.6967;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans overflow-x-hidden;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Typography defaults */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading), 'Playfair Display', serif;
+  }
+
+  /* Focus visible styles */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Smooth transitions */
+  button,
+  a,
+  input,
+  textarea,
+  select {
+    @apply transition-all duration-200 ease-in-out;
+  }
+
+  /* Custom scrollbar styles */
+  ::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-muted;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full;
+    background-color: oklch(var(--muted-foreground) / 0.5);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: oklch(var(--muted-foreground) / 0.7);
+  }
+
+  /* Selection styles */
+  ::selection {
+    background-color: oklch(var(--primary) / 0.2);
+    color: oklch(var(--primary-foreground));
+  }
+}
+
+@layer utilities {
+  /* Text utilities */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Animation utilities */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes fade-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes slide-in-from-top {
+    from {
+      transform: translateY(-100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slide-in-from-bottom {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slide-in-from-left {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slide-in-from-right {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.2s ease-in-out;
+  }
+
+  .animate-fade-out {
+    animation: fade-out 0.2s ease-in-out;
+  }
+
+  .animate-slide-in-from-top {
+    animation: slide-in-from-top 0.2s ease-out;
+  }
+
+  .animate-slide-in-from-bottom {
+    animation: slide-in-from-bottom 0.2s ease-out;
+  }
+
+  .animate-slide-in-from-left {
+    animation: slide-in-from-left 0.2s ease-out;
+  }
+
+  .animate-slide-in-from-right {
+    animation: slide-in-from-right 0.2s ease-out;
+  }
+
+  @keyframes collapsible-down {
+    from {
+      height: 0;
+      opacity: 0;
+    }
+    to {
+      height: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+  }
+
+  @keyframes collapsible-up {
+    from {
+      height: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+    to {
+      height: 0;
+      opacity: 0;
+    }
+  }
+
+  /* Loading skeleton animation - Designer Portal specific */
+  @keyframes shimmer {
+    0% {
+      background-position: -1000px 0;
+    }
+    100% {
+      background-position: 1000px 0;
+    }
+  }
+
+  .animate-shimmer {
+    animation: shimmer 2s infinite linear;
+    background: linear-gradient(
+      to right,
+      oklch(var(--muted)) 0%,
+      oklch(var(--muted-foreground) / 0.1) 50%,
+      oklch(var(--muted)) 100%
+    );
+    background-size: 1000px 100%;
+  }
+
+  /* Custom scrollbar thin utility - Designer Portal specific */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(var(--muted-foreground)) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: oklch(var(--muted-foreground));
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: oklch(var(--foreground) / 0.5);
+  }
+}

@@ -1,0 +1,2107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patina — Companion & Navigation Flow Wireframes</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   PATINA COMPANION & FLOW WIREFRAMES
+   The Companion as Navigation — A Living Presence
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+    --patina-off-white: #EDE9E4;
+    --patina-clay-beige: #A3927C;
+    --patina-mocha-brown: #655B52;
+    --patina-charcoal: #3F3B37;
+    --patina-soft-cream: #F5F2ED;
+    --patina-warm-white: #FAF7F2;
+    
+    --font-display: 'Playfair Display', Georgia, serif;
+    --font-body: 'Inter', -apple-system, sans-serif;
+    
+    --wire-bg: #F8F8F8;
+    --wire-border: #D0D0D0;
+}
+
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html { font-size: 16px; scroll-behavior: smooth; }
+
+body {
+    font-family: var(--font-body);
+    background: var(--patina-off-white);
+    color: var(--patina-charcoal);
+    line-height: 1.6;
+}
+
+/* Layout */
+.section {
+    padding: 5rem 2rem;
+}
+
+.section--dark {
+    background: var(--patina-charcoal);
+    color: var(--patina-off-white);
+}
+
+.section--cream {
+    background: var(--patina-soft-cream);
+}
+
+.section--clay {
+    background: var(--patina-clay-beige);
+    color: white;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.container--narrow {
+    max-width: 900px;
+}
+
+/* Typography */
+.display {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: 500;
+    line-height: 1.15;
+}
+
+.h1 {
+    font-family: var(--font-display);
+    font-size: clamp(1.75rem, 3.5vw, 2.5rem);
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.h2 {
+    font-family: var(--font-display);
+    font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+    font-weight: 500;
+    line-height: 1.3;
+}
+
+.h3 {
+    font-family: var(--font-display);
+    font-size: 1.125rem;
+    font-weight: 500;
+}
+
+.lead {
+    font-size: 1.125rem;
+    color: var(--patina-mocha-brown);
+    line-height: 1.7;
+}
+
+.eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--patina-clay-beige);
+}
+
+em { font-style: italic; }
+
+/* Hero */
+.hero {
+    min-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 4rem 2rem;
+    background: linear-gradient(135deg, var(--patina-warm-white) 0%, var(--patina-off-white) 50%, var(--patina-soft-cream) 100%);
+    position: relative;
+}
+
+.hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.03;
+    pointer-events: none;
+}
+
+.hero__content {
+    position: relative;
+    z-index: 1;
+    max-width: 700px;
+}
+
+.strata {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 2rem;
+}
+
+.strata__line {
+    height: 3px;
+    border-radius: 3px;
+}
+
+.strata__line:nth-child(1) { width: 60px; background: var(--patina-mocha-brown); }
+.strata__line:nth-child(2) { width: 45px; background: var(--patina-clay-beige); }
+.strata__line:nth-child(3) { width: 30px; background: var(--patina-clay-beige); opacity: 0.5; }
+
+.hero__subtitle {
+    margin-top: 1.5rem;
+    font-size: 1.0625rem;
+    color: var(--patina-mocha-brown);
+}
+
+/* Section Header */
+.section-header {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+.section-header__title {
+    margin-top: 0.5rem;
+}
+
+.section-header__desc {
+    max-width: 600px;
+    margin: 1rem auto 0;
+    color: var(--patina-mocha-brown);
+}
+
+.section--dark .section-header__desc,
+.section--clay .section-header__desc {
+    color: rgba(255,255,255,0.75);
+}
+
+/* Phone Frame */
+.phone-frame {
+    background: #1a1a1a;
+    border-radius: 44px;
+    padding: 12px;
+    box-shadow: 0 25px 70px rgba(0,0,0,0.35), inset 0 0 0 2px #333;
+    position: relative;
+}
+
+.phone-frame::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 28px;
+    background: #1a1a1a;
+    border-radius: 0 0 16px 16px;
+    z-index: 10;
+}
+
+.phone-frame--small {
+    transform: scale(0.85);
+}
+
+.phone-screen {
+    width: 280px;
+    height: 606px;
+    border-radius: 34px;
+    overflow: hidden;
+    position: relative;
+    background: var(--patina-off-white);
+}
+
+/* Screen Variants */
+.screen--dark {
+    background: var(--patina-charcoal);
+}
+
+.screen--ar {
+    background: linear-gradient(180deg, #4a5568 0%, #2d3748 100%);
+}
+
+.screen--threshold {
+    background: linear-gradient(180deg, #2a2520 0%, #1a1714 100%);
+}
+
+/* Wireframe Showcase */
+.wireframe-showcase {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 3rem;
+    margin: 2rem 0;
+}
+
+.wireframe-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.wireframe-label {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 500;
+    margin-top: 1.25rem;
+    text-align: center;
+}
+
+.wireframe-desc {
+    font-size: 0.8125rem;
+    color: var(--patina-mocha-brown);
+    text-align: center;
+    max-width: 260px;
+    margin-top: 0.375rem;
+}
+
+/* Companion States */
+.companion-collapsed {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 80px;
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(20px);
+    border-radius: 24px 24px 0 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+}
+
+.companion-pulling {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 160px;
+    background: rgba(255,255,255,0.98);
+    backdrop-filter: blur(20px);
+    border-radius: 24px 24px 0 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 12px;
+    box-shadow: 0 -8px 30px rgba(0,0,0,0.12);
+}
+
+.companion-expanded {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 420px;
+    background: rgba(255,255,255,0.98);
+    backdrop-filter: blur(20px);
+    border-radius: 24px 24px 0 0;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 -12px 40px rgba(0,0,0,0.15);
+}
+
+.companion-handle {
+    width: 36px;
+    height: 4px;
+    background: var(--patina-clay-beige);
+    opacity: 0.4;
+    border-radius: 2px;
+    margin: 8px 0 12px;
+}
+
+.companion-strata {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.companion-strata__line {
+    height: 2px;
+    border-radius: 1px;
+    background: var(--patina-clay-beige);
+}
+
+.companion-strata__line:nth-child(1) { width: 20px; }
+.companion-strata__line:nth-child(2) { width: 15px; opacity: 0.7; }
+.companion-strata__line:nth-child(3) { width: 10px; opacity: 0.4; }
+
+.companion-hint {
+    font-size: 10px;
+    color: var(--patina-clay-beige);
+    margin-top: 8px;
+}
+
+.companion-strata--breathing {
+    animation: breathe 3s ease-in-out infinite;
+}
+
+@keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.companion-strata--pulse {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Companion Chat */
+.companion-chat {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+.companion-message {
+    margin-bottom: 16px;
+}
+
+.companion-message--patina {
+    padding-right: 30px;
+}
+
+.companion-message--user {
+    padding-left: 30px;
+    text-align: right;
+}
+
+.companion-message__text {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--patina-charcoal);
+}
+
+.companion-message--patina .companion-message__text {
+    font-family: var(--font-display);
+    font-style: italic;
+}
+
+.companion-message__author {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--patina-clay-beige);
+    margin-top: 4px;
+}
+
+.companion-input {
+    padding: 12px 16px 28px;
+    border-top: 1px solid rgba(163, 146, 124, 0.15);
+}
+
+.companion-input__field {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--patina-soft-cream);
+    border: none;
+    border-radius: 20px;
+    font-size: 13px;
+    color: var(--patina-charcoal);
+}
+
+/* Quick Actions */
+.companion-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 16px;
+}
+
+.companion-action {
+    padding: 8px 14px;
+    background: var(--patina-soft-cream);
+    border-radius: 16px;
+    font-size: 12px;
+    color: var(--patina-mocha-brown);
+}
+
+.companion-action--primary {
+    background: var(--patina-clay-beige);
+    color: white;
+}
+
+/* Context Indicator */
+.companion-context {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--patina-soft-cream);
+    font-size: 11px;
+    color: var(--patina-mocha-brown);
+}
+
+.companion-context__icon {
+    width: 20px;
+    height: 20px;
+    background: var(--patina-clay-beige);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: white;
+}
+
+/* Flow Diagram */
+.flow-diagram {
+    background: white;
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 4px 20px rgba(101, 91, 82, 0.08);
+    margin: 2rem 0;
+    overflow-x: auto;
+}
+
+.flow-diagram__title {
+    font-family: var(--font-display);
+    font-size: 1.125rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.flow-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+}
+
+.flow-node {
+    padding: 1rem 1.5rem;
+    background: var(--patina-soft-cream);
+    border-radius: 12px;
+    font-size: 0.875rem;
+    text-align: center;
+    min-width: 120px;
+}
+
+.flow-node--primary {
+    background: var(--patina-clay-beige);
+    color: white;
+}
+
+.flow-node--companion {
+    background: var(--patina-charcoal);
+    color: var(--patina-off-white);
+    border: 2px dashed var(--patina-clay-beige);
+}
+
+.flow-node--screen {
+    background: white;
+    border: 2px solid var(--patina-clay-beige);
+}
+
+.flow-arrow {
+    color: var(--patina-clay-beige);
+    font-size: 1.25rem;
+}
+
+.flow-arrow--down {
+    transform: rotate(90deg);
+}
+
+.flow-arrow--bidirectional::before {
+    content: '↔';
+}
+
+/* Annotation */
+.annotation {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--patina-soft-cream);
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+}
+
+.annotation__number {
+    width: 24px;
+    height: 24px;
+    background: var(--patina-clay-beige);
+    color: white;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.annotation__text {
+    font-size: 0.875rem;
+    color: var(--patina-mocha-brown);
+    line-height: 1.5;
+}
+
+/* State Table */
+.state-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 2rem 0;
+    font-size: 0.875rem;
+}
+
+.state-table th,
+.state-table td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(163, 146, 124, 0.15);
+}
+
+.state-table th {
+    background: var(--patina-soft-cream);
+    font-weight: 600;
+    color: var(--patina-charcoal);
+}
+
+.state-table td {
+    color: var(--patina-mocha-brown);
+}
+
+.state-table code {
+    background: rgba(163, 146, 124, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.8125rem;
+}
+
+/* Gesture Diagram */
+.gesture-diagram {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin: 2rem 0;
+}
+
+.gesture-card {
+    background: white;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 16px rgba(101, 91, 82, 0.06);
+}
+
+.gesture-card__visual {
+    height: 100px;
+    background: var(--patina-soft-cream);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.gesture-card__title {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.gesture-card__desc {
+    font-size: 0.8125rem;
+    color: var(--patina-mocha-brown);
+    line-height: 1.5;
+}
+
+/* Journey Map */
+.journey-map {
+    position: relative;
+    padding: 2rem 0;
+}
+
+.journey-path {
+    position: absolute;
+    top: 50%;
+    left: 5%;
+    right: 5%;
+    height: 3px;
+    background: linear-gradient(90deg, 
+        var(--patina-clay-beige) 0%,
+        var(--patina-mocha-brown) 50%,
+        var(--patina-charcoal) 100%
+    );
+    border-radius: 2px;
+    z-index: 0;
+}
+
+.journey-nodes {
+    display: flex;
+    justify-content: space-between;
+    position: relative;
+    z-index: 1;
+}
+
+.journey-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 140px;
+}
+
+.journey-node__dot {
+    width: 48px;
+    height: 48px;
+    background: white;
+    border: 3px solid var(--patina-clay-beige);
+    border-radius: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 12px rgba(101, 91, 82, 0.15);
+}
+
+.journey-node__label {
+    font-family: var(--font-display);
+    font-size: 0.875rem;
+    text-align: center;
+    color: var(--patina-charcoal);
+}
+
+.journey-node__companion {
+    font-size: 0.6875rem;
+    color: var(--patina-clay-beige);
+    text-align: center;
+    margin-top: 0.375rem;
+    font-style: italic;
+}
+
+/* Screen Content Elements */
+.screen-status {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px 0;
+    font-size: 11px;
+    font-weight: 500;
+    z-index: 5;
+}
+
+.screen-status--light { color: var(--patina-charcoal); }
+.screen-status--dark { color: white; }
+
+.screen-header {
+    padding: 60px 20px 16px;
+}
+
+.screen-title {
+    font-family: var(--font-display);
+    font-size: 20px;
+    color: var(--patina-charcoal);
+}
+
+.screen-subtitle {
+    font-size: 13px;
+    color: var(--patina-mocha-brown);
+    margin-top: 4px;
+}
+
+/* Conversation Screen Content */
+.conversation-area {
+    flex: 1;
+    padding: 60px 20px 100px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+
+.conv-message {
+    margin-bottom: 16px;
+}
+
+.conv-message--patina {
+    padding-right: 40px;
+}
+
+.conv-message--user {
+    padding-left: 40px;
+    text-align: right;
+}
+
+.conv-message__bubble {
+    display: inline-block;
+    padding: 12px 16px;
+    border-radius: 16px;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.conv-message--patina .conv-message__bubble {
+    background: white;
+    font-family: var(--font-display);
+    font-style: italic;
+    color: var(--patina-charcoal);
+}
+
+.conv-message--user .conv-message__bubble {
+    background: var(--patina-clay-beige);
+    color: white;
+}
+
+/* Walk Screen Content */
+.walk-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.walk-narration {
+    position: absolute;
+    bottom: 120px;
+    left: 20px;
+    right: 20px;
+    text-align: center;
+}
+
+.walk-narration__text {
+    font-family: var(--font-display);
+    font-size: 17px;
+    font-style: italic;
+    color: white;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    line-height: 1.5;
+}
+
+.walk-detected {
+    position: absolute;
+    top: 100px;
+    left: 30px;
+    right: 30px;
+    height: 180px;
+    border: 2px dashed rgba(163, 146, 124, 0.6);
+    border-radius: 4px;
+}
+
+.walk-detected__label {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    font-size: 9px;
+    color: var(--patina-clay-beige);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Emergence Screen Content */
+.emergence-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px 120px;
+    height: 100%;
+}
+
+.emergence-piece {
+    width: 160px;
+    height: 160px;
+    background: linear-gradient(135deg, #d4a574 0%, #a3927c 100%);
+    border-radius: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 56px;
+    margin-bottom: 24px;
+    box-shadow: 0 16px 48px rgba(163, 146, 124, 0.3);
+}
+
+.emergence-info {
+    text-align: center;
+}
+
+.emergence-maker {
+    font-size: 10px;
+    color: var(--patina-clay-beige);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.emergence-name {
+    font-family: var(--font-display);
+    font-size: 20px;
+    color: var(--patina-charcoal);
+    margin-top: 6px;
+}
+
+.emergence-provenance {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-style: italic;
+    color: var(--patina-mocha-brown);
+    margin-top: 8px;
+    max-width: 200px;
+}
+
+/* Table Screen Content */
+.table-surface {
+    position: absolute;
+    top: 100px;
+    left: 20px;
+    right: 20px;
+    bottom: 100px;
+    background: linear-gradient(180deg, 
+        rgba(101, 91, 82, 0.15) 0%,
+        rgba(101, 91, 82, 0.25) 100%
+    );
+    border-radius: 12px;
+    border: 1px solid rgba(163, 146, 124, 0.2);
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    padding: 16px;
+    gap: 12px;
+}
+
+.table-item {
+    width: 60px;
+    height: 60px;
+    background: white;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+}
+
+.table-item--aged {
+    filter: sepia(15%) saturate(90%);
+    border: 1px solid rgba(163, 146, 124, 0.3);
+}
+
+/* Principle Card */
+.principle-card {
+    background: white;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 16px rgba(101, 91, 82, 0.06);
+}
+
+.principle-card__icon {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, var(--patina-clay-beige), var(--patina-mocha-brown));
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.principle-card__title {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.principle-card__text {
+    font-size: 0.875rem;
+    color: var(--patina-mocha-brown);
+    line-height: 1.6;
+}
+
+/* Grid Layouts */
+.grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.grid-3 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+/* Quote Block */
+.quote-block {
+    background: white;
+    border-radius: 16px;
+    padding: 2.5rem;
+    margin: 2rem 0;
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(101, 91, 82, 0.06);
+}
+
+.quote-block__text {
+    font-family: var(--font-display);
+    font-size: 1.375rem;
+    font-style: italic;
+    line-height: 1.6;
+    color: var(--patina-charcoal);
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.quote-block__author {
+    margin-top: 1.25rem;
+    font-size: 0.875rem;
+    color: var(--patina-clay-beige);
+}
+
+/* Notification Dot */
+.notification-dot {
+    width: 10px;
+    height: 10px;
+    background: var(--patina-clay-beige);
+    border-radius: 5px;
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Footer */
+.footer {
+    padding: 3rem 2rem;
+    text-align: center;
+    background: var(--patina-charcoal);
+    color: var(--patina-off-white);
+}
+
+.footer__strata {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 1.5rem;
+}
+
+.footer__strata-line {
+    height: 3px;
+    border-radius: 3px;
+}
+
+.footer__strata-line:nth-child(1) { width: 60px; background: rgba(237, 233, 228, 0.8); }
+.footer__strata-line:nth-child(2) { width: 45px; background: var(--patina-clay-beige); }
+.footer__strata-line:nth-child(3) { width: 30px; background: var(--patina-clay-beige); opacity: 0.5; }
+
+.footer__tagline {
+    font-family: var(--font-display);
+    font-size: 1.125rem;
+    font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .phone-frame--small { transform: scale(0.75); }
+    .wireframe-showcase { gap: 1.5rem; }
+    .journey-nodes { flex-wrap: wrap; gap: 2rem; justify-content: center; }
+    .journey-path { display: none; }
+}
+    </style>
+</head>
+<body>
+
+<!-- Hero -->
+<section class="hero">
+    <div class="hero__content">
+        <div class="strata">
+            <div class="strata__line"></div>
+            <div class="strata__line"></div>
+            <div class="strata__line"></div>
+        </div>
+        <p class="eyebrow">Navigation & Flow Specification</p>
+        <h1 class="display">The Companion<br><em>System</em></h1>
+        <p class="hero__subtitle">
+            How users flow through Patina without tabs, menus, or conventional navigation — 
+            guided by a breathing presence that knows where they are and where they want to go.
+        </p>
+    </div>
+</section>
+
+<!-- The Core Concept -->
+<section class="section">
+    <div class="container container--narrow">
+        <header class="section-header">
+            <p class="eyebrow">Core Concept</p>
+            <h2 class="h1 section-header__title">Navigation as Conversation</h2>
+            <p class="section-header__desc">
+                The Companion replaces traditional navigation entirely. 
+                There's no tab bar, no hamburger menu, no bottom navigation. 
+                Instead, a single, living element — the Strata Mark — is always present, 
+                ready to guide.
+            </p>
+        </header>
+        
+        <div class="quote-block">
+            <p class="quote-block__text">
+                "Where do you want to go?" becomes "What would you like to do?" 
+                Navigation through intent, not icons.
+            </p>
+            <p class="quote-block__author">— Design philosophy</p>
+        </div>
+        
+        <div class="grid-3">
+            <div class="principle-card">
+                <div class="principle-card__icon">🧭</div>
+                <h3 class="principle-card__title">Always Present</h3>
+                <p class="principle-card__text">
+                    The Companion appears on every screen. 
+                    It's never hidden, never replaced. 
+                    A constant, reassuring presence.
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">💬</div>
+                <h3 class="principle-card__title">Intent-Based</h3>
+                <p class="principle-card__text">
+                    "Show me my rooms." "What surfaced today?" 
+                    Users describe where they want to go. 
+                    Patina understands and responds.
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">🎯</div>
+                <h3 class="principle-card__title">Context-Aware</h3>
+                <p class="principle-card__text">
+                    The Companion knows which screen you're on. 
+                    Pull it up from Emergence, and it knows 
+                    you might want to discuss that piece.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Companion Visual States -->
+<section class="section section--cream">
+    <div class="container">
+        <header class="section-header">
+            <p class="eyebrow">Visual States</p>
+            <h2 class="h1 section-header__title">Three States of Presence</h2>
+            <p class="section-header__desc">
+                The Companion transitions fluidly between collapsed, pulling, and expanded states.
+                Each state serves a purpose in the user's journey.
+            </p>
+        </header>
+        
+        <div class="wireframe-showcase">
+            <!-- State 1: Collapsed -->
+            <div class="wireframe-item">
+                <div class="phone-frame phone-frame--small">
+                    <div class="phone-screen">
+                        <div class="screen-status screen-status--light">
+                            <span>9:41</span>
+                            <span>●●● 100%</span>
+                        </div>
+                        <div class="screen-header">
+                            <h2 class="screen-title">Your Rooms</h2>
+                            <p class="screen-subtitle">3 spaces saved</p>
+                        </div>
+                        <!-- Companion Collapsed -->
+                        <div class="companion-collapsed">
+                            <div class="companion-handle"></div>
+                            <div class="companion-strata companion-strata--breathing">
+                                <div class="companion-strata__line"></div>
+                                <div class="companion-strata__line"></div>
+                                <div class="companion-strata__line"></div>
+                            </div>
+                            <p class="companion-hint">Pull up to speak</p>
+                        </div>
+                    </div>
+                </div>
+                <p class="wireframe-label">Collapsed (Resting)</p>
+                <p class="wireframe-desc">
+                    Gentle breathing animation. Minimal footprint.
+                    User knows it's there without distraction.
+                </p>
+            </div>
+            
+            <!-- State 2: Pulling -->
+            <div class="wireframe-item">
+                <div class="phone-frame phone-frame--small">
+                    <div class="phone-screen">
+                        <div class="screen-status screen-status--light">
+                            <span>9:41</span>
+                            <span>●●● 100%</span>
+                        </div>
+                        <div class="screen-header">
+                            <h2 class="screen-title">Your Rooms</h2>
+                            <p class="screen-subtitle">3 spaces saved</p>
+                        </div>
+                        <!-- Companion Pulling -->
+                        <div class="companion-pulling">
+                            <div class="companion-handle"></div>
+                            <div class="companion-strata" style="transform: scale(1.2);">
+                                <div class="companion-strata__line"></div>
+                                <div class="companion-strata__line"></div>
+                                <div class="companion-strata__line"></div>
+                            </div>
+                            <div class="companion-actions" style="margin-top: 16px;">
+                                <span class="companion-action">Walk a room</span>
+                                <span class="companion-action">My table</span>
+                                <span class="companion-action">What's new?</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="wireframe-label">Pulling (Anticipating)</p>
+                <p class="wireframe-desc">
+                    Quick actions appear as user pulls. 
+                    Release before threshold returns to collapsed.
+                </p>
+            </div>
+            
+            <!-- State 3: Expanded -->
+            <div class="wireframe-item">
+                <div class="phone-frame phone-frame--small">
+                    <div class="phone-screen">
+                        <div class="screen-status screen-status--light">
+                            <span>9:41</span>
+                            <span>●●● 100%</span>
+                        </div>
+                        <!-- Companion Expanded -->
+                        <div class="companion-expanded">
+                            <div style="padding: 8px 0; display: flex; justify-content: center;">
+                                <div class="companion-handle"></div>
+                            </div>
+                            <div class="companion-context">
+                                <div class="companion-context__icon">🏠</div>
+                                <span>Viewing: Your Rooms</span>
+                            </div>
+                            <div class="companion-chat">
+                                <div class="companion-message companion-message--patina">
+                                    <p class="companion-message__text">
+                                        You have three rooms saved. 
+                                        Would you like to walk a new space, 
+                                        or revisit one you've scanned?
+                                    </p>
+                                    <p class="companion-message__author">Patina</p>
+                                </div>
+                                <div class="companion-message companion-message--user">
+                                    <p class="companion-message__text">
+                                        Show me what's surfaced lately
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="companion-input">
+                                <input type="text" class="companion-input__field" placeholder="Ask or say anything...">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="wireframe-label">Expanded (Engaged)</p>
+                <p class="wireframe-desc">
+                    Full conversational interface. Context shown.
+                    User can navigate by intent from here.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Companion with Notification -->
+<section class="section">
+    <div class="container">
+        <header class="section-header">
+            <p class="eyebrow">Proactive Presence</p>
+            <h2 class="h1 section-header__title">When Patina Has Something to Share</h2>
+            <p class="section-header__desc">
+                The Companion pulses gently when there's something new — 
+                an emerged piece, an insight about your collection, a thought.
+            </p>
+        </header>
+        
+        <div class="wireframe-showcase">
+            <!-- With Notification -->
+            <div class="wireframe-item">
+                <div class="phone-frame phone-frame--small">
+                    <div class="phone-screen">
+                        <div class="screen-status screen-status--light">
+                            <span>9:41</span>
+                            <span>●●● 100%</span>
+                        </div>
+                        <div class="conversation-area">
+                            <div class="conv-message conv-message--patina">
+                                <div class="conv-message__bubble">
+                                    Tell me about a room where you feel most yourself.
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Companion with pulse -->
+                        <div class="companion-collapsed">
+                            <div class="companion-handle"></div>
+                            <div class="companion-strata companion-strata--pulse" style="position: relative;">
+                                <div class="companion-strata__line"></div>
+                                <div class="companion-strata__line"></div>
+                                <div class="companion-strata__line"></div>
+                                <div class="notification-dot"></div>
+                            </div>
+                            <p class="companion-hint" style="color: var(--patina-mocha-brown);">Something surfaced</p>
+                        </div>
+                    </div>
+                </div>
+                <p class="wireframe-label">Pulsing (Has Message)</p>
+                <p class="wireframe-desc">
+                    Subtle pulse draws attention without interrupting.
+                    Hint text changes to indicate what's waiting.
+                </p>
+            </div>
+            
+            <!-- Notification Revealed -->
+            <div class="wireframe-item">
+                <div class="phone-frame phone-frame--small">
+                    <div class="phone-screen">
+                        <div class="screen-status screen-status--light">
+                            <span>9:41</span>
+                            <span>●●● 100%</span>
+                        </div>
+                        <!-- Companion Expanded with notification -->
+                        <div class="companion-expanded">
+                            <div style="padding: 8px 0; display: flex; justify-content: center;">
+                                <div class="companion-handle"></div>
+                            </div>
+                            <div class="companion-context" style="background: var(--patina-clay-beige); color: white;">
+                                <div class="companion-context__icon" style="background: white; color: var(--patina-clay-beige);">✨</div>
+                                <span>Something surfaced for your living room</span>
+                            </div>
+                            <div class="companion-chat">
+                                <div class="companion-message companion-message--patina">
+                                    <p class="companion-message__text">
+                                        A piece emerged that might speak to your space — 
+                                        hand-turned walnut, from a workshop in Vermont. 
+                                        Shall I show you?
+                                    </p>
+                                    <p class="companion-message__author">Patina</p>
+                                </div>
+                            </div>
+                            <div class="companion-actions">
+                                <span class="companion-action companion-action--primary">Show me</span>
+                                <span class="companion-action">Later</span>
+                                <span class="companion-action">Tell me more first</span>
+                            </div>
+                            <div class="companion-input">
+                                <input type="text" class="companion-input__field" placeholder="Or ask anything...">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="wireframe-label">Notification Revealed</p>
+                <p class="wireframe-desc">
+                    When opened, the notification context is shown.
+                    Quick actions help user respond immediately.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Context-Aware Behaviors -->
+<section class="section section--dark">
+    <div class="container">
+        <header class="section-header">
+            <p class="eyebrow" style="color: var(--patina-clay-beige);">Contextual Intelligence</p>
+            <h2 class="h1 section-header__title">The Companion Knows Where You Are</h2>
+            <p class="section-header__desc">
+                Pull up the Companion from any screen, and it understands the context.
+                Its suggestions, questions, and actions adapt accordingly.
+            </p>
+        </header>
+        
+        <div class="wireframe-showcase">
+            <!-- From Walk Screen -->
+            <div class="wireframe-item">
+                <div class="phone-frame phone-frame--small">
+                    <div class="phone-screen screen--ar">
+                        <div class="walk-overlay">
+                            <div class="walk-detected">
+                                <span class="walk-detected__label">south wall</span>
+                            </div>
+                            <div class="walk-narration">
+                                <p class="walk-narration__text">
+                                    "Natural light from two directions... 
+                                    that's something special."
+                                </p>
+                            </div>
+                        </div>
+                        <!-- Companion Expanded on AR -->
+                        <div class="companion-expanded" style="height: 280px;">
+                            <div style="padding: 8px 0; display: flex; justify-content: center;">
+                                <div class="companion-handle"></div>
+                            </div>
+                            <div class="companion-context">
+                                <div class="companion-context__icon">🚶</div>
+                                <span>Walking: Living Room (68% complete)</span>
+                            </div>
+                            <div class="companion-chat" style="padding: 12px 16px;">
+                                <div class="companion-message companion-message--patina">
+                                    <p class="companion-message__text" style="font-size: 13px;">
+                                        Still capturing? Take your time. 
+                                        Or I can save what we have so far.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="companion-actions">
+                                <span class="companion-action companion-action--primary">Continue walking</span>
+                                <span class="companion-action">Save progress</span>
+                                <span class="companion-action">Start over</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="wireframe-label">Context: The Walk</p>
+                <p class="wireframe-desc" style="color: rgba(237,233,228,0.7);">
+                    Shows scan progress. Actions relate to the walk.
+                    Can pause, save, or restart from here.
+                </p>
+            </div>
+            
+            <!-- From Emergence -->
+            <div class="wireframe-item">
+                <div class="phone-frame phone-frame--small">
+                    <div class="phone-screen">
+                        <div class="emergence-content" style="padding-bottom: 300px;">
+                            <div class="emergence-piece" style="width: 120px; height: 120px; font-size: 42px;">🪑</div>
+                            <div class="emergence-info">
+                                <p class="emergence-maker">Thos. Moser</p>
+                                <p class="emergence-name" style="font-size: 17px;">Edo Lounge Chair</p>
+                            </div>
+                        </div>
+                        <!-- Companion Expanded on Emergence -->
+                        <div class="companion-expanded" style="height: 300px;">
+                            <div style="padding: 8px 0; display: flex; justify-content: center;">
+                                <div class="companion-handle"></div>
+                            </div>
+                            <div class="companion-context">
+                                <div class="companion-context__icon">🪑</div>
+                                <span>Viewing: Edo Lounge Chair by Thos. Moser</span>
+                            </div>
+                            <div class="companion-chat" style="padding: 12px 16px;">
+                                <div class="companion-message companion-message--patina">
+                                    <p class="companion-message__text" style="font-size: 13px;">
+                                        This piece caught my attention for you. 
+                                        Want me to tell you why, or place it in your room?
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="companion-actions">
+                                <span class="companion-action">Why this piece?</span>
+                                <span class="companion-action companion-action--primary">See in my room</span>
+                                <span class="companion-action">Similar pieces</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="wireframe-label">Context: Emergence</p>
+                <p class="wireframe-desc" style="color: rgba(237,233,228,0.7);">
+                    Knows which piece you're viewing.
+                    Can explain, visualize, or find alternatives.
+                </p>
+            </div>
+            
+            <!-- From Table -->
+            <div class="wireframe-item">
+                <div class="phone-frame phone-frame--small">
+                    <div class="phone-screen screen--dark">
+                        <div class="table-surface" style="bottom: 280px; background: rgba(255,255,255,0.08);">
+                            <div class="table-item table-item--aged">🪑</div>
+                            <div class="table-item">🛋️</div>
+                            <div class="table-item table-item--aged">📚</div>
+                            <div class="table-item">🏺</div>
+                        </div>
+                        <!-- Companion Expanded on Table -->
+                        <div class="companion-expanded" style="height: 280px; background: rgba(255,255,255,0.95);">
+                            <div style="padding: 8px 0; display: flex; justify-content: center;">
+                                <div class="companion-handle"></div>
+                            </div>
+                            <div class="companion-context">
+                                <div class="companion-context__icon">🪵</div>
+                                <span>Your Table: 4 pieces gathering</span>
+                            </div>
+                            <div class="companion-chat" style="padding: 12px 16px;">
+                                <div class="companion-message companion-message--patina">
+                                    <p class="companion-message__text" style="font-size: 13px;">
+                                        I notice the chair and bookshelf have 
+                                        been here longest. They speak to each other well.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="companion-actions">
+                                <span class="companion-action">See them together</span>
+                                <span class="companion-action">What's missing?</span>
+                                <span class="companion-action companion-action--primary">Share my table</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="wireframe-label">Context: The Table</p>
+                <p class="wireframe-desc" style="color: rgba(237,233,228,0.7);">
+                    Knows your collection. Offers resonance insights.
+                    Can suggest what's missing or export.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Navigation Flow -->
+<section class="section">
+    <div class="container">
+        <header class="section-header">
+            <p class="eyebrow">Navigation Model</p>
+            <h2 class="h1 section-header__title">Intent-Based Navigation</h2>
+            <p class="section-header__desc">
+                Users don't tap icons to navigate. They express intent through conversation.
+                The Companion interprets and transitions them to the right place.
+            </p>
+        </header>
+        
+        <div class="flow-diagram">
+            <h3 class="flow-diagram__title">Navigation Through Dialogue</h3>
+            
+            <div class="flow-row">
+                <div class="flow-node flow-node--companion">The Companion</div>
+            </div>
+            
+            <div class="flow-row">
+                <span class="flow-arrow flow-arrow--down">↓</span>
+            </div>
+            
+            <div class="flow-row">
+                <div class="flow-node">"Walk a room"</div>
+                <div class="flow-node">"Show me what surfaced"</div>
+                <div class="flow-node">"My table"</div>
+                <div class="flow-node">"My rooms"</div>
+            </div>
+            
+            <div class="flow-row">
+                <span class="flow-arrow flow-arrow--down">↓</span>
+                <span class="flow-arrow flow-arrow--down">↓</span>
+                <span class="flow-arrow flow-arrow--down">↓</span>
+                <span class="flow-arrow flow-arrow--down">↓</span>
+            </div>
+            
+            <div class="flow-row">
+                <div class="flow-node flow-node--screen">The Walk</div>
+                <div class="flow-node flow-node--screen">Emergence</div>
+                <div class="flow-node flow-node--screen">The Table</div>
+                <div class="flow-node flow-node--screen">Room List</div>
+            </div>
+        </div>
+        
+        <div class="grid-2">
+            <div>
+                <h3 class="h3" style="margin-bottom: 1rem;">Sample Navigation Phrases</h3>
+                <table class="state-table">
+                    <thead>
+                        <tr>
+                            <th>User Says</th>
+                            <th>Patina Navigates To</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>"Let's walk my bedroom"</td>
+                            <td>→ Walk (new scan)</td>
+                        </tr>
+                        <tr>
+                            <td>"What's new?"</td>
+                            <td>→ Latest Emergence</td>
+                        </tr>
+                        <tr>
+                            <td>"Show me my collection"</td>
+                            <td>→ The Table</td>
+                        </tr>
+                        <tr>
+                            <td>"I want to see that chair again"</td>
+                            <td>→ Specific piece detail</td>
+                        </tr>
+                        <tr>
+                            <td>"Take me back"</td>
+                            <td>→ Previous screen</td>
+                        </tr>
+                        <tr>
+                            <td>"Start over"</td>
+                            <td>→ Conversation reset</td>
+                        </tr>
+                        <tr>
+                            <td>"I need help"</td>
+                            <td>→ Guidance overlay</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div>
+                <h3 class="h3" style="margin-bottom: 1rem;">Transition Behavior</h3>
+                <div class="annotation">
+                    <span class="annotation__number">1</span>
+                    <span class="annotation__text">
+                        <strong>Smooth collapse:</strong> When navigating away, the Companion 
+                        smoothly collapses as the new screen slides in. Never abrupt.
+                    </span>
+                </div>
+                <div class="annotation">
+                    <span class="annotation__number">2</span>
+                    <span class="annotation__text">
+                        <strong>Context preservation:</strong> The Companion remembers the 
+                        conversation. Return to it and pick up where you left off.
+                    </span>
+                </div>
+                <div class="annotation">
+                    <span class="annotation__number">3</span>
+                    <span class="annotation__text">
+                        <strong>Graceful uncertainty:</strong> If Patina isn't sure what you mean, 
+                        it asks for clarification rather than guessing wrong.
+                    </span>
+                </div>
+                <div class="annotation">
+                    <span class="annotation__number">4</span>
+                    <span class="annotation__text">
+                        <strong>Back gestures:</strong> Edge swipe back always works as expected, 
+                        returning to the previous screen in the stack.
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Complete User Journey Map -->
+<section class="section section--clay">
+    <div class="container">
+        <header class="section-header">
+            <p class="eyebrow" style="color: rgba(255,255,255,0.7);">Complete Journey</p>
+            <h2 class="h1 section-header__title">The Companion Across All Experiences</h2>
+            <p class="section-header__desc">
+                From first launch to daily use, the Companion evolves its presence 
+                while remaining the constant thread through every interaction.
+            </p>
+        </header>
+        
+        <div class="journey-map">
+            <div class="journey-path"></div>
+            <div class="journey-nodes">
+                <div class="journey-node">
+                    <div class="journey-node__dot">🚪</div>
+                    <span class="journey-node__label">Threshold</span>
+                    <span class="journey-node__companion">Not yet present</span>
+                </div>
+                <div class="journey-node">
+                    <div class="journey-node__dot">💬</div>
+                    <span class="journey-node__label">Conversation</span>
+                    <span class="journey-node__companion">First appearance</span>
+                </div>
+                <div class="journey-node">
+                    <div class="journey-node__dot">🚶</div>
+                    <span class="journey-node__label">Walk</span>
+                    <span class="journey-node__companion">Narrating guide</span>
+                </div>
+                <div class="journey-node">
+                    <div class="journey-node__dot">✨</div>
+                    <span class="journey-node__label">Emergence</span>
+                    <span class="journey-node__companion">Thoughtful curator</span>
+                </div>
+                <div class="journey-node">
+                    <div class="journey-node__dot">🪵</div>
+                    <span class="journey-node__label">Table</span>
+                    <span class="journey-node__companion">Collection guardian</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Gesture Interactions -->
+<section class="section">
+    <div class="container">
+        <header class="section-header">
+            <p class="eyebrow">Interaction Design</p>
+            <h2 class="h1 section-header__title">Companion Gestures</h2>
+            <p class="section-header__desc">
+                Physical gestures that feel natural and embodied — 
+                like reaching for a friend rather than pressing a button.
+            </p>
+        </header>
+        
+        <div class="gesture-diagram">
+            <div class="gesture-card">
+                <div class="gesture-card__visual">🫳</div>
+                <h3 class="gesture-card__title">Pull Up</h3>
+                <p class="gesture-card__desc">
+                    Drag upward from the Strata Mark. Quick actions appear at 80px. 
+                    Full conversation opens at 150px. Spring physics provide satisfying feedback.
+                </p>
+            </div>
+            <div class="gesture-card">
+                <div class="gesture-card__visual">👇</div>
+                <h3 class="gesture-card__title">Push Down</h3>
+                <p class="gesture-card__desc">
+                    Drag down on the expanded Companion to collapse. 
+                    Also triggered by tapping outside the sheet. 
+                    Conversation state is preserved.
+                </p>
+            </div>
+            <div class="gesture-card">
+                <div class="gesture-card__visual">👆</div>
+                <h3 class="gesture-card__title">Tap Mark</h3>
+                <p class="gesture-card__desc">
+                    Quick tap expands to full conversation immediately. 
+                    Useful when you know you want to talk, 
+                    not just peek at quick actions.
+                </p>
+            </div>
+            <div class="gesture-card">
+                <div class="gesture-card__visual">🎤</div>
+                <h3 class="gesture-card__title">Long Press</h3>
+                <p class="gesture-card__desc">
+                    Hold on the Strata Mark to activate voice input. 
+                    Speak your intent naturally. Release to send. 
+                    Haptic confirms activation.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Detailed Flow Diagrams -->
+<section class="section section--cream">
+    <div class="container">
+        <header class="section-header">
+            <p class="eyebrow">Detailed Flows</p>
+            <h2 class="h1 section-header__title">Screen-to-Screen Transitions</h2>
+        </header>
+        
+        <!-- Flow 1: First Launch -->
+        <div class="flow-diagram">
+            <h3 class="flow-diagram__title">Flow 1: First Launch Journey</h3>
+            <div class="flow-row">
+                <div class="flow-node flow-node--primary">App Launch</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node flow-node--screen">Threshold</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node">"Hold to enter"</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node flow-node--screen">Conversation</div>
+            </div>
+            <div class="flow-row" style="margin-top: 1rem;">
+                <div class="flow-node flow-node--screen">Conversation</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node">"Let's walk your space"</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node flow-node--screen">Walk</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node flow-node--screen">First Emergence</div>
+            </div>
+            <p style="text-align: center; color: var(--patina-mocha-brown); font-size: 0.875rem; margin-top: 1rem;">
+                The Companion appears after the Threshold, guiding the first conversation and walk.
+            </p>
+        </div>
+        
+        <!-- Flow 2: Returning User -->
+        <div class="flow-diagram">
+            <h3 class="flow-diagram__title">Flow 2: Returning User (Has Rooms)</h3>
+            <div class="flow-row">
+                <div class="flow-node flow-node--primary">App Launch</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node flow-node--screen">Room List</div>
+                <span class="flow-arrow">↔</span>
+                <div class="flow-node flow-node--companion">Companion</div>
+            </div>
+            <div class="flow-row" style="margin-top: 1rem;">
+                <div class="flow-node">If notification pending</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node flow-node--companion">Companion pulses</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node">"Something surfaced"</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node flow-node--screen">Emergence</div>
+            </div>
+            <p style="text-align: center; color: var(--patina-mocha-brown); font-size: 0.875rem; margin-top: 1rem;">
+                Returning users land on their rooms. Companion indicates if something new is waiting.
+            </p>
+        </div>
+        
+        <!-- Flow 3: Daily Engagement -->
+        <div class="flow-diagram">
+            <h3 class="flow-diagram__title">Flow 3: Daily Engagement Loop</h3>
+            <div class="flow-row">
+                <div class="flow-node flow-node--screen">Any Screen</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node flow-node--companion">Pull Companion</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node">"What's new?"</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node flow-node--screen">Latest Emergence</div>
+            </div>
+            <div class="flow-row" style="margin-top: 1rem;">
+                <div class="flow-node flow-node--screen">Emergence</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node">"Invite to stay"</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node flow-node--screen">Table (piece added)</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node flow-node--companion">Companion reflects</div>
+            </div>
+            <p style="text-align: center; color: var(--patina-mocha-brown); font-size: 0.875rem; margin-top: 1rem;">
+                The engagement loop: check what's new, respond, see collection grow.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- State Machine -->
+<section class="section">
+    <div class="container container--narrow">
+        <header class="section-header">
+            <p class="eyebrow">Technical Specification</p>
+            <h2 class="h1 section-header__title">Companion State Machine</h2>
+        </header>
+        
+        <table class="state-table">
+            <thead>
+                <tr>
+                    <th>State</th>
+                    <th>Height</th>
+                    <th>Triggers</th>
+                    <th>Next States</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>collapsed</code></td>
+                    <td>80px</td>
+                    <td>Default, push down, tap outside, navigation</td>
+                    <td>pulling, expanded</td>
+                </tr>
+                <tr>
+                    <td><code>pulling</code></td>
+                    <td>80-400px</td>
+                    <td>Drag gesture on mark</td>
+                    <td>collapsed (release &lt;150px), expanded (release &gt;150px)</td>
+                </tr>
+                <tr>
+                    <td><code>expanded</code></td>
+                    <td>400px</td>
+                    <td>Pull past threshold, tap mark, notification tap</td>
+                    <td>collapsed, navigating</td>
+                </tr>
+                <tr>
+                    <td><code>navigating</code></td>
+                    <td>Collapsing</td>
+                    <td>User requests navigation via intent</td>
+                    <td>collapsed (on new screen)</td>
+                </tr>
+                <tr>
+                    <td><code>pulsing</code></td>
+                    <td>80px</td>
+                    <td>New emergence or insight available</td>
+                    <td>expanded (on interact), collapsed (message viewed)</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div style="margin-top: 2rem;">
+            <h3 class="h3" style="margin-bottom: 1rem;">Context Properties</h3>
+            <table class="state-table">
+                <thead>
+                    <tr>
+                        <th>Property</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>currentScreen</code></td>
+                        <td>Screen enum</td>
+                        <td>Which experience the user is in</td>
+                    </tr>
+                    <tr>
+                        <td><code>viewingPiece</code></td>
+                        <td>FurniturePiece?</td>
+                        <td>If viewing a specific piece</td>
+                    </tr>
+                    <tr>
+                        <td><code>activeRoom</code></td>
+                        <td>Room?</td>
+                        <td>If in a room context</td>
+                    </tr>
+                    <tr>
+                        <td><code>walkProgress</code></td>
+                        <td>Float?</td>
+                        <td>If walk is in progress</td>
+                    </tr>
+                    <tr>
+                        <td><code>pendingNotification</code></td>
+                        <td>Notification?</td>
+                        <td>Unacknowledged message</td>
+                    </tr>
+                    <tr>
+                        <td><code>conversationHistory</code></td>
+                        <td>[Message]</td>
+                        <td>Full dialogue state</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<!-- Screen Inventory -->
+<section class="section section--dark">
+    <div class="container">
+        <header class="section-header">
+            <p class="eyebrow" style="color: var(--patina-clay-beige);">Complete Inventory</p>
+            <h2 class="h1 section-header__title">Screens & Companion Behavior</h2>
+        </header>
+        
+        <div class="grid-2">
+            <div class="principle-card">
+                <div class="principle-card__icon">🚪</div>
+                <h3 class="principle-card__title">Threshold</h3>
+                <p class="principle-card__text">
+                    <strong>Companion:</strong> Not present<br>
+                    <strong>Transition:</strong> Appears after hold completes<br>
+                    <strong>Reason:</strong> First entry should feel unmediated
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">💬</div>
+                <h3 class="principle-card__title">Conversation</h3>
+                <p class="principle-card__text">
+                    <strong>Companion:</strong> Collapsed, subtle<br>
+                    <strong>Context:</strong> "Getting to know you"<br>
+                    <strong>Actions:</strong> Skip to walk, tell me more
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">🚶</div>
+                <h3 class="principle-card__title">The Walk</h3>
+                <p class="principle-card__text">
+                    <strong>Companion:</strong> Narrating, collapsed between<br>
+                    <strong>Context:</strong> Room name, progress %<br>
+                    <strong>Actions:</strong> Pause, save, start over
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">✨</div>
+                <h3 class="principle-card__title">Emergence</h3>
+                <p class="principle-card__text">
+                    <strong>Companion:</strong> Collapsed, can explain<br>
+                    <strong>Context:</strong> Piece name, maker<br>
+                    <strong>Actions:</strong> Why this?, see in room, similar
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">🪵</div>
+                <h3 class="principle-card__title">The Table</h3>
+                <p class="principle-card__text">
+                    <strong>Companion:</strong> Collapsed, offers insights<br>
+                    <strong>Context:</strong> Piece count, resonances<br>
+                    <strong>Actions:</strong> What's missing?, share, clear
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">🏠</div>
+                <h3 class="principle-card__title">Room List</h3>
+                <p class="principle-card__text">
+                    <strong>Companion:</strong> Collapsed, ready<br>
+                    <strong>Context:</strong> Room count<br>
+                    <strong>Actions:</strong> Walk new room, recent emergences
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">👁️</div>
+                <h3 class="principle-card__title">Piece Detail</h3>
+                <p class="principle-card__text">
+                    <strong>Companion:</strong> Collapsed, knowledgeable<br>
+                    <strong>Context:</strong> Piece name, saved status<br>
+                    <strong>Actions:</strong> Tell me more, similar pieces
+                </p>
+            </div>
+            <div class="principle-card">
+                <div class="principle-card__icon">📍</div>
+                <h3 class="principle-card__title">AR Placement</h3>
+                <p class="principle-card__text">
+                    <strong>Companion:</strong> Collapsed, advisory<br>
+                    <strong>Context:</strong> Piece + room<br>
+                    <strong>Actions:</strong> Adjust, save photo, swap piece
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Quick Actions Reference -->
+<section class="section">
+    <div class="container container--narrow">
+        <header class="section-header">
+            <p class="eyebrow">Quick Reference</p>
+            <h2 class="h1 section-header__title">Context-Specific Quick Actions</h2>
+            <p class="section-header__desc">
+                When pulling the Companion (before full expansion), 
+                quick action chips appear based on context.
+            </p>
+        </header>
+        
+        <table class="state-table">
+            <thead>
+                <tr>
+                    <th>Current Screen</th>
+                    <th>Quick Actions (Left to Right)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Conversation</td>
+                    <td>Walk a room • Skip ahead • Start fresh</td>
+                </tr>
+                <tr>
+                    <td>Walk (in progress)</td>
+                    <td>Continue • Save progress • Start over</td>
+                </tr>
+                <tr>
+                    <td>Walk (complete)</td>
+                    <td>See what fits • Walk another • My table</td>
+                </tr>
+                <tr>
+                    <td>Emergence</td>
+                    <td>Why this? • See in room • Let it drift</td>
+                </tr>
+                <tr>
+                    <td>Table</td>
+                    <td>What's missing? • See together • Share</td>
+                </tr>
+                <tr>
+                    <td>Room List</td>
+                    <td>Walk new room • Latest emergence • My table</td>
+                </tr>
+                <tr>
+                    <td>Piece Detail</td>
+                    <td>See in room • Similar pieces • Add to table</td>
+                </tr>
+                <tr>
+                    <td>AR Placement</td>
+                    <td>Save photo • Try another • Exit AR</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- Voice Patterns -->
+<section class="section section--cream">
+    <div class="container container--narrow">
+        <header class="section-header">
+            <p class="eyebrow">Companion Voice</p>
+            <h2 class="h1 section-header__title">How Patina Speaks</h2>
+            <p class="section-header__desc">
+                The Companion has a consistent voice — warm, curious, unhurried.
+                Never robotic, never salesy.
+            </p>
+        </header>
+        
+        <div class="quote-block">
+            <p class="quote-block__text">
+                "I noticed you've lingered on that chair. 
+                There's something about hand-turned wood that 
+                wants to be touched, isn't there?"
+            </p>
+            <p class="quote-block__author">— Contextual observation</p>
+        </div>
+        
+        <div class="grid-2" style="margin-top: 2rem;">
+            <div>
+                <h3 class="h3" style="margin-bottom: 1rem;">Voice Principles</h3>
+                <div class="annotation">
+                    <span class="annotation__number">✓</span>
+                    <span class="annotation__text">
+                        <strong>Uses "I" sparingly:</strong> "I noticed" not "I think you should"
+                    </span>
+                </div>
+                <div class="annotation">
+                    <span class="annotation__number">✓</span>
+                    <span class="annotation__text">
+                        <strong>Asks, doesn't tell:</strong> "Would you like to..." not "You should..."
+                    </span>
+                </div>
+                <div class="annotation">
+                    <span class="annotation__number">✓</span>
+                    <span class="annotation__text">
+                        <strong>Specific, not generic:</strong> Names pieces, makers, materials
+                    </span>
+                </div>
+                <div class="annotation">
+                    <span class="annotation__number">✓</span>
+                    <span class="annotation__text">
+                        <strong>Sensory language:</strong> Touch, warmth, weight, grain
+                    </span>
+                </div>
+            </div>
+            <div>
+                <h3 class="h3" style="margin-bottom: 1rem;">Sample Phrases</h3>
+                <div class="annotation">
+                    <span class="annotation__number">💬</span>
+                    <span class="annotation__text">
+                        "Something surfaced that might speak to that corner you mentioned."
+                    </span>
+                </div>
+                <div class="annotation">
+                    <span class="annotation__number">💬</span>
+                    <span class="annotation__text">
+                        "The light in here is remarkable. Afternoon sun?"
+                    </span>
+                </div>
+                <div class="annotation">
+                    <span class="annotation__number">💬</span>
+                    <span class="annotation__text">
+                        "These two pieces have been on your table awhile. They complement each other."
+                    </span>
+                </div>
+                <div class="annotation">
+                    <span class="annotation__number">💬</span>
+                    <span class="annotation__text">
+                        "Ready when you are. No rush."
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer class="footer">
+    <div class="footer__strata">
+        <div class="footer__strata-line"></div>
+        <div class="footer__strata-line"></div>
+        <div class="footer__strata-line"></div>
+    </div>
+    <p class="footer__tagline">"Where Time Adds Value"</p>
+    <p style="margin-top: 1rem; font-size: 0.8125rem; opacity: 0.5;">
+        Patina Companion & Flow Wireframes • Version 1.0 • January 2026
+    </p>
+</footer>
+
+</body>
+</html>

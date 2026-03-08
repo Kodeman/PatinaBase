@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Testing
+coverage/
+test-results/
+playwright-report/
+
+# Plasmo (extension)
+.plasmo/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.mypy_cache/
+
+# Storybook
+storybook-static/
+
+# Supabase
+supabase/.temp/
+
+# Infrastructure secrets
+infra/secrets.txt
+infra/.env
+infra/.env.swp
+infra/coolify/.env.coolify
+
+# Misc
+*.log
+npm-debug.log*
+pnpm-debug.log*

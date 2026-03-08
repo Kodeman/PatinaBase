@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 
+    Patina App Icon - Layer 2: Strata Lines
+    For use with Apple Icon Composer (iOS 26 / Liquid Glass)
+    
+    The three horizontal lines representing accumulated layers of time.
+    Note: Line 3 opacity (50%) should be applied in Icon Composer, not here.
+    
+    Positioning:
+    - Lines centered horizontally
+    - Positioned in lower third of icon
+    - Gap from P to Line 1: ~34px
+    - Gap between lines: ~26px
+  -->
+  
+  <!-- Line 1: Mocha Brown - Full width reference (40% of 1024 = 410px) -->
+  <rect 
+    x="307" 
+    y="560" 
+    width="410" 
+    height="34" 
+    rx="17" 
+    fill="#655B52"
+  />
+  
+  <!-- Line 2: Clay Beige - 80% of Line 1 width (30% of 1024 = 307px) -->
+  <rect 
+    x="358.5" 
+    y="620" 
+    width="307" 
+    height="29" 
+    rx="14.5" 
+    fill="#A3927C"
+  />
+  
+  <!-- Line 3: Clay Beige - 60% of Line 1 width (21% of 1024 = 215px) -->
+  <!-- NOTE: Apply 50% opacity in Icon Composer, exported at full opacity here -->
+  <rect 
+    x="404.5" 
+    y="674" 
+    width="215" 
+    height="23" 
+    rx="11.5" 
+    fill="#A3927C"
+  />
+</svg>

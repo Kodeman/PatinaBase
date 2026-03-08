@@ -1,0 +1,1 @@
+ALTER TABLE email_templates ADD COLUMN IF NOT EXISTS html_content TEXT NOT NULL DEFAULT '';

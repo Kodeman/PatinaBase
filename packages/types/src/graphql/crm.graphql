@@ -1,0 +1,825 @@
+# Patina CRM GraphQL Schema v2
+# Unified client relationship management with lifecycle, health scoring, touchpoints, and insights
+
+"""
+Scalar types for CRM
+"""
+scalar DateTime
+scalar JSON
+scalar UUID
+
+"""
+Enums for CRM
+"""
+
+enum ClientStage {
+  PROSPECT
+  LEAD
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum ClientSegment {
+  RESIDENTIAL
+  COMMERCIAL
+  HOSPITALITY
+}
+
+enum TouchpointType {
+  CALL
+  MEETING
+  EMAIL
+  PORTAL_ACTIVITY
+  APPROVAL
+  UPLOAD
+  NOTE
+}
+
+enum TouchpointChannel {
+  PHONE
+  ZOOM
+  EMAIL
+  IN_PERSON
+  PORTAL
+  SMS
+}
+
+enum SentimentScore {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+enum HealthScoreTier {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum RecommendationType {
+  UPSELL
+  NEXT_ACTION
+  CONTENT
+  TIMING
+}
+
+enum RecommendationStatus {
+  PENDING
+  CONFIRMED
+  DISMISSED
+  ACTIONED
+}
+
+enum RiskAlertSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+}
+
+enum RiskAlertType {
+  CHURN
+  SLA_BREACH
+  SENTIMENT
+  APPROVAL_DELAY
+  ENGAGEMENT_DROP
+}
+
+enum BudgetBand {
+  UNDER_25K
+  BAND_25K_50K
+  BAND_50K_100K
+  BAND_100K_250K
+  BAND_250K_500K
+  BAND_500K_PLUS
+}
+
+enum HouseholdRole {
+  PRIMARY_DECISION_MAKER
+  INFLUENCER
+  BUDGET_HOLDER
+  OTHER
+}
+
+enum PropertyType {
+  RESIDENTIAL
+  COMMERCIAL
+  HOSPITALITY
+  OTHER
+}
+
+# ============================================================================
+# INPUT TYPES
+# ============================================================================
+
+input CreateClientInput {
+  email: String!
+  firstName: String!
+  lastName: String!
+  phone: String
+  source: String
+  referralSource: String
+  marketingConsent: Boolean
+  property: PropertyInfoInput
+  household: [HouseholdMemberInput!]
+  financial: FinancialInfoInput
+  customFields: JSON
+}
+
+input UpdateClientInput {
+  firstName: String
+  lastName: String
+  phone: String
+  property: PropertyInfoInput
+  household: [HouseholdMemberInput!]
+  financial: FinancialInfoInput
+  status: String
+  notes: String
+}
+
+input PropertyInfoInput {
+  type: PropertyType!
+  address: String
+  city: String
+  state: String
+  zip: String
+  country: String
+  squareFeet: Int
+  rooms: Int
+  bathrooms: Float
+  constructionStatus: String
+  yearBuilt: Int
+  styles: [String!]
+  features: [String!]
+}
+
+input HouseholdMemberInput {
+  id: UUID
+  name: String!
+  email: String
+  phone: String
+  role: HouseholdRole!
+  communicationPreference: String!
+  decisionInfluence: Int
+}
+
+input FinancialInfoInput {
+  budgetBand: BudgetBand!
+  budgetMin: Float
+  budgetMax: Float
+  currency: String
+  paymentTerms: String
+  creditLimit: Float
+}
+
+input CreateTouchpointInput {
+  type: TouchpointType!
+  channel: TouchpointChannel!
+  date: DateTime!
+  duration: String
+  subject: String
+  notes: String
+  sentiment: SentimentScore
+  participants: [TouchpointParticipantInput!]
+  clientResponseRequired: Boolean
+  outcome: String
+  artifacts: [TouchpointArtifactInput!]
+}
+
+input TouchpointParticipantInput {
+  id: UUID
+  name: String
+  role: String
+}
+
+input TouchpointArtifactInput {
+  id: UUID
+  type: String!
+  name: String!
+  url: String!
+}
+
+input StageTransitionInput {
+  newStage: ClientStage!
+  reason: String
+  notes: String
+  force: Boolean
+}
+
+input RecommendationFeedbackInput {
+  status: RecommendationStatus!
+  notes: String
+}
+
+input OverrideHealthScoreInput {
+  score: Float!
+  reason: String!
+  notes: String
+}
+
+input FilterOptions {
+  page: Int
+  pageSize: Int
+  search: String
+  status: String
+  segment: ClientSegment
+  budgetMin: Float
+  budgetMax: Float
+  owner: UUID
+  riskTier: HealthScoreTier
+}
+
+# ============================================================================
+# TYPE DEFINITIONS
+# ============================================================================
+
+type Client {
+  id: UUID!
+  userId: UUID!
+  email: String!
+  firstName: String!
+  lastName: String!
+  phone: String
+
+  currentStage: ClientStage!
+  segment: ClientSegment
+  owner: User
+  ownerId: UUID
+  status: String!
+
+  property: PropertyInfo
+  householdMembers: [HouseholdMember!]
+  financial: FinancialInfo
+
+  healthScore: HealthScore
+  engagement: EngagementMetrics
+
+  # Relations
+  touchpoints(limit: Int, offset: Int): [Touchpoint!]!
+  recommendations: [Recommendation!]!
+  riskAlerts: [RiskAlert!]!
+  activityLog: [ClientActivityLog!]!
+  notes(limit: Int): [ClientNote!]!
+
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type PropertyInfo {
+  id: UUID!
+  type: PropertyType!
+  address: String
+  city: String
+  state: String
+  zip: String
+  country: String
+  squareFeet: Int
+  rooms: Int
+  bathrooms: Float
+  constructionStatus: String
+  yearBuilt: Int
+  styles: [String!]!
+  features: [String!]!
+}
+
+type HouseholdMember {
+  id: UUID!
+  name: String!
+  email: String
+  phone: String
+  role: HouseholdRole!
+  communicationPreference: String!
+  decisionInfluence: Int!
+}
+
+type FinancialInfo {
+  id: UUID!
+  budgetBand: BudgetBand!
+  budgetMin: Float
+  budgetMax: Float
+  currency: String!
+  paymentTerms: String
+  creditLimit: Float
+}
+
+"""
+Customer360 unified view of client across all services
+"""
+type Customer360 {
+  client: Client!
+  activeProjects: [ProjectSummary!]!
+  orders: [OrderSummary!]!
+  communications: CommunicationsSummary!
+  styleProfile: StyleProfileSummary
+  predictiveInsights: PredictiveInsights!
+}
+
+type ProjectSummary {
+  id: UUID!
+  name: String!
+  status: String!
+  stage: String!
+  budget: Float!
+  spend: Float!
+  owner: String!
+  startDate: DateTime!
+  targetEndDate: DateTime!
+  nextMilestone: DateTime
+}
+
+type OrderSummary {
+  id: UUID!
+  status: String!
+  total: Float!
+  createdAt: DateTime!
+  eta: DateTime
+}
+
+type CommunicationsSummary {
+  activeThreads: Int!
+  unreadMessages: Int!
+  lastMessage: DateTime
+  sentiment: SentimentScore
+}
+
+type StyleProfileSummary {
+  preferences: [String!]!
+  lastUpdated: DateTime!
+  confidence: Float!
+}
+
+type PredictiveInsights {
+  healthScore: HealthScoreSummary!
+  nextBestAction: String
+  upsellOpportunity: String
+  engagementWindow: String
+}
+
+type HealthScoreSummary {
+  score: Float!
+  tier: HealthScoreTier!
+  trend: String
+  nextReviewDate: DateTime
+}
+
+"""
+HealthScore with component breakdown
+"""
+type HealthScore {
+  id: UUID!
+  clientId: UUID!
+  score: Float!
+  tier: HealthScoreTier!
+
+  components: HealthScoreComponents!
+  churnRiskScore: Float!
+  churnProbability: Float!
+  churnRiskFactors: [String!]!
+
+  trend: String
+  previousScore: Float
+  historicalScores: [HistoricalScore!]!
+
+  calculatedBy: String!
+  calculatedAt: DateTime!
+  overriddenAt: DateTime
+  overriddenBy: UUID
+  overrideReason: String
+
+  risks: [HealthRisk!]
+}
+
+type HealthScoreComponents {
+  slaCompliance: HealthScoreComponent!
+  sentiment: HealthScoreComponent!
+  activity: HealthScoreComponent!
+  orderVariance: HealthScoreComponent!
+  approvalLatency: HealthScoreComponent!
+}
+
+type HealthScoreComponent {
+  score: Float!
+  weight: Float!
+  detail: String!
+  trend: String
+}
+
+type HistoricalScore {
+  date: DateTime!
+  score: Float!
+  tier: HealthScoreTier!
+}
+
+type HealthRisk {
+  risk: String!
+  probability: Float!
+  recommendation: String!
+}
+
+"""
+Touchpoint: Record of client interaction
+"""
+type Touchpoint {
+  id: UUID!
+  clientId: UUID!
+  type: TouchpointType!
+  channel: TouchpointChannel!
+  date: DateTime!
+  duration: String
+
+  subject: String
+  notes: String
+  sentiment: SentimentScore
+
+  participants: [TouchpointParticipant!]!
+  createdBy: User
+  clientResponseRequired: Boolean!
+  outcome: String
+  artifacts: [TouchpointArtifact!]!
+
+  linkedProjects: [UUID!]!
+  linkedThreads: [UUID!]!
+  linkedApprovals: [UUID!]!
+
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type TouchpointParticipant {
+  id: UUID!
+  name: String!
+  role: String!
+}
+
+type TouchpointArtifact {
+  id: UUID!
+  type: String!
+  name: String!
+  url: String!
+}
+
+"""
+Engagement metrics for a client
+"""
+type EngagementMetrics {
+  clientId: UUID!
+
+  totalTouchpoints: Int!
+  lastTouchpointAt: DateTime
+  avgTouchpointInterval: Int
+
+  messageCount: Int!
+  unreadMessageCount: Int!
+  avgResponseTimeHours: Float
+  lastMessageAt: DateTime
+  messagesSentiment: SentimentScore
+
+  approvalRate: Float!
+  approvalCount: Int!
+  rejectionCount: Int!
+  totalApprovalsRequested: Int!
+  pendingApprovalsCount: Int!
+  avgApprovalDays: Float
+
+  portalLastLoginAt: DateTime
+  portalLoginCount: Int!
+  daysInactive: Int
+  contentInteractions: JSON!
+
+  touchpointTrend: String
+  engagementScore: Float!
+  engagementTier: String!
+
+  updatedAt: DateTime!
+}
+
+"""
+Recommendation: AI-powered suggestion
+"""
+type Recommendation {
+  id: UUID!
+  clientId: UUID!
+  type: RecommendationType!
+  title: String!
+  description: String
+
+  confidence: Float!
+  suggestedTiming: String
+
+  relatedEntity: RelatedEntity
+  suggestedAction: String
+  reasoning: String
+
+  estimatedLift: EstimatedLift
+  status: RecommendationStatus!
+  confirmedAt: DateTime
+  dismissedAt: DateTime
+  actionedAt: DateTime
+  dismissalReason: String
+  actionNotes: String
+  userFeedback: String
+  feedbackAt: DateTime
+
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type RelatedEntity {
+  type: String!
+  id: UUID!
+  name: String!
+}
+
+type EstimatedLift {
+  metric: String!
+  expectedValue: Float!
+}
+
+"""
+RiskAlert: High-priority alert for client attention
+"""
+type RiskAlert {
+  id: UUID!
+  clientId: UUID!
+  clientName: String!
+  severity: RiskAlertSeverity!
+  type: RiskAlertType!
+  title: String!
+  description: String!
+
+  detectedAt: DateTime!
+  detectedBy: String
+  detectedReason: String
+
+  relatedEntity: RelatedEntity
+  suggestedActions: [String!]!
+  assignedTo: User
+  resolvedAt: DateTime
+  resolutionNotes: String
+
+  escalatedAt: DateTime
+  escalatedTo: UUID
+}
+
+type ClientActivityLog {
+  id: UUID!
+  clientId: UUID!
+  action: String!
+  actorId: UUID
+  actorName: String
+  previousValues: JSON
+  newValues: JSON
+  changedFields: [String!]!
+  source: String
+  ipAddress: String
+  createdAt: DateTime!
+}
+
+type ClientNote {
+  id: UUID!
+  clientId: UUID!
+  content: String!
+  author: User!
+  tags: [String!]!
+  isPinned: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""
+Insights and Analytics
+"""
+type PipelineVelocityMetrics {
+  timeRange: String!
+  data: [PipelineStage!]!
+}
+
+type PipelineStage {
+  stage: ClientStage!
+  clientCount: Int!
+  avgDuration: String!
+  medianDuration: String!
+  conversionRate: Float!
+  slaCompliance: Float!
+  bottleneck: Boolean!
+  notes: String
+}
+
+type ClientSegmentAnalysis {
+  dimension: String!
+  segments: [ClientSegment!]!
+}
+
+type ClientSegmentData {
+  name: String!
+  clientCount: Int!
+  avgHealthScore: Float!
+  avgOrderValue: Float!
+  churnRate: Float!
+  ltv: Float!
+  activeProjects: Int!
+  engagementIndex: Float!
+}
+
+type HealthTrends {
+  timeRange: String!
+  granularity: String!
+  data: [HealthTrendPeriod!]!
+}
+
+type HealthTrendPeriod {
+  period: DateTime!
+  avgScore: Float!
+  medianScore: Float!
+  distribution: HealthScoreDistribution!
+  anomalies: [HealthAnomaly!]
+}
+
+type HealthScoreDistribution {
+  low: Int!
+  medium: Int!
+  high: Int!
+}
+
+type HealthAnomaly {
+  clientId: UUID!
+  change: Float!
+  severity: String!
+}
+
+type RiskAlertSummary {
+  critical: Int!
+  high: Int!
+  medium: Int!
+}
+
+type User {
+  id: UUID!
+  email: String!
+  displayName: String
+}
+
+type StageTransitionResult {
+  clientId: UUID!
+  previousStage: ClientStage!
+  newStage: ClientStage!
+  transitionedAt: DateTime!
+  durationInStage: String!
+  nextMilestone: DateTime
+}
+
+type PaginatedClients {
+  data: [Client!]!
+  total: Int!
+  page: Int!
+  pageSize: Int!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrev: Boolean!
+}
+
+type PaginatedTouchpoints {
+  data: [Touchpoint!]!
+  total: Int!
+  page: Int!
+  pageSize: Int!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrev: Boolean!
+}
+
+type RecommendationList {
+  data: [Recommendation!]!
+  generatedAt: DateTime!
+  nextRefresh: DateTime!
+}
+
+# ============================================================================
+# QUERIES
+# ============================================================================
+
+type Query {
+  # Client Queries
+  client(id: UUID!): Client
+  clients(filters: FilterOptions): PaginatedClients!
+  customer360(clientId: UUID!): Customer360!
+
+  # Health Score Queries
+  clientHealthScore(clientId: UUID!, includeHistorical: Boolean): HealthScore
+  healthTrends(
+    timeRange: String
+    segment: String
+    owner: UUID
+    granularity: String
+  ): HealthTrends!
+
+  # Touchpoint Queries
+  touchpoints(
+    clientId: UUID!
+    page: Int
+    pageSize: Int
+    type: TouchpointType
+    channel: TouchpointChannel
+    startDate: DateTime
+    endDate: DateTime
+  ): PaginatedTouchpoints!
+
+  touchpoint(clientId: UUID!, touchpointId: UUID!): Touchpoint
+
+  # Recommendation Queries
+  recommendations(
+    clientId: UUID!
+    types: [RecommendationType!]
+  ): RecommendationList!
+
+  # Risk Queries
+  riskAlerts(
+    severity: RiskAlertSeverity
+    type: RiskAlertType
+  ): [RiskAlert!]!
+
+  # Analytics Queries
+  pipelineVelocity(
+    timeRange: String
+    segmentBy: String
+    owner: UUID
+  ): PipelineVelocityMetrics!
+
+  clientSegments(segmentDimension: String): [ClientSegmentData!]!
+
+  # Search
+  searchClients(query: String!): [Client!]!
+}
+
+# ============================================================================
+# MUTATIONS
+# ============================================================================
+
+type Mutation {
+  # Client Management
+  createClient(input: CreateClientInput!): Client!
+  updateClient(id: UUID!, input: UpdateClientInput!): Client!
+
+  # Lifecycle
+  transitionClientStage(
+    clientId: UUID!
+    input: StageTransitionInput!
+  ): StageTransitionResult!
+
+  # Health Scoring
+  overrideHealthScore(
+    clientId: UUID!
+    input: OverrideHealthScoreInput!
+  ): HealthScore!
+
+  # Touchpoints
+  createTouchpoint(clientId: UUID!, input: CreateTouchpointInput!): Touchpoint!
+  updateTouchpoint(
+    clientId: UUID!
+    touchpointId: UUID!
+    input: CreateTouchpointInput!
+  ): Touchpoint!
+
+  # Recommendations
+  feedbackRecommendation(
+    clientId: UUID!
+    recommendationId: UUID!
+    input: RecommendationFeedbackInput!
+  ): Recommendation!
+}
+
+# ============================================================================
+# SUBSCRIPTIONS
+# ============================================================================
+
+type Subscription {
+  """
+  Subscribe to client stage changes
+  """
+  clientStageChanged(clientId: UUID!): StageTransitionResult!
+
+  """
+  Subscribe to health score updates
+  """
+  healthScoreUpdated(clientId: UUID!): HealthScore!
+
+  """
+  Subscribe to new touchpoints
+  """
+  touchpointCreated(clientId: UUID!): Touchpoint!
+
+  """
+  Subscribe to new risk alerts
+  """
+  riskAlertCreated: RiskAlert!
+
+  """
+  Subscribe to new recommendations
+  """
+  recommendationGenerated(clientId: UUID!): Recommendation!
+
+  """
+  Subscribe to health score alerts
+  """
+  healthScoreAlert: RiskAlert!
+}

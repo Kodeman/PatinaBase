@@ -1,0 +1,133 @@
+# =============================================================================
+# PATINA NEXT.JS DOCKERFILE (Monorepo)
+# Multi-stage build for production deployment
+# =============================================================================
+#
+# USAGE (from monorepo root):
+#   docker build -t patina-designer-portal:latest \
+#     --build-arg APP_NAME=designer-portal \
+#     --build-arg NEXT_PUBLIC_SUPABASE_URL=https://api.patina.cloud \
+#     --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key \
+#     -f infra/Dockerfile.nextjs .
+#
+#   docker build -t patina-admin-portal:latest \
+#     --build-arg APP_NAME=admin-portal \
+#     --build-arg NEXT_PUBLIC_SUPABASE_URL=https://api.patina.cloud \
+#     --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key \
+#     -f infra/Dockerfile.nextjs .
+#
+#   docker build -t patina-client-portal:latest \
+#     --build-arg APP_NAME=client-portal \
+#     --build-arg NEXT_PUBLIC_SUPABASE_URL=https://api.patina.cloud \
+#     --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key \
+#     -f infra/Dockerfile.nextjs .
+# =============================================================================
+
+ARG APP_NAME
+
+# =============================================================================
+# STAGE 1: Dependencies
+# =============================================================================
+FROM node:20-alpine AS deps
+RUN apk add --no-cache libc6-compat
+RUN corepack enable pnpm
+
+WORKDIR /app
+
+# Copy workspace config and lockfile
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+
+# Copy all package.json files for workspace resolution
+COPY packages/types/package.json ./packages/types/
+COPY packages/utils/package.json ./packages/utils/
+COPY packages/cache/package.json ./packages/cache/
+COPY packages/auth/package.json ./packages/auth/
+COPY packages/api-client/package.json ./packages/api-client/
+COPY packages/api-routes/package.json ./packages/api-routes/
+COPY packages/patina-design-system/package.json ./packages/patina-design-system/
+COPY packages/supabase/package.json ./packages/supabase/
+COPY packages/shared/package.json ./packages/shared/
+
+ARG APP_NAME
+COPY apps/${APP_NAME}/package.json ./apps/${APP_NAME}/
+
+# Install all dependencies for the app and its workspace deps
+RUN pnpm install --frozen-lockfile --filter @patina/${APP_NAME}...
+
+# =============================================================================
+# STAGE 2: Builder
+# =============================================================================
+FROM node:20-alpine AS builder
+RUN corepack enable pnpm
+
+WORKDIR /app
+
+# Copy everything from deps
+COPY --from=deps /app/ ./
+
+# Copy all source code
+COPY packages/ ./packages/
+ARG APP_NAME
+COPY apps/${APP_NAME}/ ./apps/${APP_NAME}/
+
+# Build-time environment variables (baked into static output)
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_POSTHOG_KEY
+ARG NEXT_PUBLIC_POSTHOG_HOST
+
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+ENV NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY
+ENV NEXT_PUBLIC_POSTHOG_HOST=$NEXT_PUBLIC_POSTHOG_HOST
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Build shared packages first
+RUN pnpm --filter @patina/types build 2>/dev/null || true
+RUN pnpm --filter @patina/utils build 2>/dev/null || true
+RUN pnpm --filter @patina/design-system build 2>/dev/null || true
+
+# Build the app
+RUN pnpm --filter @patina/${APP_NAME} build
+
+# =============================================================================
+# STAGE 3: Runner (Production)
+# =============================================================================
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+ARG APP_NAME
+ENV APP_NAME=${APP_NAME}
+
+# Copy public assets
+COPY --from=builder /app/apps/${APP_NAME}/public ./public
+
+# Set correct permissions for prerender cache
+RUN mkdir .next && chown nextjs:nodejs .next
+
+# Copy standalone output (requires output: 'standalone' in next.config.js)
+# outputFileTracingRoot is set to ../../ (monorepo root), so standalone output
+# includes the full monorepo path structure
+COPY --from=builder --chown=nextjs:nodejs /app/apps/${APP_NAME}/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/${APP_NAME}/.next/static ./apps/${APP_NAME}/.next/static
+
+USER nextjs
+
+EXPOSE 3000
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+
+# Standalone output puts server.js in the app directory (shell form for ENV expansion)
+CMD node apps/${APP_NAME}/server.js

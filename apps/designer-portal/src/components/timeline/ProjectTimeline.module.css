@@ -1,0 +1,144 @@
+.timelineContainer {
+  position: relative;
+  min-height: 100vh;
+}
+
+.timelineHeader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: white;
+  transition: opacity 0.3s ease-out, background-color 0.3s ease-out;
+  pointer-events: none;
+}
+
+.timelineHeaderDark {
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+}
+
+.timelineHeaderContent {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+.timelineHeader h1 {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.timelineHeader p {
+  font-size: 18px;
+  opacity: 0.8;
+}
+
+.timelineOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.8), rgba(0,0,0,0.4));
+  pointer-events: none;
+  transition: opacity 0.3s ease-out;
+  z-index: 50;
+}
+
+.timelineOverview {
+  padding: 120px 24px 80px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.timelineOverviewContent {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.timelineOverview h2 {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 32px;
+}
+
+.overviewGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+}
+
+.overviewStat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.statLabel {
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.statValue {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.timelineSection {
+  padding: 80px 24px;
+  background: #f5f5f5;
+  min-height: 100vh;
+}
+
+.timelineContent {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.timelineTitle {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 48px;
+  color: #111;
+}
+
+.timelineMilestones {
+  position: relative;
+}
+
+/* Add timeline line */
+.timelineMilestones::before {
+  content: '';
+  position: absolute;
+  left: 20px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #ddd;
+}
+
+.milestoneWrapper {
+  animation-delay: var(--stagger-delay, 0ms);
+}
+
+@media (min-width: 768px) {
+  /* Only stagger on larger screens where multiple cards might be visible */
+  .milestoneWrapper {
+    animation: fadeInStagger 0.3s ease-out forwards;
+    animation-delay: inherit;
+  }
+}
+
+@keyframes fadeInStagger {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

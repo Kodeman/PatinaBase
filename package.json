@@ -1,0 +1,60 @@
+{
+  "name": "patina-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Patina - Custom Home Furnishing Platform",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev": "turbo run dev --concurrency=20",
+    "dev:minimal": "turbo run dev --filter=@patina/designer-portal --filter=@patina/orders --filter=@patina/media --filter=@patina/projects",
+    "dev:designer": "turbo run dev --filter=@patina/designer-portal --filter=@patina/orders --filter=@patina/media --filter=@patina/projects",
+    "dev:admin": "turbo run dev --filter=@patina/admin-portal --filter=@patina/orders --filter=@patina/media",
+    "dev:client": "turbo run dev --filter=@patina/client-portal --filter=@patina/orders --filter=@patina/projects",
+    "dev:frontend": "turbo run dev --filter='@patina/*-portal'",
+    "dev:backend": "turbo run dev --filter='./services/*'",
+    "build": "turbo run build",
+    "build:no-cache": "turbo run build --no-cache",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "lint:fix": "turbo run lint:fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,scss,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,scss,md}\"",
+    "type-check": "turbo run type-check",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "clean:cache": "turbo run clean && rm -rf .turbo node_modules",
+    "db:generate": "pnpm --filter @patina/supabase generate",
+    "db:push": "pnpm --filter @patina/supabase push",
+    "db:studio": "pnpm --filter @patina/supabase studio",
+    "supabase:start": "cd supabase && supabase start",
+    "supabase:stop": "cd supabase && supabase stop",
+    "supabase:reset": "cd supabase && supabase db reset",
+    "supabase:migration:new": "cd supabase && supabase migration new",
+    "prisma:generate": "pnpm --filter @patina/orders exec prisma generate && pnpm --filter @patina/media exec prisma generate && pnpm --filter @patina/projects exec prisma generate",
+    "prisma:push": "pnpm --filter @patina/orders exec prisma db push && pnpm --filter @patina/media exec prisma db push && pnpm --filter @patina/projects exec prisma db push"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.19",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^9.1.0",
+    "lint-staged": "^15.2.2",
+    "prettier": "^3.2.5",
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,css,scss,md}": [
+      "prettier --write"
+    ]
+  }
+}

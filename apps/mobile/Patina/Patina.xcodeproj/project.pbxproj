@@ -1,0 +1,718 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		CBB2D0C32F1D65F8007686CD /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0C22F1D65F8007686CD /* Auth */; };
+		CBB2D0C52F1D65F8007686CD /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0C42F1D65F8007686CD /* Functions */; };
+		CBB2D0C72F1D65F8007686CD /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0C62F1D65F8007686CD /* PostgREST */; };
+		CBB2D0C92F1D65F8007686CD /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0C82F1D65F8007686CD /* Realtime */; };
+		CBB2D0CB2F1D65F8007686CD /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0CA2F1D65F8007686CD /* Storage */; };
+		CBB2D0CD2F1D65F8007686CD /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0CC2F1D65F8007686CD /* Supabase */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		CBB2D0242F1D20F8007686CD /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CBB2D00E2F1D20F7007686CD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CBB2D0152F1D20F7007686CD;
+			remoteInfo = Patina;
+		};
+		CBB2D02E2F1D20F8007686CD /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CBB2D00E2F1D20F7007686CD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CBB2D0152F1D20F7007686CD;
+			remoteInfo = Patina;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		CBB2D0162F1D20F7007686CD /* Patina.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Patina.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CBB2D0232F1D20F8007686CD /* PatinaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PatinaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		CBB2D02D2F1D20F8007686CD /* PatinaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PatinaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		CBB2D51B2F26AF69007686CD /* Exceptions for "Patina" folder in "Patina" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = CBB2D0152F1D20F7007686CD /* Patina */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		CBB2D0182F1D20F7007686CD /* Patina */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				CBB2D51B2F26AF69007686CD /* Exceptions for "Patina" folder in "Patina" target */,
+			);
+			path = Patina;
+			sourceTree = "<group>";
+		};
+		CBB2D0262F1D20F8007686CD /* PatinaTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PatinaTests;
+			sourceTree = "<group>";
+		};
+		CBB2D0302F1D20F8007686CD /* PatinaUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PatinaUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		CBB2D0132F1D20F7007686CD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CBB2D0C72F1D65F8007686CD /* PostgREST in Frameworks */,
+				CBB2D0C52F1D65F8007686CD /* Functions in Frameworks */,
+				CBB2D0CD2F1D65F8007686CD /* Supabase in Frameworks */,
+				CBB2D0C32F1D65F8007686CD /* Auth in Frameworks */,
+				CBB2D0CB2F1D65F8007686CD /* Storage in Frameworks */,
+				CBB2D0C92F1D65F8007686CD /* Realtime in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CBB2D0202F1D20F8007686CD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CBB2D02A2F1D20F8007686CD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		CBB2D00D2F1D20F7007686CD = {
+			isa = PBXGroup;
+			children = (
+				CBB2D0182F1D20F7007686CD /* Patina */,
+				CBB2D0262F1D20F8007686CD /* PatinaTests */,
+				CBB2D0302F1D20F8007686CD /* PatinaUITests */,
+				CBB2D0172F1D20F7007686CD /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		CBB2D0172F1D20F7007686CD /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				CBB2D0162F1D20F7007686CD /* Patina.app */,
+				CBB2D0232F1D20F8007686CD /* PatinaTests.xctest */,
+				CBB2D02D2F1D20F8007686CD /* PatinaUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		CBB2D0152F1D20F7007686CD /* Patina */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CBB2D0372F1D20F8007686CD /* Build configuration list for PBXNativeTarget "Patina" */;
+			buildPhases = (
+				CBB2D0122F1D20F7007686CD /* Sources */,
+				CBB2D0132F1D20F7007686CD /* Frameworks */,
+				CBB2D0142F1D20F7007686CD /* Resources */,
+				CBB2D0412F1D5E34007686CD /* SwiftLint */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				CBB2D0182F1D20F7007686CD /* Patina */,
+			);
+			name = Patina;
+			packageProductDependencies = (
+				CBB2D0C22F1D65F8007686CD /* Auth */,
+				CBB2D0C42F1D65F8007686CD /* Functions */,
+				CBB2D0C62F1D65F8007686CD /* PostgREST */,
+				CBB2D0C82F1D65F8007686CD /* Realtime */,
+				CBB2D0CA2F1D65F8007686CD /* Storage */,
+				CBB2D0CC2F1D65F8007686CD /* Supabase */,
+			);
+			productName = Patina;
+			productReference = CBB2D0162F1D20F7007686CD /* Patina.app */;
+			productType = "com.apple.product-type.application";
+		};
+		CBB2D0222F1D20F8007686CD /* PatinaTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CBB2D03A2F1D20F8007686CD /* Build configuration list for PBXNativeTarget "PatinaTests" */;
+			buildPhases = (
+				CBB2D01F2F1D20F8007686CD /* Sources */,
+				CBB2D0202F1D20F8007686CD /* Frameworks */,
+				CBB2D0212F1D20F8007686CD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CBB2D0252F1D20F8007686CD /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				CBB2D0262F1D20F8007686CD /* PatinaTests */,
+			);
+			name = PatinaTests;
+			packageProductDependencies = (
+			);
+			productName = PatinaTests;
+			productReference = CBB2D0232F1D20F8007686CD /* PatinaTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		CBB2D02C2F1D20F8007686CD /* PatinaUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CBB2D03D2F1D20F8007686CD /* Build configuration list for PBXNativeTarget "PatinaUITests" */;
+			buildPhases = (
+				CBB2D0292F1D20F8007686CD /* Sources */,
+				CBB2D02A2F1D20F8007686CD /* Frameworks */,
+				CBB2D02B2F1D20F8007686CD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CBB2D02F2F1D20F8007686CD /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				CBB2D0302F1D20F8007686CD /* PatinaUITests */,
+			);
+			name = PatinaUITests;
+			packageProductDependencies = (
+			);
+			productName = PatinaUITests;
+			productReference = CBB2D02D2F1D20F8007686CD /* PatinaUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		CBB2D00E2F1D20F7007686CD /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2620;
+				LastUpgradeCheck = 2620;
+				TargetAttributes = {
+					CBB2D0152F1D20F7007686CD = {
+						CreatedOnToolsVersion = 26.2;
+					};
+					CBB2D0222F1D20F8007686CD = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = CBB2D0152F1D20F7007686CD;
+					};
+					CBB2D02C2F1D20F8007686CD = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = CBB2D0152F1D20F7007686CD;
+					};
+				};
+			};
+			buildConfigurationList = CBB2D0112F1D20F7007686CD /* Build configuration list for PBXProject "Patina" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = CBB2D00D2F1D20F7007686CD;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				CBB2D0C12F1D65F8007686CD /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = CBB2D0172F1D20F7007686CD /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				CBB2D0152F1D20F7007686CD /* Patina */,
+				CBB2D0222F1D20F8007686CD /* PatinaTests */,
+				CBB2D02C2F1D20F8007686CD /* PatinaUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		CBB2D0142F1D20F7007686CD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CBB2D0212F1D20F8007686CD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CBB2D02B2F1D20F8007686CD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		CBB2D0412F1D5E34007686CD /* SwiftLint */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = SwiftLint;
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if which swiftlint > /dev/null; then\n  cd \"${SRCROOT}\"\n  swiftlint lint Patina || true\nelse\n  echo \"warning: SwiftLint not installed, download from https://github.com/realm/SwiftLint\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		CBB2D0122F1D20F7007686CD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CBB2D01F2F1D20F8007686CD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CBB2D0292F1D20F8007686CD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		CBB2D0252F1D20F8007686CD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CBB2D0152F1D20F7007686CD /* Patina */;
+			targetProxy = CBB2D0242F1D20F8007686CD /* PBXContainerItemProxy */;
+		};
+		CBB2D02F2F1D20F8007686CD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CBB2D0152F1D20F7007686CD /* Patina */;
+			targetProxy = CBB2D02E2F1D20F8007686CD /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		CBB2D0352F1D20F8007686CD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = VP22LXHT7L;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		CBB2D0362F1D20F8007686CD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = VP22LXHT7L;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		CBB2D0382F1D20F8007686CD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_ENTITLEMENTS = Patina/Patina.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = VP22LXHT7L;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Patina/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.shopping";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Patina uses your camera to walk through your space together and visualize furniture in your room.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Have a voice conversation with Patina about your space and style.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Patina uses motion data to detect when your device is steady for capturing the best room photos.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Save room designs and furniture visualizations to your photo library.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speak naturally with Patina instead of typing.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = cloud.patina.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		CBB2D0392F1D20F8007686CD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_ENTITLEMENTS = Patina/Patina.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = VP22LXHT7L;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Patina/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.shopping";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Patina uses your camera to walk through your space together and visualize furniture in your room.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Have a voice conversation with Patina about your space and style.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Patina uses motion data to detect when your device is steady for capturing the best room photos.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Save room designs and furniture visualizations to your photo library.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speak naturally with Patina instead of typing.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = cloud.patina.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		CBB2D03B2F1D20F8007686CD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = VP22LXHT7L;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.middlewesetstudio.PatinaTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Patina.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Patina";
+			};
+			name = Debug;
+		};
+		CBB2D03C2F1D20F8007686CD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = VP22LXHT7L;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.middlewesetstudio.PatinaTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Patina.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Patina";
+			};
+			name = Release;
+		};
+		CBB2D03E2F1D20F8007686CD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = VP22LXHT7L;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.middlewesetstudio.PatinaUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Patina;
+			};
+			name = Debug;
+		};
+		CBB2D03F2F1D20F8007686CD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = VP22LXHT7L;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.middlewesetstudio.PatinaUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Patina;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		CBB2D0112F1D20F7007686CD /* Build configuration list for PBXProject "Patina" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CBB2D0352F1D20F8007686CD /* Debug */,
+				CBB2D0362F1D20F8007686CD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CBB2D0372F1D20F8007686CD /* Build configuration list for PBXNativeTarget "Patina" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CBB2D0382F1D20F8007686CD /* Debug */,
+				CBB2D0392F1D20F8007686CD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CBB2D03A2F1D20F8007686CD /* Build configuration list for PBXNativeTarget "PatinaTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CBB2D03B2F1D20F8007686CD /* Debug */,
+				CBB2D03C2F1D20F8007686CD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CBB2D03D2F1D20F8007686CD /* Build configuration list for PBXNativeTarget "PatinaUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CBB2D03E2F1D20F8007686CD /* Debug */,
+				CBB2D03F2F1D20F8007686CD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		CBB2D0C12F1D65F8007686CD /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		CBB2D0C22F1D65F8007686CD /* Auth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CBB2D0C12F1D65F8007686CD /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Auth;
+		};
+		CBB2D0C42F1D65F8007686CD /* Functions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CBB2D0C12F1D65F8007686CD /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Functions;
+		};
+		CBB2D0C62F1D65F8007686CD /* PostgREST */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CBB2D0C12F1D65F8007686CD /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = PostgREST;
+		};
+		CBB2D0C82F1D65F8007686CD /* Realtime */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CBB2D0C12F1D65F8007686CD /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Realtime;
+		};
+		CBB2D0CA2F1D65F8007686CD /* Storage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CBB2D0C12F1D65F8007686CD /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Storage;
+		};
+		CBB2D0CC2F1D65F8007686CD /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CBB2D0C12F1D65F8007686CD /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = CBB2D00E2F1D20F7007686CD /* Project object */;
+}
