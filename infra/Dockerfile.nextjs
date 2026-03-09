@@ -86,9 +86,13 @@ ENV NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY
 ENV NEXT_PUBLIC_POSTHOG_HOST=$NEXT_PUBLIC_POSTHOG_HOST
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Build shared packages first
+# Build shared packages first (order matters: types → utils → cache/auth → api-routes/api-client → design-system)
 RUN pnpm --filter @patina/types build 2>/dev/null || true
 RUN pnpm --filter @patina/utils build 2>/dev/null || true
+RUN pnpm --filter @patina/cache build 2>/dev/null || true
+RUN pnpm --filter @patina/auth build 2>/dev/null || true
+RUN pnpm --filter @patina/api-routes build 2>/dev/null || true
+RUN pnpm --filter @patina/api-client build 2>/dev/null || true
 RUN pnpm --filter @patina/design-system build 2>/dev/null || true
 
 # Build the app

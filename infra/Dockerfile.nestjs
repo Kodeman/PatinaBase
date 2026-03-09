@@ -125,8 +125,12 @@ COPY --from=builder --chown=nestjs:nestjs /app/packages/utils/dist ./node_module
 COPY --from=builder --chown=nestjs:nestjs /app/packages/cache/dist ./node_modules/@patina/cache/dist
 COPY --from=builder --chown=nestjs:nestjs /app/packages/auth/dist ./node_modules/@patina/auth/dist
 
+# Copy entrypoint script (creates Prisma schema before starting app)
+COPY --chown=nestjs:nestjs infra/nestjs-entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 USER nestjs
 
 # Use tini for proper signal handling
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["node", "dist/main.js"]
+CMD ["/app/entrypoint.sh"]
