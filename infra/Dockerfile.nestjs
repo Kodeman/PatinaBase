@@ -41,6 +41,9 @@ COPY packages/auth/package.json ./packages/auth/
 ARG SERVICE_NAME
 COPY services/${SERVICE_NAME}/package.json ./services/${SERVICE_NAME}/
 
+# Copy Prisma schema so postinstall `prisma generate` succeeds
+COPY services/${SERVICE_NAME}/prisma ./services/${SERVICE_NAME}/prisma
+
 # Force NODE_ENV=development so devDependencies (prisma, typescript, etc.) are installed
 # Coolify injects NODE_ENV=production as a build-arg which would skip them
 ENV NODE_ENV=development
