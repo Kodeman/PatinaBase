@@ -110,13 +110,16 @@ ENV SERVICE_NAME=${SERVICE_NAME}
 
 # Copy built output
 COPY --from=builder --chown=nestjs:nestjs /app/services/${SERVICE_NAME}/dist ./dist
-COPY --from=builder --chown=nestjs:nestjs /app/services/${SERVICE_NAME}/node_modules ./node_modules
 COPY --from=builder --chown=nestjs:nestjs /app/services/${SERVICE_NAME}/package.json ./package.json
+
+# Copy node_modules — pnpm hoists deps to root, so we need both
+COPY --from=builder --chown=nestjs:nestjs /app/node_modules ./node_modules
+COPY --from=builder --chown=nestjs:nestjs /app/services/${SERVICE_NAME}/node_modules ./services/${SERVICE_NAME}/node_modules
 
 # Copy Prisma schema and generated client (if exists)
 COPY --from=builder --chown=nestjs:nestjs /app/services/${SERVICE_NAME}/prisma ./prisma
 
-# Copy shared package outputs
+# Copy shared package outputs (built libs)
 COPY --from=builder --chown=nestjs:nestjs /app/packages/types/dist ./node_modules/@patina/types/dist
 COPY --from=builder --chown=nestjs:nestjs /app/packages/utils/dist ./node_modules/@patina/utils/dist
 COPY --from=builder --chown=nestjs:nestjs /app/packages/cache/dist ./node_modules/@patina/cache/dist
