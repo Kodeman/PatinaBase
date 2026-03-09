@@ -288,7 +288,7 @@ setup_backend() {
     push_env "applications" "$uuid" "NODE_ENV" "production"
     push_env "applications" "$uuid" "PORT" "$port"
     push_env "applications" "$uuid" "DATABASE_URL" \
-      "postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/postgres?schema=${schema}"
+      "postgresql://postgres:${POSTGRES_PASSWORD}@db-es8w8g0c00og4gsgg0k8w8o8:5432/postgres?schema=${schema}"
     push_env "applications" "$uuid" "REDIS_HOST" "patina-redis"
     push_env "applications" "$uuid" "REDIS_PORT" "6379"
     push_env "applications" "$uuid" "REDIS_PASSWORD" "$REDIS_PASSWORD"

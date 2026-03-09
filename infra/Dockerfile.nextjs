@@ -51,7 +51,9 @@ COPY packages/shared/package.json ./packages/shared/
 ARG APP_NAME
 COPY apps/${APP_NAME}/package.json ./apps/${APP_NAME}/
 
-# Install all dependencies for the app and its workspace deps
+# Force NODE_ENV=development so devDependencies (typescript, etc.) are installed
+# Coolify injects NODE_ENV=production as a build-arg which would skip them
+ENV NODE_ENV=development
 RUN pnpm install --frozen-lockfile --filter @patina/${APP_NAME}...
 
 # =============================================================================

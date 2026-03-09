@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 # Configuration (validated lazily — only commands that need DB access check these)
-SUPABASE_DB_HOST="${SUPABASE_DB_HOST:-supabase-db}"
+SUPABASE_DB_HOST="${SUPABASE_DB_HOST:-db-es8w8g0c00og4gsgg0k8w8o8}"
 SUPABASE_DB_PORT="${SUPABASE_DB_PORT:-5432}"
 SUPABASE_DB_USER="${SUPABASE_DB_USER:-postgres}"
 SUPABASE_DB_NAME="${SUPABASE_DB_NAME:-postgres}"

@@ -23,7 +23,10 @@ services:
     volumes:
       - redis_data:/data
     networks:
-      - patina_network
+      es8w8g0c00og4gsgg0k8w8o8:
+        aliases:
+          - patina-redis
+      vo0gs8wg0s0o8wcgsg8c0o8k: null
 
   # ===========================================================================
   # MINIO - S3-compatible Object Storage (for media service)
@@ -48,7 +51,10 @@ services:
     volumes:
       - minio_data:/data
     networks:
-      - patina_network
+      es8w8g0c00og4gsgg0k8w8o8:
+        aliases:
+          - patina-minio
+      vo0gs8wg0s0o8wcgsg8c0o8k: null
 
 volumes:
   redis_data:
@@ -57,5 +63,7 @@ volumes:
     driver: local
 
 networks:
-  patina_network:
+  es8w8g0c00og4gsgg0k8w8o8:
+    external: true
+  vo0gs8wg0s0o8wcgsg8c0o8k:
     external: true

@@ -1,0 +1,656 @@
+services:
+  db:
+    image: 'supabase/postgres:15.1.1.78'
+    restart: unless-stopped
+    healthcheck:
+      test: 'pg_isready -U postgres -h localhost'
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    entrypoint:
+      - bash
+      - -c
+      - |
+        # Run the original docker-entrypoint with postgres command in background
+        /usr/local/bin/docker-entrypoint.sh "$$@" &
+        PG_PID=$$!
+        # Wait for postgres to be ready
+        until pg_isready -U postgres -h localhost 2>/dev/null; do sleep 1; done
+        echo "=== Syncing service user passwords ==="
+        psql -U postgres -c "ALTER USER supabase_auth_admin WITH PASSWORD '$${POSTGRES_PASSWORD}';" 2>&1 || true
+        psql -U postgres -c "ALTER USER supabase_storage_admin WITH PASSWORD '$${POSTGRES_PASSWORD}';" 2>&1 || true
+        psql -U postgres -c "ALTER USER authenticator WITH PASSWORD '$${POSTGRES_PASSWORD}';" 2>&1 || true
+        psql -U postgres -c "ALTER USER supabase_admin WITH PASSWORD '$${POSTGRES_PASSWORD}';" 2>&1 || true
+        echo "=== Password sync complete ==="
+        wait $$PG_PID
+      - --
+    command:
+      - postgres
+      - '-c'
+      - "listen_addresses=*"
+      - '-c'
+      - wal_level=logical
+      - '-c'
+      - max_connections=100
+      - '-c'
+      - shared_buffers=512MB
+      - '-c'
+      - effective_cache_size=1536MB
+      - '-c'
+      - work_mem=32MB
+      - '-c'
+      - maintenance_work_mem=256MB
+      - '-c'
+      - random_page_cost=1.1
+      - '-c'
+      - effective_io_concurrency=200
+      - '-c'
+      - checkpoint_completion_target=0.9
+      - '-c'
+      - wal_buffers=16MB
+      - '-c'
+      - default_statistics_target=100
+      - '-c'
+      - min_wal_size=1GB
+      - '-c'
+      - max_wal_size=4GB
+      - '-c'
+      - huge_pages=try
+      - '-c'
+      - log_min_duration_statement=1000
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      PGPORT: '${POSTGRES_PORT:-5432}'
+      POSTGRES_PORT: '${POSTGRES_PORT:-5432}'
+      PGPASSWORD: '${POSTGRES_PASSWORD}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+      PGDATABASE: '${POSTGRES_DB:-postgres}'
+      POSTGRES_DB: '${POSTGRES_DB:-postgres}'
+      JWT_SECRET: '${JWT_SECRET}'
+      JWT_EXP: '${JWT_EXPIRY:-3600}'
+      COOLIFY_RESOURCE_UUID: es8w8g0c00og4gsgg0k8w8o8
+      COOLIFY_CONTAINER_NAME: db-es8w8g0c00og4gsgg0k8w8o8
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_KONG: kong
+      SERVICE_NAME_AUTH: auth
+      SERVICE_NAME_REALTIME: realtime
+      SERVICE_NAME_REST: rest
+      SERVICE_NAME_STORAGE: storage
+      SERVICE_NAME_IMGPROXY: imgproxy
+      SERVICE_NAME_STUDIO: studio
+      SERVICE_NAME_META: meta
+      SERVICE_NAME_ANALYTICS: analytics
+    volumes:
+      - 'es8w8g0c00og4gsgg0k8w8o8_db-data:/var/lib/postgresql/data'
+    ports:
+      - '5433:5432'
+    container_name: db-es8w8g0c00og4gsgg0k8w8o8
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.463
+      - coolify.serviceId=12
+      - coolify.type=service
+      - coolify.name=db-es8w8g0c00og4gsgg0k8w8o8
+      - coolify.resourceName=supabase-stack
+      - coolify.projectName=strata
+      - coolify.serviceName=db
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - coolify.service.subId=8
+      - coolify.service.subType=database
+      - coolify.service.subName=db
+    networks:
+      es8w8g0c00og4gsgg0k8w8o8: null
+    env_file:
+      - .env
+  kong:
+    image: 'kong:2.8.1'
+    restart: unless-stopped
+    entrypoint:
+      - bash
+      - '-c'
+      - 'echo "$$KONG_CONFIG_B64" | base64 -d > /home/kong/kong.yml && /docker-entrypoint.sh kong docker-start'
+    environment:
+      KONG_DATABASE: 'off'
+      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
+      KONG_DNS_ORDER: 'LAST,A,CNAME'
+      KONG_PLUGINS: 'request-transformer,cors,key-auth,acl,basic-auth'
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: '64 160k'
+      KONG_NGINX_WORKER_PROCESSES: auto
+      KONG_NGINX_PROXY_PROXY_CONNECT_TIMEOUT: 60s
+      KONG_NGINX_PROXY_PROXY_READ_TIMEOUT: 60s
+      KONG_UPSTREAM_KEEPALIVE_POOL_SIZE: '60'
+      KONG_UPSTREAM_KEEPALIVE_MAX_REQUESTS: '1000'
+      KONG_CONFIG_B64: X2Zvcm1hdF92ZXJzaW9uOiAiMi4xIgpfdHJhbnNmb3JtOiB0cnVlCmNvbnN1bWVyczoKICAtIHVzZXJuYW1lOiBEQVNIQk9BUkQKICAtIHVzZXJuYW1lOiBhbm9uCiAgICBrZXlhdXRoX2NyZWRlbnRpYWxzOgogICAgICAtIGtleTogZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnliMnhsSWpvaVlXNXZiaUlzSW1semN5STZJbk4xY0dGaVlYTmxJaXdpYVdGMElqb3hOemN5T0RZek1qQXdMQ0psZUhBaU9qRTVNekEyTWprMk1EQjkuOGtkTTdJaUFyb29TZ3duaWxSbzYwTVZFQ1FaVXF0UWVEaW1RQk1GWmthRQogIC0gdXNlcm5hbWU6IHNlcnZpY2Vfcm9sZQogICAga2V5YXV0aF9jcmVkZW50aWFsczoKICAgICAgLSBrZXk6IGV5SmhiR2NpT2lKSVV6STFOaUlzSW5SNWNDSTZJa3BYVkNKOS5leUp5YjJ4bElqb2ljMlZ5ZG1salpWOXliMnhsSWl3aWFYTnpJam9pYzNWd1lXSmhjMlVpTENKcFlYUWlPakUzTnpJNE5qTXlNREFzSW1WNGNDSTZNVGt6TURZeU9UWXdNSDAuWDF4ZkVFMjlPZXlFVEgwQ05OampaSUxNREVwS1UwaW9KeHZSdjVpS1ZRWQphY2xzOgogIC0gY29uc3VtZXI6IGFub24KICAgIGdyb3VwOiBhbm9uCiAgLSBjb25zdW1lcjogc2VydmljZV9yb2xlCiAgICBncm91cDogYWRtaW4Kc2VydmljZXM6CiAgLSBuYW1lOiBhdXRoLXYxLW9wZW4KICAgIHVybDogaHR0cDovL2F1dGg6OTk5OS92ZXJpZnkKICAgIHJvdXRlczoKICAgICAgLSBuYW1lOiBhdXRoLXYxLW9wZW4KICAgICAgICBzdHJpcF9wYXRoOiB0cnVlCiAgICAgICAgcGF0aHM6CiAgICAgICAgICAtIC9hdXRoL3YxL3ZlcmlmeQogICAgcGx1Z2luczoKICAgICAgLSBuYW1lOiBjb3JzCiAgLSBuYW1lOiBhdXRoLXYxLW9wZW4tY2FsbGJhY2sKICAgIHVybDogaHR0cDovL2F1dGg6OTk5OS9jYWxsYmFjawogICAgcm91dGVzOgogICAgICAtIG5hbWU6IGF1dGgtdjEtb3Blbi1jYWxsYmFjawogICAgICAgIHN0cmlwX3BhdGg6IHRydWUKICAgICAgICBwYXRoczoKICAgICAgICAgIC0gL2F1dGgvdjEvY2FsbGJhY2sKICAgIHBsdWdpbnM6CiAgICAgIC0gbmFtZTogY29ycwogIC0gbmFtZTogYXV0aC12MS1vcGVuLWF1dGhvcml6ZQogICAgdXJsOiBodHRwOi8vYXV0aDo5OTk5L2F1dGhvcml6ZQogICAgcm91dGVzOgogICAgICAtIG5hbWU6IGF1dGgtdjEtb3Blbi1hdXRob3JpemUKICAgICAgICBzdHJpcF9wYXRoOiB0cnVlCiAgICAgICAgcGF0aHM6CiAgICAgICAgICAtIC9hdXRoL3YxL2F1dGhvcml6ZQogICAgcGx1Z2luczoKICAgICAgLSBuYW1lOiBjb3JzCiAgLSBuYW1lOiBhdXRoLXYxCiAgICBfY29tbWVudDogIkdvVHJ1ZTogL2F1dGgvdjEvKiAtPiBodHRwOi8vYXV0aDo5OTk5LyoiCiAgICB1cmw6IGh0dHA6Ly9hdXRoOjk5OTkKICAgIHJvdXRlczoKICAgICAgLSBuYW1lOiBhdXRoLXYxLWFsbAogICAgICAgIHN0cmlwX3BhdGg6IHRydWUKICAgICAgICBwYXRoczoKICAgICAgICAgIC0gL2F1dGgvdjEvCiAgICBwbHVnaW5zOgogICAgICAtIG5hbWU6IGNvcnMKICAgICAgLSBuYW1lOiBrZXktYXV0aAogICAgICAgIGNvbmZpZzoKICAgICAgICAgIGhpZGVfY3JlZGVudGlhbHM6IGZhbHNlCiAgLSBuYW1lOiByZXN0LXYxCiAgICBfY29tbWVudDogIlBvc3RnUkVTVDogL3Jlc3QvdjEvKiAtPiBodHRwOi8vcmVzdDozMDAwLyoiCiAgICB1cmw6IGh0dHA6Ly9yZXN0OjMwMDAKICAgIHJvdXRlczoKICAgICAgLSBuYW1lOiByZXN0LXYxLWFsbAogICAgICAgIHN0cmlwX3BhdGg6IHRydWUKICAgICAgICBwYXRoczoKICAgICAgICAgIC0gL3Jlc3QvdjEvCiAgICBwbHVnaW5zOgogICAgICAtIG5hbWU6IGNvcnMKICAgICAgLSBuYW1lOiBrZXktYXV0aAogICAgICAgIGNvbmZpZzoKICAgICAgICAgIGhpZGVfY3JlZGVudGlhbHM6IGZhbHNlCiAgLSBuYW1lOiByZWFsdGltZS12MS13cwogICAgX2NvbW1lbnQ6ICJSZWFsdGltZTogL3JlYWx0aW1lL3YxLyogLT4gd3M6Ly9yZWFsdGltZTo0MDAwL3NvY2tldC8qIgogICAgdXJsOiBodHRwOi8vcmVhbHRpbWU6NDAwMC9zb2NrZXQKICAgIHJvdXRlczoKICAgICAgLSBuYW1lOiByZWFsdGltZS12MS13cwogICAgICAgIHN0cmlwX3BhdGg6IHRydWUKICAgICAgICBwYXRoczoKICAgICAgICAgIC0gL3JlYWx0aW1lL3YxLwogICAgcGx1Z2luczoKICAgICAgLSBuYW1lOiBjb3JzCiAgICAgIC0gbmFtZToga2V5LWF1dGgKICAgICAgICBjb25maWc6CiAgICAgICAgICBoaWRlX2NyZWRlbnRpYWxzOiBmYWxzZQogIC0gbmFtZTogc3RvcmFnZS12MQogICAgX2NvbW1lbnQ6ICJTdG9yYWdlOiAvc3RvcmFnZS92MS8qIC0+IGh0dHA6Ly9zdG9yYWdlOjUwMDAvKiIKICAgIHVybDogaHR0cDovL3N0b3JhZ2U6NTAwMAogICAgcm91dGVzOgogICAgICAtIG5hbWU6IHN0b3JhZ2UtdjEtYWxsCiAgICAgICAgc3RyaXBfcGF0aDogdHJ1ZQogICAgICAgIHBhdGhzOgogICAgICAgICAgLSAvc3RvcmFnZS92MS8KICAgIHBsdWdpbnM6CiAgICAgIC0gbmFtZTogY29ycwogICAgICAtIG5hbWU6IGtleS1hdXRoCiAgICAgICAgY29uZmlnOgogICAgICAgICAgaGlkZV9jcmVkZW50aWFsczogZmFsc2UKICAtIG5hbWU6IGZ1bmN0aW9ucy12MQogICAgX2NvbW1lbnQ6ICJGdW5jdGlvbnM6IC9mdW5jdGlvbnMvdjEvKiAtPiBodHRwOi8vZnVuY3Rpb25zOjkwMDAvKiIKICAgIHVybDogaHR0cDovL2Z1bmN0aW9uczo5MDAwCiAgICByb3V0ZXM6CiAgICAgIC0gbmFtZTogZnVuY3Rpb25zLXYxLWFsbAogICAgICAgIHN0cmlwX3BhdGg6IHRydWUKICAgICAgICBwYXRoczoKICAgICAgICAgIC0gL2Z1bmN0aW9ucy92MS8KICAgIHBsdWdpbnM6CiAgICAgIC0gbmFtZTogY29ycwogICAgICAtIG5hbWU6IGtleS1hdXRoCiAgICAgICAgY29uZmlnOgogICAgICAgICAgaGlkZV9jcmVkZW50aWFsczogZmFsc2UKICAtIG5hbWU6IG1ldGEKICAgIF9jb21tZW50OiBwZ19tZXRhCiAgICB1cmw6IGh0dHA6Ly9tZXRhOjgwODAKICAgIHJvdXRlczoKICAgICAgLSBuYW1lOiBtZXRhLWFsbAogICAgICAgIHN0cmlwX3BhdGg6IHRydWUKICAgICAgICBwYXRoczoKICAgICAgICAgIC0gL3BnLwogICAgcGx1Z2luczoKICAgICAgLSBuYW1lOiBrZXktYXV0aAogICAgICAgIGNvbmZpZzoKICAgICAgICAgIGhpZGVfY3JlZGVudGlhbHM6IGZhbHNlCiAgLSBuYW1lOiBkYXNoYm9hcmQKICAgIF9jb21tZW50OiBEYXNoYm9hcmQKICAgIHVybDogaHR0cDovL3N0dWRpbzozMDAwCiAgICByb3V0ZXM6CiAgICAgIC0gbmFtZTogZGFzaGJvYXJkLWFsbAogICAgICAgIHN0cmlwX3BhdGg6IHRydWUKICAgICAgICBwYXRoczoKICAgICAgICAgIC0gLwogICAgcGx1Z2luczoKICAgICAgLSBuYW1lOiBjb3JzCiAgICAgIC0gbmFtZTogYmFzaWMtYXV0aAogICAgICAgIGNvbmZpZzoKICAgICAgICAgIGhpZGVfY3JlZGVudGlhbHM6IHRydWUKcGx1Z2luczoKICAtIG5hbWU6IGNvcnMKICAgIGNvbmZpZzoKICAgICAgb3JpZ2luczoKICAgICAgICAtIGh0dHBzOi8vYXBwLnBhdGluYS5jbG91ZAogICAgICAgIC0gaHR0cHM6Ly9hZG1pbi5wYXRpbmEuY2xvdWQKICAgICAgICAtIGh0dHBzOi8vY2xpZW50LnBhdGluYS5jbG91ZAogICAgICAgIC0gaHR0cHM6Ly9wYXRpbmEuY2xvdWQKICAgICAgICAtIGh0dHA6Ly9sb2NhbGhvc3Q6MzAwMAogICAgICAgIC0gaHR0cDovL2xvY2FsaG9zdDozMDAxCiAgICAgICAgLSBodHRwOi8vbG9jYWxob3N0OjMwMDIKICAgICAgbWV0aG9kczoKICAgICAgICAtIEdFVAogICAgICAgIC0gSEVBRAogICAgICAgIC0gUFVUCiAgICAgICAgLSBQQVRDSAogICAgICAgIC0gUE9TVAogICAgICAgIC0gREVMRVRFCiAgICAgICAgLSBPUFRJT05TCiAgICAgIGhlYWRlcnM6CiAgICAgICAgLSBBY2NlcHQKICAgICAgICAtIEFjY2VwdC1WZXJzaW9uCiAgICAgICAgLSBBdXRob3JpemF0aW9uCiAgICAgICAgLSBDb250ZW50LUxlbmd0aAogICAgICAgIC0gQ29udGVudC1NRDUKICAgICAgICAtIENvbnRlbnQtVHlwZQogICAgICAgIC0gRGF0ZQogICAgICAgIC0gYXBpa2V5CiAgICAgICAgLSBYLUNsaWVudC1JbmZvCiAgICAgICAgLSBYLVJlcXVlc3RlZC1XaXRoCiAgICAgICAgLSBQcmVmZXIKICAgICAgICAtIFJhbmdlCiAgICAgIGV4cG9zZWRfaGVhZGVyczoKICAgICAgICAtIENvbnRlbnQtUmFuZ2UKICAgICAgICAtIFJhbmdlCiAgICAgICAgLSBYLVRvdGFsLUNvdW50CiAgICAgIGNyZWRlbnRpYWxzOiB0cnVlCiAgICAgIG1heF9hZ2U6IDM2MDAK
+      COOLIFY_RESOURCE_UUID: es8w8g0c00og4gsgg0k8w8o8
+      COOLIFY_CONTAINER_NAME: kong-es8w8g0c00og4gsgg0k8w8o8
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_KONG: kong
+      SERVICE_NAME_AUTH: auth
+      SERVICE_NAME_REALTIME: realtime
+      SERVICE_NAME_REST: rest
+      SERVICE_NAME_STORAGE: storage
+      SERVICE_NAME_IMGPROXY: imgproxy
+      SERVICE_NAME_STUDIO: studio
+      SERVICE_NAME_META: meta
+      SERVICE_NAME_ANALYTICS: analytics
+    ports:
+      - '8100:8000/tcp'
+      - '8543:8443/tcp'
+    depends_on:
+      db:
+        condition: service_healthy
+    container_name: kong-es8w8g0c00og4gsgg0k8w8o8
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.463
+      - coolify.serviceId=12
+      - coolify.type=service
+      - coolify.name=kong-es8w8g0c00og4gsgg0k8w8o8
+      - coolify.resourceName=supabase-stack
+      - coolify.projectName=strata
+      - coolify.serviceName=kong
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - coolify.service.subId=57
+      - coolify.service.subType=application
+      - coolify.service.subName=kong
+    networks:
+      es8w8g0c00og4gsgg0k8w8o8: null
+    env_file:
+      - .env
+  auth:
+    image: 'supabase/gotrue:v2.143.0'
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - '--no-verbose'
+        - '--tries=1'
+        - '--spider'
+        - 'http://localhost:9999/health'
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: '9999'
+      API_EXTERNAL_URL: '${API_EXTERNAL_URL:-https://api.patina.cloud}'
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: 'postgres://supabase_auth_admin:1c3aabda9b01ff203d297d5ee8cea8a39f7a057ce915a442@db-es8w8g0c00og4gsgg0k8w8o8:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-postgres}'
+      GOTRUE_SITE_URL: '${SITE_URL:-https://app.patina.cloud}'
+      GOTRUE_URI_ALLOW_LIST: '${ADDITIONAL_REDIRECT_URLS:-https://app.patina.cloud,https://admin.patina.cloud,patina://}'
+      GOTRUE_DISABLE_SIGNUP: '${DISABLE_SIGNUP:-false}'
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: '${JWT_EXPIRY:-3600}'
+      GOTRUE_JWT_SECRET: '${JWT_SECRET}'
+      GOTRUE_MAILER_AUTOCONFIRM: 'true'
+      GOTRUE_SMTP_ADMIN_EMAIL: '${SMTP_ADMIN_EMAIL:-hello@patina.cloud}'
+      GOTRUE_SMTP_SENDER_NAME: '${SMTP_SENDER_NAME:-Patina}'
+      GOTRUE_MAILER_URLPATHS_INVITE: '${MAILER_URLPATHS_INVITE:-/auth/v1/verify}'
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: '${MAILER_URLPATHS_CONFIRMATION:-/auth/v1/verify}'
+      GOTRUE_MAILER_URLPATHS_RECOVERY: '${MAILER_URLPATHS_RECOVERY:-/auth/v1/verify}'
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: '${MAILER_URLPATHS_EMAIL_CHANGE:-/auth/v1/verify}'
+      GOTRUE_EXTERNAL_APPLE_ENABLED: 'false'
+      GOTRUE_EXTERNAL_GOOGLE_ENABLED: 'false'
+      JWT_SECRET: '${JWT_SECRET}'
+      COOLIFY_RESOURCE_UUID: es8w8g0c00og4gsgg0k8w8o8
+      COOLIFY_CONTAINER_NAME: auth-es8w8g0c00og4gsgg0k8w8o8
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_KONG: kong
+      SERVICE_NAME_AUTH: auth
+      SERVICE_NAME_REALTIME: realtime
+      SERVICE_NAME_REST: rest
+      SERVICE_NAME_STORAGE: storage
+      SERVICE_NAME_IMGPROXY: imgproxy
+      SERVICE_NAME_STUDIO: studio
+      SERVICE_NAME_META: meta
+      SERVICE_NAME_ANALYTICS: analytics
+    depends_on:
+      db:
+        condition: service_healthy
+    container_name: auth-es8w8g0c00og4gsgg0k8w8o8
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.463
+      - coolify.serviceId=12
+      - coolify.type=service
+      - coolify.name=auth-es8w8g0c00og4gsgg0k8w8o8
+      - coolify.resourceName=supabase-stack
+      - coolify.projectName=strata
+      - coolify.serviceName=auth
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - coolify.service.subId=58
+      - coolify.service.subType=application
+      - coolify.service.subName=auth
+    networks:
+      es8w8g0c00og4gsgg0k8w8o8: null
+    env_file:
+      - .env
+  realtime:
+    image: 'supabase/realtime:v2.28.32'
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'bash -c "echo > /dev/tcp/localhost/4000" || exit 1'
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    environment:
+      PORT: '4000'
+      DB_HOST: db-es8w8g0c00og4gsgg0k8w8o8
+      DB_PORT: '${POSTGRES_PORT:-5432}'
+      DB_NAME: '${POSTGRES_DB:-postgres}'
+      DB_USER: supabase_admin
+      DB_PASSWORD: '1c3aabda9b01ff203d297d5ee8cea8a39f7a057ce915a442'
+      DB_AFTER_CONNECT_QUERY: 'SET search_path TO _realtime'
+      DB_ENC_KEY: '${REALTIME_ENC_KEY:-supabaserealtime}'
+      FLY_ALLOC_ID: fly123
+      FLY_APP_NAME: realtime
+      SECRET_KEY_BASE: '${REALTIME_SECRET_KEY_BASE}'
+      ERL_AFLAGS: '-proto_dist inet_tcp'
+      ENABLE_TAILSCALE: 'false'
+      DNS_NODES: "''"
+      REPLICATION_MODE: RLS
+      REPLICATION_POLL_INTERVAL: '100'
+      SECURE_CHANNELS: 'true'
+      SLOT_NAME: supabase_realtime_rls
+      TEMPORARY_SLOT: 'true'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+      REALTIME_SECRET_KEY_BASE: '${REALTIME_SECRET_KEY_BASE}'
+      COOLIFY_RESOURCE_UUID: es8w8g0c00og4gsgg0k8w8o8
+      COOLIFY_CONTAINER_NAME: realtime-es8w8g0c00og4gsgg0k8w8o8
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_KONG: kong
+      SERVICE_NAME_AUTH: auth
+      SERVICE_NAME_REALTIME: realtime
+      SERVICE_NAME_REST: rest
+      SERVICE_NAME_STORAGE: storage
+      SERVICE_NAME_IMGPROXY: imgproxy
+      SERVICE_NAME_STUDIO: studio
+      SERVICE_NAME_META: meta
+      SERVICE_NAME_ANALYTICS: analytics
+    depends_on:
+      db:
+        condition: service_healthy
+    container_name: realtime-es8w8g0c00og4gsgg0k8w8o8
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.463
+      - coolify.serviceId=12
+      - coolify.type=service
+      - coolify.name=realtime-es8w8g0c00og4gsgg0k8w8o8
+      - coolify.resourceName=supabase-stack
+      - coolify.projectName=strata
+      - coolify.serviceName=realtime
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - coolify.service.subId=59
+      - coolify.service.subType=application
+      - coolify.service.subName=realtime
+    networks:
+      es8w8g0c00og4gsgg0k8w8o8: null
+    env_file:
+      - .env
+  rest:
+    image: 'postgrest/postgrest:v12.0.1'
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: 'postgres://authenticator:1c3aabda9b01ff203d297d5ee8cea8a39f7a057ce915a442@db-es8w8g0c00og4gsgg0k8w8o8:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-postgres}'
+      PGRST_DB_SCHEMAS: '${PGRST_DB_SCHEMAS:-public,storage,graphql_public}'
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: '${JWT_SECRET}'
+      PGRST_DB_USE_LEGACY_GUCS: 'false'
+      PGRST_APP_SETTINGS_JWT_SECRET: '${JWT_SECRET}'
+      PGRST_APP_SETTINGS_JWT_EXP: '${JWT_EXPIRY:-3600}'
+      PGRST_DB_POOL: '20'
+      PGRST_DB_POOL_ACQUISITION_TIMEOUT: '10'
+      JWT_SECRET: '${JWT_SECRET}'
+      COOLIFY_RESOURCE_UUID: es8w8g0c00og4gsgg0k8w8o8
+      COOLIFY_CONTAINER_NAME: rest-es8w8g0c00og4gsgg0k8w8o8
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_KONG: kong
+      SERVICE_NAME_AUTH: auth
+      SERVICE_NAME_REALTIME: realtime
+      SERVICE_NAME_REST: rest
+      SERVICE_NAME_STORAGE: storage
+      SERVICE_NAME_IMGPROXY: imgproxy
+      SERVICE_NAME_STUDIO: studio
+      SERVICE_NAME_META: meta
+      SERVICE_NAME_ANALYTICS: analytics
+    depends_on:
+      db:
+        condition: service_healthy
+    container_name: rest-es8w8g0c00og4gsgg0k8w8o8
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.463
+      - coolify.serviceId=12
+      - coolify.type=service
+      - coolify.name=rest-es8w8g0c00og4gsgg0k8w8o8
+      - coolify.resourceName=supabase-stack
+      - coolify.projectName=strata
+      - coolify.serviceName=rest
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - coolify.service.subId=60
+      - coolify.service.subType=application
+      - coolify.service.subName=rest
+    networks:
+      es8w8g0c00og4gsgg0k8w8o8: null
+    env_file:
+      - .env
+  storage:
+    image: 'supabase/storage-api:v1.0.6'
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "node -e \"require('http').get('http://localhost:5000/status',(r)=>{process.exit(r.statusCode<500?0:1)}).on('error',()=>process.exit(1))\""
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    environment:
+      ANON_KEY: '${ANON_KEY}'
+      SERVICE_KEY: '${SERVICE_ROLE_KEY}'
+      POSTGREST_URL: 'http://rest:3000'
+      PGRST_JWT_SECRET: '${JWT_SECRET}'
+      DATABASE_URL: 'postgres://supabase_storage_admin:1c3aabda9b01ff203d297d5ee8cea8a39f7a057ce915a442@db-es8w8g0c00og4gsgg0k8w8o8:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-postgres}'
+      FILE_SIZE_LIMIT: '52428800'
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: stub
+      GLOBAL_S3_BUCKET: stub
+      ENABLE_IMAGE_TRANSFORMATION: 'true'
+      IMGPROXY_URL: 'http://imgproxy:5001'
+      JWT_SECRET: '${JWT_SECRET}'
+      COOLIFY_RESOURCE_UUID: es8w8g0c00og4gsgg0k8w8o8
+      COOLIFY_CONTAINER_NAME: storage-es8w8g0c00og4gsgg0k8w8o8
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_KONG: kong
+      SERVICE_NAME_AUTH: auth
+      SERVICE_NAME_REALTIME: realtime
+      SERVICE_NAME_REST: rest
+      SERVICE_NAME_STORAGE: storage
+      SERVICE_NAME_IMGPROXY: imgproxy
+      SERVICE_NAME_STUDIO: studio
+      SERVICE_NAME_META: meta
+      SERVICE_NAME_ANALYTICS: analytics
+    volumes:
+      - 'es8w8g0c00og4gsgg0k8w8o8_storage-data:/var/lib/storage'
+    depends_on:
+      db:
+        condition: service_healthy
+      rest:
+        condition: service_started
+    container_name: storage-es8w8g0c00og4gsgg0k8w8o8
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.463
+      - coolify.serviceId=12
+      - coolify.type=service
+      - coolify.name=storage-es8w8g0c00og4gsgg0k8w8o8
+      - coolify.resourceName=supabase-stack
+      - coolify.projectName=strata
+      - coolify.serviceName=storage
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - coolify.service.subId=61
+      - coolify.service.subType=application
+      - coolify.service.subName=storage
+    networks:
+      es8w8g0c00og4gsgg0k8w8o8: null
+    env_file:
+      - .env
+  imgproxy:
+    image: 'darthsim/imgproxy:v3.8.0'
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - imgproxy
+        - health
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    environment:
+      IMGPROXY_BIND: ':5001'
+      IMGPROXY_LOCAL_FILESYSTEM_ROOT: /
+      IMGPROXY_USE_ETAG: 'true'
+      IMGPROXY_ENABLE_WEBP_DETECTION: '${IMGPROXY_ENABLE_WEBP_DETECTION:-true}'
+      COOLIFY_RESOURCE_UUID: es8w8g0c00og4gsgg0k8w8o8
+      COOLIFY_CONTAINER_NAME: imgproxy-es8w8g0c00og4gsgg0k8w8o8
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_KONG: kong
+      SERVICE_NAME_AUTH: auth
+      SERVICE_NAME_REALTIME: realtime
+      SERVICE_NAME_REST: rest
+      SERVICE_NAME_STORAGE: storage
+      SERVICE_NAME_IMGPROXY: imgproxy
+      SERVICE_NAME_STUDIO: studio
+      SERVICE_NAME_META: meta
+      SERVICE_NAME_ANALYTICS: analytics
+    volumes:
+      - 'es8w8g0c00og4gsgg0k8w8o8_storage-data:/var/lib/storage:ro'
+    container_name: imgproxy-es8w8g0c00og4gsgg0k8w8o8
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.463
+      - coolify.serviceId=12
+      - coolify.type=service
+      - coolify.name=imgproxy-es8w8g0c00og4gsgg0k8w8o8
+      - coolify.resourceName=supabase-stack
+      - coolify.projectName=strata
+      - coolify.serviceName=imgproxy
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - coolify.service.subId=62
+      - coolify.service.subType=application
+      - coolify.service.subName=imgproxy
+    networks:
+      es8w8g0c00og4gsgg0k8w8o8: null
+    env_file:
+      - .env
+  studio:
+    image: 'supabase/studio:20240422-5cf8f30'
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "node -e \"require('http').get('http://localhost:3000/api/profile',(r)=>{process.exit(r.statusCode<500?0:1)}).on('error',()=>process.exit(1))\""
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    environment:
+      STUDIO_PG_META_URL: 'http://meta:8080'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+      DEFAULT_ORGANIZATION_NAME: '${STUDIO_DEFAULT_ORGANIZATION:-Patina}'
+      DEFAULT_PROJECT_NAME: '${STUDIO_DEFAULT_PROJECT:-Patina Platform}'
+      SUPABASE_URL: 'http://kong:8000'
+      SUPABASE_PUBLIC_URL: '${API_EXTERNAL_URL:-https://api.patina.cloud}'
+      SUPABASE_ANON_KEY: '${ANON_KEY}'
+      SUPABASE_SERVICE_KEY: '${SERVICE_ROLE_KEY}'
+      AUTH_JWT_SECRET: '${JWT_SECRET}'
+      LOGFLARE_API_KEY: '${LOGFLARE_API_KEY}'
+      LOGFLARE_URL: 'http://analytics:4000'
+      NEXT_PUBLIC_ENABLE_LOGS: 'true'
+      NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
+      ANON_KEY: '${ANON_KEY}'
+      JWT_SECRET: '${JWT_SECRET}'
+      COOLIFY_RESOURCE_UUID: es8w8g0c00og4gsgg0k8w8o8
+      COOLIFY_CONTAINER_NAME: studio-es8w8g0c00og4gsgg0k8w8o8
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_KONG: kong
+      SERVICE_NAME_AUTH: auth
+      SERVICE_NAME_REALTIME: realtime
+      SERVICE_NAME_REST: rest
+      SERVICE_NAME_STORAGE: storage
+      SERVICE_NAME_IMGPROXY: imgproxy
+      SERVICE_NAME_STUDIO: studio
+      SERVICE_NAME_META: meta
+      SERVICE_NAME_ANALYTICS: analytics
+    ports:
+      - '3010:3000'
+    depends_on:
+      kong:
+        condition: service_started
+      meta:
+        condition: service_healthy
+    container_name: studio-es8w8g0c00og4gsgg0k8w8o8
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.463
+      - coolify.serviceId=12
+      - coolify.type=service
+      - coolify.name=studio-es8w8g0c00og4gsgg0k8w8o8
+      - coolify.resourceName=supabase-stack
+      - coolify.projectName=strata
+      - coolify.serviceName=studio
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - coolify.service.subId=63
+      - coolify.service.subType=application
+      - coolify.service.subName=studio
+    networks:
+      es8w8g0c00og4gsgg0k8w8o8: null
+    env_file:
+      - .env
+  meta:
+    image: 'supabase/postgres-meta:v0.80.0'
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - '--eval'
+        - "fetch('http://localhost:8080/health').then((r) => {if (r.status !== 200) throw new Error(r.statusText)})"
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    environment:
+      PG_META_PORT: '8080'
+      PG_META_DB_HOST: db-es8w8g0c00og4gsgg0k8w8o8
+      PG_META_DB_PORT: '${POSTGRES_PORT:-5432}'
+      PG_META_DB_NAME: '${POSTGRES_DB:-postgres}'
+      PG_META_DB_USER: supabase_admin
+      PG_META_DB_PASSWORD: '1c3aabda9b01ff203d297d5ee8cea8a39f7a057ce915a442'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+      COOLIFY_RESOURCE_UUID: es8w8g0c00og4gsgg0k8w8o8
+      COOLIFY_CONTAINER_NAME: meta-es8w8g0c00og4gsgg0k8w8o8
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_KONG: kong
+      SERVICE_NAME_AUTH: auth
+      SERVICE_NAME_REALTIME: realtime
+      SERVICE_NAME_REST: rest
+      SERVICE_NAME_STORAGE: storage
+      SERVICE_NAME_IMGPROXY: imgproxy
+      SERVICE_NAME_STUDIO: studio
+      SERVICE_NAME_META: meta
+      SERVICE_NAME_ANALYTICS: analytics
+    depends_on:
+      db:
+        condition: service_healthy
+    container_name: meta-es8w8g0c00og4gsgg0k8w8o8
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.463
+      - coolify.serviceId=12
+      - coolify.type=service
+      - coolify.name=meta-es8w8g0c00og4gsgg0k8w8o8
+      - coolify.resourceName=supabase-stack
+      - coolify.projectName=strata
+      - coolify.serviceName=meta
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - coolify.service.subId=64
+      - coolify.service.subType=application
+      - coolify.service.subName=meta
+    networks:
+      es8w8g0c00og4gsgg0k8w8o8: null
+    env_file:
+      - .env
+  analytics:
+    image: 'supabase/logflare:1.4.0'
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - '-f'
+        - 'http://localhost:4000/health'
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    environment:
+      LOGFLARE_NODE_HOST: 127.0.0.1
+      DB_USERNAME: supabase_admin
+      DB_DATABASE: '${POSTGRES_DB:-postgres}'
+      DB_HOSTNAME: db-es8w8g0c00og4gsgg0k8w8o8
+      DB_PORT: '${POSTGRES_PORT:-5432}'
+      DB_PASSWORD: '1c3aabda9b01ff203d297d5ee8cea8a39f7a057ce915a442'
+      DB_SCHEMA: _analytics
+      LOGFLARE_API_KEY: '${LOGFLARE_API_KEY}'
+      LOGFLARE_SINGLE_TENANT: 'true'
+      LOGFLARE_SUPABASE_MODE: 'true'
+      LOGFLARE_MIN_CLUSTER_SIZE: '1'
+      POSTGRES_BACKEND_URL: 'postgresql://supabase_admin:${POSTGRES_PASSWORD}@db-es8w8g0c00og4gsgg0k8w8o8:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-postgres}'
+      POSTGRES_BACKEND_SCHEMA: _analytics
+      LOGFLARE_FEATURE_FLAG_OVERRIDE: multibackend=true
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+      COOLIFY_RESOURCE_UUID: es8w8g0c00og4gsgg0k8w8o8
+      COOLIFY_CONTAINER_NAME: analytics-es8w8g0c00og4gsgg0k8w8o8
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_KONG: kong
+      SERVICE_NAME_AUTH: auth
+      SERVICE_NAME_REALTIME: realtime
+      SERVICE_NAME_REST: rest
+      SERVICE_NAME_STORAGE: storage
+      SERVICE_NAME_IMGPROXY: imgproxy
+      SERVICE_NAME_STUDIO: studio
+      SERVICE_NAME_META: meta
+      SERVICE_NAME_ANALYTICS: analytics
+    depends_on:
+      db:
+        condition: service_healthy
+    container_name: analytics-es8w8g0c00og4gsgg0k8w8o8
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.463
+      - coolify.serviceId=12
+      - coolify.type=service
+      - coolify.name=analytics-es8w8g0c00og4gsgg0k8w8o8
+      - coolify.resourceName=supabase-stack
+      - coolify.projectName=strata
+      - coolify.serviceName=analytics
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - coolify.service.subId=65
+      - coolify.service.subType=application
+      - coolify.service.subName=analytics
+    networks:
+      es8w8g0c00og4gsgg0k8w8o8: null
+    env_file:
+      - .env
+volumes:
+  db_data:
+    driver: local
+  storage_data:
+    driver: local
+  es8w8g0c00og4gsgg0k8w8o8_db-data:
+    name: es8w8g0c00og4gsgg0k8w8o8_db-data
+  es8w8g0c00og4gsgg0k8w8o8_storage-data:
+    name: es8w8g0c00og4gsgg0k8w8o8_storage-data
+networks:
+  es8w8g0c00og4gsgg0k8w8o8:
+    name: es8w8g0c00og4gsgg0k8w8o8
+    external: true
