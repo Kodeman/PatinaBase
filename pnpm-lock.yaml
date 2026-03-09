@@ -529,6 +529,9 @@ importers:
       '@tanstack/react-query-devtools':
         specifier: ^5.17.19
         version: 5.91.3(@tanstack/react-query@5.90.21(react@19.2.4))(react@19.2.4)
+      '@tanstack/react-table':
+        specifier: ^8.21.3
+        version: 8.21.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@tanstack/react-virtual':
         specifier: ^3.0.0
         version: 3.13.21(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -550,12 +553,18 @@ importers:
       framer-motion:
         specifier: ^12.23.24
         version: 12.35.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      jsonwebtoken:
+        specifier: ^9.0.2
+        version: 9.0.3
       lucide-react:
         specifier: ^0.544.0
         version: 0.544.0(react@19.2.4)
       next:
         specifier: ^15.0.0
         version: 15.5.12(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.3)
+      posthog-js:
+        specifier: ^1.359.1
+        version: 1.359.1
       react:
         specifier: ^19.0.0
         version: 19.2.4
@@ -571,6 +580,9 @@ importers:
       recharts:
         specifier: ^2.12.7
         version: 2.15.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      socket.io-client:
+        specifier: ^4.8.3
+        version: 4.8.3
       sonner:
         specifier: ^1.5.0
         version: 1.7.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -583,6 +595,9 @@ importers:
       uuid:
         specifier: ^10.0.0
         version: 10.0.0
+      yet-another-react-lightbox:
+        specifier: ^3.29.1
+        version: 3.29.1(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       zod:
         specifier: ^3.22.4
         version: 3.25.76

@@ -98,6 +98,9 @@ RUN pnpm --filter @patina/design-system build 2>/dev/null || true
 # Build the app
 RUN pnpm --filter @patina/${APP_NAME} build
 
+# Ensure public directory exists (some apps don't have one)
+RUN mkdir -p /app/apps/${APP_NAME}/public
+
 # =============================================================================
 # STAGE 3: Runner (Production)
 # =============================================================================
