@@ -14,6 +14,9 @@ const nextConfig = {
   // Monorepo workspace root for file tracing
   outputFileTracingRoot: require('path').join(__dirname, '../../'),
 
+  // Transpile monorepo packages
+  transpilePackages: ['@patina/design-system', '@patina/types', '@patina/utils', '@patina/api-client', '@patina/api-routes', '@patina/supabase'],
+
   // Typed routes (moved from experimental in Next.js 15)
   typedRoutes: true,
 
