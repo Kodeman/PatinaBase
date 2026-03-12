@@ -11,7 +11,6 @@ esac
 if [ -n "$SCHEMA" ]; then
   echo "Ensuring schema '$SCHEMA' exists..."
   DB_URL=$(echo "$DATABASE_URL" | sed 's/[?]schema=.*//')
-  # prisma is installed as a service-level devDependency
   PRISMA_BIN="./node_modules/.bin/prisma"
   if [ -x "$PRISMA_BIN" ] && [ -f prisma/schema.prisma ]; then
     echo "CREATE SCHEMA IF NOT EXISTS \"$SCHEMA\";" | "$PRISMA_BIN" db execute --stdin --url "$DB_URL" 2>&1 || echo "Schema creation via prisma failed (non-fatal)"
