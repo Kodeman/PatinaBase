@@ -125,7 +125,10 @@ COPY --from=builder --chown=nestjs:nestjs /app/deployed/package.json ./package.j
 # Copy built dist from the service directory (pnpm deploy doesn't copy build output)
 COPY --from=builder --chown=nestjs:nestjs /app/services/${SERVICE_NAME}/dist ./dist
 
-# Copy Prisma schema and generated client
+# Copy Prisma generated client into dist (imports use ../../generated/prisma-client relative paths)
+COPY --from=builder --chown=nestjs:nestjs /app/services/${SERVICE_NAME}/src/generated ./generated
+
+# Copy Prisma schema
 COPY --from=builder --chown=nestjs:nestjs /app/services/${SERVICE_NAME}/prisma ./prisma
 
 # Copy entrypoint script (creates Prisma schema before starting app)
