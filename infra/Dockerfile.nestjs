@@ -120,8 +120,10 @@ ENV SERVICE_NAME=${SERVICE_NAME}
 
 # Copy the self-contained deployment (flat node_modules, no symlinks)
 COPY --from=builder --chown=nestjs:nestjs /app/deployed/node_modules ./node_modules
-COPY --from=builder --chown=nestjs:nestjs /app/deployed/dist ./dist
 COPY --from=builder --chown=nestjs:nestjs /app/deployed/package.json ./package.json
+
+# Copy built dist from the service directory (pnpm deploy doesn't copy build output)
+COPY --from=builder --chown=nestjs:nestjs /app/services/${SERVICE_NAME}/dist ./dist
 
 # Copy Prisma schema and generated client
 COPY --from=builder --chown=nestjs:nestjs /app/services/${SERVICE_NAME}/prisma ./prisma
