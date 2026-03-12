@@ -26,6 +26,7 @@
     "@hookform/resolvers": "^3.9.0",
     "@patina/api-routes": "workspace:*",
     "@patina/design-system": "workspace:*",
+    "@patina/email": "workspace:*",
     "@patina/supabase": "workspace:*",
     "@patina/types": "workspace:*",
     "@patina/utils": "workspace:*",

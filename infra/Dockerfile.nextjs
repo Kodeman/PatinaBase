@@ -47,6 +47,7 @@ COPY packages/api-routes/package.json ./packages/api-routes/
 COPY packages/patina-design-system/package.json ./packages/patina-design-system/
 COPY packages/supabase/package.json ./packages/supabase/
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/email/package.json ./packages/email/
 
 ARG APP_NAME
 COPY apps/${APP_NAME}/package.json ./apps/${APP_NAME}/

@@ -487,6 +487,9 @@ importers:
       '@patina/design-system':
         specifier: workspace:*
         version: link:../../packages/patina-design-system
+      '@patina/email':
+        specifier: workspace:*
+        version: link:../../packages/email
       '@patina/supabase':
         specifier: workspace:*
         version: link:../../packages/supabase
