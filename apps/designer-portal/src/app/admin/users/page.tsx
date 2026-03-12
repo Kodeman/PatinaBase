@@ -20,7 +20,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuDivider,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@patina/design-system';
 import {
@@ -231,7 +231,7 @@ export default function UsersPage() {
 
                         {!user.emailVerified && (
                           <>
-                            <DropdownMenuDivider />
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => handleAction(user, 'verify')}>
                               <Mail className="mr-2 h-4 w-4" />
                               Verify Email
@@ -239,7 +239,7 @@ export default function UsersPage() {
                           </>
                         )}
 
-                        <DropdownMenuDivider />
+                        <DropdownMenuSeparator />
 
                         {user.status === 'active' && (
                           <>

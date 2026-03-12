@@ -235,3 +235,10 @@ export function useBulkCreateAdminVariants() {
     },
   });
 }
+
+// Aliases for backward compatibility with variant-editor imports
+export const useVariants = useAdminVariants;
+export const useCreateVariant = useCreateAdminVariant;
+export const useUpdateVariant = useUpdateAdminVariant;
+export const useDeleteVariant = useDeleteAdminVariant;
+export const useBulkCreateVariants = useBulkCreateAdminVariants;
