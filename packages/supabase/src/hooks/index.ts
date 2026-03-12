@@ -468,3 +468,16 @@ export type {
   DuplicateGroup,
   DuplicateReport,
 } from './use-duplicate-detection';
+export {
+  useCompanionConversation,
+  useCompanionHistory,
+  useSendCompanionMessage,
+  useCompanionQuickActions,
+} from './use-companion';
+export type {
+  CompanionMessage,
+  CompanionResponse,
+  QuickAction,
+  CompanionContext,
+  CompanionConversation,
+} from './use-companion';
