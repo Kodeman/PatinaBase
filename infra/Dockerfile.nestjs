@@ -118,6 +118,9 @@ RUN addgroup --system --gid 1001 nestjs && \
 ARG SERVICE_NAME
 ENV SERVICE_NAME=${SERVICE_NAME}
 
+# Create writable logs directory for Winston file transports
+RUN mkdir -p /app/logs && chown nestjs:nestjs /app/logs
+
 # Copy the self-contained deployment (flat node_modules, no symlinks)
 COPY --from=builder --chown=nestjs:nestjs /app/deployed/node_modules ./node_modules
 COPY --from=builder --chown=nestjs:nestjs /app/deployed/package.json ./package.json

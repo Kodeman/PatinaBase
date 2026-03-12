@@ -27,7 +27,8 @@ import { JwtStrategy } from '../strategies/jwt.strategy';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => {
-        const secret = configService.get<string>('JWT_SECRET');
+        const secret = configService.get<string>('JWT_SECRET') ||
+          configService.get<string>('SUPABASE_JWT_SECRET');
 
         if (!secret) {
           throw new Error(
