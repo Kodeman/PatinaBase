@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Heart, Plus, Eye, Share2, TrendingUp } from 'lucide-react';
+import { Heart, Plus, Eye, Share2, TrendingUp, Tag, Clock } from 'lucide-react';
 import { Button, Card, CardContent, Badge } from '@patina/design-system';
 import { formatCurrency } from '@/lib/utils';
 import { useSwipeGesture } from '@/hooks/use-swipe-gesture';
@@ -36,6 +36,18 @@ export function ProductCardAnimated({
   const shouldReduceMotion = useReducedMotion();
   const [isHovered, setIsHovered] = useState(false);
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
+
+  // Trade pricing data (available when product comes from useProductsWithVendorPricing)
+  const designerCost: number | null = product.designerCost ?? null;
+  const retailPrice: number | null = product.priceRetail ?? product.price ?? null;
+  const activeVendor = product.retailer ?? product.vendor ?? null;
+  const tierName: string | null = activeVendor?.currentTier ?? null;
+  const tierDiscount: number | null = activeVendor?.tierDiscount ?? null;
+  const discountDisplay: string | null = activeVendor?.discountDisplay ?? null;
+  const leadTimeWeeks: number | null = product.leadTimeWeeks ?? null;
+  const leadTimeQuickShip: string | null = activeVendor?.leadTimeQuickShip ?? null;
+  const leadTimeMTO: string | null = activeVendor?.leadTimeMTO ?? null;
+  const hasTradePrice = designerCost !== null && designerCost !== retailPrice;
 
   // Swipe gesture for mobile
   const swipeRef = useSwipeGesture({
@@ -290,22 +302,64 @@ export function ProductCardAnimated({
                 </div>
               )}
 
-              <div className="flex items-center justify-between pt-2 border-t mt-auto">
-                <span className="text-lg font-bold text-primary">
-                  {formatCurrency(product.price)}
-                </span>
-                <Button
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAddToProject?.(product);
-                  }}
-                  className="min-h-[44px] sm:min-h-0"
-                  aria-label="Add to project"
-                >
-                  <Plus className="mr-1 h-3 w-3" />
-                  Add
-                </Button>
+              {/* Trade Pricing & Lead Time */}
+              <div className="pt-2 border-t mt-auto space-y-2">
+                {/* Tier discount badge */}
+                {tierName && tierDiscount && (
+                  <div className="flex items-center gap-1">
+                    <Badge variant="subtle" color="success" className="text-xs">
+                      <Tag className="h-3 w-3 mr-1" />
+                      {tierName} Tier {discountDisplay ?? `-${tierDiscount}%`}
+                    </Badge>
+                  </div>
+                )}
+
+                {/* Lead time indicator */}
+                {(leadTimeWeeks || leadTimeQuickShip || leadTimeMTO) && (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Clock className="h-3 w-3 flex-shrink-0" />
+                    <span>
+                      {leadTimeQuickShip
+                        ? `Quick Ship: ${leadTimeQuickShip}`
+                        : leadTimeWeeks
+                          ? `Ships in ${leadTimeWeeks} ${leadTimeWeeks === 1 ? 'week' : 'weeks'}`
+                          : leadTimeMTO
+                            ? `Made to Order: ${leadTimeMTO}`
+                            : ''}
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    {hasTradePrice ? (
+                      <>
+                        <span className="text-lg font-bold text-primary">
+                          {formatCurrency(designerCost)}
+                        </span>
+                        <span className="text-xs text-muted-foreground line-through">
+                          Retail {formatCurrency(retailPrice!)}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-lg font-bold text-primary">
+                        {formatCurrency(retailPrice ?? product.price)}
+                      </span>
+                    )}
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddToProject?.(product);
+                    }}
+                    className="min-h-[44px] sm:min-h-0"
+                    aria-label="Add to project"
+                  >
+                    <Plus className="mr-1 h-3 w-3" />
+                    Add
+                  </Button>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -346,10 +400,43 @@ export function ProductCardAnimated({
                   </div>
                 )}
               </div>
-              <div className="flex flex-col items-end justify-between">
-                <span className="text-lg font-bold text-primary">
-                  {formatCurrency(product.price)}
-                </span>
+              <div className="flex flex-col items-end justify-between gap-1">
+                <div className="flex flex-col items-end">
+                  {hasTradePrice ? (
+                    <>
+                      <span className="text-lg font-bold text-primary">
+                        {formatCurrency(designerCost)}
+                      </span>
+                      <span className="text-xs text-muted-foreground line-through">
+                        Retail {formatCurrency(retailPrice!)}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-lg font-bold text-primary">
+                      {formatCurrency(retailPrice ?? product.price)}
+                    </span>
+                  )}
+                </div>
+                {tierName && tierDiscount && (
+                  <Badge variant="subtle" color="success" className="text-xs">
+                    <Tag className="h-3 w-3 mr-1" />
+                    {tierName} Tier {discountDisplay ?? `-${tierDiscount}%`}
+                  </Badge>
+                )}
+                {(leadTimeWeeks || leadTimeQuickShip || leadTimeMTO) && (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Clock className="h-3 w-3 flex-shrink-0" />
+                    <span>
+                      {leadTimeQuickShip
+                        ? `Quick Ship: ${leadTimeQuickShip}`
+                        : leadTimeWeeks
+                          ? `${leadTimeWeeks}wk`
+                          : leadTimeMTO
+                            ? `MTO: ${leadTimeMTO}`
+                            : ''}
+                    </span>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <Button
                     size="icon"

@@ -22,7 +22,6 @@ import {
 import {
   ArrowLeft,
   Calendar,
-  Camera,
   DollarSign,
   Edit,
   FileText,
@@ -39,6 +38,7 @@ import {
 import { formatCurrency, formatDate, formatRelativeTime } from '@/lib/utils';
 import { MLPredictionsPanel } from '@/components/crm/MLPredictionsPanel';
 import { HealthScoreTrendChart } from '@/components/crm/HealthScoreTrendChart';
+import { AssociatedRoomScans } from '@/components/rooms/associated-room-scans';
 
 export default function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -276,43 +276,9 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
         </TabsContent>
 
         <TabsContent value="scans" className="mt-6">
-          {client.scans?.length ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              {client.scans.map((scan: any) => (
-                <Card key={scan.id} className="overflow-hidden">
-                  <img src={scan.previewImage} alt={scan.room} className="h-48 w-full object-cover" />
-                  <CardContent className="space-y-2 p-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold">{scan.room}</h3>
-                      <Badge variant="outline">{scan.quality}</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Captured {formatRelativeTime(scan.capturedAt)}</p>
-                    <p className="text-sm">{scan.dimensions.width}" × {scan.dimensions.depth}" × {scan.dimensions.height}"</p>
-                    <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                      {scan.features.map((feature: string) => (
-                        <Badge key={feature} variant="secondary">
-                          {feature}
-                        </Badge>
-                      ))}
-                    </div>
-                    {scan.quickLookUrl && (
-                      <Button variant="outline" size="sm" className="w-full" asChild>
-                        <a href={scan.quickLookUrl} target="_blank" rel="noreferrer">
-                          <Camera className="mr-2 h-4 w-4" /> Quick Look
-                        </a>
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="p-10 text-center text-sm text-muted-foreground">
-                No scans uploaded yet.
-              </CardContent>
-            </Card>
-          )}
+          <AssociatedRoomScans
+            context={{ type: 'client', clientId: client.id }}
+          />
         </TabsContent>
 
         <TabsContent value="projects" className="mt-6">

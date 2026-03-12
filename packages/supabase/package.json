@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@patina/shared": "workspace:*",
-    "@supabase/ssr": "^0.3.0",
+    "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.43.0",
     "@tanstack/react-query": "^5.40.0"
   },

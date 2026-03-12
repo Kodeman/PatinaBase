@@ -2,12 +2,9 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { projectsApi } from '@/lib/api-client';
 import { useProjects } from '@/hooks/use-projects';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import {
-  ProjectStatusBadge,
-  ProgressRing,
   Card,
   Button,
   Input,
@@ -32,14 +29,6 @@ import {
   TabsTrigger,
   TabsContent,
 } from '@/components/ui/tabs';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface Project {
   id: string;
@@ -57,9 +46,9 @@ export default function ProjectsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const { data, isLoading } = useProjects({ status: statusFilter === 'all' ? undefined : statusFilter });
+  const { data: apiProjects, isLoading } = useProjects({ status: statusFilter === 'all' ? undefined : statusFilter });
 
-  // Mock data - replace with real API data
+  // Mock data as fallback when API returns no data
   const mockProjects: Project[] = [
     {
       id: '1',
@@ -96,7 +85,10 @@ export default function ProjectsPage() {
     },
   ];
 
-  const projects = mockProjects.filter((p) =>
+  // Use API data when available, fall back to mock data
+  const allProjects: Project[] = (apiProjects as Project[] | undefined) ?? mockProjects;
+
+  const projects = allProjects.filter((p) =>
     statusFilter === 'all' ? true : p.status === statusFilter
   ).filter((p) =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

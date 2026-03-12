@@ -453,3 +453,18 @@ export {
   usePauseAutomation,
   useSequenceEnrollments,
 } from './use-automations';
+export {
+  // Duplicate Detection
+  useDuplicateCheck,
+  useDuplicateReport,
+  useBulkDuplicateScan,
+  useDismissDuplicate,
+  useMarkAsDuplicate,
+  useMergeDuplicates,
+} from './use-duplicate-detection';
+export type {
+  DuplicateMatch,
+  DuplicateCheckResult,
+  DuplicateGroup,
+  DuplicateReport,
+} from './use-duplicate-detection';

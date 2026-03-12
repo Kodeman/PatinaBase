@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { AnimatedSidebar, type NavItem } from './animated-sidebar';
 import {
   BarChart3,
+  Bot,
   DollarSign,
   FileText,
   FolderOpen,
@@ -83,6 +84,11 @@ function SidebarContent({ isAdmin }: SidebarContentProps) {
       badge: 5
     },
     {
+      title: 'AI Companion',
+      href: '/companion',
+      icon: Bot
+    },
+    {
       title: 'Teaching',
       href: '/teaching',
       icon: GraduationCap
@@ -137,6 +143,7 @@ function SidebarContent({ isAdmin }: SidebarContentProps) {
       children: [
         { title: 'Profile', href: '/settings/profile' },
         { title: 'Account', href: '/settings/account' },
+        { title: 'Organization', href: '/settings?tab=organization' },
         { title: 'Notifications', href: '/settings/notifications' },
         { title: 'Billing', href: '/settings/billing' },
       ]

@@ -266,7 +266,7 @@ CREATE TABLE IF NOT EXISTS reconciliations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   job_id TEXT UNIQUE NOT NULL,
   status TEXT NOT NULL DEFAULT 'running',
-  window JSONB NOT NULL,
+  "window" JSONB NOT NULL,
   stripe_count INT NOT NULL DEFAULT 0,
   patina_count INT NOT NULL DEFAULT 0,
   matched_count INT NOT NULL DEFAULT 0,
@@ -350,3 +350,5 @@ BEGIN
 END $$;
 
 COMMIT;
+
+RESET search_path;

@@ -2,30 +2,53 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useProposals } from '@/hooks/use-proposals';
+import { useProposals, useSendProposal } from '@/hooks/use-proposals';
+import type { Proposal } from '@/hooks/use-proposals';
 import { Card, CardContent } from '@patina/design-system';
 import { Badge } from '@patina/design-system';
 import { Button } from '@patina/design-system';
 import { Skeleton } from '@patina/design-system';
 import { Plus, FileText, Send, Eye, Target } from 'lucide-react';
-import { formatCurrency, formatRelativeTime } from '@/lib/utils';
+import { formatCurrency, formatRelativeTime, formatDate } from '@/lib/utils';
+
+const STATUS_FILTERS = ['', 'draft', 'sent', 'viewed', 'accepted', 'declined'] as const;
 
 export default function ProposalsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('');
-  const { data: proposals, isLoading } = useProposals({ status: statusFilter });
+  const { data: proposals, isLoading } = useProposals(
+    statusFilter ? { status: statusFilter } : undefined
+  );
+  const sendProposal = useSendProposal();
 
-  const getStatusConfig = (status: string): { variant: 'solid' | 'subtle' | 'outline' | 'dot', color: 'primary' | 'success' | 'warning' | 'error' | 'info' | 'neutral' } => {
+  const getStatusConfig = (
+    status: string
+  ): {
+    variant: 'solid' | 'subtle' | 'outline' | 'dot';
+    color: 'primary' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
+  } => {
     switch (status) {
       case 'draft':
         return { variant: 'subtle', color: 'neutral' };
       case 'sent':
         return { variant: 'solid', color: 'info' };
-      case 'approved':
+      case 'viewed':
+        return { variant: 'dot', color: 'warning' };
+      case 'accepted':
         return { variant: 'solid', color: 'success' };
-      case 'rejected':
+      case 'declined':
         return { variant: 'solid', color: 'error' };
+      case 'expired':
+        return { variant: 'outline', color: 'neutral' };
       default:
         return { variant: 'subtle', color: 'neutral' };
+    }
+  };
+
+  const handleSend = async (proposalId: string) => {
+    try {
+      await sendProposal.mutateAsync(proposalId);
+    } catch (error) {
+      console.error('Failed to send proposal:', error);
     }
   };
 
@@ -48,7 +71,7 @@ export default function ProposalsPage() {
 
       {/* Status Filters */}
       <div className="flex flex-wrap items-center gap-2">
-        {['', 'draft', 'ready', 'sent', 'approved'].map((status) => (
+        {STATUS_FILTERS.map((status) => (
           <Button
             key={status || 'all'}
             variant={statusFilter === status ? 'default' : 'outline'}
@@ -75,7 +98,7 @@ export default function ProposalsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {proposals?.data.map((proposal: any) => (
+          {proposals?.map((proposal: Proposal) => (
             <Card key={proposal.id} className="group hover:border-primary transition-colors">
               <CardContent className="p-6 space-y-3">
                 <div className="flex items-start justify-between gap-4">
@@ -89,7 +112,9 @@ export default function ProposalsPage() {
                           {proposal.title}
                         </h3>
                       </Link>
-                      <p className="text-sm text-muted-foreground">{proposal.clientName}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {proposal.client?.full_name || 'No client assigned'}
+                      </p>
                     </div>
                   </div>
                   <Badge {...getStatusConfig(proposal.status)}>{proposal.status}</Badge>
@@ -97,17 +122,24 @@ export default function ProposalsPage() {
                 <div className="grid gap-3 lg:grid-cols-4 text-sm text-muted-foreground">
                   <div className="flex items-center gap-1">
                     <Target className="h-4 w-4" />
-                    Due {proposal.dueDate ? formatRelativeTime(proposal.dueDate) : '—'}
+                    {proposal.valid_until
+                      ? `Valid until ${formatDate(proposal.valid_until)}`
+                      : 'No expiration'}
                   </div>
-                  <div>{proposal.itemCount} items</div>
-                  <div>Updated {formatRelativeTime(proposal.updatedAt)}</div>
+                  <div>{proposal.project?.name || 'No project'}</div>
+                  <div>Updated {formatRelativeTime(proposal.updated_at)}</div>
                   <div className="text-right text-base font-semibold text-foreground">
-                    {formatCurrency(proposal.totalAmount)}
+                    {formatCurrency(proposal.total_amount)}
                   </div>
                 </div>
                 <div className="flex flex-wrap justify-end gap-2">
                   {proposal.status === 'draft' && (
-                    <Button size="sm" variant="outline">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleSend(proposal.id)}
+                      disabled={sendProposal.isPending}
+                    >
                       <Send className="mr-2 h-4 w-4" />
                       Send
                     </Button>
@@ -126,7 +158,7 @@ export default function ProposalsPage() {
       )}
 
       {/* Empty State */}
-      {!isLoading && proposals?.data.length === 0 && (
+      {!isLoading && (!proposals || proposals.length === 0) && (
         <Card>
           <CardContent className="p-12 text-center">
             <FileText className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />

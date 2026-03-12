@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useChangePassword } from '@/hooks/use-profile';
 import { useSessions, useRevokeSession, useRevokeAllSessions } from '@/hooks/use-sessions';
-import { Button, Input, Alert } from '@patina/design-system';
-import { Monitor, Trash2 } from 'lucide-react';
+import { useMfaFactors, useUnenrollMfa } from '@patina/supabase';
+import { Button, Input, Alert, Badge } from '@patina/design-system';
+import { Monitor, Trash2, Shield, ShieldCheck, ShieldAlert, Smartphone } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
+import { MfaEnrollDialog } from './MfaEnrollDialog';
 
 export function SecurityTab() {
   const { signOut } = useAuth();
@@ -14,12 +16,17 @@ export function SecurityTab() {
   const { data: sessions, isLoading: sessionsLoading } = useSessions();
   const revokeSession = useRevokeSession();
   const revokeAllSessions = useRevokeAllSessions();
+  const { factors, isLoading: mfaLoading, hasMfaEnabled } = useMfaFactors();
+  const unenrollMfa = useUnenrollMfa();
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [mfaEnrollOpen, setMfaEnrollOpen] = useState(false);
+  const [mfaError, setMfaError] = useState<string | null>(null);
+  const [mfaSuccess, setMfaSuccess] = useState<string | null>(null);
 
   const handleChangePassword = async () => {
     setPasswordError(null);
@@ -190,16 +197,123 @@ export function SecurityTab() {
 
       {/* Two-Factor Authentication */}
       <div className="rounded-lg bg-white p-6 shadow">
-        <h2 className="text-lg font-semibold text-gray-900">Two-Factor Authentication</h2>
-        <p className="mt-1 text-sm text-gray-600">
-          Managed through OCI Identity Domains
-        </p>
-        <a
-          href="#"
-          className="mt-2 inline-flex text-sm font-medium text-blue-600 hover:text-blue-500"
-        >
-          Configure in Identity Domains →
-        </a>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {hasMfaEnabled ? (
+              <ShieldCheck className="h-5 w-5 text-green-600" />
+            ) : (
+              <ShieldAlert className="h-5 w-5 text-amber-500" />
+            )}
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">
+                Two-Factor Authentication
+              </h2>
+              <p className="mt-1 text-sm text-gray-600">
+                {hasMfaEnabled
+                  ? 'Your account is protected with two-factor authentication'
+                  : 'Add an extra layer of security to your account'}
+              </p>
+            </div>
+          </div>
+          <Badge variant={hasMfaEnabled ? 'default' : 'secondary'}>
+            {hasMfaEnabled ? 'Enabled' : 'Disabled'}
+          </Badge>
+        </div>
+
+        {mfaError && (
+          <Alert variant="destructive" className="mt-4">
+            {mfaError}
+          </Alert>
+        )}
+
+        {mfaSuccess && (
+          <Alert variant="success" className="mt-4">
+            {mfaSuccess}
+          </Alert>
+        )}
+
+        <div className="mt-4">
+          {mfaLoading ? (
+            <p className="text-sm text-gray-500">Loading MFA status...</p>
+          ) : factors.length > 0 ? (
+            <div className="space-y-3">
+              {factors
+                .filter((f) => f.status === 'verified')
+                .map((factor) => (
+                  <div
+                    key={factor.id}
+                    className="flex items-center justify-between rounded-md border p-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Smartphone className="h-5 w-5 text-gray-400" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {factor.friendlyName || 'Authenticator App'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Added {formatDate(new Date(factor.createdAt))}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        setMfaError(null);
+                        setMfaSuccess(null);
+                        try {
+                          await unenrollMfa.mutateAsync({
+                            factorId: factor.id,
+                          });
+                          setMfaSuccess(
+                            'Two-factor authentication has been disabled.'
+                          );
+                          // Reload to refresh factor list
+                          window.location.reload();
+                        } catch (err: any) {
+                          setMfaError(
+                            err.message ||
+                              'Failed to disable two-factor authentication'
+                          );
+                        }
+                      }}
+                      disabled={unenrollMfa.isPending}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="mr-1 h-4 w-4" />
+                      {unenrollMfa.isPending ? 'Disabling...' : 'Disable'}
+                    </Button>
+                  </div>
+                ))}
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 rounded-md border border-dashed p-4">
+              <Shield className="h-5 w-5 text-gray-400" />
+              <p className="text-sm text-gray-500">
+                No authenticator app configured. Set up two-factor
+                authentication to secure your account.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {!hasMfaEnabled && (
+          <Button className="mt-4" onClick={() => setMfaEnrollOpen(true)}>
+            Set Up Two-Factor Authentication
+          </Button>
+        )}
+
+        <MfaEnrollDialog
+          open={mfaEnrollOpen}
+          onOpenChange={setMfaEnrollOpen}
+          onSuccess={() => {
+            setMfaSuccess(
+              'Two-factor authentication has been enabled successfully.'
+            );
+            // Reload to refresh factor list
+            window.location.reload();
+          }}
+        />
       </div>
 
       {/* Sign Out Current Session */}

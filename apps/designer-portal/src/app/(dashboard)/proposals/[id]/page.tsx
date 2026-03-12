@@ -1,7 +1,13 @@
 'use client';
 
-import { use } from 'react';
-import { useProposal } from '@/hooks/use-proposals';
+import { use, useState } from 'react';
+import {
+  useProposal,
+  useSendProposal,
+  useRemoveProposalItem,
+  useDeleteProposal,
+} from '@/hooks/use-proposals';
+import type { ProposalItem } from '@/hooks/use-proposals';
 import { Card, CardContent, CardHeader, CardTitle } from '@patina/design-system';
 import { Badge } from '@patina/design-system';
 import { Button } from '@patina/design-system';
@@ -10,14 +16,15 @@ import {
   ArrowLeft,
   Send,
   Download,
-  Edit,
   Trash2,
-  Plus,
+  Clock,
   CheckCircle2,
-  Timer,
+  Eye,
+  AlertCircle,
 } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatRelativeTime, formatDate } from '@/lib/utils';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function ProposalDetailPage({
   params,
@@ -25,7 +32,82 @@ export default function ProposalDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
   const { data: proposal, isLoading } = useProposal(id);
+  const sendProposal = useSendProposal();
+  const removeItem = useRemoveProposalItem();
+  const deleteProposal = useDeleteProposal();
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+
+  const getStatusConfig = (
+    status: string
+  ): {
+    variant: 'solid' | 'subtle' | 'outline' | 'dot';
+    color: 'primary' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
+  } => {
+    switch (status) {
+      case 'draft':
+        return { variant: 'subtle', color: 'neutral' };
+      case 'sent':
+        return { variant: 'solid', color: 'info' };
+      case 'viewed':
+        return { variant: 'dot', color: 'warning' };
+      case 'accepted':
+        return { variant: 'solid', color: 'success' };
+      case 'declined':
+        return { variant: 'solid', color: 'error' };
+      case 'expired':
+        return { variant: 'outline', color: 'neutral' };
+      default:
+        return { variant: 'subtle', color: 'neutral' };
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'draft':
+        return <Clock className="h-4 w-4" />;
+      case 'sent':
+        return <Send className="h-4 w-4" />;
+      case 'viewed':
+        return <Eye className="h-4 w-4" />;
+      case 'accepted':
+        return <CheckCircle2 className="h-4 w-4" />;
+      case 'declined':
+        return <AlertCircle className="h-4 w-4" />;
+      default:
+        return <Clock className="h-4 w-4" />;
+    }
+  };
+
+  const handleSend = async () => {
+    try {
+      await sendProposal.mutateAsync(id);
+    } catch (error) {
+      console.error('Failed to send proposal:', error);
+    }
+  };
+
+  const handleRemoveItem = async (itemId: string) => {
+    setDeletingItemId(itemId);
+    try {
+      await removeItem.mutateAsync({ itemId, proposalId: id });
+    } catch (error) {
+      console.error('Failed to remove item:', error);
+    } finally {
+      setDeletingItemId(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('Are you sure you want to delete this proposal?')) return;
+    try {
+      await deleteProposal.mutateAsync(id);
+      router.push('/proposals');
+    } catch (error) {
+      console.error('Failed to delete proposal:', error);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -47,20 +129,8 @@ export default function ProposalDetailPage({
     );
   }
 
-  const totalAmount = proposal.sections.reduce(
-    (total: number, section: any) =>
-      total +
-      section.items.reduce(
-        (sectionTotal: number, item: any) =>
-          sectionTotal + item.price * item.quantity,
-        0
-      ),
-    0
-  );
-
-  const budgetUsage = proposal.targetBudget
-    ? Math.min((totalAmount / proposal.targetBudget) * 100, 100)
-    : 0;
+  const items = proposal.items ?? [];
+  const itemCount = items.length;
 
   return (
     <div className="space-y-6">
@@ -76,8 +146,13 @@ export default function ProposalDetailPage({
           </Link>
           <h1 className="text-3xl font-bold">{proposal.title}</h1>
           <p className="text-muted-foreground">
-            Client: {proposal.clientName}
+            Client: {proposal.client?.full_name || 'No client assigned'}
           </p>
+          {proposal.project && (
+            <p className="text-sm text-muted-foreground">
+              Project: {proposal.project.name}
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm">
@@ -85,10 +160,25 @@ export default function ProposalDetailPage({
             Export PDF
           </Button>
           {proposal.status === 'draft' && (
-            <Button size="sm">
-              <Send className="mr-2 h-4 w-4" />
-              Send to Client
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDelete}
+                disabled={deleteProposal.isPending}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSend}
+                disabled={sendProposal.isPending}
+              >
+                <Send className="mr-2 h-4 w-4" />
+                Send to Client
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -99,194 +189,170 @@ export default function ProposalDetailPage({
           <div className="grid gap-4 md:grid-cols-3">
             <div>
               <p className="text-sm text-muted-foreground">Total amount</p>
-              <p className="text-3xl font-bold">{formatCurrency(totalAmount)}</p>
+              <p className="text-3xl font-bold">
+                {formatCurrency(proposal.total_amount)}
+              </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Target budget</p>
+              <p className="text-sm text-muted-foreground">Valid until</p>
               <p className="text-2xl font-semibold">
-                {proposal.targetBudget ? formatCurrency(proposal.targetBudget) : '—'}
+                {proposal.valid_until
+                  ? formatDate(proposal.valid_until)
+                  : 'No expiration'}
               </p>
-              {proposal.targetBudget && (
-                <div className="mt-2">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Usage</span>
-                    <span>{budgetUsage.toFixed(0)}%</span>
-                  </div>
-                  <div className="mt-1 h-2 rounded-full bg-muted">
-                    <div
-                      className="h-2 rounded-full bg-primary"
-                      style={{ width: `${budgetUsage}%` }}
-                    />
-                  </div>
-                </div>
-              )}
             </div>
-            <div className="flex items-center justify-end gap-4">
+            <div className="flex items-center justify-end gap-6">
               <div>
                 <p className="text-sm text-muted-foreground">Status</p>
-                <Badge className="mt-1 uppercase">{proposal.status}</Badge>
+                <Badge className="mt-1" {...getStatusConfig(proposal.status)}>
+                  <span className="flex items-center gap-1">
+                    {getStatusIcon(proposal.status)}
+                    {proposal.status}
+                  </span>
+                </Badge>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Items</p>
-                <p className="text-2xl font-semibold">
-                  {proposal.sections.reduce(
-                    (total: number, s: any) => total + s.items.length,
-                    0
-                  )}
+                <p className="text-2xl font-semibold">{itemCount}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Timeline info */}
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Created</p>
+              <p className="text-sm">{formatRelativeTime(proposal.created_at)}</p>
+            </div>
+            {proposal.sent_at && (
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Sent</p>
+                <p className="text-sm">{formatRelativeTime(proposal.sent_at)}</p>
+              </div>
+            )}
+            {proposal.viewed_at && (
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Viewed</p>
+                <p className="text-sm">{formatRelativeTime(proposal.viewed_at)}</p>
+              </div>
+            )}
+            {proposal.responded_at && (
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Responded</p>
+                <p className="text-sm">
+                  {formatRelativeTime(proposal.responded_at)}
                 </p>
               </div>
-            </div>
+            )}
           </div>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <div className="rounded-lg border p-4">
-              <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <span>Approval</span>
-                <span>{proposal.approvals.status}</span>
-              </div>
-              <div className="mt-2 flex items-center gap-2 text-sm">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                {proposal.approvals.decisionBy} by{' '}
-                {formatRelativeTime(proposal.approvals.dueDate)}
-              </div>
-            </div>
-            <div className="rounded-lg border p-4">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Timer className="h-4 w-4" />
-                Timeline
-              </div>
-              <ul className="mt-2 space-y-1 text-sm">
-                {proposal.timeline.map((entry: any) => (
-                  <li key={entry.id} className="flex items-center justify-between">
-                    <span>{entry.label}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {formatRelativeTime(entry.timestamp)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-          {proposal.notes && (
+          {proposal.description && (
             <div className="mt-4 pt-4 border-t">
-              <div className="text-sm text-muted-foreground mb-1">Notes</div>
-              <p className="text-sm">{proposal.notes}</p>
+              <div className="text-sm text-muted-foreground mb-1">Description</div>
+              <p className="text-sm">{proposal.description}</p>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Sections */}
-      <div className="space-y-6">
-        {proposal.sections.map((section: any) => (
-          <Card key={section.id}>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>{section.name}</CardTitle>
-              <Button variant="outline" size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Item
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {section.items.map((item: any) => (
+      {/* Items */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Items ({itemCount})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {items.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>No items in this proposal yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {items.map((item: ProposalItem) => {
+                const displayName =
+                  item.product?.name || item.custom_name || 'Unnamed item';
+                const vendorName = item.product?.vendor_name;
+                const imageUrl = item.product?.primary_image_url;
+                const lineTotal = item.unit_price * item.quantity;
+
+                return (
                   <div
                     key={item.id}
                     className="flex gap-4 p-4 rounded-lg border hover:border-primary transition-colors"
                   >
                     {/* Image */}
                     <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-muted">
-                      <img
-                        src={item.imageUrl}
-                        alt={item.productName}
-                        className="h-full w-full object-cover"
-                      />
+                      {imageUrl ? (
+                        <img
+                          src={imageUrl}
+                          alt={displayName}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center text-muted-foreground text-xs">
+                          No image
+                        </div>
+                      )}
                     </div>
 
                     {/* Details */}
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold">{item.productName}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {item.brand}
-                      </p>
+                      <h4 className="font-semibold">{displayName}</h4>
+                      {vendorName && (
+                        <p className="text-sm text-muted-foreground">
+                          {vendorName}
+                        </p>
+                      )}
+                      {item.notes && (
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {item.notes}
+                        </p>
+                      )}
                       <div className="mt-2 flex items-center gap-4 text-sm">
                         <span className="text-muted-foreground">
                           Qty: {item.quantity}
                         </span>
                         <span className="font-semibold">
-                          {formatCurrency(item.price)}
+                          {formatCurrency(item.unit_price)} each
                         </span>
                       </div>
                     </div>
 
                     {/* Actions */}
                     <div className="flex flex-col items-end justify-between">
-                      <div className="flex gap-1">
-                        <Button size="icon" variant="ghost">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button size="icon" variant="ghost">
+                      {proposal.status === 'draft' && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => handleRemoveItem(item.id)}
+                          disabled={deletingItemId === item.id}
+                        >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
-                      </div>
+                      )}
                       <div className="text-right">
                         <div className="text-sm text-muted-foreground">
                           Subtotal
                         </div>
                         <div className="font-bold">
-                          {formatCurrency(item.price * item.quantity)}
+                          {formatCurrency(lineTotal)}
                         </div>
                       </div>
                     </div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
+            </div>
+          )}
 
-              {/* Section Total */}
-              <div className="mt-4 pt-4 border-t flex items-center justify-between">
-                <span className="text-sm font-medium">Section Total</span>
-                <span className="text-lg font-bold">
-                  {formatCurrency(
-                    section.items.reduce(
-                      (total: number, item: any) =>
-                        total + item.price * item.quantity,
-                      0
-                    )
-                  )}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-
-        {/* Add Section Button */}
-        <Card className="border-dashed">
-          <CardContent className="p-6 text-center">
-            <Button variant="outline">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Section
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardContent className="p-6">
-          <h2 className="text-lg font-semibold mb-4">Version history</h2>
-          <div className="space-y-3">
-            {proposal.versions.map((version: any) => (
-              <div key={version.id} className="flex items-center justify-between rounded-lg border p-3">
-                <div>
-                  <p className="font-medium">{version.label}</p>
-                  <p className="text-sm text-muted-foreground">{version.summary}</p>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {formatRelativeTime(version.createdAt)}
-                </p>
-              </div>
-            ))}
-          </div>
+          {/* Total */}
+          {items.length > 0 && (
+            <div className="mt-4 pt-4 border-t flex items-center justify-between">
+              <span className="text-lg font-semibold">Total</span>
+              <span className="text-xl font-bold">
+                {formatCurrency(proposal.total_amount)}
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

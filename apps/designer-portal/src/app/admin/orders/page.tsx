@@ -11,6 +11,7 @@ import {
   Badge,
 } from '@patina/design-system';
 import { Search, Filter, Eye, Package } from 'lucide-react';
+import Link from 'next/link';
 import { ordersService } from '@/services/admin';
 import { formatCurrency, formatDateTime } from '@/lib/utils';
 
@@ -131,8 +132,10 @@ export default function OrdersPage() {
                   >
                     {order.status}
                   </Badge>
-                  <Button variant="ghost" size="icon">
-                    <Eye className="h-4 w-4" />
+                  <Button variant="ghost" size="icon" asChild>
+                    <Link href={`/admin/orders/${order.id}`}>
+                      <Eye className="h-4 w-4" />
+                    </Link>
                   </Button>
                 </div>
               ))}

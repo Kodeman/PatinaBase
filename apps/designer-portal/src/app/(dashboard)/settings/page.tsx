@@ -8,8 +8,9 @@ import { SecurityTab } from './components/SecurityTab';
 import { NotificationsTab } from './components/NotificationsTab';
 import { BusinessTab } from './components/BusinessTab';
 import { AccountTab } from './components/AccountTab';
+import { OrganizationTab } from './components/OrganizationTab';
 
-type TabId = 'profile' | 'account' | 'security' | 'notifications' | 'business';
+type TabId = 'profile' | 'account' | 'security' | 'notifications' | 'business' | 'organization';
 
 const tabs: { id: TabId; label: string }[] = [
   { id: 'profile', label: 'Profile' },
@@ -17,6 +18,7 @@ const tabs: { id: TabId; label: string }[] = [
   { id: 'security', label: 'Security' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'business', label: 'Business Info' },
+  { id: 'organization', label: 'Organization' },
 ];
 
 export default function SettingsPage() {
@@ -78,6 +80,7 @@ export default function SettingsPage() {
           {activeTab === 'security' && <SecurityTab />}
           {activeTab === 'notifications' && <NotificationsTab />}
           {activeTab === 'business' && <BusinessTab />}
+          {activeTab === 'organization' && <OrganizationTab />}
         </div>
       </div>
     </div>

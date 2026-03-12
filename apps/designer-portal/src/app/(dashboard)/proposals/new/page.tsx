@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCreateProposal, useCreateSection, useAddProposalItem } from '@/hooks/use-proposals';
+import { useCreateProposal, useAddProposalItem } from '@/hooks/use-proposals';
+import { useClients } from '@patina/supabase';
+import { useProducts } from '@patina/supabase';
 import { Card } from '@patina/design-system';
 import { Button } from '@patina/design-system';
 import { Input } from '@patina/design-system';
@@ -23,16 +25,17 @@ import {
   X,
   GripVertical,
   Image,
-  DollarSign,
   Package,
   Grid3x3,
   LayoutGrid,
+  Search,
+  Loader2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { cn, formatCurrency } from '@/lib/utils';
+import { formatCurrency } from '@/lib/utils';
 
 interface ProposalSection {
   id: string;
@@ -82,7 +85,19 @@ function NewProposalContent() {
   const clientId = searchParams.get('clientId');
 
   const createProposal = useCreateProposal();
+  const addProposalItem = useAddProposalItem();
   const [viewMode, setViewMode] = useState<'list' | 'board'>('list');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Fetch clients for the dropdown
+  const { data: clients } = useClients();
+  const clientOptions = useMemo(() => {
+    if (!clients) return [];
+    return clients.map((c) => ({
+      value: c.client_id || c.id,
+      label: c.client?.full_name || c.client_name || c.client?.email || 'Unknown client',
+    }));
+  }, [clients]);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -103,6 +118,13 @@ function NewProposalContent() {
   const [showSectionDialog, setShowSectionDialog] = useState(false);
   const [currentSectionId, setCurrentSectionId] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [productSearch, setProductSearch] = useState('');
+
+  // Product search
+  const { data: productResults, isLoading: productsLoading } = useProducts(
+    productSearch.length >= 2 ? { search: productSearch } : undefined,
+    { page: 1, pageSize: 20 },
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -115,7 +137,6 @@ function NewProposalContent() {
     const { active, over } = event;
 
     if (active.id !== over.id) {
-      // Find which section the items belong to
       for (const section of sections) {
         const itemIds = section.items.map((item) => item.id);
         const activeIndex = itemIds.indexOf(active.id);
@@ -151,6 +172,7 @@ function NewProposalContent() {
 
   const addProduct = (sectionId: string) => {
     setCurrentSectionId(sectionId);
+    setProductSearch('');
     setShowProductDialog(true);
   };
 
@@ -205,7 +227,6 @@ function NewProposalContent() {
   const validate = () => {
     const newErrors: Record<string, string> = {};
     if (!formData.title.trim()) newErrors.title = 'Title is required';
-    if (!formData.clientId) newErrors.clientId = 'Client is required';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -213,13 +234,33 @@ function NewProposalContent() {
   const handleSubmit = async () => {
     if (!validate()) return;
 
+    setIsSaving(true);
     try {
-      // Create proposal with sections and items
-      // This would need to be implemented in the API
-      console.log('Creating proposal:', { formData, sections });
-      router.push('/proposals');
+      const result = await createProposal.mutateAsync({
+        title: formData.title,
+        clientId: formData.clientId || undefined,
+        description: formData.description || undefined,
+      });
+
+      // Add all items from all sections
+      for (const section of sections) {
+        for (const item of section.items) {
+          await addProposalItem.mutateAsync({
+            proposalId: result.id,
+            productId: item.productId || undefined,
+            customName: item.productName,
+            quantity: item.quantity,
+            unitPrice: item.price,
+            notes: item.notes,
+          });
+        }
+      }
+
+      router.push(`/proposals/${result.id}`);
     } catch (error) {
       console.error('Failed to create proposal:', error);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -266,9 +307,13 @@ function NewProposalContent() {
                 <Plus className="h-4 w-4 mr-2" />
                 Add Section
               </Button>
-              <Button onClick={handleSubmit} disabled={createProposal.isPending}>
-                <Save className="h-4 w-4 mr-2" />
-                Save Proposal
+              <Button onClick={handleSubmit} disabled={isSaving}>
+                {isSaving ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                {isSaving ? 'Saving...' : 'Save Proposal'}
               </Button>
             </div>
           </div>
@@ -292,18 +337,20 @@ function NewProposalContent() {
                   {errors.title && <p className="text-sm text-red-600 mt-1">{errors.title}</p>}
                 </div>
                 <div>
-                  <Label required>Client</Label>
-                  <Select
-                    value={formData.clientId}
-                    onValueChange={(value: string) => setFormData({ ...formData, clientId: value })}
-                    placeholder="Select a client"
-                    options={[
-                      { value: 'client-1', label: 'Sarah Johnson' },
-                      { value: 'client-2', label: 'Michael Chen' },
-                    ]}
-                  />
-                  {errors.clientId && (
-                    <p className="text-sm text-red-500 mt-1">{errors.clientId}</p>
+                  <Label>Client</Label>
+                  {clientOptions.length > 0 ? (
+                    <Select
+                      value={formData.clientId}
+                      onValueChange={(value: string) => setFormData({ ...formData, clientId: value })}
+                      placeholder="Select a client (optional)"
+                      options={clientOptions}
+                    />
+                  ) : (
+                    <Input
+                      value={formData.clientId}
+                      onChange={(e) => setFormData({ ...formData, clientId: e.target.value })}
+                      placeholder="Client ID (optional)"
+                    />
                   )}
                 </div>
                 <div>
@@ -496,9 +543,17 @@ function NewProposalContent() {
                       {section.items.map((item) => (
                         <div
                           key={item.id}
-                          className="aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center text-xs text-center p-2"
+                          className="aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center text-xs text-center p-2 overflow-hidden"
                         >
-                          {item.productName}
+                          {item.productImage ? (
+                            <img
+                              src={item.productImage}
+                              alt={item.productName}
+                              className="w-full h-full object-cover rounded"
+                            />
+                          ) : (
+                            item.productName
+                          )}
                         </div>
                       ))}
                       <button
@@ -522,31 +577,85 @@ function NewProposalContent() {
           <DialogHeader>
             <DialogTitle>Add Product</DialogTitle>
           </DialogHeader>
-          
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Search and select a product from the catalog
+
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Search the product catalog to add items to your proposal
             </p>
-            {/* Product browser would go here */}
-            <div className="text-center py-12 border-2 border-dashed rounded-lg">
-              <Package className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-              <p className="text-gray-500">Product browser integration pending</p>
-              <Button
-                className="mt-4"
-                onClick={() => {
-                  // Mock adding a product
-                  addItemToSection({
-                    id: `item-${Date.now()}`,
-                    productId: 'prod-1',
-                    productName: 'Mid-Century Modern Sofa',
-                    price: 1299000,
-                    quantity: 1,
-                  });
-                }}
-              >
-                Add Sample Product
-              </Button>
+
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                placeholder="Search products by name..."
+                className="pl-10"
+              />
             </div>
-          
+
+            {/* Product Results */}
+            <div className="max-h-[400px] overflow-y-auto space-y-2">
+              {productSearch.length < 2 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Search className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                  <p>Type at least 2 characters to search products</p>
+                </div>
+              ) : productsLoading ? (
+                <div className="text-center py-8">
+                  <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin text-gray-400" />
+                  <p className="text-gray-500">Searching...</p>
+                </div>
+              ) : productResults?.data && productResults.data.length > 0 ? (
+                productResults.data.map((product: any) => (
+                  <button
+                    key={product.id}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg border hover:border-primary hover:bg-primary/5 transition-colors text-left"
+                    onClick={() => {
+                      addItemToSection({
+                        id: `item-${Date.now()}`,
+                        productId: product.id,
+                        productName: product.name,
+                        productImage: product.images?.[0] || product.primary_image_url || undefined,
+                        price: product.price_retail || product.price_trade || 0,
+                        quantity: 1,
+                      });
+                    }}
+                  >
+                    <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
+                      {(product.images?.[0] || product.primary_image_url) ? (
+                        <img
+                          src={product.images?.[0] || product.primary_image_url}
+                          alt={product.name}
+                          className="w-full h-full object-cover rounded-lg"
+                        />
+                      ) : (
+                        <Package className="h-5 w-5 text-gray-400" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{product.name}</p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {product.vendor?.name || 'Unknown vendor'}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-semibold">
+                        {product.price_retail
+                          ? formatCurrency(product.price_retail)
+                          : 'No price'}
+                      </p>
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <Package className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                  <p>No products found for &ldquo;{productSearch}&rdquo;</p>
+                </div>
+              )}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -556,22 +665,22 @@ function NewProposalContent() {
           <DialogHeader>
             <DialogTitle>Add Section</DialogTitle>
           </DialogHeader>
-          
-            <div className="space-y-4">
-              <div>
-                <Label required>Section Name</Label>
-                <Input id="section-name" placeholder="e.g., Living Room, Bedroom" />
-              </div>
-              <div>
-                <Label>Description</Label>
-                <Textarea
-                  id="section-description"
-                  placeholder="Optional description..."
-                  rows={3}
-                />
-              </div>
+
+          <div className="space-y-4">
+            <div>
+              <Label required>Section Name</Label>
+              <Input id="section-name" placeholder="e.g., Living Room, Bedroom" />
             </div>
-          
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                id="section-description"
+                placeholder="Optional description..."
+                rows={3}
+              />
+            </div>
+          </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSectionDialog(false)}>
               Cancel
@@ -582,7 +691,9 @@ function NewProposalContent() {
                 const descInput = document.getElementById(
                   'section-description'
                 ) as HTMLTextAreaElement;
-                addSection(nameInput.value, descInput.value);
+                if (nameInput.value.trim()) {
+                  addSection(nameInput.value, descInput.value);
+                }
               }}
             >
               Add Section

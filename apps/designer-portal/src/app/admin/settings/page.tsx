@@ -7,32 +7,44 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@patina/design-system';
-// REPLACED: card';
-import { Button } from '@patina/design-system';
-// REPLACED: button';
-import { Input } from '@patina/design-system';
-// REPLACED: input';
-import { Badge } from '@patina/design-system';
-// REPLACED: badge';
-import { Switch } from '@patina/design-system';
-// REPLACED: switch';
-import {
+  Button,
+  Input,
+  Badge,
+  Switch,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Divider,
 } from '@patina/design-system';
-// REPLACED: select';
-import { Divider } from '@patina/design-system';
-// REPLACED: separator';
 import { notificationDefaults, type NotificationPreferences } from '@/data/mock-admin';
 import { toast } from 'sonner';
-import { ShieldCheck, Settings as SettingsIcon } from 'lucide-react';
+import { ShieldCheck, Settings as SettingsIcon, Globe } from 'lucide-react';
+
+interface PlatformSettings {
+  maintenanceMode: boolean;
+  registrationOpen: boolean;
+  requireDesignerVerification: boolean;
+  maxUploadSizeMb: number;
+  platformName: string;
+  supportEmail: string;
+  defaultCurrency: string;
+}
+
+const initialPlatformSettings: PlatformSettings = {
+  maintenanceMode: false,
+  registrationOpen: true,
+  requireDesignerVerification: true,
+  maxUploadSizeMb: 25,
+  platformName: 'Patina',
+  supportEmail: 'support@patina.com',
+  defaultCurrency: 'USD',
+};
 
 export default function SettingsPage() {
   const [preferences, setPreferences] = useState<NotificationPreferences>(notificationDefaults);
+  const [platform, setPlatform] = useState<PlatformSettings>(initialPlatformSettings);
 
   const toggleChannel = (channel: keyof NotificationPreferences['channels']) => {
     setPreferences((prev) => ({
@@ -74,6 +86,17 @@ export default function SettingsPage() {
     toast.success('Notification preferences updated');
   };
 
+  const handlePlatformSave = () => {
+    toast.success('Platform settings saved');
+  };
+
+  const togglePlatformSetting = (key: keyof PlatformSettings) => {
+    setPlatform((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
@@ -84,10 +107,108 @@ export default function SettingsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
           <p className="text-muted-foreground">
-            Manage your operator profile, security, and notification channels
+            Manage platform configuration, security, and notification channels
           </p>
         </div>
       </div>
+
+      {/* Platform Settings */}
+      <Card>
+        <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Globe className="h-5 w-5" />
+              Platform Settings
+            </CardTitle>
+            <CardDescription>Core platform configuration and operational controls</CardDescription>
+          </div>
+          <Button size="sm" onClick={handlePlatformSave}>
+            Save Changes
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Platform Name</label>
+              <Input
+                value={platform.platformName}
+                onChange={(e) => setPlatform({ ...platform, platformName: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Support Email</label>
+              <Input
+                value={platform.supportEmail}
+                onChange={(e) => setPlatform({ ...platform, supportEmail: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Default Currency</label>
+              <Select
+                value={platform.defaultCurrency}
+                onValueChange={(value) => setPlatform({ ...platform, defaultCurrency: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="USD">USD ($)</SelectItem>
+                  <SelectItem value="EUR">EUR</SelectItem>
+                  <SelectItem value="GBP">GBP</SelectItem>
+                  <SelectItem value="CAD">CAD</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Max Upload Size (MB)</label>
+              <Input
+                type="number"
+                value={platform.maxUploadSizeMb}
+                onChange={(e) => setPlatform({ ...platform, maxUploadSizeMb: parseInt(e.target.value, 10) || 25 })}
+              />
+            </div>
+          </div>
+          <Divider />
+          <div className="space-y-4">
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <p className="font-medium">Maintenance Mode</p>
+                <p className="text-sm text-muted-foreground">
+                  When enabled, only admins can access the platform
+                </p>
+              </div>
+              <Switch
+                checked={platform.maintenanceMode}
+                onCheckedChange={() => togglePlatformSetting('maintenanceMode')}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <p className="font-medium">Open Registration</p>
+                <p className="text-sm text-muted-foreground">
+                  Allow new designers to register on the platform
+                </p>
+              </div>
+              <Switch
+                checked={platform.registrationOpen}
+                onCheckedChange={() => togglePlatformSetting('registrationOpen')}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <p className="font-medium">Require Designer Verification</p>
+                <p className="text-sm text-muted-foreground">
+                  New designers must be verified before accessing the catalog
+                </p>
+              </div>
+              <Switch
+                checked={platform.requireDesignerVerification}
+                onCheckedChange={() => togglePlatformSetting('requireDesignerVerification')}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -124,7 +245,7 @@ export default function SettingsPage() {
                   Required for all elevated roles
                 </p>
               </div>
-              <Badge variant="solid" color="success">Enforced</Badge>
+              <Badge variant="outline">Enforced</Badge>
             </div>
             <Divider />
             <div className="flex items-center justify-between">
@@ -146,7 +267,7 @@ export default function SettingsPage() {
                   Critical actions mirrored to Slack #ops-audit
                 </p>
               </div>
-              <ShieldCheck className="h-5 w-5 text-success" />
+              <ShieldCheck className="h-5 w-5 text-green-600" />
             </div>
           </CardContent>
         </Card>

@@ -396,3 +396,5 @@ BEGIN
 END $$;
 
 COMMIT;
+
+RESET search_path;

@@ -30,6 +30,16 @@ import {
 import Link from 'next/link';
 import { useState } from 'react';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { useProject } from '@/hooks/use-projects';
+import {
+  useProjectsWebSocket,
+  useProjectSubscription,
+  useRealtimeTasks,
+  useRealtimeApprovals,
+  useRealtimeMilestones,
+} from '@/hooks/use-project-subscription';
+import { CollaborationPresence } from '@/components/collaboration/CollaborationPresence';
+import { AssociatedRoomScans } from '@/components/rooms/associated-room-scans';
 
 interface ProjectDetailPageProps {
   params: Promise<{ id: string }>;
@@ -40,8 +50,18 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
   const [showTaskDialog, setShowTaskDialog] = useState(false);
   const [showRFIDialog, setShowRFIDialog] = useState(false);
 
-  // Mock data - replace with real API call
-  const project = {
+  // Real-time collaboration hooks
+  const { isConnected, connectionQuality } = useProjectsWebSocket();
+  const { presence } = useProjectSubscription(id);
+  const { lastUpdate: lastTaskUpdate } = useRealtimeTasks(id);
+  const { pendingCount: pendingApprovals } = useRealtimeApprovals(id);
+  const { completedMilestones } = useRealtimeMilestones(id);
+
+  // Fetch project data via React Query (with mock fallback)
+  const { data: projectData } = useProject(id);
+
+  // Mock data as fallback when API data is unavailable
+  const fallbackProject = {
     id,
     name: 'Modern Living Room Redesign',
     clientName: 'Sarah Johnson',
@@ -53,6 +73,8 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
     progress: 65,
     description: 'Complete redesign of main living space with modern minimalist aesthetic.',
   };
+
+  const project = projectData ?? fallbackProject;
 
   const tasks = [
     { id: '1', title: 'Select paint colors', status: 'completed', assignee: 'Me', dueDate: '2024-01-20' },
@@ -116,18 +138,48 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
               Client: {project.clientName}
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline">
-              <Edit className="h-4 w-4 mr-2" />
-              Edit Project
-            </Button>
-            <Button variant="outline">
-              <FileText className="h-4 w-4 mr-2" />
-              Export Report
-            </Button>
+          <div className="flex items-center gap-4">
+            {/* Real-time collaboration presence */}
+            <CollaborationPresence
+              presence={presence}
+              isConnected={isConnected}
+              connectionQuality={connectionQuality}
+            />
+
+            <div className="flex gap-2">
+              <Button variant="outline">
+                <Edit className="h-4 w-4 mr-2" />
+                Edit Project
+              </Button>
+              <Button variant="outline">
+                <FileText className="h-4 w-4 mr-2" />
+                Export Report
+              </Button>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Real-time notification banner */}
+      {(lastTaskUpdate || pendingApprovals > 0 || completedMilestones.length > 0) && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {lastTaskUpdate && (
+            <Badge variant="subtle" color="primary">
+              Task updated: {lastTaskUpdate.title}
+            </Badge>
+          )}
+          {pendingApprovals > 0 && (
+            <Badge variant="solid" color="warning">
+              {pendingApprovals} pending approval{pendingApprovals !== 1 ? 's' : ''}
+            </Badge>
+          )}
+          {completedMilestones.length > 0 && (
+            <Badge variant="solid" color="success">
+              {completedMilestones.length} milestone{completedMilestones.length !== 1 ? 's' : ''} completed
+            </Badge>
+          )}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4 mb-6">
@@ -205,6 +257,7 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
           <TabsTrigger value="rfis">RFIs</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
+          <TabsTrigger value="scans">Room Scans</TabsTrigger>
           <TabsTrigger value="details">Details</TabsTrigger>
         </TabsList>
 
@@ -222,11 +275,14 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
               {tasks.map((task) => {
                 const statusConfig = getStatusConfig(task.status);
                 const StatusIcon = statusConfig.icon;
+                const isRecentlyUpdated = lastTaskUpdate?.taskId === task.id;
 
                 return (
                   <div
                     key={task.id}
-                    className="flex items-center gap-4 p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    className={`flex items-center gap-4 p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
+                      isRecentlyUpdated ? 'ring-2 ring-purple-400 ring-opacity-50' : ''
+                    }`}
                   >
                     <div className={`p-2 ${statusConfig.bgColor} rounded-lg`}>
                       <StatusIcon className={`h-5 w-5 ${statusConfig.color}`} />
@@ -334,6 +390,10 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
           </Card>
         </TabsContent>
 
+        <TabsContent value="scans" className="mt-6">
+          <AssociatedRoomScans context={{ type: 'project', projectId: id }} />
+        </TabsContent>
+
         <TabsContent value="details" className="mt-6">
           <Card className="p-6">
             <h2 className="text-lg font-semibold mb-4">Project Details</h2>
@@ -381,7 +441,7 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
                 <Textarea rows={3} placeholder="Task details..." />
               </div>
             </div>
-          
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowTaskDialog(false)}>
               Cancel

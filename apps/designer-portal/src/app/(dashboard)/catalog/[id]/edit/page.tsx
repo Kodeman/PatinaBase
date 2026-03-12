@@ -10,6 +10,7 @@ import { toast } from '@patina/design-system';
 import { catalogApi } from '@/lib/api-client';
 import { DetailsTab, MediaTab, PricingTab, InventoryTab, SEOTab } from '@/components/products/tabs';
 import { ValidationIssuesPanel } from '@/components/products/validation-issues-panel';
+import { DuplicateDetectionPanel } from '@/components/catalog/duplicate-detection-panel';
 import { canEditProducts } from '@/lib/permissions';
 import type { Product, UserRole } from '@patina/types';
 
@@ -20,6 +21,7 @@ const tabConfig = [
   { id: 'inventory', label: 'Inventory' },
   { id: 'seo', label: 'SEO' },
   { id: 'validation', label: 'Validation' },
+  { id: 'duplicates', label: 'Duplicates' },
 ];
 
 export default function EditProductPage() {
@@ -271,6 +273,14 @@ export default function EditProductPage() {
 
             <TabsContent value="validation" className="mt-0">
               <ValidationIssuesPanel productId={productId} />
+            </TabsContent>
+
+            <TabsContent value="duplicates" className="mt-0">
+              <DuplicateDetectionPanel
+                productId={productId}
+                productName={productData.name}
+                productImage={productData.images?.[0]}
+              />
             </TabsContent>
           </Tabs>
         </CardContent>

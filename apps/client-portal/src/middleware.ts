@@ -20,18 +20,27 @@ export async function middleware(req: NextRequest) {
   if (isApiRoute) return res;
   if (req.headers.get('rsc') === '1' || req.headers.get('next-router-prefetch') === '1') return res;
 
+  // Helper: create a redirect that preserves Supabase auth cookies from res
+  const redirectWithCookies = (url: URL) => {
+    const redirect = NextResponse.redirect(url);
+    res.cookies.getAll().forEach((cookie) => {
+      redirect.cookies.set(cookie.name, cookie.value);
+    });
+    return redirect;
+  };
+
   if (isAuthenticated && isAuthPage) {
     const callbackUrl = req.nextUrl.searchParams.get('callbackUrl');
     if (callbackUrl) {
-      return NextResponse.redirect(new URL(callbackUrl, baseUrl));
+      return redirectWithCookies(new URL(callbackUrl, baseUrl));
     }
-    return NextResponse.redirect(new URL('/', baseUrl));
+    return redirectWithCookies(new URL('/', baseUrl));
   }
 
   if (!isAuthenticated && !isAuthPage && !isPublicPage) {
     const loginUrl = new URL('/auth/signin', baseUrl);
     loginUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
-    return NextResponse.redirect(loginUrl);
+    return redirectWithCookies(loginUrl);
   }
 
   return res;

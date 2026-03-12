@@ -55,7 +55,7 @@ ingress:
 
   # Kong API Gateway (main Supabase endpoint — Auth, REST, Storage, Functions)
   - hostname: api.patina.cloud
-    service: http://localhost:8000
+    service: http://localhost:8100
     originRequest:
       noTLSVerify: true
       connectTimeout: 30s

@@ -4,6 +4,9 @@
 --              analytics tracking, and automated sequences (schema only).
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- Enable moddatetime extension for updated_at triggers
+CREATE EXTENSION IF NOT EXISTS moddatetime WITH SCHEMA extensions;
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- CAMPAIGN STATUS ENUM
 -- ═══════════════════════════════════════════════════════════════════════════

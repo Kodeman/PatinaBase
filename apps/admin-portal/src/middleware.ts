@@ -31,20 +31,29 @@ export async function middleware(req: NextRequest) {
     return res;
   }
 
+  // Helper: create a redirect that preserves Supabase auth cookies from res
+  const redirectWithCookies = (url: URL) => {
+    const redirect = NextResponse.redirect(url);
+    res.cookies.getAll().forEach((cookie) => {
+      redirect.cookies.set(cookie.name, cookie.value);
+    });
+    return redirect;
+  };
+
   // Redirect authenticated users away from auth pages
   if (isAuthenticated && isAuthPage) {
     const callbackUrl = req.nextUrl.searchParams.get('callbackUrl');
     if (callbackUrl) {
-      return NextResponse.redirect(new URL(callbackUrl, baseUrl));
+      return redirectWithCookies(new URL(callbackUrl, baseUrl));
     }
-    return NextResponse.redirect(new URL('/dashboard', baseUrl));
+    return redirectWithCookies(new URL('/dashboard', baseUrl));
   }
 
   // Redirect unauthenticated users to login
   if (!isAuthenticated && !isAuthPage && !isPublicPage) {
     const loginUrl = new URL('/auth/signin', baseUrl);
     loginUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
-    return NextResponse.redirect(loginUrl);
+    return redirectWithCookies(loginUrl);
   }
 
   return res;
