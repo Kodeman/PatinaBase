@@ -42,7 +42,7 @@ export async function middleware(req: NextRequest) {
 
   // Redirect unauthenticated users to login
   if (!isAuthenticated && !isAuthPage && !isPublicPage) {
-    const loginUrl = new URL('/login', baseUrl);
+    const loginUrl = new URL('/auth/signin', baseUrl);
     loginUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);
   }
