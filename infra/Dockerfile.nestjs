@@ -108,16 +108,18 @@ RUN addgroup --system --gid 1001 nestjs && \
 ARG SERVICE_NAME
 ENV SERVICE_NAME=${SERVICE_NAME}
 
-# Copy built output
-COPY --from=builder --chown=nestjs:nestjs /app/services/${SERVICE_NAME}/dist ./dist
-COPY --from=builder --chown=nestjs:nestjs /app/services/${SERVICE_NAME}/package.json ./package.json
-
-# Copy node_modules — pnpm hoists deps to root, so we need both
+# Copy root node_modules (.pnpm store needed for symlink targets)
 COPY --from=builder --chown=nestjs:nestjs /app/node_modules ./node_modules
+
+# Copy service node_modules (has @nestjs/core etc. — pnpm doesn't hoist these to root)
 COPY --from=builder --chown=nestjs:nestjs /app/services/${SERVICE_NAME}/node_modules ./services/${SERVICE_NAME}/node_modules
 
-# Copy Prisma schema and generated client (if exists)
-COPY --from=builder --chown=nestjs:nestjs /app/services/${SERVICE_NAME}/prisma ./prisma
+# Copy built output and config
+COPY --from=builder --chown=nestjs:nestjs /app/services/${SERVICE_NAME}/dist ./services/${SERVICE_NAME}/dist
+COPY --from=builder --chown=nestjs:nestjs /app/services/${SERVICE_NAME}/package.json ./services/${SERVICE_NAME}/package.json
+
+# Copy Prisma schema and generated client
+COPY --from=builder --chown=nestjs:nestjs /app/services/${SERVICE_NAME}/prisma ./services/${SERVICE_NAME}/prisma
 
 # Copy shared package outputs (built libs)
 COPY --from=builder --chown=nestjs:nestjs /app/packages/types/dist ./node_modules/@patina/types/dist
@@ -128,6 +130,9 @@ COPY --from=builder --chown=nestjs:nestjs /app/packages/auth/dist ./node_modules
 # Copy entrypoint script (creates Prisma schema before starting app)
 COPY --chown=nestjs:nestjs infra/nestjs-entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
+
+# Run from service directory so Node.js module resolution finds service deps
+WORKDIR /app/services/${SERVICE_NAME}
 
 USER nestjs
 
