@@ -4,7 +4,7 @@ import type {
   ContentBlockType,
   EmailTemplate,
 } from '@patina/types';
-import { getDefaultProps } from '@patina/types';
+import { getDefaultProps } from '@patina/shared';
 
 // --- Types ------------------------------------------------------------------
 

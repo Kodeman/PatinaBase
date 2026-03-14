@@ -8,7 +8,7 @@ import {
   Label
 } from '@patina/design-system';
 import { Textarea } from './shared-components';
-import { cn } from '@patina/utils';
+import { cn } from '@/lib/utils';
 import type { Product } from '@patina/types';
 
 interface SEOTabProps {

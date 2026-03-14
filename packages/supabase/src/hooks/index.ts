@@ -389,6 +389,8 @@ export {
   useCreateCampaign,
   useUpdateCampaign,
   useSendCampaign,
+  useArchiveCampaign,
+  useDeleteCampaign,
   useCancelCampaign,
 } from './use-campaigns';
 export {

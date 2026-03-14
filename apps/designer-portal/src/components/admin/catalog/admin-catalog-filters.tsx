@@ -7,14 +7,10 @@ import {
   Checkbox,
   Input,
   Label,
-  RadioGroup,
-  RadioGroupItem,
-  Separator,
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle
 } from '@patina/design-system';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Separator } from '@/components/ui/separator';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { AdminCatalogPresenter } from '@/features/admin/catalog/hooks/useAdminCatalogPresenter';

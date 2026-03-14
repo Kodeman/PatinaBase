@@ -141,6 +141,57 @@ export function useSendCampaign() {
 }
 
 /**
+ * Archive a campaign (sent, cancelled, or draft).
+ */
+export function useArchiveCampaign() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/campaigns/${id}`, {
+        method: 'PATCH',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'archived' }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to archive campaign');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+    },
+  });
+}
+
+/**
+ * Delete a draft campaign (hard delete).
+ */
+export function useDeleteCampaign() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/campaigns/${id}`, {
+        method: 'DELETE',
+        headers,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to delete campaign');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+    },
+  });
+}
+
+/**
  * Cancel a scheduled campaign.
  */
 export function useCancelCampaign() {

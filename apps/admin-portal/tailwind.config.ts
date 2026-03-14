@@ -20,11 +20,24 @@ const config: Config = {
     extend: {
       fontFamily: {
         heading: ['var(--font-heading)', 'Playfair Display', 'serif'],
+        display: ['var(--font-heading)', 'Playfair Display', 'Georgia', 'serif'],
         body: ['var(--font-inter)', 'Inter', 'system-ui', 'sans-serif'],
         sans: ['var(--font-inter)', 'Inter', 'system-ui', 'sans-serif'],
         mono: ['var(--font-mono)', 'monospace'],
       },
       colors: {
+        patina: {
+          'off-white': '#EDE9E4',
+          'clay-beige': '#A3927C',
+          'mocha-brown': '#655B52',
+          charcoal: '#3F3B37',
+          'soft-cream': '#F5F2ED',
+          'warm-white': '#FAF7F2',
+          success: '#7A9C85',
+          warning: '#D4A574',
+          error: '#B87969',
+          info: '#6B8FAD',
+        },
         border: 'oklch(var(--border))',
         input: 'oklch(var(--input))',
         ring: 'oklch(var(--ring))',

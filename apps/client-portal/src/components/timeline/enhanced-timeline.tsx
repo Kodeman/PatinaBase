@@ -57,23 +57,17 @@ const mapMilestoneToSegment = (milestone: MilestoneDetail): TimelineSegmentData 
     title: milestone.title,
     description: milestone.description,
     date: milestone.targetDate,
-    media: milestone.media?.map(m => ({
-      id: m.id,
-      url: m.url,
-      type: m.type as 'image' | 'video',
-      caption: m.caption,
-      thumbnail: m.thumbnail
-    })) || [],
+    media: [],
     icon: getStatusIcon(milestone.status),
     metadata: {
       phase: milestone.phase,
-      progress: milestone.progress,
+      progress: milestone.progressPercentage,
       checklist: milestone.checklist,
       documents: milestone.documents,
       approval: milestone.approval,
       messages: milestone.messages,
-      sequenceNumber: milestone.sequenceNumber,
-      totalMilestones: milestone.totalMilestones,
+      sequenceNumber: milestone.index + 1,
+      totalMilestones: undefined,
     }
   };
 };
@@ -111,11 +105,11 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
     const unsubscribeMilestone = subscribeMilestoneUpdate((update: WebSocketMilestoneUpdate) => {
       setMilestones(prev => prev.map(m => {
         if (m.id === update.id) {
-          const updated = {
+          const updated: MilestoneDetail = {
             ...m,
-            status: update.status,
-            progress: update.progress,
-            completedAt: update.completedAt,
+            status: update.status as MilestoneDetail['status'],
+            progressPercentage: update.progress ?? m.progressPercentage,
+            completionDate: update.completedAt ?? m.completionDate,
           };
           onMilestoneUpdate?.(updated);
           return updated;
@@ -217,7 +211,7 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
               <div>
                 <h3 className="text-lg font-semibold">{segment.title}</h3>
                 <div className="flex items-center gap-2 mt-1">
-                  <Badge variant={segment.status === 'completed' ? 'success' : segment.status === 'active' ? 'primary' : 'secondary'}>
+                  <Badge variant="subtle" color={segment.status === 'completed' ? 'success' : segment.status === 'active' ? 'primary' : 'neutral'}>
                     {segment.status}
                   </Badge>
                   {metadata?.phase && <Tag>{metadata.phase}</Tag>}
@@ -231,7 +225,7 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
             </div>
             {segment.date && (
               <div className="text-sm text-muted-foreground">
-                {formatRelativeTime(segment.date)}
+                {formatRelativeTime(segment.date instanceof Date ? segment.date.toISOString() : segment.date)}
               </div>
             )}
           </div>
@@ -314,8 +308,8 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
               <TabsContent value="media" className="mt-4">
                 {segment.media && segment.media.length > 0 ? (
                   <MediaCarousel
-                    media={segment.media}
-                    autoPlay={false}
+                    items={segment.media as any[]}
+                    autoPlay={0}
                     showThumbnails
                     className="rounded-lg"
                   />
@@ -483,26 +477,34 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
       {/* Approval Theater Modal */}
       {showApprovalTheater && currentApproval && (
         <ApprovalTheater
-          isOpen={showApprovalTheater}
-          onClose={() => {
-            setShowApprovalTheater(false);
-            setCurrentApproval(null);
+          open={showApprovalTheater}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShowApprovalTheater(false);
+              setCurrentApproval(null);
+            }
           }}
-          title={currentApproval.title || 'Approval Required'}
-          description={currentApproval.description}
-          amount={currentApproval.value}
-          currency={currentApproval.currency}
-          documents={currentApproval.documents || []}
-          onApprove={(comment) => handleApproval(currentApproval.milestoneId, 'approved', comment)}
-          onReject={(comment) => handleApproval(currentApproval.milestoneId, 'rejected', comment)}
+          approval={{
+            id: currentApproval.id || currentApproval.milestoneId,
+            title: currentApproval.title || 'Approval Required',
+            description: currentApproval.description || '',
+            type: 'design' as const,
+            status: 'pending' as const,
+            costImpact: currentApproval.value ? {
+              amount: currentApproval.value,
+              currency: currentApproval.currency || 'USD',
+            } : undefined,
+          }}
+          onApprove={(approvalId) => handleApproval(currentApproval.milestoneId, 'approved')}
         />
       )}
 
       {/* Celebration Animation */}
       {showCelebration && (
         <ProjectCompletionCelebration
+          isActive={showCelebration}
           projectName={activeMilestone?.title || 'Milestone'}
-          message="Milestone completed! Great progress on your project."
+          onComplete={() => setShowCelebration(false)}
         />
       )}
     </div>

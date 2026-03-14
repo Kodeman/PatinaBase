@@ -5,7 +5,7 @@ import { Upload, X, Image as ImageIcon } from 'lucide-react';
 import {
   Button
 } from '@patina/design-system';
-import { cn } from '@patina/utils';
+import { cn } from '@/lib/utils';
 
 interface ImageUploaderProps {
   value?: string;

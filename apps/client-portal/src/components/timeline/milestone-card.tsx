@@ -61,7 +61,7 @@ export function MilestoneCard({ projectId, milestone, isExpanded, onToggle }: Mi
         author: {
           id: message.authorId,
           name: message.authorName,
-          role: message.authorRole,
+          role: message.authorRole as ThreadMessage['author']['role'],
         },
         timestamp: new Date(message.createdAt),
         body: message.body,
@@ -70,7 +70,7 @@ export function MilestoneCard({ projectId, milestone, isExpanded, onToggle }: Mi
             id: attachment.id,
             name: attachment.title ?? 'Attachment',
             url: attachment.url,
-            type: attachment.type,
+            type: attachment.type as any,
           })) ?? [],
         variant: message.isSystem
           ? 'system'

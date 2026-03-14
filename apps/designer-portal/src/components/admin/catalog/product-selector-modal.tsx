@@ -20,7 +20,7 @@ import {
   Skeleton
 } from '@patina/design-system';
 import type { Product } from '@patina/types';
-import { cn } from '@patina/utils';
+import { cn } from '@/lib/utils';
 
 interface ProductSelectorModalProps {
   open: boolean;

@@ -5,7 +5,7 @@
  * Aggregates data from multiple hooks and provides a unified interface for catalog operations.
  *
  * Architecture:
- * - Coordinates useAdminProducts, useProductBulkActions, and useCatalogStats
+ * - Coordinates useAdminProducts, useAdminProductBulkActions, and useAdminCatalogStats
  * - Manages local UI state (search, filters, pagination, view mode)
  * - Provides computed properties for empty states and loading states
  * - Handles all user interactions through action methods
@@ -17,7 +17,7 @@
 'use client';
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { useAdminProducts, useProductBulkActions, useCatalogStats, useBulkOperationLock } from '@/hooks/admin';
+import { useAdminProducts, useAdminProductBulkActions, useAdminCatalogStats, useBulkOperationLock } from '@/hooks/admin';
 import type { AdminProductFilters, ProductListItem } from '@patina/types';
 
 /**
@@ -277,7 +277,7 @@ export function useAdminCatalogPresenter(): AdminCatalogPresenter {
 
   // ========== DATA HOOKS ==========
   const productsQuery = useAdminProducts(filters);
-  const bulkActions = useProductBulkActions({
+  const bulkActions = useAdminProductBulkActions({
     clearOnSuccess: true,
     onSuccess: (result) => {
       // Close modals on success
@@ -286,7 +286,7 @@ export function useAdminCatalogPresenter(): AdminCatalogPresenter {
       setIsDeleteModalOpen(false);
     },
   });
-  const statsQuery = useCatalogStats();
+  const statsQuery = useAdminCatalogStats();
   const operationLock = useBulkOperationLock();
 
   // ========== COMPUTED VALUES ==========

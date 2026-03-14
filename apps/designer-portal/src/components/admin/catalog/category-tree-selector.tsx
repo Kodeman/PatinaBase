@@ -7,7 +7,7 @@ import {
   Label,
   ScrollArea
 } from '@patina/design-system';
-import { cn } from '@patina/utils';
+import { cn } from '@/lib/utils';
 import type { Category } from '@patina/types';
 
 interface CategoryTreeSelectorProps {

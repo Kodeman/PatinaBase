@@ -8,7 +8,7 @@ import {
   Label
 } from '@patina/design-system';
 import { Switch } from './shared-components';
-import { cn } from '@patina/utils';
+import { cn } from '@/lib/utils';
 import type { Product, ProductImage } from '@patina/types';
 
 interface MediaTabProps {

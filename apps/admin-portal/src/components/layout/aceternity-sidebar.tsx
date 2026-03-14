@@ -11,12 +11,19 @@ import {
 } from '@/components/ui/aceternity-sidebar';
 import { UserProfileCard, type UserPresenceStatus } from '@patina/design-system';
 import {
+  BarChart3,
   FolderKanban,
+  LayoutTemplate,
+  Mail,
   Package,
+  Send,
+  ShieldCheck,
   ShoppingCart,
   Sparkles,
   UserCheck,
   Users,
+  Workflow,
+  Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -42,6 +49,11 @@ export function AdminAceternitySidebar({ className, isOpen, setIsOpen }: AdminAc
       icon: <Users className="h-5 w-5" />,
     },
     {
+      label: 'Roles & Permissions',
+      href: '/roles',
+      icon: <ShieldCheck className="h-5 w-5" />,
+    },
+    {
       label: 'Verification Queue',
       href: '/verification',
       icon: <UserCheck className="h-5 w-5" />,
@@ -61,6 +73,42 @@ export function AdminAceternitySidebar({ className, isOpen, setIsOpen }: AdminAc
       href: '/orders',
       icon: <ShoppingCart className="h-5 w-5" />,
     },
+  ];
+
+  const commsLinks = [
+    {
+      label: 'Command Center',
+      href: '/communications',
+      icon: <Mail className="h-5 w-5" />,
+    },
+    {
+      label: 'Campaigns',
+      href: '/communications/campaigns',
+      icon: <Send className="h-5 w-5" />,
+    },
+    {
+      label: 'Templates',
+      href: '/communications/templates',
+      icon: <LayoutTemplate className="h-5 w-5" />,
+    },
+    {
+      label: 'Audiences',
+      href: '/communications/audiences',
+      icon: <Users className="h-5 w-5" />,
+    },
+    {
+      label: 'Automations',
+      href: '/communications/automations',
+      icon: <Zap className="h-5 w-5" />,
+    },
+    {
+      label: 'Analytics',
+      href: '/communications/analytics',
+      icon: <BarChart3 className="h-5 w-5" />,
+    },
+  ];
+
+  const bottomLinks = [
     {
       label: 'Demo Workspace',
       href: '/demo',
@@ -90,7 +138,7 @@ export function AdminAceternitySidebar({ className, isOpen, setIsOpen }: AdminAc
         <Logo>Patina Admin</Logo>
 
         {/* Navigation Links */}
-        <div className="flex flex-col gap-2 flex-1">
+        <div className="flex flex-col gap-1 flex-1">
           {links.map((link, idx) => (
             <SidebarLink
               key={idx}
@@ -102,7 +150,48 @@ export function AdminAceternitySidebar({ className, isOpen, setIsOpen }: AdminAc
               onClick={(e) => {
                 e.preventDefault();
                 router.push(link.href as any);
-                // Close mobile sidebar after navigation
+                if (window.innerWidth < 1024 && setIsOpen) {
+                  setIsOpen(false);
+                }
+              }}
+            />
+          ))}
+
+          {/* Communications Section */}
+          <div className="mt-4 mb-1 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            {sidebarOpen ? 'Communications' : ''}
+          </div>
+          {commsLinks.map((link, idx) => (
+            <SidebarLink
+              key={`comms-${idx}`}
+              link={link}
+              className={cn(
+                isLinkActive(link.href) &&
+                'bg-sidebar-accent text-sidebar-accent-foreground'
+              )}
+              onClick={(e) => {
+                e.preventDefault();
+                router.push(link.href as any);
+                if (window.innerWidth < 1024 && setIsOpen) {
+                  setIsOpen(false);
+                }
+              }}
+            />
+          ))}
+
+          {/* Spacer + Demo */}
+          <div className="mt-auto" />
+          {bottomLinks.map((link, idx) => (
+            <SidebarLink
+              key={`bottom-${idx}`}
+              link={link}
+              className={cn(
+                isLinkActive(link.href) &&
+                'bg-sidebar-accent text-sidebar-accent-foreground'
+              )}
+              onClick={(e) => {
+                e.preventDefault();
+                router.push(link.href as any);
                 if (window.innerWidth < 1024 && setIsOpen) {
                   setIsOpen(false);
                 }

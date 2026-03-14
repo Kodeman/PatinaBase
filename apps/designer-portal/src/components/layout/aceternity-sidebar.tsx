@@ -12,12 +12,22 @@ import {
   type UserPresenceStatus,
 } from '@patina/design-system';
 import {
+  BarChart3,
+  Bot,
+  DollarSign,
   FileText,
   FolderOpen,
+  GraduationCap,
   Grid3x3,
+
+  Mail,
   MessageSquare,
+  Settings,
+  Shield,
   Sparkles,
+  Store,
   Users,
+  UserPlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -34,61 +44,121 @@ type NavSection = {
   items: NavItem[];
 };
 
-const navSections: NavSection[] = [
-  {
-    title: 'Studio',
-    items: [
-      {
-        label: 'Projects',
-        href: '/projects',
-        icon: <FolderOpen className="h-5 w-5" />,
-      },
-      {
-        label: 'Proposals',
-        href: '/proposals',
-        icon: <FileText className="h-5 w-5" />,
-        badge: 2,
-      },
-    ],
-  },
-  {
-    title: 'Clients',
-    items: [
-      {
-        label: 'Client roster',
-        href: '/clients',
-        icon: <Users className="h-5 w-5" />,
-        badge: 3,
-      },
-    ],
-  },
-  {
-    title: 'Workflows',
-    items: [
-      {
-        label: 'Catalog',
-        href: '/catalog',
-        icon: <Grid3x3 className="h-5 w-5" />,
-      },
-      {
-        label: 'Messages',
-        href: '/messages',
-        icon: <MessageSquare className="h-5 w-5" />,
-        badge: 5,
-      },
-    ],
-  },
-  {
-    title: 'Labs',
-    items: [
-      {
-        label: 'Demo workspace',
-        href: '/demo',
-        icon: <Sparkles className="h-5 w-5" />,
-      },
-    ],
-  },
-];
+function getNavSections(userRoles: string[]): NavSection[] {
+  const isAdmin = userRoles.some((r) => r === 'admin' || r === 'super_admin');
+
+  const sections: NavSection[] = [
+    {
+      title: 'Studio',
+      items: [
+        {
+          label: 'Projects',
+          href: '/projects',
+          icon: <FolderOpen className="h-5 w-5" />,
+        },
+        {
+          label: 'Proposals',
+          href: '/proposals',
+          icon: <FileText className="h-5 w-5" />,
+          badge: 2,
+        },
+        {
+          label: 'Catalog',
+          href: '/catalog',
+          icon: <Grid3x3 className="h-5 w-5" />,
+        },
+        {
+          label: 'Vendors',
+          href: '/vendors',
+          icon: <Store className="h-5 w-5" />,
+        },
+      ],
+    },
+    {
+      title: 'Clients',
+      items: [
+        {
+          label: 'Client roster',
+          href: '/clients',
+          icon: <Users className="h-5 w-5" />,
+          badge: 3,
+        },
+        {
+          label: 'Leads',
+          href: '/leads',
+          icon: <UserPlus className="h-5 w-5" />,
+        },
+      ],
+    },
+    {
+      title: 'Communications',
+      items: [
+        {
+          label: 'Messages',
+          href: '/messages',
+          icon: <MessageSquare className="h-5 w-5" />,
+          badge: 5,
+        },
+        {
+          label: 'Communications',
+          href: '/communications',
+          icon: <Mail className="h-5 w-5" />,
+        },
+        {
+          label: 'AI Companion',
+          href: '/companion',
+          icon: <Bot className="h-5 w-5" />,
+        },
+      ],
+    },
+    {
+      title: 'Business',
+      items: [
+        {
+          label: 'Earnings',
+          href: '/earnings',
+          icon: <DollarSign className="h-5 w-5" />,
+        },
+        {
+          label: 'Teaching',
+          href: '/teaching',
+          icon: <GraduationCap className="h-5 w-5" />,
+        },
+      ],
+    },
+    ...(isAdmin
+      ? [
+          {
+            title: 'Admin',
+            items: [
+              {
+                label: 'Insights',
+                href: '/insights',
+                icon: <BarChart3 className="h-5 w-5" />,
+              },
+              {
+                label: 'Administration',
+                href: '/administration',
+                icon: <Shield className="h-5 w-5" />,
+              },
+            ],
+          },
+        ]
+      : []),
+    {
+      title: 'Labs',
+      items: [
+        {
+          label: 'Demo workspace',
+          href: '/demo',
+          icon: <Sparkles className="h-5 w-5" />,
+        },
+      ],
+    },
+  ];
+
+  return sections;
+}
 
 interface AceternitySidebarProps {
   className?: string;
@@ -108,12 +178,15 @@ export function AceternitySidebar({ className, isOpen, setIsOpen }: AceternitySi
     return pathname === href || pathname.startsWith(`${href}/`);
   };
 
+  const userRoles = user?.roles ?? ['designer'];
+  const navSections = getNavSections(userRoles);
+
   const sidebarUser = user
     ? {
         name: user.name || user.email || 'Designer',
         email: user.email ?? undefined,
         avatar: undefined,
-        roles: user.roles ?? ['designer'],
+        roles: userRoles,
       }
     : undefined;
 
@@ -162,6 +235,22 @@ export function AceternitySidebar({ className, isOpen, setIsOpen }: AceternitySi
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Settings */}
+        <div className="pb-2">
+          <SidebarLink
+            link={{
+              label: 'Settings',
+              href: '/settings',
+              icon: <Settings className="h-5 w-5" />,
+            }}
+            className={cn(
+              isLinkActive('/settings') &&
+                'bg-sidebar-accent text-sidebar-accent-foreground'
+            )}
+            onClick={handleNavigate('/settings')}
+          />
         </div>
 
         {/* User Profile */}

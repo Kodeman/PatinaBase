@@ -85,7 +85,7 @@ const mapApproval = (input: any): MilestoneApproval => ({
     const status = typeof input?.status === 'string' ? input.status.toLowerCase() : 'pending';
     if (status === 'approved') return 'approved';
     if (status === 'rejected') return 'rejected';
-    if (status === 'changes_requested' || status === 'changes-requested') return 'changes_requested';
+    if (status === 'changes_requested' || status === 'changes-requested') return 'needs_discussion';
     return 'pending';
   })(),
   summary: asString(input?.summary || input?.title),

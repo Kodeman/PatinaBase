@@ -9,7 +9,7 @@ import {
   Input,
   Label
 } from '@patina/design-system';
-import { cn } from '@patina/utils';
+import { cn } from '@/lib/utils';
 import type { Product, Variant } from '@patina/types';
 
 interface PricingTabProps {

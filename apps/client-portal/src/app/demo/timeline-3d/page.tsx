@@ -696,7 +696,6 @@ const getProgressBarColor = (value?: number) => {
 
 const ACTIONABLE_APPROVAL_STATES = new Set<ApprovalItem['status']>([
   'pending',
-  'changes-requested',
   'discussion',
   'rejected',
 ])

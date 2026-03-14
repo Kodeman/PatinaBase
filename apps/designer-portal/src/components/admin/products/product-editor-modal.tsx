@@ -11,7 +11,7 @@ import {
   Package,
   Search as SearchIcon,
 } from 'lucide-react';
-import { cn } from '@patina/utils';
+import { cn } from '@/lib/utils';
 import {
   Badge,
   Button,

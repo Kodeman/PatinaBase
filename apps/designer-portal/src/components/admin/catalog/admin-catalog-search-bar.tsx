@@ -5,9 +5,8 @@ import {
   Badge,
   Button,
   Input,
-  ToggleGroup,
-  ToggleGroupItem
 } from '@patina/design-system';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { toast } from 'sonner';
 import type { AdminCatalogPresenter } from '@/features/admin/catalog/hooks/useAdminCatalogPresenter';
 import {

@@ -19,7 +19,7 @@ import {
   useBulkDeleteMedia,
   useReorderMedia,
 } from '@/hooks/use-media-upload';
-import { cn } from '@patina/utils';
+import { cn } from '@/lib/utils';
 import type { Product } from '@patina/types';
 import { ErrorBoundary } from '@/components/error-boundary';
 

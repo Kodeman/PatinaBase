@@ -9,6 +9,10 @@ export {
   mapMilestoneStatusToClient,
 } from '@patina/types';
 
+// Import types for local use in this file
+import type { ClientMilestoneStatus, ApprovalStatus } from '@patina/types';
+type MilestoneStatus = ClientMilestoneStatus;
+
 // Legacy alias for backwards compatibility - maps to ApprovalStatus
 // 'changes_requested' is now 'needs_discussion' in the canonical type
 export function mapLegacyApprovalStatus(

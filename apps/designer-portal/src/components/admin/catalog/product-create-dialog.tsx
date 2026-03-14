@@ -37,7 +37,7 @@ import {
   Input,
   Label
 } from '@patina/design-system';
-import { useCreateProduct } from '@/hooks/admin/use-admin-products';
+import { useCreateAdminProduct } from '@/hooks/admin/use-admin-products';
 import { catalogService } from '@/services/admin/catalog';
 import type { Category } from '@patina/types';
 import type { CreateProductRequest } from '@/types/admin/catalog-service';
@@ -235,7 +235,7 @@ export function ProductCreateDialog({
   const styleTags = watch('styleTags');
 
   // TanStack Query mutation for creating products
-  const createProductMutation = useCreateProduct();
+  const createProductMutation = useCreateAdminProduct();
 
   /**
    * Load categories when dialog opens.

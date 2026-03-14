@@ -129,7 +129,7 @@ const mapAttachment = (attachment: AttachmentLike, fallbackId: string) => ({
   name: attachment.name || attachment.filename || 'Attachment',
   url: attachment.url,
   size: attachment.size ? `${Math.round(attachment.size / 1024)} KB` : undefined,
-  type: attachment.mimeType || attachment.type,
+  type: (attachment.mimeType || attachment.type) as any,
 });
 
 const mapThreadMessages = (messages: ThreadMessageLike[], currentUserId: string): ThreadMessage[] => {
@@ -137,7 +137,7 @@ const mapThreadMessages = (messages: ThreadMessageLike[], currentUserId: string)
     .slice()
     .sort((a, b) => new Date(a.createdAt!).getTime() - new Date(b.createdAt!).getTime())
     .map((message, index) => {
-      const attachments: Array<{ id: string; name: string; url?: string; size?: string; type?: string }> = [];
+      const attachments: ThreadMessage['attachments'] = [];
 
       if (Array.isArray(message.richAttachments)) {
         message.richAttachments.forEach((attachment) => {
@@ -152,15 +152,15 @@ const mapThreadMessages = (messages: ThreadMessageLike[], currentUserId: string)
       return {
         id: message.id || `message-${index}`,
         author: {
-          id: message.authorId,
+          id: message.authorId || 'unknown',
           name: message.authorName || (message.metadata?.authorName as string) || message.authorId || 'Unknown',
           avatarUrl: message.authorAvatar || (message.metadata?.authorAvatar as string),
-          role: message.authorRole || (message.metadata?.authorRole as string),
+          role: (message.authorRole || (message.metadata?.authorRole as string)) as MessageAuthor['role'],
         } satisfies MessageAuthor,
         timestamp: new Date(message.createdAt!),
         body: message.bodyText || message.text || message.body || '',
         attachments,
-        status: message.status,
+        status: message.status as ThreadMessage['status'],
         variant: message.isSystem
           ? 'system'
           : message.authorId && currentUserId && message.authorId === currentUserId
@@ -192,7 +192,8 @@ export default function MessagesPage() {
 
   const { data: threadsResponse, isLoading: threadsLoading } = useThreads();
   const threads = normalizeThreads(threadsResponse);
-  const { data: threadDetail, isLoading: threadLoading } = useThread(activeThreadId);
+  const { data: threadDetailRaw, isLoading: threadLoading } = useThread(activeThreadId);
+  const threadDetail = threadDetailRaw as ThreadLike | undefined;
   const { typingUsers } = useTypingIndicator(activeThreadId);
   const sendMessage = useSendMessage();
   const markRead = useMarkRead();
@@ -206,6 +207,7 @@ export default function MessagesPage() {
   useEffect(() => {
     if (!activeThreadId || !threadDetail?.messages?.length) return;
     const latestMessage = threadDetail.messages[0];
+    if (!latestMessage.id) return;
     markRead.mutate({
       threadId: activeThreadId,
       lastReadMessageId: latestMessage.id,

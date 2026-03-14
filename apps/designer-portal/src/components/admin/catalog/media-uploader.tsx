@@ -7,9 +7,9 @@ import {
   Alert,
   AlertDescription,
   Button,
-  Progress
 } from '@patina/design-system';
-import { cn } from '@patina/utils';
+import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 import {
   formatFileSize,
   getImageDimensions,

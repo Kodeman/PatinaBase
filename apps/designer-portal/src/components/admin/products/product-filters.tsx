@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Search, Filter, X, Save, ChevronDown, Check } from 'lucide-react';
-import { cn } from '@patina/utils';
+import { cn } from '@/lib/utils';
 import {
   Badge,
   Button,

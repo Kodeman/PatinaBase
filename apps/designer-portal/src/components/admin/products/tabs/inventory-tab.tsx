@@ -9,7 +9,7 @@ import {
   Label
 } from '@patina/design-system';
 import { Select } from './shared-components';
-import { cn } from '@patina/utils';
+import { cn } from '@/lib/utils';
 import type { Product, Variant, AvailabilityStatus } from '@patina/types';
 
 interface InventoryTabProps {

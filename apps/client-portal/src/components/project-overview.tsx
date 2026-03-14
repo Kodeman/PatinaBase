@@ -11,6 +11,8 @@ import {
   ProgressRing,
   Tag,
   Tooltip,
+  TooltipTrigger,
+  TooltipContent,
 } from '@patina/design-system';
 import { Calendar, Users, MessageSquare, Bell, TrendingUp, Clock, CheckCircle, AlertCircle, FileText } from 'lucide-react';
 import Image from 'next/image';
@@ -102,7 +104,7 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
               {/* Project Metadata Tags */}
               <div className="mt-6 flex flex-wrap items-center gap-3">
                 {project.currentPhase && (
-                  <Badge variant="secondary" className="px-4 py-1.5">
+                  <Badge variant="subtle" color="neutral" className="px-4 py-1.5">
                     Phase: {project.currentPhase}
                   </Badge>
                 )}
@@ -132,7 +134,7 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
                     animate={{ scale: [1, 1.05, 1] }}
                     transition={{ repeat: Infinity, duration: 2 }}
                   >
-                    <Badge variant="warning" className="gap-1">
+                    <Badge variant="subtle" color="warning" className="gap-1">
                       <AlertCircle className="h-3 w-3" />
                       {project.approvalsPending} Pending Approval{project.approvalsPending > 1 ? 's' : ''}
                     </Badge>
@@ -140,14 +142,14 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
                 )}
 
                 {project.unreadMessages && project.unreadMessages > 0 && (
-                  <Badge variant="info" className="gap-1">
+                  <Badge variant="subtle" color="info" className="gap-1">
                     <MessageSquare className="h-3 w-3" />
                     {project.unreadMessages} Unread Message{project.unreadMessages > 1 ? 's' : ''}
                   </Badge>
                 )}
 
                 {onlineTeamMembers.length > 0 && (
-                  <Badge variant="success" className="gap-1">
+                  <Badge variant="subtle" color="success" className="gap-1">
                     <Users className="h-3 w-3" />
                     {onlineTeamMembers.length} Team Member{onlineTeamMembers.length > 1 ? 's' : ''} Online
                   </Badge>
@@ -161,9 +163,10 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
               <div className="relative">
                 <ProgressRing
                   value={project.progressPercentage}
-                  size={160}
+                  size="xl"
                   strokeWidth={12}
                   className="text-[var(--color-accent)]"
+                  showLabel={false}
                 />
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   <span className="text-3xl font-bold text-[var(--color-text)]">
@@ -193,10 +196,11 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
                     </p>
                   )}
                   <Badge
-                    variant={project.nextMilestone.status === 'attention' ? 'warning' : 'secondary'}
+                    variant="subtle"
+                    color={project.nextMilestone.status === 'attention' ? 'warning' : 'neutral'}
                     className="mt-2"
                   >
-                    {formatStatusLabel(project.nextMilestone.status)}
+                    {formatStatusLabel(project.nextMilestone.status as any)}
                   </Badge>
                 </Card>
               )}
@@ -223,18 +227,21 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
                 {project.team.map((member) => {
                   const isOnline = teamPresence.some(p => p.userId === member.id && p.status === 'online');
                   return (
-                    <Tooltip key={member.id} content={`${member.name} - ${member.role}${isOnline ? ' (Online)' : ''}`}>
-                      <div className="relative">
-                        <Avatar
-                          src={member.avatar}
-                          alt={member.name}
-                          fallback={member.name.charAt(0)}
-                          className="border-2 border-white"
-                        />
-                        {isOnline && (
-                          <div className="absolute -bottom-1 -right-1 h-3 w-3 bg-green-500 border-2 border-white rounded-full" />
-                        )}
-                      </div>
+                    <Tooltip key={member.id}>
+                      <TooltipTrigger asChild>
+                        <div className="relative">
+                          <Avatar
+                            src={member.avatar}
+                            alt={member.name}
+                            name={member.name}
+                            className="border-2 border-white"
+                            status={isOnline ? 'online' : undefined}
+                          />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {member.name} - {member.role}{isOnline ? ' (Online)' : ''}
+                      </TooltipContent>
                     </Tooltip>
                   );
                 })}
