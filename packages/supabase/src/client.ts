@@ -68,10 +68,12 @@ export function createMiddlewareClient(
 /**
  * Server client with service role - for admin operations
  * Bypasses RLS - use with caution
+ * Uses SUPABASE_INTERNAL_URL if set (for server-side calls when external URL is unavailable)
  */
 export function createAdminClient(serviceRoleKey?: string) {
   const key = serviceRoleKey || process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createSupabaseClient<Database>(supabaseUrl, key, {
+  const adminUrl = process.env.SUPABASE_INTERNAL_URL || supabaseUrl;
+  return createSupabaseClient<Database>(adminUrl, key, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
