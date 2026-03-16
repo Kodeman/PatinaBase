@@ -158,6 +158,7 @@ services:
       - coolify.service.subName=kong
     networks:
       es8w8g0c00og4gsgg0k8w8o8: null
+      coolify: null
     env_file:
       - .env
   auth:
@@ -653,4 +654,7 @@ volumes:
 networks:
   es8w8g0c00og4gsgg0k8w8o8:
     name: es8w8g0c00og4gsgg0k8w8o8
+    external: true
+  coolify:
+    name: coolify
     external: true
