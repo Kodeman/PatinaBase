@@ -106,6 +106,7 @@ services:
   kong:
     image: 'kong:2.8.1'
     restart: unless-stopped
+    dns_search: ''
     entrypoint:
       - bash
       - '-c'
@@ -113,7 +114,7 @@ services:
     environment:
       KONG_DATABASE: 'off'
       KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
-      KONG_DNS_ORDER: 'LAST,A,CNAME'
+      KONG_DNS_ORDER: 'A,CNAME'
       KONG_PLUGINS: 'request-transformer,cors,key-auth,acl,basic-auth'
       KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
       KONG_NGINX_PROXY_PROXY_BUFFERS: '64 160k'
@@ -156,6 +157,15 @@ services:
       - coolify.service.subId=57
       - coolify.service.subType=application
       - coolify.service.subName=kong
+      - traefik.enable=true
+      - traefik.http.routers.kong-http.rule=Host(`api.patina.cloud`)
+      - traefik.http.routers.kong-http.entrypoints=http
+      - traefik.http.routers.kong-http.service=kong
+      - traefik.http.routers.kong-https.rule=Host(`api.patina.cloud`)
+      - traefik.http.routers.kong-https.entrypoints=https
+      - traefik.http.routers.kong-https.tls=true
+      - traefik.http.routers.kong-https.service=kong
+      - traefik.http.services.kong.loadbalancer.server.port=8000
     networks:
       es8w8g0c00og4gsgg0k8w8o8: null
       coolify: null
@@ -164,6 +174,7 @@ services:
   auth:
     image: 'supabase/gotrue:v2.143.0'
     restart: unless-stopped
+    dns_search: ''
     healthcheck:
       test:
         - CMD
@@ -236,6 +247,7 @@ services:
   realtime:
     image: 'supabase/realtime:v2.28.32'
     restart: unless-stopped
+    dns_search: ''
     healthcheck:
       test:
         - CMD-SHELL
@@ -303,6 +315,7 @@ services:
   rest:
     image: 'postgrest/postgrest:v12.0.1'
     restart: unless-stopped
+    dns_search: ''
     environment:
       PGRST_DB_URI: 'postgres://authenticator:1c3aabda9b01ff203d297d5ee8cea8a39f7a057ce915a442@db-es8w8g0c00og4gsgg0k8w8o8:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-postgres}'
       PGRST_DB_SCHEMAS: '${PGRST_DB_SCHEMAS:-public,storage,graphql_public}'
@@ -351,6 +364,7 @@ services:
   storage:
     image: 'supabase/storage-api:v1.0.6'
     restart: unless-stopped
+    dns_search: ''
     healthcheck:
       test:
         - CMD-SHELL
@@ -415,6 +429,7 @@ services:
   imgproxy:
     image: 'darthsim/imgproxy:v3.8.0'
     restart: unless-stopped
+    dns_search: ''
     healthcheck:
       test:
         - CMD
@@ -464,6 +479,7 @@ services:
   studio:
     image: 'supabase/studio:20240422-5cf8f30'
     restart: unless-stopped
+    dns_search: ''
     healthcheck:
       test:
         - CMD-SHELL
@@ -529,6 +545,7 @@ services:
   meta:
     image: 'supabase/postgres-meta:v0.80.0'
     restart: unless-stopped
+    dns_search: ''
     healthcheck:
       test:
         - CMD
@@ -583,6 +600,7 @@ services:
   analytics:
     image: 'supabase/logflare:1.4.0'
     restart: unless-stopped
+    dns_search: ''
     healthcheck:
       test:
         - CMD
