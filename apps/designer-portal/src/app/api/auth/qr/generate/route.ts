@@ -8,6 +8,10 @@ export const dynamic = 'force-dynamic';
 
 const QR_SESSION_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+// Direct PostgREST URL for bypassing Kong when internal routing is broken
+// Falls back to the Supabase client if not set
+const POSTGREST_DIRECT_URL = process.env.POSTGREST_DIRECT_URL;
+
 function parseBrowserFromUA(ua: string): { browser: string; os: string } {
   let browser = 'Unknown';
   let os = 'Unknown';
@@ -28,6 +32,31 @@ function parseBrowserFromUA(ua: string): { browser: string; os: string } {
   return { browser, os };
 }
 
+async function insertViaPostgREST(data: Record<string, unknown>): Promise<{ error: any }> {
+  const url = POSTGREST_DIRECT_URL;
+  if (!url) return { error: 'POSTGREST_DIRECT_URL not set' };
+
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) return { error: 'SUPABASE_SERVICE_ROLE_KEY not set' };
+
+  const resp = await fetch(`${url}/qr_auth_sessions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${serviceKey}`,
+      'apikey': serviceKey,
+      'Prefer': 'return=minimal',
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!resp.ok) {
+    const body = await resp.text();
+    return { error: `PostgREST ${resp.status}: ${body}` };
+  }
+  return { error: null };
+}
+
 /**
  * GET /api/auth/qr/generate
  *
@@ -46,18 +75,29 @@ export async function GET(request: NextRequest) {
       || request.headers.get('x-real-ip')
       || null;
 
-    const supabase = createAdminClient();
+    const insertData = {
+      session_token: sessionToken,
+      status: 'pending',
+      browser,
+      os,
+      ip_address: ip,
+      expires_at: expiresAt.toISOString(),
+    };
 
-    const { error } = await (supabase as any)
-      .from('qr_auth_sessions')
-      .insert({
-        session_token: sessionToken,
-        status: 'pending',
-        browser,
-        os,
-        ip_address: ip,
-        expires_at: expiresAt.toISOString(),
-      });
+    let error: any;
+
+    if (POSTGREST_DIRECT_URL) {
+      // Bypass Kong — talk to PostgREST directly on Docker network
+      const result = await insertViaPostgREST(insertData);
+      error = result.error;
+    } else {
+      // Standard path through Supabase client (goes through Kong)
+      const supabase = createAdminClient();
+      const result = await (supabase as any)
+        .from('qr_auth_sessions')
+        .insert(insertData);
+      error = result.error;
+    }
 
     if (error) {
       console.error('Failed to create QR session:', error);
