@@ -1,0 +1,40 @@
+# Version control
+.git
+.gitignore
+
+# Claude
+.claude
+
+# Dependencies (rebuilt in Docker)
+node_modules
+**/node_modules
+
+# Build outputs (rebuilt in Docker)
+**/.next
+**/coverage
+**/.turbo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment files (secrets - passed as build args)
+.env*
+**/.env*
+
+# Non-containerized apps
+apps/mobile
+apps/extension
+
+# Deferred service
+services/aesthete-engine
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
