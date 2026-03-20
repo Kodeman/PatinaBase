@@ -25,6 +25,7 @@ import { ProductCaptureForm } from './components/ProductCaptureForm';
 import { VendorCaptureForm } from './components/VendorCaptureForm';
 
 import { identifyUser, resetAnalytics, extensionEvents } from './lib/analytics';
+import { UpdateBanner } from './components/UpdateBanner';
 
 import './style.css';
 
@@ -1049,6 +1050,9 @@ function Popup() {
   // Quick Capture Modal
   return (
     <div className="w-full min-w-[320px] max-w-[600px] h-screen flex flex-col bg-patina-off-white font-body" onClick={() => setHasInteracted(true)}>
+      {/* Update banner for self-hosted beta */}
+      <UpdateBanner />
+
       {/* Header */}
       <header className="px-4 py-3 border-b border-patina-clay-beige/30 shadow-patina-sm">
         <div className="flex items-center justify-between mb-2">

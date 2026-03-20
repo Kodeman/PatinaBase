@@ -1,0 +1,55 @@
+name: Extension — Chrome Web Store
+
+on:
+  push:
+    tags:
+      - 'extension-v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build extension
+        env:
+          PLASMO_PUBLIC_SUPABASE_URL: ${{ secrets.EXT_SUPABASE_URL }}
+          PLASMO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXT_SUPABASE_ANON_KEY }}
+          PLASMO_PUBLIC_PORTAL_URL: ${{ secrets.EXT_PORTAL_URL }}
+          PLASMO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXT_POSTHOG_KEY }}
+          PLASMO_PUBLIC_UPDATE_URL: ''
+        run: |
+          pnpm --filter @patina/extension build
+          pnpm --filter @patina/extension package
+
+      - name: Find built zip
+        id: zip
+        run: |
+          ZIP=$(find apps/extension/build -name '*.zip' | head -1)
+          echo "path=$ZIP" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to Chrome Web Store
+        run: |
+          npx chrome-webstore-upload-cli upload \
+            --source "${{ steps.zip.outputs.path }}" \
+            --extension-id "${{ secrets.CWS_EXTENSION_ID }}" \
+            --client-id "${{ secrets.CWS_CLIENT_ID }}" \
+            --client-secret "${{ secrets.CWS_CLIENT_SECRET }}" \
+            --refresh-token "${{ secrets.CWS_REFRESH_TOKEN }}"
+
+      - name: Publish to Chrome Web Store
+        run: |
+          npx chrome-webstore-upload-cli publish \
+            --extension-id "${{ secrets.CWS_EXTENSION_ID }}" \
+            --client-id "${{ secrets.CWS_CLIENT_ID }}" \
+            --client-secret "${{ secrets.CWS_CLIENT_SECRET }}" \
+            --refresh-token "${{ secrets.CWS_REFRESH_TOKEN }}"

@@ -1,0 +1,94 @@
+name: Extension — Beta Channel
+
+on:
+  push:
+    tags:
+      - 'extension-beta-v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/extension-beta-v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Build extension
+        env:
+          PLASMO_PUBLIC_SUPABASE_URL: ${{ secrets.EXT_SUPABASE_URL }}
+          PLASMO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXT_SUPABASE_ANON_KEY }}
+          PLASMO_PUBLIC_PORTAL_URL: ${{ secrets.EXT_PORTAL_URL }}
+          PLASMO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXT_POSTHOG_KEY }}
+          PLASMO_PUBLIC_UPDATE_URL: https://api.patina.cloud/storage/v1/object/public/extension-releases/version.json
+        run: |
+          pnpm --filter @patina/extension build
+          pnpm --filter @patina/extension package
+
+      - name: Find built zip
+        id: zip
+        run: |
+          ZIP=$(find apps/extension/build -name '*.zip' | head -1)
+          echo "path=$ZIP" >> "$GITHUB_OUTPUT"
+
+      - name: Rename zip with version
+        id: artifact
+        run: |
+          VERSION="${{ steps.version.outputs.tag }}"
+          DEST="apps/extension/build/patina-capture-${VERSION}.zip"
+          cp "${{ steps.zip.outputs.path }}" "$DEST"
+          echo "path=$DEST" >> "$GITHUB_OUTPUT"
+
+      - name: Generate version.json
+        run: |
+          VERSION="${{ steps.version.outputs.tag }}"
+          cat > apps/extension/build/version.json <<EOF
+          {
+            "version": "${VERSION}",
+            "downloadUrl": "https://api.patina.cloud/storage/v1/object/public/extension-releases/patina-capture-${VERSION}.zip",
+            "changelog": "",
+            "releasedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+      - name: Upload to Supabase Storage
+        env:
+          SUPABASE_URL: ${{ secrets.EXT_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          VERSION="${{ steps.version.outputs.tag }}"
+
+          # Upload version.json
+          curl -f -X POST \
+            "${SUPABASE_URL}/storage/v1/object/extension-releases/version.json" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "x-upsert: true" \
+            --data-binary @apps/extension/build/version.json
+
+          # Upload zip
+          curl -f -X POST \
+            "${SUPABASE_URL}/storage/v1/object/extension-releases/patina-capture-${VERSION}.zip" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/zip" \
+            -H "x-upsert: true" \
+            --data-binary @"${{ steps.artifact.outputs.path }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.artifact.outputs.path }}
+          generate_release_notes: true
+          prerelease: true

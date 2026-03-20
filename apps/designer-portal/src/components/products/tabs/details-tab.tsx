@@ -180,14 +180,9 @@ export function DetailsTab({ product, onChange }: DetailsTabProps) {
             <Select
               value={product?.category}
               onValueChange={handleSelectChange('category')}
-            >
-              <option value="">Select a category</option>
-              {PRODUCT_CATEGORIES.map((cat) => (
-                <option key={cat.value} value={cat.value}>
-                  {cat.label}
-                </option>
-              ))}
-            </Select>
+              placeholder="Select a category"
+              options={PRODUCT_CATEGORIES}
+            />
           </div>
 
           <div className="space-y-2">
@@ -195,13 +190,9 @@ export function DetailsTab({ product, onChange }: DetailsTabProps) {
             <Select
               value={product?.status}
               onValueChange={handleSelectChange('status')}
-            >
-              {PRODUCT_STATUSES.map((status) => (
-                <option key={status.value} value={status.value}>
-                  {status.label}
-                </option>
-              ))}
-            </Select>
+              placeholder="Select a status"
+              options={PRODUCT_STATUSES}
+            />
           </div>
         </div>
 

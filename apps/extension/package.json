@@ -1,7 +1,7 @@
 {
   "name": "@patina/extension",
   "displayName": "Patina Capture",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Capture furniture products for your Patina catalog",
   "author": "Patina",
   "scripts": {
@@ -49,7 +49,8 @@
       "alarms"
     ],
     "host_permissions": [
-      "https://*/*"
+      "https://*/*",
+      "http://*/*"
     ]
   }
 }

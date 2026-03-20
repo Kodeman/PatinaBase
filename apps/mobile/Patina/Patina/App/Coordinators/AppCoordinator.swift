@@ -309,6 +309,10 @@ public final class AppCoordinator: Coordinator {
             showingQRScanner = true
             return true
 
+        case .showSettings:
+            navigate(to: .settings)
+            return true
+
         // Screen-specific intents (don't navigate, just return)
         case .continueWalk, .saveWalkProgress, .seeWhatFits:
             return false

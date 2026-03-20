@@ -1,31 +1,44 @@
-import { NextRequest } from 'next/server';
-import {
-  createRouteHandler,
-  proxyToBackend,
-} from '@patina/api-routes';
-import { apiError } from '@patina/api-routes';
-
-const CATALOG_URL = process.env.CATALOG_SERVICE_URL || 'http://localhost:3011';
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@patina/supabase/server';
 
 // GET /api/catalog/categories/:id
-export const GET = createRouteHandler(
-  async (request: NextRequest, context: any) => {
-    try {
-      const id = context.custom?.params?.id;
-      return await proxyToBackend(request, context, {
-        service: {
-          name: 'catalog',
-          baseUrl: CATALOG_URL,
-          path: `/v1/categories/${id}`,
-        },
-        requireAuth: false,
-        retry: { maxRetries: 3 },
-        timeout: { read: 5000 },
-        cache: { maxAge: 300, staleWhileRevalidate: 60 },
-      });
-    } catch (error) {
-      return apiError(error);
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase: any = await createServerClient();
+
+    const { data, error } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return NextResponse.json({ error: 'Category not found' }, { status: 404 });
+      }
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
-  },
-  { method: 'GET' }
-);
+
+    return NextResponse.json({
+      id: data.id,
+      name: data.name,
+      slug: data.slug,
+      parentId: data.parent_id,
+      description: data.description,
+      imageUrl: data.image_url,
+      productCount: data.product_count,
+      sortOrder: data.sort_order,
+      isActive: data.is_active,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    });
+  } catch (error) {
+    console.error('[API] GET /catalog/categories/[id] error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

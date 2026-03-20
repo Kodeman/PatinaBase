@@ -51,6 +51,9 @@ public enum NavigationIntent: Equatable {
     // QR authentication
     case webSignIn
 
+    // Account
+    case showSettings
+
     // Action intents (within current screen)
     case continueWalk
     case saveWalkProgress
@@ -84,7 +87,7 @@ public enum NavigationIntent: Equatable {
     /// Whether this intent triggers navigation
     public var triggersNavigation: Bool {
         switch self {
-        case .walkRoom, .showEmergence, .showTable, .showRooms, .goBack, .startOver, .requestDesignServices, .viewRecommendations, .webSignIn:
+        case .walkRoom, .showEmergence, .showTable, .showRooms, .goBack, .startOver, .requestDesignServices, .viewRecommendations, .webSignIn, .showSettings:
             return true
         default:
             return false
@@ -204,11 +207,11 @@ public enum QuickActionFactory {
             ))
         }
 
-        // Sign in to web (when authenticated)
+        // Account
         actions.append(QuickAction(
-            title: "Sign in to Web",
-            icon: "qrcode.viewfinder",
-            intent: .webSignIn
+            title: "Account",
+            icon: "person.circle",
+            intent: .showSettings
         ))
 
         return Array(actions.prefix(4)) // Max 4 actions

@@ -1,26 +1,46 @@
-import { NextRequest } from 'next/server';
-import { createRouteHandler, proxyToBackend, apiError } from '@patina/api-routes';
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@patina/supabase/server';
 
-const CATALOG_URL = process.env.CATALOG_SERVICE_URL || 'http://localhost:3011';
+// POST /api/admin/catalog/products/[id]/publish
+export async function POST(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase: any = await createServerClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-// POST /api/admin/catalog/products/[id]/publish - Publish product
-export const POST = createRouteHandler(
-  async (request: NextRequest, context: any) => {
-    const { id } = await context.params;
-    try {
-      return await proxyToBackend(request, context, {
-        service: {
-          name: 'catalog',
-          baseUrl: CATALOG_URL,
-          path: `/v1/products/${id}/publish`,
-        },
-        requireAuth: true,
-        retry: { maxRetries: 2 },
-        timeout: { write: 10000 },
-      });
-    } catch (error) {
-      return apiError(error);
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
-  },
-  { method: 'POST' }
-);
+
+    const { data, error } = await supabase
+      .from('products')
+      .update({
+        status: 'published',
+        published_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+      }
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    return NextResponse.json({
+      id: data.id,
+      status: data.status,
+      publishedAt: data.published_at,
+    });
+  } catch (error) {
+    console.error('[API] POST /admin/catalog/products/[id]/publish error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

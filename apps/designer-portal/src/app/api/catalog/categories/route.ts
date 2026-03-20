@@ -1,30 +1,47 @@
-import { NextRequest } from 'next/server';
-import {
-  createRouteHandler,
-  proxyToBackend,
-} from '@patina/api-routes';
-import { apiError } from '@patina/api-routes';
-
-const CATALOG_URL = process.env.CATALOG_SERVICE_URL || 'http://localhost:3011';
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@patina/supabase/server';
 
 // GET /api/catalog/categories - List categories
-export const GET = createRouteHandler(
-  async (request: NextRequest, context: any) => {
-    try {
-      return await proxyToBackend(request, context, {
-        service: {
-          name: 'catalog',
-          baseUrl: CATALOG_URL,
-          path: '/v1/categories',
-        },
-        requireAuth: false, // Public listing
-        retry: { maxRetries: 3 },
-        timeout: { read: 10000 },
-        cache: { maxAge: 300, staleWhileRevalidate: 60 }, // Cache for 5min
-      });
-    } catch (error) {
-      return apiError(error);
+export async function GET(request: NextRequest) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase: any = await createServerClient();
+    const { searchParams } = new URL(request.url);
+    const parentId = searchParams.get('parentId');
+
+    let query = supabase
+      .from('categories')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+
+    if (parentId) {
+      query = query.eq('parent_id', parentId);
     }
-  },
-  { method: 'GET' }
-);
+
+    const { data, error } = await query;
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const categories = (data ?? []).map((cat: any) => ({
+      id: cat.id,
+      name: cat.name,
+      slug: cat.slug,
+      parentId: cat.parent_id,
+      description: cat.description,
+      imageUrl: cat.image_url,
+      productCount: cat.product_count,
+      sortOrder: cat.sort_order,
+      isActive: cat.is_active,
+      createdAt: cat.created_at,
+      updatedAt: cat.updated_at,
+    }));
+
+    return NextResponse.json({ categories });
+  } catch (error) {
+    console.error('[API] GET /catalog/categories error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

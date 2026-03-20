@@ -45,6 +45,19 @@ public struct UnifiedHeroPageView: View {
             content
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
 
+            // Profile button overlay
+            if AuthService.shared.isAuthenticated {
+                VStack {
+                    HStack {
+                        Spacer()
+                        profileButton
+                    }
+                    .padding(.horizontal, PatinaSpacing.lg)
+                    .padding(.top, PatinaSpacing.sm)
+                    Spacer()
+                }
+            }
+
             // Post-scan prompt overlay
             if case .postScanPrompt(let roomId) = pageState {
                 postScanPromptOverlay(roomId: roomId)
@@ -120,6 +133,18 @@ public struct UnifiedHeroPageView: View {
 
         case .error(let message):
             errorView(message: message)
+        }
+    }
+
+    // MARK: - Profile Button
+
+    private var profileButton: some View {
+        Button {
+            coordinator.navigate(to: .settings)
+        } label: {
+            Image(systemName: "person.circle")
+                .font(.system(size: 28))
+                .foregroundColor(TimeOfDay.current.textColor.opacity(0.8))
         }
     }
 

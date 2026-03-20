@@ -18,7 +18,7 @@ public enum Secrets {
 
     /// Supabase anonymous key - safe to expose, used for client-side auth
     /// Self-hosted Coolify deployment key
-    public static let supabaseAnonKey = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc2OTUyOTQyMCwiZXhwIjo0OTI1MjAzMDIwLCJyb2xlIjoiYW5vbiJ9.TNj1ZtJc9e90UqoDElmX6XhwfpdF8aL6aI4GArrUaXo"
+    public static let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzcyODYzMjAwLCJleHAiOjE5MzA2Mjk2MDB9.8kdM7IiArooSgwnilRo60MVECQZUqtQeDimQBMFZkaE"
 
     /// OpenAI API key for conversation features (optional)
     public static let openAIKey: String? = nil

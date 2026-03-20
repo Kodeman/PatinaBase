@@ -1,47 +1,66 @@
-import { NextRequest } from 'next/server';
-import { createRouteHandler, proxyToBackend, apiError } from '@patina/api-routes';
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@patina/supabase/server';
 
-const CATALOG_URL = process.env.CATALOG_SERVICE_URL || 'http://localhost:3011';
+// GET /api/admin/catalog/vendors - List vendors (admin)
+export async function GET(_request: NextRequest) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase: any = await createServerClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-// GET /api/admin/catalog/vendors - List vendors
-export const GET = createRouteHandler(
-  async (request: NextRequest, context: any) => {
-    try {
-      return await proxyToBackend(request, context, {
-        service: {
-          name: 'catalog',
-          baseUrl: CATALOG_URL,
-          path: '/v1/vendors',
-        },
-        requireAuth: true,
-        retry: { maxRetries: 3 },
-        timeout: { read: 10000 },
-        cache: { maxAge: 300 }, // 5 min cache for vendors
-      });
-    } catch (error) {
-      return apiError(error);
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
-  },
-  { method: 'GET' }
-);
 
-// POST /api/admin/catalog/vendors - Create vendor
-export const POST = createRouteHandler(
-  async (request: NextRequest, context: any) => {
-    try {
-      return await proxyToBackend(request, context, {
-        service: {
-          name: 'catalog',
-          baseUrl: CATALOG_URL,
-          path: '/v1/vendors',
-        },
-        requireAuth: true,
-        retry: { maxRetries: 2 },
-        timeout: { write: 10000 },
-      });
-    } catch (error) {
-      return apiError(error);
+    const { data, error } = await supabase
+      .from('vendors')
+      .select('*')
+      .order('name', { ascending: true });
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
-  },
-  { method: 'POST' }
-);
+
+    return NextResponse.json({ vendors: data ?? [] });
+  } catch (error) {
+    console.error('[API] GET /admin/catalog/vendors error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+// POST /api/admin/catalog/vendors - Create vendor (admin)
+export async function POST(request: NextRequest) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase: any = await createServerClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const body = await request.json();
+
+    const { data, error } = await supabase
+      .from('vendors')
+      .insert({
+        name: body.name,
+        trade_name: body.tradeName || body.trade_name || null,
+        website: body.website || null,
+        logo_url: body.logoUrl || body.logo_url || null,
+        description: body.description || null,
+        contact_email: body.contactEmail || body.contact_email || null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    return NextResponse.json(data, { status: 201 });
+  } catch (error) {
+    console.error('[API] POST /admin/catalog/vendors error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

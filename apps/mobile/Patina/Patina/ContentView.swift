@@ -52,6 +52,12 @@ struct ContentView: View {
         )) {
             QRScannerView()
         }
+        .sheet(isPresented: Binding(
+            get: { coordinator.showingSettings },
+            set: { coordinator.showingSettings = $0 }
+        )) {
+            AccountView()
+        }
     }
 
     // MARK: - Launching View
@@ -183,7 +189,8 @@ struct ContentView: View {
                 .navigationBarTitleDisplayMode(.inline)
 
         case .settings:
-            placeholderScreen(title: "Settings", icon: "gear")
+            // Handled by sheet, not navigation destination
+            EmptyView()
 
         case .designServicesRequest:
             // Handled by sheet, not navigation destination

@@ -6,6 +6,7 @@
 import { Storage } from '@plasmohq/storage';
 import type { QuickCaptureRequest, VendorSelection, VendorCaptureInput } from '@patina/shared';
 import { supabase } from './lib/supabase';
+import { checkForUpdate } from './lib/update-checker';
 
 // Initialize storage
 const storage = new Storage({ area: 'local' });
@@ -23,6 +24,9 @@ interface QueuedCapture {
   data: QuickCaptureRequest;
   vendors?: QueuedVendorData;         // Vendor selections for product capture
   vendorData?: VendorCaptureInput;    // Direct vendor data for vendor-only capture
+  projectId?: string | null;          // Project to add the product to
+  styleIds?: string[];                // Style assignments for the product
+  note?: string | null;               // Note for project_products
   attempts: number;
   lastAttempt: string | null;
   createdAt: string;
@@ -46,6 +50,9 @@ interface AddToQueueOptions {
   type: 'product' | 'vendor';
   vendors?: QueuedVendorData;
   vendorData?: VendorCaptureInput;
+  projectId?: string | null;
+  styleIds?: string[];
+  note?: string | null;
 }
 
 async function addToQueue(capture: QuickCaptureRequest, options: AddToQueueOptions = { type: 'product' }): Promise<string> {
@@ -58,6 +65,9 @@ async function addToQueue(capture: QuickCaptureRequest, options: AddToQueueOptio
     data: capture,
     vendors: options.vendors,
     vendorData: options.vendorData,
+    projectId: options.projectId,
+    styleIds: options.styleIds,
+    note: options.note,
     attempts: 0,
     lastAttempt: null,
     createdAt: new Date().toISOString(),
@@ -145,7 +155,7 @@ async function syncQueue(): Promise<void> {
           ? Math.round(parseFloat(captureData.price) * 100)
           : null;
 
-        const { error } = await supabase.from('products').insert({
+        const { data: product, error } = await supabase.from('products').insert({
           name: captureData.title || 'Untitled Product',
           description: captureData.description || null,
           source_url: captureData.url,
@@ -153,9 +163,31 @@ async function syncQueue(): Promise<void> {
           price_retail: priceRetail,
           captured_by: session.user.id,
           captured_at: new Date().toISOString(),
-        });
+        }).select('id').single();
 
         if (error) throw error;
+
+        // Add to project if specified
+        if (item.projectId && product) {
+          await supabase.from('project_products').insert({
+            project_id: item.projectId,
+            product_id: product.id,
+            notes: item.note || null,
+          });
+        }
+
+        // Add style assignments if specified
+        if (item.styleIds && item.styleIds.length > 0 && product) {
+          const styleInserts = item.styleIds.map((styleId, index) => ({
+            product_id: product.id,
+            style_id: styleId,
+            confidence: 1.0,
+            is_primary: index === 0,
+            source: 'manual',
+            assigned_by: session.user.id,
+          }));
+          await supabase.from('product_styles').insert(styleInserts);
+        }
         // Success — don't add to remaining
       }
     } catch {
@@ -247,6 +279,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         type: message.itemType || 'product',
         vendors: message.vendors,
         vendorData: message.vendorData,
+        projectId: message.projectId,
+        styleIds: message.styleIds,
+        note: message.note,
       }).then(id => {
         sendResponse({ success: true, queueId: id });
       });
@@ -325,10 +360,21 @@ chrome.runtime.onStartup.addListener(() => {
 
 // Periodic sync using alarms (Manifest V3 doesn't allow setInterval in service workers)
 chrome.alarms?.create('sync-queue', { periodInMinutes: 5 });
+chrome.alarms?.create('check-update', { periodInMinutes: 60 });
 
 chrome.alarms?.onAlarm?.addListener(alarm => {
   if (alarm.name === 'sync-queue') {
     syncQueue();
+  }
+  if (alarm.name === 'check-update') {
+    checkForUpdate().then(state => {
+      if (state?.hasUpdate) {
+        // Notify sidepanel if open
+        chrome.runtime.sendMessage({ type: 'UPDATE_AVAILABLE', updateState: state }).catch(() => {
+          // Sidepanel not open — that's fine, it will read cached state on next open
+        });
+      }
+    });
   }
 });
 

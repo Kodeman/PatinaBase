@@ -285,6 +285,8 @@ extension NavigationIntent {
             return "View recommendations"
         case .webSignIn:
             return "Sign in to web"
+        case .showSettings:
+            return "Account"
         }
     }
 }

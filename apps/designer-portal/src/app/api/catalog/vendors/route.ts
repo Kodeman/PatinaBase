@@ -1,30 +1,24 @@
-import { NextRequest } from 'next/server';
-import {
-  createRouteHandler,
-  proxyToBackend,
-} from '@patina/api-routes';
-import { apiError } from '@patina/api-routes';
-
-const CATALOG_URL = process.env.CATALOG_SERVICE_URL || 'http://localhost:3011';
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@patina/supabase/server';
 
 // GET /api/catalog/vendors - List vendors
-export const GET = createRouteHandler(
-  async (request: NextRequest, context: any) => {
-    try {
-      return await proxyToBackend(request, context, {
-        service: {
-          name: 'catalog',
-          baseUrl: CATALOG_URL,
-          path: '/v1/vendors',
-        },
-        requireAuth: false, // Public listing
-        retry: { maxRetries: 3 },
-        timeout: { read: 10000 },
-        cache: { maxAge: 300, staleWhileRevalidate: 60 }, // Cache for 5min
-      });
-    } catch (error) {
-      return apiError(error);
+export async function GET(_request: NextRequest) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase: any = await createServerClient();
+
+    const { data, error } = await supabase
+      .from('vendors')
+      .select('*')
+      .order('name', { ascending: true });
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
-  },
-  { method: 'GET' }
-);
+
+    return NextResponse.json({ vendors: data ?? [] });
+  } catch (error) {
+    console.error('[API] GET /catalog/vendors error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

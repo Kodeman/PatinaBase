@@ -104,6 +104,14 @@ public final class QRAuthService {
             return
         }
 
+        // Wait for auth state to be determined (handles cold-launch via deep link)
+        await authService.waitForAuthReady()
+
+        // If session appears stale, try refreshing before giving up
+        if !authService.isAuthenticated {
+            _ = await authService.getSession()
+        }
+
         // Check if user is authenticated
         guard authService.isAuthenticated else {
             state = .error(.userNotAuthenticated)
@@ -173,8 +181,22 @@ public final class QRAuthService {
         isLoading = true
 
         do {
-            // Get current access token
-            guard let accessToken = try? await supabase.auth.session.accessToken else {
+            // Get current access token, refreshing if needed
+            var accessToken: String?
+            do {
+                accessToken = try await supabase.auth.session.accessToken
+            } catch {
+                // Token may be expired — try refreshing the session
+                print("QR Auth: access token retrieval failed, attempting refresh: \(error)")
+                do {
+                    try await authService.refreshSession()
+                    accessToken = try await supabase.auth.session.accessToken
+                } catch {
+                    print("QR Auth: session refresh also failed: \(error)")
+                }
+            }
+
+            guard let accessToken else {
                 throw QRAuthError.userNotAuthenticated
             }
 

@@ -455,6 +455,7 @@ export {
   usePauseAutomation,
   useSequenceEnrollments,
 } from './use-automations';
+export { useProductBySourceUrl } from './use-product-source-url';
 export {
   // Duplicate Detection
   useDuplicateCheck,

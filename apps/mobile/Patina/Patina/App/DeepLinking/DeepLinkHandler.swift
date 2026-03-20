@@ -83,22 +83,33 @@ public final class DeepLinkHandler {
             return true
         }
 
-        // Check if user is authenticated for other auth URLs
-        guard AuthService.shared.isAuthenticated else {
-            // Navigate to auth first
-            coordinator?.navigate(to: .authentication)
-            return true
+        // For QR auth deep links, handle asynchronously to wait for auth state
+        // (app may be cold-launched via deep link before auth state is ready)
+        Task {
+            // Wait for auth state to be determined
+            await AuthService.shared.waitForAuthReady()
+
+            // If still not authenticated after auth state is ready, try getting session
+            if !AuthService.shared.isAuthenticated {
+                _ = await AuthService.shared.getSession()
+            }
+
+            guard AuthService.shared.isAuthenticated else {
+                // Navigate to auth first
+                coordinator?.navigate(to: .authentication)
+                return
+            }
+
+            // Let QRAuthService handle the URL
+            let handled = qrAuthService.handleDeepLink(url)
+
+            if handled {
+                // Show approval sheet
+                coordinator?.showingQRScanner = true
+            }
         }
 
-        // Let QRAuthService handle the URL
-        let handled = qrAuthService.handleDeepLink(url)
-
-        if handled {
-            // Show approval sheet
-            coordinator?.showingQRScanner = true
-        }
-
-        return handled
+        return true
     }
 
     // MARK: - Room URLs

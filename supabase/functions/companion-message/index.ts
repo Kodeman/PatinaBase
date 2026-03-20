@@ -142,7 +142,7 @@ serve(async (req) => {
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: false })
         .limit(10),
-      supabase.from("style_profiles").select("*").eq("user_id", user.id).single(),
+      supabase.from("user_style_signals").select("*").eq("user_id", user.id).single(),
     ]);
 
     // Build conversation history for Claude
