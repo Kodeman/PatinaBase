@@ -1,38 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouteHandler, proxyToBackend, apiError } from '@patina/api-routes';
-import { auth } from '@/lib/auth';
+import { createServerClient } from '@patina/supabase/server';
+import { createAdminClient } from '@patina/supabase';
 
-/**
- * Get current user profile
- */
-const USER_MANAGEMENT_URL = process.env.USER_MANAGEMENT_SERVICE_URL || 'http://localhost:3010';
+// GET /api/me - Get current user profile with roles
+export async function GET(_request: NextRequest) {
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
 
-export const GET = createRouteHandler(
-  async (request: NextRequest) => {
-    try {
-      const session = await auth();
+  if (error || !user) {
+    return NextResponse.json(
+      { error: 'UNAUTHORIZED', message: 'Authentication required' },
+      { status: 401 }
+    );
+  }
 
-      if (!session?.user?.id) {
-        return NextResponse.json(
-          { error: 'UNAUTHORIZED', message: 'Authentication required' },
-          { status: 401 }
-        );
-      }
+  try {
+    const adminClient = createAdminClient();
 
-      return await proxyToBackend(request, { requestId: crypto.randomUUID() } as any, {
-        service: {
-          name: 'user-management',
-          baseUrl: USER_MANAGEMENT_URL,
-          path: '/v1/me',
-        },
-        requireAuth: true,
-        retry: { maxRetries: 3 },
-        timeout: { read: 10000 },
-        cache: { maxAge: 60 }, // Short cache for user data
-      });
-    } catch (error: any) {
-      return apiError(error);
-    }
-  },
-  { method: 'GET' }
-);
+    const [profileRes, rolesRes] = await Promise.all([
+      adminClient
+        .from('profiles')
+        .select('display_name, avatar_url')
+        .eq('id', user.id)
+        .single(),
+      adminClient
+        .from('user_roles')
+        .select('roles!inner(id, name, display_name, description, domain)')
+        .eq('user_id', user.id),
+    ]);
+
+    return NextResponse.json({
+      data: {
+        id: user.id,
+        email: user.email,
+        emailVerified: !!user.email_confirmed_at,
+        displayName: profileRes.data?.display_name ?? undefined,
+        avatarUrl: profileRes.data?.avatar_url ?? undefined,
+        roles: (rolesRes.data ?? []).map((r: any) => ({
+          id: r.roles.id,
+          name: r.roles.name,
+          displayName: r.roles.display_name,
+          domain: r.roles.domain,
+        })),
+        createdAt: user.created_at,
+      },
+    });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: 'SERVER_ERROR', message: err.message ?? 'Failed to get profile' },
+      { status: 500 }
+    );
+  }
+}

@@ -1,47 +1,129 @@
-import { NextRequest } from 'next/server';
-import { createRouteHandler, proxyToBackend, apiError } from '@patina/api-routes';
+import { NextRequest, NextResponse } from 'next/server';
+import {
+  getAuthenticatedAdmin,
+  createAuditLog,
+  badRequest,
+  serverError,
+  getClientIp,
+} from '@/lib/supabase-admin';
 
-const USER_MANAGEMENT_URL = process.env.USER_MANAGEMENT_SERVICE_URL || 'http://localhost:3010';
+// Helper to map DB role to API response shape
+function mapRole(role: any, userCount?: number) {
+  return {
+    id: role.id,
+    name: role.name,
+    description: role.description ?? undefined,
+    isSystem: role.is_system,
+    createdAt: role.created_at,
+    updatedAt: role.updated_at,
+    userCount: userCount ?? 0,
+    permissionCount: role.role_permissions?.length ?? 0,
+    permissions: (role.role_permissions ?? [])
+      .filter((rp: any) => rp.permissions)
+      .map((rp: any) => ({
+        id: rp.permissions.id,
+        code: rp.permissions.name,
+        resource: rp.permissions.resource,
+        action: rp.permissions.action,
+        description: rp.permissions.description ?? undefined,
+      })),
+  };
+}
 
-// GET /api/roles - List roles
-export const GET = createRouteHandler(
-  async (request: NextRequest, context: any) => {
-    try {
-      return await proxyToBackend(request, context, {
-        service: {
-          name: 'user-management',
-          baseUrl: USER_MANAGEMENT_URL,
-          path: '/api/v1/roles',
-        },
-        requireAuth: true,
-        retry: { maxRetries: 3 },
-        timeout: { read: 10000 },
-        cache: { maxAge: 300 }, // 5 min cache for roles
-      });
-    } catch (error) {
-      return apiError(error);
+// GET /api/roles - List all roles with user and permission counts
+export async function GET(request: NextRequest) {
+  const auth = await getAuthenticatedAdmin(request);
+  if ('error' in auth) return auth.error;
+  const { adminClient } = auth;
+
+  try {
+    const { data: roles, error } = await adminClient
+      .from('roles')
+      .select('*, role_permissions(permissions(id, name, description, resource, action))')
+      .order('created_at', { ascending: true });
+
+    if (error) return serverError(error.message);
+
+    // Get user counts per role
+    const { data: userCounts } = await adminClient
+      .from('user_roles')
+      .select('role_id');
+
+    const countMap = new Map<string, number>();
+    for (const uc of userCounts ?? []) {
+      countMap.set(uc.role_id, (countMap.get(uc.role_id) ?? 0) + 1);
     }
-  },
-  { method: 'GET' }
-);
 
-// POST /api/roles - Create role
-export const POST = createRouteHandler(
-  async (request: NextRequest, context: any) => {
-    try {
-      return await proxyToBackend(request, context, {
-        service: {
-          name: 'user-management',
-          baseUrl: USER_MANAGEMENT_URL,
-          path: '/api/v1/roles',
-        },
-        requireAuth: true,
-        retry: { maxRetries: 2 },
-        timeout: { write: 10000 },
-      });
-    } catch (error) {
-      return apiError(error);
+    const result = (roles ?? []).map((r: any) => mapRole(r, countMap.get(r.id) ?? 0));
+
+    return NextResponse.json({ data: result });
+  } catch (err: any) {
+    return serverError(err.message ?? 'Failed to list roles');
+  }
+}
+
+// POST /api/roles - Create a custom role
+export async function POST(request: NextRequest) {
+  const auth = await getAuthenticatedAdmin(request);
+  if ('error' in auth) return auth.error;
+  const { user: adminUser, adminClient } = auth;
+
+  let body: { name?: string; description?: string; domain?: string; permissionIds?: string[] };
+  try {
+    body = await request.json();
+  } catch {
+    return badRequest('Invalid JSON body');
+  }
+
+  if (!body.name) return badRequest('name is required');
+
+  try {
+    const { data: role, error } = await adminClient
+      .from('roles')
+      .insert({
+        name: body.name,
+        display_name: body.name,
+        description: body.description ?? null,
+        domain: (body.domain ?? 'admin') as any,
+        is_system: false,
+        is_assignable: true,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') return badRequest('A role with this name already exists');
+      return serverError(error.message);
     }
-  },
-  { method: 'POST' }
-);
+
+    // Assign permissions if provided
+    if (body.permissionIds && body.permissionIds.length > 0) {
+      const permInserts = body.permissionIds.map((pid) => ({
+        role_id: role.id,
+        permission_id: pid,
+      }));
+      await adminClient.from('role_permissions').insert(permInserts);
+    }
+
+    await createAuditLog(adminClient, {
+      userId: adminUser.id,
+      action: 'role.create',
+      resourceType: 'role',
+      resourceId: role.id,
+      newValues: { name: body.name, permissionIds: body.permissionIds },
+      ipAddress: getClientIp(request),
+      userAgent: request.headers.get('user-agent') ?? undefined,
+    });
+
+    // Re-fetch with permissions
+    const { data: fullRole } = await adminClient
+      .from('roles')
+      .select('*, role_permissions(permissions(id, name, description, resource, action))')
+      .eq('id', role.id)
+      .single();
+
+    return NextResponse.json({ data: mapRole(fullRole, 0) }, { status: 201 });
+  } catch (err: any) {
+    return serverError(err.message ?? 'Failed to create role');
+  }
+}

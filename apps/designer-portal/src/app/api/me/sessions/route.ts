@@ -1,69 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouteHandler, proxyToBackend, apiError } from '@patina/api-routes';
-import { auth } from '@/lib/auth';
+import { createServerClient } from '@patina/supabase/server';
 
-const USER_MANAGEMENT_URL = process.env.USER_MANAGEMENT_SERVICE_URL || 'http://localhost:3010';
+// GET /api/me/sessions - Get current user's MFA factors (session proxy)
+export async function GET(_request: NextRequest) {
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-/**
- * Get current user's sessions
- */
-export const GET = createRouteHandler(
-  async (request: NextRequest) => {
-    try {
-      const session = await auth();
+  if (authError || !user) {
+    return NextResponse.json(
+      { error: 'UNAUTHORIZED', message: 'Authentication required' },
+      { status: 401 }
+    );
+  }
 
-      if (!session?.user?.id) {
-        return NextResponse.json(
-          { error: 'UNAUTHORIZED', message: 'Authentication required' },
-          { status: 401 }
-        );
-      }
+  try {
+    // Get MFA factors as session information
+    const { data: factorsData } = await supabase.auth.mfa.listFactors();
 
-      return await proxyToBackend(request, { requestId: crypto.randomUUID() } as any, {
-        service: {
-          name: 'user-management',
-          baseUrl: USER_MANAGEMENT_URL,
-          path: '/v1/sessions',
-        },
-        requireAuth: true,
-        retry: { maxRetries: 3 },
-        timeout: { read: 10000 },
-      });
-    } catch (error: any) {
-      return apiError(error);
+    const sessions = (factorsData?.all ?? []).map((f: any) => ({
+      id: f.id,
+      factorType: f.factor_type,
+      status: f.status,
+      createdAt: f.created_at,
+      updatedAt: f.updated_at,
+    }));
+
+    return NextResponse.json({ data: sessions });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: 'SERVER_ERROR', message: err.message ?? 'Failed to get sessions' },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/me/sessions - Sign out from all other sessions
+export async function DELETE(_request: NextRequest) {
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return NextResponse.json(
+      { error: 'UNAUTHORIZED', message: 'Authentication required' },
+      { status: 401 }
+    );
+  }
+
+  try {
+    // Sign out from other sessions (scope: 'others')
+    const { error } = await supabase.auth.signOut({ scope: 'others' });
+
+    if (error) {
+      return NextResponse.json(
+        { error: 'SIGNOUT_FAILED', message: error.message },
+        { status: 500 }
+      );
     }
-  },
-  { method: 'GET' }
-);
 
-/**
- * Revoke all other sessions (except current)
- */
-export const DELETE = createRouteHandler(
-  async (request: NextRequest) => {
-    try {
-      const session = await auth();
-
-      if (!session?.user?.id) {
-        return NextResponse.json(
-          { error: 'UNAUTHORIZED', message: 'Authentication required' },
-          { status: 401 }
-        );
-      }
-
-      return await proxyToBackend(request, { requestId: crypto.randomUUID() } as any, {
-        service: {
-          name: 'user-management',
-          baseUrl: USER_MANAGEMENT_URL,
-          path: '/v1/sessions',
-        },
-        requireAuth: true,
-        retry: { maxRetries: 1 },
-        timeout: { write: 10000 },
-      });
-    } catch (error: any) {
-      return apiError(error);
-    }
-  },
-  { method: 'DELETE' }
-);
+    return NextResponse.json({ data: { success: true } });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: 'SERVER_ERROR', message: err.message ?? 'Failed to revoke sessions' },
+      { status: 500 }
+    );
+  }
+}

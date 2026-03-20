@@ -1,63 +1,126 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
-import { createRouteHandler, proxyToBackend, apiError } from '@patina/api-routes';
-import { auth } from '@/lib/auth';
+import { createServerClient } from '@patina/supabase/server';
 
-const USER_MANAGEMENT_URL = process.env.USER_MANAGEMENT_SERVICE_URL || 'http://localhost:3010';
+// POST /api/me/avatar - Upload avatar to Supabase Storage and update profile
+export async function POST(request: NextRequest) {
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-const updateAvatarSchema = z.object({
-  avatarUrl: z.string().url('Invalid avatar URL'),
-});
+  if (authError || !user) {
+    return NextResponse.json(
+      { error: 'UNAUTHORIZED', message: 'Authentication required' },
+      { status: 401 }
+    );
+  }
 
-/**
- * Update current user avatar
- */
-export const PATCH = createRouteHandler(
-  async (request: NextRequest) => {
-    try {
-      const session = await auth();
+  try {
+    const formData = await request.formData();
+    const file = formData.get('file') as File | null;
 
-      if (!session?.user?.id) {
-        return NextResponse.json(
-          { error: 'UNAUTHORIZED', message: 'Authentication required' },
-          { status: 401 }
-        );
-      }
-
-      // Validate request body
-      const body = await request.json();
-      const validatedData = updateAvatarSchema.parse(body);
-
-      // Create new request with validated body
-      const proxiedRequest = new Request(request.url, {
-        method: 'PATCH',
-        headers: request.headers,
-        body: JSON.stringify(validatedData),
-      });
-
-      return await proxyToBackend(proxiedRequest, { requestId: crypto.randomUUID() } as any, {
-        service: {
-          name: 'user-management',
-          baseUrl: USER_MANAGEMENT_URL,
-          path: '/v1/me/avatar',
-        },
-        requireAuth: true,
-        retry: { maxRetries: 2 },
-        timeout: { write: 10000 },
-      });
-    } catch (error: any) {
-      if (error.name === 'ZodError') {
-        return NextResponse.json(
-          {
-            error: 'VALIDATION_ERROR',
-            message: 'Invalid avatar URL',
-            details: error.errors,
-          },
-          { status: 400 }
-        );
-      }
-      return apiError(error);
+    if (!file) {
+      return NextResponse.json(
+        { error: 'VALIDATION_ERROR', message: 'No file provided' },
+        { status: 400 }
+      );
     }
-  },
-  { method: 'PATCH' }
-);
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      return NextResponse.json(
+        { error: 'VALIDATION_ERROR', message: 'File must be an image' },
+        { status: 400 }
+      );
+    }
+
+    // Max 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      return NextResponse.json(
+        { error: 'VALIDATION_ERROR', message: 'File must be less than 5MB' },
+        { status: 400 }
+      );
+    }
+
+    const ext = file.name.split('.').pop() ?? 'jpg';
+    const filePath = `avatars/${user.id}.${ext}`;
+
+    // Upload to Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, file, { upsert: true });
+
+    if (uploadError) {
+      return NextResponse.json(
+        { error: 'UPLOAD_FAILED', message: uploadError.message },
+        { status: 500 }
+      );
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(filePath);
+
+    const avatarUrl = urlData.publicUrl;
+
+    // Update profile
+    await (supabase as any)
+      .from('profiles')
+      .update({ avatar_url: avatarUrl })
+      .eq('id', user.id);
+
+    return NextResponse.json({ data: { avatarUrl } });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: 'SERVER_ERROR', message: err.message ?? 'Failed to upload avatar' },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH /api/me/avatar - Update avatar URL directly
+export async function PATCH(request: NextRequest) {
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return NextResponse.json(
+      { error: 'UNAUTHORIZED', message: 'Authentication required' },
+      { status: 401 }
+    );
+  }
+
+  try {
+    const body = await request.json();
+    if (!body.avatarUrl || typeof body.avatarUrl !== 'string') {
+      return NextResponse.json(
+        { error: 'VALIDATION_ERROR', message: 'Invalid avatar URL' },
+        { status: 400 }
+      );
+    }
+
+    const { error } = await (supabase as any)
+      .from('profiles')
+      .update({ avatar_url: body.avatarUrl })
+      .eq('id', user.id);
+
+    if (error) {
+      return NextResponse.json(
+        { error: 'UPDATE_FAILED', message: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ data: { avatarUrl: body.avatarUrl } });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: 'SERVER_ERROR', message: err.message ?? 'Failed to update avatar' },
+      { status: 500 }
+    );
+  }
+}

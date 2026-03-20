@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createMiddlewareClient } from '@patina/supabase/client';
+import { createClient } from '@supabase/supabase-js';
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
@@ -12,6 +13,7 @@ export async function middleware(req: NextRequest) {
   const isAuthPage = req.nextUrl.pathname.startsWith('/auth') || req.nextUrl.pathname.startsWith('/login');
   const isPublicPage = req.nextUrl.pathname === '/';
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');
+  const isUnauthorizedPage = req.nextUrl.pathname === '/unauthorized';
   const isAuthenticated = !!user;
 
   const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:3001';
@@ -21,7 +23,7 @@ export async function middleware(req: NextRequest) {
   const isRSCRequest = req.headers.get('rsc') === '1';
   const isPrefetch = req.headers.get('next-router-prefetch') === '1';
 
-  // API routes pass through
+  // API routes pass through (auth handled per-route)
   if (isApiRoute) {
     return res;
   }
@@ -54,6 +56,33 @@ export async function middleware(req: NextRequest) {
     const loginUrl = new URL('/auth/signin', baseUrl);
     loginUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
     return redirectWithCookies(loginUrl);
+  }
+
+  // For authenticated users on protected pages (not auth, not public, not unauthorized),
+  // verify they have an admin-domain role
+  if (isAuthenticated && !isAuthPage && !isPublicPage && !isUnauthorizedPage) {
+    try {
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+      if (serviceRoleKey && supabaseUrl) {
+        const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+
+        const { data: adminRoles } = await adminClient
+          .from('user_roles')
+          .select('role_id, roles!inner(domain)')
+          .eq('user_id', user!.id)
+          .eq('roles.domain', 'admin');
+
+        if (!adminRoles || adminRoles.length === 0) {
+          return redirectWithCookies(new URL('/unauthorized', baseUrl));
+        }
+      }
+    } catch {
+      // If role check fails, allow through (fail-open for now, API routes still enforce)
+    }
   }
 
   return res;

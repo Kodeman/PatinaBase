@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createRouteHandler, proxyToBackend, apiError } from '@patina/api-routes';
-import { auth } from '@/lib/auth';
-
-const USER_MANAGEMENT_URL = process.env.USER_MANAGEMENT_SERVICE_URL || 'http://localhost:3010';
+import { createServerClient } from '@patina/supabase/server';
 
 const updateProfileSchema = z.object({
   displayName: z.string().min(1).max(100).optional(),
@@ -13,55 +10,59 @@ const updateProfileSchema = z.object({
   notifPrefs: z.record(z.any()).optional(),
 });
 
-/**
- * Update current user profile
- */
-export const PATCH = createRouteHandler(
-  async (request: NextRequest) => {
-    try {
-      const session = await auth();
+// PATCH /api/me/profile - Update current user profile (uses RLS)
+export async function PATCH(request: NextRequest) {
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-      if (!session?.user?.id) {
-        return NextResponse.json(
-          { error: 'UNAUTHORIZED', message: 'Authentication required' },
-          { status: 401 }
-        );
-      }
+  if (authError || !user) {
+    return NextResponse.json(
+      { error: 'UNAUTHORIZED', message: 'Authentication required' },
+      { status: 401 }
+    );
+  }
 
-      // Validate request body
-      const body = await request.json();
-      const validatedData = updateProfileSchema.parse(body);
+  try {
+    const body = await request.json();
+    const validatedData = updateProfileSchema.parse(body);
 
-      // Create new request with validated body
-      const proxiedRequest = new Request(request.url, {
-        method: 'PATCH',
-        headers: request.headers,
-        body: JSON.stringify(validatedData),
-      });
+    const updates: Record<string, unknown> = {};
+    if (validatedData.displayName !== undefined) updates.display_name = validatedData.displayName;
+    if (validatedData.avatarUrl !== undefined) updates.avatar_url = validatedData.avatarUrl;
 
-      return await proxyToBackend(proxiedRequest, { requestId: crypto.randomUUID() } as any, {
-        service: {
-          name: 'user-management',
-          baseUrl: USER_MANAGEMENT_URL,
-          path: '/v1/me/profile',
-        },
-        requireAuth: true,
-        retry: { maxRetries: 2 },
-        timeout: { write: 10000 },
-      });
-    } catch (error: any) {
-      if (error.name === 'ZodError') {
-        return NextResponse.json(
-          {
-            error: 'VALIDATION_ERROR',
-            message: 'Invalid request data',
-            details: error.errors,
-          },
-          { status: 400 }
-        );
-      }
-      return apiError(error);
+    const { data, error } = await (supabase as any)
+      .from('profiles')
+      .update(updates)
+      .eq('id', user.id)
+      .select('display_name, avatar_url')
+      .single();
+
+    if (error) {
+      return NextResponse.json(
+        { error: 'UPDATE_FAILED', message: error.message },
+        { status: 500 }
+      );
     }
-  },
-  { method: 'PATCH' }
-);
+
+    return NextResponse.json({
+      data: {
+        displayName: (data as any)?.display_name,
+        avatarUrl: (data as any)?.avatar_url,
+      },
+    });
+  } catch (error: any) {
+    if (error.name === 'ZodError') {
+      return NextResponse.json(
+        { error: 'VALIDATION_ERROR', message: 'Invalid request data', details: error.errors },
+        { status: 400 }
+      );
+    }
+    return NextResponse.json(
+      { error: 'SERVER_ERROR', message: error.message ?? 'Failed to update profile' },
+      { status: 500 }
+    );
+  }
+}

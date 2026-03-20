@@ -1,70 +1,166 @@
-import { NextRequest } from 'next/server';
-import { createRouteHandler, proxyToBackend, apiError } from '@patina/api-routes';
+import { NextRequest, NextResponse } from 'next/server';
+import {
+  getAuthenticatedAdmin,
+  createAuditLog,
+  badRequest,
+  serverError,
+  getClientIp,
+} from '@/lib/supabase-admin';
 
-const USER_MANAGEMENT_URL = process.env.USER_MANAGEMENT_SERVICE_URL || 'http://localhost:3010';
+// GET /api/roles/[id]/users - Get users assigned to this role
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const auth = await getAuthenticatedAdmin(request);
+  if ('error' in auth) return auth.error;
+  const { adminClient } = auth;
+  const { id } = await context.params;
 
-// GET /api/roles/[id]/users - Get users with this role
-export const GET = createRouteHandler(
-  async (request: NextRequest, context: any) => {
-    const { id } = await context.params;
-    try {
-      return await proxyToBackend(request, context, {
-        service: {
-          name: 'user-management',
-          baseUrl: USER_MANAGEMENT_URL,
-          path: `/api/v1/roles/${id}/users`,
-        },
-        requireAuth: true,
-        retry: { maxRetries: 3 },
-        timeout: { read: 10000 },
-      });
-    } catch (error) {
-      return apiError(error);
+  const url = new URL(request.url);
+  const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10));
+  const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize') ?? '20', 10)));
+  const offset = (page - 1) * pageSize;
+
+  try {
+    const { count } = await adminClient
+      .from('user_roles')
+      .select('*', { count: 'exact', head: true })
+      .eq('role_id', id);
+
+    const { data, error } = await adminClient
+      .from('user_roles')
+      .select('user_id, granted_at, granted_by, profiles!inner(id, display_name, avatar_url)')
+      .eq('role_id', id)
+      .order('granted_at', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) return serverError(error.message);
+
+    // Get email addresses from auth
+    const userIds = (data ?? []).map((d: any) => d.user_id);
+    const emailMap = new Map<string, string>();
+    if (userIds.length > 0) {
+      // Fetch auth users in batches
+      const { data: authData } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+      for (const u of authData?.users ?? []) {
+        if (userIds.includes(u.id)) {
+          emailMap.set(u.id, u.email ?? '');
+        }
+      }
     }
-  },
-  { method: 'GET' }
-);
 
-// POST /api/roles/[id]/users - Add users to role
-export const POST = createRouteHandler(
-  async (request: NextRequest, context: any) => {
-    const { id } = await context.params;
-    try {
-      return await proxyToBackend(request, context, {
-        service: {
-          name: 'user-management',
-          baseUrl: USER_MANAGEMENT_URL,
-          path: `/api/v1/roles/${id}/users`,
-        },
-        requireAuth: true,
-        retry: { maxRetries: 2 },
-        timeout: { write: 10000 },
-      });
-    } catch (error) {
-      return apiError(error);
-    }
-  },
-  { method: 'POST' }
-);
+    const users = (data ?? []).map((d: any) => ({
+      id: d.user_id,
+      email: emailMap.get(d.user_id) ?? '',
+      displayName: d.profiles?.display_name ?? undefined,
+      avatarUrl: d.profiles?.avatar_url ?? undefined,
+      assignedAt: d.granted_at,
+      assignedBy: d.granted_by ?? undefined,
+    }));
 
-// DELETE /api/roles/[id]/users - Remove users from role
-export const DELETE = createRouteHandler(
-  async (request: NextRequest, context: any) => {
-    const { id } = await context.params;
-    try {
-      return await proxyToBackend(request, context, {
-        service: {
-          name: 'user-management',
-          baseUrl: USER_MANAGEMENT_URL,
-          path: `/api/v1/roles/${id}/users`,
-        },
-        requireAuth: true,
-        retry: { maxRetries: 1 },
-        timeout: { write: 10000 },
+    return NextResponse.json({
+      data: { data: users, meta: { total: count ?? 0, page, pageSize } },
+    });
+  } catch (err: any) {
+    return serverError(err.message ?? 'Failed to get role users');
+  }
+}
+
+// POST /api/roles/[id]/users - Bulk assign role to users
+export async function POST(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const auth = await getAuthenticatedAdmin(request);
+  if ('error' in auth) return auth.error;
+  const { user: adminUser, adminClient } = auth;
+  const { id } = await context.params;
+
+  let body: { userIds?: string[] };
+  try {
+    body = await request.json();
+  } catch {
+    return badRequest('Invalid JSON body');
+  }
+  if (!body.userIds || body.userIds.length === 0) return badRequest('userIds is required');
+
+  try {
+    let successCount = 0;
+    const failures: Record<string, string> = {};
+
+    for (const userId of body.userIds) {
+      const { error } = await adminClient.from('user_roles').insert({
+        user_id: userId,
+        role_id: id,
+        granted_by: adminUser.id,
       });
-    } catch (error) {
-      return apiError(error);
+      if (error) {
+        failures[userId] = error.code === '23505' ? 'Already assigned' : error.message;
+      } else {
+        successCount++;
+      }
     }
-  },
-  { method: 'DELETE' }
-);
+
+    await createAuditLog(adminClient, {
+      userId: adminUser.id,
+      action: 'role.bulk_assign',
+      resourceType: 'role',
+      resourceId: id,
+      newValues: { userIds: body.userIds, successCount, failedCount: Object.keys(failures).length },
+      ipAddress: getClientIp(request),
+      userAgent: request.headers.get('user-agent') ?? undefined,
+    });
+
+    return NextResponse.json({
+      data: { successCount, failedCount: Object.keys(failures).length, failures },
+    });
+  } catch (err: any) {
+    return serverError(err.message ?? 'Failed to bulk assign role');
+  }
+}
+
+// DELETE /api/roles/[id]/users - Bulk remove role from users
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const auth = await getAuthenticatedAdmin(request);
+  if ('error' in auth) return auth.error;
+  const { user: adminUser, adminClient } = auth;
+  const { id } = await context.params;
+
+  let body: { userIds?: string[] };
+  try {
+    body = await request.json();
+  } catch {
+    return badRequest('Invalid JSON body');
+  }
+  if (!body.userIds || body.userIds.length === 0) return badRequest('userIds is required');
+
+  try {
+    const { error } = await adminClient
+      .from('user_roles')
+      .delete()
+      .eq('role_id', id)
+      .in('user_id', body.userIds);
+
+    if (error) return serverError(error.message);
+
+    await createAuditLog(adminClient, {
+      userId: adminUser.id,
+      action: 'role.bulk_remove',
+      resourceType: 'role',
+      resourceId: id,
+      newValues: { userIds: body.userIds },
+      ipAddress: getClientIp(request),
+      userAgent: request.headers.get('user-agent') ?? undefined,
+    });
+
+    return NextResponse.json({
+      data: { successCount: body.userIds.length, failedCount: 0, failures: {} },
+    });
+  } catch (err: any) {
+    return serverError(err.message ?? 'Failed to bulk remove role');
+  }
+}

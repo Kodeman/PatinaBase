@@ -1,26 +1,39 @@
-import { NextRequest } from 'next/server';
-import { createRouteHandler, proxyToBackend, apiError } from '@patina/api-routes';
-
-const USER_MANAGEMENT_URL = process.env.USER_MANAGEMENT_SERVICE_URL || 'http://localhost:3010';
+import { NextRequest, NextResponse } from 'next/server';
+import { createAdminClient } from '@patina/supabase';
+import { createServerClient } from '@patina/supabase/server';
+import { mapUserToResponse, serverError } from '@/lib/supabase-admin';
 
 // GET /api/users/me - Get current admin user
-export const GET = createRouteHandler(
-  async (request: NextRequest, context: any) => {
-    try {
-      return await proxyToBackend(request, context, {
-        service: {
-          name: 'user-management',
-          baseUrl: USER_MANAGEMENT_URL,
-          path: '/api/v1/me',
-        },
-        requireAuth: true,
-        retry: { maxRetries: 3 },
-        timeout: { read: 10000 },
-        cache: { maxAge: 60 }, // Short cache for current user
-      });
-    } catch (error) {
-      return apiError(error);
-    }
-  },
-  { method: 'GET' }
-);
+export async function GET(_request: NextRequest) {
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    const adminClient = createAdminClient();
+
+    const [profileRes, rolesRes] = await Promise.all([
+      adminClient.from('profiles').select('display_name, avatar_url').eq('id', user.id).single(),
+      adminClient
+        .from('user_roles')
+        .select('roles!inner(id, name, description, role_permissions(permissions(id, name, description, resource, action)))')
+        .eq('user_id', user.id),
+    ]);
+
+    return NextResponse.json({
+      data: mapUserToResponse(
+        user,
+        profileRes.data,
+        (rolesRes.data ?? []).map((r: any) => r.roles)
+      ),
+    });
+  } catch (err: any) {
+    return serverError(err.message ?? 'Failed to get current user');
+  }
+}
