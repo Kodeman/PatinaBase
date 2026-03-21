@@ -269,11 +269,11 @@ export default function UsersPage() {
             </div>
           )}
 
-          {meta && meta.totalPages > 1 && (
+          {meta && meta.total > meta.pageSize && (
             <div className="flex items-center justify-between mt-4 pt-4 border-t">
               <div className="text-sm text-muted-foreground">
-                Showing {(meta.page - 1) * meta.limit + 1} to{' '}
-                {Math.min(meta.page * meta.limit, meta.total)} of {meta.total} users
+                Showing {(meta.page - 1) * meta.pageSize + 1} to{' '}
+                {Math.min(meta.page * meta.pageSize, meta.total)} of {meta.total} users
               </div>
               <div className="flex gap-2">
                 <Button
@@ -287,7 +287,7 @@ export default function UsersPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={page === meta.totalPages}
+                  disabled={page * meta.pageSize >= meta.total}
                   onClick={() => setPage((p) => p + 1)}
                 >
                   Next
