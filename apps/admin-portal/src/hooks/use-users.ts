@@ -17,10 +17,7 @@ export const userKeys = {
 export function useUser(userId: string) {
   return useQuery({
     queryKey: userKeys.detail(userId),
-    queryFn: async () => {
-      const response = await usersService.getUser(userId);
-      return response.data;
-    },
+    queryFn: () => usersService.getUser(userId),
     enabled: !!userId,
   });
 }
@@ -29,10 +26,7 @@ export function useUser(userId: string) {
 export function useUserSessions(userId: string) {
   return useQuery({
     queryKey: userKeys.sessions(userId),
-    queryFn: async () => {
-      const response = await usersService.getUserSessions(userId);
-      return response.data;
-    },
+    queryFn: () => usersService.getUserSessions(userId),
     enabled: !!userId,
   });
 }
@@ -177,10 +171,7 @@ export function useCreateUser() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: CreateUserRequest) => {
-      const response = await usersService.createUser(data);
-      return response.data;
-    },
+    mutationFn: (data: CreateUserRequest) => usersService.createUser(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: userKeys.lists() });
     },
@@ -192,10 +183,8 @@ export function useUpdateUser() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ userId, data }: { userId: string; data: UpdateUserRequest }) => {
-      const response = await usersService.updateUser(userId, data);
-      return response.data;
-    },
+    mutationFn: ({ userId, data }: { userId: string; data: UpdateUserRequest }) =>
+      usersService.updateUser(userId, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: userKeys.detail(variables.userId) });
       queryClient.invalidateQueries({ queryKey: userKeys.lists() });
@@ -207,10 +196,7 @@ export function useUpdateUser() {
 export function useUserActivity(userId: string, limit = 50, offset = 0) {
   return useQuery({
     queryKey: [...userKeys.activity(userId), { limit, offset }],
-    queryFn: async () => {
-      const response = await usersService.getUserActivity(userId, { limit, offset });
-      return response.data;
-    },
+    queryFn: () => usersService.getUserActivity(userId, { limit, offset }),
     enabled: !!userId,
   });
 }
