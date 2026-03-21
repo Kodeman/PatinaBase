@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
-import { createAdminClient } from '@patina/supabase';
+import { createAdminClient } from '@patina/supabase/client';
 
 // POST /api/me/data-export - Request data export (GDPR)
 export async function POST(_request: NextRequest) {

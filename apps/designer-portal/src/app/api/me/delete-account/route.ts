@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
-import { createAdminClient } from '@patina/supabase';
+import { createAdminClient } from '@patina/supabase/client';
 
 // POST /api/me/delete-account - Request account deletion (30-day grace period)
 export async function POST(request: NextRequest) {

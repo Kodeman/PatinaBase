@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createAdminClient } from '@patina/supabase';
+import { createAdminClient } from '@patina/supabase/client';
 import { createServerClient } from '@patina/supabase/server';
 
 /**

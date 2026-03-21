@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
-import { createAdminClient } from '@patina/supabase';
+import { createAdminClient } from '@patina/supabase/client';
 
 // GET /api/me - Get current user profile with roles
 export async function GET(_request: NextRequest) {
