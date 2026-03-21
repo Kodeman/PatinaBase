@@ -68,8 +68,8 @@ export default function UsersPage() {
       }),
   });
 
-  const users = data?.data?.data || [];
-  const meta = data?.data?.meta;
+  const users = data?.data || [];
+  const meta = data?.meta;
 
   const handleAction = (user: User, action: string) => {
     setSelectedUser(user);

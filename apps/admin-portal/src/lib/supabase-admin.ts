@@ -77,14 +77,14 @@ export function mapUserToResponse(
   let status: 'active' | 'pending' | 'suspended' | 'banned' | 'deleted' = 'active';
   if (authUser.banned_until) {
     const banEnd = new Date(authUser.banned_until);
-    // Supabase uses a far-future date for permanent bans
-    if (banEnd.getFullYear() > 2900) {
+    // Permanent bans use very long durations (876000h = ~100 years)
+    if (banEnd.getFullYear() > 2050) {
       status = 'banned';
     } else {
       status = 'suspended';
     }
   }
-  if (!authUser.email_confirmed_at) {
+  if (!authUser.email_confirmed_at && status === 'active') {
     status = 'pending';
   }
 

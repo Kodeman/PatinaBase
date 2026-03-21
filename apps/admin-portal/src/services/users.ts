@@ -1,5 +1,3 @@
-import { userManagementApi } from '@/lib/api-client';
-const api = userManagementApi as any;
 import type { User, DesignerProfile, Role, PaginatedResponse, ApiResponse } from '@/types';
 
 export interface CreateUserRequest {
@@ -44,16 +42,27 @@ export interface AuditLogResponse {
   };
 }
 
+/** Helper to make JSON API calls to Next.js API routes */
+async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    ...options,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(body.error || `Request failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 export const usersService = {
-  // User Management
-  // Note: Base URL is /api/users, so paths are relative to that
   async getUsers(params?: {
     query?: string;
     status?: string;
     role?: string;
     page?: number;
     pageSize?: number;
-  }): Promise<ApiResponse<PaginatedResponse<User>>> {
+  }): Promise<{ data: User[]; meta: { total: number; page: number; pageSize: number } }> {
     const searchParams = new URLSearchParams();
     if (params?.query) searchParams.append('query', params.query);
     if (params?.status) searchParams.append('status', params.status);
@@ -61,126 +70,133 @@ export const usersService = {
     if (params?.page) searchParams.append('page', params.page.toString());
     if (params?.pageSize) searchParams.append('pageSize', params.pageSize.toString());
 
-    const query = searchParams.toString();
-    return api.get(`/${query ? `?${query}` : ''}`);
+    const qs = searchParams.toString();
+    const json = await apiFetch<{ data: { data: User[]; meta: any } }>(`/api/users${qs ? `?${qs}` : ''}`);
+    return json.data;
   },
 
-  async getUser(userId: string): Promise<ApiResponse<User>> {
-    return api.get(`/${userId}`);
+  async getUser(userId: string): Promise<User> {
+    const json = await apiFetch<{ data: User }>(`/api/users/${userId}`);
+    return json.data;
   },
 
-  async createUser(data: CreateUserRequest): Promise<ApiResponse<CreateUserResponse>> {
-    return api.post('/', data);
+  async createUser(data: CreateUserRequest): Promise<CreateUserResponse> {
+    const json = await apiFetch<{ data: CreateUserResponse }>('/api/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return json.data;
   },
 
-  async updateUser(userId: string, data: UpdateUserRequest): Promise<ApiResponse<User>> {
-    return api.patch(`/${userId}`, data);
+  async updateUser(userId: string, data: UpdateUserRequest): Promise<User> {
+    const json = await apiFetch<{ data: User }>(`/api/users/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return json.data;
   },
 
   async getUserActivity(userId: string, params?: {
     limit?: number;
     offset?: number;
-  }): Promise<ApiResponse<AuditLogResponse>> {
+  }): Promise<AuditLogResponse> {
     const searchParams = new URLSearchParams();
     if (params?.limit) searchParams.append('limit', params.limit.toString());
     if (params?.offset) searchParams.append('offset', params.offset.toString());
-    const query = searchParams.toString();
-    return api.get(`/${userId}/activity${query ? `?${query}` : ''}`);
+    const qs = searchParams.toString();
+    const json = await apiFetch<{ data: AuditLogResponse }>(`/api/users/${userId}/activity${qs ? `?${qs}` : ''}`);
+    return json.data;
   },
 
-  async suspendUser(userId: string, reason?: string): Promise<ApiResponse<void>> {
-    return api.post(`/${userId}/suspend`, { reason });
-  },
-
-  async banUser(userId: string, reason?: string): Promise<ApiResponse<void>> {
-    return api.post(`/${userId}/ban`, { reason });
-  },
-
-  async reactivateUser(userId: string): Promise<ApiResponse<void>> {
-    return api.post(`/${userId}/activate`);
-  },
-
-  async verifyEmail(userId: string): Promise<ApiResponse<void>> {
-    return api.post(`/${userId}/verify-email`);
-  },
-
-  // Role Management - these use a different base path
-  async getRoles(): Promise<ApiResponse<Role[]>> {
-    // Roles endpoint is at /api/roles, not /api/users
-    return fetch('/api/roles').then(r => r.json());
-  },
-
-  async assignRole(userId: string, roleId: string, reason?: string): Promise<ApiResponse<void>> {
-    return api.post(`/${userId}/roles`, { roleId, reason });
-  },
-
-  async revokeRole(userId: string, roleId: string, reason?: string): Promise<ApiResponse<void>> {
-    return api.delete(`/${userId}/roles/${roleId}`, {
+  async suspendUser(userId: string, reason?: string): Promise<void> {
+    await apiFetch(`/api/users/${userId}/suspend`, {
+      method: 'POST',
       body: JSON.stringify({ reason }),
     });
   },
 
-  // Designer Verification - uses admin API routes
+  async banUser(userId: string, reason?: string): Promise<void> {
+    await apiFetch(`/api/users/${userId}/ban`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  },
+
+  async reactivateUser(userId: string): Promise<void> {
+    await apiFetch(`/api/users/${userId}/activate`, { method: 'POST' });
+  },
+
+  async verifyEmail(userId: string): Promise<void> {
+    await apiFetch(`/api/users/${userId}/verify-email`, { method: 'POST' });
+  },
+
+  async getRoles(): Promise<Role[]> {
+    const json = await apiFetch<{ data: Role[] }>('/api/roles');
+    return json.data;
+  },
+
+  async assignRole(userId: string, roleId: string, reason?: string): Promise<void> {
+    await apiFetch(`/api/users/${userId}/roles`, {
+      method: 'POST',
+      body: JSON.stringify({ roleId, reason }),
+    });
+  },
+
+  async revokeRole(userId: string, roleId: string, reason?: string): Promise<void> {
+    await apiFetch(`/api/users/${userId}/roles/${roleId}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ reason }),
+    });
+  },
+
   async getVerificationQueue(params?: {
     status?: string;
     page?: number;
     pageSize?: number;
-  }): Promise<ApiResponse<PaginatedResponse<DesignerProfile>>> {
+  }): Promise<PaginatedResponse<DesignerProfile>> {
     const searchParams = new URLSearchParams();
     if (params?.status) searchParams.append('status', params.status);
     if (params?.page) searchParams.append('page', params.page.toString());
     if (params?.pageSize) searchParams.append('pageSize', params.pageSize.toString());
-
-    return fetch(`/api/admin/verification-queue?${searchParams.toString()}`).then(r => r.json());
+    return apiFetch(`/api/admin/verification-queue?${searchParams.toString()}`);
   },
 
-  async getDesignerProfile(userId: string): Promise<ApiResponse<DesignerProfile>> {
-    return fetch(`/api/designers/${userId}`).then(r => r.json());
+  async getDesignerProfile(userId: string): Promise<DesignerProfile> {
+    const json = await apiFetch<{ data: DesignerProfile }>(`/api/designers/${userId}`);
+    return json.data;
   },
 
-  async approveDesigner(
-    userId: string,
-    notes?: string
-  ): Promise<ApiResponse<void>> {
-    return fetch(`/api/admin/designers/${userId}/decision`, {
+  async approveDesigner(userId: string, notes?: string): Promise<void> {
+    await apiFetch(`/api/admin/designers/${userId}/decision`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'approved', notes }),
-    }).then(r => r.json());
+    });
   },
 
-  async rejectDesigner(
-    userId: string,
-    notes: string
-  ): Promise<ApiResponse<void>> {
-    return fetch(`/api/admin/designers/${userId}/decision`, {
+  async rejectDesigner(userId: string, notes: string): Promise<void> {
+    await apiFetch(`/api/admin/designers/${userId}/decision`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'rejected', notes }),
-    }).then(r => r.json());
+    });
   },
 
-  async requestMoreInfo(
-    userId: string,
-    message: string
-  ): Promise<ApiResponse<void>> {
-    return fetch(`/api/admin/designers/${userId}/request-info`, {
+  async requestMoreInfo(userId: string, message: string): Promise<void> {
+    await apiFetch(`/api/admin/designers/${userId}/request-info`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message }),
-    }).then(r => r.json());
+    });
   },
 
-  // Sessions Management
-  async getUserSessions(userId: string): Promise<ApiResponse<any[]>> {
-    return api.get(`/${userId}/sessions`);
+  async getUserSessions(userId: string): Promise<any[]> {
+    const json = await apiFetch<{ data: any[] }>(`/api/users/${userId}/sessions`);
+    return json.data;
   },
 
-  async revokeSession(userId: string, sessionId: string): Promise<ApiResponse<void>> {
-    return api.delete(`/${userId}/sessions/${sessionId}`);
+  async revokeSession(userId: string, sessionId: string): Promise<void> {
+    await apiFetch(`/api/users/${userId}/sessions/${sessionId}`, { method: 'DELETE' });
   },
 
-  async revokeAllSessions(userId: string): Promise<ApiResponse<void>> {
-    return api.post(`/${userId}/sessions/revoke-all`);
+  async revokeAllSessions(userId: string): Promise<void> {
+    await apiFetch(`/api/users/${userId}/sessions/revoke-all`, { method: 'POST' });
   },
 };
