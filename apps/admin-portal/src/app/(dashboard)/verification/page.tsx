@@ -48,7 +48,7 @@ export default function VerificationPage() {
     },
   });
 
-  const profiles = data?.data?.data || [];
+  const profiles = data?.data || [];
 
   const statuses = [
     { value: 'submitted', label: 'Submitted', count: 5 },
