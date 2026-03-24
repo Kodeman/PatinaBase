@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -44,6 +44,21 @@ import { CreateUserDialog } from '@/components/users/CreateUserDialog';
 import type { User } from '@/types';
 
 export default function UsersPage() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  if (!mounted) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        Loading users...
+      </div>
+    );
+  }
+
+  return <UsersPageContent />;
+}
+
+function UsersPageContent() {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -57,7 +72,7 @@ export default function UsersPage() {
   const [activateDialogOpen, setActivateDialogOpen] = useState(false);
   const [verifyEmailDialogOpen, setVerifyEmailDialogOpen] = useState(false);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['users', { query, status: statusFilter !== 'all' ? statusFilter : undefined, page }],
     queryFn: () =>
       usersService.getUsers({
@@ -151,6 +166,14 @@ export default function UsersPage() {
           {isLoading ? (
             <div className="text-center py-8 text-muted-foreground">
               Loading users...
+            </div>
+          ) : isError ? (
+            <div className="text-center py-8 text-destructive">
+              <AlertCircle className="mx-auto h-8 w-8 mb-2" />
+              <p className="font-medium">Failed to load users</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {error instanceof Error ? error.message : 'An unexpected error occurred'}
+              </p>
             </div>
           ) : users.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">

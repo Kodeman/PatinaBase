@@ -48,7 +48,7 @@ export function createBrowserClient(): SupabaseClient<Database> {
  * Handles cookie operations via request/response
  */
 export function createMiddlewareClient(
-  request: { cookies: { get: (name: string) => { name: string; value: string } | undefined; getAll: () => { name: string; value: string }[] } },
+  request: { cookies: { get: (name: string) => { name: string; value: string } | undefined; getAll: () => { name: string; value: string }[]; set: (name: string, value: string) => void } },
   response: { cookies: { set: (cookie: { name: string; value: string; [key: string]: unknown }) => void } }
 ) {
   return createSSRServerClient<Database>(supabaseUrl, supabaseAnonKey, {
@@ -58,6 +58,9 @@ export function createMiddlewareClient(
       },
       setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
         cookiesToSet.forEach(({ name, value, options }) => {
+          // Set on request so downstream Route Handlers see refreshed tokens
+          request.cookies.set(name, value);
+          // Set on response so the browser stores refreshed tokens
           response.cookies.set({ name, value, ...options });
         });
       },
