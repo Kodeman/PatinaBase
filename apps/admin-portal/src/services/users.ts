@@ -143,7 +143,7 @@ export const usersService = {
   },
 
   async revokeRole(userId: string, roleId: string, reason?: string): Promise<void> {
-    await apiFetch(`/api/users/${userId}/roles/${roleId}`, {
+    await apiFetch(`/api/users/${userId}/roles?roleId=${roleId}`, {
       method: 'DELETE',
       body: JSON.stringify({ reason }),
     });

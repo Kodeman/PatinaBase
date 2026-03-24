@@ -1,12 +1,10 @@
 /**
  * Roles & Permissions Service Layer
  * Handles all API interactions for role and permission management
+ *
+ * Uses direct fetch to Next.js API routes (not the shared api-client,
+ * since these routes are local to the admin portal).
  */
-
-import { userManagementApi } from '@/lib/api-client';
-import type { ApiResponse, PaginatedResponse } from '@/types';
-
-const api = userManagementApi as any;
 
 // =============================================================================
 // Types
@@ -74,6 +72,45 @@ export interface CloneRoleRequest {
   description?: string;
 }
 
+interface PaginatedData<T> {
+  data: T[];
+  meta: { total: number; page: number; pageSize: number };
+}
+
+// =============================================================================
+// Fetch Helpers
+// =============================================================================
+
+class ServiceError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ServiceError';
+    this.status = status;
+  }
+}
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    ...options,
+  });
+
+  if (!res.ok) {
+    let message = `Request failed: ${res.status}`;
+    try {
+      const body = await res.json();
+      message = body.error || body.message || message;
+    } catch {
+      // ignore parse error
+    }
+    throw new ServiceError(message, res.status);
+  }
+
+  const json = await res.json();
+  return json.data as T;
+}
+
 // =============================================================================
 // Roles Service
 // =============================================================================
@@ -83,85 +120,74 @@ export const rolesService = {
   // Role CRUD
   // ==========================================================================
 
-  /**
-   * Get all roles with user and permission counts
-   */
-  async getRoles(): Promise<ApiResponse<Role[]>> {
-    return api.get('/v1/roles');
+  async getRoles(): Promise<Role[]> {
+    return request<Role[]>('/api/roles');
   },
 
-  /**
-   * Get a single role by ID
-   */
-  async getRole(roleId: string): Promise<ApiResponse<Role>> {
-    return api.get(`/v1/roles/${roleId}`);
+  async getRole(roleId: string): Promise<Role> {
+    return request<Role>(`/api/roles/${roleId}`);
   },
 
-  /**
-   * Create a new custom role
-   */
-  async createRole(data: CreateRoleRequest): Promise<ApiResponse<Role>> {
-    return api.post('/v1/roles', data);
+  async createRole(data: CreateRoleRequest): Promise<Role> {
+    return request<Role>('/api/roles', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 
-  /**
-   * Update a role (custom roles only)
-   */
-  async updateRole(roleId: string, data: UpdateRoleRequest): Promise<ApiResponse<Role>> {
-    return api.put(`/v1/roles/${roleId}`, data);
+  async updateRole(roleId: string, data: UpdateRoleRequest): Promise<Role> {
+    return request<Role>(`/api/roles/${roleId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   },
 
-  /**
-   * Delete a role (custom roles only)
-   */
-  async deleteRole(roleId: string, force = false): Promise<ApiResponse<{ success: boolean; deletedRole: string; usersAffected: number }>> {
-    return api.delete(`/v1/roles/${roleId}?force=${force}`);
+  async deleteRole(
+    roleId: string,
+    force = false
+  ): Promise<{ success: boolean; deletedRole: string; usersAffected: number }> {
+    return request(`/api/roles/${roleId}?force=${force}`, {
+      method: 'DELETE',
+    });
   },
 
-  /**
-   * Clone an existing role (including system roles)
-   */
-  async cloneRole(sourceRoleId: string, data: CloneRoleRequest): Promise<ApiResponse<Role>> {
-    return api.post(`/v1/roles/${sourceRoleId}/clone`, data);
+  async cloneRole(sourceRoleId: string, data: CloneRoleRequest): Promise<Role> {
+    return request<Role>(`/api/roles/${sourceRoleId}/clone`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 
   // ==========================================================================
   // Permission Management
   // ==========================================================================
 
-  /**
-   * Get all permissions (flat list)
-   */
-  async getPermissions(): Promise<ApiResponse<Permission[]>> {
-    return api.get('/v1/permissions');
+  async getPermissions(): Promise<GroupedPermissionsResponse> {
+    // The single /api/permissions route returns grouped data
+    return request<GroupedPermissionsResponse>('/api/permissions');
   },
 
-  /**
-   * Get all permissions grouped by domain
-   */
-  async getPermissionsGrouped(): Promise<ApiResponse<GroupedPermissionsResponse>> {
-    return api.get('/v1/permissions/grouped');
+  async getPermissionsGrouped(): Promise<GroupedPermissionsResponse> {
+    return request<GroupedPermissionsResponse>('/api/permissions');
   },
 
-  /**
-   * Replace all permissions on a role
-   */
-  async replacePermissions(roleId: string, permissionIds: string[]): Promise<ApiResponse<Role>> {
-    return api.put(`/v1/roles/${roleId}/permissions`, { permissionIds });
+  async replacePermissions(roleId: string, permissionIds: string[]): Promise<Role> {
+    return request<Role>(`/api/roles/${roleId}/permissions`, {
+      method: 'PUT',
+      body: JSON.stringify({ permissionIds }),
+    });
   },
 
-  /**
-   * Add permissions to a role
-   */
-  async addPermissions(roleId: string, permissionIds: string[]): Promise<ApiResponse<Role>> {
-    return api.post(`/v1/roles/${roleId}/permissions`, { permissionIds });
+  async addPermissions(roleId: string, permissionIds: string[]): Promise<Role> {
+    return request<Role>(`/api/roles/${roleId}/permissions`, {
+      method: 'POST',
+      body: JSON.stringify({ permissionIds }),
+    });
   },
 
-  /**
-   * Remove permissions from a role
-   */
-  async removePermissions(roleId: string, permissionIds: string[]): Promise<ApiResponse<Role>> {
-    return api.delete(`/v1/roles/${roleId}/permissions`, {
+  async removePermissions(roleId: string, permissionIds: string[]): Promise<Role> {
+    return request<Role>(`/api/roles/${roleId}/permissions`, {
+      method: 'DELETE',
       body: JSON.stringify({ permissionIds }),
     });
   },
@@ -170,49 +196,45 @@ export const rolesService = {
   // User Assignment
   // ==========================================================================
 
-  /**
-   * Get users assigned to a role
-   */
   async getUsersForRole(
     roleId: string,
     params?: { page?: number; pageSize?: number }
-  ): Promise<ApiResponse<PaginatedResponse<RoleUser>>> {
+  ): Promise<PaginatedData<RoleUser>> {
     const searchParams = new URLSearchParams();
     if (params?.page) searchParams.append('page', params.page.toString());
     if (params?.pageSize) searchParams.append('pageSize', params.pageSize.toString());
 
     const query = searchParams.toString();
-    return api.get(`/v1/roles/${roleId}/users${query ? `?${query}` : ''}`);
+    return request<PaginatedData<RoleUser>>(
+      `/api/roles/${roleId}/users${query ? `?${query}` : ''}`
+    );
   },
 
-  /**
-   * Bulk assign a role to multiple users
-   */
-  async bulkAssignRole(roleId: string, userIds: string[]): Promise<ApiResponse<BulkOperationResult>> {
-    return api.post(`/v1/roles/${roleId}/users`, { userIds });
-  },
-
-  /**
-   * Bulk remove a role from multiple users
-   */
-  async bulkRemoveRole(roleId: string, userIds: string[]): Promise<ApiResponse<BulkOperationResult>> {
-    return api.delete(`/v1/roles/${roleId}/users`, {
+  async bulkAssignRole(roleId: string, userIds: string[]): Promise<BulkOperationResult> {
+    return request<BulkOperationResult>(`/api/roles/${roleId}/users`, {
+      method: 'POST',
       body: JSON.stringify({ userIds }),
     });
   },
 
-  /**
-   * Assign a single role to a user
-   */
-  async assignRoleToUser(userId: string, roleId: string): Promise<ApiResponse<void>> {
-    return api.post(`/v1/users/${userId}/roles`, { roleId });
+  async bulkRemoveRole(roleId: string, userIds: string[]): Promise<BulkOperationResult> {
+    return request<BulkOperationResult>(`/api/roles/${roleId}/users`, {
+      method: 'DELETE',
+      body: JSON.stringify({ userIds }),
+    });
   },
 
-  /**
-   * Remove a single role from a user
-   */
-  async removeRoleFromUser(userId: string, roleId: string): Promise<ApiResponse<void>> {
-    return api.delete(`/v1/users/${userId}/roles/${roleId}`);
+  async assignRoleToUser(userId: string, roleId: string): Promise<void> {
+    await request<{ success: boolean }>(`/api/users/${userId}/roles`, {
+      method: 'POST',
+      body: JSON.stringify({ roleId }),
+    });
+  },
+
+  async removeRoleFromUser(userId: string, roleId: string): Promise<void> {
+    await request<{ success: boolean }>(`/api/users/${userId}/roles?roleId=${roleId}`, {
+      method: 'DELETE',
+    });
   },
 };
 

@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import {
   AlertCircle,
   BarChart3,
+  ClipboardList,
   FileText,
   Flag,
   Image,
@@ -25,6 +26,7 @@ const navigation: Array<{ name: string; href: string; icon: any }> = [
   { name: 'Users', href: '/users', icon: Users },
   { name: 'User Lifecycle Demo', href: '/users/demo', icon: Sparkles },
   { name: 'Designer Verification', href: '/verification', icon: Shield },
+  { name: 'Waitlist', href: '/waitlist', icon: ClipboardList },
   { name: 'Roles & Permissions', href: '/roles', icon: KeyRound },
   { name: 'Catalog', href: '/catalog', icon: Package },
   { name: 'Media', href: '/media', icon: Image },

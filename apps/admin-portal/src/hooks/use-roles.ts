@@ -6,7 +6,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rolesService } from '@/services/roles';
 import type {
   Role,
-  Permission,
   GroupedPermissionsResponse,
   RoleUser,
   BulkOperationResult,
@@ -14,7 +13,6 @@ import type {
   UpdateRoleRequest,
   CloneRoleRequest,
 } from '@/services/roles';
-import type { PaginatedResponse } from '@/types';
 
 // =============================================================================
 // Query Keys
@@ -47,10 +45,7 @@ export const permissionKeys = {
 export function useRoles() {
   return useQuery({
     queryKey: roleKeys.lists(),
-    queryFn: async () => {
-      const response = await rolesService.getRoles();
-      return response.data;
-    },
+    queryFn: () => rolesService.getRoles(),
   });
 }
 
@@ -60,10 +55,7 @@ export function useRoles() {
 export function useRole(roleId: string) {
   return useQuery({
     queryKey: roleKeys.detail(roleId),
-    queryFn: async () => {
-      const response = await rolesService.getRole(roleId);
-      return response.data;
-    },
+    queryFn: () => rolesService.getRole(roleId),
     enabled: !!roleId,
   });
 }
@@ -74,10 +66,7 @@ export function useRole(roleId: string) {
 export function useRoleUsers(roleId: string, page = 1, pageSize = 20) {
   return useQuery({
     queryKey: roleKeys.usersPage(roleId, page, pageSize),
-    queryFn: async () => {
-      const response = await rolesService.getUsersForRole(roleId, { page, pageSize });
-      return response.data as PaginatedResponse<RoleUser>;
-    },
+    queryFn: () => rolesService.getUsersForRole(roleId, { page, pageSize }),
     enabled: !!roleId,
   });
 }
@@ -92,10 +81,7 @@ export function useRoleUsers(roleId: string, page = 1, pageSize = 20) {
 export function usePermissions() {
   return useQuery({
     queryKey: permissionKeys.list(),
-    queryFn: async () => {
-      const response = await rolesService.getPermissions();
-      return response.data;
-    },
+    queryFn: () => rolesService.getPermissions(),
   });
 }
 
@@ -105,10 +91,7 @@ export function usePermissions() {
 export function usePermissionsGrouped() {
   return useQuery({
     queryKey: permissionKeys.grouped(),
-    queryFn: async () => {
-      const response = await rolesService.getPermissionsGrouped();
-      return response.data;
-    },
+    queryFn: () => rolesService.getPermissionsGrouped(),
   });
 }
 
@@ -123,10 +106,7 @@ export function useCreateRole() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: CreateRoleRequest) => {
-      const response = await rolesService.createRole(data);
-      return response.data;
-    },
+    mutationFn: (data: CreateRoleRequest) => rolesService.createRole(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: roleKeys.lists() });
     },
@@ -140,10 +120,8 @@ export function useUpdateRole() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ roleId, data }: { roleId: string; data: UpdateRoleRequest }) => {
-      const response = await rolesService.updateRole(roleId, data);
-      return response.data;
-    },
+    mutationFn: ({ roleId, data }: { roleId: string; data: UpdateRoleRequest }) =>
+      rolesService.updateRole(roleId, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: roleKeys.detail(variables.roleId) });
       queryClient.invalidateQueries({ queryKey: roleKeys.lists() });
@@ -158,10 +136,8 @@ export function useDeleteRole() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ roleId, force = false }: { roleId: string; force?: boolean }) => {
-      const response = await rolesService.deleteRole(roleId, force);
-      return response.data;
-    },
+    mutationFn: ({ roleId, force = false }: { roleId: string; force?: boolean }) =>
+      rolesService.deleteRole(roleId, force),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: roleKeys.detail(variables.roleId) });
       queryClient.invalidateQueries({ queryKey: roleKeys.lists() });
@@ -176,10 +152,8 @@ export function useCloneRole() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ sourceRoleId, data }: { sourceRoleId: string; data: CloneRoleRequest }) => {
-      const response = await rolesService.cloneRole(sourceRoleId, data);
-      return response.data;
-    },
+    mutationFn: ({ sourceRoleId, data }: { sourceRoleId: string; data: CloneRoleRequest }) =>
+      rolesService.cloneRole(sourceRoleId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: roleKeys.lists() });
     },
@@ -197,10 +171,8 @@ export function useReplacePermissions() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ roleId, permissionIds }: { roleId: string; permissionIds: string[] }) => {
-      const response = await rolesService.replacePermissions(roleId, permissionIds);
-      return response.data;
-    },
+    mutationFn: ({ roleId, permissionIds }: { roleId: string; permissionIds: string[] }) =>
+      rolesService.replacePermissions(roleId, permissionIds),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: roleKeys.detail(variables.roleId) });
       queryClient.invalidateQueries({ queryKey: roleKeys.lists() });
@@ -215,10 +187,8 @@ export function useAddPermissions() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ roleId, permissionIds }: { roleId: string; permissionIds: string[] }) => {
-      const response = await rolesService.addPermissions(roleId, permissionIds);
-      return response.data;
-    },
+    mutationFn: ({ roleId, permissionIds }: { roleId: string; permissionIds: string[] }) =>
+      rolesService.addPermissions(roleId, permissionIds),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: roleKeys.detail(variables.roleId) });
       queryClient.invalidateQueries({ queryKey: roleKeys.lists() });
@@ -233,10 +203,8 @@ export function useRemovePermissions() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ roleId, permissionIds }: { roleId: string; permissionIds: string[] }) => {
-      const response = await rolesService.removePermissions(roleId, permissionIds);
-      return response.data;
-    },
+    mutationFn: ({ roleId, permissionIds }: { roleId: string; permissionIds: string[] }) =>
+      rolesService.removePermissions(roleId, permissionIds),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: roleKeys.detail(variables.roleId) });
       queryClient.invalidateQueries({ queryKey: roleKeys.lists() });
@@ -255,10 +223,8 @@ export function useBulkAssignRole() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ roleId, userIds }: { roleId: string; userIds: string[] }) => {
-      const response = await rolesService.bulkAssignRole(roleId, userIds);
-      return response.data;
-    },
+    mutationFn: ({ roleId, userIds }: { roleId: string; userIds: string[] }) =>
+      rolesService.bulkAssignRole(roleId, userIds),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: roleKeys.detail(variables.roleId) });
       queryClient.invalidateQueries({ queryKey: roleKeys.users(variables.roleId) });
@@ -274,10 +240,8 @@ export function useBulkRemoveRole() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ roleId, userIds }: { roleId: string; userIds: string[] }) => {
-      const response = await rolesService.bulkRemoveRole(roleId, userIds);
-      return response.data;
-    },
+    mutationFn: ({ roleId, userIds }: { roleId: string; userIds: string[] }) =>
+      rolesService.bulkRemoveRole(roleId, userIds),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: roleKeys.detail(variables.roleId) });
       queryClient.invalidateQueries({ queryKey: roleKeys.users(variables.roleId) });
@@ -293,14 +257,12 @@ export function useAssignRoleToUser() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ userId, roleId }: { userId: string; roleId: string }) => {
-      await rolesService.assignRoleToUser(userId, roleId);
-    },
+    mutationFn: ({ userId, roleId }: { userId: string; roleId: string }) =>
+      rolesService.assignRoleToUser(userId, roleId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: roleKeys.detail(variables.roleId) });
       queryClient.invalidateQueries({ queryKey: roleKeys.users(variables.roleId) });
       queryClient.invalidateQueries({ queryKey: roleKeys.lists() });
-      // Also invalidate user queries
       queryClient.invalidateQueries({ queryKey: ['users', 'detail', variables.userId] });
     },
   });
@@ -313,14 +275,12 @@ export function useRemoveRoleFromUser() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ userId, roleId }: { userId: string; roleId: string }) => {
-      await rolesService.removeRoleFromUser(userId, roleId);
-    },
+    mutationFn: ({ userId, roleId }: { userId: string; roleId: string }) =>
+      rolesService.removeRoleFromUser(userId, roleId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: roleKeys.detail(variables.roleId) });
       queryClient.invalidateQueries({ queryKey: roleKeys.users(variables.roleId) });
       queryClient.invalidateQueries({ queryKey: roleKeys.lists() });
-      // Also invalidate user queries
       queryClient.invalidateQueries({ queryKey: ['users', 'detail', variables.userId] });
     },
   });

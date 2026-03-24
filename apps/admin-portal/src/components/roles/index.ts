@@ -3,3 +3,4 @@ export { RoleFormDialog } from './RoleFormDialog';
 export { CloneRoleDialog } from './CloneRoleDialog';
 export { DeleteRoleDialog } from './DeleteRoleDialog';
 export { PermissionGrid } from './PermissionGrid';
+export { AddUsersToRoleDialog } from './AddUsersToRoleDialog';

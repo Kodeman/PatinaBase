@@ -1,8 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Shield, Users, Key, Pencil, Copy, Trash2, Lock, Loader2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Shield,
+  Users,
+  Key,
+  Pencil,
+  Copy,
+  Trash2,
+  Lock,
+  Loader2,
+  UserPlus,
+  UserMinus,
+  Save,
+  RotateCcw,
+} from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,19 +37,28 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { useRole, useRoleUsers, usePermissionsGrouped } from '@/hooks/use-roles';
+import { useToast } from '@/components/ui/use-toast';
+import {
+  useRole,
+  useRoleUsers,
+  usePermissionsGrouped,
+  useReplacePermissions,
+  useBulkRemoveRole,
+} from '@/hooks/use-roles';
 import {
   RoleFormDialog,
   CloneRoleDialog,
   DeleteRoleDialog,
   PermissionGrid,
 } from '@/components/roles';
+import { AddUsersToRoleDialog } from '@/components/roles/AddUsersToRoleDialog';
 import type { Role } from '@/services/roles';
 
 export default function RoleDetailPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { toast } = useToast();
   const roleId = params.roleId as string;
 
   const initialTab = searchParams.get('tab') || 'permissions';
@@ -45,11 +68,82 @@ export default function RoleDetailPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isAddUsersDialogOpen, setIsAddUsersDialogOpen] = useState(false);
+
+  // Permission editing state
+  const [editedPermissions, setEditedPermissions] = useState<Set<string> | null>(null);
 
   // Queries
   const { data: role, isLoading: isLoadingRole, error: roleError } = useRole(roleId);
   const { data: usersData, isLoading: isLoadingUsers } = useRoleUsers(roleId, 1, 50);
   const { data: permissionsData, isLoading: isLoadingPermissions } = usePermissionsGrouped();
+
+  // Mutations
+  const replacePermissionsMutation = useReplacePermissions();
+  const bulkRemoveMutation = useBulkRemoveRole();
+
+  // Original permission IDs from the role
+  const originalPermissionIds = useMemo(
+    () => new Set(role?.permissions?.map((p) => p.id) || []),
+    [role?.permissions]
+  );
+
+  // Reset edited permissions when role data changes
+  useEffect(() => {
+    setEditedPermissions(null);
+  }, [role?.permissions]);
+
+  // The permissions currently shown in the grid
+  const displayedPermissions = editedPermissions ?? originalPermissionIds;
+
+  // Whether permissions have been changed
+  const hasPermissionChanges = useMemo(() => {
+    if (!editedPermissions) return false;
+    if (editedPermissions.size !== originalPermissionIds.size) return true;
+    for (const id of editedPermissions) {
+      if (!originalPermissionIds.has(id)) return true;
+    }
+    return false;
+  }, [editedPermissions, originalPermissionIds]);
+
+  const handlePermissionChange = useCallback((selected: Set<string>) => {
+    setEditedPermissions(selected);
+  }, []);
+
+  const handleSavePermissions = async () => {
+    if (!editedPermissions) return;
+    try {
+      await replacePermissionsMutation.mutateAsync({
+        roleId,
+        permissionIds: Array.from(editedPermissions),
+      });
+      toast({ title: 'Permissions updated', description: 'Role permissions have been saved.' });
+      setEditedPermissions(null);
+    } catch (error: any) {
+      toast({
+        title: 'Failed to update permissions',
+        description: error.message || 'An error occurred',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleResetPermissions = () => {
+    setEditedPermissions(null);
+  };
+
+  const handleRemoveUser = async (userId: string) => {
+    try {
+      await bulkRemoveMutation.mutateAsync({ roleId, userIds: [userId] });
+      toast({ title: 'User removed', description: 'User has been removed from this role.' });
+    } catch (error: any) {
+      toast({
+        title: 'Failed to remove user',
+        description: error.message || 'An error occurred',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const formatRoleName = (name: string) => {
     return name
@@ -91,8 +185,7 @@ export default function RoleDetailPage() {
     );
   }
 
-  // Get selected permission IDs for the grid
-  const selectedPermissionIds = new Set(role.permissions?.map((p) => p.id) || []);
+  const canEditPermissions = !role.isSystem;
 
   return (
     <div className="space-y-6 p-6">
@@ -208,12 +301,41 @@ export default function RoleDetailPage() {
         <TabsContent value="permissions" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Assigned Permissions</CardTitle>
-              <CardDescription>
-                {role.isSystem
-                  ? 'View the permissions assigned to this system role.'
-                  : 'Manage the permissions assigned to this role.'}
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Assigned Permissions</CardTitle>
+                  <CardDescription>
+                    {role.isSystem
+                      ? 'View the permissions assigned to this system role.'
+                      : 'Manage the permissions assigned to this role.'}
+                  </CardDescription>
+                </div>
+                {canEditPermissions && hasPermissionChanges && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleResetPermissions}
+                      disabled={replacePermissionsMutation.isPending}
+                    >
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                      Reset
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSavePermissions}
+                      disabled={replacePermissionsMutation.isPending}
+                    >
+                      {replacePermissionsMutation.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="mr-2 h-4 w-4" />
+                      )}
+                      Save Changes
+                    </Button>
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {isLoadingPermissions ? (
@@ -223,9 +345,10 @@ export default function RoleDetailPage() {
               ) : permissionsData?.groups ? (
                 <PermissionGrid
                   groups={permissionsData.groups}
-                  selectedPermissions={selectedPermissionIds}
-                  onSelectionChange={() => {}}
-                  readOnly
+                  selectedPermissions={displayedPermissions}
+                  onSelectionChange={handlePermissionChange}
+                  readOnly={!canEditPermissions}
+                  disabled={replacePermissionsMutation.isPending}
                 />
               ) : (
                 <div className="py-8 text-center text-muted-foreground">
@@ -239,10 +362,18 @@ export default function RoleDetailPage() {
         <TabsContent value="users" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Assigned Users</CardTitle>
-              <CardDescription>
-                Users who have been assigned this role.
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Assigned Users</CardTitle>
+                  <CardDescription>
+                    Users who have been assigned this role.
+                  </CardDescription>
+                </div>
+                <Button size="sm" onClick={() => setIsAddUsersDialogOpen(true)}>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Add Users
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {isLoadingUsers ? (
@@ -257,6 +388,7 @@ export default function RoleDetailPage() {
                       <TableHead>Email</TableHead>
                       <TableHead>Assigned</TableHead>
                       <TableHead>Assigned By</TableHead>
+                      <TableHead className="w-[80px]" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -281,6 +413,24 @@ export default function RoleDetailPage() {
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {user.assignedBy || 'System'}
+                        </TableCell>
+                        <TableCell>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                  onClick={() => handleRemoveUser(user.id)}
+                                  disabled={bulkRemoveMutation.isPending}
+                                >
+                                  <UserMinus className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Remove user from role</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -315,6 +465,14 @@ export default function RoleDetailPage() {
         onOpenChange={setIsDeleteDialogOpen}
         role={role}
         onSuccess={() => router.push('/roles')}
+      />
+
+      <AddUsersToRoleDialog
+        open={isAddUsersDialogOpen}
+        onOpenChange={setIsAddUsersDialogOpen}
+        roleId={roleId}
+        roleName={formatRoleName(role.name)}
+        existingUserIds={usersData?.data?.map((u) => u.id) || []}
       />
     </div>
   );
