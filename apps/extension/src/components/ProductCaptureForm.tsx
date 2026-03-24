@@ -20,6 +20,8 @@ import { VendorCard } from './VendorCard';
 import { VendorSelector } from './VendorSelector';
 import { VendorInlineForm } from './VendorInlineForm';
 import { TradePricing } from './TradePricing';
+import { EditableDetails } from './EditableDetails';
+import type { EditableDimensions } from './EditableDetails';
 import type { ValidationResult } from '../lib/capture-validation';
 
 interface ProductCaptureFormProps {
@@ -67,6 +69,17 @@ interface ProductCaptureFormProps {
   searchVendors: (query: string) => Promise<VendorSummaryForCapture[]>;
   // Validation
   validation: ValidationResult | null;
+  // Editable details
+  editedDescription: string;
+  setEditedDescription: (v: string) => void;
+  editedMaterials: string[];
+  setEditedMaterials: (v: string[]) => void;
+  editedColors: string[];
+  setEditedColors: (v: string[]) => void;
+  editedFinish: string;
+  setEditedFinish: (v: string) => void;
+  editedDimensions: EditableDimensions;
+  setEditedDimensions: (v: EditableDimensions) => void;
 }
 
 export function ProductCaptureForm({
@@ -110,6 +123,16 @@ export function ProductCaptureForm({
   createVendorInline,
   searchVendors,
   validation,
+  editedDescription,
+  setEditedDescription,
+  editedMaterials,
+  setEditedMaterials,
+  editedColors,
+  setEditedColors,
+  editedFinish,
+  setEditedFinish,
+  editedDimensions,
+  setEditedDimensions,
 }: ProductCaptureFormProps) {
   const fieldError = (field: string) =>
     validation?.errors.find(e => e.field === field)?.message ?? null;
@@ -192,65 +215,20 @@ export function ProductCaptureForm({
         userId={userId}
       />
 
-      {/* Extracted details (colors, finish, dimensions) */}
-      {(extractedData.colors?.length || extractedData.finish || extractedData.dimensions) && (
-        <div className="p-3 bg-patina-clay-beige/10 rounded-lg border border-patina-clay-beige/30 space-y-2">
-          <p className="text-xs font-medium text-patina-charcoal/70 uppercase tracking-wide">Extracted Details</p>
-
-          {/* Colors */}
-          {extractedData.colors && extractedData.colors.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              <span className="text-xs text-patina-mocha-brown">Colors:</span>
-              {extractedData.colors.map((color, i) => (
-                <span key={i} className="px-2 py-0.5 bg-patina-clay-beige/30 rounded text-xs text-patina-charcoal">
-                  {color.name}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Finish */}
-          {extractedData.finish && (
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-patina-mocha-brown">Finish:</span>
-              <span className="px-2 py-0.5 bg-patina-clay-beige/30 rounded text-xs text-patina-charcoal">
-                {extractedData.finish.name}
-              </span>
-            </div>
-          )}
-
-          {/* Dimensions */}
-          {extractedData.dimensions && (
-            <div className="text-xs text-patina-charcoal space-y-1">
-              {/* Overall */}
-              {(extractedData.dimensions.width || extractedData.dimensions.height || extractedData.dimensions.depth) && (
-                <div>
-                  <span className="text-patina-mocha-brown">Size: </span>
-                  {[
-                    extractedData.dimensions.width && `W: ${extractedData.dimensions.width}"`,
-                    extractedData.dimensions.height && `H: ${extractedData.dimensions.height}"`,
-                    extractedData.dimensions.depth && `D: ${extractedData.dimensions.depth}"`,
-                  ].filter(Boolean).join(' × ')}
-                </div>
-              )}
-              {/* Specialty dimensions */}
-              {(extractedData.dimensions.seatHeight || extractedData.dimensions.seatDepth || extractedData.dimensions.armHeight) && (
-                <div className="flex flex-wrap gap-2">
-                  {extractedData.dimensions.seatHeight && (
-                    <span>Seat H: {extractedData.dimensions.seatHeight}"</span>
-                  )}
-                  {extractedData.dimensions.seatDepth && (
-                    <span>Seat D: {extractedData.dimensions.seatDepth}"</span>
-                  )}
-                  {extractedData.dimensions.armHeight && (
-                    <span>Arm H: {extractedData.dimensions.armHeight}"</span>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Editable details (description, materials, colors, finish, dimensions) */}
+      <EditableDetails
+        description={editedDescription}
+        setDescription={setEditedDescription}
+        materials={editedMaterials}
+        setMaterials={setEditedMaterials}
+        colors={editedColors}
+        setColors={setEditedColors}
+        finish={editedFinish}
+        setFinish={setEditedFinish}
+        dimensions={editedDimensions}
+        setDimensions={setEditedDimensions}
+        setHasInteracted={setHasInteracted}
+      />
 
       {/* Manufacturer */}
       <div className="relative">

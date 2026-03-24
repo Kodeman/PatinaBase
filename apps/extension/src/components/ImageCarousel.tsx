@@ -93,6 +93,14 @@ export function ImageCarousel({ images, selectedIndex, onSelect }: ImageCarousel
           </>
         )}
 
+        {/* Hero badge */}
+        <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 bg-patina-mocha-brown/85 rounded-full text-white text-xs">
+          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+          </svg>
+          Hero
+        </div>
+
         {/* Image counter */}
         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black/50 rounded-full text-white text-xs">
           {selectedIndex + 1} / {images.length}
@@ -106,7 +114,7 @@ export function ImageCarousel({ images, selectedIndex, onSelect }: ImageCarousel
             <button
               key={index}
               onClick={() => onSelect(index)}
-              className={`flex-shrink-0 w-12 h-12 rounded overflow-hidden border-2 transition-all
+              className={`relative flex-shrink-0 w-12 h-12 rounded overflow-hidden border-2 transition-all
                        ${index === selectedIndex ? 'border-patina-mocha-brown shadow-patina-sm' : 'border-transparent hover:border-patina-clay-beige'}`}
             >
               {loadErrors.has(index) ? (
@@ -118,6 +126,13 @@ export function ImageCarousel({ images, selectedIndex, onSelect }: ImageCarousel
                   className="w-full h-full object-cover"
                   onError={() => handleImageError(index)}
                 />
+              )}
+              {index === selectedIndex && (
+                <div className="absolute top-0 right-0 w-4 h-4 bg-patina-mocha-brown rounded-bl flex items-center justify-center">
+                  <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                  </svg>
+                </div>
               )}
             </button>
           ))}

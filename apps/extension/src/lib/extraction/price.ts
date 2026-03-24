@@ -30,17 +30,31 @@ const PRICE_PATTERNS = [
   /(?:price|cost|total)[:\s]*\$?\s*([\d,]+\.\d{2})/i,
 ];
 
-// Selectors commonly used for prices
+// Range price pattern: $1,200 - $1,800 or $1,200-$1,800 or From $1,200
+const RANGE_PRICE_PATTERN = /\$\s*([\d,]+(?:\.\d{2})?)\s*[-–—]\s*\$\s*([\d,]+(?:\.\d{2})?)/;
+const FROM_PRICE_PATTERN = /(?:from|starting\s+at)\s+\$\s*([\d,]+(?:\.\d{2})?)/i;
+
+// Selectors that indicate original/struck-through prices (skip these)
+const SKIP_PRICE_CLASSES = [
+  'was', 'compare', 'original', 'regular', 'list-price', 'strikethrough',
+  'crossed-out', 'old-price', 'msrp', 'retail-price',
+];
+
+// Selectors commonly used for prices (sale/current prices first for priority)
 const PRICE_SELECTORS = [
   '[data-price]',
   '[itemprop="price"]',
-  '[class*="price"]:not([class*="compare"]):not([class*="was"]):not([class*="original"])',
-  '.product-price',
-  '.current-price',
-  '#price',
-  '[data-product-price]',
   '.sale-price',
   '.final-price',
+  '.current-price',
+  '[class*="sale-price"]',
+  '[class*="special-price"]',
+  '[class*="current-price"]',
+  '[class*="offer-price"]',
+  '[class*="price"]:not([class*="compare"]):not([class*="was"]):not([class*="original"]):not([class*="regular"]):not([class*="list-price"]):not([class*="strikethrough"])',
+  '.product-price',
+  '#price',
+  '[data-product-price]',
 ];
 
 /**
@@ -87,11 +101,30 @@ function extractPriceFromString(text: string): ExtractedPrice | null {
  * Extract price from DOM elements
  */
 export function extractPriceFromDOM(): ExtractedPrice | null {
+  // Check meta tags first (Shopify and many platforms emit these)
+  const metaPrice = document.querySelector('meta[property="product:price:amount"]')?.getAttribute('content');
+  const metaCurrency = document.querySelector('meta[property="product:price:currency"]')?.getAttribute('content');
+  if (metaPrice) {
+    const value = parseFloat(metaPrice);
+    if (!isNaN(value) && value > 0) {
+      console.log(`[Patina] Price from meta tag: ${value} ${metaCurrency || 'USD'}`);
+      return {
+        value: Math.round(value * 100),
+        currency: metaCurrency || 'USD',
+        raw: metaPrice,
+      };
+    }
+  }
+
   // Try specific selectors first
   for (const selector of PRICE_SELECTORS) {
     try {
       const elements = document.querySelectorAll(selector);
       for (const el of elements) {
+        // Skip elements that look like original/was prices
+        const className = (el.className || '').toLowerCase();
+        if (SKIP_PRICE_CLASSES.some(cls => className.includes(cls))) continue;
+
         // Check data attributes first
         const dataPrice = el.getAttribute('data-price') ||
                          el.getAttribute('data-product-price') ||
@@ -110,6 +143,32 @@ export function extractPriceFromDOM(): ExtractedPrice | null {
         // Check text content
         const text = el.textContent?.trim();
         if (text) {
+          // Check for range prices first
+          const rangeMatch = text.match(RANGE_PRICE_PATTERN);
+          if (rangeMatch) {
+            const lowValue = parseFloat(rangeMatch[1].replace(/,/g, ''));
+            if (!isNaN(lowValue) && lowValue > 0) {
+              return {
+                value: Math.round(lowValue * 100),
+                currency: 'USD',
+                raw: rangeMatch[0],
+              };
+            }
+          }
+
+          // Check for "From $X" pattern
+          const fromMatch = text.match(FROM_PRICE_PATTERN);
+          if (fromMatch) {
+            const fromValue = parseFloat(fromMatch[1].replace(/,/g, ''));
+            if (!isNaN(fromValue) && fromValue > 0) {
+              return {
+                value: Math.round(fromValue * 100),
+                currency: 'USD',
+                raw: fromMatch[0],
+              };
+            }
+          }
+
           const price = extractPriceFromString(text);
           if (price) return price;
         }
@@ -135,6 +194,15 @@ export function extractPriceFromDOM(): ExtractedPrice | null {
   const bodyText = document.body.innerText;
   const lines = bodyText.split('\n').slice(0, 100); // Limit to first 100 lines
   for (const line of lines) {
+    // Try range prices in body text
+    const rangeMatch = line.match(RANGE_PRICE_PATTERN);
+    if (rangeMatch) {
+      const lowValue = parseFloat(rangeMatch[1].replace(/,/g, ''));
+      if (!isNaN(lowValue) && lowValue >= 1 && lowValue <= 100000) {
+        return { value: Math.round(lowValue * 100), currency: 'USD', raw: rangeMatch[0] };
+      }
+    }
+
     const price = extractPriceFromString(line);
     if (price && price.value >= 100 && price.value <= 10000000) { // $1 - $100,000
       return price;

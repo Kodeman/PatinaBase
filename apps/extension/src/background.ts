@@ -163,6 +163,7 @@ async function syncQueue(): Promise<void> {
           price_retail: priceRetail,
           captured_by: session.user.id,
           captured_at: new Date().toISOString(),
+          status: 'published',
         }).select('id').single();
 
         if (error) throw error;

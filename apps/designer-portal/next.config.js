@@ -171,6 +171,21 @@ const nextConfig = {
         pathname: '/**',
       },
       {
+        protocol: 'https',
+        hostname: 'api.patina.cloud',
+        pathname: '/storage/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'storage.patina.cloud',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'media.patina.cloud',
+        pathname: '/**',
+      },
+      {
         protocol: 'http',
         hostname: 'localhost',
         port: '',

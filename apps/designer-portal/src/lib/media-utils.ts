@@ -217,9 +217,19 @@ export function getOptimizedImageUrl(
     return getCDNOptimizedUrl(url, options);
   }
 
-  // Use media service transformation
-  const mediaServiceUrl = process.env.NEXT_PUBLIC_MEDIA_SERVICE_URL || 'http://localhost:3006';
-  return getMediaServiceOptimizedUrl(url, mediaServiceUrl, options);
+  // Supabase Storage URLs — use built-in ImgProxy transforms
+  if (url.includes('/storage/v1/object/')) {
+    return getSupabaseStorageOptimizedUrl(url, options);
+  }
+
+  // Use media service transformation if configured
+  const mediaServiceUrl = process.env.NEXT_PUBLIC_MEDIA_SERVICE_URL;
+  if (mediaServiceUrl) {
+    return getMediaServiceOptimizedUrl(url, mediaServiceUrl, options);
+  }
+
+  // No transform service available — return raw URL
+  return url;
 }
 
 /**
@@ -257,6 +267,24 @@ function getCDNOptimizedUrl(url: string, options: ImageTransformOptions): string
 
   const separator = url.includes('?') ? '&' : '?';
   return `${url}${separator}${params.toString()}`;
+}
+
+/**
+ * Optimize Supabase Storage images using built-in ImgProxy transforms
+ */
+function getSupabaseStorageOptimizedUrl(url: string, options: ImageTransformOptions): string {
+  const params = new URLSearchParams();
+
+  if (options.width) params.set('width', options.width.toString());
+  if (options.height) params.set('height', options.height.toString());
+  if (options.quality) params.set('quality', (options.quality || 80).toString());
+  if (options.fit) params.set('resize', options.fit === 'cover' ? 'cover' : 'contain');
+
+  const queryString = params.toString();
+  if (!queryString) return url;
+
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}${queryString}`;
 }
 
 /**

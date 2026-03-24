@@ -242,6 +242,9 @@ function extractProductVendors(url: string): ExtractedProductVendors {
  * Extract all product data from current page
  */
 export async function extractProductData(url: string): Promise<ExtractedProductData> {
+  const startTime = performance.now();
+  console.log('[Patina] Starting full extraction for:', url);
+
   // Run all extractions
   const [productName, description, price, dimensions, materials, colorFinish, images, brand] = await Promise.all([
     Promise.resolve(extractProductName()),
@@ -278,6 +281,19 @@ export async function extractProductData(url: string): Promise<ExtractedProductD
 
   // Calculate confidence
   data.confidence = calculateConfidence(data);
+
+  const elapsed = Math.round(performance.now() - startTime);
+  console.log(`[Patina] Extraction complete in ${elapsed}ms:`, {
+    name: productName || '(none)',
+    price: price ? `$${(price.value / 100).toFixed(2)}` : '(none)',
+    images: images.length,
+    materials: materials.length,
+    colors: colorFinish.colors.length,
+    dimensions: dimensions ? 'yes' : 'no',
+    finish: primaryFinish?.name || '(none)',
+    manufacturer: manufacturer || '(none)',
+    confidence: data.confidence,
+  });
 
   return data;
 }

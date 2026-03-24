@@ -19,6 +19,8 @@ import { supabase } from './lib/supabase';
 import { scorePageMode, detectModeFromUrl } from './lib/mode-detection';
 import { validateProductCapture } from './lib/capture-validation';
 import { usePortalSession } from './hooks/use-portal-session';
+import type { EditableDimensions } from './components/EditableDetails';
+import { dimensionsFromExtracted, dimensionsToPayload } from './components/EditableDetails';
 import { ModeToggle } from './components/ModeToggle';
 import { AuthScreen } from './components/AuthScreen';
 import { ProductCaptureForm } from './components/ProductCaptureForm';
@@ -70,6 +72,15 @@ function Popup() {
   const [selectedStyleIds, setSelectedStyleIds] = useState<UUID[]>([]);
   const [note, setNote] = useState('');
 
+  // Editable extracted details
+  const [editedDescription, setEditedDescription] = useState('');
+  const [editedMaterials, setEditedMaterials] = useState<string[]>([]);
+  const [editedColors, setEditedColors] = useState<string[]>([]);
+  const [editedFinish, setEditedFinish] = useState('');
+  const [editedDimensions, setEditedDimensions] = useState<EditableDimensions>(
+    { width: '', height: '', depth: '', seatHeight: '', seatDepth: '', armHeight: '', unit: 'in' }
+  );
+
   // Data state
   const [projects, setProjects] = useState<Project[]>([]);
   const [styles, setStyles] = useState<StyleArchetype[]>([]);
@@ -112,6 +123,15 @@ function Popup() {
   const [existingProduct, setExistingProduct] = useState<ExistingProduct | null>(null);
   const [existingVendor, setExistingVendor] = useState<ExistingVendor | null>(null);
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+
+  // Extraction diagnostics
+  const [showDebug, setShowDebug] = useState(false);
+  const [extractionDiag, setExtractionDiag] = useState<{
+    method: 'content_script' | 'fallback' | null;
+    elapsed: number | null;
+    fields: Record<string, string>;
+    error: string | null;
+  }>({ method: null, elapsed: null, fields: {}, error: null });
 
   // Auth check
   useEffect(() => {
@@ -302,6 +322,11 @@ function Popup() {
     setExtractedData(null);
     setExtractedVendorData(null);
     setHasInteracted(false);
+    setEditedDescription('');
+    setEditedMaterials([]);
+    setEditedColors([]);
+    setEditedFinish('');
+    setEditedDimensions({ width: '', height: '', depth: '', seatHeight: '', seatDepth: '', armHeight: '', unit: 'in' });
   }, []);
 
   // Re-extract when URL changes
@@ -326,20 +351,22 @@ function Popup() {
     const nonce = ++extractionNonceRef.current;
     setIsExtracting(true);
     setExtractionError('');
+    setExtractionDiag({ method: null, elapsed: null, fields: {}, error: null });
+    const extractionStart = performance.now();
     extensionEvents.extractionStart(captureMode);
 
     chrome.runtime.sendMessage({ type: 'EXTRACT_REQUEST' }, (response) => {
       if (nonce !== extractionNonceRef.current) return; // stale
 
       if (chrome.runtime.lastError) {
-        extractDirectly(nonce);
+        extractDirectly(nonce, extractionStart);
         return;
       }
 
       if (response?.success && response?.data) {
-        handleExtractionResult(response.data);
+        handleExtractionResult(response.data, 'content_script', extractionStart);
       } else {
-        extractDirectly(nonce);
+        extractDirectly(nonce, extractionStart);
       }
     });
   }, [currentUrl, user, resetFormState, detectCaptureMode, checkForExistingProduct, checkForExistingVendor]);
@@ -396,7 +423,8 @@ function Popup() {
   // Initial extraction when popup opens (only if URL already set)
   // Note: Main extraction logic is now in the URL change effect above
 
-  const extractDirectly = async (nonce?: number) => {
+  const extractDirectly = async (nonce?: number, extractionStart?: number) => {
+    console.log('[Patina] Falling back to direct extraction');
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (nonce != null && nonce !== extractionNonceRef.current) return; // stale
@@ -409,29 +437,115 @@ function Popup() {
         return;
       }
 
-      // Execute extraction script
+      // Execute extraction script (enhanced fallback)
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: () => {
-          // Simple extraction for fallback
-          const title = document.querySelector('h1')?.textContent?.trim() ||
-                       document.querySelector('meta[property="og:title"]')?.getAttribute('content') ||
-                       document.title;
+          // --- Product Name ---
+          let title: string | null = null;
 
-          const images = Array.from(document.querySelectorAll('img'))
-            .filter(img => img.naturalWidth >= 200 && img.naturalHeight >= 200)
-            .map(img => ({
-              url: img.src,
-              score: 50,
-              width: img.naturalWidth,
-              height: img.naturalHeight,
-              alt: img.alt || '',
-            }))
-            .slice(0, 10);
+          // Try JSON-LD Product schema first
+          const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
+          for (const script of jsonLdScripts) {
+            try {
+              const data = JSON.parse(script.textContent || '');
+              const findProduct = (obj: unknown): { name?: string; image?: unknown; offers?: unknown } | null => {
+                if (!obj || typeof obj !== 'object') return null;
+                const o = obj as Record<string, unknown>;
+                if (o['@type'] === 'Product') return o as { name?: string; image?: unknown; offers?: unknown };
+                if (Array.isArray(obj)) {
+                  for (const item of obj) { const r = findProduct(item); if (r) return r; }
+                }
+                if (o['@graph'] && Array.isArray(o['@graph'])) {
+                  for (const item of o['@graph']) { const r = findProduct(item); if (r) return r; }
+                }
+                return null;
+              };
+              const product = findProduct(data);
+              if (product?.name) { title = product.name as string; break; }
+            } catch { /* invalid json */ }
+          }
 
-          const priceEl = document.querySelector('[class*="price"]');
-          const priceText = priceEl?.textContent?.match(/\$[\d,]+\.?\d{0,2}/)?.[0];
+          if (!title) {
+            title = document.querySelector('h1')?.textContent?.trim() ||
+                    document.querySelector('meta[property="og:title"]')?.getAttribute('content') ||
+                    document.title;
+          }
 
+          // --- Price ---
+          // Check meta tag first (Shopify etc.)
+          let priceResult: { value: number; currency: string; raw: string } | null = null;
+          const metaPrice = document.querySelector('meta[property="product:price:amount"]')?.getAttribute('content');
+          const metaCurrency = document.querySelector('meta[property="product:price:currency"]')?.getAttribute('content');
+          if (metaPrice) {
+            const val = parseFloat(metaPrice);
+            if (!isNaN(val) && val > 0) {
+              priceResult = { value: Math.round(val * 100), currency: metaCurrency || 'USD', raw: metaPrice };
+            }
+          }
+
+          if (!priceResult) {
+            // Try sale/current price selectors first, skip original price elements
+            const skipClasses = ['was', 'compare', 'original', 'regular', 'list-price', 'strikethrough'];
+            const priceSelectors = ['.sale-price', '.final-price', '.current-price', '[class*="sale-price"]', '[class*="current-price"]', '[data-price]', '[itemprop="price"]', '[class*="price"]'];
+            for (const sel of priceSelectors) {
+              try {
+                const els = document.querySelectorAll(sel);
+                for (const el of els) {
+                  const cn = (el.className || '').toLowerCase();
+                  if (skipClasses.some(c => cn.includes(c))) continue;
+                  const dp = el.getAttribute('data-price') || el.getAttribute('content');
+                  if (dp) {
+                    const v = parseFloat(dp);
+                    if (!isNaN(v) && v > 0) { priceResult = { value: Math.round(v * 100), currency: 'USD', raw: dp }; break; }
+                  }
+                  const t = el.textContent?.match(/\$[\d,]+\.?\d{0,2}/)?.[0];
+                  if (t) { priceResult = { value: Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100), currency: 'USD', raw: t }; break; }
+                }
+                if (priceResult) break;
+              } catch { /* skip */ }
+            }
+          }
+
+          // --- Images ---
+          const seenUrls = new Set<string>();
+          const images: Array<{ url: string; score: number; width: number; height: number; alt: string }> = [];
+
+          // DOM images
+          for (const img of document.querySelectorAll('img')) {
+            const w = img.naturalWidth || img.width || 0;
+            const h = img.naturalHeight || img.height || 0;
+            const src = img.getAttribute('data-src') || img.getAttribute('data-lazy') || img.src;
+            if (!src || src.startsWith('data:') || seenUrls.has(src)) continue;
+            if (w >= 200 && h >= 200) {
+              seenUrls.add(src);
+              images.push({ url: src, score: 50, width: w, height: h, alt: img.alt || '' });
+            }
+          }
+
+          // Picture sources
+          for (const picture of document.querySelectorAll('picture')) {
+            for (const source of picture.querySelectorAll('source[srcset]')) {
+              const srcset = source.getAttribute('srcset') || '';
+              const parts = srcset.split(',').map(s => { const p = s.trim().split(/\s+/); return { url: p[0], w: parseInt(p[1] || '0') }; });
+              parts.sort((a, b) => b.w - a.w);
+              if (parts[0]?.url && !seenUrls.has(parts[0].url)) {
+                seenUrls.add(parts[0].url);
+                images.push({ url: parts[0].url, score: 55, width: 0, height: 0, alt: picture.querySelector('img')?.alt || '' });
+              }
+            }
+          }
+
+          // OG image
+          const ogImg = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
+          if (ogImg && !seenUrls.has(ogImg)) {
+            seenUrls.add(ogImg);
+            images.push({ url: ogImg, score: 35, width: 0, height: 0, alt: '' });
+          }
+
+          images.sort((a, b) => b.score - a.score);
+
+          // --- Description ---
           const descEl = document.querySelector('meta[property="og:description"]') ||
                          document.querySelector('meta[name="description"]');
           const description = descEl?.getAttribute('content') || null;
@@ -439,12 +553,8 @@ function Popup() {
           return {
             productName: title,
             description,
-            price: priceText ? {
-              value: Math.round(parseFloat(priceText.replace(/[$,]/g, '')) * 100),
-              currency: 'USD',
-              raw: priceText,
-            } : null,
-            images,
+            price: priceResult,
+            images: images.slice(0, 10),
             url: window.location.href,
           };
         },
@@ -465,11 +575,12 @@ function Popup() {
           manufacturer: null,
           extractedAt: new Date().toISOString(),
           confidence: data.images?.length > 0 && data.productName ? 'medium' : 'low',
-        } as ExtractedProductData);
+        } as ExtractedProductData, 'fallback', extractionStart);
       }
     } catch (err) {
       if (nonce != null && nonce !== extractionNonceRef.current) return; // stale
       setExtractionError('Failed to extract product data');
+      setExtractionDiag(prev => ({ ...prev, method: 'fallback', error: 'direct_extraction_failed' }));
       extensionEvents.extractionError(captureMode, 'direct_extraction_failed');
     } finally {
       if (nonce == null || nonce === extractionNonceRef.current) {
@@ -478,12 +589,42 @@ function Popup() {
     }
   };
 
-  const handleExtractionResult = (data: ExtractedProductData) => {
+  const handleExtractionResult = (
+    data: ExtractedProductData,
+    method: 'content_script' | 'fallback' = 'content_script',
+    extractionStart?: number,
+  ) => {
     setExtractedData(data);
     setProductName(data.productName || '');
     setPrice(data.price ? (data.price.value / 100).toFixed(2) : '');
     setSelectedImageIndex(0);
     setIsExtracting(false);
+
+    // Initialize editable detail fields from extracted data
+    setEditedDescription(data.description || '');
+    setEditedMaterials(data.materials || []);
+    setEditedColors(data.colors?.map(c => c.name) || []);
+    setEditedFinish(data.finish?.name || '');
+    setEditedDimensions(dimensionsFromExtracted(data.dimensions));
+
+    // Record diagnostics
+    const elapsed = extractionStart ? Math.round(performance.now() - extractionStart) : null;
+    setExtractionDiag({
+      method,
+      elapsed,
+      fields: {
+        name: data.productName || '(empty)',
+        price: data.price ? `$${(data.price.value / 100).toFixed(2)}` : '(empty)',
+        images: `${data.images?.length ?? 0}`,
+        materials: `${data.materials?.length ?? 0}`,
+        colors: `${data.colors?.length ?? 0}`,
+        dimensions: data.dimensions ? 'yes' : 'no',
+        finish: data.finish?.name || '(empty)',
+        manufacturer: data.manufacturer || '(empty)',
+        confidence: data.confidence || 'unknown',
+      },
+      error: null,
+    });
 
     // Track successful extraction
     const fieldCount = [
@@ -730,37 +871,40 @@ function Popup() {
         retailerId = retailer.id;
       }
 
+      // Build dimensions from edited state
+      const dimensionsPayload = dimensionsToPayload(editedDimensions);
+
       // Insert product with vendor_id (manufacturer)
-      // Note: retailer_id support requires migration 00011_add_retailer_id.sql to be applied
       const { data: product, error: productError } = await supabase
         .from('products')
         .insert({
           name: productName || extractedData.productName || 'Untitled Product',
-          description: extractedData.description || null,
+          description: editedDescription || null,
           source_url: extractedData.url,
           images: images.slice(0, 10),
           price_retail: price ? Math.round(parseFloat(price) * 100) : null,
-          materials: extractedData.materials || [],
-          colors: extractedData.colors?.map(c => c.name) || null,
-          finish: extractedData.finish?.name || null,
+          materials: editedMaterials,
+          colors: editedColors.length > 0 ? editedColors : null,
+          finish: editedFinish || null,
           available_colors: extractedData.availableColors || null,
-          dimensions: extractedData.dimensions ? {
-            width: extractedData.dimensions.width,
-            height: extractedData.dimensions.height,
-            depth: extractedData.dimensions.depth,
-            seatHeight: extractedData.dimensions.seatHeight,
-            seatDepth: extractedData.dimensions.seatDepth,
-            seatWidth: extractedData.dimensions.seatWidth,
-            armHeight: extractedData.dimensions.armHeight,
-            backHeight: extractedData.dimensions.backHeight,
-            legHeight: extractedData.dimensions.legHeight,
-            clearance: extractedData.dimensions.clearance,
-            unit: extractedData.dimensions.unit,
+          dimensions: dimensionsPayload ? {
+            width: dimensionsPayload.width,
+            height: dimensionsPayload.height,
+            depth: dimensionsPayload.depth,
+            seatHeight: dimensionsPayload.seatHeight,
+            seatDepth: dimensionsPayload.seatDepth,
+            seatWidth: dimensionsPayload.seatWidth,
+            armHeight: dimensionsPayload.armHeight,
+            backHeight: dimensionsPayload.backHeight,
+            legHeight: dimensionsPayload.legHeight,
+            clearance: dimensionsPayload.clearance,
+            unit: dimensionsPayload.unit,
           } : null,
           vendor_id: vendorId,
           retailer_id: retailerId,
           captured_by: user.id,
           captured_at: new Date().toISOString(),
+          status: 'published',
         })
         .select('id')
         .single();
@@ -832,29 +976,31 @@ function Popup() {
       const vendorId = manufacturer?.id || null;
       const retailerId = retailer?.id || null;
 
+      const dimensionsPayload = dimensionsToPayload(editedDimensions);
+
       const { error: updateError } = await supabase
         .from('products')
         .update({
           name: productName || extractedData.productName || 'Untitled Product',
-          description: extractedData.description || null,
+          description: editedDescription || null,
           images: images.slice(0, 10),
           price_retail: price ? Math.round(parseFloat(price) * 100) : null,
-          materials: extractedData.materials || [],
-          colors: extractedData.colors?.map(c => c.name) || null,
-          finish: extractedData.finish?.name || null,
+          materials: editedMaterials,
+          colors: editedColors.length > 0 ? editedColors : null,
+          finish: editedFinish || null,
           available_colors: extractedData.availableColors || null,
-          dimensions: extractedData.dimensions ? {
-            width: extractedData.dimensions.width,
-            height: extractedData.dimensions.height,
-            depth: extractedData.dimensions.depth,
-            seatHeight: extractedData.dimensions.seatHeight,
-            seatDepth: extractedData.dimensions.seatDepth,
-            seatWidth: extractedData.dimensions.seatWidth,
-            armHeight: extractedData.dimensions.armHeight,
-            backHeight: extractedData.dimensions.backHeight,
-            legHeight: extractedData.dimensions.legHeight,
-            clearance: extractedData.dimensions.clearance,
-            unit: extractedData.dimensions.unit,
+          dimensions: dimensionsPayload ? {
+            width: dimensionsPayload.width,
+            height: dimensionsPayload.height,
+            depth: dimensionsPayload.depth,
+            seatHeight: dimensionsPayload.seatHeight,
+            seatDepth: dimensionsPayload.seatDepth,
+            seatWidth: dimensionsPayload.seatWidth,
+            armHeight: dimensionsPayload.armHeight,
+            backHeight: dimensionsPayload.backHeight,
+            legHeight: dimensionsPayload.legHeight,
+            clearance: dimensionsPayload.clearance,
+            unit: dimensionsPayload.unit,
           } : null,
           vendor_id: vendorId,
           retailer_id: retailerId,
@@ -940,20 +1086,22 @@ function Popup() {
     const nonce = ++extractionNonceRef.current;
     setIsExtracting(true);
     setExtractionError('');
+    setExtractionDiag({ method: null, elapsed: null, fields: {}, error: null });
+    const refreshStart = performance.now();
     extensionEvents.extractionStart(captureMode);
 
     chrome.runtime.sendMessage({ type: 'EXTRACT_REQUEST' }, (response) => {
       if (nonce !== extractionNonceRef.current) return;
 
       if (chrome.runtime.lastError) {
-        extractDirectly(nonce);
+        extractDirectly(nonce, refreshStart);
         return;
       }
 
       if (response?.success && response?.data) {
-        handleExtractionResult(response.data);
+        handleExtractionResult(response.data, 'content_script', refreshStart);
       } else {
-        extractDirectly(nonce);
+        extractDirectly(nonce, refreshStart);
       }
     });
   }, [currentUrl, isExtracting, resetFormState, detectCaptureMode, checkForExistingProduct, checkForExistingVendor]);
@@ -1173,6 +1321,16 @@ function Popup() {
             createVendorInline={createVendorInline}
             searchVendors={searchVendors}
             validation={productValidation}
+            editedDescription={editedDescription}
+            setEditedDescription={setEditedDescription}
+            editedMaterials={editedMaterials}
+            setEditedMaterials={setEditedMaterials}
+            editedColors={editedColors}
+            setEditedColors={setEditedColors}
+            editedFinish={editedFinish}
+            setEditedFinish={setEditedFinish}
+            editedDimensions={editedDimensions}
+            setEditedDimensions={setEditedDimensions}
           />
         )}
 
@@ -1204,6 +1362,34 @@ function Popup() {
           />
         )}
       </div>
+
+      {/* Extraction Debug Panel */}
+      {extractionDiag.method && (
+        <div className="px-4 border-t border-patina-clay-beige/20">
+          <button
+            onClick={() => setShowDebug(!showDebug)}
+            className="w-full py-1.5 flex items-center justify-between text-xs text-patina-mocha-brown/60 hover:text-patina-mocha-brown"
+          >
+            <span>Debug: {extractionDiag.method}{extractionDiag.elapsed != null ? ` (${extractionDiag.elapsed}ms)` : ''}</span>
+            <svg className={`w-3 h-3 transition-transform ${showDebug ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {showDebug && (
+            <div className="pb-2 space-y-1 text-xs font-mono text-patina-charcoal/70">
+              {Object.entries(extractionDiag.fields).map(([key, value]) => (
+                <div key={key} className="flex justify-between">
+                  <span className="text-patina-mocha-brown/60">{key}:</span>
+                  <span className={value === '(empty)' || value === 'no' || value === '0' ? 'text-red-400' : ''}>{value}</span>
+                </div>
+              ))}
+              {extractionDiag.error && (
+                <div className="text-red-500 mt-1">Error: {extractionDiag.error}</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Footer */}
       <div className="px-4 py-3 border-t border-patina-clay-beige/30 bg-patina-off-white">

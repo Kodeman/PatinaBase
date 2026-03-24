@@ -26,6 +26,28 @@ interface ExtractResponse {
 }
 
 /**
+ * Wait for dynamic content signals before extracting.
+ * Many e-commerce sites (React/Vue SPAs) load product data after initial DOM ready.
+ */
+async function waitForProductSignals(maxMs = 3000, intervalMs = 300): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < maxMs) {
+    if (
+      document.querySelector('script[type="application/ld+json"]') ||
+      document.querySelector('[itemprop="price"], [itemprop="offers"]') ||
+      document.querySelector('[class*="product-detail"], [class*="pdp-"], [class*="product-page"], [data-product]') ||
+      document.querySelector('[class*="add-to-cart"], [class*="addtocart"], button[data-add-to-cart]')
+    ) {
+      console.log(`[Patina] Product signals found after ${Date.now() - start}ms`);
+      return true;
+    }
+    await new Promise(r => setTimeout(r, intervalMs));
+  }
+  console.log(`[Patina] No product signals found after ${maxMs}ms, extracting anyway`);
+  return false;
+}
+
+/**
  * Handle extraction requests from popup or background script
  */
 chrome.runtime.onMessage.addListener(
@@ -35,8 +57,10 @@ chrome.runtime.onMessage.addListener(
     sendResponse: (response: ExtractResponse) => void
   ) => {
     if (message.type === 'EXTRACT_FULL') {
-      // Full extraction (async)
-      extractProductData(window.location.href)
+      console.log('[Patina] Received EXTRACT_FULL request');
+      // Wait for dynamic content, then extract
+      waitForProductSignals()
+        .then(() => extractProductData(window.location.href))
         .then(data => {
           sendResponse({
             type: 'EXTRACTION_RESULT',
@@ -45,6 +69,7 @@ chrome.runtime.onMessage.addListener(
           });
         })
         .catch(error => {
+          console.error('[Patina] Extraction failed:', error);
           sendResponse({
             type: 'EXTRACTION_RESULT',
             data: {} as ExtractedProductData,

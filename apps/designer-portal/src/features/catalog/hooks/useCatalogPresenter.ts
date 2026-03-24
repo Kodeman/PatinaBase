@@ -20,7 +20,7 @@ import type {
 } from '../types';
 
 const DEFAULT_PAGE_SIZE = 24;
-const PLACEHOLDER_IMAGE = 'https://via.placeholder.com/400';
+const PLACEHOLDER_IMAGE = '';
 
 type SerializableFilters = Omit<ProductFilters, 'page' | 'pageSize' | 'take'>;
 
@@ -174,6 +174,7 @@ export function useCatalogPresenter(options: CatalogPresenterOptions = {}): Cata
           (firstImage as any)?.uri ||
           (firstImage as any)?.originalUrl ||
           (product as any).imageUrl ||
+          ((product as any).images?.[0]) ||
           PLACEHOLDER_IMAGE;
 
         return {

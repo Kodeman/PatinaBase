@@ -74,6 +74,12 @@ ingress:
       noTLSVerify: true
       connectTimeout: 10s
 
+  # Media Service (image processing & transformation)
+  - hostname: media.patina.cloud
+    service: http://localhost:3014
+    originRequest:
+      noTLSVerify: true
+
   # Supabase Storage (direct, bypassing Kong for large uploads)
   - hostname: storage.patina.cloud
     service: http://localhost:5000

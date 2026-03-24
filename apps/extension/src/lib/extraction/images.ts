@@ -124,6 +124,31 @@ function scoreImage(img: HTMLImageElement, pageUrl: string): number {
 }
 
 /**
+ * Parse a srcset string and return the largest image URL
+ */
+function getLargestFromSrcset(srcset: string): string | null {
+  if (!srcset) return null;
+
+  const sources = srcset.split(',').map(s => {
+    const parts = s.trim().split(/\s+/);
+    const url = parts[0];
+    const descriptor = parts[1] || '1x';
+    let width = 0;
+
+    if (descriptor.endsWith('w')) {
+      width = parseInt(descriptor);
+    } else if (descriptor.endsWith('x')) {
+      width = parseFloat(descriptor) * 1000; // Approximate
+    }
+
+    return { url, width };
+  });
+
+  sources.sort((a, b) => b.width - a.width);
+  return sources.length > 0 && sources[0].url ? sources[0].url : null;
+}
+
+/**
  * Get the best quality URL for an image
  */
 function getBestImageUrl(img: HTMLImageElement): string {
@@ -132,35 +157,24 @@ function getBestImageUrl(img: HTMLImageElement): string {
                   img.getAttribute('data-large') ||
                   img.getAttribute('data-zoom') ||
                   img.getAttribute('data-full') ||
-                  img.getAttribute('data-original');
+                  img.getAttribute('data-original') ||
+                  img.getAttribute('data-lazy');
 
   if (dataSrc && dataSrc.startsWith('http')) {
     return dataSrc;
   }
 
+  // Check data-srcset for lazy-loaded images
+  const dataSrcset = img.getAttribute('data-srcset');
+  if (dataSrcset) {
+    const largest = getLargestFromSrcset(dataSrcset);
+    if (largest) return largest;
+  }
+
   // Check srcset for largest image
-  const srcset = img.srcset;
-  if (srcset) {
-    const sources = srcset.split(',').map(s => {
-      const parts = s.trim().split(/\s+/);
-      const url = parts[0];
-      const descriptor = parts[1] || '1x';
-      let width = 0;
-
-      if (descriptor.endsWith('w')) {
-        width = parseInt(descriptor);
-      } else if (descriptor.endsWith('x')) {
-        width = parseFloat(descriptor) * 1000; // Approximate
-      }
-
-      return { url, width };
-    });
-
-    // Sort by width descending and get the largest
-    sources.sort((a, b) => b.width - a.width);
-    if (sources.length > 0 && sources[0].url) {
-      return sources[0].url;
-    }
+  if (img.srcset) {
+    const largest = getLargestFromSrcset(img.srcset);
+    if (largest) return largest;
   }
 
   return img.src;
@@ -196,9 +210,32 @@ export function extractImagesFromDOM(pageUrl: string): ExtractedImage[] {
     });
   }
 
-  // Also check for background images in product containers
+  // Check <picture> elements with <source> tags
+  const pictureElements = document.querySelectorAll('picture');
+  for (const picture of pictureElements) {
+    const sources = picture.querySelectorAll('source[srcset]');
+    for (const source of sources) {
+      const srcset = source.getAttribute('srcset');
+      if (!srcset) continue;
+      const largest = getLargestFromSrcset(srcset);
+      if (largest && !seenUrls.has(largest)) {
+        seenUrls.add(largest);
+        images.push({
+          url: largest,
+          score: 55,
+          width: 0,
+          height: 0,
+          alt: picture.querySelector('img')?.alt || '',
+        });
+      }
+    }
+  }
+
+  // Check for background images in product containers (expanded selectors)
   const productContainers = document.querySelectorAll(
-    '[class*="product-image"], [class*="gallery"], [data-product-image]'
+    '[class*="product-image"], [class*="gallery"], [data-product-image], ' +
+    '[class*="pdp"], [class*="hero"], [class*="main-image"], [class*="product-media"], ' +
+    '[class*="swiper-slide"], [class*="carousel-item"], [class*="slide"], [role="img"]'
   );
 
   for (const container of productContainers) {
@@ -208,7 +245,23 @@ export function extractImagesFromDOM(pageUrl: string): ExtractedImage[] {
       seenUrls.add(match[1]);
       images.push({
         url: match[1],
-        score: 50, // Reasonable default for background images in product containers
+        score: 50,
+        width: 0,
+        height: 0,
+        alt: '',
+      });
+    }
+  }
+
+  // Check <video poster> attributes
+  const videoElements = document.querySelectorAll('video[poster]');
+  for (const video of videoElements) {
+    const poster = video.getAttribute('poster');
+    if (poster && !seenUrls.has(poster)) {
+      seenUrls.add(poster);
+      images.push({
+        url: poster,
+        score: 40,
         width: 0,
         height: 0,
         alt: '',
@@ -239,8 +292,23 @@ export function extractImagesFromDOM(pageUrl: string): ExtractedImage[] {
     }
   }
 
+  // OG image fallback
+  const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
+  if (ogImage && !seenUrls.has(ogImage)) {
+    seenUrls.add(ogImage);
+    images.push({
+      url: ogImage,
+      score: 35,
+      width: 0,
+      height: 0,
+      alt: 'from og:image',
+    });
+  }
+
   // Sort by score descending
   images.sort((a, b) => b.score - a.score);
+
+  console.log(`[Patina] Images: found ${images.length} (top score: ${images[0]?.score ?? 0})`);
 
   // Return top images (limit to prevent overwhelming)
   return images.slice(0, 20);
