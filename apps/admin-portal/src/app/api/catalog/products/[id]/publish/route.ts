@@ -1,26 +1,27 @@
-import { NextRequest } from 'next/server';
-import { createRouteHandler, proxyToBackend, apiError } from '@patina/api-routes';
+import { NextRequest, NextResponse } from 'next/server';
+import { getServiceClient, verifyAdmin, unauthorized, notFound, serverError } from '@/lib/admin-api';
 
-const CATALOG_URL = process.env.CATALOG_SERVICE_URL || 'http://localhost:3011';
+// POST /api/catalog/products/[id]/publish
+export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+  const supabase = getServiceClient();
+  const user = await verifyAdmin(supabase, req.headers.get('authorization'));
+  if (!user) return unauthorized();
 
-// POST /api/catalog/products/[id]/publish - Publish product
-export const POST = createRouteHandler(
-  async (request: NextRequest, context: any) => {
-    const { id } = await context.params;
-    try {
-      return await proxyToBackend(request, context, {
-        service: {
-          name: 'catalog',
-          baseUrl: CATALOG_URL,
-          path: `/v1/products/${id}/publish`,
-        },
-        requireAuth: true,
-        retry: { maxRetries: 2 },
-        timeout: { write: 10000 },
-      });
-    } catch (error) {
-      return apiError(error);
-    }
-  },
-  { method: 'POST' }
-);
+  const { data, error } = await supabase
+    .from('products')
+    .update({
+      status: 'published',
+      published_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return notFound('Product not found');
+    return serverError(error.message);
+  }
+
+  return NextResponse.json(data);
+}

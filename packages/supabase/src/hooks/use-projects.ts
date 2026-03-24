@@ -70,6 +70,64 @@ export function useCreateProject() {
   });
 }
 
+export function useUpdateProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      data,
+    }: {
+      projectId: string;
+      data: {
+        name?: string;
+        status?: string;
+        notes?: string | null;
+        budget_min?: number | null;
+        budget_max?: number | null;
+        timeline_start?: string | null;
+        timeline_end?: string | null;
+      };
+    }) => {
+      const supabase = getAuthSupabase();
+
+      const { data: result, error } = await supabase
+        .from('projects')
+        .update(data as any)
+        .eq('id', projectId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+    },
+  });
+}
+
+export function useDeleteProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (projectId: string) => {
+      const supabase = getAuthSupabase();
+
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', projectId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PROJECT PRODUCTS HOOKS
 // ═══════════════════════════════════════════════════════════════════════════

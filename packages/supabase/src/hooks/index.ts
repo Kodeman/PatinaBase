@@ -12,6 +12,8 @@ export {
   useProjects,
   useProject,
   useCreateProject,
+  useUpdateProject,
+  useDeleteProject,
   useProjectProducts,
   useAddProductToProject,
   useRemoveProductFromProject,

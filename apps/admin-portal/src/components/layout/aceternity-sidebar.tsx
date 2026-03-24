@@ -11,18 +11,24 @@ import {
 } from '@/components/ui/aceternity-sidebar';
 import { UserProfileCard, type UserPresenceStatus } from '@patina/design-system';
 import {
+  Activity,
   BarChart3,
+  ClipboardList,
+  FileText,
+  Flag,
   FolderKanban,
+  Image,
+  LayoutDashboard,
   LayoutTemplate,
   Mail,
   Package,
   Send,
+  Settings,
   ShieldCheck,
   ShoppingCart,
   Sparkles,
   UserCheck,
   Users,
-  Workflow,
   Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -33,6 +39,11 @@ interface AdminAceternitySidebarProps {
   setIsOpen?: (open: boolean) => void;
 }
 
+interface NavSection {
+  label: string;
+  links: Array<{ label: string; href: string; icon: React.ReactNode }>;
+}
+
 export function AdminAceternitySidebar({ className, isOpen, setIsOpen }: AdminAceternitySidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -40,71 +51,126 @@ export function AdminAceternitySidebar({ className, isOpen, setIsOpen }: AdminAc
   const sidebarOpen = isOpen ?? true;
   const [userStatus] = useState<UserPresenceStatus>('online');
 
-  // Simplified navigation - only production-ready pages
-  // Demo pages are now consolidated under /demo
-  const links = [
+  const sections: NavSection[] = [
     {
-      label: 'User Management',
-      href: '/users',
-      icon: <Users className="h-5 w-5" />,
+      label: 'Overview',
+      links: [
+        {
+          label: 'Dashboard',
+          href: '/dashboard',
+          icon: <LayoutDashboard className="h-5 w-5" />,
+        },
+      ],
     },
     {
-      label: 'Roles & Permissions',
-      href: '/roles',
-      icon: <ShieldCheck className="h-5 w-5" />,
+      label: 'People',
+      links: [
+        {
+          label: 'User Management',
+          href: '/users',
+          icon: <Users className="h-5 w-5" />,
+        },
+        {
+          label: 'Roles & Permissions',
+          href: '/roles',
+          icon: <ShieldCheck className="h-5 w-5" />,
+        },
+        {
+          label: 'Verification Queue',
+          href: '/verification',
+          icon: <UserCheck className="h-5 w-5" />,
+        },
+        {
+          label: 'Waitlist',
+          href: '/waitlist',
+          icon: <ClipboardList className="h-5 w-5" />,
+        },
+      ],
     },
     {
-      label: 'Verification Queue',
-      href: '/verification',
-      icon: <UserCheck className="h-5 w-5" />,
+      label: 'Commerce',
+      links: [
+        {
+          label: 'Catalog',
+          href: '/catalog',
+          icon: <Package className="h-5 w-5" />,
+        },
+        {
+          label: 'Orders',
+          href: '/orders',
+          icon: <ShoppingCart className="h-5 w-5" />,
+        },
+        {
+          label: 'Projects',
+          href: '/projects',
+          icon: <FolderKanban className="h-5 w-5" />,
+        },
+      ],
     },
     {
-      label: 'Catalog',
-      href: '/catalog',
-      icon: <Package className="h-5 w-5" />,
+      label: 'Communications',
+      links: [
+        {
+          label: 'Command Center',
+          href: '/communications',
+          icon: <Mail className="h-5 w-5" />,
+        },
+        {
+          label: 'Campaigns',
+          href: '/communications/campaigns',
+          icon: <Send className="h-5 w-5" />,
+        },
+        {
+          label: 'Templates',
+          href: '/communications/templates',
+          icon: <LayoutTemplate className="h-5 w-5" />,
+        },
+        {
+          label: 'Audiences',
+          href: '/communications/audiences',
+          icon: <Users className="h-5 w-5" />,
+        },
+        {
+          label: 'Automations',
+          href: '/communications/automations',
+          icon: <Zap className="h-5 w-5" />,
+        },
+      ],
     },
     {
-      label: 'Projects',
-      href: '/projects',
-      icon: <FolderKanban className="h-5 w-5" />,
-    },
-    {
-      label: 'Orders',
-      href: '/orders',
-      icon: <ShoppingCart className="h-5 w-5" />,
-    },
-  ];
-
-  const commsLinks = [
-    {
-      label: 'Command Center',
-      href: '/communications',
-      icon: <Mail className="h-5 w-5" />,
-    },
-    {
-      label: 'Campaigns',
-      href: '/communications/campaigns',
-      icon: <Send className="h-5 w-5" />,
-    },
-    {
-      label: 'Templates',
-      href: '/communications/templates',
-      icon: <LayoutTemplate className="h-5 w-5" />,
-    },
-    {
-      label: 'Audiences',
-      href: '/communications/audiences',
-      icon: <Users className="h-5 w-5" />,
-    },
-    {
-      label: 'Automations',
-      href: '/communications/automations',
-      icon: <Zap className="h-5 w-5" />,
-    },
-    {
-      label: 'Analytics',
-      href: '/communications/analytics',
-      icon: <BarChart3 className="h-5 w-5" />,
+      label: 'System',
+      links: [
+        {
+          label: 'Analytics',
+          href: '/analytics',
+          icon: <BarChart3 className="h-5 w-5" />,
+        },
+        {
+          label: 'Media Library',
+          href: '/media',
+          icon: <Image className="h-5 w-5" />,
+        },
+        {
+          label: 'Audit Logs',
+          href: '/audit',
+          icon: <FileText className="h-5 w-5" />,
+        },
+        {
+          label: 'System Health',
+          href: '/health',
+          icon: <Activity className="h-5 w-5" />,
+        },
+        {
+          label: 'Feature Flags',
+          href: '/flags',
+          icon: <Flag className="h-5 w-5" />,
+        },
+        {
+          label: 'Settings',
+          href: '/settings',
+          icon: <Settings className="h-5 w-5" />,
+        },
+      ],
     },
   ];
 
@@ -119,6 +185,14 @@ export function AdminAceternitySidebar({ className, isOpen, setIsOpen }: AdminAc
   // Check if a link is active (current page or a subpage)
   const isLinkActive = (href: string) => {
     return pathname === href || pathname.startsWith(`${href}/`);
+  };
+
+  const handleNavClick = (href: string) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    router.push(href as any);
+    if (window.innerWidth < 1024 && setIsOpen) {
+      setIsOpen(false);
+    }
   };
 
   // User data from session - fixes the hardcoded data bug
@@ -138,45 +212,26 @@ export function AdminAceternitySidebar({ className, isOpen, setIsOpen }: AdminAc
         <Logo>Patina Admin</Logo>
 
         {/* Navigation Links */}
-        <div className="flex flex-col gap-1 flex-1">
-          {links.map((link, idx) => (
-            <SidebarLink
-              key={idx}
-              link={link}
-              className={cn(
-                isLinkActive(link.href) &&
-                'bg-sidebar-accent text-sidebar-accent-foreground'
+        <div className="flex flex-col gap-1 flex-1 overflow-y-auto">
+          {sections.map((section, sIdx) => (
+            <div key={section.label}>
+              {sIdx > 0 && (
+                <div className="mt-4 mb-1 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {sidebarOpen ? section.label : ''}
+                </div>
               )}
-              onClick={(e) => {
-                e.preventDefault();
-                router.push(link.href as any);
-                if (window.innerWidth < 1024 && setIsOpen) {
-                  setIsOpen(false);
-                }
-              }}
-            />
-          ))}
-
-          {/* Communications Section */}
-          <div className="mt-4 mb-1 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            {sidebarOpen ? 'Communications' : ''}
-          </div>
-          {commsLinks.map((link, idx) => (
-            <SidebarLink
-              key={`comms-${idx}`}
-              link={link}
-              className={cn(
-                isLinkActive(link.href) &&
-                'bg-sidebar-accent text-sidebar-accent-foreground'
-              )}
-              onClick={(e) => {
-                e.preventDefault();
-                router.push(link.href as any);
-                if (window.innerWidth < 1024 && setIsOpen) {
-                  setIsOpen(false);
-                }
-              }}
-            />
+              {section.links.map((link, idx) => (
+                <SidebarLink
+                  key={`${section.label}-${idx}`}
+                  link={link}
+                  className={cn(
+                    isLinkActive(link.href) &&
+                    'bg-sidebar-accent text-sidebar-accent-foreground'
+                  )}
+                  onClick={handleNavClick(link.href)}
+                />
+              ))}
+            </div>
           ))}
 
           {/* Spacer + Demo */}
@@ -189,13 +244,7 @@ export function AdminAceternitySidebar({ className, isOpen, setIsOpen }: AdminAc
                 isLinkActive(link.href) &&
                 'bg-sidebar-accent text-sidebar-accent-foreground'
               )}
-              onClick={(e) => {
-                e.preventDefault();
-                router.push(link.href as any);
-                if (window.innerWidth < 1024 && setIsOpen) {
-                  setIsOpen(false);
-                }
-              }}
+              onClick={handleNavClick(link.href)}
             />
           ))}
         </div>

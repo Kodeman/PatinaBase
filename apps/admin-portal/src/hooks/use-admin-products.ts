@@ -1,34 +1,28 @@
 /**
  * useAdminProducts Hook
  *
- * Custom React hook for admin product management with advanced filtering,
- * pagination, and TanStack Query integration.
- *
- * Features:
- * - Product listing with admin-specific filters
- * - Pagination and sorting
- * - Cache management
- * - CRUD operations with mutations
- * - Query invalidation
- *
- * @module hooks/use-admin-products
+ * Fetches products directly from Supabase for admin catalog management.
+ * Uses browser client for reads (RLS allows authenticated SELECT).
+ * Mutations call admin API routes that use service role for writes.
  */
 
-import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
-import { catalogService } from '@/services/catalog';
+'use client';
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { createBrowserClient } from '@patina/supabase';
 import type {
-  UseProductsResult,
-  UseProductResult,
-  UseCreateProductResult,
-  UseUpdateProductResult,
-  UseDeleteProductResult,
-  UsePublishProductResult,
   AdminProductFilters,
-  CatalogServiceResponse,
-  AdminProduct,
   ProductListItem,
 } from '@/types';
-import type { PaginatedResponse, UUID } from '@patina/types';
+
+const SORT_COL_MAP: Record<string, string> = {
+  name: 'name',
+  price: 'price_retail',
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+  publishedAt: 'published_at',
+  status: 'status',
+};
 
 /**
  * Query key factory for admin products
@@ -41,18 +35,32 @@ const adminProductsKeys = {
   detail: (id: string) => [...adminProductsKeys.details(), id] as const,
 };
 
+function mapRowToProductListItem(row: Record<string, unknown>): ProductListItem {
+  const images = row.images as string[] | null;
+  return {
+    id: row.id as string,
+    name: (row.name as string) || '',
+    brand: (row.brand as string) || '',
+    category: (row.category as string) || '',
+    status: (row.status as ProductListItem['status']) || 'draft',
+    price: row.price_retail != null ? (row.price_retail as number) / 100 : 0,
+    currency: 'USD',
+    coverImage: images?.[0] ?? undefined,
+    hasValidationIssues: false,
+    validationErrorCount: 0,
+    variantCount: 0,
+    has3D: false,
+    arSupported: false,
+    publishedAt: row.published_at ? new Date(row.published_at as string) : undefined,
+    updatedAt: new Date((row.updated_at as string) || Date.now()),
+    createdAt: new Date((row.created_at as string) || Date.now()),
+  };
+}
+
 /**
- * Hook for fetching admin products with advanced filtering
- *
- * @param filters - Admin-specific product filters
- * @param options - Additional query options
- * @returns Query result with products and pagination metadata
+ * Hook for fetching admin products with filtering, pagination, and sorting.
  */
-export function useAdminProducts(
-  filters?: AdminProductFilters,
-  options?: Partial<UseQueryOptions<CatalogServiceResponse<PaginatedResponse<ProductListItem>>, Error>>
-): UseProductsResult {
-  // Apply default pagination values
+export function useAdminProducts(filters?: AdminProductFilters) {
   const normalizedFilters: AdminProductFilters = {
     page: 1,
     pageSize: 20,
@@ -61,15 +69,72 @@ export function useAdminProducts(
 
   const query = useQuery({
     queryKey: adminProductsKeys.list(normalizedFilters),
-    queryFn: () => catalogService.getProducts(normalizedFilters as any) as any,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    enabled: options?.enabled ?? true,
-    ...options,
+    queryFn: async () => {
+      const supabase = createBrowserClient();
+      let q = supabase.from('products').select('*', { count: 'exact' });
+
+      // Search
+      if (normalizedFilters.q?.trim()) {
+        q = q.ilike('name', `%${normalizedFilters.q.trim()}%`);
+      }
+
+      // Status filter
+      if (normalizedFilters.status) {
+        if (Array.isArray(normalizedFilters.status)) {
+          q = q.in('status', normalizedFilters.status);
+        } else {
+          q = q.eq('status', normalizedFilters.status);
+        }
+      }
+
+      // Category filter
+      if (normalizedFilters.categoryId) {
+        if (Array.isArray(normalizedFilters.categoryId)) {
+          q = q.in('category', normalizedFilters.categoryId);
+        } else {
+          q = q.eq('category', normalizedFilters.categoryId);
+        }
+      }
+
+      // Brand filter
+      if (normalizedFilters.brand) {
+        if (Array.isArray(normalizedFilters.brand)) {
+          q = q.in('brand', normalizedFilters.brand);
+        } else {
+          q = q.eq('brand', normalizedFilters.brand);
+        }
+      }
+
+      // Sorting
+      const sortCol = SORT_COL_MAP[normalizedFilters.sortBy || 'createdAt'] || 'created_at';
+      q = q.order(sortCol, { ascending: normalizedFilters.sortOrder === 'asc' });
+
+      // Pagination
+      const page = normalizedFilters.page ?? 1;
+      const pageSize = normalizedFilters.pageSize ?? 20;
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+      q = q.range(from, to);
+
+      const { data, count, error } = await q;
+      if (error) throw error;
+
+      const total = count ?? 0;
+      return {
+        products: (data ?? []).map(mapRowToProductListItem),
+        meta: {
+          total,
+          page,
+          pageSize,
+          totalPages: Math.ceil(total / pageSize),
+        },
+      };
+    },
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Extract products and metadata from response
-  const products = query.data?.data?.data ?? [];
-  const meta = query.data?.data?.meta ?? {
+  const products = query.data?.products ?? [];
+  const meta = query.data?.meta ?? {
     total: 0,
     page: normalizedFilters.page ?? 1,
     pageSize: normalizedFilters.pageSize ?? 20,
@@ -84,125 +149,124 @@ export function useAdminProducts(
     totalPages: meta.totalPages,
     hasNextPage: meta.page < meta.totalPages,
     hasPreviousPage: meta.page > 1,
-    // Computed properties for empty states
     isEmpty: products.length === 0,
     hasFilters: Object.keys(filters ?? {}).length > 0,
-    // Cache management
-    invalidate: () => {
-      const queryClient = useQueryClient();
-      return queryClient.invalidateQueries({ queryKey: adminProductsKeys.lists() });
+  };
+}
+
+/** Helper to get the current session token for API route calls */
+async function getAuthToken(): Promise<string | null> {
+  const supabase = createBrowserClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
+}
+
+async function adminFetch(url: string, options: RequestInit = {}) {
+  const token = await getAuthToken();
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
     },
-  } as any as UseProductsResult;
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Request failed: ${res.status}`);
+  }
+  return res.json();
 }
 
 /**
  * Hook for fetching a single product by ID
- *
- * @param id - Product UUID
- * @param options - Additional query options
- * @returns Query result with product data
  */
-export function useProduct(
-  id: string,
-  options?: Partial<UseQueryOptions<CatalogServiceResponse<AdminProduct>, Error>>
-): UseProductResult {
+export function useProduct(id: string) {
   const query = useQuery({
     queryKey: adminProductsKeys.detail(id),
-    queryFn: () => catalogService.getProduct(id) as any,
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    enabled: !!id && (options?.enabled ?? true),
-    ...options,
+    queryFn: () => adminFetch(`/api/catalog/products/${id}`),
+    staleTime: 10 * 60 * 1000,
+    enabled: !!id,
   });
 
   return {
     ...query,
-    product: query.data?.data,
-  } as any as UseProductResult;
+    product: query.data,
+  };
 }
 
 /**
  * Hook for creating a new product
- *
- * @returns Mutation result with create function
  */
-export function useCreateProduct(): UseCreateProductResult {
+export function useCreateProduct() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: any) => catalogService.createProduct(data),
+    mutationFn: (data: Record<string, unknown>) =>
+      adminFetch('/api/catalog/products', { method: 'POST', body: JSON.stringify(data) }),
     onSuccess: () => {
-      // Invalidate all product lists
       queryClient.invalidateQueries({ queryKey: adminProductsKeys.lists() });
     },
-  }) as UseCreateProductResult;
+  });
 }
 
 /**
  * Hook for updating an existing product
- *
- * @returns Mutation result with update function
  */
-export function useUpdateProduct(): UseUpdateProductResult {
+export function useUpdateProduct() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ productId, data }: { productId: UUID; data: any }) =>
-      catalogService.updateProduct(productId, data),
+    mutationFn: ({ productId, data }: { productId: string; data: Record<string, unknown> }) =>
+      adminFetch(`/api/catalog/products/${productId}`, { method: 'PATCH', body: JSON.stringify(data) }),
     onSuccess: (_, { productId }) => {
-      // Invalidate specific product and all lists
       queryClient.invalidateQueries({ queryKey: adminProductsKeys.detail(productId) });
       queryClient.invalidateQueries({ queryKey: adminProductsKeys.lists() });
     },
-  }) as UseUpdateProductResult;
+  });
 }
 
 /**
  * Hook for deleting a product
- *
- * @returns Mutation result with delete function
  */
-export function useDeleteProduct(): UseDeleteProductResult {
+export function useDeleteProduct() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (productId: UUID) => catalogService.deleteProduct(productId),
+    mutationFn: (productId: string) =>
+      adminFetch(`/api/catalog/products/${productId}`, { method: 'DELETE' }),
     onSuccess: (_, productId) => {
-      // Remove from cache and invalidate lists
       queryClient.removeQueries({ queryKey: adminProductsKeys.detail(productId) });
       queryClient.invalidateQueries({ queryKey: adminProductsKeys.lists() });
     },
-  }) as UseDeleteProductResult;
+  });
 }
 
 /**
  * Hook for publishing a product
- *
- * @returns Mutation result with publish function
  */
-export function usePublishProduct(): UsePublishProductResult {
+export function usePublishProduct() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ productId }: { productId: UUID; options?: any }) =>
-      catalogService.publishProduct(productId),
+    mutationFn: ({ productId }: { productId: string }) =>
+      adminFetch(`/api/catalog/products/${productId}/publish`, { method: 'POST' }),
     onSuccess: (_, { productId }) => {
-      // Invalidate specific product and all lists
       queryClient.invalidateQueries({ queryKey: adminProductsKeys.detail(productId) });
       queryClient.invalidateQueries({ queryKey: adminProductsKeys.lists() });
     },
-  }) as UsePublishProductResult;
+  });
 }
 
 /**
  * Hook for unpublishing a product
- *
- * @returns Mutation result with unpublish function
  */
 export function useUnpublishProduct() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (productId: UUID) => catalogService.unpublishProduct(productId),
+    mutationFn: (productId: string) =>
+      adminFetch(`/api/catalog/products/${productId}/unpublish`, { method: 'POST' }),
     onSuccess: (_, productId) => {
       queryClient.invalidateQueries({ queryKey: adminProductsKeys.detail(productId) });
       queryClient.invalidateQueries({ queryKey: adminProductsKeys.lists() });
@@ -212,17 +276,18 @@ export function useUnpublishProduct() {
 
 /**
  * Hook for duplicating a product
- *
- * @returns Mutation result with duplicate function
  */
 export function useDuplicateProduct() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ productId }: { productId: UUID; options?: any }) => {
-      // Duplicate would be implemented in the service
-      // For now, this is a placeholder
-      return catalogService.getProduct(productId).then((response) => response);
+    mutationFn: async ({ productId }: { productId: string }) => {
+      const product = await adminFetch(`/api/catalog/products/${productId}`);
+      const { id, created_at, updated_at, published_at, ...rest } = product;
+      return adminFetch('/api/catalog/products', {
+        method: 'POST',
+        body: JSON.stringify({ ...rest, name: `${rest.name} (Copy)`, status: 'draft' }),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminProductsKeys.lists() });

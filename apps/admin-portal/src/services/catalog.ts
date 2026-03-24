@@ -1,372 +1,139 @@
-import { catalogApi } from '@/lib/api-client';
-import type { Product, Variant, Category, PaginatedResponse, ApiResponse } from '@/types';
-import type { BulkActionResult, CatalogStats, ProductValidationIssue } from '@/types/admin-catalog';
-import {
-  BulkPublishSchema,
-  BulkUnpublishSchema,
-  BulkDeleteSchema,
-  BulkUpdateStatusSchema,
-  validateProductIds,
-} from '@/lib/validation/bulk-operations';
-import { rateLimiter, RATE_LIMITS } from '@/lib/security/rate-limiter';
-import { z } from 'zod';
+/**
+ * Catalog Service
+ *
+ * Thin wrapper for admin catalog write operations that call API routes.
+ * Read operations now go directly through Supabase in the hooks.
+ */
 
-// Constants
-const MAX_BULK_BATCH_SIZE = 100;
+import { createBrowserClient } from '@patina/supabase';
+
+async function getAuthToken(): Promise<string | null> {
+  const supabase = createBrowserClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
+}
+
+async function adminFetch(url: string, options: RequestInit = {}) {
+  const token = await getAuthToken();
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Request failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+function mapCategoryRow(row: Record<string, unknown>) {
+  return {
+    id: row.id as string,
+    name: (row.name as string) || '',
+    slug: (row.slug as string) || '',
+    description: (row.description as string) || '',
+    path: (row.slug as string) || '',
+    depth: 0,
+    order: (row.sort_order as number) ?? 0,
+    isActive: (row.is_active as boolean) ?? true,
+    productCount: (row.product_count as number) ?? 0,
+    parentId: (row.parent_id as string) || undefined,
+    imageUrl: (row.image_url as string) || undefined,
+    createdAt: row.created_at ? new Date(row.created_at as string) : new Date(),
+    updatedAt: row.updated_at ? new Date(row.updated_at as string) : new Date(),
+  };
+}
 
 export const catalogService = {
-  // Products
-  async getProducts(params?: {
-    query?: string;
-    status?: string;
-    statuses?: string[];
-    category?: string;
-    brand?: string;
-    page?: number;
-    pageSize?: number;
-    createdAfter?: string;
-    createdBefore?: string;
-    hasValidationIssues?: boolean;
-  }): Promise<ApiResponse<PaginatedResponse<Product>>> {
-    // Build params object for CatalogApiClient
-    const apiParams: Record<string, unknown> = {};
-    if (params?.query) apiParams.q = params.query;
-    if (params?.status) apiParams.status = params.status;
-    if (params?.statuses) apiParams.statuses = params.statuses.join(',');
-    if (params?.category) apiParams.category = params.category;
-    if (params?.brand) apiParams.brand = params.brand;
-    if (params?.page) apiParams.page = params.page;
-    if (params?.pageSize) apiParams.pageSize = params.pageSize;
-    if (params?.createdAfter) apiParams.createdAfter = params.createdAfter;
-    if (params?.createdBefore) apiParams.createdBefore = params.createdBefore;
-    if (params?.hasValidationIssues !== undefined) {
-      apiParams.hasValidationIssues = params.hasValidationIssues;
-    }
-
-    return catalogApi.getProducts(apiParams) as Promise<ApiResponse<PaginatedResponse<Product>>>;
+  // Products - write operations via API routes
+  async getProduct(productId: string) {
+    return adminFetch(`/api/catalog/products/${productId}`);
   },
 
-  async getProduct(productId: string): Promise<ApiResponse<Product>> {
-    return catalogApi.getProduct(productId) as Promise<ApiResponse<Product>>;
+  async createProduct(data: Record<string, unknown> | object) {
+    return adminFetch('/api/catalog/products', { method: 'POST', body: JSON.stringify(data) });
   },
 
-  async createProduct(data: Partial<Product>): Promise<ApiResponse<Product>> {
-    return catalogApi.createProduct(data as Record<string, unknown>) as Promise<ApiResponse<Product>>;
+  async updateProduct(productId: string, data: Record<string, unknown> | object) {
+    return adminFetch(`/api/catalog/products/${productId}`, { method: 'PATCH', body: JSON.stringify(data) });
   },
 
-  async updateProduct(productId: string, data: Partial<Product>): Promise<ApiResponse<Product>> {
-    return catalogApi.updateProduct(productId, data as Record<string, unknown>) as Promise<ApiResponse<Product>>;
+  async deleteProduct(productId: string) {
+    return adminFetch(`/api/catalog/products/${productId}`, { method: 'DELETE' });
   },
 
-  async deleteProduct(productId: string): Promise<ApiResponse<void>> {
-    return catalogApi.deleteProduct(productId) as Promise<ApiResponse<void>>;
+  async publishProduct(productId: string) {
+    return adminFetch(`/api/catalog/products/${productId}/publish`, { method: 'POST' });
   },
 
-  async publishProduct(productId: string): Promise<ApiResponse<void>> {
-    return catalogApi.publishProduct(productId) as Promise<ApiResponse<void>>;
+  async unpublishProduct(productId: string) {
+    return adminFetch(`/api/catalog/products/${productId}/unpublish`, { method: 'POST' });
   },
 
-  async unpublishProduct(productId: string): Promise<ApiResponse<void>> {
-    return catalogApi.unpublishProduct(productId) as Promise<ApiResponse<void>>;
+  // Bulk operations
+  async bulkPublish(productIds: string[]) {
+    return adminFetch('/api/catalog/products/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'publish', productIds }),
+    });
   },
 
-  // Variants
-  async createVariant(productId: string, data: Partial<Variant>): Promise<ApiResponse<Variant>> {
-    // Use base client for variant creation (not exposed in catalogApi interface yet)
-    return catalogApi['post'](`/products/${productId}/variants`, data) as Promise<ApiResponse<Variant>>;
+  async bulkUnpublish(productIds: string[]) {
+    return adminFetch('/api/catalog/products/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'unpublish', productIds }),
+    });
   },
 
-  async updateVariant(variantId: string, data: Partial<Variant>): Promise<ApiResponse<Variant>> {
-    // Variants are updated through product-scoped endpoint
-    return catalogApi['patch'](`/variants/${variantId}`, data) as Promise<ApiResponse<Variant>>;
+  async bulkDelete(productIds: string[]) {
+    return adminFetch('/api/catalog/products/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'delete', productIds }),
+    });
   },
 
-  async deleteVariant(variantId: string): Promise<ApiResponse<void>> {
-    return catalogApi['delete'](`/variants/${variantId}`) as Promise<ApiResponse<void>>;
+  // Categories - read from Supabase directly
+  async getCategories() {
+    const supabase = createBrowserClient();
+    const { data, error } = await supabase.from('categories').select('*').order('name');
+    if (error) throw error;
+    const categories = (data ?? []).map(mapCategoryRow);
+    return { data: categories };
   },
 
-  // Categories
-  async getCategories(): Promise<ApiResponse<Category[]>> {
-    return catalogApi.getCategories() as Promise<ApiResponse<Category[]>>;
+  async getCategory(categoryId: string) {
+    const supabase = createBrowserClient();
+    const { data, error } = await supabase.from('categories').select('*').eq('id', categoryId).single();
+    if (error) throw error;
+    return { data: data ? mapCategoryRow(data) : null };
   },
 
-  async getCategory(categoryId: string): Promise<ApiResponse<Category>> {
-    return catalogApi.getCategory(categoryId) as Promise<ApiResponse<Category>>;
+  async createCategory(data: Record<string, unknown>) {
+    return adminFetch('/api/catalog/categories', { method: 'POST', body: JSON.stringify(data) });
   },
 
-  async createCategory(data: Partial<Category>): Promise<ApiResponse<Category>> {
-    return catalogApi.createCategory(data as any) as Promise<ApiResponse<Category>>;
+  async updateCategory(categoryId: string, data: Record<string, unknown>) {
+    return adminFetch(`/api/catalog/categories/${categoryId}`, { method: 'PATCH', body: JSON.stringify(data) });
   },
 
-  async updateCategory(categoryId: string, data: Partial<Category>): Promise<ApiResponse<Category>> {
-    return catalogApi.updateCategory(categoryId, data as Record<string, unknown>) as Promise<ApiResponse<Category>>;
+  async deleteCategory(categoryId: string) {
+    return adminFetch(`/api/catalog/categories/${categoryId}`, { method: 'DELETE' });
   },
 
-  async deleteCategory(categoryId: string): Promise<ApiResponse<void>> {
-    return catalogApi.deleteCategory(categoryId) as Promise<ApiResponse<void>>;
+  // Variants — write operations via API routes
+  async createVariant(productId: string, data: Partial<Record<string, unknown>>) {
+    return adminFetch(`/api/catalog/products/${productId}/variants`, { method: 'POST', body: JSON.stringify(data) });
   },
 
-  // Validation Issues
-  async getValidationIssues(params?: {
-    productId?: string;
-    severity?: string;
-    status?: string;
-  }): Promise<ApiResponse<any[]>> {
-    const apiParams: Record<string, unknown> = {};
-    if (params?.productId) apiParams.productId = params.productId;
-    if (params?.severity) apiParams.severity = params.severity;
-    if (params?.status) apiParams.status = params.status;
-
-    return catalogApi['get']('/admin/catalog/issues', { params: apiParams }) as Promise<ApiResponse<any[]>>;
+  async updateVariant(variantId: string, data: Partial<Record<string, unknown>>) {
+    return adminFetch(`/api/catalog/variants/${variantId}`, { method: 'PATCH', body: JSON.stringify(data) });
   },
 
-  // Import
-  async createImportJob(data: {
-    source: string;
-    mapping: any;
-    file?: File;
-  }): Promise<ApiResponse<any>> {
-    return catalogApi['post']('/imports', data) as Promise<ApiResponse<any>>;
-  },
-
-  async getImportJob(jobId: string): Promise<ApiResponse<any>> {
-    return catalogApi['get'](`/imports/${jobId}`) as Promise<ApiResponse<any>>;
-  },
-
-  async getImportJobs(): Promise<ApiResponse<PaginatedResponse<any>>> {
-    return catalogApi['get']('/imports') as Promise<ApiResponse<PaginatedResponse<any>>>;
-  },
-
-  async retryImportJob(jobId: string): Promise<ApiResponse<void>> {
-    return catalogApi['post'](`/imports/${jobId}/retry`) as Promise<ApiResponse<void>>;
-  },
-
-  // ==================== BULK OPERATIONS ====================
-
-  async bulkPublish(productIds: string[]): Promise<ApiResponse<BulkActionResult>> {
-    // Rate limit check
-    if (!rateLimiter.canProceed('bulk-publish', RATE_LIMITS.bulkOperations)) {
-      const timeUntilReset = rateLimiter.getTimeUntilReset('bulk-publish', RATE_LIMITS.bulkOperations);
-      const secondsUntilReset = Math.ceil(timeUntilReset / 1000);
-      throw new Error(
-        `Rate limit exceeded. Please wait ${secondsUntilReset} seconds before trying again.`
-      );
-    }
-
-    // Validate input
-    try {
-      const validated = BulkPublishSchema.parse({ productIds });
-
-      // Proceed with validated data
-      return catalogApi['post']('/admin/catalog/bulk/publish', {
-        productIds: validated.productIds,
-      }) as Promise<ApiResponse<BulkActionResult>>;
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        const issues = error.issues.map(i => i.message).join(', ');
-        throw new Error(`Validation failed: ${issues}`);
-      }
-      throw error;
-    }
-  },
-
-  async bulkUnpublish(productIds: string[], reason?: string): Promise<ApiResponse<BulkActionResult>> {
-    // Rate limit check
-    if (!rateLimiter.canProceed('bulk-unpublish', RATE_LIMITS.bulkOperations)) {
-      const timeUntilReset = rateLimiter.getTimeUntilReset('bulk-unpublish', RATE_LIMITS.bulkOperations);
-      const secondsUntilReset = Math.ceil(timeUntilReset / 1000);
-      throw new Error(
-        `Rate limit exceeded. Please wait ${secondsUntilReset} seconds before trying again.`
-      );
-    }
-
-    // Validate input with reason if provided
-    try {
-      const payload: { productIds: string[]; reason?: string } = {
-        productIds,
-      };
-
-      if (reason) {
-        // Validate with reason required
-        const validated = BulkUnpublishSchema.parse({ productIds, reason });
-        payload.productIds = validated.productIds;
-        payload.reason = validated.reason;
-      } else {
-        // Validate without reason
-        const validated = BulkPublishSchema.parse({ productIds });
-        payload.productIds = validated.productIds;
-      }
-
-      return catalogApi['post']('/admin/catalog/bulk/unpublish', payload) as Promise<ApiResponse<BulkActionResult>>;
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        const issues = error.issues.map(i => i.message).join(', ');
-        throw new Error(`Validation failed: ${issues}`);
-      }
-      throw error;
-    }
-  },
-
-  async bulkDelete(productIds: string[], options?: { soft?: boolean }): Promise<ApiResponse<BulkActionResult>> {
-    // Rate limit check
-    if (!rateLimiter.canProceed('bulk-delete', RATE_LIMITS.bulkOperations)) {
-      const timeUntilReset = rateLimiter.getTimeUntilReset('bulk-delete', RATE_LIMITS.bulkOperations);
-      const secondsUntilReset = Math.ceil(timeUntilReset / 1000);
-      throw new Error(
-        `Rate limit exceeded. Please wait ${secondsUntilReset} seconds before trying again.`
-      );
-    }
-
-    // Validate input
-    try {
-      const validated = BulkDeleteSchema.parse({
-        productIds,
-        soft: options?.soft,
-      });
-
-      return catalogApi['post']('/admin/catalog/bulk/delete', validated) as Promise<ApiResponse<BulkActionResult>>;
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        const issues = error.issues.map(i => i.message).join(', ');
-        throw new Error(`Validation failed: ${issues}`);
-      }
-      throw error;
-    }
-  },
-
-  async bulkUpdateStatus(productIds: string[], status: string): Promise<ApiResponse<BulkActionResult>> {
-    // Rate limit check
-    if (!rateLimiter.canProceed('bulk-update-status', RATE_LIMITS.bulkOperations)) {
-      const timeUntilReset = rateLimiter.getTimeUntilReset('bulk-update-status', RATE_LIMITS.bulkOperations);
-      const secondsUntilReset = Math.ceil(timeUntilReset / 1000);
-      throw new Error(
-        `Rate limit exceeded. Please wait ${secondsUntilReset} seconds before trying again.`
-      );
-    }
-
-    // Validate input
-    try {
-      const validated = BulkUpdateStatusSchema.parse({
-        productIds,
-        status,
-      });
-
-      return catalogApi['post']('/admin/catalog/bulk/update-status', validated) as Promise<ApiResponse<BulkActionResult>>;
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        const issues = error.issues.map(i => i.message).join(', ');
-        throw new Error(`Validation failed: ${issues}`);
-      }
-      throw error;
-    }
-  },
-
-  // ==================== VALIDATION OPERATIONS ====================
-
-  async getValidationSummary(filters?: {
-    severity?: string;
-    productId?: string;
-  }): Promise<ApiResponse<any>> {
-    const apiParams: Record<string, unknown> = {};
-    if (filters?.severity) apiParams.severity = filters.severity;
-    if (filters?.productId) apiParams.productId = filters.productId;
-
-    return catalogApi['get']('/admin/catalog/validation/summary', { params: apiParams }) as Promise<ApiResponse<any>>;
-  },
-
-  async getProductValidationIssues(productId: string): Promise<ApiResponse<ProductValidationIssue[]>> {
-    return catalogApi.getProductValidation(productId) as Promise<ApiResponse<ProductValidationIssue[]>>;
-  },
-
-  async resolveValidationIssue(issueId: string): Promise<ApiResponse<void>> {
-    return catalogApi['post'](`/admin/catalog/validation/issues/${issueId}/resolve`) as Promise<ApiResponse<void>>;
-  },
-
-  // ==================== ANALYTICS & STATISTICS ====================
-
-  async getProductStats(filters?: {
-    startDate?: string;
-    endDate?: string;
-    categoryId?: string;
-  }): Promise<ApiResponse<CatalogStats>> {
-    const apiParams: Record<string, unknown> = {};
-    if (filters?.startDate) apiParams.startDate = filters.startDate;
-    if (filters?.endDate) apiParams.endDate = filters.endDate;
-    if (filters?.categoryId) apiParams.categoryId = filters.categoryId;
-
-    return catalogApi['get']('/admin/catalog/stats', { params: apiParams }) as Promise<ApiResponse<CatalogStats>>;
-  },
-
-  async getRecentActivity(params?: { limit?: number }): Promise<ApiResponse<any[]>> {
-    const apiParams: Record<string, unknown> = {};
-    if (params?.limit) apiParams.limit = params.limit;
-
-    return catalogApi['get']('/admin/catalog/activity', { params: apiParams }) as Promise<ApiResponse<any[]>>;
-  },
-
-  // ==================== ERROR HANDLING & RETRY ====================
-
-  async retryFailedOperation(operationId: string): Promise<ApiResponse<any>> {
-    return catalogApi['post'](`/admin/catalog/operations/${operationId}/retry`) as Promise<ApiResponse<any>>;
-  },
-
-  async getProductWithRetry(productId: string): Promise<ApiResponse<Product>> {
-    // Retry logic with exponential backoff
-    const maxRetries = 2;
-    let lastError: any;
-
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        const result: any = await catalogApi.getProduct(productId);
-
-        // Check if result exists and has an error property
-        if (result && result.error) {
-          const statusCode = result.error.statusCode;
-          const errorCode = result.error.code;
-
-          // Don't retry on client errors (4xx) or specific error codes like NOT_FOUND
-          if (
-            (statusCode && statusCode >= 400 && statusCode < 500) ||
-            errorCode === 'NOT_FOUND' ||
-            errorCode === 'VALIDATION_FAILED' ||
-            errorCode === 'UNAUTHORIZED' ||
-            errorCode === 'FORBIDDEN'
-          ) {
-            return result;
-          }
-
-          // Retry on server errors (5xx) or network errors
-          if (attempt < maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
-            continue;
-          }
-        }
-
-        // Return successful result or result with non-retryable error
-        return result;
-      } catch (error: any) {
-        lastError = error;
-
-        // Don't retry on last attempt
-        if (attempt === maxRetries) {
-          throw error;
-        }
-
-        // Wait before retry with exponential backoff
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
-      }
-    }
-
-    throw lastError;
-  },
-
-  // ==================== EXPORT OPERATIONS ====================
-
-  async exportProducts(options: { format: 'csv' | 'json' }): Promise<ApiResponse<any>> {
-    const apiParams: Record<string, unknown> = {
-      format: options.format,
-    };
-
-    return catalogApi['get']('/admin/catalog/export', { params: apiParams }) as Promise<ApiResponse<any>>;
+  async deleteVariant(variantId: string) {
+    return adminFetch(`/api/catalog/variants/${variantId}`, { method: 'DELETE' });
   },
 };

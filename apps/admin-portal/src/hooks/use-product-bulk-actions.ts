@@ -1,70 +1,61 @@
 /**
  * useProductBulkActions Hook
  *
- * Custom React hook for managing bulk product operations including
- * selection state, bulk publish/unpublish, bulk delete, and status updates.
- *
- * Features:
- * - Selection state management (individual and select-all)
- * - Bulk publish/unpublish operations
- * - Bulk delete with soft delete support
- * - Bulk status updates
- * - Error handling and callbacks
- * - Query invalidation after operations
- *
- * @module hooks/use-product-bulk-actions
+ * Manages bulk product operations via the admin bulk API endpoint.
+ * Replaces N+1 individual service calls with single batch requests.
  */
+
+'use client';
 
 import { useState, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { catalogService } from '@/services/catalog';
-import type {
-  BulkSelection,
-  BulkActionResult,
-  BulkActionItemResult,
-} from '@/types';
-import type { UUID } from '@patina/types';
+import { createBrowserClient } from '@patina/supabase';
+import type { BulkActionResult, BulkActionItemResult } from '@/types';
 
-/**
- * Options for configuring bulk actions hook
- */
 interface UseBulkActionsOptions {
-  /** Clear selection after successful operation */
   clearOnSuccess?: boolean;
-  /** Require confirmation for delete operations */
   requireConfirmation?: boolean;
-  /** Enable optimistic updates */
   optimistic?: boolean;
-  /** Success callback */
   onSuccess?: (result: BulkActionResult) => void;
-  /** Error callback */
-  onError?: (error: any) => void;
+  onError?: (error: unknown) => void;
 }
 
-/**
- * Hook for managing bulk product actions
- *
- * @param options - Configuration options
- * @returns Bulk actions interface with selection state and operations
- */
+async function getAuthToken(): Promise<string | null> {
+  const supabase = createBrowserClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
+}
+
+async function bulkFetch(action: string, productIds: string[]) {
+  const token = await getAuthToken();
+  const res = await fetch('/api/catalog/products/bulk', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ action, productIds }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Bulk ${action} failed: ${res.status}`);
+  }
+
+  return res.json();
+}
+
 export function useProductBulkActions(options: UseBulkActionsOptions = {}) {
   const queryClient = useQueryClient();
 
-  // Selection state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isAllSelected, setIsAllSelected] = useState(false);
-  const [error, setError] = useState<any | null>(null);
+  const [error, setError] = useState<unknown | null>(null);
   const [lastResult, setLastResult] = useState<BulkActionResult | null>(null);
 
-  // Selection management functions
+  // Selection management
   const selectProduct = useCallback((productId: string) => {
-    setSelectedIds((prev) => {
-      // Prevent duplicates
-      if (prev.includes(productId)) {
-        return prev;
-      }
-      return [...prev, productId];
-    });
+    setSelectedIds((prev) => prev.includes(productId) ? prev : [...prev, productId]);
   }, []);
 
   const selectProducts = useCallback((productIds: string[]) => {
@@ -90,12 +81,9 @@ export function useProductBulkActions(options: UseBulkActionsOptions = {}) {
   }, []);
 
   const toggleProduct = useCallback((productId: string) => {
-    setSelectedIds((prev) => {
-      if (prev.includes(productId)) {
-        return prev.filter((id) => id !== productId);
-      }
-      return [...prev, productId];
-    });
+    setSelectedIds((prev) =>
+      prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
+    );
   }, []);
 
   const isSelected = useCallback(
@@ -103,217 +91,43 @@ export function useProductBulkActions(options: UseBulkActionsOptions = {}) {
     [selectedIds]
   );
 
-  // Validate selection
   const validateSelection = useCallback(() => {
     if (selectedIds.length === 0) {
       throw new Error('No products selected');
     }
   }, [selectedIds]);
 
-  // Bulk publish mutation
+  function handleSuccess(response: BulkActionResult) {
+    setLastResult(response);
+    queryClient.invalidateQueries({ queryKey: ['admin-products'] });
+    queryClient.invalidateQueries({ queryKey: ['catalog-stats'] });
+    if (options.clearOnSuccess) clearSelection();
+    if (options.onSuccess) options.onSuccess(response);
+  }
+
+  function handleError(err: unknown) {
+    setError(err);
+    if (options.onError) options.onError(err);
+  }
+
   const bulkPublishMutation = useMutation({
-    mutationFn: async (ids: string[]) => {
-      // Add bulk publish method to catalog service
-      const results: BulkActionItemResult[] = [];
-
-      for (const id of ids) {
-        try {
-          await catalogService.publishProduct(id);
-          results.push({ id, success: true });
-        } catch (err: any) {
-          results.push({
-            id,
-            success: false,
-            error: err.message || 'Failed to publish',
-          });
-        }
-      }
-
-      const successful = results.filter((r) => r.success);
-      const failed = results.filter((r) => !r.success);
-
-      return {
-        data: {
-          success: successful,
-          failed,
-          skipped: [],
-          total: ids.length,
-        },
-      };
-    },
-    onSuccess: (response) => {
-      const result = response.data;
-      setLastResult(result);
-      queryClient.invalidateQueries({ queryKey: ['admin-products'] });
-
-      if (options.clearOnSuccess) {
-        clearSelection();
-      }
-
-      if (options.onSuccess) {
-        options.onSuccess(result);
-      }
-    },
-    onError: (err) => {
-      setError(err);
-      if (options.onError) {
-        options.onError(err);
-      }
-    },
+    mutationFn: (ids: string[]) => bulkFetch('publish', ids),
+    onSuccess: handleSuccess,
+    onError: handleError,
   });
 
-  // Bulk unpublish mutation
   const bulkUnpublishMutation = useMutation({
-    mutationFn: async ({ ids, reason }: { ids: string[]; reason?: string }) => {
-      const results: BulkActionItemResult[] = [];
-
-      for (const id of ids) {
-        try {
-          await catalogService.unpublishProduct(id);
-          results.push({ id, success: true });
-        } catch (err: any) {
-          results.push({
-            id,
-            success: false,
-            error: err.message || 'Failed to unpublish',
-          });
-        }
-      }
-
-      const successful = results.filter((r) => r.success);
-      const failed = results.filter((r) => !r.success);
-
-      return {
-        data: {
-          success: successful,
-          failed,
-          skipped: [],
-          total: ids.length,
-        },
-      };
-    },
-    onSuccess: (response) => {
-      const result = response.data;
-      setLastResult(result);
-      queryClient.invalidateQueries({ queryKey: ['admin-products'] });
-
-      if (options.clearOnSuccess) {
-        clearSelection();
-      }
-
-      if (options.onSuccess) {
-        options.onSuccess(result);
-      }
-    },
-    onError: (err) => {
-      setError(err);
-      if (options.onError) {
-        options.onError(err);
-      }
-    },
+    mutationFn: ({ ids }: { ids: string[]; reason?: string }) => bulkFetch('unpublish', ids),
+    onSuccess: handleSuccess,
+    onError: handleError,
   });
 
-  // Bulk delete mutation
   const bulkDeleteMutation = useMutation({
-    mutationFn: async ({ ids, deleteOptions }: { ids: string[]; deleteOptions?: { soft?: boolean } }) => {
-      if (options.requireConfirmation) {
-        throw new Error('Confirmation required');
-      }
-
-      const results: BulkActionItemResult[] = [];
-
-      for (const id of ids) {
-        try {
-          await catalogService.deleteProduct(id);
-          results.push({ id, success: true });
-        } catch (err: any) {
-          results.push({
-            id,
-            success: false,
-            error: err.message || 'Failed to delete',
-          });
-        }
-      }
-
-      const successful = results.filter((r) => r.success);
-      const failed = results.filter((r) => !r.success);
-
-      return {
-        data: {
-          success: successful,
-          failed,
-          skipped: [],
-          total: ids.length,
-        },
-      };
-    },
-    onSuccess: (response) => {
-      const result = response.data;
-      setLastResult(result);
-      queryClient.invalidateQueries({ queryKey: ['admin-products'] });
-
-      if (options.clearOnSuccess) {
-        clearSelection();
-      }
-
-      if (options.onSuccess) {
-        options.onSuccess(result);
-      }
-    },
-    onError: (err) => {
-      setError(err);
-      if (options.onError) {
-        options.onError(err);
-      }
-    },
+    mutationFn: ({ ids }: { ids: string[] }) => bulkFetch('delete', ids),
+    onSuccess: handleSuccess,
+    onError: handleError,
   });
 
-  // Bulk update status mutation
-  const bulkUpdateStatusMutation = useMutation({
-    mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
-      const results: BulkActionItemResult[] = [];
-
-      for (const id of ids) {
-        try {
-          await catalogService.updateProduct(id, { status: status as any });
-          results.push({ id, success: true });
-        } catch (err: any) {
-          results.push({
-            id,
-            success: false,
-            error: err.message || 'Failed to update status',
-          });
-        }
-      }
-
-      const successful = results.filter((r) => r.success);
-      const failed = results.filter((r) => !r.success);
-
-      return {
-        data: {
-          success: successful,
-          failed,
-          skipped: [],
-          total: ids.length,
-        },
-      };
-    },
-    onSuccess: (response) => {
-      const result = response.data;
-      setLastResult(result);
-      queryClient.invalidateQueries({ queryKey: ['admin-products'] });
-
-      if (options.clearOnSuccess) {
-        clearSelection();
-      }
-
-      if (options.onSuccess) {
-        options.onSuccess(result);
-      }
-    },
-  });
-
-  // Public API
   return {
     // Selection state
     selectedIds,
@@ -340,13 +154,16 @@ export function useProductBulkActions(options: UseBulkActionsOptions = {}) {
       validateSelection();
       return bulkUnpublishMutation.mutateAsync({ ids: selectedIds, reason });
     },
-    bulkDelete: async (deleteOptions?: { soft?: boolean }) => {
+    bulkDelete: async () => {
       validateSelection();
-      return bulkDeleteMutation.mutateAsync({ ids: selectedIds, deleteOptions });
+      return bulkDeleteMutation.mutateAsync({ ids: selectedIds });
     },
     bulkUpdateStatus: async (status: string) => {
       validateSelection();
-      return bulkUpdateStatusMutation.mutateAsync({ ids: selectedIds, status });
+      // For now, map to publish/unpublish
+      if (status === 'published') return bulkPublishMutation.mutateAsync(selectedIds);
+      if (status === 'draft') return bulkUnpublishMutation.mutateAsync({ ids: selectedIds });
+      throw new Error(`Unsupported bulk status: ${status}`);
     },
 
     // Loading states
@@ -356,18 +173,14 @@ export function useProductBulkActions(options: UseBulkActionsOptions = {}) {
     isLoading:
       bulkPublishMutation.isPending ||
       bulkUnpublishMutation.isPending ||
-      bulkDeleteMutation.isPending ||
-      bulkUpdateStatusMutation.isPending,
+      bulkDeleteMutation.isPending,
 
     // Operation results
     lastResult,
     error,
-
-    // Error management
     setError,
     clearError: () => setError(null),
 
-    // Optimistic updates flag
     optimisticSuccess: options.optimistic && bulkPublishMutation.isPending,
   };
 }
