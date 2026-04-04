@@ -179,6 +179,16 @@ export const queryKeys = {
     tasks: (projectId: string) => [...queryKeys.projects.all, projectId, 'tasks'] as const,
     rfis: (projectId: string) => [...queryKeys.projects.all, projectId, 'rfis'] as const,
     changeOrders: (projectId: string) => [...queryKeys.projects.all, projectId, 'change-orders'] as const,
+    timeline: (projectId: string) => [...queryKeys.projects.all, projectId, 'timeline'] as const,
+    documents: (projectId: string) => [...queryKeys.projects.all, projectId, 'documents'] as const,
+    milestones: (projectId: string) => [...queryKeys.projects.all, projectId, 'milestones'] as const,
+    activity: (projectId: string) => [...queryKeys.projects.all, projectId, 'activity'] as const,
+    progress: (projectId: string) => [...queryKeys.projects.all, projectId, 'progress'] as const,
+    rooms: (projectId: string) => [...queryKeys.projects.all, projectId, 'rooms'] as const,
+    ffeItems: (projectId: string) => [...queryKeys.projects.all, projectId, 'ffe-items'] as const,
+    financials: (projectId: string) => [...queryKeys.projects.all, projectId, 'financials'] as const,
+    timeTracking: (projectId: string) => [...queryKeys.projects.all, projectId, 'time-tracking'] as const,
+    keyMetrics: (projectId: string) => [...queryKeys.projects.all, projectId, 'key-metrics'] as const,
   },
 
   // Threads & Messages

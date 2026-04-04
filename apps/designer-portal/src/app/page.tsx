@@ -1,148 +1,104 @@
 import Link from 'next/link';
-import { ArrowRight, Palette, Package, Users, TrendingUp, Sparkles, Home } from 'lucide-react';
+import { StrataMark } from '@/components/portal/strata-mark';
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/5">
-      {/* Header */}
-      <header className="w-full px-6 py-4 border-b bg-background/80 backdrop-blur-sm">
-        <nav className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">P</span>
-            </div>
-            <span className="font-heading text-xl font-bold">Patina</span>
-          </div>
-          <Link
-            href="/projects"
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+    <div
+      className="relative min-h-screen flex flex-col justify-end"
+      style={{ padding: 'clamp(2rem, 6vw, 6rem) clamp(1.5rem, 5vw, 4rem)' }}
+    >
+      {/* Pearl gradient wash — right edge */}
+      <div
+        className="pointer-events-none absolute inset-y-0 right-0 w-[40%]"
+        style={{
+          background:
+            'linear-gradient(180deg, transparent 0%, var(--color-pearl) 50%, transparent 100%)',
+          opacity: 0.4,
+        }}
+      />
+
+      {/* Content */}
+      <div className="relative">
+        {/* Meta label */}
+        <div className="type-meta mb-12 animate-section-enter">
+          Patina &mdash; Designer Portal
+        </div>
+
+        {/* Heading */}
+        <h1
+          className="font-heading font-normal mb-6 animate-text-reveal"
+          style={{
+            fontSize: 'clamp(3rem, 7vw, 5.5rem)',
+            lineHeight: 1.15,
+            letterSpacing: '-0.02em',
+          }}
+        >
+          The Designer Portal
+          <span
+            className="block font-heading italic font-normal"
+            style={{
+              fontSize: '0.65em',
+              letterSpacing: '0',
+              color: 'var(--color-aged-oak)',
+            }}
           >
-            Sign In
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </nav>
-      </header>
+            Where craft meets commerce
+          </span>
+        </h1>
 
-      <main className="flex min-h-[calc(100vh-65px)] flex-col items-center justify-center px-6 py-12">
-        {/* Hero Section */}
-        <div className="max-w-5xl w-full text-center space-y-8">
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium">
-            <Sparkles className="h-4 w-4" />
-            Designer Portal
-          </div>
+        {/* Subtitle */}
+        <p
+          className="type-body max-w-[540px] mb-16 animate-section-enter"
+          style={{ animationDelay: '200ms', fontSize: '1.15rem' }}
+        >
+          A professional design hub where information hierarchy replaces
+          containers, type does the speaking, and the interface gets out of
+          the way of the work.
+        </p>
 
-          {/* Main Heading */}
-          <div className="space-y-4">
-            <h1 className="text-5xl md:text-6xl font-heading font-bold tracking-tight">
-              Welcome to Your
-              <span className="block text-primary mt-2">Design Studio</span>
-            </h1>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Create stunning custom home furnishing solutions for your clients with our comprehensive designer platform
-            </p>
-          </div>
+        {/* Strata divider */}
+        <StrataMark variant="full" />
 
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
+        {/* Footer metadata */}
+        <div
+          className="flex flex-wrap gap-16 animate-section-enter"
+          style={{ animationDelay: '400ms' }}
+        >
+          <div>
+            <p className="type-meta mb-1">Enter</p>
             <Link
-              href="/projects"
-              className="group flex items-center gap-3 px-8 py-4 bg-primary text-primary-foreground rounded-lg font-medium text-lg hover:bg-primary/90 transition-all hover:scale-105 shadow-lg shadow-primary/20"
+              href="/portal"
+              className="type-body-small text-patina-charcoal hover:text-patina-clay transition-colors"
             >
-              <Home className="h-5 w-5" />
-              Enter Designer Portal
-              <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+              Designer Portal
             </Link>
+          </div>
+          <div>
+            <p className="type-meta mb-1">Account</p>
             <Link
               href="/auth/signin"
-              className="flex items-center gap-3 px-8 py-4 bg-background border-2 border-border rounded-lg font-medium text-lg hover:bg-accent hover:border-accent transition-all"
+              className="type-body-small text-patina-charcoal hover:text-patina-clay transition-colors"
+            >
+              Sign In
+            </Link>
+          </div>
+          <div>
+            <p className="type-meta mb-1">New Here?</p>
+            <Link
+              href="/auth/signup"
+              className="type-body-small text-patina-charcoal hover:text-patina-clay transition-colors"
             >
               Create Account
             </Link>
           </div>
-
-          {/* Features Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pt-16">
-            <FeatureCard
-              icon={<Palette className="h-6 w-6" />}
-              title="Style Profiles"
-              description="Create and manage personalized style profiles for each client"
-            />
-            <FeatureCard
-              icon={<Package className="h-6 w-6" />}
-              title="Product Catalog"
-              description="Browse and customize our extensive furniture collection"
-            />
-            <FeatureCard
-              icon={<Users className="h-6 w-6" />}
-              title="Client Management"
-              description="Organize projects and collaborate with your clients"
-            />
-            <FeatureCard
-              icon={<TrendingUp className="h-6 w-6" />}
-              title="Order Tracking"
-              description="Monitor production and delivery status in real-time"
-            />
-          </div>
-
-          {/* Quick Links */}
-          <div className="pt-12 space-y-4">
-            <p className="text-sm text-muted-foreground">Quick Access:</p>
-            <div className="flex flex-wrap gap-4 justify-center">
-              <QuickLink href="/projects" label="Projects" />
-              <QuickLink href="/catalog" label="Catalog" />
-              <QuickLink href="/clients" label="Clients" />
-              <QuickLink href="/proposals" label="Proposals" />
-              <QuickLink href="/demo" label="Demo" />
-            </div>
+          <div>
+            <p className="type-meta mb-1">Platform</p>
+            <p className="type-body-small text-patina-charcoal">
+              Patina v1.0 &mdash; March 2026
+            </p>
           </div>
         </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="w-full px-6 py-8 border-t bg-background/50">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-sm text-muted-foreground">
-            © 2024 Patina. Custom furniture for discerning designers.
-          </p>
-          <div className="flex gap-6">
-            <Link href="/support" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              Support
-            </Link>
-            <Link href="/docs" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              Documentation
-            </Link>
-            <Link href="/contact" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              Contact
-            </Link>
-          </div>
-        </div>
-      </footer>
-    </div>
-  );
-}
-
-function FeatureCard({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
-  return (
-    <div className="p-6 rounded-lg border bg-card hover:bg-accent/5 transition-colors group">
-      <div className="flex flex-col items-center text-center space-y-3">
-        <div className="p-3 rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-          {icon}
-        </div>
-        <h3 className="font-semibold">{title}</h3>
-        <p className="text-sm text-muted-foreground">{description}</p>
       </div>
     </div>
-  );
-}
-
-function QuickLink({ href, label }: { href: string; label: string }) {
-  return (
-    <Link
-      href={href}
-      className="px-4 py-2 rounded-lg bg-background border hover:bg-accent hover:border-accent-foreground/20 transition-all text-sm font-medium"
-    >
-      {label}
-    </Link>
   );
 }

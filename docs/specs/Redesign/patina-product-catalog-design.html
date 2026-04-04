@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — Product Catalog UX/UI Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+--off-white:#FAF7F2;--pearl:#E5E2DD;--clay:#C4A57B;--aged-oak:#8B7355;--mocha:#5C4A3C;--charcoal:#2C2926;
+--sage:#A8B5A0;--dusty-blue:#8B9CAD;--terracotta:#D4A090;--golden-hour:#E8C547;
+--bg:var(--off-white);--surface:#FFFFFF;--hover:rgba(196,165,123,0.06);
+--text:var(--charcoal);--body:var(--mocha);--muted:var(--aged-oak);--subtle:var(--pearl);
+--fd:'Playfair Display',Georgia,serif;--fb:'Inter',-apple-system,sans-serif;--fm:'DM Mono','SF Mono',monospace;
+--ease:cubic-bezier(0.4,0,0.2,1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:16px;scroll-behavior:smooth;background:var(--bg)}
+body{font-family:var(--fb);color:var(--text);-webkit-font-smoothing:antialiased;line-height:1.6}
+
+/* Layout */
+.wrap{max-width:1120px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}
+.narrow{max-width:800px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}
+section{padding:clamp(3rem,6vw,6rem) 0}
+
+/* Type */
+h1,.h1{font-family:var(--fd);font-weight:400;font-size:clamp(2.2rem,5vw,3.8rem);line-height:1.12;letter-spacing:-0.02em}
+h2,.h2{font-family:var(--fd);font-weight:400;font-size:clamp(1.6rem,3.5vw,2.4rem);line-height:1.2;letter-spacing:-0.02em}
+h3,.h3{font-family:var(--fd);font-weight:500;font-size:1.25rem;line-height:1.35;letter-spacing:-0.01em}
+.meta{font-family:var(--fm);font-weight:400;font-size:0.68rem;line-height:1.5;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted)}
+.meta-sm{font-family:var(--fm);font-weight:400;font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted)}
+.label{font-family:var(--fb);font-weight:500;font-size:0.95rem;color:var(--text)}
+.label-sec{font-family:var(--fb);font-weight:400;font-size:0.82rem;color:var(--muted)}
+.body{font-family:var(--fb);font-weight:400;font-size:0.95rem;line-height:1.7;color:var(--body);max-width:600px}
+em{font-family:var(--fd);font-style:italic;color:var(--aged-oak)}
+.data-lg{font-family:var(--fd);font-weight:700;font-size:2rem;line-height:1;color:var(--text)}
+.data-unit{font-family:var(--fb);font-size:0.8rem;color:var(--muted);margin-left:0.35rem}
+
+/* Strata */
+.strata{display:flex;flex-direction:column;gap:6px;padding:2.5rem 0}
+.strata .s{height:2px;border-radius:1px}
+.strata .s:nth-child(1){width:100%;background:var(--mocha)}
+.strata .s:nth-child(2){width:80%;background:var(--clay);opacity:.7}
+.strata .s:nth-child(3){width:60%;background:var(--clay);opacity:.35}
+.strata-m{display:flex;flex-direction:column;gap:4px;padding:1.5rem 0}
+.strata-m .s{height:1.5px;border-radius:1px}
+.strata-m .s:nth-child(1){width:60px;background:var(--mocha)}
+.strata-m .s:nth-child(2){width:48px;background:var(--clay);opacity:.7}
+.strata-m .s:nth-child(3){width:36px;background:var(--clay);opacity:.35}
+
+/* Cover */
+.cover{min-height:70vh;display:flex;flex-direction:column;justify-content:flex-end;padding:4rem clamp(1.5rem,5vw,4rem)}
+.cover h1 span{display:block;font-style:italic;color:var(--aged-oak);font-weight:400;font-size:0.55em}
+.cover-sub{font-size:1.05rem;color:var(--body);max-width:520px;margin:1rem 0 3rem;line-height:1.75}
+.cover-meta{display:flex;gap:3rem;flex-wrap:wrap}
+.cover-meta-item .meta{margin-bottom:0.2rem}
+.cover-meta-item p{font-size:0.85rem;color:var(--text)}
+
+/* Screen Frame */
+.screen{background:var(--surface);border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(44,41,38,0.04),0 8px 32px rgba(44,41,38,0.05);margin:2rem 0}
+.screen-bar{display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:48px;background:var(--surface);border-bottom:1px solid var(--subtle)}
+.screen-logo{font-family:var(--fd);font-weight:500;font-size:0.72rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--text)}
+.screen-nav{display:flex;gap:1.2rem}
+.screen-nav span{font-family:var(--fb);font-size:0.72rem;color:var(--muted);cursor:default}
+.screen-nav span.on{color:var(--text);border-bottom:2px solid var(--clay);padding-bottom:2px}
+.screen-user{display:flex;align-items:center;gap:0.4rem}
+.screen-avatar{width:24px;height:24px;border-radius:50%;background:var(--pearl);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-weight:500;font-size:0.55rem;color:var(--mocha)}
+.screen-body{padding:clamp(1.5rem,3vw,2.5rem);background:var(--bg);min-height:200px}
+
+/* Page Header */
+.pg-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2rem;flex-wrap:wrap;gap:1rem}
+
+/* Filters */
+.filters{display:flex;gap:0;border-bottom:1px solid var(--subtle);margin-bottom:1.5rem}
+.fi{font-family:var(--fb);font-size:0.8rem;color:var(--muted);padding:0.5rem 1rem 0.6rem;cursor:default;border-bottom:2px solid transparent;white-space:nowrap}
+.fi:first-child{padding-left:0}
+.fi.on{color:var(--text);border-bottom-color:var(--clay)}
+.fi .ct{font-family:var(--fm);font-size:0.58rem;color:var(--muted);margin-left:0.3rem}
+
+/* Search */
+.search{position:relative;max-width:320px}
+.search input{width:100%;font-family:var(--fb);font-size:0.82rem;padding:0.5rem 0.7rem 0.5rem 1.8rem;border:1px solid var(--pearl);border-radius:3px;background:var(--surface);color:var(--text);outline:none}
+.search input:focus{border-color:var(--clay)}
+.search::before{content:'⌕';position:absolute;left:0.6rem;top:50%;transform:translateY(-50%);color:var(--muted);font-size:0.82rem}
+
+/* Buttons */
+.btn{font-family:var(--fb);font-weight:500;font-size:0.8rem;padding:0.55rem 1.2rem;border:none;border-radius:3px;cursor:default;letter-spacing:0.01em;display:inline-flex;align-items:center;gap:0.4rem}
+.btn-p{background:var(--charcoal);color:var(--off-white)}
+.btn-s{background:transparent;color:var(--text);border:1px solid var(--pearl)}
+.btn-g{background:transparent;color:var(--muted)}
+.btn-sm{font-size:0.72rem;padding:0.4rem 0.8rem}
+.btn-clay{background:var(--clay);color:white}
+
+/* Tags */
+.tag{display:inline-flex;font-family:var(--fb);font-size:0.72rem;font-weight:500;color:var(--mocha);padding:0.25rem 0.7rem;background:var(--off-white);border:1px solid var(--pearl);border-radius:2px;white-space:nowrap}
+.tag.on{border-color:var(--clay);color:var(--charcoal)}
+.tag.tier-maker{background:rgba(196,165,123,0.1);border-color:var(--clay);color:var(--mocha)}
+.tag.tier-pick{background:rgba(168,181,160,0.1);border-color:var(--sage);color:var(--mocha)}
+.tag.tier-sourced{background:rgba(139,156,173,0.1);border-color:var(--dusty-blue);color:var(--mocha)}
+
+/* Product Grid */
+.prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1.5rem;margin-top:1.5rem}
+.prod-card{cursor:default;transition:transform 0.2s var(--ease)}
+.prod-card:hover{transform:translateY(-2px)}
+.prod-img{aspect-ratio:4/3;background:var(--pearl);border-radius:6px;margin-bottom:0.75rem;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.prod-img::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 20px,rgba(196,165,123,0.03) 20px,rgba(196,165,123,0.03) 40px)}
+.prod-img .img-label{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);z-index:1}
+.prod-tier{position:absolute;top:8px;left:8px;font-family:var(--fm);font-size:0.5rem;text-transform:uppercase;letter-spacing:0.06em;padding:2px 6px;border-radius:2px;z-index:2}
+.prod-tier.maker{background:rgba(196,165,123,0.9);color:white}
+.prod-tier.pick{background:rgba(122,155,118,0.85);color:white}
+.prod-tier.sourced{background:rgba(139,156,173,0.85);color:white}
+.prod-name{font-family:var(--fb);font-weight:500;font-size:0.88rem;color:var(--text);margin-bottom:0.15rem}
+.prod-maker{font-family:var(--fb);font-size:0.75rem;color:var(--muted);font-style:italic;margin-bottom:0.25rem}
+.prod-price{font-family:var(--fd);font-weight:600;font-size:1rem;color:var(--text)}
+.prod-meta{display:flex;gap:0.5rem;align-items:center;margin-top:0.3rem}
+.prod-status{font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em}
+.prod-status.active{color:var(--sage)}
+.prod-status.draft{color:var(--muted)}
+.prod-status.review{color:var(--golden-hour)}
+.prod-ai{font-family:var(--fm);font-size:0.52rem;color:var(--clay)}
+
+/* Product List (alternate view) */
+.prod-list-item{display:grid;grid-template-columns:80px 1fr 100px 80px 100px;gap:1rem;padding:0.85rem 0;border-bottom:1px solid var(--subtle);align-items:center;cursor:default;transition:background 0.15s}
+.prod-list-item:hover{background:var(--hover)}
+.prod-list-thumb{width:80px;height:60px;background:var(--pearl);border-radius:4px;display:flex;align-items:center;justify-content:center}
+.prod-list-thumb .img-label{font-family:var(--fm);font-size:0.45rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted)}
+.prod-list-name{font-family:var(--fb);font-weight:500;font-size:0.88rem;color:var(--text)}
+.prod-list-sub{font-family:var(--fb);font-size:0.75rem;color:var(--muted);margin-top:0.1rem}
+.prod-list-price{font-family:var(--fd);font-weight:600;font-size:0.95rem;color:var(--text);text-align:right}
+.prod-list-score{text-align:center}
+.prod-list-score .num{font-family:var(--fd);font-weight:700;font-size:1.1rem;color:var(--clay);display:block}
+.prod-list-actions{display:flex;gap:0.4rem;justify-content:flex-end}
+
+/* Detail Sections */
+.detail-hero{display:grid;grid-template-columns:1.1fr 1fr;gap:3rem;margin-bottom:2rem;padding-bottom:2rem;border-bottom:1px solid var(--subtle)}
+.detail-images{display:grid;grid-template-columns:1fr;gap:0.75rem}
+.detail-img-main{aspect-ratio:4/3;background:var(--pearl);border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.detail-img-main::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 30px,rgba(196,165,123,0.03) 30px,rgba(196,165,123,0.03) 60px)}
+.detail-thumbs{display:flex;gap:0.5rem}
+.detail-thumb{width:64px;height:48px;background:var(--pearl);border-radius:4px;border:2px solid transparent;cursor:default}
+.detail-thumb.on{border-color:var(--clay)}
+.detail-info .h2{margin-bottom:0.25rem}
+
+.field{margin-bottom:1.5rem}
+.field-label{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:0.4rem}
+.field-val{font-family:var(--fb);font-size:0.9rem;color:var(--body);line-height:1.6}
+
+.d-row{display:grid;grid-template-columns:110px 1fr;gap:0.75rem;padding:0.3rem 0;font-size:0.85rem}
+.d-row-k{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);padding-top:0.12rem}
+.d-row-v{font-family:var(--fb);color:var(--body);line-height:1.5}
+
+/* Spectrum Bar */
+.spectrum{margin:0.6rem 0}
+.spectrum-row{display:grid;grid-template-columns:80px 1fr 80px;gap:0.5rem;align-items:center;margin-bottom:0.5rem}
+.spectrum-label{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted)}
+.spectrum-label:last-child{text-align:right}
+.spectrum-track{height:4px;background:var(--pearl);border-radius:2px;position:relative}
+.spectrum-fill{position:absolute;top:-3px;width:10px;height:10px;border-radius:50%;background:var(--clay);border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.15)}
+
+/* Tabs inline */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--subtle);margin-bottom:2rem}
+.tab{font-family:var(--fb);font-size:0.82rem;color:var(--muted);padding:0.5rem 1.2rem 0.65rem;border-bottom:2px solid transparent;cursor:default}
+.tab:first-child{padding-left:0}
+.tab.on{color:var(--text);border-bottom-color:var(--clay)}
+
+/* Form */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem 2rem}
+.form-field{display:flex;flex-direction:column;gap:0.35rem}
+.form-field.full{grid-column:1/-1}
+.form-field label{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)}
+.form-field input,.form-field textarea,.form-field select{font-family:var(--fb);font-size:0.85rem;padding:0.55rem 0.7rem;border:1px solid var(--pearl);border-radius:3px;background:var(--surface);color:var(--text);outline:none}
+.form-field input:focus,.form-field textarea:focus,.form-field select:focus{border-color:var(--clay)}
+.form-field textarea{resize:vertical;min-height:80px}
+.form-field select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238B7355' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 0.7rem center}
+
+/* Image Upload Zone */
+.upload-zone{border:2px dashed var(--pearl);border-radius:8px;padding:2rem;text-align:center;cursor:default;transition:border-color 0.2s}
+.upload-zone:hover{border-color:var(--clay)}
+.upload-zone p{font-family:var(--fb);font-size:0.85rem;color:var(--muted)}
+.upload-zone .upload-hint{font-family:var(--fm);font-size:0.58rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);margin-top:0.5rem}
+
+/* Teaching Panel */
+.teach-panel{background:rgba(196,165,123,0.04);border:1px solid rgba(196,165,123,0.15);border-radius:8px;padding:1.5rem}
+.teach-panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+.teach-badge{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.06em;color:white;background:var(--clay);padding:2px 8px;border-radius:2px}
+
+/* Compatibility */
+.compat-item{display:grid;grid-template-columns:56px 1fr;gap:0.75rem;padding:0.65rem 0;border-bottom:1px solid var(--subtle);align-items:center}
+.compat-thumb{width:56px;height:42px;background:var(--pearl);border-radius:4px}
+.compat-name{font-family:var(--fb);font-weight:500;font-size:0.82rem;color:var(--text)}
+.compat-rel{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--sage)}
+
+/* Score circle */
+.sc{width:72px;height:72px;border-radius:50%;border:3px solid var(--clay);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.sc .n{font-family:var(--fd);font-size:1.6rem;font-weight:700;color:var(--text);line-height:1}
+.sc .l{font-family:var(--fm);font-size:0.48rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)}
+
+/* Breadcrumb */
+.bc{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:1.5rem}
+.bc a{color:var(--clay);text-decoration:none}
+
+/* Pull quote */
+.pq{padding:2.5rem 0;border-top:1px solid var(--subtle);border-bottom:1px solid var(--subtle);margin:2rem 0}
+.pq blockquote{font-family:var(--fd);font-size:clamp(1.2rem,2.5vw,1.8rem);font-weight:400;font-style:italic;line-height:1.45;color:var(--text);max-width:620px}
+.pq cite{display:block;font-family:var(--fm);font-size:0.65rem;font-style:normal;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-top:1rem}
+
+/* Section label */
+.sl{margin-bottom:0.75rem}
+
+/* Feature block */
+.feat{margin:2rem 0;padding:2rem 0;border-top:1px solid var(--subtle)}
+.feat-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem}
+
+/* Progress */
+.prog{height:3px;background:var(--pearl);border-radius:2px;overflow:hidden;width:100%}
+.prog-fill{height:100%;background:var(--clay);border-radius:2px}
+
+/* Two-col */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:3rem}
+
+/* Responsive */
+@media(max-width:768px){
+  .detail-hero{grid-template-columns:1fr}
+  .form-grid{grid-template-columns:1fr}
+  .prod-grid{grid-template-columns:1fr 1fr}
+  .two-col{grid-template-columns:1fr}
+  .prod-list-item{grid-template-columns:60px 1fr auto}
+  .prod-list-item>:nth-child(n+4){display:none}
+  .cover-meta{flex-direction:column;gap:1rem}
+}
+
+/* Fade */
+.fade{opacity:0;transform:translateY(16px);transition:opacity 0.7s ease,transform 0.7s ease}
+.fade.vis{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ============================== COVER ============================== -->
+<div class="cover">
+  <p class="meta" style="margin-bottom:1rem">Patina — Product Catalog Design</p>
+  <h1>The Curated Shelf<span>Product catalog pages for the Designer Portal</span></h1>
+  <p class="cover-sub">Every screen a designer touches when browsing, teaching, editing, or adding products to the Patina catalog. Typography-first. No boxes around boxes. The product is the hero — the interface stays out of the way.</p>
+  <div class="strata"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div class="cover-meta">
+    <div class="cover-meta-item"><p class="meta">Prepared for</p><p>Kody & Leah</p></div>
+    <div class="cover-meta-item"><p class="meta">Version</p><p>1.0 — March 2026</p></div>
+    <div class="cover-meta-item"><p class="meta">Screens</p><p>8 pages, 3 flows</p></div>
+  </div>
+</div>
+
+<!-- ============================== OVERVIEW ============================== -->
+<section class="fade">
+<div class="wrap">
+  <p class="meta sl">01 — Overview</p>
+  <h2>Three tiers, <em>one catalog.</em></h2>
+  <p class="body" style="margin-bottom:2rem">The Patina product catalog isn't a flat database — it's organized around The Curated Shelf: three tiers that reflect the reality of how designers furnish complete rooms. Every product carries not just specs and pricing, but living intelligence from The Aesthete Engine.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1px solid var(--subtle);margin-top:1.5rem">
+    <div style="padding:1.5rem 1.5rem 1.5rem 0;border-bottom:1px solid var(--subtle)">
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem"><span class="tag tier-maker">★ Maker Piece</span></div>
+      <div class="h3" style="margin-bottom:0.5rem">Patina Partners</div>
+      <p class="body" style="font-size:0.85rem">Handcrafted anchor pieces from makers we know personally. Full provenance, maker stories, and heritage documentation. These are the pieces clients will build rooms around.</p>
+    </div>
+    <div style="padding:1.5rem;border-left:1px solid var(--subtle);border-bottom:1px solid var(--subtle)">
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem"><span class="tag tier-pick">✓ Designer's Pick</span></div>
+      <div class="h3" style="margin-bottom:0.5rem">Designer Picks</div>
+      <p class="body" style="font-size:0.85rem">Sofas, rugs, and lighting chosen by designers from brands they trust. Quality-verified and style-classified but not artisan-exclusive. The supporting cast that completes a room.</p>
+    </div>
+    <div style="padding:1.5rem 0 1.5rem 1.5rem;border-left:1px solid var(--subtle);border-bottom:1px solid var(--subtle)">
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem"><span class="tag tier-sourced">○ Sourced</span></div>
+      <div class="h3" style="margin-bottom:0.5rem">Sourced Selections</div>
+      <p class="body" style="font-size:0.85rem">Paint colors, hardware, throw pillows — the finishing details. Designer-approved, sourced from trusted retailers. The touches that make a room feel complete.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== UI FLOW ============================== -->
+<section class="fade">
+<div class="wrap">
+  <p class="meta sl">02 — UI Flow</p>
+  <h2>How a designer <em>moves through products.</em></h2>
+  <p class="body" style="margin-bottom:2rem">The product catalog serves two modes: browsing (finding the right piece for a client) and teaching (adding intelligence to The Aesthete Engine). Both flows share the same entry point.</p>
+
+  <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin:2rem 0;padding:1rem 0;overflow-x:auto">
+    <div style="text-align:center;flex-shrink:0"><div style="width:130px;height:70px;border:1.5px solid var(--clay);border-radius:5px;display:flex;align-items:center;justify-content:center;background:rgba(196,165,123,0.04)"><span style="font-family:var(--fb);font-size:0.75rem;font-weight:500;color:var(--text)">Product List</span></div><span class="meta-sm" style="display:block;margin-top:0.4rem">Browse & Filter</span></div>
+    <div style="width:24px;height:1px;background:var(--pearl);flex-shrink:0;position:relative"><div style="position:absolute;right:0;top:-3px;width:6px;height:6px;border-right:1px solid var(--pearl);border-bottom:1px solid var(--pearl);transform:rotate(-45deg)"></div></div>
+    <div style="text-align:center;flex-shrink:0"><div style="width:130px;height:70px;border:1.5px solid var(--pearl);border-radius:5px;display:flex;align-items:center;justify-content:center"><span style="font-family:var(--fb);font-size:0.75rem;font-weight:500;color:var(--mocha)">Product Detail</span></div><span class="meta-sm" style="display:block;margin-top:0.4rem">View & Teach</span></div>
+    <div style="width:24px;height:1px;background:var(--pearl);flex-shrink:0;position:relative"><div style="position:absolute;right:0;top:-3px;width:6px;height:6px;border-right:1px solid var(--pearl);border-bottom:1px solid var(--pearl);transform:rotate(-45deg)"></div></div>
+    <div style="display:flex;flex-direction:column;gap:0.5rem;flex-shrink:0">
+      <div style="text-align:center"><div style="width:130px;height:50px;border:1.5px solid var(--pearl);border-radius:5px;display:flex;align-items:center;justify-content:center"><span style="font-family:var(--fb);font-size:0.72rem;color:var(--mocha)">Edit Product</span></div></div>
+      <div style="text-align:center"><div style="width:130px;height:50px;border:1.5px solid var(--clay);border-radius:5px;display:flex;align-items:center;justify-content:center;background:rgba(196,165,123,0.04)"><span style="font-family:var(--fb);font-size:0.72rem;color:var(--mocha)">Teach Aesthete</span></div></div>
+      <div style="text-align:center"><div style="width:130px;height:50px;border:1.5px solid var(--pearl);border-radius:5px;display:flex;align-items:center;justify-content:center"><span style="font-family:var(--fb);font-size:0.72rem;color:var(--mocha)">Add to Proposal</span></div></div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:1rem">
+    <div style="text-align:center;flex-shrink:0"><div style="width:130px;height:70px;border:1.5px solid var(--sage);border-radius:5px;display:flex;align-items:center;justify-content:center;background:rgba(168,181,160,0.06)"><span style="font-family:var(--fb);font-size:0.75rem;font-weight:500;color:var(--mocha)">Add Product</span></div><span class="meta-sm" style="display:block;margin-top:0.4rem">Manual Entry</span></div>
+    <div style="text-align:center;flex-shrink:0"><div style="width:130px;height:70px;border:1.5px solid var(--dusty-blue);border-radius:5px;display:flex;align-items:center;justify-content:center;background:rgba(139,156,173,0.06)"><span style="font-family:var(--fb);font-size:0.75rem;font-weight:500;color:var(--mocha)">Bulk Import</span></div><span class="meta-sm" style="display:block;margin-top:0.4rem">CSV / API Sync</span></div>
+    <div style="text-align:center;flex-shrink:0"><div style="width:130px;height:70px;border:1.5px solid var(--golden-hour);border-radius:5px;display:flex;align-items:center;justify-content:center;background:rgba(232,197,71,0.06)"><span style="font-family:var(--fb);font-size:0.75rem;font-weight:500;color:var(--mocha)">Teaching Queue</span></div><span class="meta-sm" style="display:block;margin-top:0.4rem">Daily Session</span></div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 1: PRODUCT LIST — GRID ============================== -->
+<section class="fade">
+<div class="wrap">
+  <p class="meta sl">03 — Product List (Grid View)</p>
+  <h2>Browse the catalog <em>visually.</em></h2>
+  <p class="body" style="margin-bottom:1.5rem">The default view. Products as a visual grid with tier badges, maker names in italic, and Aesthete intelligence scores. Filters above as text links — not dropdowns hiding behind icons. Category, tier, style, status, and intelligence completeness all filter inline.</p>
+
+  <div class="screen">
+    <div class="screen-bar"><div class="screen-logo">Patina</div><div class="screen-nav"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="screen-user"><span class="meta-sm">Leah</span><div class="screen-avatar">LK</div></div></div>
+    <div class="screen-body">
+      <!-- Page header -->
+      <div class="pg-head">
+        <div class="h2" style="font-size:1.5rem">Products</div>
+        <div style="display:flex;gap:0.6rem"><button class="btn btn-p btn-sm">+ Add Product</button><button class="btn btn-s btn-sm">Import</button></div>
+      </div>
+
+      <!-- Search + view toggle -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <div class="search" style="max-width:280px"><input placeholder="Search by name, maker, style…"></div>
+        <div style="display:flex;gap:0.5rem"><span class="meta" style="cursor:default;opacity:1">▦ Grid</span><span class="meta" style="cursor:default;opacity:0.4">☰ List</span></div>
+      </div>
+
+      <!-- Tier filters -->
+      <div class="filters">
+        <div class="fi on">All Products<span class="ct">847</span></div>
+        <div class="fi">★ Maker Pieces<span class="ct">94</span></div>
+        <div class="fi">✓ Designer Picks<span class="ct">312</span></div>
+        <div class="fi">○ Sourced<span class="ct">441</span></div>
+        <div class="fi">Needs Teaching<span class="ct">67</span></div>
+        <div class="fi">Drafts<span class="ct">12</span></div>
+      </div>
+
+      <!-- Secondary filters (style tags) -->
+      <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:1.5rem">
+        <span class="tag on">All Styles</span>
+        <span class="tag">Warm Minimalist</span>
+        <span class="tag">Organic Modern</span>
+        <span class="tag">Midcentury</span>
+        <span class="tag">Moody Traditional</span>
+        <span class="tag">Coastal Calm</span>
+        <span class="tag">Bold Eclectic</span>
+      </div>
+
+      <!-- Category sub-filters -->
+      <div style="display:flex;gap:0.3rem;flex-wrap:wrap;margin-bottom:1.5rem">
+        <span class="tag on" style="font-size:0.65rem;padding:0.2rem 0.6rem">All</span>
+        <span class="tag" style="font-size:0.65rem;padding:0.2rem 0.6rem">Seating</span>
+        <span class="tag" style="font-size:0.65rem;padding:0.2rem 0.6rem">Tables</span>
+        <span class="tag" style="font-size:0.65rem;padding:0.2rem 0.6rem">Storage</span>
+        <span class="tag" style="font-size:0.65rem;padding:0.2rem 0.6rem">Lighting</span>
+        <span class="tag" style="font-size:0.65rem;padding:0.2rem 0.6rem">Rugs</span>
+        <span class="tag" style="font-size:0.65rem;padding:0.2rem 0.6rem">Décor</span>
+        <span class="tag" style="font-size:0.65rem;padding:0.2rem 0.6rem">Outdoor</span>
+      </div>
+
+      <!-- Product Grid -->
+      <div class="prod-grid">
+        <div class="prod-card"><div class="prod-img"><span class="prod-tier maker">★ Maker</span><span class="img-label">Product Image</span></div><div class="prod-name">Heirloom Oak Dining Table</div><div class="prod-maker">Nordic Atelier · Aarhus</div><div class="prod-price">$4,200</div><div class="prod-meta"><span class="prod-status active">● Active</span><span class="prod-ai">AI 94%</span></div></div>
+        <div class="prod-card"><div class="prod-img"><span class="prod-tier pick">✓ Pick</span><span class="img-label">Product Image</span></div><div class="prod-name">Meadow Linen Sectional</div><div class="prod-maker">Woodward & Sons · Richmond</div><div class="prod-price">$6,800</div><div class="prod-meta"><span class="prod-status active">● Active</span><span class="prod-ai">AI 88%</span></div></div>
+        <div class="prod-card"><div class="prod-img"><span class="prod-tier sourced">○ Sourced</span><span class="img-label">Product Image</span></div><div class="prod-name">Woven Jute Area Rug 8×10</div><div class="prod-maker">Studio Piet · Copenhagen</div><div class="prod-price">$1,450</div><div class="prod-meta"><span class="prod-status active">● Active</span><span class="prod-ai">AI 72%</span></div></div>
+        <div class="prod-card"><div class="prod-img"><span class="prod-tier maker">★ Maker</span><span class="img-label">Product Image</span></div><div class="prod-name">Walnut Credenza</div><div class="prod-maker">Prairie Workshop · Madison</div><div class="prod-price">$3,600</div><div class="prod-meta"><span class="prod-status review">◌ Needs Teaching</span><span class="prod-ai">AI 34%</span></div></div>
+        <div class="prod-card"><div class="prod-img"><span class="prod-tier pick">✓ Pick</span><span class="img-label">Product Image</span></div><div class="prod-name">Brass Arc Floor Lamp</div><div class="prod-maker">Schoolhouse · Portland</div><div class="prod-price">$890</div><div class="prod-meta"><span class="prod-status active">● Active</span><span class="prod-ai">AI 91%</span></div></div>
+        <div class="prod-card"><div class="prod-img"><span class="prod-tier sourced">○ Sourced</span><span class="img-label">Product Image</span></div><div class="prod-name">Linen Throw Pillow Set</div><div class="prod-maker">West Elm</div><div class="prod-price">$128</div><div class="prod-meta"><span class="prod-status draft">○ Draft</span><span class="prod-ai">AI —</span></div></div>
+        <div class="prod-card"><div class="prod-img"><span class="prod-tier maker">★ Maker</span><span class="img-label">Product Image</span></div><div class="prod-name">Live-Edge Coffee Table</div><div class="prod-maker">Heritage Lumber · Duluth</div><div class="prod-price">$2,100</div><div class="prod-meta"><span class="prod-status active">● Active</span><span class="prod-ai">AI 96%</span></div></div>
+        <div class="prod-card"><div class="prod-img"><span class="prod-tier pick">✓ Pick</span><span class="img-label">Product Image</span></div><div class="prod-name">Velvet Club Chair</div><div class="prod-maker">Article · Vancouver</div><div class="prod-price">$1,250</div><div class="prod-meta"><span class="prod-status active">● Active</span><span class="prod-ai">AI 82%</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 2: PRODUCT LIST — LIST VIEW ============================== -->
+<section class="fade">
+<div class="wrap">
+  <p class="meta sl">04 — Product List (List View)</p>
+  <h2>Scan the catalog <em>by the numbers.</em></h2>
+  <p class="body" style="margin-bottom:1.5rem">Alternate list view for bulk work — sortable by price, AI intelligence score, or status. Same filters apply. This is where Leah works through the teaching queue efficiently.</p>
+
+  <div class="screen">
+    <div class="screen-bar"><div class="screen-logo">Patina</div><div class="screen-nav"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="screen-user"><span class="meta-sm">Leah</span><div class="screen-avatar">LK</div></div></div>
+    <div class="screen-body">
+      <div class="pg-head"><div class="h2" style="font-size:1.5rem">Products</div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem"><div class="search" style="max-width:280px"><input placeholder="Search…"></div><div style="display:flex;gap:0.5rem"><span class="meta" style="opacity:0.4">▦ Grid</span><span class="meta" style="opacity:1">☰ List</span></div></div>
+      <div class="filters"><div class="fi">All<span class="ct">847</span></div><div class="fi on">Needs Teaching<span class="ct">67</span></div><div class="fi">★ Maker<span class="ct">94</span></div><div class="fi">✓ Pick<span class="ct">312</span></div></div>
+
+      <!-- Column Headers -->
+      <div style="display:grid;grid-template-columns:80px 1fr 100px 80px 100px;gap:1rem;padding:0.5rem 0;border-bottom:1px solid var(--subtle)">
+        <span class="meta-sm"></span><span class="meta-sm">Product</span><span class="meta-sm" style="text-align:right">Price</span><span class="meta-sm" style="text-align:center">AI Score</span><span class="meta-sm" style="text-align:right">Actions</span>
+      </div>
+
+      <div class="prod-list-item">
+        <div class="prod-list-thumb"><span class="img-label">IMG</span></div>
+        <div><div class="prod-list-name">Walnut Credenza</div><div class="prod-list-sub">Prairie Workshop · Madison · ★ Maker Piece</div></div>
+        <div class="prod-list-price">$3,600</div>
+        <div class="prod-list-score"><span class="num" style="color:var(--golden-hour)">34%</span><span class="meta-sm">Needs<br>Teaching</span></div>
+        <div class="prod-list-actions"><button class="btn btn-clay btn-sm">Teach</button></div>
+      </div>
+      <div class="prod-list-item">
+        <div class="prod-list-thumb"><span class="img-label">IMG</span></div>
+        <div><div class="prod-list-name">Ceramic Table Lamp</div><div class="prod-list-sub">Local Potter · Mineral Point · ★ Maker Piece</div></div>
+        <div class="prod-list-price">$420</div>
+        <div class="prod-list-score"><span class="num" style="color:var(--golden-hour)">28%</span><span class="meta-sm">Needs<br>Teaching</span></div>
+        <div class="prod-list-actions"><button class="btn btn-clay btn-sm">Teach</button></div>
+      </div>
+      <div class="prod-list-item">
+        <div class="prod-list-thumb"><span class="img-label">IMG</span></div>
+        <div><div class="prod-list-name">Hand-Forged Iron Shelf</div><div class="prod-list-sub">Blacksmith & Co · Milwaukee · ★ Maker Piece</div></div>
+        <div class="prod-list-price">$1,890</div>
+        <div class="prod-list-score"><span class="num" style="color:var(--golden-hour)">41%</span><span class="meta-sm">Needs<br>Teaching</span></div>
+        <div class="prod-list-actions"><button class="btn btn-clay btn-sm">Teach</button></div>
+      </div>
+      <div class="prod-list-item">
+        <div class="prod-list-thumb"><span class="img-label">IMG</span></div>
+        <div><div class="prod-list-name">Linen Throw Pillow Set</div><div class="prod-list-sub">West Elm · ○ Sourced</div></div>
+        <div class="prod-list-price">$128</div>
+        <div class="prod-list-score"><span class="num" style="color:var(--terracotta)">—</span><span class="meta-sm">Draft</span></div>
+        <div class="prod-list-actions"><button class="btn btn-s btn-sm">Edit</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 3: PRODUCT DETAIL ============================== -->
+<section class="fade">
+<div class="wrap">
+  <p class="meta sl">05 — Product Detail</p>
+  <h2>The product as <em>a design brief.</em></h2>
+  <p class="body" style="margin-bottom:1.5rem">Not a spec sheet. The detail view reads like a story — maker provenance first, then the design intelligence Leah has taught, then the specs. The Aesthete Engine panel lives inline, not hidden behind a tab.</p>
+
+  <div class="screen">
+    <div class="screen-bar"><div class="screen-logo">Patina</div><div class="screen-nav"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="screen-user"><span class="meta-sm">Leah</span><div class="screen-avatar">LK</div></div></div>
+    <div class="screen-body">
+      <div class="bc"><a>Products</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Heirloom Oak Dining Table</div>
+
+      <!-- Hero -->
+      <div class="detail-hero">
+        <div class="detail-images">
+          <div class="detail-img-main"><span class="img-label" style="font-size:0.72rem;color:var(--muted);z-index:1">Hero Product Image</span></div>
+          <div class="detail-thumbs"><div class="detail-thumb on"></div><div class="detail-thumb"></div><div class="detail-thumb"></div><div class="detail-thumb"></div><div class="detail-thumb"></div></div>
+        </div>
+        <div class="detail-info">
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.75rem"><span class="tag tier-maker">★ Maker Piece</span><span class="prod-status active" style="font-size:0.6rem">● Active</span></div>
+          <div class="h2" style="margin-bottom:0.15rem">Heirloom Oak Dining Table</div>
+          <div style="font-family:var(--fb);font-size:0.88rem;font-style:italic;color:var(--aged-oak);margin-bottom:1rem">Nordic Atelier · Aarhus, Denmark · Est. 1968</div>
+          <div style="font-family:var(--fd);font-weight:700;font-size:1.8rem;color:var(--text);margin-bottom:0.25rem">$4,200</div>
+          <div class="meta" style="margin-bottom:1.5rem">Trade: $3,360 · MAP: $3,990 · Lead Time: 8–12 weeks</div>
+
+          <p class="body" style="font-size:0.88rem;margin-bottom:1.5rem">Solid quarter-sawn white oak with hand-rubbed tung oil finish. Each table is made to order by a three-person workshop outside Aarhus. The grain pattern on the top surface is bookmatched from a single log, meaning no two tables are identical. Seats six comfortably, eight with leaves.</p>
+
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1.5rem"><span class="tag">Warm Minimalist</span><span class="tag">Organic Modern</span><span class="tag">Scandinavian</span><span class="tag">Natural Materials</span></div>
+
+          <div style="display:flex;gap:0.6rem"><button class="btn btn-p">Add to Proposal</button><button class="btn btn-s">Edit Product</button><button class="btn btn-g">Archive</button></div>
+        </div>
+      </div>
+
+      <!-- Two-column below hero -->
+      <div class="two-col">
+        <!-- Left: Specs -->
+        <div>
+          <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--subtle)">Specifications</div>
+          <div class="d-row"><div class="d-row-k">Dimensions</div><div class="d-row-v">72"L × 36"W × 30"H</div></div>
+          <div class="d-row"><div class="d-row-k">With Leaves</div><div class="d-row-v">96"L × 36"W × 30"H</div></div>
+          <div class="d-row"><div class="d-row-k">Weight</div><div class="d-row-v">145 lbs</div></div>
+          <div class="d-row"><div class="d-row-k">Material</div><div class="d-row-v">Quarter-sawn white oak, tung oil finish</div></div>
+          <div class="d-row"><div class="d-row-k">Assembly</div><div class="d-row-v">Minimal — attach legs (15 min)</div></div>
+          <div class="d-row"><div class="d-row-k">Care</div><div class="d-row-v">Wipe with damp cloth. Re-oil annually.</div></div>
+          <div class="d-row"><div class="d-row-k">Certifications</div><div class="d-row-v">FSC Certified, Carbon Neutral Workshop</div></div>
+
+          <div class="strata-m"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+          <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--subtle)">Pairs Beautifully With</div>
+          <div class="compat-item"><div class="compat-thumb"></div><div><div class="compat-name">Meadow Linen Dining Chairs</div><div class="compat-rel">✦ Complements</div></div></div>
+          <div class="compat-item"><div class="compat-thumb"></div><div><div class="compat-name">Brass Pendant Light</div><div class="compat-rel">✦ Complements</div></div></div>
+          <div class="compat-item"><div class="compat-thumb"></div><div><div class="compat-name">Woven Jute Runner</div><div class="compat-rel">✦ Complements</div></div></div>
+        </div>
+
+        <!-- Right: Aesthete Intelligence -->
+        <div>
+          <div class="teach-panel">
+            <div class="teach-panel-head"><div class="h3">Aesthete Intelligence</div><div style="display:flex;align-items:center;gap:0.5rem"><div class="sc" style="width:52px;height:52px;border-width:2px"><span class="n" style="font-size:1.2rem">94</span><span class="l" style="font-size:0.42rem">Score</span></div></div></div>
+            <div class="meta" style="margin-bottom:1rem">Last taught by Leah · Mar 18, 2026</div>
+
+            <div class="field"><div class="field-label">Style Spectrum</div>
+              <div class="spectrum">
+                <div class="spectrum-row"><span class="spectrum-label">Cold</span><div class="spectrum-track"><div class="spectrum-fill" style="left:72%"></div></div><span class="spectrum-label">Warm</span></div>
+                <div class="spectrum-row"><span class="spectrum-label">Minimal</span><div class="spectrum-track"><div class="spectrum-fill" style="left:35%"></div></div><span class="spectrum-label">Ornate</span></div>
+                <div class="spectrum-row"><span class="spectrum-label">Casual</span><div class="spectrum-track"><div class="spectrum-fill" style="left:55%"></div></div><span class="spectrum-label">Formal</span></div>
+                <div class="spectrum-row"><span class="spectrum-label">Trendy</span><div class="spectrum-track"><div class="spectrum-fill" style="left:85%"></div></div><span class="spectrum-label">Timeless</span></div>
+                <div class="spectrum-row"><span class="spectrum-label">Subtle</span><div class="spectrum-track"><div class="spectrum-fill" style="left:60%"></div></div><span class="spectrum-label">Statement</span></div>
+              </div>
+            </div>
+
+            <div class="field"><div class="field-label">Ideal Client Profile</div>
+              <div class="d-row"><div class="d-row-k">Lifestyle</div><div class="d-row-v">Entertains, values craft, patient buyer</div></div>
+              <div class="d-row"><div class="d-row-k">Budget</div><div class="d-row-v">Mid-to-upper ($3k+ per anchor piece)</div></div>
+              <div class="d-row"><div class="d-row-k">Risk</div><div class="d-row-v">Moderate — appreciates heritage brands</div></div>
+            </div>
+
+            <div class="field"><div class="field-label">Designer Notes</div>
+              <p class="body" style="font-size:0.82rem;font-style:italic;color:var(--aged-oak)">"This table anchors a room. Needs at least 12' of space to breathe. The grain pattern catches afternoon light beautifully — position near west-facing windows. Not for families with very young children — the oil finish shows water rings."</p>
+            </div>
+
+            <div class="field" style="margin-bottom:0"><div class="field-label">Avoidance Signals</div>
+              <div style="display:flex;gap:0.4rem;flex-wrap:wrap"><span class="tag" style="border-color:var(--terracotta);color:var(--terracotta)">Ultra-minimalist purist</span><span class="tag" style="border-color:var(--terracotta);color:var(--terracotta)">High-maintenance allergic</span><span class="tag" style="border-color:var(--terracotta);color:var(--terracotta)">Budget under $2k</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 4: PRODUCT EDIT ============================== -->
+<section class="fade">
+<div class="wrap">
+  <p class="meta sl">06 — Product Edit</p>
+  <h2>Edit like a document, <em>not a form.</em></h2>
+  <p class="body" style="margin-bottom:1.5rem">The edit view uses the same vertical flow as the detail view. Fields are grouped logically — identity, specifications, pricing, media — separated by strata dividers. No tabs forcing you to context-switch between sections.</p>
+
+  <div class="screen">
+    <div class="screen-bar"><div class="screen-logo">Patina</div><div class="screen-nav"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="screen-user"><span class="meta-sm">Leah</span><div class="screen-avatar">LK</div></div></div>
+    <div class="screen-body">
+      <div class="bc"><a>Products</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> <a>Heirloom Oak Dining Table</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Edit</div>
+
+      <div class="pg-head"><div class="h2" style="font-size:1.5rem">Edit Product</div><div style="display:flex;gap:0.5rem"><button class="btn btn-p btn-sm">Save Changes</button><button class="btn btn-s btn-sm">Preview</button><button class="btn btn-g btn-sm">Cancel</button></div></div>
+
+      <!-- Identity -->
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--subtle)">Product Identity</div>
+      <div class="form-grid">
+        <div class="form-field"><label>Product Name</label><input value="Heirloom Oak Dining Table"></div>
+        <div class="form-field"><label>Maker / Brand</label><input value="Nordic Atelier"></div>
+        <div class="form-field"><label>SKU</label><input value="NA-HDT-001"></div>
+        <div class="form-field"><label>Product Tier</label><select><option selected>★ Maker Piece</option><option>✓ Designer's Pick</option><option>○ Sourced Selection</option></select></div>
+        <div class="form-field"><label>Category</label><select><option selected>Tables — Dining</option><option>Tables — Coffee</option><option>Tables — Side</option></select></div>
+        <div class="form-field"><label>Status</label><select><option selected>Active</option><option>Draft</option><option>Archived</option></select></div>
+        <div class="form-field full"><label>Description</label><textarea rows="4">Solid quarter-sawn white oak with hand-rubbed tung oil finish. Each table is made to order by a three-person workshop outside Aarhus. The grain pattern on the top surface is bookmatched from a single log.</textarea></div>
+        <div class="form-field full"><label>Provenance / Maker Story</label><textarea rows="3">Nordic Atelier was founded in 1968 by Jørgen Holm. Three generations of woodworkers now produce every piece in the same converted barn workshop on the outskirts of Aarhus. They source oak exclusively from FSC-certified Danish forests within 50km of the workshop.</textarea></div>
+      </div>
+
+      <div class="strata-m"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- Specs -->
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--subtle)">Specifications</div>
+      <div class="form-grid">
+        <div class="form-field"><label>Length</label><input value='72"'></div>
+        <div class="form-field"><label>Width</label><input value='36"'></div>
+        <div class="form-field"><label>Height</label><input value='30"'></div>
+        <div class="form-field"><label>Weight</label><input value="145 lbs"></div>
+        <div class="form-field"><label>Primary Material</label><input value="Quarter-sawn white oak"></div>
+        <div class="form-field"><label>Finish</label><input value="Hand-rubbed tung oil"></div>
+        <div class="form-field"><label>Assembly</label><input value="Attach legs — 15 min"></div>
+        <div class="form-field"><label>Lead Time</label><input value="8–12 weeks"></div>
+        <div class="form-field full"><label>Care Instructions</label><textarea rows="2">Wipe with damp cloth. Re-oil with tung oil annually. Avoid prolonged moisture contact. Use coasters for hot beverages.</textarea></div>
+      </div>
+
+      <div class="strata-m"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- Pricing -->
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--subtle)">Pricing</div>
+      <div class="form-grid">
+        <div class="form-field"><label>Retail Price</label><input value="$4,200"></div>
+        <div class="form-field"><label>Trade Price</label><input value="$3,360"></div>
+        <div class="form-field"><label>MAP (Min Advertised)</label><input value="$3,990"></div>
+        <div class="form-field"><label>Commission Rate</label><input value="12%"></div>
+      </div>
+
+      <div class="strata-m"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- Media -->
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--subtle)">Media</div>
+      <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem">
+        <div style="width:100px;height:75px;background:var(--pearl);border-radius:4px;border:2px solid var(--clay);display:flex;align-items:center;justify-content:center"><span class="meta-sm">Hero</span></div>
+        <div style="width:100px;height:75px;background:var(--pearl);border-radius:4px;display:flex;align-items:center;justify-content:center"><span class="meta-sm">Detail</span></div>
+        <div style="width:100px;height:75px;background:var(--pearl);border-radius:4px;display:flex;align-items:center;justify-content:center"><span class="meta-sm">Context</span></div>
+        <div style="width:100px;height:75px;background:var(--pearl);border-radius:4px;display:flex;align-items:center;justify-content:center"><span class="meta-sm">Lifestyle</span></div>
+      </div>
+      <div class="upload-zone"><p>Drop images here or click to upload</p><div class="upload-hint">JPG, PNG, WebP · 2000×2000px min · Max 10MB each</div></div>
+
+      <div style="margin-top:1.5rem">
+        <div class="form-field" style="max-width:320px"><label>AR Model (.usdz / .glb)</label><input value="heirloom_table.usdz" disabled style="background:var(--bg);color:var(--muted)"></div>
+      </div>
+
+      <div style="display:flex;gap:0.5rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--subtle)"><button class="btn btn-p">Save Changes</button><button class="btn btn-s">Preview</button><button class="btn btn-g">Cancel</button></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 5: ADD PRODUCT ============================== -->
+<section class="fade">
+<div class="wrap">
+  <p class="meta sl">07 — Add Product</p>
+  <h2>Start with the image, <em>tell the story.</em></h2>
+  <p class="body" style="margin-bottom:1.5rem">Adding a product starts visually — upload the image first, then fill in the identity. The same form structure as Edit, but starting from blank. Products captured via the Chrome Extension arrive here pre-populated.</p>
+
+  <div class="screen">
+    <div class="screen-bar"><div class="screen-logo">Patina</div><div class="screen-nav"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="screen-user"><span class="meta-sm">Leah</span><div class="screen-avatar">LK</div></div></div>
+    <div class="screen-body">
+      <div class="bc"><a>Products</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Add New Product</div>
+      <div class="pg-head"><div class="h2" style="font-size:1.5rem">Add New Product</div><div style="display:flex;gap:0.5rem"><button class="btn btn-p btn-sm">Save as Draft</button><button class="btn btn-s btn-sm">Publish</button></div></div>
+
+      <!-- Image first -->
+      <div class="upload-zone" style="min-height:180px;margin-bottom:2rem"><p style="font-size:1rem;color:var(--mocha);margin-bottom:0.5rem">Start with the product image</p><p>Drop images here or click to upload</p><div class="upload-hint">This is what Leah and clients see first. Lead with the hero shot.</div></div>
+
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--subtle)">Product Identity</div>
+      <div class="form-grid">
+        <div class="form-field"><label>Product Name</label><input placeholder="e.g. Heirloom Oak Dining Table"></div>
+        <div class="form-field"><label>Maker / Brand</label><input placeholder="e.g. Nordic Atelier"></div>
+        <div class="form-field"><label>Product Tier</label><select><option>Select tier…</option><option>★ Maker Piece</option><option>✓ Designer's Pick</option><option>○ Sourced Selection</option></select></div>
+        <div class="form-field"><label>Category</label><select><option>Select category…</option><option>Seating</option><option>Tables</option><option>Storage</option><option>Lighting</option><option>Rugs</option><option>Décor</option></select></div>
+        <div class="form-field full"><label>Description</label><textarea rows="3" placeholder="Tell the product's story. What makes it special? What should a client know?"></textarea></div>
+      </div>
+
+      <div class="strata-m"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--subtle)">Quick Specs & Pricing</div>
+      <div class="form-grid">
+        <div class="form-field"><label>Retail Price</label><input placeholder="$0.00"></div>
+        <div class="form-field"><label>Lead Time</label><input placeholder="e.g. 8–12 weeks"></div>
+        <div class="form-field"><label>Dimensions</label><input placeholder='e.g. 72"L × 36"W × 30"H'></div>
+        <div class="form-field"><label>Primary Material</label><input placeholder="e.g. Solid white oak"></div>
+      </div>
+
+      <div style="margin-top:1.5rem;padding:1rem;background:rgba(196,165,123,0.04);border:1px solid rgba(196,165,123,0.15);border-radius:6px">
+        <p class="meta" style="margin-bottom:0.3rem;color:var(--clay)">Tip — Save now, teach later</p>
+        <p class="body" style="font-size:0.82rem">You can save this product as a draft and come back to add Aesthete intelligence during a teaching session. Products from the Chrome Extension arrive here with images and basic info pre-filled.</p>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 6: TEACHING INTERFACE ============================== -->
+<section class="fade">
+<div class="wrap">
+  <p class="meta sl">08 — Teaching Interface</p>
+  <h2>Teach The Aesthete <em>what you see.</em></h2>
+  <p class="body" style="margin-bottom:1.5rem">This is where Leah's expertise becomes scalable intelligence. The teaching view shows the product with its images on the left and the intelligence capture form on the right — style spectrums, client matching, and designer notes flow naturally top to bottom. Every classification she makes improves future recommendations for thousands of clients.</p>
+
+  <div class="screen">
+    <div class="screen-bar"><div class="screen-logo">Patina</div><div class="screen-nav"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="screen-user"><span class="meta-sm">Leah</span><div class="screen-avatar">LK</div></div></div>
+    <div class="screen-body">
+      <div class="bc"><a>Products</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> <a>Walnut Credenza</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Teach</div>
+
+      <!-- Teaching header with stats -->
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2rem;flex-wrap:wrap;gap:1rem">
+        <div>
+          <div class="h2" style="font-size:1.5rem;margin-bottom:0.15rem">Teach: Walnut Credenza</div>
+          <div class="label-sec">Prairie Workshop · Madison, WI · ★ Maker Piece · $3,600</div>
+        </div>
+        <div style="display:flex;gap:1.5rem;align-items:center">
+          <div style="text-align:center"><div class="meta-sm" style="margin-bottom:0.2rem">Queue</div><span class="data-lg" style="font-size:1.3rem">4</span><span class="data-unit">remaining</span></div>
+          <div style="text-align:center"><div class="meta-sm" style="margin-bottom:0.2rem">Today's Impact</div><span class="data-lg" style="font-size:1.3rem">12</span><span class="data-unit">products</span></div>
+        </div>
+      </div>
+
+      <div class="two-col" style="gap:2.5rem">
+        <!-- Left: Product reference -->
+        <div>
+          <div class="detail-img-main" style="margin-bottom:1rem;height:280px"><span class="img-label" style="font-size:0.72rem;color:var(--muted);z-index:1">Product Image — Walnut Credenza</span></div>
+          <div class="detail-thumbs" style="margin-bottom:1.5rem"><div class="detail-thumb on"></div><div class="detail-thumb"></div><div class="detail-thumb"></div></div>
+
+          <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--subtle)">Product Specs</div>
+          <div class="d-row"><div class="d-row-k">Dimensions</div><div class="d-row-v">60"W × 18"D × 32"H</div></div>
+          <div class="d-row"><div class="d-row-k">Material</div><div class="d-row-v">Solid black walnut, brass hardware</div></div>
+          <div class="d-row"><div class="d-row-k">Finish</div><div class="d-row-v">Hand-rubbed lacquer</div></div>
+          <div class="d-row"><div class="d-row-k">Weight</div><div class="d-row-v">95 lbs</div></div>
+        </div>
+
+        <!-- Right: Teaching form -->
+        <div>
+          <div class="teach-panel" style="margin-bottom:1.5rem">
+            <div class="teach-panel-head"><div class="h3">Style Classification</div><span class="teach-badge">Required</span></div>
+            <div class="form-field" style="margin-bottom:1rem"><label>Primary Style</label><select><option>Select primary style…</option><option>Warm Minimalist</option><option selected>Midcentury Modern</option><option>Organic Modern</option><option>Moody Traditional</option></select></div>
+            <div class="form-field" style="margin-bottom:1rem"><label>Secondary Styles (optional)</label><div style="display:flex;gap:0.3rem;flex-wrap:wrap;margin-top:0.3rem"><span class="tag on">Warm Minimalist</span><span class="tag">Organic Modern</span><span class="tag">Scandinavian</span><span class="tag">Japandi</span></div></div>
+            <div class="field-label" style="margin-bottom:0.5rem">Style Spectrum</div>
+            <div class="spectrum">
+              <div class="spectrum-row"><span class="spectrum-label">Cold</span><div class="spectrum-track"><div class="spectrum-fill" style="left:68%"></div></div><span class="spectrum-label">Warm</span></div>
+              <div class="spectrum-row"><span class="spectrum-label">Minimal</span><div class="spectrum-track"><div class="spectrum-fill" style="left:40%"></div></div><span class="spectrum-label">Ornate</span></div>
+              <div class="spectrum-row"><span class="spectrum-label">Casual</span><div class="spectrum-track"><div class="spectrum-fill" style="left:50%"></div></div><span class="spectrum-label">Formal</span></div>
+              <div class="spectrum-row"><span class="spectrum-label">Trendy</span><div class="spectrum-track"><div class="spectrum-fill" style="left:82%"></div></div><span class="spectrum-label">Timeless</span></div>
+              <div class="spectrum-row"><span class="spectrum-label">Subtle</span><div class="spectrum-track"><div class="spectrum-fill" style="left:55%"></div></div><span class="spectrum-label">Statement</span></div>
+              <div class="spectrum-row"><span class="spectrum-label">Mass</span><div class="spectrum-track"><div class="spectrum-fill" style="left:90%"></div></div><span class="spectrum-label">Artisan</span></div>
+            </div>
+          </div>
+
+          <div class="teach-panel" style="margin-bottom:1.5rem">
+            <div class="teach-panel-head"><div class="h3">Client Matching</div><span class="teach-badge">Required</span></div>
+            <div class="form-field" style="margin-bottom:0.75rem"><label>Who would love this?</label><textarea rows="2" placeholder="Describe the ideal client for this piece…" style="font-family:var(--fb);font-size:0.85rem">Clients who appreciate midcentury craftsmanship with warm wood tones. Works for both young professionals and established families.</textarea></div>
+            <div class="field-label" style="margin-bottom:0.4rem">Lifestyle Signals</div>
+            <div style="display:flex;gap:0.3rem;flex-wrap:wrap;margin-bottom:1rem"><span class="tag on">Values craft</span><span class="tag on">Entertains</span><span class="tag">Has pets</span><span class="tag">Has children</span><span class="tag on">Patient buyer</span><span class="tag">Work from home</span></div>
+            <div class="field-label" style="margin-bottom:0.4rem">Avoidance Flags</div>
+            <div style="display:flex;gap:0.3rem;flex-wrap:wrap"><span class="tag" style="border-color:var(--terracotta);color:var(--terracotta)">Ultra-minimalist</span><span class="tag on" style="border-color:var(--terracotta);color:var(--terracotta);background:rgba(199,123,110,0.06)">Budget under $2k</span><span class="tag" style="border-color:var(--terracotta);color:var(--terracotta)">Needs quick delivery</span></div>
+          </div>
+
+          <div class="teach-panel" style="margin-bottom:1.5rem">
+            <div class="teach-panel-head"><div class="h3">Designer Notes</div><span class="meta-sm" style="color:var(--sage)">Optional</span></div>
+            <div class="form-field" style="margin-bottom:0.75rem"><label>Key Features</label><textarea rows="2" placeholder="What stands out about this piece? What should other designers know?">Beautiful brass drawer pulls patina over time. The walnut grain has natural color variation — show clients samples if possible.</textarea></div>
+            <div class="form-field" style="margin-bottom:0.75rem"><label>Best Context</label><input value="Living room or entry credenza. Needs 5' clear wall."></div>
+            <div class="form-field"><label>Avoid When</label><input value="Too deep for narrow hallways. Brass hardware clashes with chrome fixtures."></div>
+          </div>
+
+          <div style="display:flex;gap:0.6rem">
+            <button class="btn btn-clay">Save & Next Product →</button>
+            <button class="btn btn-s">Save & Close</button>
+            <button class="btn btn-g">Skip Product</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 7: BULK IMPORT ============================== -->
+<section class="fade">
+<div class="wrap">
+  <p class="meta sl">09 — Bulk Import</p>
+  <h2>Bring products in <em>at scale.</em></h2>
+  <p class="body" style="margin-bottom:1.5rem">For manufacturer partnerships and large catalog additions. Upload CSV, map columns to Patina's schema, preview the import, then review and publish. Products land in the teaching queue automatically.</p>
+
+  <div class="screen">
+    <div class="screen-bar"><div class="screen-logo">Patina</div><div class="screen-nav"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="screen-user"><span class="meta-sm">Leah</span><div class="screen-avatar">LK</div></div></div>
+    <div class="screen-body">
+      <div class="bc"><a>Products</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Import Products</div>
+      <div class="h2" style="font-size:1.5rem;margin-bottom:1.5rem">Import Products</div>
+
+      <!-- Step indicator -->
+      <div style="display:flex;gap:0;margin-bottom:2rem">
+        <div style="flex:1;padding-bottom:0.75rem;border-bottom:3px solid var(--clay)"><span class="meta" style="color:var(--clay)">1. Upload File</span></div>
+        <div style="flex:1;padding-bottom:0.75rem;border-bottom:3px solid var(--pearl)"><span class="meta">2. Map Columns</span></div>
+        <div style="flex:1;padding-bottom:0.75rem;border-bottom:3px solid var(--pearl)"><span class="meta">3. Preview & Import</span></div>
+      </div>
+
+      <div class="upload-zone" style="min-height:200px;margin-bottom:1.5rem">
+        <p style="font-size:1.1rem;color:var(--mocha);margin-bottom:0.5rem">Drop your CSV file here</p>
+        <p style="font-size:0.85rem;color:var(--muted)">Or click to browse your computer</p>
+        <div class="upload-hint" style="margin-top:1rem">Supported: CSV, TSV, Excel (.xlsx) · Max 5,000 products per import</div>
+      </div>
+
+      <div style="padding:1rem;background:rgba(139,156,173,0.06);border:1px solid rgba(139,156,173,0.15);border-radius:6px">
+        <p class="meta" style="margin-bottom:0.3rem;color:var(--dusty-blue)">Need a template?</p>
+        <p class="body" style="font-size:0.82rem">Download the <a style="color:var(--clay);text-decoration:none;border-bottom:1px solid var(--clay)">Patina Import Template</a> with all required and optional columns pre-configured. Includes a sample row for reference.</p>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 8: TEACHING QUEUE ============================== -->
+<section class="fade">
+<div class="wrap">
+  <p class="meta sl">10 — Teaching Queue</p>
+  <h2>The daily teaching <em>session.</em></h2>
+  <p class="body" style="margin-bottom:1.5rem">Leah's dedicated view for working through products that need Aesthete intelligence. Shows daily progress, accuracy metrics, and the queue sorted by priority. Two modes: Quick Tags (5 min per product) for rapid classification, or Deep Analysis (15 min) for complete intelligence mapping.</p>
+
+  <div class="screen">
+    <div class="screen-bar"><div class="screen-logo">Patina</div><div class="screen-nav"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="screen-user"><span class="meta-sm">Leah</span><div class="screen-avatar">LK</div></div></div>
+    <div class="screen-body">
+      <div class="pg-head"><div><div class="h2" style="font-size:1.5rem;margin-bottom:0.15rem">Teaching Queue</div><div class="label-sec">67 products need your expertise</div></div></div>
+
+      <!-- Daily stats -->
+      <div style="display:flex;gap:0;padding-bottom:1.5rem;border-bottom:1px solid var(--subtle);margin-bottom:1.5rem">
+        <div style="padding-right:2rem"><div class="meta-sm" style="margin-bottom:0.3rem">Today's Progress</div><div class="data-lg" style="font-size:1.8rem">12<span class="data-unit">of 20 goal</span></div><div class="prog" style="margin-top:0.5rem;width:120px"><div class="prog-fill" style="width:60%"></div></div></div>
+        <div style="padding:0 2rem;border-left:1px solid var(--subtle)"><div class="meta-sm" style="margin-bottom:0.3rem">Your Accuracy</div><div class="data-lg" style="font-size:1.8rem">94.2%</div><div style="font-family:var(--fb);font-size:0.72rem;color:var(--sage);margin-top:0.2rem">↑ 1.4% this week</div></div>
+        <div style="padding-left:2rem;border-left:1px solid var(--subtle)"><div class="meta-sm" style="margin-bottom:0.3rem">Impact</div><div class="data-lg" style="font-size:1.8rem">847</div><div style="font-family:var(--fb);font-size:0.72rem;color:var(--muted);margin-top:0.2rem">future matches improved</div></div>
+      </div>
+
+      <!-- Mode selector -->
+      <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem">
+        <div style="flex:1;padding:1rem;border:2px solid var(--clay);border-radius:6px;background:rgba(196,165,123,0.04);cursor:default"><div class="label" style="margin-bottom:0.2rem">Quick Tags</div><div class="label-sec">~5 min per product · Style + basic matching</div></div>
+        <div style="flex:1;padding:1rem;border:1px solid var(--pearl);border-radius:6px;cursor:default"><div class="label" style="margin-bottom:0.2rem">Deep Analysis</div><div class="label-sec">~15 min per product · Full intelligence mapping</div></div>
+      </div>
+
+      <!-- Queue list -->
+      <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--subtle)">Up Next</div>
+      <div class="prod-list-item"><div class="prod-list-thumb"><span class="img-label">IMG</span></div><div><div class="prod-list-name">Walnut Credenza</div><div class="prod-list-sub">Prairie Workshop · ★ Maker Piece</div></div><div class="prod-list-price">$3,600</div><div class="prod-list-score"><span class="num" style="color:var(--golden-hour)">34%</span></div><div class="prod-list-actions"><button class="btn btn-clay btn-sm">Start →</button></div></div>
+      <div class="prod-list-item"><div class="prod-list-thumb"><span class="img-label">IMG</span></div><div><div class="prod-list-name">Ceramic Table Lamp</div><div class="prod-list-sub">Local Potter · ★ Maker Piece</div></div><div class="prod-list-price">$420</div><div class="prod-list-score"><span class="num" style="color:var(--golden-hour)">28%</span></div><div class="prod-list-actions"><button class="btn btn-s btn-sm">Start</button></div></div>
+      <div class="prod-list-item"><div class="prod-list-thumb"><span class="img-label">IMG</span></div><div><div class="prod-list-name">Hand-Forged Iron Shelf</div><div class="prod-list-sub">Blacksmith & Co · ★ Maker Piece</div></div><div class="prod-list-price">$1,890</div><div class="prod-list-score"><span class="num" style="color:var(--golden-hour)">41%</span></div><div class="prod-list-actions"><button class="btn btn-s btn-sm">Start</button></div></div>
+      <div class="prod-list-item"><div class="prod-list-thumb"><span class="img-label">IMG</span></div><div><div class="prod-list-name">Marble Side Table</div><div class="prod-list-sub">CB2 · ✓ Designer's Pick</div></div><div class="prod-list-price">$899</div><div class="prod-list-score"><span class="num" style="color:var(--terracotta)">0%</span></div><div class="prod-list-actions"><button class="btn btn-s btn-sm">Start</button></div></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== CLOSING ============================== -->
+<section class="fade">
+<div class="narrow">
+  <div class="pq"><blockquote>"Every product Leah classifies improves eight hundred future recommendations. The teaching interface doesn't feel like extra work — it's the design judgment she already applies, now captured as intelligence."</blockquote><cite>Core Principle — Leah's Time Creates Compounding Value</cite></div>
+</div>
+</section>
+
+<section class="fade">
+<div class="wrap">
+  <div class="strata"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <h2 style="margin-top:2rem;margin-bottom:1.5rem">Every screen follows <em>three rules.</em></h2>
+  <div class="two-col" style="gap:2rem">
+    <div>
+      <p class="body" style="margin-bottom:1.5rem">The product is always the hero — images first, specs second, intelligence third. No page loads without showing what the product looks like within the first viewport.</p>
+      <p class="body" style="margin-bottom:1.5rem">Filters are visible text, not hidden menus. A designer scanning 800 products needs to narrow results with two clicks, not four. Tier badges, style tags, and category pills all filter inline.</p>
+    </div>
+    <div>
+      <p class="body" style="margin-bottom:1.5rem">Teaching is embedded, not separate. The Aesthete intelligence panel appears directly on the product detail page, not behind a different portal login. Browse and teach happen in the same flow.</p>
+      <p class="body">The form is a document. Product editing uses the same vertical scroll with strata dividers — identity, specs, pricing, media — not tabs that hide information. Everything visible in one continuous read.</p>
+    </div>
+  </div>
+
+  <div class="strata-m" style="margin-top:3rem"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2rem;flex-wrap:wrap;gap:1rem">
+    <div><div style="font-family:var(--fd);font-weight:400;font-size:1.05rem">Patina</div><div style="font-family:var(--fd);font-style:italic;font-size:0.82rem;color:var(--aged-oak)">Where Time Adds Value</div></div>
+    <div class="meta-sm">Product Catalog Design v1.0 · March 2026 · 8 Screens · Kody & Leah</div>
+  </div>
+</div>
+</section>
+
+<script>
+const f=document.querySelectorAll('.fade');
+const o=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('vis')})},{threshold:0.08,rootMargin:'0px 0px -40px 0px'});
+f.forEach(s=>o.observe(s));
+</script>
+</body>
+</html>

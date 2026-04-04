@@ -2,7 +2,6 @@
 
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Button } from '@patina/design-system';
 
 const errorMessages: Record<string, { title: string; description: string }> = {
   Configuration: {
@@ -30,12 +29,12 @@ export default function AuthErrorPage() {
   const errorInfo = errorMessages[errorType] || errorMessages.Default;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--color-canvas)] px-6">
+    <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)] px-6">
       <div className="w-full max-w-md space-y-6 text-center">
         <div className="space-y-2">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border-2 border-patina-terracotta">
             <svg
-              className="h-8 w-8 text-red-600"
+              className="h-8 w-8 text-patina-terracotta"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -49,41 +48,30 @@ export default function AuthErrorPage() {
             </svg>
           </div>
 
-          <h1 className="font-[var(--font-playfair)] text-3xl text-[var(--color-text)]">
-            {errorInfo.title}
-          </h1>
-          <p className="text-lg text-[var(--color-muted)]">
-            {errorInfo.description}
-          </p>
+          <h1 className="type-section-head">{errorInfo.title}</h1>
+          <p className="type-body mx-auto">{errorInfo.description}</p>
         </div>
 
         {errorType !== 'Default' && (
-          <div className="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
-            <p className="font-medium">Error Type</p>
-            <p className="mt-1 font-mono text-xs">{errorType}</p>
+          <div className="border-l-2 border-patina-terracotta pl-4 text-left">
+            <p className="type-meta">Error Type</p>
+            <p className="mt-1 font-mono text-xs text-[var(--text-muted)]">{errorType}</p>
           </div>
         )}
 
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-          <Link href="/auth/signin">
-            <Button variant="default" size="lg">
-              Try signing in again
-            </Button>
+          <Link href="/auth/signin" className="rounded-[3px] bg-patina-charcoal px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90 no-underline">
+            Try signing in again
           </Link>
-          <Link href="/">
-            <Button variant="outline" size="lg">
-              Go home
-            </Button>
+          <Link href="/" className="rounded-[3px] border border-[var(--border-default)] px-5 py-2.5 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--text-primary)] no-underline">
+            Go home
           </Link>
         </div>
 
-        <div className="text-sm text-[var(--color-muted)]">
+        <div className="type-body-small">
           <p>
             Need help?{' '}
-            <a
-              href="mailto:support@patina.cloud"
-              className="font-medium text-[var(--color-accent)] hover:underline"
-            >
+            <a href="mailto:support@patina.cloud" className="font-medium hover:underline">
               Contact support
             </a>
           </p>

@@ -8,21 +8,32 @@ const getSupabase = () => createBrowserClient();
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 
+export type ClientLifecycleStage = 'lead' | 'proposal' | 'active' | 'completed' | 'nurture';
+
 export interface DesignerClient {
   id: string;
   designer_id: string;
   client_id: string | null;
   source: 'lead' | 'direct' | 'referral';
   lead_id: string | null;
-  status: 'active' | 'paused' | 'completed';
+  status: ClientLifecycleStage;
   notes: string | null;
   total_revenue: number;
-  project_count: number;
+  total_projects: number;
   created_at: string;
   updated_at: string;
   // Direct contact info (for clients without profiles)
   client_email: string | null;
   client_name: string | null;
+  // Extended fields (v2)
+  referral_source: string | null;
+  location: string | null;
+  preferred_contact: string | null;
+  style_tags: string[];
+  style_preferences: Record<string, unknown>;
+  inspiration_quote: string | null;
+  last_contacted_at: string | null;
+  satisfaction_score: number | null;
   // Joined data (for clients with profiles)
   client?: {
     id: string;
@@ -148,22 +159,39 @@ export function useClientStats() {
 
       const { data, error } = await supabase
         .from('designer_clients')
-        .select('status, source, total_revenue, project_count');
+        .select('status, source, total_revenue, total_projects, satisfaction_score');
 
       if (error) throw error;
 
       const clients = data ?? [];
-      const stats = {
+      const scores = clients
+        .map((c: DesignerClient) => c.satisfaction_score)
+        .filter((s: number | null): s is number => s != null);
+      const referralClients = clients.filter((c: DesignerClient) => c.source === 'referral');
+
+      return {
         total: clients.length,
+        // Per-stage counts
+        lead: clients.filter((c: DesignerClient) => c.status === 'lead').length,
+        proposal: clients.filter((c: DesignerClient) => c.status === 'proposal').length,
         active: clients.filter((c: DesignerClient) => c.status === 'active').length,
-        paused: clients.filter((c: DesignerClient) => c.status === 'paused').length,
         completed: clients.filter((c: DesignerClient) => c.status === 'completed').length,
+        nurture: clients.filter((c: DesignerClient) => c.status === 'nurture').length,
+        // Aggregate metrics
         fromLeads: clients.filter((c: DesignerClient) => c.source === 'lead').length,
         totalRevenue: clients.reduce((sum: number, c: DesignerClient) => sum + (c.total_revenue || 0), 0),
-        totalProjects: clients.reduce((sum: number, c: DesignerClient) => sum + (c.project_count || 0), 0),
+        totalProjects: clients.reduce((sum: number, c: DesignerClient) => sum + (c.total_projects || 0), 0),
+        avgSatisfaction: scores.length > 0
+          ? scores.reduce((a: number, b: number) => a + b, 0) / scores.length
+          : 0,
+        reviewCount: scores.length,
+        referralRate: clients.length > 0
+          ? Math.round((referralClients.length / clients.length) * 100)
+          : 0,
+        activeProjectValue: clients
+          .filter((c: DesignerClient) => c.status === 'active')
+          .reduce((sum: number, c: DesignerClient) => sum + (c.total_revenue || 0), 0),
       };
-
-      return stats;
     },
   });
 }

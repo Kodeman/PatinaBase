@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — Decision Workflow UX/UI Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--bg:var(--ow);--sf:#FFFFFF;--hv:rgba(196,165,123,0.06);--tx:var(--ch);--bd:var(--mo);--mu:var(--ao);--su:var(--pe);--fd:'Playfair Display',Georgia,serif;--fb:'Inter',-apple-system,sans-serif;--fm:'DM Mono','SF Mono',monospace;--e:cubic-bezier(0.4,0,0.2,1)}
+*{margin:0;padding:0;box-sizing:border-box}html{font-size:16px;scroll-behavior:smooth;background:var(--bg)}body{font-family:var(--fb);color:var(--tx);-webkit-font-smoothing:antialiased;line-height:1.6}
+.w{max-width:1120px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}.nr{max-width:800px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}section{padding:clamp(3rem,6vw,6rem) 0}
+h1{font-family:var(--fd);font-weight:400;font-size:clamp(2.2rem,5vw,3.8rem);line-height:1.12;letter-spacing:-0.02em}h2,.h2{font-family:var(--fd);font-weight:400;font-size:clamp(1.6rem,3.5vw,2.4rem);line-height:1.2;letter-spacing:-0.02em}h3,.h3{font-family:var(--fd);font-weight:500;font-size:1.25rem;line-height:1.35}
+.meta{font-family:var(--fm);font-size:0.68rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--mu)}.ms{font-family:var(--fm);font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mu)}
+.lbl{font-family:var(--fb);font-weight:500;font-size:0.95rem;color:var(--tx)}.ls{font-family:var(--fb);font-weight:400;font-size:0.82rem;color:var(--mu)}
+.bd{font-family:var(--fb);font-size:0.95rem;line-height:1.7;color:var(--bd);max-width:600px}em{font-family:var(--fd);font-style:italic;color:var(--ao)}
+.st{display:flex;flex-direction:column;gap:6px;padding:2.5rem 0}.st .s{height:2px;border-radius:1px}.st .s:nth-child(1){width:100%;background:var(--mo)}.st .s:nth-child(2){width:80%;background:var(--cl);opacity:.7}.st .s:nth-child(3){width:60%;background:var(--cl);opacity:.35}
+.sm{display:flex;flex-direction:column;gap:4px;padding:1.5rem 0}.sm .s{height:1.5px;border-radius:1px}.sm .s:nth-child(1){width:60px;background:var(--mo)}.sm .s:nth-child(2){width:48px;background:var(--cl);opacity:.7}.sm .s:nth-child(3){width:36px;background:var(--cl);opacity:.35}
+.cover{min-height:75vh;display:flex;flex-direction:column;justify-content:flex-end;padding:4rem clamp(1.5rem,5vw,4rem)}.cover h1 span{display:block;font-style:italic;color:var(--ao);font-weight:400;font-size:0.55em}.cover-sub{font-size:1.05rem;color:var(--bd);max-width:560px;margin:1rem 0 3rem;line-height:1.75}
+.cm{display:flex;gap:3rem;flex-wrap:wrap}.cm-i .meta{margin-bottom:0.2rem}.cm-i p{font-size:0.85rem;color:var(--tx)}
+.sc{background:var(--sf);border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(44,41,38,0.04),0 8px 32px rgba(44,41,38,0.05);margin:2rem 0}.sb{display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:48px;background:var(--sf);border-bottom:1px solid var(--su)}.sb-l{font-family:var(--fd);font-weight:500;font-size:0.72rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--tx)}.sb-n{display:flex;gap:1.2rem}.sb-n span{font-family:var(--fb);font-size:0.72rem;color:var(--mu)}.sb-n span.on{color:var(--tx);border-bottom:2px solid var(--cl);padding-bottom:2px}.sb-u{display:flex;align-items:center;gap:0.4rem}.sb-a{width:24px;height:24px;border-radius:50%;background:var(--pe);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-weight:500;font-size:0.55rem;color:var(--mo)}
+.sd{padding:clamp(1.5rem,3vw,2.5rem);background:var(--bg);min-height:200px}
+.ph{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2rem;flex-wrap:wrap;gap:1rem}
+.fi{display:flex;gap:0;border-bottom:1px solid var(--su);margin-bottom:1.5rem}.fi-i{font-family:var(--fb);font-size:0.8rem;color:var(--mu);padding:0.5rem 1rem 0.6rem;border-bottom:2px solid transparent;white-space:nowrap;cursor:default}.fi-i:first-child{padding-left:0}.fi-i.on{color:var(--tx);border-bottom-color:var(--cl)}.fi-i .ct{font-family:var(--fm);font-size:0.58rem;color:var(--mu);margin-left:0.3rem}
+.btn{font-family:var(--fb);font-weight:500;font-size:0.8rem;padding:0.55rem 1.2rem;border:none;border-radius:3px;cursor:default;display:inline-flex;align-items:center;gap:0.4rem}.btn-p{background:var(--ch);color:var(--ow)}.btn-s{background:transparent;color:var(--tx);border:1px solid var(--pe)}.btn-g{background:transparent;color:var(--mu)}.btn-sm{font-size:0.72rem;padding:0.4rem 0.8rem}.btn-cl{background:var(--cl);color:white}.btn-sa{background:var(--sa);color:white}
+.tag{display:inline-flex;font-family:var(--fb);font-size:0.72rem;font-weight:500;color:var(--mo);padding:0.25rem 0.7rem;background:var(--ow);border:1px solid var(--pe);border-radius:2px;white-space:nowrap}.tag.on{border-color:var(--cl);color:var(--ch)}
+.bc{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:1.5rem}.bc a{color:var(--cl);text-decoration:none}
+.fl{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:0.4rem}
+.dr{display:grid;grid-template-columns:110px 1fr;gap:0.75rem;padding:0.3rem 0;font-size:0.85rem}.dr-k{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);padding-top:0.12rem}.dr-v{font-family:var(--fb);color:var(--bd);line-height:1.5}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:3rem}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem 2rem}.ff{display:flex;flex-direction:column;gap:0.35rem}.ff.full{grid-column:1/-1}.ff label{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu)}.ff input,.ff textarea,.ff select{font-family:var(--fb);font-size:0.85rem;padding:0.55rem 0.7rem;border:1px solid var(--pe);border-radius:3px;background:var(--sf);color:var(--tx);outline:none}.ff textarea{resize:vertical;min-height:80px}.ff select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238B7355' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 0.7rem center}
+.pq{padding:2.5rem 0;border-top:1px solid var(--su);border-bottom:1px solid var(--su);margin:2rem 0}.pq blockquote{font-family:var(--fd);font-size:clamp(1.2rem,2.5vw,1.8rem);font-weight:400;font-style:italic;line-height:1.45;color:var(--tx);max-width:620px}.pq cite{display:block;font-family:var(--fm);font-size:0.65rem;font-style:normal;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-top:1rem}
+.mr{display:flex;gap:0;padding-bottom:1.5rem;border-bottom:1px solid var(--su);margin-bottom:2rem}.mt{padding-right:2rem}.mt+.mt{padding-left:2rem;border-left:1px solid var(--su)}.mt-l{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:0.3rem}.mt-v{font-family:var(--fd);font-size:1.6rem;font-weight:700;color:var(--tx);line-height:1;margin-bottom:0.2rem}.mt-c{font-family:var(--fb);font-size:0.72rem}.mt-c.up{color:var(--sa)}.mt-c.dn{color:var(--te)}.mt-c.nu{color:var(--mu)}
+
+/* Status */
+.stat{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.06em;padding:3px 8px;border-radius:2px;white-space:nowrap}
+.stat-pending{color:var(--gh);background:rgba(232,197,71,0.1)}.stat-overdue{color:var(--te);background:rgba(199,123,110,0.08)}.stat-resolved{color:var(--sa);background:rgba(122,155,118,0.1)}.stat-blocked{color:var(--te);background:rgba(199,123,110,0.1)}.stat-draft{color:var(--mu);background:rgba(139,115,85,0.08)}
+
+/* Decision card */
+.dec{border:1.5px solid var(--cl);border-radius:8px;padding:1.25rem;background:rgba(196,165,123,0.02);margin-bottom:1rem;transition:border-color 0.2s}.dec.overdue{border-color:var(--te);background:rgba(199,123,110,0.02)}.dec.resolved{border-color:var(--sa);background:rgba(122,155,118,0.02);opacity:0.8}
+.dec-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem}
+
+/* Option card */
+.opt{border:1.5px solid var(--pe);border-radius:6px;padding:1rem;cursor:default;transition:all 0.15s var(--e);position:relative}.opt:hover{border-color:var(--cl)}.opt.chosen{border-color:var(--sa);background:rgba(122,155,118,0.03)}.opt.chosen::after{content:'✓ Selected';position:absolute;top:0.6rem;right:0.6rem;font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--sa);background:rgba(122,155,118,0.1);padding:2px 6px;border-radius:2px}
+.opt-swatch{width:100%;height:64px;border-radius:4px;margin-bottom:0.6rem}
+.opt-name{font-family:var(--fb);font-weight:500;font-size:0.85rem;color:var(--tx);margin-bottom:0.15rem}
+.opt-note{font-family:var(--fb);font-size:0.75rem;color:var(--mu);line-height:1.5}
+.opt-rec{font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--cl);background:rgba(196,165,123,0.08);padding:2px 6px;border-radius:2px;margin-top:0.5rem;display:inline-block}
+
+/* Image placeholder */
+.img-ph{background:var(--pe);border-radius:6px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}.img-ph::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 20px,rgba(196,165,123,0.03) 20px,rgba(196,165,123,0.03) 40px)}.img-ph span{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);z-index:1}
+
+/* Connection line */
+.conn{display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.75rem;background:rgba(139,156,173,0.04);border:1px solid rgba(139,156,173,0.12);border-radius:4px;margin-top:0.5rem;font-family:var(--fb);font-size:0.78rem;color:var(--bd)}
+.conn-icon{font-size:0.7rem;color:var(--db)}
+
+/* Bubble */
+.bubble{max-width:75%;padding:0.8rem 1rem;border-radius:12px 12px 12px 4px;margin-bottom:0.6rem}.bubble.in{background:var(--pe)}.bubble.out{background:var(--ch);color:var(--ow);border-radius:12px 12px 4px 12px;margin-left:auto}.bubble p{font-family:var(--fb);font-size:0.85rem;line-height:1.55}.bubble-t{font-family:var(--fm);font-size:0.5rem;text-transform:uppercase;letter-spacing:0.04em;margin-top:0.3rem}.bubble.in .bubble-t{color:var(--mu)}.bubble.out .bubble-t{color:rgba(250,247,242,0.4)}
+
+/* Activity */
+.act{padding:0.5rem 0;border-bottom:1px solid rgba(229,226,221,0.3)}.act-text{font-family:var(--fb);font-size:0.82rem;color:var(--bd);line-height:1.5}.act-text strong{font-weight:500;color:var(--tx)}.act-time{font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);margin-top:0.1rem}
+
+/* Flow node */
+.flow-node{display:inline-flex;align-items:center;justify-content:center;padding:0.5rem 1rem;border-radius:5px;font-family:var(--fb);font-size:0.72rem;font-weight:500;white-space:nowrap;flex-shrink:0}
+.flow-arrow{width:28px;height:1px;background:var(--pe);position:relative;flex-shrink:0}.flow-arrow::after{content:'';position:absolute;right:0;top:-3px;width:6px;height:6px;border-right:1px solid var(--pe);border-bottom:1px solid var(--pe);transform:rotate(-45deg)}
+.flow-down{width:1px;height:28px;background:var(--pe);margin:0 auto;position:relative}.flow-down::after{content:'';position:absolute;bottom:0;left:-3px;width:6px;height:6px;border-right:1px solid var(--pe);border-bottom:1px solid var(--pe);transform:rotate(45deg)}
+
+/* Progress */
+.prog{height:3px;background:var(--pe);border-radius:2px;overflow:hidden;width:100%}.pf{height:100%;background:var(--cl);border-radius:2px}
+
+/* Responsive */
+@media(max-width:768px){.two{grid-template-columns:1fr}.fg{grid-template-columns:1fr}.mr{flex-direction:column;gap:1.5rem}.mt+.mt{border-left:none;padding-left:0}.cm{flex-direction:column;gap:1rem}}
+.fade{opacity:0;transform:translateY(16px);transition:opacity 0.7s ease,transform 0.7s ease}.fade.vis{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ============================== COVER ============================== -->
+<div class="cover">
+  <p class="meta" style="margin-bottom:1rem">Patina — Decision Workflow Design</p>
+  <h1>The Decision<span>How choices move through the Designer Portal</span></h1>
+  <p class="cover-sub">A design project is a chain of decisions — from paint color to sofa fabric to dining table finish. Each decision involves context, options, a recommendation, and a client response. This document defines the complete lifecycle: how decisions are created, presented, tracked, resolved, and how they flow between projects, proposals, messages, and procurement.</p>
+  <div class="st"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div class="cm">
+    <div class="cm-i"><p class="meta">Prepared for</p><p>Kody & Leah</p></div>
+    <div class="cm-i"><p class="meta">Version</p><p>1.0 — March 2026</p></div>
+    <div class="cm-i"><p class="meta">Screens</p><p>11 pages, complete lifecycle</p></div>
+    <div class="cm-i"><p class="meta">Connects to</p><p>Projects, Proposals, Messages, Clients</p></div>
+  </div>
+</div>
+
+<!-- ============================== LIFECYCLE ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">01 — The Decision Lifecycle</p>
+  <h2>Every design project is <em>a chain of choices.</em></h2>
+  <p class="bd" style="margin-bottom:2rem">A single room redesign involves 30 to 50 individual decisions — from anchor furniture down to hardware finishes. Today these decisions happen over email, text threads, and phone calls with no structured tracking. Patina makes each decision a first-class object with a clear lifecycle, visible across every part of the portal.</p>
+
+  <!-- Flow diagram -->
+  <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin:2rem 0;padding:1.5rem 0;border-top:1px solid var(--su);border-bottom:1px solid var(--su)">
+    <div class="flow-node" style="border:1.5px solid var(--cl);background:rgba(196,165,123,0.04);color:var(--tx)">Create</div>
+    <div class="flow-arrow"></div>
+    <div class="flow-node" style="border:1.5px solid var(--pe);color:var(--bd)">Attach</div>
+    <div class="flow-arrow"></div>
+    <div class="flow-node" style="border:1.5px solid var(--pe);color:var(--bd)">Send</div>
+    <div class="flow-arrow"></div>
+    <div class="flow-node" style="border:1.5px solid var(--pe);color:var(--bd)">Track</div>
+    <div class="flow-arrow"></div>
+    <div class="flow-node" style="border:1.5px solid var(--pe);color:var(--bd)">Resolve</div>
+    <div class="flow-arrow"></div>
+    <div class="flow-node" style="border:1.5px solid var(--sa);background:rgba(122,155,118,0.04);color:var(--tx)">Execute</div>
+  </div>
+
+  <!-- Six lifecycle stages -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1px solid var(--su)">
+    <div style="padding:1.25rem 1rem 1.25rem 0;border-bottom:1px solid var(--su)"><div class="ms" style="color:var(--cl);margin-bottom:0.4rem">01 Create</div><div class="h3" style="font-size:1rem;margin-bottom:0.3rem">Build the Choice</div><p style="font-size:0.75rem;color:var(--bd);line-height:1.5">Designer defines the decision: title, context, visual options with swatches or images, her recommendation, and a deadline. Options include product choices, material swatches, color selections, layout approvals, or budget sign-offs.</p></div>
+    <div style="padding:1.25rem 1rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div class="ms" style="color:var(--cl);margin-bottom:0.4rem">02 Attach</div><div class="h3" style="font-size:1rem;margin-bottom:0.3rem">Link to Context</div><p style="font-size:0.75rem;color:var(--bd);line-height:1.5">Decision is linked to a project phase, a proposal section, or both. Linking enables the system to know which decisions block procurement, which gate phase advancement, and which are advisory.</p></div>
+    <div style="padding:1.25rem 0 1.25rem 1rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div class="ms" style="color:var(--cl);margin-bottom:0.4rem">03 Send</div><div class="h3" style="font-size:1rem;margin-bottom:0.3rem">Deliver to Client</div><p style="font-size:0.75rem;color:var(--bd);line-height:1.5">Decision card appears in the message thread. Client receives a notification. Visual options are tappable. Designer recommendation is flagged. Client can ask a question inline before choosing.</p></div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0">
+    <div style="padding:1.25rem 1rem 1.25rem 0;border-bottom:1px solid var(--su)"><div class="ms" style="color:var(--cl);margin-bottom:0.4rem">04 Track</div><div class="h3" style="font-size:1rem;margin-bottom:0.3rem">Monitor Response</div><p style="font-size:0.75rem;color:var(--bd);line-height:1.5">Decision appears on the project timeline, the client profile, and the decision dashboard. Status updates as the client views, asks questions, or lets the deadline approach. Overdue items surface automatically.</p></div>
+    <div style="padding:1.25rem 1rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div class="ms" style="color:var(--cl);margin-bottom:0.4rem">05 Resolve</div><div class="h3" style="font-size:1rem;margin-bottom:0.3rem">Client Chooses</div><p style="font-size:0.75rem;color:var(--bd);line-height:1.5">Client taps their selection. Optionally adds a note. Decision resolves with a timestamped record of what was chosen, by whom, and with what context — creating an immutable audit trail for the project.</p></div>
+    <div style="padding:1.25rem 0 1.25rem 1rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div class="ms" style="color:var(--cl);margin-bottom:0.4rem">06 Execute</div><div class="h3" style="font-size:1rem;margin-bottom:0.3rem">Action Follows</div><p style="font-size:0.75rem;color:var(--bd);line-height:1.5">Resolved decisions trigger downstream actions: product ordered in procurement, phase unblocked, proposal updated, task checked off. The choice flows directly into the work — no manual bridging required.</p></div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== DECISION TYPES ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">02 — Decision Types</p>
+  <h2>Five types of choices, <em>one consistent pattern.</em></h2>
+  <p class="bd" style="margin-bottom:2rem">Every decision in the portal uses the same structured format — title, context, visual options, recommendation, deadline — but they serve different purposes and connect to different parts of the system.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;border-top:1px solid var(--su)">
+    <div style="padding:1.15rem 0.6rem 1.15rem 0;border-bottom:1px solid var(--su)"><div style="width:36px;height:36px;border-radius:6px;background:rgba(196,165,123,0.1);display:flex;align-items:center;justify-content:center;margin-bottom:0.5rem;font-size:0.8rem">🎨</div><div class="lbl" style="font-size:0.82rem;margin-bottom:0.2rem">Material</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Paint color, fabric, finish, flooring. Visual swatches side by side.</p><p class="ms" style="margin-top:0.4rem">Blocks: Procurement</p></div>
+    <div style="padding:1.15rem 0.6rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div style="width:36px;height:36px;border-radius:6px;background:rgba(196,165,123,0.1);display:flex;align-items:center;justify-content:center;margin-bottom:0.5rem;font-size:0.8rem">🪑</div><div class="lbl" style="font-size:0.82rem;margin-bottom:0.2rem">Product</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Which sofa, which table, which lighting. Product cards with pricing.</p><p class="ms" style="margin-top:0.4rem">Blocks: Procurement</p></div>
+    <div style="padding:1.15rem 0.6rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div style="width:36px;height:36px;border-radius:6px;background:rgba(196,165,123,0.1);display:flex;align-items:center;justify-content:center;margin-bottom:0.5rem;font-size:0.8rem">📐</div><div class="lbl" style="font-size:0.82rem;margin-bottom:0.2rem">Layout</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Furniture arrangement, room plan. AR screenshots or floor plans.</p><p class="ms" style="margin-top:0.4rem">Blocks: Refinement</p></div>
+    <div style="padding:1.15rem 0.6rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div style="width:36px;height:36px;border-radius:6px;background:rgba(196,165,123,0.1);display:flex;align-items:center;justify-content:center;margin-bottom:0.5rem;font-size:0.8rem">💰</div><div class="lbl" style="font-size:0.82rem;margin-bottom:0.2rem">Budget</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Scope change, upgrade approval, contingency use. Financial impact shown.</p><p class="ms" style="margin-top:0.4rem">Blocks: Phase gate</p></div>
+    <div style="padding:1.15rem 0 1.15rem 0.6rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div style="width:36px;height:36px;border-radius:6px;background:rgba(196,165,123,0.1);display:flex;align-items:center;justify-content:center;margin-bottom:0.5rem;font-size:0.8rem">✓</div><div class="lbl" style="font-size:0.82rem;margin-bottom:0.2rem">Approval</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Concept sign-off, proposal acceptance, final walkthrough. Yes/no response.</p><p class="ms" style="margin-top:0.4rem">Blocks: Phase advance</p></div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 1: DECISION DASHBOARD ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">03 — Decision Dashboard</p>
+  <h2>Every open choice, <em>across every project.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">The single view showing all pending decisions across all active projects. Sorted by urgency — overdue first, then approaching deadline, then pending. Each row shows the decision title, client, project, type, deadline, and what it blocks. This is Leah's morning scan: what needs a client answer before work can continue.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="ph"><div><div class="h2" style="font-size:1.5rem;margin-bottom:0.15rem">Decisions</div><div class="ls">Open choices awaiting client response</div></div><div><button class="btn btn-cl btn-sm">+ New Decision</button></div></div>
+
+      <div class="fi">
+        <div class="fi-i on">All Open<span class="ct">8</span></div>
+        <div class="fi-i">Overdue<span class="ct">2</span></div>
+        <div class="fi-i">Due This Week<span class="ct">3</span></div>
+        <div class="fi-i">Resolved<span class="ct">24</span></div>
+      </div>
+
+      <div class="mr">
+        <div class="mt"><div class="mt-l">Open Decisions</div><div class="mt-v">8</div><div class="mt-c nu">across 4 projects</div></div>
+        <div class="mt"><div class="mt-l">Overdue</div><div class="mt-v" style="color:var(--te)">2</div><div class="mt-c dn">blocking procurement</div></div>
+        <div class="mt"><div class="mt-l">Avg Response</div><div class="mt-v">3.4<span style="font-family:var(--fb);font-size:0.8rem;color:var(--mu);margin-left:0.3rem">days</span></div><div class="mt-c up">↓ 0.8 days faster</div></div>
+        <div class="mt"><div class="mt-l">Resolution Rate</div><div class="mt-v">92%</div><div class="mt-c up">on time this quarter</div></div>
+      </div>
+
+      <!-- Overdue -->
+      <div class="dec overdue">
+        <div class="dec-head"><div><div class="lbl" style="font-size:0.9rem">Rug color — Natural vs Sand</div><div class="ls">Chen Residence · Procurement phase</div></div><div style="display:flex;align-items:center;gap:0.75rem"><span class="stat stat-overdue">Overdue 4 days</span><button class="btn btn-cl btn-sm">Send Reminder</button></div></div>
+        <div style="display:flex;gap:0.75rem;margin:0.75rem 0">
+          <div style="width:60px;height:40px;border-radius:3px;background:#D4C8B0"></div>
+          <div style="width:60px;height:40px;border-radius:3px;background:#E8DCC8"></div>
+        </div>
+        <div class="conn"><span class="conn-icon">⚡</span> Blocking: Jute rug order from Studio Piet · Delays installation by est. 2 weeks</div>
+      </div>
+
+      <div class="dec overdue">
+        <div class="dec-head"><div><div class="lbl" style="font-size:0.9rem">Pendant light finish — Brass vs Matte Black</div><div class="ls">Whitfield Living Room · Refinement phase</div></div><div style="display:flex;align-items:center;gap:0.75rem"><span class="stat stat-overdue">Overdue 1 day</span><button class="btn btn-s btn-sm">View</button></div></div>
+        <div class="conn"><span class="conn-icon">⚡</span> Blocking: Schoolhouse Electric order · 3 units</div>
+      </div>
+
+      <!-- Pending -->
+      <div class="dec">
+        <div class="dec-head"><div><div class="lbl" style="font-size:0.9rem">Wall paint — Simply White vs Chantilly Lace</div><div class="ls">Chen Residence · Procurement phase</div></div><div style="display:flex;align-items:center;gap:0.75rem"><span class="stat stat-pending">Due Apr 1</span><button class="btn btn-s btn-sm">View</button></div></div>
+        <div style="display:flex;gap:0.75rem;margin:0.75rem 0">
+          <div style="width:60px;height:40px;border-radius:3px;background:linear-gradient(135deg,#FAF7F2,#F5F0E8)"></div>
+          <div style="width:60px;height:40px;border-radius:3px;background:linear-gradient(135deg,#FAFAFA,#F2F0ED)"></div>
+        </div>
+        <div class="conn"><span class="conn-icon">◎</span> Linked: Procurement phase · Non-blocking (painting scheduled week 17)</div>
+      </div>
+
+      <div class="dec">
+        <div class="dec-head"><div><div class="lbl" style="font-size:0.9rem">Concept direction approval</div><div class="ls">Lakefront Condo · Concept phase</div></div><div style="display:flex;align-items:center;gap:0.75rem"><span class="stat stat-pending">Due Apr 3</span><button class="btn btn-s btn-sm">View</button></div></div>
+        <div class="conn"><span class="conn-icon">⚡</span> Blocking: Phase advance to Refinement</div>
+      </div>
+
+      <div class="dec">
+        <div class="dec-head"><div><div class="lbl" style="font-size:0.9rem">Accent chair fabric — Linen vs Boucle</div><div class="ls">Whitfield Living Room · Refinement phase</div></div><div style="display:flex;align-items:center;gap:0.75rem"><span class="stat stat-pending">Due Apr 5</span><button class="btn btn-s btn-sm">View</button></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 2: DECISION BUILDER ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">04 — Decision Builder</p>
+  <h2>Build the choice, <em>frame the decision.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">The creation screen walks Leah through constructing a structured decision: what is the choice, what are the options (with visuals), what's her recommendation and why, when does she need the answer, and what does this decision connect to in the project. The builder assembles a decision card that appears identically in the conversation thread and on the client's device.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="bc"><a>Decisions</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> New Decision</div>
+      <div class="h2" style="font-size:1.5rem;margin-bottom:0.25rem">New Decision</div>
+      <div class="ls" style="margin-bottom:2rem">Build a structured choice for your client. They'll see this as an interactive card they can respond to directly.</div>
+
+      <!-- Section 1: What & Who -->
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">The Choice</div>
+      <div class="fg" style="max-width:580px">
+        <div class="ff full"><label>Decision Title</label><input value="Dining chairs — Shaker Oak vs Windsor Elm" style="font-family:var(--fd);font-size:1rem;font-weight:500;padding:0.65rem"></div>
+        <div class="ff"><label>Client</label><select><option selected>James & Lin Chen</option><option>Sarah & James Whitfield</option><option>Andrea Novak</option></select></div>
+        <div class="ff"><label>Decision Type</label><select><option selected>Product Selection</option><option>Material / Color</option><option>Layout Approval</option><option>Budget Change</option><option>Phase Approval</option></select></div>
+        <div class="ff full"><label>Context for Client</label><textarea rows="3" style="font-family:var(--fb)">We need six dining chairs to pair with the Nordic Atelier table. I've narrowed it down to two options that complement the warm oak grain beautifully — both are solid wood with hand-finished joints, but they bring different personalities to the room.</textarea></div>
+      </div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- Section 2: Options -->
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">The Options</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;max-width:580px">
+        <div style="border:1px solid var(--pe);border-radius:6px;padding:1rem">
+          <div class="img-ph" style="height:100px;margin-bottom:0.75rem"><span>Chair Image A</span></div>
+          <div class="ff" style="margin-bottom:0.5rem"><label>Option Name</label><input value="Shaker Dining Chair — Sawkille Co"></div>
+          <div class="ff" style="margin-bottom:0.5rem"><label>Price (each)</label><input value="$400"></div>
+          <div class="ff"><label>Designer Note</label><textarea rows="2" style="font-family:var(--fb);font-size:0.8rem">Clean lines, understated craft. The most natural pairing — echoes the table's Scandinavian roots. My recommendation.</textarea></div>
+          <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.6rem;font-family:var(--fb);font-size:0.78rem;color:var(--cl);cursor:default">
+            <span style="width:16px;height:16px;border-radius:3px;border:2px solid var(--cl);display:flex;align-items:center;justify-content:center;font-size:0.55rem;background:rgba(196,165,123,0.1)">✓</span>
+            Your Recommendation
+          </label>
+        </div>
+        <div style="border:1px solid var(--pe);border-radius:6px;padding:1rem">
+          <div class="img-ph" style="height:100px;margin-bottom:0.75rem"><span>Chair Image B</span></div>
+          <div class="ff" style="margin-bottom:0.5rem"><label>Option Name</label><input value="Windsor Side Chair — Heritage Mill"></div>
+          <div class="ff" style="margin-bottom:0.5rem"><label>Price (each)</label><input value="$350"></div>
+          <div class="ff"><label>Designer Note</label><textarea rows="2" style="font-family:var(--fb);font-size:0.8rem">More character, a bit more casual. The spindle back adds visual interest but reads slightly more traditional. Great if they want warmth over minimalism.</textarea></div>
+        </div>
+      </div>
+      <div style="margin-top:0.75rem;max-width:580px"><button class="btn btn-s btn-sm">+ Add Another Option</button></div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- Section 3: Connections -->
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Connections & Timing</div>
+      <div class="fg" style="max-width:580px">
+        <div class="ff"><label>Linked Project</label><select><option selected>Chen Residence</option></select></div>
+        <div class="ff"><label>Linked Phase</label><select><option>Consultation</option><option>Concept</option><option>Refinement</option><option selected>Procurement</option><option>Installation</option></select></div>
+        <div class="ff"><label>Decision Due</label><input value="April 5, 2026"></div>
+        <div class="ff"><label>Blocking Status</label><select><option selected>Blocks procurement (ordering)</option><option>Blocks phase advancement</option><option>Non-blocking (advisory)</option></select></div>
+        <div class="ff full"><label>Linked Proposal Section (Optional)</label><select><option>None</option><option selected>Product Selections — Dining Chairs</option><option>Investment Breakdown</option></select></div>
+      </div>
+
+      <!-- Impact preview -->
+      <div style="padding:1rem;background:rgba(196,165,123,0.04);border:1px solid rgba(196,165,123,0.12);border-radius:6px;margin-top:1.5rem;max-width:580px">
+        <p class="ms" style="color:var(--cl);margin-bottom:0.3rem">What This Decision Connects To</p>
+        <div style="font-family:var(--fb);font-size:0.78rem;color:var(--bd);line-height:1.8">
+          <div class="conn" style="margin:0.3rem 0"><span class="conn-icon">📋</span> Project: Chen Residence → Procurement phase → "Order dining chairs" task</div>
+          <div class="conn" style="margin:0.3rem 0"><span class="conn-icon">📄</span> Proposal: Product Selections section — will update line item when resolved</div>
+          <div class="conn" style="margin:0.3rem 0"><span class="conn-icon">💬</span> Message: Will appear as interactive card in Chen conversation thread</div>
+          <div class="conn" style="margin:0.3rem 0"><span class="conn-icon">👤</span> Client: Will appear under "Pending Decisions" on Chen profile</div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:0.5rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--su)"><button class="btn btn-cl">Send Decision to Client</button><button class="btn btn-s">Save as Draft</button><button class="btn btn-g">Cancel</button></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 3: DECISION IN THREAD ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">05 — Decision in Conversation</p>
+  <h2>The choice arrives <em>where the conversation lives.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">When sent, the decision card embeds directly in the message thread between designer and client. It's not a separate page to navigate to — it's a structured, visual object within the natural flow of conversation. The client can ask questions above and below the card, then tap to select their choice without leaving the thread.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span>Work</span><span class="on">Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd" style="padding-bottom:0">
+      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--su)">
+        <div style="width:40px;height:40px;border-radius:50%;background:rgba(122,155,118,0.12);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-weight:500;font-size:0.78rem;color:var(--sa)">JC</div>
+        <div><div class="lbl">James & Lin Chen</div><div class="ls">Chen Residence · Procurement</div></div>
+      </div>
+
+      <div style="max-width:560px;margin:0 auto;padding-bottom:1rem">
+        <div class="bubble out"><p>Great news — the dining table from Nordic Atelier is confirmed for April 2nd delivery! Now we need to finalize the chairs. I've put together two beautiful options for you.</p><div class="bubble-t">Mar 26, 10:14 AM</div></div>
+
+        <!-- Decision card in thread -->
+        <div style="max-width:85%;margin:1rem 0 1rem auto">
+          <div class="dec" style="margin-bottom:0">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem"><span class="ms" style="color:var(--cl)">Decision Request</span><span class="stat stat-pending">Due Apr 5</span></div>
+            <div class="lbl" style="font-size:0.95rem;margin-bottom:0.35rem">Dining Chairs — Shaker Oak vs Windsor Elm</div>
+            <p style="font-family:var(--fb);font-size:0.82rem;color:var(--bd);line-height:1.55;margin-bottom:1rem">Six chairs to pair with the Nordic Atelier table. Both are solid wood with hand-finished joints — different personalities for the room.</p>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+              <div class="opt">
+                <div class="opt-swatch" style="background:linear-gradient(135deg,#D4C8B0,#C4B8A0)"></div>
+                <div class="opt-name">Shaker Chair — Sawkille</div>
+                <div style="font-family:var(--fd);font-weight:600;font-size:0.88rem;margin:0.2rem 0">$400 <span style="font-family:var(--fb);font-weight:400;font-size:0.7rem;color:var(--mu)">each</span></div>
+                <div class="opt-note">Clean lines, understated craft. The most natural pairing.</div>
+                <div class="opt-rec">★ Leah's Recommendation</div>
+              </div>
+              <div class="opt">
+                <div class="opt-swatch" style="background:linear-gradient(135deg,#C8B89C,#B8A888)"></div>
+                <div class="opt-name">Windsor Chair — Heritage Mill</div>
+                <div style="font-family:var(--fd);font-weight:600;font-size:0.88rem;margin:0.2rem 0">$350 <span style="font-family:var(--fb);font-weight:400;font-size:0.7rem;color:var(--mu)">each</span></div>
+                <div class="opt-note">More character, slightly more casual. Spindle back adds warmth.</div>
+              </div>
+            </div>
+            <div class="ms" style="margin-top:0.75rem">Tap an option to select · You can add a note with your choice</div>
+          </div>
+        </div>
+
+        <div class="bubble in"><p>Both are gorgeous! Quick question — with Miso (our cat) does either fabric hold up better for scratching? She loves furniture corners.</p><div class="bubble-t">Mar 26, 12:38 PM</div></div>
+
+        <div class="bubble out"><p>Great question! Both are solid wood so no fabric to worry about on the chair itself. The Shaker has simpler legs that give the cat less to grip. I'd lean Shaker for a pet household. The Windsor spindles might become a scratching post.</p><div class="bubble-t">Mar 26, 12:45 PM</div></div>
+
+        <div class="bubble in"><p>Ha! That settles it. Going with the Shaker. Love that they're from Rhinebeck too — we visited there last fall.</p><div class="bubble-t">Mar 26, 1:02 PM</div></div>
+
+        <!-- Resolved decision card -->
+        <div style="max-width:85%;margin:0.75rem 0 1rem 0">
+          <div class="dec resolved" style="margin-bottom:0">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem"><span class="ms" style="color:var(--sa)">Decision Resolved ✓</span><span class="ms">Mar 26, 1:02 PM</span></div>
+            <div class="lbl" style="font-size:0.88rem;margin-bottom:0.2rem">Dining Chairs → Shaker Chair — Sawkille Co</div>
+            <div class="ls">Selected by James Chen · $400 × 6 = $2,400</div>
+            <div class="conn" style="margin-top:0.5rem"><span class="conn-icon" style="color:var(--sa)">✓</span> Procurement task unblocked · Order ready to place</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:0.5rem;padding:0.75rem;background:var(--sf);border-top:1px solid var(--su)"><input style="flex:1;font-family:var(--fb);font-size:0.85rem;padding:0.55rem 0.8rem;border:1px solid var(--pe);border-radius:20px;background:var(--bg);color:var(--tx);outline:none" placeholder="Type a message…"><button class="btn btn-cl btn-sm" style="border-radius:20px">Send</button></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 4: DECISION ON PROJECT ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">06 — Decision on Project Timeline</p>
+  <h2>Choices that <em>gate the work.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">On the project detail page, decisions appear inline within their linked phase. Blocking decisions show a visual indicator and prevent the "Advance Phase" action until resolved. Non-blocking decisions track alongside tasks but don't gate progress. This is where Leah sees how client responsiveness affects project momentum.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="bc"><a>Projects</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Chen Residence <span style="margin:0 0.3rem;opacity:0.5">→</span> Procurement</div>
+
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem"><span style="width:10px;height:10px;border-radius:50%;background:var(--gh);display:inline-block"></span><span class="meta" style="color:var(--gh)">Procurement Phase · 5 of 9 tasks complete</span></div>
+      <div class="h2" style="font-size:1.5rem;margin-bottom:0.15rem">Chen Residence — Procurement</div>
+      <div class="ls" style="margin-bottom:2rem">3 decisions pending · 1 overdue · 2 blocking orders</div>
+
+      <!-- Tasks with decisions woven in -->
+      <div style="margin-bottom:0.5rem">
+        <div style="display:grid;grid-template-columns:20px 1fr auto;gap:0.75rem;padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:start">
+          <span style="width:18px;height:18px;border-radius:3px;border:1.5px solid var(--sa);display:flex;align-items:center;justify-content:center;font-size:0.6rem;color:var(--sa);background:rgba(122,155,118,0.1)">✓</span>
+          <div><div class="lbl" style="font-size:0.88rem;color:var(--mu);text-decoration:line-through;text-decoration-color:var(--pe)">Order dining table from Nordic Atelier</div></div>
+          <span class="ms" style="color:var(--sa)">Mar 12</span>
+        </div>
+      </div>
+
+      <!-- Resolved decision inline -->
+      <div style="display:grid;grid-template-columns:20px 1fr auto;gap:0.75rem;padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:start">
+        <span style="width:18px;height:18px;border-radius:3px;border:1.5px solid var(--sa);display:flex;align-items:center;justify-content:center;font-size:0.6rem;color:var(--sa);background:rgba(122,155,118,0.1)">✓</span>
+        <div>
+          <div class="lbl" style="font-size:0.88rem;color:var(--mu);text-decoration:line-through;text-decoration-color:var(--pe)">Dining chair decision</div>
+          <div style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.25rem;padding:0.2rem 0.5rem;background:rgba(122,155,118,0.04);border:1px solid rgba(122,155,118,0.12);border-radius:3px"><span class="ms" style="color:var(--sa)">Resolved</span><span style="font-family:var(--fb);font-size:0.72rem;color:var(--bd)">→ Shaker Chair — Sawkille Co × 6</span></div>
+        </div>
+        <span class="ms" style="color:var(--sa)">Mar 26</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:20px 1fr auto;gap:0.75rem;padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:start">
+        <span style="width:18px;height:18px;border-radius:3px;border:1.5px solid var(--sa);display:flex;align-items:center;justify-content:center;font-size:0.6rem;color:var(--sa);background:rgba(122,155,118,0.1)">✓</span>
+        <div><div class="lbl" style="font-size:0.88rem;color:var(--mu);text-decoration:line-through;text-decoration-color:var(--pe)">Order Meadow sectional</div></div>
+        <span class="ms" style="color:var(--sa)">Mar 14</span>
+      </div>
+
+      <!-- Blocking decision — overdue -->
+      <div style="display:grid;grid-template-columns:20px 1fr auto;gap:0.75rem;padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:start">
+        <span style="width:18px;height:18px;border-radius:3px;border:1.5px solid var(--te);display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:var(--te)">⚡</span>
+        <div>
+          <div class="lbl" style="font-size:0.88rem">Order jute area rug</div>
+          <div style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.25rem;padding:0.2rem 0.5rem;background:rgba(199,123,110,0.04);border:1px solid rgba(199,123,110,0.12);border-radius:3px"><span class="stat stat-overdue">Blocked</span><span style="font-family:var(--fb);font-size:0.72rem;color:var(--bd)">Waiting on: Rug color decision (overdue 4 days)</span></div>
+        </div>
+        <span class="ms" style="color:var(--te)">Blocked</span>
+      </div>
+
+      <!-- Pending decision -->
+      <div style="display:grid;grid-template-columns:20px 1fr auto;gap:0.75rem;padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:start">
+        <span style="width:18px;height:18px;border-radius:3px;border:1.5px solid var(--gh);display:flex;align-items:center;justify-content:center;font-size:0.65rem;color:var(--gh)">◉</span>
+        <div>
+          <div class="lbl" style="font-size:0.88rem">Wall paint selection</div>
+          <div style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.25rem;padding:0.2rem 0.5rem;background:rgba(232,197,71,0.04);border:1px solid rgba(232,197,71,0.12);border-radius:3px"><span class="stat stat-pending">Pending</span><span style="font-family:var(--fb);font-size:0.72rem;color:var(--bd)">Simply White vs Chantilly Lace · Due Apr 1</span></div>
+        </div>
+        <span class="ms">Due Apr 1</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:20px 1fr auto;gap:0.75rem;padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:start">
+        <span style="width:18px;height:18px;border-radius:3px;border:1.5px solid var(--pe)"></span>
+        <div><div class="lbl" style="font-size:0.88rem">Finalize accent pillow + throw selections</div><div class="ls" style="font-size:0.72rem;margin-top:0.1rem">Pending rug color — these coordinate</div></div>
+        <span class="ms">Due Apr 5</span>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 5: DECISION DETAIL ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">07 — Decision Detail View</p>
+  <h2>The full picture <em>of a single choice.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">When Leah clicks into any decision from the dashboard, project, or client profile, this is what she sees: the complete record. What was asked, when, what the options were, what the client chose (or hasn't yet), the conversation around it, what it connects to, and what happens next. This is the audit trail and the action center in one scroll.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="bc"><a>Decisions</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Dining Chairs — Shaker vs Windsor</div>
+
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem"><span class="stat stat-resolved">Resolved</span><span class="ms">· Mar 26, 2026</span></div>
+      <div class="h2" style="font-size:1.5rem;margin-bottom:0.15rem">Dining Chairs — Shaker Oak vs Windsor Elm</div>
+      <div class="ls" style="margin-bottom:2rem">Chen Residence · James & Lin Chen · Procurement phase</div>
+
+      <div class="two" style="gap:2.5rem">
+        <div>
+          <!-- Options with resolution -->
+          <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Options Presented</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
+            <div class="opt chosen">
+              <div class="opt-swatch" style="background:linear-gradient(135deg,#D4C8B0,#C4B8A0)"></div>
+              <div class="opt-name">Shaker Chair — Sawkille Co</div>
+              <div style="font-family:var(--fd);font-weight:600;font-size:0.88rem;margin:0.15rem 0">$400 <span style="font-family:var(--fb);font-weight:400;font-size:0.68rem;color:var(--mu)">× 6 = $2,400</span></div>
+              <div class="opt-note">Clean lines, understated craft.</div>
+              <div class="opt-rec">★ Leah's Recommendation</div>
+            </div>
+            <div class="opt" style="opacity:0.5">
+              <div class="opt-swatch" style="background:linear-gradient(135deg,#C8B89C,#B8A888)"></div>
+              <div class="opt-name">Windsor Chair — Heritage Mill</div>
+              <div style="font-family:var(--fd);font-weight:600;font-size:0.88rem;margin:0.15rem 0">$350 <span style="font-family:var(--fb);font-weight:400;font-size:0.68rem;color:var(--mu)">each</span></div>
+              <div class="opt-note">More character, slightly more casual.</div>
+            </div>
+          </div>
+
+          <!-- Client's note -->
+          <div style="margin-bottom:1.5rem"><div class="fl">Client's Note</div><p style="font-family:var(--fb);font-size:0.88rem;font-style:italic;color:var(--ao);line-height:1.55">"Going with the Shaker. Love that they're from Rhinebeck too — we visited there last fall."</p><div class="ms" style="margin-top:0.25rem">— James Chen · Mar 26, 1:02 PM</div></div>
+
+          <!-- Resolution record -->
+          <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Resolution Record</div>
+          <div class="dr"><div class="dr-k">Selected</div><div class="dr-v" style="font-weight:500">Shaker Dining Chair — Sawkille Co</div></div>
+          <div class="dr"><div class="dr-k">Selected By</div><div class="dr-v">James Chen</div></div>
+          <div class="dr"><div class="dr-k">Selected At</div><div class="dr-v">March 26, 2026, 1:02 PM CST</div></div>
+          <div class="dr"><div class="dr-k">Quantity</div><div class="dr-v">6 chairs</div></div>
+          <div class="dr"><div class="dr-k">Value</div><div class="dr-v">$2,400</div></div>
+          <div class="dr"><div class="dr-k">Sent → Resolved</div><div class="dr-v">2 hours 48 minutes</div></div>
+        </div>
+
+        <div>
+          <!-- Connections -->
+          <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Connected To</div>
+          <div class="conn" style="margin-bottom:0.5rem"><span class="conn-icon" style="color:var(--sa)">✓</span> <strong>Project Task:</strong> "Order dining chairs" — now unblocked, ready to execute</div>
+          <div class="conn" style="margin-bottom:0.5rem"><span class="conn-icon" style="color:var(--sa)">✓</span> <strong>Proposal:</strong> Product Selections — line item updated to Sawkille Shaker × 6</div>
+          <div class="conn" style="margin-bottom:0.5rem"><span class="conn-icon" style="color:var(--sa)">✓</span> <strong>Budget:</strong> $2,400 committed against $2,400 budgeted (on target)</div>
+          <div class="conn" style="margin-bottom:0.5rem"><span class="conn-icon">💬</span> <strong>Conversation:</strong> 4 messages exchanged around this decision</div>
+
+          <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+          <!-- What happened next -->
+          <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">What Happened Next</div>
+          <div class="act"><div class="act-text"><strong>System</strong> unblocked "Order dining chairs" task in Procurement phase</div><div class="act-time">Mar 26, 1:02 PM (Automatic)</div></div>
+          <div class="act"><div class="act-text"><strong>System</strong> updated proposal line item: Shaker Chair × 6 · $2,400</div><div class="act-time">Mar 26, 1:02 PM (Automatic)</div></div>
+          <div class="act"><div class="act-text"><strong>Leah</strong> placed order with Sawkille Co · PO #SK-2026-087</div><div class="act-time">Mar 26, 2:30 PM</div></div>
+          <div class="act"><div class="act-text"><strong>Sawkille Co</strong> confirmed order · Est. delivery Apr 15</div><div class="act-time">Mar 27, 9:15 AM</div></div>
+
+          <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+          <!-- Actions -->
+          <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Actions</div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap"><button class="btn btn-s btn-sm">View in Project</button><button class="btn btn-s btn-sm">View Conversation</button><button class="btn btn-s btn-sm">View Proposal</button><button class="btn btn-g btn-sm">Reopen Decision</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 6: DECISION ANALYTICS ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">08 — Decision Analytics</p>
+  <h2>Where projects stall, <em>and why.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">Across all projects and clients, decision analytics reveal patterns: which clients respond quickly, which decision types cause the most delay, which project phases accumulate bottlenecks. This isn't a report Leah runs monthly — it's ambient intelligence that helps her anticipate where to apply attention.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="ph"><div class="h2" style="font-size:1.5rem">Decision Insights</div></div>
+
+      <div class="mr">
+        <div class="mt"><div class="mt-l">Total Decisions</div><div class="mt-v">32</div><div class="mt-c nu">this quarter</div></div>
+        <div class="mt"><div class="mt-l">On-Time Rate</div><div class="mt-v">84%</div><div class="mt-c up">↑ 6% vs last quarter</div></div>
+        <div class="mt"><div class="mt-l">Avg Response</div><div class="mt-v">3.4<span style="font-family:var(--fb);font-size:0.8rem;color:var(--mu);margin-left:0.3rem">days</span></div></div>
+        <div class="mt"><div class="mt-l">Procurement Delays</div><div class="mt-v">2.1<span style="font-family:var(--fb);font-size:0.8rem;color:var(--mu);margin-left:0.3rem">weeks</span></div><div class="mt-c dn">avg from overdue decisions</div></div>
+      </div>
+
+      <div class="two" style="gap:2.5rem">
+        <div>
+          <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Response Time by Type</div>
+          <div style="margin-bottom:1.25rem"><div style="display:flex;justify-content:space-between;margin-bottom:0.25rem"><span class="lbl" style="font-size:0.82rem">Material / Color</span><span class="ms">Avg 4.2 days</span></div><div class="prog" style="height:5px"><div class="pf" style="width:84%;background:var(--cl)"></div></div></div>
+          <div style="margin-bottom:1.25rem"><div style="display:flex;justify-content:space-between;margin-bottom:0.25rem"><span class="lbl" style="font-size:0.82rem">Product Selection</span><span class="ms">Avg 3.1 days</span></div><div class="prog" style="height:5px"><div class="pf" style="width:62%"></div></div></div>
+          <div style="margin-bottom:1.25rem"><div style="display:flex;justify-content:space-between;margin-bottom:0.25rem"><span class="lbl" style="font-size:0.82rem">Layout Approval</span><span class="ms">Avg 1.8 days</span></div><div class="prog" style="height:5px"><div class="pf" style="width:36%;background:var(--sa)"></div></div></div>
+          <div style="margin-bottom:1.25rem"><div style="display:flex;justify-content:space-between;margin-bottom:0.25rem"><span class="lbl" style="font-size:0.82rem">Budget Change</span><span class="ms">Avg 5.6 days</span></div><div class="prog" style="height:5px"><div class="pf" style="width:100%;background:var(--te)"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;margin-bottom:0.25rem"><span class="lbl" style="font-size:0.82rem">Phase Approval</span><span class="ms">Avg 2.4 days</span></div><div class="prog" style="height:5px"><div class="pf" style="width:48%"></div></div></div>
+
+          <div style="padding:0.85rem;background:rgba(196,165,123,0.04);border:1px solid rgba(196,165,123,0.12);border-radius:6px;margin-top:1.5rem"><p class="ms" style="color:var(--cl);margin-bottom:0.15rem">Pattern</p><p style="font-size:0.78rem;color:var(--bd)">Material and color decisions take the longest to resolve. Consider sending swatches earlier in the process and combining color decisions into a single batch rather than sending individually.</p></div>
+        </div>
+
+        <div>
+          <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">By Client</div>
+          <div style="padding:0.65rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><div style="display:flex;justify-content:space-between;align-items:baseline"><span class="lbl" style="font-size:0.85rem">James & Lin Chen</span><span style="font-family:var(--fd);font-weight:600;font-size:0.88rem">2.1 days</span></div><div class="ls">12 decisions · 92% on time · Fast responders</div></div>
+          <div style="padding:0.65rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><div style="display:flex;justify-content:space-between;align-items:baseline"><span class="lbl" style="font-size:0.85rem">Sarah Whitfield</span><span style="font-family:var(--fd);font-weight:600;font-size:0.88rem">4.8 days</span></div><div class="ls">6 decisions · 67% on time · Needs gentle reminders</div></div>
+          <div style="padding:0.65rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><div style="display:flex;justify-content:space-between;align-items:baseline"><span class="lbl" style="font-size:0.85rem">Andrea Novak</span><span style="font-family:var(--fd);font-weight:600;font-size:0.88rem">3.0 days</span></div><div class="ls">4 decisions · 100% on time · Decisive</div></div>
+          <div style="padding:0.65rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><div style="display:flex;justify-content:space-between;align-items:baseline"><span class="lbl" style="font-size:0.85rem">Mark Olsen</span><span style="font-family:var(--fd);font-weight:600;font-size:0.88rem">5.2 days</span></div><div class="ls">10 decisions · 70% on time · Discusses with partner first</div></div>
+
+          <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+          <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Bottleneck Phases</div>
+          <div class="dr"><div class="dr-k">Most Delays</div><div class="dr-v" style="font-weight:500;color:var(--te)">Procurement (68% of overdue decisions)</div></div>
+          <div class="dr"><div class="dr-k">Fastest</div><div class="dr-v" style="color:var(--sa)">Concept approval (avg 1.4 days)</div></div>
+          <div class="dr"><div class="dr-k">Impact</div><div class="dr-v">Overdue decisions add avg 2.1 weeks to project</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== PULL QUOTE ============================== -->
+<section>
+<div class="nr">
+  <div class="pq"><blockquote>"The slowest part of any design project isn't the design. It's waiting for decisions. Every day a client deliberates on a rug color is a day the installer can't be scheduled. Structured decisions don't rush the client — they respect their time by making the choice clear."</blockquote><cite>Design Principle — Decisions Deserve Structure</cite></div>
+</div>
+</section>
+
+<!-- ============================== CLOSING ============================== -->
+<section class="fade">
+<div class="w">
+  <div class="st"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <h2 style="margin-top:2rem;margin-bottom:1.5rem">How decisions connect <em>everything.</em></h2>
+  <div class="two" style="gap:2rem">
+    <div>
+      <p class="bd" style="margin-bottom:1.5rem"><strong>Decisions are objects, not messages.</strong> An email asking "which rug color?" disappears into a thread. A Patina decision is a structured card with visual options, a recommendation, a deadline, and a one-tap response. It persists on the client profile, the project timeline, and the decision dashboard simultaneously. It can't get lost.</p>
+      <p class="bd"><strong>Blocking decisions drive urgency.</strong> When a decision blocks procurement, the project timeline shows it. When it goes overdue, the dashboard surfaces it. The system doesn't nag the client — but it makes the impact visible to the designer, who can send a contextual reminder with "this is delaying your rug order by 2 weeks" instead of "hey, just checking in."</p>
+    </div>
+    <div>
+      <p class="bd" style="margin-bottom:1.5rem"><strong>Resolution triggers action.</strong> When a client selects the Shaker chair, the system doesn't just log the choice. It unblocks the procurement task, updates the proposal line item, commits the budget, and notifies the designer to place the order. The moment of decision flows directly into the moment of execution. No copy-pasting between apps.</p>
+      <p class="bd"><strong>Analytics reveal patterns.</strong> Material decisions take 40% longer than product decisions. Budget changes take the longest of all. The Chen family responds in 2 days; the Whitfields need 5. These patterns aren't reports — they're ambient intelligence that helps Leah time her requests, batch related decisions, and anticipate bottlenecks before they stall a project.</p>
+    </div>
+  </div>
+
+  <div class="sm" style="margin-top:3rem"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2rem;flex-wrap:wrap;gap:1rem">
+    <div><div style="font-family:var(--fd);font-weight:400;font-size:1.05rem">Patina</div><div style="font-family:var(--fd);font-style:italic;font-size:0.82rem;color:var(--ao)">Where Time Adds Value</div></div>
+    <div class="ms">Decision Workflow Design v1.0 · March 2026 · 11 Screens · Kody & Leah</div>
+  </div>
+</div>
+</section>
+
+<script>
+const f=document.querySelectorAll('.fade');
+const o=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('vis')})},{threshold:0.08,rootMargin:'0px 0px -40px 0px'});
+f.forEach(s=>o.observe(s));
+</script>
+</body>
+</html>

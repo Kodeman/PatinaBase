@@ -220,6 +220,34 @@ const nextConfig = {
   },
 
 
+  async redirects() {
+    return [
+      // Redirect old dashboard routes to new portal routes
+      { source: '/leads', destination: '/portal/leads', permanent: true },
+      { source: '/leads/:path*', destination: '/portal/leads/:path*', permanent: true },
+      { source: '/projects', destination: '/portal/projects', permanent: true },
+      { source: '/projects/:path*', destination: '/portal/projects/:path*', permanent: true },
+      { source: '/proposals', destination: '/portal/proposals', permanent: true },
+      { source: '/proposals/:path*', destination: '/portal/proposals/:path*', permanent: true },
+      { source: '/earnings', destination: '/portal/earnings', permanent: true },
+      { source: '/messages', destination: '/portal/messages', permanent: true },
+      { source: '/clients', destination: '/portal/clients', permanent: true },
+      { source: '/clients/:path*', destination: '/portal/clients/:path*', permanent: true },
+      { source: '/settings', destination: '/portal/settings', permanent: true },
+      { source: '/catalog', destination: '/portal/catalog', permanent: true },
+      { source: '/catalog/:path*', destination: '/portal/catalog/:path*', permanent: true },
+      { source: '/vendors', destination: '/portal/vendors', permanent: true },
+      { source: '/vendors/:path*', destination: '/portal/vendors/:path*', permanent: true },
+      { source: '/teaching', destination: '/portal/teaching', permanent: true },
+      { source: '/teaching/:path*', destination: '/portal/teaching/:path*', permanent: true },
+      { source: '/communications', destination: '/portal/communications', permanent: true },
+      { source: '/communications/:path*', destination: '/portal/communications/:path*', permanent: true },
+      { source: '/companion', destination: '/portal/companion', permanent: true },
+      { source: '/insights', destination: '/portal/insights', permanent: true },
+      { source: '/profile', destination: '/portal/profile', permanent: true },
+    ];
+  },
+
   webpack: (config, { dev, isServer }) => {
     // Ensure resolve.alias exists
     if (!config.resolve.alias) {

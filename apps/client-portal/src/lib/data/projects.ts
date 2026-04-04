@@ -3,6 +3,7 @@ import 'server-only';
 import { cache } from 'react';
 
 import { serverProjectsApi } from '../api-client-server';
+import { env } from '../env';
 import type {
   ClientProjectView,
   DocumentAttachment,
@@ -163,23 +164,220 @@ const mapProjectListItem = (input: any): ProjectListItem => ({
   unreadMessages: asNumber(input?.unreadMessages || input?.pendingMessages, 0),
 });
 
+// ── Dev fallback data (used when the projects NestJS service is unavailable) ──
+
+const devFallbackProjects: ProjectListItem[] = [
+  {
+    id: 'project-lakefront-condo',
+    name: 'Lakefront Condo Renovation',
+    code: 'LCR-2025',
+    location: 'Chicago, IL',
+    heroImageUrl: '',
+    progressPercentage: 62,
+    status: 'active',
+    currentPhase: 'Design',
+    nextMilestoneTitle: 'Design Approval',
+    approvalsPending: 1,
+    unreadMessages: 3,
+  },
+  {
+    id: 'project-highland-estate',
+    name: 'Highland Park Estate',
+    code: 'HPE-2025',
+    location: 'Dallas, TX',
+    heroImageUrl: '',
+    progressPercentage: 25,
+    status: 'active',
+    currentPhase: 'Discovery',
+    nextMilestoneTitle: 'Concept Presentation',
+    approvalsPending: 0,
+    unreadMessages: 1,
+  },
+];
+
+const devFallbackMilestones: MilestoneDetail[] = [
+  {
+    id: 'ms-1',
+    index: 0,
+    title: 'Initial Consultation',
+    phase: 'Discovery',
+    description: 'Met with designer to discuss vision, budget, and timeline.',
+    status: 'completed',
+    startDate: '2025-01-10',
+    targetDate: '2025-01-15',
+    completionDate: '2025-01-15',
+    progressPercentage: 100,
+    checklist: [
+      { id: 'c1', label: 'Vision board created', completed: true },
+      { id: 'c2', label: 'Budget approved', completed: true },
+      { id: 'c3', label: 'Timeline agreed', completed: true },
+    ],
+    documents: [],
+    messages: [
+      { id: 'm1', authorId: 'designer-1', authorName: 'Leah Kochaver', authorRole: 'designer', body: 'Thank you for the wonderful consultation!', createdAt: '2025-01-15T14:30:00Z' },
+    ],
+    tags: [],
+  },
+  {
+    id: 'ms-2',
+    index: 1,
+    title: 'Design Concept Development',
+    phase: 'Design',
+    description: 'Comprehensive design concepts including floor plans, color palettes, and furniture selections.',
+    status: 'completed',
+    startDate: '2025-01-20',
+    targetDate: '2025-02-01',
+    completionDate: '2025-02-01',
+    progressPercentage: 100,
+    checklist: [
+      { id: 'c4', label: 'Floor plan drafted', completed: true },
+      { id: 'c5', label: 'Color palette selected', completed: true },
+      { id: 'c6', label: 'Furniture sourced', completed: true },
+    ],
+    documents: [],
+    messages: [],
+    tags: [],
+  },
+  {
+    id: 'ms-3',
+    index: 2,
+    title: 'Design Approval',
+    phase: 'Design',
+    description: 'Review and approve the final design concepts and material selections.',
+    status: 'attention',
+    startDate: '2025-02-05',
+    targetDate: '2025-02-15',
+    progressPercentage: 85,
+    checklist: [
+      { id: 'c7', label: 'Review floor plan', completed: true },
+      { id: 'c8', label: 'Approve color selections', completed: true },
+      { id: 'c9', label: 'Sign off on furniture', completed: false },
+    ],
+    documents: [],
+    messages: [
+      { id: 'm2', authorId: 'designer-1', authorName: 'Leah Kochaver', authorRole: 'designer', body: 'The final design package is ready for your review!', createdAt: '2025-02-14T10:00:00Z' },
+    ],
+    approval: {
+      id: 'a1',
+      status: 'pending',
+      summary: 'Design Concept Approval — please review the final design package',
+      requestedAt: '2025-02-14T10:00:00Z',
+      dueDate: '2025-02-20',
+      requiresClientAction: true,
+      totalValue: 12500,
+      currency: 'USD',
+    },
+    tags: [],
+  },
+  {
+    id: 'ms-4',
+    index: 3,
+    title: 'Material Ordering',
+    phase: 'Procurement',
+    description: 'Order all approved materials, furniture, and fixtures.',
+    status: 'upcoming',
+    targetDate: '2025-03-01',
+    progressPercentage: 0,
+    checklist: [
+      { id: 'c10', label: 'Order furniture', completed: false },
+      { id: 'c11', label: 'Order fixtures', completed: false },
+      { id: 'c12', label: 'Schedule deliveries', completed: false },
+    ],
+    documents: [],
+    messages: [],
+    tags: [],
+  },
+  {
+    id: 'ms-5',
+    index: 4,
+    title: 'Installation',
+    phase: 'Installation',
+    description: 'Professional installation of all furniture, fixtures, and décor.',
+    status: 'upcoming',
+    targetDate: '2025-03-15',
+    progressPercentage: 0,
+    checklist: [],
+    documents: [],
+    messages: [],
+    tags: [],
+  },
+  {
+    id: 'ms-6',
+    index: 5,
+    title: 'Final Walkthrough',
+    phase: 'Completion',
+    description: 'Tour your completed space, final touches, and project completion celebration.',
+    status: 'upcoming',
+    targetDate: '2025-03-22',
+    progressPercentage: 0,
+    checklist: [],
+    documents: [],
+    messages: [],
+    tags: [],
+  },
+];
+
+const devFallbackProjectView = (projectId: string): ClientProjectView => {
+  const listItem = devFallbackProjects.find((p) => p.id === projectId) ?? devFallbackProjects[0];
+  return {
+    project: {
+      id: listItem.id,
+      name: listItem.name,
+      code: listItem.code,
+      location: listItem.location,
+      summary: 'A luxury residential renovation bringing modern warmth and timeless elegance to every room.',
+      currentPhase: listItem.currentPhase,
+      status: listItem.status,
+      startDate: '2025-01-10',
+      projectedCompletionDate: '2025-03-30',
+      heroImageUrl: '',
+      progressPercentage: listItem.progressPercentage,
+      completedMilestones: 2,
+      totalMilestones: 6,
+      approvalsPending: listItem.approvalsPending,
+      unreadMessages: listItem.unreadMessages,
+      nextMilestone: { id: 'ms-3', title: 'Design Approval', targetDate: '2025-02-15', status: 'attention' },
+    },
+    milestones: devFallbackMilestones,
+    lastUpdated: new Date().toISOString(),
+  };
+};
+
+// ── Public API ──
+
 export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> => {
-  const response = await serverProjectsApi.getProjects();
-  return asArray(response?.data || response).map(mapProjectListItem);
+  try {
+    const response = await serverProjectsApi.getProjects();
+    return asArray(response?.data || response).map(mapProjectListItem);
+  } catch (error) {
+    if (env.isDevelopment) {
+      console.warn('[Client Portal] Projects service unavailable — using fallback data');
+      return devFallbackProjects;
+    }
+    throw error;
+  }
 });
 
 export const fetchClientProjectView = cache(async (projectId: string): Promise<ClientProjectView> => {
-  const response = await serverProjectsApi.getClientView(projectId);
-  const project = mapProjectOverview(response?.project ?? response);
-  const milestonesSource = response?.milestones ?? response?.timeline ?? [];
+  try {
+    const response = await serverProjectsApi.getClientView(projectId);
+    const project = mapProjectOverview(response?.project ?? response);
+    const milestonesSource = response?.milestones ?? response?.timeline ?? [];
 
-  const milestones = asArray(milestonesSource)
-    .map((milestone, index) => mapMilestone(milestone, index))
-    .sort((a, b) => a.index - b.index);
+    const milestones = asArray(milestonesSource)
+      .map((milestone, index) => mapMilestone(milestone, index))
+      .sort((a, b) => a.index - b.index);
 
-  return {
-    project,
-    milestones,
-    lastUpdated: asString(response?.lastUpdated || response?.updatedAt),
-  };
+    return {
+      project,
+      milestones,
+      lastUpdated: asString(response?.lastUpdated || response?.updatedAt),
+    };
+  } catch (error) {
+    if (env.isDevelopment) {
+      console.warn('[Client Portal] Projects service unavailable — using fallback data for', projectId);
+      return devFallbackProjectView(projectId);
+    }
+    throw error;
+  }
 });

@@ -126,6 +126,13 @@ export interface UserStatusMenuProps {
    * Custom class name for the dropdown content
    */
   contentClassName?: string
+
+  /**
+   * Base path prefix for default menu item hrefs (Profile, Settings).
+   * e.g. '/portal' results in '/portal/profile' and '/portal/settings'
+   * @default ''
+   */
+  basePath?: string
 }
 
 /**
@@ -203,6 +210,7 @@ const UserStatusMenu = React.forwardRef<HTMLButtonElement, UserStatusMenuProps>(
       align = 'end',
       className,
       contentClassName,
+      basePath = '',
     },
     ref
   ) => {
@@ -221,12 +229,12 @@ const UserStatusMenu = React.forwardRef<HTMLButtonElement, UserStatusMenuProps>(
       {
         label: 'Profile',
         icon: <User className="h-4 w-4" />,
-        href: '/profile',
+        href: `${basePath}/profile`,
       },
       {
         label: 'Settings',
         icon: <Settings className="h-4 w-4" />,
-        href: '/settings',
+        href: `${basePath}/settings`,
       },
     ]
 

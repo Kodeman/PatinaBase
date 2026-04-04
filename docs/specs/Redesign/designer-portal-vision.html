@@ -1,0 +1,1837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — Designer Portal Design Vision</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500;1,600;1,700&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --off-white: #FAF7F2;
+    --clay: #C4A57B;
+    --aged-oak: #8B7355;
+    --mocha: #5C4A3C;
+    --charcoal: #2C2926;
+    --sage: #A8B5A0;
+    --dusty-blue: #8B9CAD;
+    --terracotta: #D4A090;
+    --pearl: #E5E2DD;
+    --golden-hour: #E8C547;
+
+    --bg: var(--off-white);
+    --text: var(--charcoal);
+    --accent: var(--clay);
+    --muted: var(--aged-oak);
+    --subtle: var(--pearl);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    font-size: 18px;
+    scroll-behavior: smooth;
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    font-weight: 400;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* — UTILITY — */
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 clamp(1.5rem, 5vw, 4rem);
+  }
+
+  .narrow {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 0 clamp(1.5rem, 5vw, 4rem);
+  }
+
+  /* — TYPOGRAPHY SYSTEM — */
+  h1, h2, h3, h4, h5 {
+    font-family: 'Playfair Display', serif;
+    font-weight: 500;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+
+  h1 {
+    font-size: clamp(3rem, 7vw, 5.5rem);
+    font-weight: 400;
+  }
+
+  h2 {
+    font-size: clamp(2rem, 4.5vw, 3.2rem);
+    font-weight: 400;
+  }
+
+  h3 {
+    font-size: clamp(1.4rem, 2.5vw, 1.8rem);
+    font-weight: 500;
+  }
+
+  h4 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-family: 'Inter', sans-serif;
+  }
+
+  p {
+    font-size: 1rem;
+    color: var(--mocha);
+    max-width: 640px;
+  }
+
+  em {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-weight: 400;
+    color: var(--aged-oak);
+  }
+
+  .mono {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .large-body {
+    font-size: 1.2rem;
+    line-height: 1.8;
+  }
+
+  /* — STRATA MARK — */
+  .strata {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 3rem 0;
+  }
+
+  .strata-line {
+    height: 2px;
+    background: var(--mocha);
+    border-radius: 1px;
+  }
+
+  .strata-line:nth-child(1) { width: 100%; opacity: 1; }
+  .strata-line:nth-child(2) { width: 80%; opacity: 0.7; }
+  .strata-line:nth-child(3) { width: 60%; opacity: 0.35; }
+
+  .strata-mini {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 2rem 0;
+  }
+
+  .strata-mini .strata-line { height: 1.5px; }
+  .strata-mini .strata-line:nth-child(1) { width: 60px; }
+  .strata-mini .strata-line:nth-child(2) { width: 48px; }
+  .strata-mini .strata-line:nth-child(3) { width: 36px; }
+
+  /* — COVER — */
+  .cover {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: clamp(2rem, 6vw, 6rem) clamp(1.5rem, 5vw, 4rem);
+    position: relative;
+  }
+
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 40%;
+    height: 100%;
+    background: linear-gradient(180deg, transparent 0%, var(--pearl) 50%, transparent 100%);
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  .cover-meta {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    margin-bottom: 3rem;
+  }
+
+  .cover h1 {
+    margin-bottom: 1.5rem;
+  }
+
+  .cover h1 span {
+    display: block;
+    font-style: italic;
+    color: var(--aged-oak);
+    font-weight: 400;
+    font-size: 0.65em;
+    letter-spacing: 0;
+  }
+
+  .cover-subtitle {
+    font-size: 1.15rem;
+    color: var(--mocha);
+    max-width: 540px;
+    margin-bottom: 4rem;
+  }
+
+  .cover-footer {
+    display: flex;
+    gap: 4rem;
+    flex-wrap: wrap;
+  }
+
+  .cover-footer-item .mono {
+    margin-bottom: 0.25rem;
+  }
+
+  .cover-footer-item p {
+    font-size: 0.9rem;
+    color: var(--charcoal);
+  }
+
+  /* — SECTIONS — */
+  section {
+    padding: clamp(4rem, 8vw, 8rem) 0;
+  }
+
+  .section-label {
+    margin-bottom: 1rem;
+  }
+
+  .section-title {
+    margin-bottom: 2rem;
+  }
+
+  .section-intro {
+    margin-bottom: 3rem;
+  }
+
+  /* — THE PROBLEM — */
+  .problem-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    margin-top: 3rem;
+    border-top: 1px solid var(--pearl);
+  }
+
+  .problem-item {
+    padding: 2.5rem 2rem 2.5rem 0;
+    border-bottom: 1px solid var(--pearl);
+  }
+
+  .problem-item:nth-child(even) {
+    padding-left: 2rem;
+    border-left: 1px solid var(--pearl);
+  }
+
+  .problem-item h3 {
+    margin-bottom: 0.75rem;
+    font-size: 1.25rem;
+  }
+
+  .problem-item p {
+    font-size: 0.95rem;
+    line-height: 1.65;
+  }
+
+  .problem-number {
+    font-family: 'Playfair Display', serif;
+    font-size: 3rem;
+    font-weight: 300;
+    color: var(--pearl);
+    line-height: 1;
+    margin-bottom: 1rem;
+  }
+
+  /* — PRINCIPLE FLOW — */
+  .principles {
+    margin-top: 4rem;
+  }
+
+  .principle {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 2rem;
+    padding: 3rem 0;
+    border-bottom: 1px solid var(--pearl);
+    align-items: baseline;
+  }
+
+  .principle:first-child {
+    border-top: 1px solid var(--pearl);
+  }
+
+  .principle-number {
+    font-family: 'Playfair Display', serif;
+    font-size: 4rem;
+    font-weight: 300;
+    color: var(--clay);
+    line-height: 1;
+  }
+
+  .principle h3 {
+    margin-bottom: 0.75rem;
+  }
+
+  .principle p {
+    font-size: 0.95rem;
+  }
+
+  /* — TYPOGRAPHY SHOWCASE — */
+  .type-specimen {
+    margin: 4rem 0;
+  }
+
+  .type-row {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 2rem;
+    padding: 2rem 0;
+    border-bottom: 1px solid var(--pearl);
+    align-items: baseline;
+  }
+
+  .type-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    padding-top: 0.2rem;
+  }
+
+  .type-sample-hero {
+    font-family: 'Playfair Display', serif;
+    font-size: 3.5rem;
+    font-weight: 400;
+    line-height: 1.15;
+    color: var(--charcoal);
+  }
+
+  .type-sample-section {
+    font-family: 'Playfair Display', serif;
+    font-size: 2rem;
+    font-weight: 400;
+    line-height: 1.3;
+    color: var(--charcoal);
+  }
+
+  .type-sample-subsection {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.3rem;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--charcoal);
+  }
+
+  .type-sample-body {
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.7;
+    color: var(--mocha);
+  }
+
+  .type-sample-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .type-sample-data {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--charcoal);
+    letter-spacing: -0.02em;
+  }
+
+  .type-sample-data span {
+    font-size: 1rem;
+    font-weight: 400;
+    color: var(--muted);
+    margin-left: 0.5rem;
+    font-family: 'Inter', sans-serif;
+  }
+
+  /* — COLOR STRIP — */
+  .color-strip {
+    display: flex;
+    gap: 0;
+    margin: 3rem 0;
+    border-radius: 4px;
+    overflow: hidden;
+    height: 100px;
+  }
+
+  .color-swatch {
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    padding: 0.75rem;
+  }
+
+  .color-swatch span {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  /* — MOCKUP SECTIONS — */
+  .mockup-section {
+    margin: 5rem 0;
+  }
+
+  .mockup-header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    margin-bottom: 2rem;
+  }
+
+  .mockup-frame {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(44,41,38,0.04), 0 8px 40px rgba(44,41,38,0.06);
+  }
+
+  /* — DASHBOARD MOCKUP — */
+  .mock-dashboard {
+    padding: clamp(2rem, 4vw, 3.5rem);
+    min-height: 560px;
+  }
+
+  .mock-dash-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 3rem;
+  }
+
+  .mock-greeting {
+    font-family: 'Playfair Display', serif;
+    font-size: 2rem;
+    font-weight: 400;
+    color: var(--charcoal);
+  }
+
+  .mock-greeting em {
+    color: var(--aged-oak);
+  }
+
+  .mock-date {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+
+  .mock-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    margin-bottom: 3.5rem;
+    border-bottom: 1px solid var(--pearl);
+    padding-bottom: 2.5rem;
+  }
+
+  .mock-metric {
+    padding-right: 2rem;
+  }
+
+  .mock-metric:not(:first-child) {
+    padding-left: 2rem;
+    border-left: 1px solid var(--pearl);
+  }
+
+  .mock-metric-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+
+  .mock-metric-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.4rem;
+    font-weight: 700;
+    color: var(--charcoal);
+    line-height: 1;
+    margin-bottom: 0.35rem;
+  }
+
+  .mock-metric-change {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.78rem;
+    color: var(--sage);
+  }
+
+  .mock-metric-change.down { color: var(--terracotta); }
+
+  .mock-sections {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 3rem;
+  }
+
+  .mock-section-label {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.15rem;
+    font-weight: 500;
+    color: var(--charcoal);
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--pearl);
+  }
+
+  /* — LEAD ITEM — */
+  .mock-lead {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1rem;
+    padding: 1.25rem 0;
+    border-bottom: 1px solid rgba(229,226,221,0.6);
+    align-items: start;
+  }
+
+  .mock-lead-name {
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    font-size: 0.95rem;
+    color: var(--charcoal);
+    margin-bottom: 0.2rem;
+  }
+
+  .mock-lead-detail {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.82rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .mock-lead-score {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--clay);
+    text-align: right;
+  }
+
+  .mock-lead-score-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.58rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    text-align: right;
+  }
+
+  /* — PROJECT ITEM — */
+  .mock-project {
+    padding: 1.1rem 0;
+    border-bottom: 1px solid rgba(229,226,221,0.6);
+  }
+
+  .mock-project-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 0.3rem;
+  }
+
+  .mock-project-name {
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: var(--charcoal);
+  }
+
+  .mock-project-phase {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+
+  .mock-progress {
+    height: 3px;
+    background: var(--pearl);
+    border-radius: 2px;
+    margin-top: 0.6rem;
+    overflow: hidden;
+  }
+
+  .mock-progress-fill {
+    height: 100%;
+    background: var(--clay);
+    border-radius: 2px;
+  }
+
+  /* — LEAD DETAIL MOCKUP — */
+  .mock-lead-detail-view {
+    padding: clamp(2rem, 4vw, 3.5rem);
+    min-height: 600px;
+  }
+
+  .mock-breadcrumb {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 2rem;
+  }
+
+  .mock-breadcrumb a {
+    color: var(--clay);
+    text-decoration: none;
+  }
+
+  .mock-lead-hero {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: start;
+    margin-bottom: 3rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--pearl);
+  }
+
+  .mock-lead-hero h2 {
+    font-size: 2rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .mock-lead-hero-meta {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.88rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .mock-score-circle {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    border: 3px solid var(--clay);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mock-score-number {
+    font-family: 'Playfair Display', serif;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--charcoal);
+    line-height: 1;
+  }
+
+  .mock-score-text {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.55rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+
+  .mock-lead-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+  }
+
+  .mock-field-group {
+    margin-bottom: 2rem;
+  }
+
+  .mock-field-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+
+  .mock-field-value {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    color: var(--charcoal);
+    line-height: 1.6;
+  }
+
+  .mock-style-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .mock-tag {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--mocha);
+    padding: 0.3rem 0.85rem;
+    background: var(--off-white);
+    border: 1px solid var(--pearl);
+    border-radius: 2px;
+  }
+
+  .mock-room-preview {
+    background: var(--pearl);
+    border-radius: 8px;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .mock-room-preview::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 30px,
+      rgba(196,165,123,0.04) 30px,
+      rgba(196,165,123,0.04) 60px
+    );
+  }
+
+  /* — ACTION BAR — */
+  .mock-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--pearl);
+  }
+
+  .mock-btn {
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    font-size: 0.85rem;
+    padding: 0.7rem 1.6rem;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+  }
+
+  .mock-btn-primary {
+    background: var(--charcoal);
+    color: var(--off-white);
+  }
+
+  .mock-btn-secondary {
+    background: transparent;
+    color: var(--charcoal);
+    border: 1px solid var(--pearl);
+  }
+
+  .mock-btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: none;
+    padding: 0.7rem 1rem;
+  }
+
+  /* — NAV MOCKUP — */
+  .mock-nav-section {
+    margin: 4rem 0;
+  }
+
+  .nav-flow {
+    display: flex;
+    gap: 0;
+    align-items: stretch;
+    margin-top: 2rem;
+  }
+
+  .nav-level {
+    flex: 1;
+    padding: 2rem 1.5rem;
+    position: relative;
+  }
+
+  .nav-level:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 2rem;
+    bottom: 2rem;
+    width: 1px;
+    background: var(--pearl);
+  }
+
+  .nav-level-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--clay);
+    margin-bottom: 1.5rem;
+  }
+
+  .nav-item {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    color: var(--mocha);
+    padding: 0.4rem 0;
+    line-height: 1.5;
+  }
+
+  .nav-item.active {
+    color: var(--charcoal);
+    font-weight: 500;
+  }
+
+  .nav-item.muted {
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+
+  /* — COMPARISON — */
+  .comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    margin: 3rem 0;
+  }
+
+  .comparison-side {
+    padding: 2.5rem;
+  }
+
+  .comparison-side:first-child {
+    background: rgba(212,160,144,0.08);
+    border-radius: 8px 0 0 8px;
+  }
+
+  .comparison-side:last-child {
+    background: rgba(168,181,160,0.08);
+    border-radius: 0 8px 8px 0;
+  }
+
+  .comparison-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 1.5rem;
+  }
+
+  .comparison-side:first-child .comparison-label { color: var(--terracotta); }
+  .comparison-side:last-child .comparison-label { color: var(--sage); }
+
+  .comparison-item {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.88rem;
+    color: var(--mocha);
+    padding: 0.5rem 0;
+    line-height: 1.6;
+  }
+
+  /* — QUOTE BLOCK — */
+  .pull-quote {
+    padding: 4rem 0;
+    margin: 3rem 0;
+    border-top: 1px solid var(--pearl);
+    border-bottom: 1px solid var(--pearl);
+  }
+
+  .pull-quote blockquote {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(1.4rem, 3vw, 2.2rem);
+    font-weight: 400;
+    font-style: italic;
+    line-height: 1.45;
+    color: var(--charcoal);
+    max-width: 700px;
+  }
+
+  .pull-quote cite {
+    display: block;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    font-style: normal;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-top: 1.25rem;
+  }
+
+  /* — FEATURE ESSAY — */
+  .feature-essay {
+    margin: 4rem 0;
+    padding: 3rem 0;
+    border-top: 1px solid var(--pearl);
+  }
+
+  .feature-essay-header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    margin-bottom: 2rem;
+  }
+
+  .feature-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: white;
+    background: var(--clay);
+    padding: 0.25rem 0.6rem;
+    border-radius: 2px;
+  }
+
+  .feature-essay p {
+    margin-bottom: 1.25rem;
+    max-width: 640px;
+  }
+
+  /* — INTERACTION DETAIL — */
+  .interaction-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    margin: 3rem 0;
+  }
+
+  .interaction-card {
+    padding: 2rem 0;
+    border-top: 2px solid var(--pearl);
+  }
+
+  .interaction-card h3 {
+    font-size: 1.15rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .interaction-card p {
+    font-size: 0.9rem;
+    line-height: 1.65;
+  }
+
+  .interaction-detail {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--pearl);
+  }
+
+  .interaction-detail-item {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 0.75rem;
+    padding: 0.35rem 0;
+    font-size: 0.85rem;
+  }
+
+  .interaction-detail-key {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    padding-top: 0.1rem;
+  }
+
+  .interaction-detail-val {
+    color: var(--mocha);
+  }
+
+  /* — SCREEN FLOW — */
+  .screen-flow {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin: 3rem 0;
+    overflow-x: auto;
+    padding: 1rem 0;
+  }
+
+  .screen-flow-item {
+    flex-shrink: 0;
+    text-align: center;
+  }
+
+  .screen-flow-box {
+    width: 140px;
+    height: 80px;
+    border: 1.5px solid var(--pearl);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--mocha);
+    margin-bottom: 0.5rem;
+    transition: all 0.2s;
+  }
+
+  .screen-flow-box.active {
+    border-color: var(--clay);
+    background: rgba(196,165,123,0.06);
+    color: var(--charcoal);
+  }
+
+  .screen-flow-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.58rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+
+  .screen-flow-arrow {
+    flex-shrink: 0;
+    width: 24px;
+    height: 1px;
+    background: var(--pearl);
+    position: relative;
+  }
+
+  .screen-flow-arrow::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: -3px;
+    width: 7px;
+    height: 7px;
+    border-right: 1px solid var(--pearl);
+    border-bottom: 1px solid var(--pearl);
+    transform: rotate(-45deg);
+  }
+
+  /* — FOOTER — */
+  .doc-footer {
+    padding: 4rem 0;
+    border-top: 1px solid var(--pearl);
+    margin-top: 4rem;
+  }
+
+  .doc-footer-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 3rem;
+  }
+
+  .doc-footer h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .doc-footer p {
+    font-size: 0.88rem;
+  }
+
+  /* — TRANSITIONS — */
+  .fade-section {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+  }
+
+  .fade-section.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* — RESPONSIVE — */
+  @media (max-width: 768px) {
+    .problem-grid { grid-template-columns: 1fr; }
+    .problem-item:nth-child(even) { padding-left: 0; border-left: none; }
+    .principle { grid-template-columns: 60px 1fr; gap: 1rem; }
+    .principle-number { font-size: 2.5rem; }
+    .type-row { grid-template-columns: 1fr; gap: 0.5rem; }
+    .mock-metrics { grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .mock-metric:nth-child(3) { border-left: none; padding-left: 0; }
+    .mock-sections { grid-template-columns: 1fr; }
+    .mock-lead-columns { grid-template-columns: 1fr; }
+    .comparison { grid-template-columns: 1fr; }
+    .comparison-side:first-child { border-radius: 8px 8px 0 0; }
+    .comparison-side:last-child { border-radius: 0 0 8px 8px; }
+    .interaction-grid { grid-template-columns: 1fr; }
+    .nav-flow { flex-direction: column; }
+    .nav-level:not(:last-child)::after { display: none; }
+    .doc-footer-grid { grid-template-columns: 1fr; }
+    .cover-footer { gap: 2rem; }
+    .mock-lead-hero { grid-template-columns: 1fr; }
+    .mock-score-circle { margin-bottom: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ==================== COVER ==================== -->
+<div class="cover">
+  <div class="cover-meta">
+    <span class="mono">Patina — Design Vision</span>
+  </div>
+  <h1>The Designer Portal<span>A typography-first interface that reads like a design document</span></h1>
+  <p class="cover-subtitle">A reimagination of the professional design hub — where information hierarchy replaces containers, type does the speaking, and the interface gets out of the way of the work.</p>
+
+  <div class="strata">
+    <div class="strata-line"></div>
+    <div class="strata-line"></div>
+    <div class="strata-line"></div>
+  </div>
+
+  <div class="cover-footer">
+    <div class="cover-footer-item">
+      <p class="mono">Prepared for</p>
+      <p>Kody & Leah — Founding Team</p>
+    </div>
+    <div class="cover-footer-item">
+      <p class="mono">Version</p>
+      <p>1.0 — March 2026</p>
+    </div>
+    <div class="cover-footer-item">
+      <p class="mono">Document Type</p>
+      <p>Interface Design Vision</p>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== THE DIAGNOSIS ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label mono">01 — The Diagnosis</h4>
+    <h2 class="section-title">The current portal reads<br>like <em>software documentation,</em><br>not a design tool.</h2>
+    <p class="section-intro large-body">After walking through the existing Designer Portal specification — eight navigation sections, Kanban boards, side panels, wizard modals, tabbed views inside tabbed views — the pattern becomes clear. We've been building a project management tool that happens to live inside a design brand, rather than building a design tool that happens to manage projects.</p>
+
+    <div class="problem-grid">
+      <div class="problem-item">
+        <div class="problem-number">01</div>
+        <h3>Container Nesting</h3>
+        <p>Cards inside panels inside tabs inside views. Every piece of information is boxed, bordered, and shadowed. The eye has no resting place — it bounces between containers instead of reading the content within them.</p>
+      </div>
+      <div class="problem-item">
+        <div class="problem-number">02</div>
+        <h3>Navigation Overload</h3>
+        <p>Eight primary destinations, each with three to four sub-sections, plus contextual sidebars and floating action buttons. A designer looking for a client's room scan must navigate through four levels of hierarchy. That's not a tool — it's a filing cabinet.</p>
+      </div>
+      <div class="problem-item">
+        <div class="problem-number">03</div>
+        <h3>Identity Mismatch</h3>
+        <p>Patina's consumer brand speaks in Playfair Display and warm earth tones. The portal specification reads like a Jira competitor — Kanban columns, bulk actions, sortable tables, badge counts. Two different products under one roof.</p>
+      </div>
+      <div class="problem-item">
+        <div class="problem-number">04</div>
+        <h3>Widget Overload</h3>
+        <p>The dashboard specification calls for customizable widget grids, revenue charts, pipeline funnels, and performance gauges — all competing for attention simultaneously. When everything demands attention, nothing gets it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== THE PHILOSOPHY ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label mono">02 — The Philosophy</h4>
+    <h2 class="section-title">Let the type <em>do the work.</em></h2>
+    <p class="section-intro large-body">The best design tools don't look like software. They look like the work itself. A designer's day lives in visual hierarchies — client names, project phases, room dimensions, budget numbers. Present that information with the right typographic weight, at the right size, in the right color, and you don't need a box around it.</p>
+
+    <div class="principles">
+      <div class="principle">
+        <div class="principle-number">01</div>
+        <div>
+          <h3>Type Weight Replaces Containers</h3>
+          <p>A client name in 500-weight Inter at 15px tells you it's important. A project phase in 11px monospaced uppercase tells you it's metadata. A lead score in 36px Playfair tells you it's the headline. No card needed. No shadow. No border. The typographic scale <em>is</em> the interface.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="principle-number">02</div>
+        <div>
+          <h3>Horizontal Rules Replace Tabs</h3>
+          <p>Instead of tabbed navigation that hides information behind clicks, we use the Strata Mark system — thin horizontal lines of decreasing width — to separate content zones. Everything stays on one continuous page. Scroll is better than click when the content is well-structured.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="principle-number">03</div>
+        <div>
+          <h3>The Document Metaphor</h3>
+          <p>A lead detail page shouldn't look like a CRM record. It should read like a design brief — the client's name as a heading, their style preferences as a narrative, the room scan as an embedded image, the budget as a typographic callout. The same information, presented as something a designer would actually want to read.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="principle-number">04</div>
+        <div>
+          <h3>Whitespace as Architecture</h3>
+          <p>In construction, negative space defines the room as much as the walls do. In our interface, generous margins and padding create visual "rooms" where related information lives together — without needing explicit containers to define the boundaries.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="principle-number">05</div>
+        <div>
+          <h3>Progressive Weight, Not Progressive Disclosure</h3>
+          <p>Instead of hiding details behind "view more" toggles, we show everything — but at different typographic weights. Primary information is bold and large. Supporting details are lighter and smaller. Metadata is monospaced and muted. The eye naturally scans what matters.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== PULL QUOTE ==================== -->
+<section>
+  <div class="narrow">
+    <div class="pull-quote">
+      <blockquote>"The interface should feel like something Leah would pin to her studio wall — not something she'd have to be trained to use."</blockquote>
+      <cite>Design Vision Principle — Patina Designer Portal</cite>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== TYPE SYSTEM ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label mono">03 — The Type System</h4>
+    <h2 class="section-title">Three voices, <em>one conversation.</em></h2>
+    <p class="section-intro">Every element on every screen speaks in one of three typographic voices. Together they create a hierarchy so clear that borders, cards, and containers become unnecessary.</p>
+
+    <div class="type-specimen">
+      <div class="type-row">
+        <div class="type-label">Page Title<br>Playfair Display 400<br>3.5rem</div>
+        <div class="type-sample-hero">Good morning, Leah</div>
+      </div>
+      <div class="type-row">
+        <div class="type-label">Section Head<br>Playfair Display 400<br>2rem</div>
+        <div class="type-sample-section">New leads waiting for you</div>
+      </div>
+      <div class="type-row">
+        <div class="type-label">Item Name<br>Playfair Display 500<br>1.3rem</div>
+        <div class="type-sample-subsection">Sarah & James — Living Room Redesign</div>
+      </div>
+      <div class="type-row">
+        <div class="type-label">Body Copy<br>Inter 400<br>1rem</div>
+        <div class="type-sample-body">Complete room scan available. Three-bedroom ranch in Wauwatosa with south-facing windows and original hardwood floors. Budget range indicates mid-tier, with flexibility for anchor pieces.</div>
+      </div>
+      <div class="type-row">
+        <div class="type-label">Metadata<br>DM Mono 400<br>0.78rem</div>
+        <div class="type-sample-meta">Received Mar 22 · Responds in 18h · Milwaukee, WI</div>
+      </div>
+      <div class="type-row">
+        <div class="type-label">Data Point<br>Playfair Display 700<br>2.5rem</div>
+        <div class="type-sample-data">87 <span>match score</span></div>
+      </div>
+    </div>
+
+    <div class="strata-mini">
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+    </div>
+
+    <h3 style="margin-top:2rem; margin-bottom:1rem;">The Color Palette — Functional, Not Decorative</h3>
+    <p>Colors serve meaning, not decoration. Charcoal for primary content. Mocha for body copy. Aged Oak for metadata. Clay for interactive elements and data highlights. Off-White as breathing room.</p>
+
+    <div class="color-strip">
+      <div class="color-swatch" style="background: var(--off-white);"><span style="color: var(--muted);">Off-White</span></div>
+      <div class="color-swatch" style="background: var(--pearl);"><span style="color: var(--muted);">Pearl</span></div>
+      <div class="color-swatch" style="background: var(--clay);"><span style="color: white;">Clay</span></div>
+      <div class="color-swatch" style="background: var(--aged-oak);"><span style="color: white;">Aged Oak</span></div>
+      <div class="color-swatch" style="background: var(--mocha);"><span style="color: white;">Mocha</span></div>
+      <div class="color-swatch" style="background: var(--charcoal);"><span style="color: white;">Charcoal</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== BEFORE / AFTER ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label mono">04 — Before & After</h4>
+    <h2 class="section-title">Same information, <em>different posture.</em></h2>
+    <p class="section-intro">Side by side — the conventional approach versus the typographic approach. Same data. Radically different experience.</p>
+
+    <div class="comparison">
+      <div class="comparison-side">
+        <div class="comparison-label">Current Specification</div>
+        <div class="comparison-item">• Customizable widget grid dashboard</div>
+        <div class="comparison-item">• Kanban board with drag-and-drop cards</div>
+        <div class="comparison-item">• Tabbed navigation with 8 primary sections</div>
+        <div class="comparison-item">• Cards with shadows, badges, and action buttons</div>
+        <div class="comparison-item">• Side panels for product search and details</div>
+        <div class="comparison-item">• Step-by-step wizard for proposal building</div>
+        <div class="comparison-item">• Floating action buttons on every view</div>
+        <div class="comparison-item">• Color-coded priority badges on leads</div>
+      </div>
+      <div class="comparison-side">
+        <div class="comparison-label">Proposed Vision</div>
+        <div class="comparison-item">Typographic greeting with inline metrics</div>
+        <div class="comparison-item">Single-page timeline with phase markers</div>
+        <div class="comparison-item">Three contextual zones: Work, Clients, Studio</div>
+        <div class="comparison-item">Type-weight hierarchy with hairline dividers</div>
+        <div class="comparison-item">Inline expansion for details, no panels</div>
+        <div class="comparison-item">Document-style proposal with live editing</div>
+        <div class="comparison-item">Contextual actions appear on hover/focus</div>
+        <div class="comparison-item">Score as large-numeral typography</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== DASHBOARD MOCKUP ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label mono">05 — The Dashboard</h4>
+    <h2 class="section-title">A morning read, <em>not a control panel.</em></h2>
+    <p class="section-intro">The dashboard is the first thing a designer sees. It should feel like opening a well-organized notebook — not a flight deck. Information flows top-to-bottom in natural reading order.</p>
+
+    <div class="mockup-section">
+      <div class="mockup-frame">
+        <div class="mock-dashboard">
+
+          <div class="mock-dash-top">
+            <div class="mock-greeting">Good morning, <em>Leah</em></div>
+            <div class="mock-date">Tuesday, March 24, 2026</div>
+          </div>
+
+          <div class="mock-metrics">
+            <div class="mock-metric">
+              <div class="mock-metric-label">New Leads</div>
+              <div class="mock-metric-value">3</div>
+              <div class="mock-metric-change">↑ 2 since Friday</div>
+            </div>
+            <div class="mock-metric">
+              <div class="mock-metric-label">Active Projects</div>
+              <div class="mock-metric-value">7</div>
+              <div class="mock-metric-change">1 awaiting review</div>
+            </div>
+            <div class="mock-metric">
+              <div class="mock-metric-label">This Month</div>
+              <div class="mock-metric-value">$12.4k</div>
+              <div class="mock-metric-change">↑ 18% vs. February</div>
+            </div>
+            <div class="mock-metric">
+              <div class="mock-metric-label">Response Time</div>
+              <div class="mock-metric-value">1.8h</div>
+              <div class="mock-metric-change down">↓ target: 2h</div>
+            </div>
+          </div>
+
+          <div class="mock-sections">
+            <div>
+              <div class="mock-section-label">Leads waiting for you</div>
+
+              <div class="mock-lead">
+                <div>
+                  <div class="mock-lead-name">Sarah & James Whitfield</div>
+                  <div class="mock-lead-detail">Living room redesign · Wauwatosa · $15k–$25k · Responds in 18h</div>
+                </div>
+                <div>
+                  <div class="mock-lead-score">87</div>
+                  <div class="mock-lead-score-label">Match</div>
+                </div>
+              </div>
+
+              <div class="mock-lead">
+                <div>
+                  <div class="mock-lead-name">Maria Gonzalez</div>
+                  <div class="mock-lead-detail">Full home · Brookfield · $40k–$60k · Responds in 6h</div>
+                </div>
+                <div>
+                  <div class="mock-lead-score">94</div>
+                  <div class="mock-lead-score-label">Match</div>
+                </div>
+              </div>
+
+              <div class="mock-lead">
+                <div>
+                  <div class="mock-lead-name">Tom Brennan</div>
+                  <div class="mock-lead-detail">Home office · Milwaukee · $5k–$8k · Responds in 2d</div>
+                </div>
+                <div>
+                  <div class="mock-lead-score">72</div>
+                  <div class="mock-lead-score-label">Match</div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="mock-section-label">Active work</div>
+
+              <div class="mock-project">
+                <div class="mock-project-top">
+                  <div class="mock-project-name">Chen Residence</div>
+                  <div class="mock-project-phase">Procurement</div>
+                </div>
+                <div class="mock-progress"><div class="mock-progress-fill" style="width: 72%;"></div></div>
+              </div>
+
+              <div class="mock-project">
+                <div class="mock-project-top">
+                  <div class="mock-project-name">Lakefront Condo — Unit 4B</div>
+                  <div class="mock-project-phase">Design Review</div>
+                </div>
+                <div class="mock-progress"><div class="mock-progress-fill" style="width: 45%;"></div></div>
+              </div>
+
+              <div class="mock-project">
+                <div class="mock-project-top">
+                  <div class="mock-project-name">Morrison Master Suite</div>
+                  <div class="mock-project-phase">Consultation</div>
+                </div>
+                <div class="mock-progress"><div class="mock-progress-fill" style="width: 15%;"></div></div>
+              </div>
+
+              <div class="mock-project">
+                <div class="mock-project-top">
+                  <div class="mock-project-name">Prairie Home — Full Redesign</div>
+                  <div class="mock-project-phase">Installation</div>
+                </div>
+                <div class="mock-progress"><div class="mock-progress-fill" style="width: 90%;"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== LEAD DETAIL MOCKUP ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label mono">06 — The Lead Brief</h4>
+    <h2 class="section-title">A design brief, <em>not a database record.</em></h2>
+    <p class="section-intro">When Leah opens a lead, she isn't querying a CRM — she's reading about a potential client. The layout should feel like opening a project brief from a colleague, with the room scan living naturally alongside the client's story.</p>
+
+    <div class="mockup-section">
+      <div class="mockup-frame">
+        <div class="mock-lead-detail-view">
+
+          <div class="mock-breadcrumb">
+            <a>Leads</a> → Sarah & James Whitfield
+          </div>
+
+          <div class="mock-lead-hero">
+            <div>
+              <h2 style="font-family: 'Playfair Display', serif; font-weight: 400;">Sarah & James Whitfield</h2>
+              <div class="mock-lead-hero-meta">Living room redesign · Wauwatosa, WI<br>Budget: $15,000 – $25,000 · Timeline: 3 months</div>
+            </div>
+            <div class="mock-score-circle">
+              <div class="mock-score-number">87</div>
+              <div class="mock-score-text">Match</div>
+            </div>
+          </div>
+
+          <div class="mock-lead-columns">
+            <div>
+              <div class="mock-field-group">
+                <div class="mock-field-label">Style Profile</div>
+                <div class="mock-style-tags">
+                  <span class="mock-tag">Warm Minimalist</span>
+                  <span class="mock-tag">Organic Modern</span>
+                  <span class="mock-tag">Natural Materials</span>
+                </div>
+              </div>
+
+              <div class="mock-field-group">
+                <div class="mock-field-label">What they're looking for</div>
+                <div class="mock-field-value">Complete living room transformation. They've recently purchased a 1960s ranch and want to honor the architecture while updating for their young family. South-facing bay window is the focal point. Original hardwood floors they want to keep.</div>
+              </div>
+
+              <div class="mock-field-group">
+                <div class="mock-field-label">Must-haves</div>
+                <div class="mock-field-value">Kid-friendly fabrics · Seating for 6+ · Reading nook near the window · Storage that doesn't look like storage</div>
+              </div>
+
+              <div class="mock-field-group">
+                <div class="mock-field-label">Inspiration</div>
+                <div class="mock-field-value" style="font-style:italic; color: var(--aged-oak);">"We want it to feel collected over time, not like we bought everything on the same weekend."</div>
+              </div>
+            </div>
+
+            <div>
+              <div class="mock-field-group">
+                <div class="mock-field-label">Room Scan</div>
+                <div class="mock-room-preview">
+                  3D Room Preview<br>Tap to explore
+                </div>
+              </div>
+
+              <div class="mock-field-group">
+                <div class="mock-field-label">Room Details</div>
+                <div class="interaction-detail">
+                  <div class="interaction-detail-item">
+                    <div class="interaction-detail-key">Dimensions</div>
+                    <div class="interaction-detail-val">18' × 14' — 252 sq ft</div>
+                  </div>
+                  <div class="interaction-detail-item">
+                    <div class="interaction-detail-key">Windows</div>
+                    <div class="interaction-detail-val">Bay (south), double-hung (west)</div>
+                  </div>
+                  <div class="interaction-detail-item">
+                    <div class="interaction-detail-key">Flooring</div>
+                    <div class="interaction-detail-val">Original red oak hardwood</div>
+                  </div>
+                  <div class="interaction-detail-item">
+                    <div class="interaction-detail-key">Light</div>
+                    <div class="interaction-detail-val">Strong south, warm afternoon</div>
+                  </div>
+                  <div class="interaction-detail-item">
+                    <div class="interaction-detail-key">Ceiling</div>
+                    <div class="interaction-detail-val">8 ft, smooth finish</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mock-actions">
+            <button class="mock-btn mock-btn-primary">Accept & Introduce Yourself</button>
+            <button class="mock-btn mock-btn-secondary">Request More Context</button>
+            <button class="mock-btn mock-btn-ghost">Pass on This Lead</button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== NAVIGATION ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label mono">07 — Navigation</h4>
+    <h2 class="section-title">Three rooms, <em>not eight tabs.</em></h2>
+    <p class="section-intro">The current specification defines eight primary navigation items. We reduce this to three intuitive zones — the way a design studio organizes itself. You're either working on something, talking to someone, or managing your practice. Everything falls into one of those rooms.</p>
+
+    <div class="nav-flow">
+      <div class="nav-level">
+        <div class="nav-level-title">Work</div>
+        <div class="nav-item active">Leads</div>
+        <div class="nav-item">Active Projects</div>
+        <div class="nav-item">Room Viewer</div>
+        <div class="nav-item">Proposals</div>
+        <div class="nav-item muted">Completed</div>
+      </div>
+      <div class="nav-level">
+        <div class="nav-level-title">Clients</div>
+        <div class="nav-item">Messages</div>
+        <div class="nav-item">Client Directory</div>
+        <div class="nav-item">Reviews & Feedback</div>
+        <div class="nav-item muted">Referral Network</div>
+      </div>
+      <div class="nav-level">
+        <div class="nav-level-title">Studio</div>
+        <div class="nav-item">Earnings</div>
+        <div class="nav-item">Portfolio</div>
+        <div class="nav-item">Resources</div>
+        <div class="nav-item muted">Settings</div>
+      </div>
+    </div>
+
+    <div class="strata-mini" style="margin-top: 2rem;">
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+    </div>
+
+    <p style="margin-top: 1.5rem;">On mobile, these three zones map directly to a bottom tab bar — Work, Clients, Studio — with the fourth tab reserved for the quick-access Room Viewer. No hamburger menus. No hidden drawers. Every destination is two taps away.</p>
+  </div>
+</section>
+
+<!-- ==================== FEATURE ESSAYS ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label mono">08 — Feature Vision</h4>
+    <h2 class="section-title">How the key features <em>should feel.</em></h2>
+
+    <!-- Feature 1 -->
+    <div class="feature-essay">
+      <div class="feature-essay-header">
+        <h3>The Lead Inbox</h3>
+        <span class="feature-tag">Core Feature</span>
+      </div>
+      <p>The current specification describes lead cards with badge counts, priority colors, budget indicators, and countdown timers — all visible simultaneously. This creates visual noise that works against the very decision it's trying to support.</p>
+      <p>Instead, the lead inbox should read like a list of people. Names set in medium-weight Inter. Below each name, a single line of context — project type, location, budget range — in lighter type. To the right, the match score as a large Playfair numeral, because that's the first thing a designer's eye should find.</p>
+      <p>No colored badges. No urgency indicators fighting for attention. The match score and the response deadline are the only two data points that matter for the initial scan. Everything else reveals itself when a lead is opened into the full brief view.</p>
+
+      <div class="screen-flow">
+        <div class="screen-flow-item">
+          <div class="screen-flow-box active">Lead List</div>
+          <div class="screen-flow-label">Scan names & scores</div>
+        </div>
+        <div class="screen-flow-arrow"></div>
+        <div class="screen-flow-item">
+          <div class="screen-flow-box">Lead Brief</div>
+          <div class="screen-flow-label">Read the full story</div>
+        </div>
+        <div class="screen-flow-arrow"></div>
+        <div class="screen-flow-item">
+          <div class="screen-flow-box">Room Scan</div>
+          <div class="screen-flow-label">Walk the space</div>
+        </div>
+        <div class="screen-flow-arrow"></div>
+        <div class="screen-flow-item">
+          <div class="screen-flow-box">Respond</div>
+          <div class="screen-flow-label">Accept or pass</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature 2 -->
+    <div class="feature-essay">
+      <div class="feature-essay-header">
+        <h3>The Proposal Builder</h3>
+        <span class="feature-tag">Core Feature</span>
+      </div>
+      <p>The current specification calls for a step-by-step wizard with a progress bar — the same pattern used by tax software and airline booking. A designer creating a proposal isn't filling out a form. She's composing a vision.</p>
+      <p>The proposal builder should feel like a document editor. One continuous page. The design narrative at the top, flowing into mood board imagery, then space plans imported from the 3D viewer, then product selections with inline pricing, and finally terms — all readable top to bottom in a single scroll.</p>
+      <p>Each section has a Playfair heading and a subtle strata divider. Products are listed by name with their maker story visible, not hidden behind a "details" link. The proposal a client receives should look identical to what the designer sees while creating it — same type, same colors, same layout. No "preview mode" necessary because the edit mode <em>is</em> the preview.</p>
+    </div>
+
+    <!-- Feature 3 -->
+    <div class="feature-essay">
+      <div class="feature-essay-header">
+        <h3>The Room Viewer</h3>
+        <span class="feature-tag">Differentiator</span>
+      </div>
+      <p>This is where the interface steps back entirely. When a designer opens a room scan, the chrome disappears. Full-screen immersion. The 3D model fills the viewport. Navigation controls are minimal — orbit and zoom, period. Measurements overlay on demand.</p>
+      <p>Product placement happens through a slim inline search at the bottom of the viewport — type a product name, drag it into the space. No side panels. No tabbed product categories. The room is the canvas. Everything else is a tool in your hand, not a menu on a shelf.</p>
+      <p>When the designer is finished, she can capture a view that embeds directly into the proposal document — same quality, same framing, seamless continuity between the spatial tool and the written brief.</p>
+    </div>
+
+    <!-- Feature 4 -->
+    <div class="feature-essay">
+      <div class="feature-essay-header">
+        <h3>Project Timeline</h3>
+        <span class="feature-tag">Simplified</span>
+      </div>
+      <p>The Kanban board is the default pattern for project management. It's also a pattern that belongs to engineering teams, not design studios. Leah doesn't think in swimlanes. She thinks in phases — consultation, concept, refinement, procurement, installation, walkthrough.</p>
+      <p>The project view should be a simple vertical timeline. Each phase is a heading. Under it, the tasks and milestones for that phase, with their dates and status shown through type weight — bold for active, regular for upcoming, light for complete. A thin progress line runs vertically alongside, showing where the project stands.</p>
+      <p>Click any phase heading and it expands inline to show the full detail — no modal, no page change, no loss of context. The designer stays oriented within the larger project arc while working on the details.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== INTERACTION PATTERNS ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label mono">09 — Interaction Patterns</h4>
+    <h2 class="section-title">Invisible until <em>needed.</em></h2>
+    <p class="section-intro">Actions should be contextual, not omnipresent. A button that appears when you hover over a lead name is better than a permanent action bar competing for attention with the content it serves.</p>
+
+    <div class="interaction-grid">
+      <div class="interaction-card">
+        <h3>Hover to Reveal</h3>
+        <p>Primary actions appear on hover. A lead item shows "Accept" and "Pass" only when the cursor is over it. On mobile, these surface with a long-press or swipe gesture.</p>
+        <div class="interaction-detail">
+          <div class="interaction-detail-item">
+            <div class="interaction-detail-key">Desktop</div>
+            <div class="interaction-detail-val">Hover → Actions fade in at right edge</div>
+          </div>
+          <div class="interaction-detail-item">
+            <div class="interaction-detail-key">Mobile</div>
+            <div class="interaction-detail-val">Swipe right → Accept / Swipe left → Pass</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="interaction-card">
+        <h3>Inline Expansion</h3>
+        <p>Detail views expand inline rather than navigating to new pages. Clicking a project in the timeline expands its tasks below the heading, pushing other content down. Context is never lost.</p>
+        <div class="interaction-detail">
+          <div class="interaction-detail-item">
+            <div class="interaction-detail-key">Transition</div>
+            <div class="interaction-detail-val">300ms ease with content-aware resize</div>
+          </div>
+          <div class="interaction-detail-item">
+            <div class="interaction-detail-key">Collapse</div>
+            <div class="interaction-detail-val">Click heading again or press Escape</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="interaction-card">
+        <h3>Typographic Transitions</h3>
+        <p>State changes happen through type, not color fills. An accepted lead's name shifts from regular to medium weight. A completed phase shifts from charcoal to muted gray. Subtle, informative, brand-consistent.</p>
+        <div class="interaction-detail">
+          <div class="interaction-detail-item">
+            <div class="interaction-detail-key">Active</div>
+            <div class="interaction-detail-val">Inter 500 · Charcoal</div>
+          </div>
+          <div class="interaction-detail-item">
+            <div class="interaction-detail-key">Complete</div>
+            <div class="interaction-detail-val">Inter 400 · Aged Oak</div>
+          </div>
+          <div class="interaction-detail-item">
+            <div class="interaction-detail-key">Archived</div>
+            <div class="interaction-detail-val">Inter 300 · Pearl Gray</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="interaction-card">
+        <h3>The Strata Divider</h3>
+        <p>Our branded line system replaces borders, section breaks, and horizontal rules throughout the interface. Three lines, decreasing width, always Patina's Mocha-to-Clay progression. It's a signature element — used sparingly, recognized immediately.</p>
+        <div class="interaction-detail">
+          <div class="interaction-detail-item">
+            <div class="interaction-detail-key">Full</div>
+            <div class="interaction-detail-val">Between major sections</div>
+          </div>
+          <div class="interaction-detail-item">
+            <div class="interaction-detail-key">Mini</div>
+            <div class="interaction-detail-val">Between subsections</div>
+          </div>
+          <div class="interaction-detail-item">
+            <div class="interaction-detail-key">Micro</div>
+            <div class="interaction-detail-val">Between inline items (single line only)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== LEAH'S TIME ==================== -->
+<section>
+  <div class="narrow">
+    <div class="pull-quote">
+      <blockquote>"Every extra click is time away from the design work. The portal succeeds when Leah forgets she's using software."</blockquote>
+      <cite>Core Principle — Leah's Time is Sacred</cite>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== IMPLEMENTATION ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label mono">10 — Implementation Path</h4>
+    <h2 class="section-title">How we <em>build this.</em></h2>
+    <p class="section-intro">This isn't a redesign of every screen simultaneously. It's a phased approach that starts with the two views Leah uses most — the dashboard and the lead brief — and expands outward.</p>
+
+    <div class="principles">
+      <div class="principle">
+        <div class="principle-number">01</div>
+        <div>
+          <h3>Foundation Sprint — The Type System</h3>
+          <p>Build the typographic design tokens: Playfair Display at three weights, Inter at three weights, DM Mono for metadata. Define the complete scale — sizes, line-heights, letter-spacing, and color assignments. This becomes the shared language every screen speaks. Implement as CSS custom properties in the Patina Design System.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="principle-number">02</div>
+        <div>
+          <h3>Core Screens — Dashboard & Lead Brief</h3>
+          <p>Implement the dashboard as shown in this vision — typographic greeting, inline metrics, lead list, and project timeline. Then the lead brief view with its document-style layout. These two screens handle 80% of daily workflow. Ship them, test with Leah, iterate.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="principle-number">03</div>
+        <div>
+          <h3>Extended Views — Projects & Proposals</h3>
+          <p>Apply the typographic system to project management (vertical timeline) and the proposal builder (document editor). These build on the patterns established in the first sprint, so the visual language is already proven.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="principle-number">04</div>
+        <div>
+          <h3>Studio Zone — Earnings & Portfolio</h3>
+          <p>The business management features — earnings dashboard, commission tracking, portfolio showcase. These are lower-frequency screens but still need to speak the same typographic language. Playfair numerals for financial data. Mono labels for date ranges. Clay accents for positive trends.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== CLOSING ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <div class="strata">
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+    </div>
+
+    <h2 style="margin-top: 3rem; margin-bottom: 1.5rem;">This is how it should <em>feel.</em></h2>
+    <p class="large-body" style="max-width: 680px; margin-bottom: 3rem;">You're reading this document right now in the same typographic system proposed for the Designer Portal. The page titles in Playfair. The body copy in Inter. The metadata in monospace. No containers-in-containers. No tabs. No cards with drop shadows competing for your eye.</p>
+    <p class="large-body" style="max-width: 680px; margin-bottom: 3rem;">If this document feels clear, readable, and distinctly like Patina — then the Designer Portal can feel the same way. The type is doing the work. The whitespace is building the rooms. And the interface is getting out of the way of the content.</p>
+    <p class="large-body" style="max-width: 680px;">That's the vision. Let's build it.</p>
+
+    <div class="strata-mini" style="margin-top: 4rem;">
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== FOOTER ==================== -->
+<footer class="doc-footer">
+  <div class="container">
+    <div class="doc-footer-grid">
+      <div>
+        <h3 style="font-family: 'Playfair Display', serif; font-weight: 400;">Patina</h3>
+        <p style="font-style: italic; color: var(--aged-oak); margin-top: 0.25rem;">Where Time Adds Value</p>
+        <p style="margin-top: 1.5rem; font-size: 0.82rem; color: var(--muted);">This document represents a design vision for the Patina Designer Portal interface. It is intended for founder review and feedback before development begins.</p>
+      </div>
+      <div>
+        <p class="mono" style="margin-bottom: 0.5rem;">Document</p>
+        <p style="font-size: 0.85rem;">Designer Portal Vision v1.0<br>March 2026<br>Prepared for Kody & Leah</p>
+      </div>
+      <div>
+        <p class="mono" style="margin-bottom: 0.5rem;">Next Steps</p>
+        <p style="font-size: 0.85rem;">Founder review & feedback<br>Leah workflow validation<br>Type system tokens → code<br>Dashboard prototype build</p>
+      </div>
+    </div>
+
+    <div style="margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--pearl);">
+      <p class="mono" style="font-size: 0.62rem;">© 2026 Patina. All rights reserved. Confidential — Founding Team Only.</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Fade-in on scroll
+  const sections = document.querySelectorAll('.fade-section');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -60px 0px' });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

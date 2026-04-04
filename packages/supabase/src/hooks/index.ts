@@ -131,7 +131,58 @@ export {
   useClientProjects,
   useAddClient,
 } from './use-clients';
-export type { DesignerClient, ClientMessage, ClientFilters } from './use-clients';
+export type { DesignerClient, ClientLifecycleStage, ClientMessage, ClientFilters } from './use-clients';
+export {
+  // Client Decisions
+  useClientDecisions,
+  useDecision,
+  useAllDecisions,
+  useDecisionsByProject,
+  useDecisionMetrics,
+  useCreateDecision,
+  useUpdateDecisionStatus,
+  useSelectDecisionOption,
+  useSendDecisionReminder,
+  useMarkDecisionViewed,
+  useDecisionAnalyticsByType,
+  useDecisionAnalyticsByClient,
+  useDecisionBottleneckPhases,
+} from './use-decisions';
+export type {
+  ClientDecision,
+  ClientDecisionOption,
+  CreateDecisionInput,
+  DecisionType,
+  BlockingStatus,
+  DecisionStatus,
+  DecisionFilters,
+  DecisionMetrics,
+  DecisionTypeAnalytics,
+  DecisionClientAnalytics,
+  DecisionPhaseAnalytics,
+} from './use-decisions';
+export {
+  // Client Reviews
+  useClientReviews,
+  useReviewStats,
+  useCreateReviewRequest,
+  useSubmitReview,
+  useTogglePortfolioPublish,
+} from './use-reviews';
+export type { ClientReview, ReviewFilters, ReviewStats } from './use-reviews';
+export {
+  // Client Nurture
+  useNurtureTouchpoints,
+  useUpdateTouchpoint,
+  useCreateTouchpoint,
+} from './use-nurture';
+export type { ClientNurtureTouchpoint, NurtureFilters, TouchpointType, TouchpointStatus } from './use-nurture';
+export {
+  // Client Activity
+  useClientActivity,
+  useLogActivity,
+} from './use-activity';
+export type { ClientActivity, ActivityType } from './use-activity';
 export {
   useProposals,
   useProposal,
@@ -143,8 +194,30 @@ export {
   useRemoveProposalItem,
   useSendProposal,
   useDeleteProposal,
+  // Sections
+  useProposalSections,
+  useUpsertProposalSection,
+  useDeleteProposalSection,
+  // Templates
+  useProposalTemplates,
+  // Engagement
+  useProposalEngagement,
+  useProposalEngagementStats,
+  // Versions & Revisions
+  useProposalVersions,
+  useCreateProposalRevision,
+  // Signing
+  useSignProposal,
 } from './use-proposals';
-export type { Proposal, ProposalItem, ProposalFilters } from './use-proposals';
+export type {
+  Proposal,
+  ProposalItem,
+  ProposalFilters,
+  ProposalSection,
+  ProposalTemplate,
+  ProposalEngagementEvent,
+  ProposalEngagementStats,
+} from './use-proposals';
 export {
   useEarnings,
   useEarningsStats,
@@ -457,6 +530,54 @@ export {
   usePauseAutomation,
   useSequenceEnrollments,
 } from './use-automations';
+export {
+  // Scope Builder
+  useProposalScopeRooms,
+  useAddScopeRoom,
+  useUpdateScopeRoom,
+  useRemoveScopeRoom,
+  useProposalPhases,
+  useAddProposalPhase,
+  useUpdateProposalPhase,
+  useRemoveProposalPhase,
+  useProposalExclusions,
+  useAddExclusion,
+  useRemoveExclusion,
+  useProposalPaymentMilestones,
+  useAddPaymentMilestone,
+  useUpdatePaymentMilestone,
+  useRemovePaymentMilestone,
+  useProposalChangeOrderTerms,
+  useUpsertChangeOrderTerms,
+  useScopeBuilderSummary,
+} from './use-scope-builder';
+export {
+  // Project v2 (scope-aware)
+  useProjectV2,
+  useProjectRooms,
+  useProjectFFEItems,
+  useUpdateFFEItemStatus,
+  useProjectPhases,
+  useUpdateProjectPhaseStatus,
+  useProjectPaymentMilestones,
+  useUpdatePaymentMilestoneStatus,
+  useProjectFinancials,
+} from './use-project-v2';
+export type { FFEItemFilters } from './use-project-v2';
+export {
+  // Proposal Activation
+  useActivateProposal,
+} from './use-proposal-activation';
+export {
+  // Scope Changes
+  useScopeChangeRequests,
+  useScopeChangeRequest,
+  useCreateScopeChangeRequest,
+  useSendScopeChangeRequest,
+  useApproveScopeChange,
+  useDeclineScopeChange,
+  useApplyScopeChange,
+} from './use-scope-changes';
 export { useProductBySourceUrl } from './use-product-source-url';
 export {
   // Duplicate Detection

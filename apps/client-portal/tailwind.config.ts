@@ -29,7 +29,24 @@ const config: Config = {
       },
     },
     extend: {
+      fontFamily: {
+        heading: ['var(--font-playfair)', 'Playfair Display', 'serif'],
+        body: ['var(--font-inter)', 'Inter', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-inter)', 'Inter', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'DM Mono', 'monospace'],
+      },
       colors: {
+        patina: {
+          'off-white': '#FAF7F2',
+          pearl: '#E5E2DD',
+          clay: '#C4A57B',
+          'aged-oak': '#8B7355',
+          mocha: '#5C4A3C',
+          charcoal: '#2C2926',
+          sage: '#A8B5A0',
+          'dusty-blue': '#8B9CAD',
+          terracotta: '#D4A090',
+        },
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
@@ -65,14 +82,14 @@ const config: Config = {
         },
         // Timeline-specific colors
         timeline: {
-          past: '#94a3b8',
-          present: '#6366f1',
-          future: '#e0e7ff',
+          past: '#8B7355',
+          present: '#C4A57B',
+          future: '#E5E2DD',
         },
         celebration: {
-          achievement: '#10b981',
-          approval: '#8b5cf6',
-          completion: '#f59e0b',
+          achievement: '#A8B5A0',
+          approval: '#C4A57B',
+          completion: '#D4A090',
         },
       },
       borderRadius: {

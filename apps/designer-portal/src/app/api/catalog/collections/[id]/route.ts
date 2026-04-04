@@ -1,6 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
 
+// Helper to map DB row to API response
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapCollection(data: any) {
+  return {
+    id: data.id,
+    name: data.name,
+    slug: data.slug,
+    type: data.type,
+    description: data.description,
+    coverImage: data.cover_image,
+    heroImage: data.cover_image,
+    isPublic: data.is_public,
+    status: data.status,
+    featured: data.featured,
+    tags: data.tags ?? [],
+    displayOrder: data.display_order,
+    publishedAt: data.published_at,
+    scheduledPublishAt: data.scheduled_publish_at,
+    seoTitle: data.seo_title,
+    seoDescription: data.seo_description,
+    rule: data.rule,
+    createdBy: data.created_by,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  };
+}
+
 // GET /api/catalog/collections/:id
 export async function GET(
   _request: NextRequest,
@@ -13,7 +40,7 @@ export async function GET(
 
     const { data, error } = await supabase
       .from('collections')
-      .select('*, collection_products(product_id, position, product:products(*))')
+      .select('*, collection_products(id, product_id, position, notes, product:products(*))')
       .eq('id', id)
       .single();
 
@@ -24,16 +51,21 @@ export async function GET(
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    const collection = mapCollection(data);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const products = (data.collection_products ?? []).map((cp: any) => ({
+      id: cp.id,
+      productId: cp.product_id,
+      position: cp.position,
+      notes: cp.notes,
+      product: cp.product,
+    }));
+
     return NextResponse.json({
-      id: data.id,
-      name: data.name,
-      description: data.description,
-      coverImage: data.cover_image,
-      isPublic: data.is_public,
-      createdBy: data.created_by,
+      ...collection,
+      items: products,
       products: data.collection_products ?? [],
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      productCount: products.length,
     });
   } catch (error) {
     console.error('[API] GET /catalog/collections/[id] error:', error);
@@ -58,10 +90,25 @@ export async function PATCH(
 
     const body = await request.json();
     const updateData: Record<string, unknown> = {};
+
+    // Map all camelCase fields to snake_case
     if (body.name !== undefined) updateData.name = body.name;
+    if (body.slug !== undefined) updateData.slug = body.slug;
+    if (body.type !== undefined) updateData.type = body.type;
     if (body.description !== undefined) updateData.description = body.description;
     if (body.coverImage !== undefined) updateData.cover_image = body.coverImage;
+    if (body.heroImage !== undefined) updateData.cover_image = body.heroImage;
     if (body.isPublic !== undefined) updateData.is_public = body.isPublic;
+    if (body.status !== undefined) updateData.status = body.status;
+    if (body.featured !== undefined) updateData.featured = body.featured;
+    if (body.tags !== undefined) updateData.tags = body.tags;
+    if (body.displayOrder !== undefined) updateData.display_order = body.displayOrder;
+    if (body.publishedAt !== undefined) updateData.published_at = body.publishedAt;
+    if (body.scheduledPublishAt !== undefined) updateData.scheduled_publish_at = body.scheduledPublishAt;
+    if (body.seoTitle !== undefined) updateData.seo_title = body.seoTitle;
+    if (body.seoDescription !== undefined) updateData.seo_description = body.seoDescription;
+    if (body.rule !== undefined) updateData.rule = body.rule;
+
     updateData.updated_at = new Date().toISOString();
 
     const { data, error } = await supabase
@@ -78,16 +125,7 @@ export async function PATCH(
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    return NextResponse.json({
-      id: data.id,
-      name: data.name,
-      description: data.description,
-      coverImage: data.cover_image,
-      isPublic: data.is_public,
-      createdBy: data.created_by,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
-    });
+    return NextResponse.json(mapCollection(data));
   } catch (error) {
     console.error('[API] PATCH /catalog/collections/[id] error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -108,12 +146,6 @@ export async function DELETE(
     if (authError || !user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
-
-    // Delete collection products first
-    await supabase
-      .from('collection_products')
-      .delete()
-      .eq('collection_id', id);
 
     const { error } = await supabase
       .from('collections')

@@ -11,24 +11,24 @@ export interface TimelineConfig {
 }
 
 const DESKTOP_CONFIG: TimelineConfig = {
-  scaleRange: [0.5, 1.0, 0.8],
-  cardWidth: 'min(900px, 90vw)',
+  scaleRange: [0.65, 1.0, 0.85],
+  cardWidth: 'min(1200px, 94vw)',
   cardSpacing: 90, // vh, leave neighbors slightly visible
   magnetRange: 150,
   enableKeyboard: true,
 }
 
 const TABLET_CONFIG: TimelineConfig = {
-  scaleRange: [0.65, 1.0, 0.85],
-  cardWidth: '90vw',
+  scaleRange: [0.7, 1.0, 0.88],
+  cardWidth: '94vw',
   cardSpacing: 90, // vh
   magnetRange: 100,
   enableKeyboard: true,
 }
 
 const MOBILE_CONFIG: TimelineConfig = {
-  scaleRange: [0.8, 1.0, 0.9],
-  cardWidth: '95vw',
+  scaleRange: [0.85, 1.0, 0.92],
+  cardWidth: '96vw',
   cardSpacing: 88, // vh
   magnetRange: 80,
   enableKeyboard: false,

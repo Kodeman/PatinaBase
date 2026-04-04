@@ -3,11 +3,13 @@
 import { WebSocketProvider } from '@/lib/websocket';
 import { EnhancedTimeline } from '@/components/timeline/enhanced-timeline';
 import { ProjectOverview } from '@/components/project-overview';
+import { ProjectScopeDetails } from '@/components/project-scope-details';
+import { StrataMark } from '@/components/strata-mark';
 import type { MilestoneDetail } from '@/types/project';
 
 interface ProjectViewWrapperProps {
   projectId: string;
-  project: any; // Project overview data
+  project: any;
   milestones: MilestoneDetail[];
   userId?: string;
   authToken?: string;
@@ -31,15 +33,17 @@ export function ProjectViewWrapper({
     >
       {showOverview && <ProjectOverview project={project} />}
 
-      <div className={showOverview ? 'mt-12' : ''}>
-        <EnhancedTimeline
-          projectId={projectId}
-          milestones={milestones}
-          onMilestoneUpdate={(milestone) => {
-            console.log('Milestone updated:', milestone.id, milestone.status);
-          }}
-        />
-      </div>
+      {showOverview && <ProjectScopeDetails projectId={projectId} />}
+
+      {showOverview && <StrataMark variant="full" />}
+
+      <EnhancedTimeline
+        projectId={projectId}
+        milestones={milestones}
+        onMilestoneUpdate={(milestone) => {
+          console.log('Milestone updated:', milestone.id, milestone.status);
+        }}
+      />
     </WebSocketProvider>
   );
 }

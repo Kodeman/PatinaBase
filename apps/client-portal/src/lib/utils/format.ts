@@ -50,30 +50,30 @@ export const formatStatusLabel = (status: MilestoneStatus) => {
 export const statusAccentClass = (status: MilestoneStatus) => {
   switch (status) {
     case 'completed':
-      return 'bg-emerald-200 text-emerald-900 border-emerald-300';
+      return 'text-patina-sage';
     case 'in_progress':
-      return 'bg-sky-200 text-sky-900 border-sky-300';
+      return 'text-patina-clay';
     case 'attention':
-      return 'bg-amber-200 text-amber-900 border-amber-300';
+      return 'text-patina-terracotta';
     case 'blocked':
-      return 'bg-rose-200 text-rose-900 border-rose-300';
+      return 'text-patina-terracotta';
     default:
-      return 'bg-stone-200 text-stone-900 border-stone-300';
+      return 'text-patina-aged-oak';
   }
 };
 
 export const statusDotClass = (status: MilestoneStatus) => {
   switch (status) {
     case 'completed':
-      return 'bg-emerald-500';
+      return 'bg-patina-sage';
     case 'in_progress':
-      return 'bg-sky-500';
+      return 'bg-patina-clay';
     case 'attention':
-      return 'bg-amber-500';
+      return 'bg-patina-terracotta';
     case 'blocked':
-      return 'bg-rose-500';
+      return 'bg-patina-terracotta';
     default:
-      return 'bg-stone-400';
+      return 'bg-patina-pearl';
   }
 };
 

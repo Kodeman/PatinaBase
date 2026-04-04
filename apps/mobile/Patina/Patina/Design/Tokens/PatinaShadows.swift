@@ -11,31 +11,39 @@ import SwiftUI
 public enum PatinaShadows {
 
     public static let sm = Shadow(
-        color: Color(hex: "655B52").opacity(0.06),
+        color: Color(hex: "5C4A3C").opacity(0.06),
         radius: 4,
         x: 0,
         y: 2
     )
 
     public static let md = Shadow(
-        color: Color(hex: "655B52").opacity(0.08),
+        color: Color(hex: "5C4A3C").opacity(0.08),
         radius: 8,
         x: 0,
         y: 4
     )
 
     public static let lg = Shadow(
-        color: Color(hex: "655B52").opacity(0.12),
+        color: Color(hex: "5C4A3C").opacity(0.12),
         radius: 16,
         x: 0,
         y: 8
     )
 
     public static let xl = Shadow(
-        color: Color(hex: "655B52").opacity(0.16),
-        radius: 24,
+        color: Color(hex: "5C4A3C").opacity(0.16),
+        radius: 32,
         x: 0,
-        y: 12
+        y: 16
+    )
+
+    /// The Companion's signature shadow
+    public static let companion = Shadow(
+        color: Color(hex: "5C4A3C").opacity(0.20),
+        radius: 12,
+        x: 0,
+        y: 4
     )
 
     public struct Shadow {

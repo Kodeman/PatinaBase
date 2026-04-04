@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/components/ui/use-toast';
-import { catalogService } from '@/services/catalog';
+import { createBrowserClient } from '@patina/supabase';
 import { CategoryFormModal } from '@/components/categories/category-form-modal';
 
 // Admin view category type with product count
@@ -31,93 +31,6 @@ interface CategoryView {
   children?: CategoryView[];
 }
 
-// Keep mock data as fallback
-const mockCategories: CategoryView[] = [
-  {
-    id: '1',
-    name: 'Seating',
-    slug: 'seating',
-    description: 'Chairs, sofas, and benches',
-    productCount: 156,
-    children: [
-      {
-        id: '1-1',
-        name: 'Sofas',
-        slug: 'sofas',
-        productCount: 48,
-        parentId: '1',
-      } as CategoryView,
-      {
-        id: '1-2',
-        name: 'Chairs',
-        slug: 'chairs',
-        productCount: 82,
-        parentId: '1',
-      } as CategoryView,
-      {
-        id: '1-3',
-        name: 'Benches',
-        slug: 'benches',
-        productCount: 26,
-        parentId: '1',
-      } as CategoryView,
-    ],
-  } as CategoryView,
-  {
-    id: '2',
-    name: 'Tables',
-    slug: 'tables',
-    description: 'Dining, coffee, and side tables',
-    productCount: 94,
-    children: [
-      {
-        id: '2-1',
-        name: 'Dining Tables',
-        slug: 'dining-tables',
-        productCount: 38,
-        parentId: '2',
-      },
-      {
-        id: '2-2',
-        name: 'Coffee Tables',
-        slug: 'coffee-tables',
-        productCount: 42,
-        parentId: '2',
-      },
-      {
-        id: '2-3',
-        name: 'Side Tables',
-        slug: 'side-tables',
-        productCount: 14,
-        parentId: '2',
-      },
-    ],
-  },
-  {
-    id: '3',
-    name: 'Storage',
-    slug: 'storage',
-    description: 'Cabinets, shelves, and organization',
-    productCount: 67,
-    children: [],
-  },
-  {
-    id: '4',
-    name: 'Lighting',
-    slug: 'lighting',
-    description: 'Lamps, chandeliers, and fixtures',
-    productCount: 118,
-    children: [],
-  },
-  {
-    id: '5',
-    name: 'Decor',
-    slug: 'decor',
-    description: 'Accessories and decorative items',
-    productCount: 203,
-    children: [],
-  },
-];
 
 interface CategoryItemProps {
   category: CategoryView;
@@ -212,21 +125,71 @@ export default function CategoriesPage() {
 
   const queryClient = useQueryClient();
 
-  // Fetch categories
-  const { data: categoriesData, isLoading } = useQuery({
+  // Fetch categories directly from Supabase
+  const { data: categories = [], isLoading } = useQuery({
     queryKey: ['categories'],
-    queryFn: () => catalogService.getCategories(),
-  });
+    queryFn: async () => {
+      const supabase = createBrowserClient();
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('sort_order', { ascending: true });
 
-  const categories: CategoryView[] = (categoriesData?.data as unknown as CategoryView[]) || mockCategories;
+      if (error) throw error;
+
+      // Map snake_case DB rows to CategoryView and build tree
+      const flat: CategoryView[] = (data ?? []).map((row: Record<string, unknown>) => ({
+        id: row.id as string,
+        name: (row.name as string) || '',
+        slug: (row.slug as string) || '',
+        description: (row.description as string) || undefined,
+        productCount: (row.product_count as number) || 0,
+        parentId: (row.parent_id as string) || undefined,
+        imageUrl: (row.image_url as string) || undefined,
+        sortOrder: (row.sort_order as number) || 0,
+        isActive: row.is_active !== false,
+        children: [],
+      }));
+
+      // Build tree: attach children to parents
+      const map = new Map(flat.map((c) => [c.id, c]));
+      const tree: CategoryView[] = [];
+      for (const cat of flat) {
+        if (cat.parentId && map.has(cat.parentId)) {
+          map.get(cat.parentId)!.children!.push(cat);
+        } else {
+          tree.push(cat);
+        }
+      }
+      return tree;
+    },
+  });
 
   // Create/Update mutation
   const saveMutation = useMutation({
-    mutationFn: (data: Partial<CategoryView>) => {
+    mutationFn: async (data: Partial<CategoryView> & { id?: string }) => {
+      const supabase = createBrowserClient();
+      const row = {
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.slug !== undefined && { slug: data.slug }),
+        ...(data.description !== undefined && { description: data.description }),
+        ...(data.parentId !== undefined && { parent_id: data.parentId || null }),
+        ...((data as any).order !== undefined && { sort_order: (data as any).order }),
+        ...((data as any).isActive !== undefined && { is_active: (data as any).isActive }),
+        ...((data as any).image !== undefined && { image_url: (data as any).image }),
+      };
+
       if (data.id) {
-        return catalogService.updateCategory(data.id, data as any);
+        const { error } = await supabase
+          .from('categories')
+          .update(row)
+          .eq('id', data.id);
+        if (error) throw error;
       } else {
-        return catalogService.createCategory(data as any);
+        const { error } = await supabase
+          .from('categories')
+          .insert({ name: data.name!, slug: data.slug!, ...row });
+        if (error) throw error;
       }
     },
     onSuccess: () => {
@@ -249,7 +212,14 @@ export default function CategoriesPage() {
 
   // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: (categoryId: string) => catalogService.deleteCategory(categoryId),
+    mutationFn: async (categoryId: string) => {
+      const supabase = createBrowserClient();
+      const { error } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', categoryId);
+      if (error) throw error;
+    },
     onSuccess: () => {
       toast({
         title: 'Category deleted',

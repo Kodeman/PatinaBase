@@ -276,12 +276,18 @@ export function ProductEditPageClient({ productId }: ProductEditPageClientProps)
   }
 
   if (error || !product) {
+    const errorMessage = error instanceof Error ? error.message : '';
+    const isAuthError = errorMessage.includes('Unauthorized') || errorMessage.includes('401');
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
         <AlertCircle className="h-12 w-12 text-destructive" />
-        <h2 className="text-2xl font-semibold">Product not found</h2>
+        <h2 className="text-2xl font-semibold">
+          {isAuthError ? 'Access denied' : 'Product not found'}
+        </h2>
         <p className="text-muted-foreground">
-          {error instanceof Error ? error.message : 'The product you are looking for does not exist.'}
+          {isAuthError
+            ? 'You do not have permission to edit this product.'
+            : errorMessage || 'The product you are looking for does not exist.'}
         </p>
         <Button asChild>
           <Link href="/catalog">

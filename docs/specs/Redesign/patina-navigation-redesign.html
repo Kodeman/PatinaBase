@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — Navigation Redesign · How the Designer Actually Works</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--bg:var(--ow);--sf:#FFFFFF;--hv:rgba(196,165,123,0.06);--tx:var(--ch);--bd:var(--mo);--mu:var(--ao);--su:var(--pe);--fd:'Playfair Display',Georgia,serif;--fb:'Inter',-apple-system,sans-serif;--fm:'DM Mono','SF Mono',monospace;--e:cubic-bezier(0.4,0,0.2,1)}
+*{margin:0;padding:0;box-sizing:border-box}html{font-size:16px;scroll-behavior:smooth;background:var(--bg)}body{font-family:var(--fb);color:var(--tx);-webkit-font-smoothing:antialiased;line-height:1.6}
+.w{max-width:1120px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}.nr{max-width:800px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}section{padding:clamp(2.5rem,5vw,5rem) 0}
+h1{font-family:var(--fd);font-weight:400;font-size:clamp(2rem,5vw,3.4rem);line-height:1.12;letter-spacing:-0.02em}h2,.h2{font-family:var(--fd);font-weight:400;font-size:clamp(1.4rem,3.5vw,2.1rem);line-height:1.2;letter-spacing:-0.02em}h3,.h3{font-family:var(--fd);font-weight:500;font-size:1.1rem;line-height:1.35}
+.meta{font-family:var(--fm);font-size:0.65rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--mu)}.ms{font-family:var(--fm);font-size:0.55rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mu)}
+.lbl{font-family:var(--fb);font-weight:500;font-size:0.9rem;color:var(--tx)}.ls{font-family:var(--fb);font-weight:400;font-size:0.78rem;color:var(--mu)}
+.bd{font-family:var(--fb);font-size:0.9rem;line-height:1.7;color:var(--bd);max-width:600px}em{font-family:var(--fd);font-style:italic;color:var(--ao)}
+.st{display:flex;flex-direction:column;gap:6px;padding:2.5rem 0}.st .s{height:2px;border-radius:1px}.st .s:nth-child(1){width:100%;background:var(--mo)}.st .s:nth-child(2){width:80%;background:var(--cl);opacity:.7}.st .s:nth-child(3){width:60%;background:var(--cl);opacity:.35}
+.sm{display:flex;flex-direction:column;gap:4px;padding:1.25rem 0}.sm .s{height:1.5px;border-radius:1px}.sm .s:nth-child(1){width:60px;background:var(--mo)}.sm .s:nth-child(2){width:48px;background:var(--cl);opacity:.7}.sm .s:nth-child(3){width:36px;background:var(--cl);opacity:.35}
+.cover{min-height:70vh;display:flex;flex-direction:column;justify-content:flex-end;padding:4rem clamp(1.5rem,5vw,4rem)}.cover h1 span{display:block;font-style:italic;color:var(--ao);font-weight:400;font-size:0.55em}.cover-sub{font-size:0.98rem;color:var(--bd);max-width:600px;margin:1rem 0 3rem;line-height:1.75}
+.cm{display:flex;gap:3rem;flex-wrap:wrap}.cm-i .meta{margin-bottom:0.2rem}.cm-i p{font-size:0.82rem;color:var(--tx)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:2.5rem}
+.pq{padding:2rem 0;border-top:1px solid var(--su);border-bottom:1px solid var(--su);margin:2rem 0}.pq blockquote{font-family:var(--fd);font-size:clamp(1.1rem,2.5vw,1.6rem);font-weight:400;font-style:italic;line-height:1.45;color:var(--tx);max-width:600px}.pq cite{display:block;font-family:var(--fm);font-size:0.6rem;font-style:normal;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-top:0.75rem}
+
+/* ===== NAV MOCKUPS ===== */
+.nav-mock{background:var(--sf);border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(44,41,38,0.04),0 8px 32px rgba(44,41,38,0.05);margin:1.5rem 0}
+
+/* Old nav */
+.nav-old{display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:48px;border-bottom:1px solid var(--su)}
+.nav-old-l{font-family:var(--fd);font-weight:500;font-size:0.72rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--tx)}
+.nav-old-c{display:flex;gap:1.2rem}.nav-old-c span{font-family:var(--fb);font-size:0.72rem;color:var(--mu);padding-bottom:2px;cursor:default}.nav-old-c span.on{color:var(--tx);border-bottom:2px solid var(--cl)}
+.nav-old-r{display:flex;align-items:center;gap:0.4rem}.nav-old-r .ms{margin-right:0.2rem}.nav-av{width:24px;height:24px;border-radius:50%;background:var(--pe);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-weight:500;font-size:0.52rem;color:var(--mo)}
+
+/* New nav */
+.nav-new{display:flex;align-items:center;padding:0 1.25rem;height:52px;border-bottom:1px solid var(--su);gap:0}
+.nav-logo{font-family:var(--fd);font-weight:500;font-size:0.72rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--tx);margin-right:2rem;flex-shrink:0}
+.nav-primary{display:flex;gap:0;height:100%;align-items:stretch;flex:1}
+.nav-item{font-family:var(--fb);font-size:0.75rem;color:var(--mu);padding:0 0.85rem;display:flex;align-items:center;cursor:default;border-bottom:2px solid transparent;transition:color 0.15s,border-color 0.15s;position:relative;white-space:nowrap}
+.nav-item:hover{color:var(--tx)}.nav-item.on{color:var(--tx);border-bottom-color:var(--cl);font-weight:500}
+.nav-item .badge{position:absolute;top:10px;right:4px;width:7px;height:7px;border-radius:50%;background:var(--cl)}
+.nav-item .count{font-family:var(--fm);font-size:0.45rem;background:var(--te);color:white;min-width:14px;height:14px;border-radius:7px;display:flex;align-items:center;justify-content:center;margin-left:0.3rem;padding:0 3px}
+.nav-utility{display:flex;align-items:center;gap:0.15rem;margin-left:auto}
+.nav-u{width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:default;position:relative;transition:background 0.15s;font-size:0.85rem;color:var(--mu)}.nav-u:hover{background:var(--hv);color:var(--tx)}
+.nav-u .u-badge{position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:var(--te)}
+.nav-u .u-count{position:absolute;top:3px;right:2px;font-family:var(--fm);font-size:0.4rem;background:var(--te);color:white;min-width:13px;height:13px;border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 2px}
+.nav-u.profile{width:auto;gap:0.4rem;padding:0 0.5rem}
+.nav-u.profile .ms{color:var(--mu)}
+
+/* Sub-nav / contextual */
+.subnav{display:flex;align-items:center;padding:0 1.25rem;height:38px;border-bottom:1px solid rgba(229,226,221,0.6);background:var(--bg);gap:0}
+.subnav-item{font-family:var(--fb);font-size:0.7rem;color:var(--mu);padding:0 0.7rem;height:100%;display:flex;align-items:center;cursor:default;border-bottom:2px solid transparent;transition:all 0.15s;white-space:nowrap}
+.subnav-item:first-child{padding-left:0}
+.subnav-item:hover{color:var(--tx)}.subnav-item.on{color:var(--tx);border-bottom-color:var(--cl)}
+.subnav-item .ct{font-family:var(--fm);font-size:0.45rem;color:var(--mu);margin-left:0.25rem}
+.subnav-right{margin-left:auto;display:flex;align-items:center;gap:0.5rem}
+
+/* Pipeline stage filter */
+.pipe-filter{display:flex;gap:0;height:100%;align-items:stretch}
+.pipe-dot{width:8px;height:8px;border-radius:50%;margin-right:0.3rem}
+
+/* Mobile nav mockup */
+.mobile-frame{width:375px;margin:0 auto;background:var(--sf);border-radius:24px;overflow:hidden;box-shadow:0 2px 8px rgba(44,41,38,0.06),0 12px 40px rgba(44,41,38,0.08)}
+.mobile-status{height:44px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px;background:var(--sf)}.mobile-status span{width:120px;height:4px;border-radius:2px;background:var(--ch)}
+.mobile-content{min-height:400px;background:var(--bg);padding:1rem}
+.mobile-tabs{display:flex;height:52px;background:var(--sf);border-top:1px solid var(--su)}.mobile-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:default;position:relative}.mobile-tab .mt-icon{font-size:1rem;color:var(--mu)}.mobile-tab .mt-label{font-family:var(--fb);font-size:0.55rem;color:var(--mu)}.mobile-tab.on .mt-icon,.mobile-tab.on .mt-label{color:var(--cl)}.mobile-tab .mt-badge{position:absolute;top:6px;right:calc(50% - 14px);width:7px;height:7px;border-radius:50%;background:var(--te)}
+.mobile-home{height:34px;display:flex;align-items:center;justify-content:center;background:var(--sf)}.mobile-home span{width:130px;height:4px;border-radius:2px;background:var(--ch)}
+
+/* Scenario cards */
+.scenario{padding:1.25rem;border:1px solid var(--su);border-radius:6px;margin-bottom:1rem}.scenario:hover{border-color:var(--cl)}
+.sc-time{font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--cl);margin-bottom:0.3rem}
+.sc-task{font-family:var(--fb);font-weight:500;font-size:0.85rem;color:var(--tx);margin-bottom:0.25rem}
+.sc-path{font-family:var(--fm);font-size:0.55rem;color:var(--mu);line-height:1.6}
+.sc-clicks{font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--sa);margin-top:0.4rem}
+
+/* Dropdown preview */
+.dd-mock{position:absolute;top:100%;right:0;width:220px;background:var(--sf);border:1px solid var(--su);border-radius:6px;box-shadow:0 4px 16px rgba(44,41,38,0.08);padding:0.5rem 0;z-index:10}
+.dd-item{font-family:var(--fb);font-size:0.75rem;color:var(--bd);padding:0.4rem 1rem;display:flex;align-items:center;justify-content:space-between;cursor:default}.dd-item:hover{background:var(--hv);color:var(--tx)}
+.dd-div{height:1px;background:var(--su);margin:0.35rem 0}
+.dd-head{font-family:var(--fm);font-size:0.5rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);padding:0.35rem 1rem 0.15rem}
+
+/* Responsive */
+@media(max-width:768px){.two{grid-template-columns:1fr}.cm{flex-direction:column;gap:1rem}}
+.fade{opacity:0;transform:translateY(14px);transition:opacity 0.6s ease,transform 0.6s ease}.fade.vis{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ============================== COVER ============================== -->
+<div class="cover">
+  <p class="meta" style="margin-bottom:1rem">Patina — Navigation Redesign</p>
+  <h1>Where Everything Lives<span>Navigation that follows the work</span></h1>
+  <p class="cover-sub">The previous "Work | Clients | Studio" navigation was a reasonable first guess — three conceptual zones that felt clean. But after building ten detailed screen designs, the cracks show. Where do Products live? Where does the Aesthete Engine go? Why are Leads separate from Projects when they're the same pipeline? This document rebuilds the navigation from the designer's actual workflow, not from a feature taxonomy.</p>
+  <div class="st"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div class="cm">
+    <div class="cm-i"><p class="meta">Prepared for</p><p>Kody & Leah</p></div>
+    <div class="cm-i"><p class="meta">Version</p><p>1.0 — March 2026</p></div>
+    <div class="cm-i"><p class="meta">Replaces</p><p>Work | Clients | Studio model</p></div>
+  </div>
+</div>
+
+<!-- ============================== THE PROBLEM ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">01 — What Broke</p>
+  <h2>Three zones sounded right. <em>Then we built the screens.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">The "Work | Clients | Studio" model organized features into conceptual buckets. But real designer workflows don't follow buckets — they follow objects across contexts. A product gets captured, classified, added to a proposal, ordered in a project, and taught to the Aesthete Engine. It doesn't live in one zone. It passes through all of them.</p>
+
+  <!-- Old nav -->
+  <div class="nav-mock">
+    <div class="nav-old"><div class="nav-old-l">Patina</div><div class="nav-old-c"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="nav-old-r"><span class="ms">Leah</span><div class="nav-av">LK</div></div></div>
+    <div style="padding:1.5rem;background:var(--bg)">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2rem">
+        <div>
+          <div class="lbl" style="font-size:0.82rem;margin-bottom:0.5rem;color:var(--te)">Work</div>
+          <p style="font-size:0.72rem;color:var(--bd);line-height:1.5;margin-bottom:0.5rem">Leads, Proposals, Projects, Decisions, Room Viewer — everything about active work.</p>
+          <p style="font-size:0.68rem;color:var(--te);line-height:1.5"><strong>Problem:</strong> Leads and Projects are the same pipeline at different stages. Splitting them creates two places to check. Proposals are now structurally part of Projects (v2 redesign) but live under "Work" as a separate item. Products aren't here at all — but you need them constantly while working.</p>
+        </div>
+        <div>
+          <div class="lbl" style="font-size:0.82rem;margin-bottom:0.5rem;color:var(--te)">Clients</div>
+          <p style="font-size:0.72rem;color:var(--bd);line-height:1.5;margin-bottom:0.5rem">Client directory, Messages, Reviews, Nurture queue — everything about relationships.</p>
+          <p style="font-size:0.68rem;color:var(--te);line-height:1.5"><strong>Problem:</strong> Messages need to be accessible from any context — while working on a project, while reviewing a lead, while checking a product. Burying them under "Clients" means 2 clicks to respond to a time-sensitive message about a rug decision while you're looking at the rug in the product catalog.</p>
+        </div>
+        <div>
+          <div class="lbl" style="font-size:0.82rem;margin-bottom:0.5rem;color:var(--te)">Studio</div>
+          <p style="font-size:0.72rem;color:var(--bd);line-height:1.5;margin-bottom:0.5rem">Earnings, Portfolio, Resources, Settings — everything about the business.</p>
+          <p style="font-size:0.68rem;color:var(--te);line-height:1.5"><strong>Problem:</strong> The Aesthete Engine doesn't fit any zone. Teaching is "Work" (you're working). Products are "Work" (you use them in projects). But the Engine dashboard is "Studio" (it's about your practice). The Engine is its own workflow that crosses all three zones.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== LEAH'S ACTUAL DAY ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">02 — Leah's Actual Day</p>
+  <h2>Trace the work, <em>then build the map.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">Before designing navigation, we traced what Leah actually does on a typical day. Not what features she uses — what problems she's solving, in what order, and how she moves between them. The navigation should match this flow, not reorganize it.</p>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+    <div>
+      <div class="scenario"><div class="sc-time">7:45 AM — Morning scan</div><div class="sc-task">What needs my attention today?</div><div class="sc-path">2 new leads to review · 1 unread message from James Chen · 1 overdue decision · Nordic Atelier table arriving today · Weekly update due to Whitfields</div><div class="sc-clicks">Need: One page, zero clicks. A dashboard.</div></div>
+
+      <div class="scenario"><div class="sc-time">8:15 AM — Lead review</div><div class="sc-task">New lead: Maria Gonzalez, full home, $48k budget</div><div class="sc-path">Read lead brief → View room scan → Check match score → Accept → Send welcome message → Lead becomes nascent project in pipeline</div><div class="sc-clicks">Need: Lead lives in the pipeline alongside proposals and projects. Same list, different stage.</div></div>
+
+      <div class="scenario"><div class="sc-time">9:00 AM — Project work</div><div class="sc-task">Chen Residence — check procurement status</div><div class="sc-path">Open project → See table arriving today → Send James a message about delivery window → Check rug decision (still overdue) → Send reminder → Look at 3 coffee table options in product catalog → Add one to FF&E schedule</div><div class="sc-clicks">Need: Jump from project → message → product catalog → back to project without losing context.</div></div>
+
+      <div class="scenario"><div class="sc-time">10:30 AM — Proposal writing</div><div class="sc-task">Morrison Master Suite — finish scope builder</div><div class="sc-path">Open Morrison proposal → Define room scope → Add FF&E allowances → Set phase fees → Add exclusions → Generate proposal document → Edit narrative</div><div class="sc-clicks">Need: Proposal IS a project at the "Proposal" stage. Same pipeline.</div></div>
+    </div>
+    <div>
+      <div class="scenario"><div class="sc-time">1:00 PM — Product work</div><div class="sc-task">New imports from this week — 12 products need teaching</div><div class="sc-path">Open product catalog → Filter: needs teaching → Start teaching session → Classify 6 products → Review 2 ML match corrections → Validate 3 peer classifications</div><div class="sc-clicks">Need: Products are their own workspace with teaching built in — not buried under "Work."</div></div>
+
+      <div class="scenario"><div class="sc-time">2:30 PM — Client communication</div><div class="sc-task">Whitfield weekly update + Andrea Novak revision response</div><div class="sc-path">Open messages → Send Whitfield weekly update using project template → Open Novak thread → Read revision request → Open her proposal → Edit scope → Resend</div><div class="sc-clicks">Need: Messages accessible from anywhere. Not 2 clicks deep under "Clients."</div></div>
+
+      <div class="scenario"><div class="sc-time">4:00 PM — Business check</div><div class="sc-task">Check this month's earnings, review portfolio draft</div><div class="sc-path">Check earnings → See $5,187 earned on Chen project → Review portfolio page draft → Update with new Olsen project photos → Check settings</div><div class="sc-clicks">Need: Business tools are secondary — accessed occasionally, not the primary workspace. Profile menu.</div></div>
+
+      <div class="scenario"><div class="sc-time">Throughout the day</div><div class="sc-task">Quick-access needs that interrupt everything</div><div class="sc-path">Search for a product by name · Read a notification about a delivery · Respond to a client message about a decision · Check a specific project's budget</div><div class="sc-clicks">Need: Search, notifications, and messages must be persistent in the top bar, accessible from any page.</div></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== THE NEW NAVIGATION ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">03 — The New Top Bar</p>
+  <h2>Four primary zones. <em>Three persistent utilities.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">The navigation follows Leah's actual workflow: start with what needs attention (Today), move into the work (Pipeline), manage the materials (Products), tend the relationships (Clients). Messages, notifications, and search live in the utility bar because they interrupt any context. Business tools live under the profile because they're accessed occasionally, not constantly.</p>
+
+  <!-- THE NEW NAV — Full mockup -->
+  <div class="nav-mock">
+    <div class="nav-new">
+      <div class="nav-logo">Patina</div>
+      <div class="nav-primary">
+        <div class="nav-item on">Today</div>
+        <div class="nav-item">Pipeline<span class="badge"></span></div>
+        <div class="nav-item">Products</div>
+        <div class="nav-item">Clients</div>
+      </div>
+      <div class="nav-utility">
+        <div class="nav-u" title="Search (⌘K)">⌕</div>
+        <div class="nav-u" title="Notifications"><span style="font-size:0.8rem">◎</span><span class="u-count">3</span></div>
+        <div class="nav-u" title="Messages"><span style="font-size:0.8rem">◆</span><span class="u-count">2</span></div>
+        <div class="nav-u profile"><div class="nav-av" style="width:28px;height:28px;font-size:0.55rem">LK</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Explanation grid -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--su);margin-top:1rem">
+    <div style="padding:1.25rem 0.75rem 1.25rem 0;border-bottom:1px solid var(--su)">
+      <div class="lbl" style="font-size:0.85rem;margin-bottom:0.35rem">Today</div>
+      <p style="font-size:0.72rem;color:var(--bd);line-height:1.55;margin-bottom:0.5rem">The morning scan. What needs attention right now — new leads, unread messages, overdue decisions, upcoming milestones, deliveries arriving today, weekly updates due.</p>
+      <p style="font-size:0.68rem;color:var(--ao);line-height:1.45;font-style:italic">Replaces the "Dashboard" concept. Not metrics — action items. What do I do first today?</p>
+    </div>
+    <div style="padding:1.25rem 0.75rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)">
+      <div class="lbl" style="font-size:0.85rem;margin-bottom:0.35rem">Pipeline</div>
+      <p style="font-size:0.72rem;color:var(--bd);line-height:1.55;margin-bottom:0.5rem">The entire lead-to-project lifecycle in one view. Leads, proposals, active projects, completed projects — all stages of the same pipeline. Sub-filtered by stage.</p>
+      <p style="font-size:0.68rem;color:var(--ao);line-height:1.45;font-style:italic">Replaces separate "Leads" + "Proposals" + "Projects" items. A lead IS a project at the earliest stage. A proposal IS a project being defined.</p>
+    </div>
+    <div style="padding:1.25rem 0.75rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)">
+      <div class="lbl" style="font-size:0.85rem;margin-bottom:0.35rem">Products</div>
+      <p style="font-size:0.72rem;color:var(--bd);line-height:1.55;margin-bottom:0.5rem">The full product world — catalog browsing, capture queue from the Chrome extension, teaching sessions, Aesthete Engine intelligence, and product detail pages.</p>
+      <p style="font-size:0.68rem;color:var(--ao);line-height:1.45;font-style:italic">Gets its own primary nav slot because product work is a daily workflow, not a sub-task. Searching for a coffee table is a 20-minute activity, not a sidebar click.</p>
+    </div>
+    <div style="padding:1.25rem 0 1.25rem 0.75rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)">
+      <div class="lbl" style="font-size:0.85rem;margin-bottom:0.35rem">Clients</div>
+      <p style="font-size:0.72rem;color:var(--bd);line-height:1.55;margin-bottom:0.5rem">The relationship directory. Client profiles, reviews, nurture queue, referral tracking. The people view — who are my clients, how are the relationships, who needs attention.</p>
+      <p style="font-size:0.68rem;color:var(--ao);line-height:1.45;font-style:italic">Messages are NOT here. They're promoted to the utility bar. Clients is about relationship management, not real-time communication.</p>
+    </div>
+  </div>
+
+  <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+  <!-- Utility bar explanation -->
+  <div class="h3" style="margin-bottom:0.75rem">The Utility Bar (Always Visible)</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1.5rem">
+    <div><div class="lbl" style="font-size:0.82rem;margin-bottom:0.2rem">⌕ Search</div><p style="font-size:0.7rem;color:var(--bd);line-height:1.5">Global search across projects, products, clients, and documents. Opens as a command palette (⌘K). Type anything — the system finds it.</p></div>
+    <div><div class="lbl" style="font-size:0.82rem;margin-bottom:0.2rem">◎ Notifications</div><p style="font-size:0.7rem;color:var(--bd);line-height:1.5">Deliveries, vendor confirmations, client actions (signed, viewed), system alerts. Badge shows unread count. Opens as dropdown.</p></div>
+    <div><div class="lbl" style="font-size:0.82rem;margin-bottom:0.2rem">◆ Messages</div><p style="font-size:0.7rem;color:var(--bd);line-height:1.5">All client conversations. Unread count always visible. Opens message panel from any page — respond without leaving current context.</p></div>
+    <div><div class="lbl" style="font-size:0.82rem;margin-bottom:0.2rem">LK Profile</div><p style="font-size:0.7rem;color:var(--bd);line-height:1.5">Dropdown: Earnings, Portfolio, Time Tracking, Settings, Help. Business tools accessed occasionally, not constantly.</p></div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== CONTEXTUAL SUB-NAVIGATION ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">04 — Contextual Sub-Navigation</p>
+  <h2>Each zone gets <em>its own filter bar.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">Below the top bar, each primary zone shows a contextual sub-navigation that filters its content. These are not tabs — they're pipeline stage filters. The content below changes; the page doesn't reload. Breadcrumbs appear when you're deep inside a specific item.</p>
+
+  <!-- Pipeline sub-nav -->
+  <div class="nav-mock">
+    <div class="nav-new">
+      <div class="nav-logo">Patina</div>
+      <div class="nav-primary"><div class="nav-item">Today</div><div class="nav-item on">Pipeline<span class="badge"></span></div><div class="nav-item">Products</div><div class="nav-item">Clients</div></div>
+      <div class="nav-utility"><div class="nav-u">⌕</div><div class="nav-u"><span style="font-size:0.8rem">◎</span><span class="u-count">3</span></div><div class="nav-u"><span style="font-size:0.8rem">◆</span><span class="u-count">2</span></div><div class="nav-u profile"><div class="nav-av" style="width:28px;height:28px;font-size:0.55rem">LK</div></div></div>
+    </div>
+    <div class="subnav">
+      <div class="subnav-item on">All<span class="ct">14</span></div>
+      <div class="subnav-item" style="color:var(--db)"><span class="pipe-dot" style="background:var(--db)"></span>Leads<span class="ct">3</span></div>
+      <div class="subnav-item" style="color:var(--gh)"><span class="pipe-dot" style="background:var(--gh)"></span>Proposals<span class="ct">4</span></div>
+      <div class="subnav-item" style="color:var(--cl)"><span class="pipe-dot" style="background:var(--cl)"></span>Active<span class="ct">5</span></div>
+      <div class="subnav-item" style="color:var(--sa)"><span class="pipe-dot" style="background:var(--sa)"></span>Completed<span class="ct">2</span></div>
+      <div class="subnav-right"><span class="ms">View:</span><span style="font-family:var(--fb);font-size:0.68rem;color:var(--tx);cursor:default">List</span><span style="font-family:var(--fb);font-size:0.68rem;color:var(--mu);cursor:default">Timeline</span></div>
+    </div>
+    <div style="padding:1rem 1.25rem;background:var(--bg);min-height:80px"><span class="ls">Pipeline list shows all 14 projects at every stage — leads through completed — with colored stage dots, client name, value, and next action needed.</span></div>
+  </div>
+
+  <!-- Products sub-nav -->
+  <div class="nav-mock">
+    <div class="nav-new">
+      <div class="nav-logo">Patina</div>
+      <div class="nav-primary"><div class="nav-item">Today</div><div class="nav-item">Pipeline</div><div class="nav-item on">Products</div><div class="nav-item">Clients</div></div>
+      <div class="nav-utility"><div class="nav-u">⌕</div><div class="nav-u"><span style="font-size:0.8rem">◎</span></div><div class="nav-u"><span style="font-size:0.8rem">◆</span><span class="u-count">2</span></div><div class="nav-u profile"><div class="nav-av" style="width:28px;height:28px;font-size:0.55rem">LK</div></div></div>
+    </div>
+    <div class="subnav">
+      <div class="subnav-item on">Catalog<span class="ct">847</span></div>
+      <div class="subnav-item">Capture Queue<span class="ct">5</span></div>
+      <div class="subnav-item">Teaching<span class="ct">12</span></div>
+      <div class="subnav-item">Aesthete Engine</div>
+      <div class="subnav-right"><span style="font-family:var(--fb);font-size:0.68rem;color:var(--cl);cursor:default">+ Add Product</span></div>
+    </div>
+    <div style="padding:1rem 1.25rem;background:var(--bg);min-height:80px"><span class="ls">Product catalog with full Curated Shelf tiers (Maker Pieces, Designer Picks, Sourced). Teaching and Engine work accessible in sub-nav — one click from the catalog.</span></div>
+  </div>
+
+  <!-- Clients sub-nav -->
+  <div class="nav-mock">
+    <div class="nav-new">
+      <div class="nav-logo">Patina</div>
+      <div class="nav-primary"><div class="nav-item">Today</div><div class="nav-item">Pipeline</div><div class="nav-item">Products</div><div class="nav-item on">Clients</div></div>
+      <div class="nav-utility"><div class="nav-u">⌕</div><div class="nav-u"><span style="font-size:0.8rem">◎</span></div><div class="nav-u"><span style="font-size:0.8rem">◆</span><span class="u-count">2</span></div><div class="nav-u profile"><div class="nav-av" style="width:28px;height:28px;font-size:0.55rem">LK</div></div></div>
+    </div>
+    <div class="subnav">
+      <div class="subnav-item on">All Clients<span class="ct">34</span></div>
+      <div class="subnav-item">Reviews<span class="ct">11</span></div>
+      <div class="subnav-item">Nurture Queue<span class="ct">4</span></div>
+      <div class="subnav-item">Decisions<span class="ct">8</span></div>
+      <div class="subnav-right"><span style="font-family:var(--fb);font-size:0.68rem;color:var(--cl);cursor:default">+ Add Client</span></div>
+    </div>
+    <div style="padding:1rem 1.25rem;background:var(--bg);min-height:80px"><span class="ls">Client directory with lifecycle stage filters. Decisions dashboard accessible here — all pending client decisions across all projects in one view.</span></div>
+  </div>
+
+  <!-- Deep-page breadcrumb example -->
+  <div class="nav-mock">
+    <div class="nav-new">
+      <div class="nav-logo">Patina</div>
+      <div class="nav-primary"><div class="nav-item">Today</div><div class="nav-item on">Pipeline</div><div class="nav-item">Products</div><div class="nav-item">Clients</div></div>
+      <div class="nav-utility"><div class="nav-u">⌕</div><div class="nav-u"><span style="font-size:0.8rem">◎</span></div><div class="nav-u"><span style="font-size:0.8rem">◆</span><span class="u-count">2</span></div><div class="nav-u profile"><div class="nav-av" style="width:28px;height:28px;font-size:0.55rem">LK</div></div></div>
+    </div>
+    <div class="subnav">
+      <div style="font-family:var(--fm);font-size:0.58rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);display:flex;align-items:center;gap:0.35rem"><a style="color:var(--cl);text-decoration:none;cursor:default">Pipeline</a><span style="opacity:0.4">→</span><a style="color:var(--cl);text-decoration:none;cursor:default">Active</a><span style="opacity:0.4">→</span><span style="color:var(--tx)">Chen Residence</span><span style="opacity:0.4">→</span><span>Procurement</span></div>
+      <div class="subnav-right"><span style="font-family:var(--fb);font-size:0.68rem;color:var(--mu);cursor:default">Edit Mode</span><span style="font-family:var(--fb);font-size:0.68rem;color:var(--cl);cursor:default">Client View</span></div>
+    </div>
+    <div style="padding:1rem 1.25rem;background:var(--bg);min-height:80px"><span class="ls">Inside a specific project, the sub-nav becomes a breadcrumb trail. Pipeline highlighted in top bar. "Edit Mode / Client View" toggle accessible from the breadcrumb bar.</span></div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== MOBILE ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">05 — Mobile Navigation</p>
+  <h2>Four tabs at the bottom. <em>Messages always visible.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">On mobile, the four primary zones become bottom tab bar icons. Messages gets a fifth tab because it's the most time-sensitive action on mobile — Leah needs to respond to a client decision while standing in the paint aisle. Search is a pull-down gesture from any screen. Notifications live under the bell in Today.</p>
+
+  <div style="display:flex;gap:2rem;justify-content:center;flex-wrap:wrap">
+    <!-- Mobile frame -->
+    <div class="mobile-frame">
+      <div class="mobile-status"><span></span></div>
+      <div class="mobile-content">
+        <div style="font-family:var(--fd);font-weight:400;font-size:1.3rem;color:var(--tx);margin-bottom:0.25rem">Good morning, Leah</div>
+        <div class="ls" style="margin-bottom:1.25rem">Tuesday, March 28</div>
+        <div style="padding:0.75rem;border:1px solid var(--su);border-radius:6px;margin-bottom:0.5rem"><div class="ms" style="color:var(--te);margin-bottom:0.15rem">Needs Attention</div><div style="font-family:var(--fb);font-size:0.78rem;color:var(--tx)">Rug decision overdue — Chen Residence</div></div>
+        <div style="padding:0.75rem;border:1px solid var(--su);border-radius:6px;margin-bottom:0.5rem"><div class="ms" style="color:var(--db);margin-bottom:0.15rem">New Lead</div><div style="font-family:var(--fb);font-size:0.78rem;color:var(--tx)">Maria Gonzalez · Full home · $48k</div></div>
+        <div style="padding:0.75rem;border:1px solid var(--su);border-radius:6px;margin-bottom:0.5rem"><div class="ms" style="color:var(--sa);margin-bottom:0.15rem">Arriving Today</div><div style="font-family:var(--fb);font-size:0.78rem;color:var(--tx)">Nordic Atelier dining table → Chen</div></div>
+      </div>
+      <div class="mobile-tabs">
+        <div class="mobile-tab on"><div class="mt-icon">◉</div><div class="mt-label">Today</div></div>
+        <div class="mobile-tab"><div class="mt-icon">▣</div><div class="mt-label">Pipeline</div><div class="mt-badge"></div></div>
+        <div class="mobile-tab"><div class="mt-icon">◇</div><div class="mt-label">Products</div></div>
+        <div class="mobile-tab"><div class="mt-icon">◎</div><div class="mt-label">Clients</div></div>
+        <div class="mobile-tab"><div class="mt-icon">◆</div><div class="mt-label">Messages</div><div class="mt-badge"></div></div>
+      </div>
+      <div class="mobile-home"><span></span></div>
+    </div>
+
+    <!-- Mobile explanation -->
+    <div style="max-width:360px">
+      <div class="h3" style="margin-bottom:0.75rem">Mobile Differences</div>
+      <div style="font-family:var(--fb);font-size:0.78rem;color:var(--bd);line-height:1.65;margin-bottom:0.75rem"><strong>Messages gets its own tab.</strong> On desktop, Messages is a utility-bar icon. On mobile, it's a full tab because responding to clients is the most common mobile action. Leah checks messages between site visits, in the car, at the store.</div>
+      <div style="font-family:var(--fb);font-size:0.78rem;color:var(--bd);line-height:1.65;margin-bottom:0.75rem"><strong>Search is pull-down.</strong> Pull down from the top of any screen to reveal the search bar. No icon in the tab bar — that space is too valuable.</div>
+      <div style="font-family:var(--fb);font-size:0.78rem;color:var(--bd);line-height:1.65;margin-bottom:0.75rem"><strong>Notifications fold into Today.</strong> The Today tab already shows what needs attention. Notifications stream into the same feed — no separate bell icon needed.</div>
+      <div style="font-family:var(--fb);font-size:0.78rem;color:var(--bd);line-height:1.65"><strong>Profile lives in Today's header.</strong> Tap the greeting ("Good morning, Leah") to access Earnings, Portfolio, Settings. Not a separate tab.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== PROFILE DROPDOWN ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">06 — Profile Menu</p>
+  <h2>Business tools, <em>not the main event.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">Earnings, Portfolio, Time Tracking, and Settings are used weekly, not hourly. They don't deserve primary navigation slots. They live under the profile avatar as a dropdown — always accessible, never competing with the active work for attention.</p>
+
+  <div class="nav-mock">
+    <div class="nav-new">
+      <div class="nav-logo">Patina</div>
+      <div class="nav-primary"><div class="nav-item">Today</div><div class="nav-item">Pipeline</div><div class="nav-item">Products</div><div class="nav-item">Clients</div></div>
+      <div class="nav-utility">
+        <div class="nav-u">⌕</div>
+        <div class="nav-u"><span style="font-size:0.8rem">◎</span></div>
+        <div class="nav-u"><span style="font-size:0.8rem">◆</span></div>
+        <div class="nav-u profile" style="position:relative">
+          <div class="nav-av" style="width:28px;height:28px;font-size:0.55rem;border:2px solid var(--cl)">LK</div>
+          <!-- Dropdown -->
+          <div class="dd-mock" style="position:relative;top:0;margin-top:0.5rem;width:100%">
+            <div style="padding:0.6rem 1rem;border-bottom:1px solid var(--su)"><div class="lbl" style="font-size:0.8rem">Leah Kirkland</div><div class="ls" style="font-size:0.68rem">Middlewest Studio</div></div>
+            <div class="dd-item" style="margin-top:0.25rem">Earnings<span class="ms" style="color:var(--sa)">$5.2k this month</span></div>
+            <div class="dd-item">Portfolio</div>
+            <div class="dd-item">Time Tracking<span class="ms">47.5h this week</span></div>
+            <div class="dd-div"></div>
+            <div class="dd-item">Settings</div>
+            <div class="dd-item">Help & Resources</div>
+            <div class="dd-div"></div>
+            <div class="dd-item" style="color:var(--mu)">Sign Out</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== CLICK COUNTS ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">07 — Click Counts</p>
+  <h2>Every common task, <em>measured in taps.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">Good navigation isn't about having fewer items — it's about fewer clicks to reach the thing you need most often. Here's how the new navigation compares to the old model for the ten most common designer tasks.</p>
+
+  <div style="display:grid;grid-template-columns:1fr 65px 65px;gap:0.5rem;padding:0.35rem 0;border-bottom:1px solid var(--su);margin-bottom:0.25rem"><span class="ms">Task</span><span class="ms" style="text-align:center">Old</span><span class="ms" style="text-align:center;color:var(--sa)">New</span></div>
+
+  <div style="display:grid;grid-template-columns:1fr 65px 65px;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline"><div style="font-family:var(--fb);font-size:0.82rem;color:var(--tx)">See what needs attention today</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--mu)">1</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--sa);font-weight:600">1</div></div>
+  <div style="display:grid;grid-template-columns:1fr 65px 65px;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline"><div style="font-family:var(--fb);font-size:0.82rem;color:var(--tx)">Review a new lead</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--mu)">2</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--sa);font-weight:600">2</div></div>
+  <div style="display:grid;grid-template-columns:1fr 65px 65px;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline"><div style="font-family:var(--fb);font-size:0.82rem;color:var(--tx)">Open an active project</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--mu)">2</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--sa);font-weight:600">2</div></div>
+  <div style="display:grid;grid-template-columns:1fr 65px 65px;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline"><div style="font-family:var(--fb);font-size:0.82rem;color:var(--tx)">Respond to a client message</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--te)">3</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--sa);font-weight:600">1</div></div>
+  <div style="display:grid;grid-template-columns:1fr 65px 65px;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline"><div style="font-family:var(--fb);font-size:0.82rem;color:var(--tx)">Search for a product</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--te)">3</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--sa);font-weight:600">1</div></div>
+  <div style="display:grid;grid-template-columns:1fr 65px 65px;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline"><div style="font-family:var(--fb);font-size:0.82rem;color:var(--tx)">Start a teaching session</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--te)">3</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--sa);font-weight:600">2</div></div>
+  <div style="display:grid;grid-template-columns:1fr 65px 65px;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline"><div style="font-family:var(--fb);font-size:0.82rem;color:var(--tx)">Write a new proposal</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--te)">3</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--sa);font-weight:600">2</div></div>
+  <div style="display:grid;grid-template-columns:1fr 65px 65px;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline"><div style="font-family:var(--fb);font-size:0.82rem;color:var(--tx)">Check project budget</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--mu)">2</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--sa);font-weight:600">2</div></div>
+  <div style="display:grid;grid-template-columns:1fr 65px 65px;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline"><div style="font-family:var(--fb);font-size:0.82rem;color:var(--tx)">Check earnings this month</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--mu)">2</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--sa);font-weight:600">2</div></div>
+  <div style="display:grid;grid-template-columns:1fr 65px 65px;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid var(--su);align-items:baseline"><div style="font-family:var(--fb);font-size:0.82rem;color:var(--tx)">View all pending decisions</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--te)">4</div><div style="font-family:var(--fd);font-size:0.85rem;text-align:center;color:var(--sa);font-weight:600">2</div></div>
+
+  <p style="font-family:var(--fb);font-size:0.78rem;color:var(--sa);margin-top:0.75rem;font-weight:500">Average across 10 tasks: Old = 2.5 clicks · New = 1.7 clicks · 32% fewer taps to reach the work.</p>
+</div>
+</section>
+
+<!-- ============================== PULL QUOTE ============================== -->
+<section>
+<div class="nr">
+  <div class="pq"><blockquote>"A lead is a project you haven't started yet. A proposal is a project you're defining. An active project is a proposal someone signed. A completed project is one you're closing. They're not four separate things — they're one pipeline at different stages."</blockquote><cite>Navigation Principle — One Pipeline, Not Four Destinations</cite></div>
+</div>
+</section>
+
+<!-- ============================== CLOSING ============================== -->
+<section class="fade">
+<div class="w">
+  <div class="st"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <h2 style="margin-top:2rem;margin-bottom:1.5rem">Why this works <em>better.</em></h2>
+  <div class="two" style="gap:2rem">
+    <div>
+      <p class="bd" style="margin-bottom:1.25rem"><strong>Pipeline unifies the lifecycle.</strong> Leads, proposals, active projects, and completed projects are the same list filtered by stage. A lead you accept today appears as a proposal draft tomorrow and an active project next month without ever changing navigation contexts. The colored dots (blue → gold → clay → sage) show progression at a glance.</p>
+      <p class="bd"><strong>Products earn their own lane.</strong> In the old model, products had no home — they were accessed from within projects or proposals as a sidebar action. But real product work is a substantial daily activity: browsing the catalog, classifying new imports, teaching the Aesthete Engine, reviewing match corrections. It deserves a primary nav position with its own sub-navigation: Catalog, Capture Queue, Teaching, Aesthete Engine.</p>
+    </div>
+    <div>
+      <p class="bd" style="margin-bottom:1.25rem"><strong>Messages are ambient, not buried.</strong> Client communication is the most time-sensitive action in the portal. Burying it under "Clients" added an extra click to every message response. Promoting it to the utility bar means Leah can respond from any page — while looking at a product, while reviewing a project, while on the Today dashboard. The unread count is always visible. The message panel slides open without losing context.</p>
+      <p class="bd"><strong>Business tools are in the right place.</strong> Earnings, Portfolio, Time Tracking, and Settings aren't daily-driver tools. They're checked weekly or when a specific question arises. The profile dropdown puts them 2 clicks away — accessible but not consuming primary navigation real estate that the actual work needs.</p>
+    </div>
+  </div>
+
+  <div class="sm" style="margin-top:3rem"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2rem;flex-wrap:wrap;gap:1rem">
+    <div><div style="font-family:var(--fd);font-weight:400;font-size:1rem">Patina</div><div style="font-family:var(--fd);font-style:italic;font-size:0.78rem;color:var(--ao)">Where Time Adds Value</div></div>
+    <div class="ms">Navigation Redesign v1.0 · March 2026 · Kody & Leah</div>
+  </div>
+</div>
+</section>
+
+<script>
+const f=document.querySelectorAll('.fade');
+const o=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('vis')})},{threshold:0.08,rootMargin:'0px 0px -40px 0px'});
+f.forEach(s=>o.observe(s));
+</script>
+</body>
+</html>

@@ -15,10 +15,10 @@ import {
 import { useMemo, useState, useTransition } from 'react';
 
 import { postMessageAction, submitApprovalAction } from '@/app/projects/[projectId]/actions';
+import { MilestoneDecisions } from './milestone-decisions';
 import {
   formatCurrency,
   formatDate,
-  formatPercentage,
   formatRelativeTime,
   formatStatusLabel,
   statusAccentClass,
@@ -140,68 +140,68 @@ export function MilestoneCard({ projectId, milestone, isExpanded, onToggle }: Mi
 
   return (
     <article className="relative">
+      {/* Collapsed — typography-first, no card container */}
       <button
         type="button"
-        className="group relative flex w-full flex-col gap-4 rounded-3xl border border-[var(--color-border)] bg-[var(--color-card)]/90 px-6 py-5 text-left shadow-lg transition hover:border-[var(--color-accent)] focus-visible:focus-ring"
+        className="group relative flex w-full flex-col gap-3 border-b border-[var(--border-default)] py-6 text-left transition hover:bg-[rgba(196,165,123,0.03)]"
         onClick={onToggle}
         aria-expanded={isExpanded}
       >
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="flex items-start gap-4">
+          <div className="flex items-start gap-3">
             <span
               aria-hidden
-              className={`mt-1 flex h-3 w-3 flex-none rounded-full ${statusDot} shadow-inner shadow-black/20 transition group-hover:scale-110`}
+              className={`mt-2 flex h-2.5 w-2.5 flex-none rounded-full ${statusDot}`}
             />
-            <div className="flex flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs uppercase tracking-[0.2em] text-[var(--color-muted)]">
+            <div className="flex flex-col gap-1.5">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="type-meta">
                   Milestone {milestone.index + 1}
                 </span>
                 {milestone.phase ? (
-                  <span className="text-xs text-[var(--color-muted)]">{milestone.phase}</span>
+                  <span className="type-meta">· {milestone.phase}</span>
                 ) : null}
               </div>
-              <h3 className="font-[var(--font-playfair)] text-xl text-[var(--color-text)]">
+              <h3 className="font-heading text-xl text-[var(--text-primary)]">
                 {milestone.title}
               </h3>
               {milestone.description ? (
-                <p className="max-w-2xl text-sm text-[var(--color-muted)]">
+                <p className="type-body-small max-w-2xl">
                   {milestone.description}
                 </p>
               ) : null}
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 font-medium ${statusClass}`}>
-                  <Circle className="h-3 w-3" />
+              <div className="flex flex-wrap items-center gap-3 mt-1">
+                <span className={`type-meta font-medium ${statusClass}`}>
                   {formatStatusLabel(milestone.status)}
                 </span>
                 {summary.targetDate ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white/70 px-3 py-1 text-[var(--color-muted)]">
+                  <span className="type-meta flex items-center gap-1">
                     <CalendarDays className="h-3 w-3" />
                     {summary.targetDate}
                   </span>
                 ) : null}
-                {summary.relative ? <span className="text-[var(--color-muted)]">({summary.relative})</span> : null}
+                {summary.relative ? <span className="type-meta">({summary.relative})</span> : null}
               </div>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-2 text-sm">
-            <div className="flex items-center gap-2 text-[var(--color-muted)]">
-              <span className="font-medium text-[var(--color-text)]">{formatPercentage(milestone.progressPercentage)}</span>
-              <div className="h-2 w-32 overflow-hidden rounded-full bg-white/60">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-text)] transition-[width] duration-300"
-                  style={{ width: `${Math.max(6, Math.round(milestone.progressPercentage))}%` }}
-                />
-              </div>
+
+          {/* Progress numeral + chevron */}
+          <div className="flex items-center gap-4 md:flex-col md:items-end md:gap-2">
+            <div className="flex items-baseline gap-1">
+              <span className="font-heading text-2xl font-bold text-[var(--text-primary)]">
+                {Math.round(milestone.progressPercentage)}
+              </span>
+              <span className="type-meta-small">%</span>
             </div>
             <ChevronDown
-              className={`h-5 w-5 text-[var(--color-muted)] transition ${isExpanded ? 'rotate-180' : ''}`}
+              className={`h-4 w-4 text-[var(--text-muted)] transition ${isExpanded ? 'rotate-180' : ''}`}
               aria-hidden
             />
           </div>
         </div>
       </button>
 
+      {/* Expanded details — left border accent, no card */}
       <AnimatePresence initial={false}>
         {isExpanded ? (
           <motion.div
@@ -210,28 +210,29 @@ export function MilestoneCard({ projectId, milestone, isExpanded, onToggle }: Mi
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.25, ease: 'easeInOut' }}
-            className="mt-2 rounded-3xl border border-[var(--color-border)] bg-white px-6 py-6 shadow-inner"
+            className="border-l-2 border-[var(--accent-primary)] ml-1 pl-8 pb-8 pt-4"
           >
             <div className="grid gap-8 md:grid-cols-[2fr_1fr]">
               <div className="space-y-8">
+                {/* Checklist */}
                 {milestone.checklist.length > 0 ? (
                   <section>
-                    <h4 className="font-semibold text-[var(--color-text)]">Progress checklist</h4>
-                    <ul className="mt-3 space-y-3">
+                    <h4 className="type-meta mb-3">Progress checklist</h4>
+                    <ul className="space-y-0">
                       {milestone.checklist.map((item) => (
                         <li
                           key={item.id}
-                          className="flex items-start gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-canvas)] px-3 py-2 text-sm"
+                          className="flex items-start gap-3 border-b border-[var(--border-subtle)] py-2.5 text-sm"
                         >
                           {item.completed ? (
-                            <CheckCircle2 className="mt-1 h-5 w-5 text-emerald-500" aria-hidden />
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 text-patina-sage" aria-hidden />
                           ) : (
-                            <Circle className="mt-1 h-5 w-5 text-[var(--color-border)]" aria-hidden />
+                            <Circle className="mt-0.5 h-4 w-4 text-[var(--border-default)]" aria-hidden />
                           )}
                           <div>
-                            <p className="text-[var(--color-text)]">{item.label}</p>
+                            <p className="text-[var(--text-primary)]">{item.label}</p>
                             {item.completedAt ? (
-                              <p className="text-xs text-[var(--color-muted)]">
+                              <p className="type-meta-small mt-0.5">
                                 Wrapped {formatRelativeTime(item.completedAt) ?? ''}
                               </p>
                             ) : null}
@@ -242,28 +243,29 @@ export function MilestoneCard({ projectId, milestone, isExpanded, onToggle }: Mi
                   </section>
                 ) : null}
 
+                {/* Documents */}
                 {milestone.documents.length > 0 ? (
                   <section>
-                    <h4 className="font-semibold text-[var(--color-text)]">Documents & deliverables</h4>
-                    <ul className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <h4 className="type-meta mb-3">Documents & deliverables</h4>
+                    <ul className="space-y-0">
                       {milestone.documents.map((document) => (
                         <li key={document.id}>
                           <a
                             href={document.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex h-full flex-col gap-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-canvas)] px-4 py-3 text-sm text-[var(--color-text)] shadow-sm transition hover:border-[var(--color-accent)] focus-visible:focus-ring"
+                            className="flex items-start justify-between gap-3 border-b border-[var(--border-subtle)] py-3 transition hover:bg-[rgba(196,165,123,0.04)]"
                           >
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="truncate font-medium">{document.title}</span>
-                              <FileText className="h-4 w-4 text-[var(--color-muted)]" aria-hidden />
+                            <div className="min-w-0">
+                              <span className="text-sm font-medium text-[var(--text-primary)]">{document.title}</span>
+                              {document.description ? (
+                                <p className="type-body-small mt-0.5 line-clamp-2">{document.description}</p>
+                              ) : null}
                             </div>
-                            {document.description ? (
-                              <p className="line-clamp-2 text-xs text-[var(--color-muted)]">{document.description}</p>
-                            ) : null}
-                            <div className="flex items-center justify-between text-xs text-[var(--color-muted)]">
-                              <span>{document.uploadedBy ?? 'Patina Team'}</span>
-                              {document.uploadedAt ? <span>{formatDate(document.uploadedAt)}</span> : null}
+                            <div className="flex flex-col items-end gap-0.5 shrink-0">
+                              <FileText className="h-4 w-4 text-[var(--text-muted)]" aria-hidden />
+                              <span className="type-meta-small">{document.uploadedBy ?? 'Patina Team'}</span>
+                              {document.uploadedAt ? <span className="type-meta-small">{formatDate(document.uploadedAt)}</span> : null}
                             </div>
                           </a>
                         </li>
@@ -272,66 +274,67 @@ export function MilestoneCard({ projectId, milestone, isExpanded, onToggle }: Mi
                   </section>
                 ) : null}
 
+                {/* Conversation */}
                 <section>
-                  <h4 className="font-semibold text-[var(--color-text)]">Conversation</h4>
-                  <div className="mt-3 rounded-3xl border border-[var(--color-border)] bg-white/90 p-2 shadow-inner">
+                  <h4 className="type-meta mb-3">Conversation</h4>
+                  <div className="border border-[var(--border-default)] rounded-[3px] overflow-hidden">
                     <MessageThread
-                      className="h-64 rounded-[1.5rem] border border-transparent"
+                      className="h-64 rounded-none border-0"
                       messages={conversationMessages}
                       currentUserId={conversationUserId}
                       showDaySeparators={false}
                       emptyState={
-                        <p className="rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-canvas)] px-4 py-6 text-sm text-[var(--color-muted)]">
+                        <p className="type-body-small px-4 py-6 text-center">
                           There are no messages yet. Use the composer below to ask a question or share feedback.
                         </p>
                       }
                     />
                   </div>
-                  <div className="mt-4 rounded-3xl border border-[var(--color-border)] bg-[var(--color-canvas)]/70 p-4">
-                    <div className="flex items-center gap-2 text-sm font-medium text-[var(--color-text)]">
-                      <MessageCircle className="h-4 w-4" />
+                  <div className="mt-4 border-t border-[var(--border-default)] pt-4">
+                    <div className="flex items-center gap-2 type-meta mb-3">
+                      <MessageCircle className="h-3.5 w-3.5" />
                       Send a message to your Patina team
                     </div>
-                    <div className="mt-2 rounded-2xl border border-[var(--color-border)] bg-white/90 p-3">
-                      <MessageComposer
-                        disabled={!canPostMessage}
-                        busy={messagePending}
-                        placeholder={
-                          canPostMessage
-                            ? 'Share feedback, ask a question, or celebrate this milestone.'
-                            : 'Messaging is unavailable for this milestone.'
-                        }
-                        onSend={({ body }) => handlePostMessage(body)}
-                      />
-                    </div>
-                    <div className="mt-3 flex items-center justify-between text-xs text-[var(--color-muted)]">
+                    <MessageComposer
+                      disabled={!canPostMessage}
+                      busy={messagePending}
+                      placeholder={
+                        canPostMessage
+                          ? 'Share feedback, ask a question, or celebrate this milestone.'
+                          : 'Messaging is unavailable for this milestone.'
+                      }
+                      onSend={({ body }) => handlePostMessage(body)}
+                    />
+                    <div className="mt-2 flex items-center justify-between">
                       {error ? (
-                        <span className="text-[var(--color-danger)]">{error}</span>
+                        <span className="type-meta text-patina-terracotta">{error}</span>
                       ) : (
-                        <span>Messages are shared with the Patina delivery team.</span>
+                        <span className="type-meta-small">Messages are shared with the Patina delivery team.</span>
                       )}
                     </div>
                   </div>
                 </section>
               </div>
 
-              <aside className="space-y-6">
+              {/* Sidebar */}
+              <aside className="space-y-8">
+                {/* Approval */}
                 {milestone.approval ? (
-                  <section className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-canvas)] px-4 py-4 shadow-inner">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
-                      <AlertTriangle className="h-4 w-4 text-[var(--color-warning)]" />
+                  <section className="border-l-2 border-patina-terracotta pl-4">
+                    <p className="type-meta text-patina-terracotta flex items-center gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5" />
                       Your approval is requested
-                    </div>
+                    </p>
                     {milestone.approval.summary ? (
-                      <p className="mt-2 text-sm text-[var(--color-muted)]">{milestone.approval.summary}</p>
+                      <p className="type-body-small mt-2">{milestone.approval.summary}</p>
                     ) : null}
                     {typeof milestone.approval.totalValue === 'number' ? (
-                      <p className="mt-3 text-sm font-medium text-[var(--color-text)]">
+                      <p className="type-data-large mt-3">
                         {formatCurrency(milestone.approval.totalValue, milestone.approval.currency)}
                       </p>
                     ) : null}
                     {milestone.approval.dueDate ? (
-                      <p className="mt-1 text-xs text-[var(--color-muted)]">
+                      <p className="type-meta mt-2">
                         Decision requested by {formatDate(milestone.approval.dueDate)}
                       </p>
                     ) : null}
@@ -339,7 +342,7 @@ export function MilestoneCard({ projectId, milestone, isExpanded, onToggle }: Mi
                       value={decisionComment}
                       onChange={(event) => setDecisionComment(event.target.value)}
                       placeholder="Share optional feedback or revision notes"
-                      className="mt-3 w-full resize-none rounded-2xl border border-[var(--color-border)] bg-white/90 px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus-visible:focus-ring"
+                      className="mt-4 w-full resize-none rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus-visible:focus-ring"
                       rows={3}
                     />
                     <div className="mt-3 grid gap-2">
@@ -347,7 +350,7 @@ export function MilestoneCard({ projectId, milestone, isExpanded, onToggle }: Mi
                         type="button"
                         onClick={() => handleDecision('approved')}
                         disabled={approvalPending}
-                        className="inline-flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex items-center justify-center gap-2 rounded-[3px] bg-patina-charcoal px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {approvalPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                         Approve milestone
@@ -356,24 +359,30 @@ export function MilestoneCard({ projectId, milestone, isExpanded, onToggle }: Mi
                         type="button"
                         onClick={() => handleDecision('changes_requested')}
                         disabled={approvalPending}
-                        className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--color-border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--color-text)] shadow transition hover:border-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex items-center justify-center gap-2 rounded-[3px] border border-[var(--border-default)] bg-transparent px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {approvalPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4 text-[var(--color-warning)]" />}
+                        {approvalPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4 text-patina-terracotta" />}
                         Request changes
                       </button>
                     </div>
                   </section>
                 ) : null}
 
+                <MilestoneDecisions
+                  projectId={projectId}
+                  phase={milestone.phase ?? milestone.title}
+                />
+
+                {/* Activity moments */}
                 {milestone.messages.length > 0 ? (
-                  <section className="rounded-3xl border border-[var(--color-border)] bg-white px-4 py-4 shadow-inner">
-                    <h5 className="text-sm font-semibold text-[var(--color-text)]">Activity moments</h5>
-                    <ul className="mt-2 space-y-2 text-xs text-[var(--color-muted)]">
+                  <section>
+                    <h5 className="type-meta mb-3">Activity moments</h5>
+                    <ul className="space-y-0">
                       {milestone.messages.slice(0, 3).map((message) => (
-                        <li key={`moment-${message.id}`} className="flex items-start gap-2">
-                          <MessageCircle className="mt-0.5 h-3.5 w-3.5 text-[var(--color-accent)]" />
-                          <span>
-                            <span className="font-medium text-[var(--color-text)]">{message.authorName}</span> shared an update
+                        <li key={`moment-${message.id}`} className="flex items-start gap-2 border-b border-[var(--border-subtle)] py-2">
+                          <MessageCircle className="mt-0.5 h-3.5 w-3.5 text-[var(--accent-primary)]" />
+                          <span className="type-meta-small">
+                            <span className="font-medium text-[var(--text-primary)]">{message.authorName}</span> shared an update
                             <br />
                             {formatRelativeTime(message.createdAt) ?? ''}
                           </span>

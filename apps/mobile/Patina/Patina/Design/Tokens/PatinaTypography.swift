@@ -14,6 +14,7 @@ public enum PatinaTypography {
 
     private static let displayFont = "PlayfairDisplay"
     private static let bodyFont = "Inter"
+    private static let monoFont = "DMMono"
 
     // MARK: - Display Styles (Playfair Display)
 
@@ -25,9 +26,13 @@ public enum PatinaTypography {
 
     public static let h1 = Font.custom(displayFont + "-Medium", size: 32, relativeTo: .title)
 
-    public static let h2 = Font.custom(displayFont + "-Medium", size: 24, relativeTo: .title2)
+    public static let h2 = Font.custom(displayFont + "-Regular", size: 26, relativeTo: .title2)
 
-    public static let h3 = Font.custom(displayFont + "-Medium", size: 20, relativeTo: .title3)
+    public static let h3 = Font.custom(displayFont + "-Regular", size: 24, relativeTo: .title2)
+
+    public static let h4 = Font.custom(displayFont + "-Regular", size: 22, relativeTo: .title3)
+
+    public static let h5 = Font.custom(displayFont + "-Medium", size: 18, relativeTo: .title3)
 
     // MARK: - Headlines
 
@@ -51,16 +56,42 @@ public enum PatinaTypography {
 
     public static let captionMedium = Font.custom(bodyFont + "-SemiBold", size: 12, relativeTo: .caption)
 
+    // MARK: - Mono Styles (DM Mono) — Metadata, Labels, Tags
+
+    /// Standard metadata — 10px, categories, tags
+    public static let mono = Font.custom(monoFont + "-Regular", size: 10, relativeTo: .caption2)
+
+    /// Small metadata — 9px, timestamps, match percentages
+    public static let monoSmall = Font.custom(monoFont + "-Regular", size: 9, relativeTo: .caption2)
+
+    /// Tiny metadata — 8px, stat labels, step indicators
+    public static let monoTiny = Font.custom(monoFont + "-Regular", size: 8, relativeTo: .caption2)
+
+    /// Medium weight mono — 10px, section titles in settings
+    public static let monoMedium = Font.custom(monoFont + "-Medium", size: 10, relativeTo: .caption2)
+
     // MARK: - Special Styles
 
     /// Uppercase tracking for labels
     public static let eyebrow = Font.custom(bodyFont + "-SemiBold", size: 12, relativeTo: .caption)
 
-    /// Italic for Patina's voice
+    /// Italic for Patina's voice — coaching text, quotes
     public static let patinaVoice = Font.custom(displayFont + "-Italic", size: 18, relativeTo: .body)
 
-    /// Wordmark style
-    public static let wordmark = Font.custom(displayFont + "-Medium", size: 18, relativeTo: .headline)
+    /// Large italic — scan coaching text
+    public static let patinaVoiceLarge = Font.custom(displayFont + "-Italic", size: 22, relativeTo: .title3)
+
+    /// Wordmark style — splash screen
+    public static let wordmark = Font.custom(displayFont + "-Medium", size: 38, relativeTo: .largeTitle)
+
+    /// Auth logo
+    public static let authLogo = Font.custom(displayFont + "-Medium", size: 32, relativeTo: .title)
+
+    /// UI action labels
+    public static let uiAction = Font.custom(bodyFont + "-Medium", size: 15, relativeTo: .body)
+
+    /// Small UI labels
+    public static let uiSmall = Font.custom(bodyFont + "-Medium", size: 13, relativeTo: .footnote)
 }
 
 // MARK: - View Modifiers
@@ -87,5 +118,14 @@ extension View {
             .foregroundColor(PatinaColors.Text.muted)
             .textCase(.uppercase)
             .tracking(1.5)
+    }
+
+    /// Apply mono metadata style (DM Mono, uppercase, tracked)
+    public func patinaMono(_ size: Font = PatinaTypography.mono) -> some View {
+        self
+            .font(size)
+            .foregroundColor(PatinaColors.agedOak)
+            .textCase(.uppercase)
+            .tracking(0.5)
     }
 }

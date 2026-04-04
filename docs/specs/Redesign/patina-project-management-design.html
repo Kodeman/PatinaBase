@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — Project Management UX/UI Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;
+--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;
+--bg:var(--ow);--sf:#FFFFFF;--hv:rgba(196,165,123,0.06);
+--tx:var(--ch);--bd:var(--mo);--mu:var(--ao);--su:var(--pe);
+--fd:'Playfair Display',Georgia,serif;--fb:'Inter',-apple-system,sans-serif;--fm:'DM Mono','SF Mono',monospace;
+--ease:cubic-bezier(0.4,0,0.2,1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:16px;scroll-behavior:smooth;background:var(--bg)}
+body{font-family:var(--fb);color:var(--tx);-webkit-font-smoothing:antialiased;line-height:1.6}
+.w{max-width:1120px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}
+.n{max-width:800px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}
+section{padding:clamp(3rem,6vw,6rem) 0}
+h1{font-family:var(--fd);font-weight:400;font-size:clamp(2.2rem,5vw,3.8rem);line-height:1.12;letter-spacing:-0.02em}
+h2,.h2{font-family:var(--fd);font-weight:400;font-size:clamp(1.6rem,3.5vw,2.4rem);line-height:1.2;letter-spacing:-0.02em}
+h3,.h3{font-family:var(--fd);font-weight:500;font-size:1.25rem;line-height:1.35}
+.meta{font-family:var(--fm);font-weight:400;font-size:0.68rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--mu)}
+.meta-s{font-family:var(--fm);font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mu)}
+.lbl{font-family:var(--fb);font-weight:500;font-size:0.95rem;color:var(--tx)}
+.lbl-s{font-family:var(--fb);font-weight:400;font-size:0.82rem;color:var(--mu)}
+.bd{font-family:var(--fb);font-size:0.95rem;line-height:1.7;color:var(--bd);max-width:600px}
+em{font-family:var(--fd);font-style:italic;color:var(--ao)}
+.dlg{font-family:var(--fd);font-weight:700;font-size:2rem;line-height:1;color:var(--tx)}
+.du{font-family:var(--fb);font-size:0.8rem;color:var(--mu);margin-left:0.35rem}
+
+/* Strata */
+.st{display:flex;flex-direction:column;gap:6px;padding:2.5rem 0}.st .s{height:2px;border-radius:1px}.st .s:nth-child(1){width:100%;background:var(--mo)}.st .s:nth-child(2){width:80%;background:var(--cl);opacity:.7}.st .s:nth-child(3){width:60%;background:var(--cl);opacity:.35}
+.stm{display:flex;flex-direction:column;gap:4px;padding:1.5rem 0}.stm .s{height:1.5px;border-radius:1px}.stm .s:nth-child(1){width:60px;background:var(--mo)}.stm .s:nth-child(2){width:48px;background:var(--cl);opacity:.7}.stm .s:nth-child(3){width:36px;background:var(--cl);opacity:.35}
+
+/* Cover */
+.cover{min-height:70vh;display:flex;flex-direction:column;justify-content:flex-end;padding:4rem clamp(1.5rem,5vw,4rem)}
+.cover h1 span{display:block;font-style:italic;color:var(--ao);font-weight:400;font-size:0.55em}
+.cover-sub{font-size:1.05rem;color:var(--bd);max-width:520px;margin:1rem 0 3rem;line-height:1.75}
+.cm{display:flex;gap:3rem;flex-wrap:wrap}.cm-i .meta{margin-bottom:0.2rem}.cm-i p{font-size:0.85rem;color:var(--tx)}
+
+/* Screen Frame */
+.sc{background:var(--sf);border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(44,41,38,0.04),0 8px 32px rgba(44,41,38,0.05);margin:2rem 0}
+.sc-bar{display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:48px;background:var(--sf);border-bottom:1px solid var(--su)}
+.sc-logo{font-family:var(--fd);font-weight:500;font-size:0.72rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--tx)}
+.sc-nav{display:flex;gap:1.2rem}.sc-nav span{font-family:var(--fb);font-size:0.72rem;color:var(--mu)}.sc-nav span.on{color:var(--tx);border-bottom:2px solid var(--cl);padding-bottom:2px}
+.sc-user{display:flex;align-items:center;gap:0.4rem}.sc-av{width:24px;height:24px;border-radius:50%;background:var(--pe);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-weight:500;font-size:0.55rem;color:var(--mo)}
+.sc-bd{padding:clamp(1.5rem,3vw,2.5rem);background:var(--bg);min-height:200px}
+
+/* Shared */
+.ph{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2rem;flex-wrap:wrap;gap:1rem}
+.fi{display:flex;gap:0;border-bottom:1px solid var(--su);margin-bottom:1.5rem}.fi-i{font-family:var(--fb);font-size:0.8rem;color:var(--mu);padding:0.5rem 1rem 0.6rem;border-bottom:2px solid transparent;white-space:nowrap;cursor:default}.fi-i:first-child{padding-left:0}.fi-i.on{color:var(--tx);border-bottom-color:var(--cl)}.fi-i .ct{font-family:var(--fm);font-size:0.58rem;color:var(--mu);margin-left:0.3rem}
+.btn{font-family:var(--fb);font-weight:500;font-size:0.8rem;padding:0.55rem 1.2rem;border:none;border-radius:3px;cursor:default;display:inline-flex;align-items:center;gap:0.4rem}.btn-p{background:var(--ch);color:var(--ow)}.btn-s{background:transparent;color:var(--tx);border:1px solid var(--pe)}.btn-g{background:transparent;color:var(--mu)}.btn-sm{font-size:0.72rem;padding:0.4rem 0.8rem}.btn-cl{background:var(--cl);color:white}
+.tag{display:inline-flex;font-family:var(--fb);font-size:0.72rem;font-weight:500;color:var(--mo);padding:0.25rem 0.7rem;background:var(--ow);border:1px solid var(--pe);border-radius:2px;white-space:nowrap}.tag.on{border-color:var(--cl);color:var(--ch)}
+.bc{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:1.5rem}.bc a{color:var(--cl);text-decoration:none}
+.field{margin-bottom:1.5rem}.fl{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:0.4rem}
+.dr{display:grid;grid-template-columns:110px 1fr;gap:0.75rem;padding:0.3rem 0;font-size:0.85rem}.dr-k{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);padding-top:0.12rem}.dr-v{font-family:var(--fb);color:var(--bd);line-height:1.5}
+.prog{height:3px;background:var(--pe);border-radius:2px;overflow:hidden;width:100%}.prog-f{height:100%;background:var(--cl);border-radius:2px}
+.pq{padding:2.5rem 0;border-top:1px solid var(--su);border-bottom:1px solid var(--su);margin:2rem 0}.pq blockquote{font-family:var(--fd);font-size:clamp(1.2rem,2.5vw,1.8rem);font-weight:400;font-style:italic;line-height:1.45;color:var(--tx);max-width:620px}.pq cite{display:block;font-family:var(--fm);font-size:0.65rem;font-style:normal;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-top:1rem}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:3rem}
+.form-g{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem 2rem}.form-f{display:flex;flex-direction:column;gap:0.35rem}.form-f.full{grid-column:1/-1}.form-f label{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu)}.form-f input,.form-f textarea,.form-f select{font-family:var(--fb);font-size:0.85rem;padding:0.55rem 0.7rem;border:1px solid var(--pe);border-radius:3px;background:var(--sf);color:var(--tx);outline:none}.form-f input:focus,.form-f textarea:focus{border-color:var(--cl)}.form-f textarea{resize:vertical;min-height:80px}.form-f select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238B7355' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 0.7rem center}
+
+/* Phase colors */
+.ph-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:0.5rem;vertical-align:middle}
+.ph-consultation{background:var(--db)}.ph-concept{background:var(--cl)}.ph-refinement{background:var(--ao)}.ph-procurement{background:var(--gh)}.ph-installation{background:var(--te)}.ph-walkthrough{background:var(--sa)}
+
+/* Timeline */
+.timeline{position:relative;padding-left:2rem}.timeline::before{content:'';position:absolute;left:5px;top:10px;bottom:10px;width:2px;background:var(--pe)}
+.tl-item{padding:0.75rem 0;position:relative}.tl-item::before{content:'';position:absolute;left:-2rem;top:1rem;width:12px;height:12px;border-radius:50%;border:2.5px solid var(--pe);background:var(--sf)}
+.tl-item.active::before{border-color:var(--cl);background:var(--cl)}.tl-item.done::before{border-color:var(--sa);background:var(--sa)}.tl-item.upcoming::before{border-color:var(--pe)}
+.tl-name{font-family:var(--fb);font-size:0.9rem}.tl-item.active .tl-name{font-weight:500;color:var(--tx)}.tl-item.done .tl-name{color:var(--mu)}.tl-item.upcoming .tl-name{color:var(--pe);font-weight:300}
+.tl-date{font-family:var(--fm);font-size:0.58rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);margin-top:0.1rem}
+.tl-tasks{margin-top:0.5rem;padding-left:0;list-style:none}.tl-tasks li{font-family:var(--fb);font-size:0.82rem;color:var(--bd);padding:0.25rem 0;display:flex;align-items:baseline;gap:0.5rem}
+.tl-check{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--pe);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:0.55rem;color:var(--sa)}
+.tl-check.done{border-color:var(--sa);background:rgba(122,155,118,0.1)}
+
+/* Project card */
+.pj-item{display:grid;grid-template-columns:1fr auto;gap:1rem;padding:1.15rem 0;border-bottom:1px solid rgba(229,226,221,0.6);cursor:default;transition:background 0.15s var(--ease)}.pj-item:hover{background:var(--hv)}
+.pj-name{font-family:var(--fb);font-weight:500;font-size:0.95rem;color:var(--tx);margin-bottom:0.15rem}
+.pj-client{font-family:var(--fb);font-size:0.82rem;color:var(--mu)}
+.pj-right{text-align:right}.pj-phase{font-family:var(--fm);font-size:0.6rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:0.25rem}
+.pj-budget{font-family:var(--fd);font-weight:600;font-size:1rem;color:var(--tx)}
+
+/* Task item */
+.task{display:grid;grid-template-columns:20px 1fr auto;gap:0.75rem;padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:start}
+.task-cb{width:18px;height:18px;border-radius:3px;border:1.5px solid var(--pe);margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:0.6rem;cursor:default}
+.task-cb.done{border-color:var(--sa);background:rgba(122,155,118,0.1);color:var(--sa)}
+.task-name{font-family:var(--fb);font-size:0.88rem;color:var(--tx)}.task.done .task-name{color:var(--mu);text-decoration:line-through;text-decoration-color:var(--pe)}
+.task-due{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);white-space:nowrap}
+.task-due.overdue{color:var(--te)}
+
+/* Document item */
+.doc-item{display:grid;grid-template-columns:36px 1fr auto;gap:0.75rem;padding:0.65rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:center;cursor:default}
+.doc-icon{width:36px;height:42px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:var(--fm);font-size:0.5rem;text-transform:uppercase;letter-spacing:0.04em}
+.doc-icon.pdf{background:rgba(199,123,110,0.1);color:var(--te)}.doc-icon.img{background:rgba(196,165,123,0.1);color:var(--cl)}.doc-icon.doc{background:rgba(139,156,173,0.1);color:var(--db)}
+.doc-name{font-family:var(--fb);font-weight:500;font-size:0.85rem;color:var(--tx)}
+.doc-meta{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu)}
+
+/* Activity item */
+.act{padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.3)}
+.act-text{font-family:var(--fb);font-size:0.82rem;color:var(--bd);line-height:1.5}
+.act-text strong{font-weight:500;color:var(--tx)}
+.act-time{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);margin-top:0.15rem}
+
+/* Financial row */
+.fin-row{display:grid;grid-template-columns:1fr auto auto;gap:1.5rem;padding:0.55rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline}
+.fin-label{font-family:var(--fb);font-size:0.88rem;color:var(--tx)}
+.fin-budget{font-family:var(--fm);font-size:0.72rem;color:var(--mu);text-align:right}
+.fin-actual{font-family:var(--fd);font-weight:600;font-size:0.95rem;text-align:right}
+.fin-actual.over{color:var(--te)}.fin-actual.under{color:var(--sa)}
+.fin-total{border-top:2px solid var(--su);border-bottom:none;padding-top:0.75rem;margin-top:0.25rem}
+.fin-total .fin-label{font-weight:600}.fin-total .fin-actual{font-size:1.2rem}
+
+/* Score circle */
+.score{width:52px;height:52px;border-radius:50%;border:2.5px solid var(--cl);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.score .n{font-family:var(--fd);font-size:1.2rem;font-weight:700;color:var(--tx);line-height:1}.score .l{font-family:var(--fm);font-size:0.42rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu)}
+
+/* Metrics inline */
+.met-row{display:flex;gap:0;padding-bottom:1.5rem;border-bottom:1px solid var(--su);margin-bottom:2rem}
+.met{padding-right:2rem}.met+.met{padding-left:2rem;border-left:1px solid var(--su)}
+.met-l{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:0.3rem}
+.met-v{font-family:var(--fd);font-size:2rem;font-weight:700;color:var(--tx);line-height:1;margin-bottom:0.2rem}
+.met-c{font-family:var(--fb);font-size:0.72rem}.met-c.up{color:var(--sa)}.met-c.dn{color:var(--te)}.met-c.nu{color:var(--mu)}
+
+/* Responsive */
+@media(max-width:768px){.two{grid-template-columns:1fr}.form-g{grid-template-columns:1fr}.met-row{flex-direction:column;gap:1.5rem}.met+.met{border-left:none;padding-left:0}.cm{flex-direction:column;gap:1rem}}
+
+/* Fade */
+.fade{opacity:0;transform:translateY(16px);transition:opacity 0.7s ease,transform 0.7s ease}.fade.vis{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ============================== COVER ============================== -->
+<div class="cover">
+  <p class="meta" style="margin-bottom:1rem">Patina — Project Management Design</p>
+  <h1>The Opus System<span>Project management pages for the Designer Portal</span></h1>
+  <p class="cover-sub">Every screen a designer touches when creating, managing, and completing design projects. Vertical timelines replace Kanban boards. Financial tracking reads like an invoice. Phase management flows like the work itself — consultation through walkthrough.</p>
+  <div class="st"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div class="cm">
+    <div class="cm-i"><p class="meta">Prepared for</p><p>Kody & Leah</p></div>
+    <div class="cm-i"><p class="meta">Version</p><p>1.0 — March 2026</p></div>
+    <div class="cm-i"><p class="meta">Screens</p><p>9 pages, 4 flows</p></div>
+    <div class="cm-i"><p class="meta">System Name</p><p>Opus — "the orchestrator"</p></div>
+  </div>
+</div>
+
+<!-- ============================== SIX PHASES ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">01 — The Six Phases</p>
+  <h2>A design project is <em>a story in six acts.</em></h2>
+  <p class="bd" style="margin-bottom:2rem">Every project in Patina follows six phases drawn from real interior design workflow — the same phases Leah walks through with Middlewest clients today. The interface doesn't impose structure; it mirrors the work.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:0;border-top:1px solid var(--su)">
+    <div style="padding:1.25rem 1rem 1.25rem 0;border-bottom:1px solid var(--su)">
+      <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.5rem"><span class="ph-dot ph-consultation"></span><span class="meta-s">Phase 1</span></div>
+      <div class="h3" style="font-size:1rem;margin-bottom:0.3rem">Consultation</div>
+      <p style="font-size:0.75rem;color:var(--bd);line-height:1.5">Client meeting, questionnaire, site docs, budget & scope</p>
+      <p class="meta-s" style="margin-top:0.5rem">1–2 weeks</p>
+    </div>
+    <div style="padding:1.25rem 1rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)">
+      <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.5rem"><span class="ph-dot ph-concept"></span><span class="meta-s">Phase 2</span></div>
+      <div class="h3" style="font-size:1rem;margin-bottom:0.3rem">Concept</div>
+      <p style="font-size:0.75rem;color:var(--bd);line-height:1.5">Mood boards, test layouts, 2-3 design options, material palette</p>
+      <p class="meta-s" style="margin-top:0.5rem">2–4 weeks</p>
+    </div>
+    <div style="padding:1.25rem 1rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)">
+      <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.5rem"><span class="ph-dot ph-refinement"></span><span class="meta-s">Phase 3</span></div>
+      <div class="h3" style="font-size:1rem;margin-bottom:0.3rem">Refinement</div>
+      <p style="font-size:0.75rem;color:var(--bd);line-height:1.5">Final selections, detailed specs, client approvals, material orders</p>
+      <p class="meta-s" style="margin-top:0.5rem">4–8 weeks</p>
+    </div>
+    <div style="padding:1.25rem 1rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)">
+      <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.5rem"><span class="ph-dot ph-procurement"></span><span class="meta-s">Phase 4</span></div>
+      <div class="h3" style="font-size:1rem;margin-bottom:0.3rem">Procurement</div>
+      <p style="font-size:0.75rem;color:var(--bd);line-height:1.5">Purchase orders, vendor coordination, delivery tracking, receiving</p>
+      <p class="meta-s" style="margin-top:0.5rem">4–12 weeks</p>
+    </div>
+    <div style="padding:1.25rem 1rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)">
+      <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.5rem"><span class="ph-dot ph-installation"></span><span class="meta-s">Phase 5</span></div>
+      <div class="h3" style="font-size:1rem;margin-bottom:0.3rem">Installation</div>
+      <p style="font-size:0.75rem;color:var(--bd);line-height:1.5">Delivery coordination, placement, styling, punch list items</p>
+      <p class="meta-s" style="margin-top:0.5rem">1–3 weeks</p>
+    </div>
+    <div style="padding:1.25rem 0 1.25rem 1rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)">
+      <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.5rem"><span class="ph-dot ph-walkthrough"></span><span class="meta-s">Phase 6</span></div>
+      <div class="h3" style="font-size:1rem;margin-bottom:0.3rem">Walkthrough</div>
+      <p style="font-size:0.75rem;color:var(--bd);line-height:1.5">Final review, photography, client sign-off, portfolio & review</p>
+      <p class="meta-s" style="margin-top:0.5rem">1–2 weeks</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== UI FLOW ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">02 — UI Flow</p>
+  <h2>How a project <em>moves through the portal.</em></h2>
+  <p class="bd" style="margin-bottom:2rem">A lead becomes a project when the designer accepts. From there, the project flows through phases — each expanding inline to show its tasks, documents, and financials. No page changes to move between phases.</p>
+
+  <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin:2rem 0;overflow-x:auto">
+    <div style="text-align:center;flex-shrink:0"><div style="width:120px;height:65px;border:1.5px solid var(--pe);border-radius:5px;display:flex;align-items:center;justify-content:center"><span style="font-size:0.72rem;font-weight:500;color:var(--mu)">Lead Accepted</span></div><span class="meta-s" style="display:block;margin-top:0.3rem">Auto-creates project</span></div>
+    <div style="width:24px;height:1px;background:var(--pe);flex-shrink:0;position:relative"><div style="position:absolute;right:0;top:-3px;width:6px;height:6px;border-right:1px solid var(--pe);border-bottom:1px solid var(--pe);transform:rotate(-45deg)"></div></div>
+    <div style="text-align:center;flex-shrink:0"><div style="width:120px;height:65px;border:1.5px solid var(--cl);border-radius:5px;display:flex;align-items:center;justify-content:center;background:rgba(196,165,123,0.04)"><span style="font-size:0.72rem;font-weight:500;color:var(--tx)">Project List</span></div><span class="meta-s" style="display:block;margin-top:0.3rem">All active work</span></div>
+    <div style="width:24px;height:1px;background:var(--pe);flex-shrink:0;position:relative"><div style="position:absolute;right:0;top:-3px;width:6px;height:6px;border-right:1px solid var(--pe);border-bottom:1px solid var(--pe);transform:rotate(-45deg)"></div></div>
+    <div style="text-align:center;flex-shrink:0"><div style="width:120px;height:65px;border:1.5px solid var(--pe);border-radius:5px;display:flex;align-items:center;justify-content:center"><span style="font-size:0.72rem;font-weight:500;color:var(--mo)">Project Detail</span></div><span class="meta-s" style="display:block;margin-top:0.3rem">Timeline + Tasks</span></div>
+    <div style="width:24px;height:1px;background:var(--pe);flex-shrink:0;position:relative"><div style="position:absolute;right:0;top:-3px;width:6px;height:6px;border-right:1px solid var(--pe);border-bottom:1px solid var(--pe);transform:rotate(-45deg)"></div></div>
+    <div style="display:flex;flex-direction:column;gap:0.4rem;flex-shrink:0">
+      <div style="text-align:center"><div style="width:120px;height:48px;border:1.5px solid var(--pe);border-radius:5px;display:flex;align-items:center;justify-content:center"><span style="font-size:0.68rem;color:var(--mo)">Proposal</span></div></div>
+      <div style="text-align:center"><div style="width:120px;height:48px;border:1.5px solid var(--pe);border-radius:5px;display:flex;align-items:center;justify-content:center"><span style="font-size:0.68rem;color:var(--mo)">Room Viewer</span></div></div>
+      <div style="text-align:center"><div style="width:120px;height:48px;border:1.5px solid var(--pe);border-radius:5px;display:flex;align-items:center;justify-content:center"><span style="font-size:0.68rem;color:var(--mo)">Documents</span></div></div>
+      <div style="text-align:center"><div style="width:120px;height:48px;border:1.5px solid var(--pe);border-radius:5px;display:flex;align-items:center;justify-content:center"><span style="font-size:0.68rem;color:var(--mo)">Financials</span></div></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 1: PROJECT LIST ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">03 — Project List</p>
+  <h2>All your work, <em>at a glance.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">Not a Kanban board. A scannable list grouped by status, showing client name, current phase with its colored dot, a thin progress bar, and the project budget. Filtering by phase, by client, or by date — all inline text.</p>
+
+  <div class="sc">
+    <div class="sc-bar"><div class="sc-logo">Patina</div><div class="sc-nav"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sc-user"><span class="meta-s">Leah</span><div class="sc-av">LK</div></div></div>
+    <div class="sc-bd">
+      <div class="ph"><div class="h2" style="font-size:1.5rem">Projects</div><div style="display:flex;gap:0.5rem"><button class="btn btn-p btn-sm">+ New Project</button></div></div>
+
+      <div class="fi">
+        <div class="fi-i on">Active<span class="ct">7</span></div>
+        <div class="fi-i">Proposal Sent<span class="ct">2</span></div>
+        <div class="fi-i">Completed<span class="ct">14</span></div>
+        <div class="fi-i">On Hold<span class="ct">1</span></div>
+      </div>
+
+      <!-- Metric summary -->
+      <div class="met-row">
+        <div class="met"><div class="met-l">Active Value</div><div class="met-v" style="font-size:1.6rem">$142k</div><div class="met-c nu">across 7 projects</div></div>
+        <div class="met"><div class="met-l">Avg Timeline</div><div class="met-v" style="font-size:1.6rem">4.2<span class="du">months</span></div><div class="met-c up">↑ on schedule</div></div>
+        <div class="met"><div class="met-l">Invoiced MTD</div><div class="met-v" style="font-size:1.6rem">$18.4k</div><div class="met-c up">↑ 22% vs Feb</div></div>
+      </div>
+
+      <!-- Project list -->
+      <div class="pj-item">
+        <div><div class="pj-name"><span class="ph-dot ph-procurement"></span>Chen Residence — Living & Dining</div><div class="pj-client">James & Lin Chen · Wauwatosa · Started Jan 8</div><div class="prog" style="margin-top:0.5rem;max-width:300px"><div class="prog-f" style="width:72%"></div></div></div>
+        <div class="pj-right"><div class="pj-phase">Procurement</div><div class="pj-budget">$24,500</div></div>
+      </div>
+      <div class="pj-item">
+        <div><div class="pj-name"><span class="ph-dot ph-concept"></span>Lakefront Condo — Unit 4B</div><div class="pj-client">Andrea Novak · Milwaukee · Started Feb 14</div><div class="prog" style="margin-top:0.5rem;max-width:300px"><div class="prog-f" style="width:35%"></div></div></div>
+        <div class="pj-right"><div class="pj-phase">Concept</div><div class="pj-budget">$18,000</div></div>
+      </div>
+      <div class="pj-item">
+        <div><div class="pj-name"><span class="ph-dot ph-installation"></span>Prairie Home — Full Redesign</div><div class="pj-client">Mark & Sarah Olsen · Prairie du Sac · Started Nov 2</div><div class="prog" style="margin-top:0.5rem;max-width:300px"><div class="prog-f" style="width:92%"></div></div></div>
+        <div class="pj-right"><div class="pj-phase">Installation</div><div class="pj-budget">$62,000</div></div>
+      </div>
+      <div class="pj-item">
+        <div><div class="pj-name"><span class="ph-dot ph-consultation"></span>Morrison Master Suite</div><div class="pj-client">David Morrison · Brookfield · Started Mar 10</div><div class="prog" style="margin-top:0.5rem;max-width:300px"><div class="prog-f" style="width:12%"></div></div></div>
+        <div class="pj-right"><div class="pj-phase">Consultation</div><div class="pj-budget">$15,000</div></div>
+      </div>
+      <div class="pj-item">
+        <div><div class="pj-name"><span class="ph-dot ph-refinement"></span>Whitfield Living Room</div><div class="pj-client">Sarah & James Whitfield · Wauwatosa · Started Feb 1</div><div class="prog" style="margin-top:0.5rem;max-width:300px"><div class="prog-f" style="width:55%"></div></div></div>
+        <div class="pj-right"><div class="pj-phase">Refinement</div><div class="pj-budget">$22,500</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 2: PROJECT DETAIL ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">04 — Project Detail</p>
+  <h2>The project as <em>a living story.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">The heart of Opus. A single scrolling page with the project header, phase timeline, current phase tasks, financials, documents, and activity feed. Everything reads top to bottom. Phases expand inline to show their tasks — click a phase heading to open it. The current phase is always expanded by default.</p>
+
+  <div class="sc">
+    <div class="sc-bar"><div class="sc-logo">Patina</div><div class="sc-nav"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sc-user"><span class="meta-s">Leah</span><div class="sc-av">LK</div></div></div>
+    <div class="sc-bd">
+      <div class="bc"><a>Projects</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Chen Residence</div>
+
+      <!-- Project Hero -->
+      <div style="display:grid;grid-template-columns:1fr auto;align-items:start;margin-bottom:2rem;padding-bottom:1.5rem;border-bottom:1px solid var(--su)">
+        <div>
+          <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem"><span class="ph-dot ph-procurement"></span><span class="meta" style="color:var(--gh)">Procurement Phase</span></div>
+          <div class="h2" style="font-size:1.8rem;margin-bottom:0.2rem">Chen Residence</div>
+          <div class="lbl-s">James & Lin Chen · Living room & dining room redesign · Wauwatosa, WI</div>
+          <div class="lbl-s">Started Jan 8, 2026 · Est. completion Apr 20 · Budget: $24,500</div>
+        </div>
+        <div style="display:flex;gap:1rem;align-items:center">
+          <div class="score"><span class="n">72</span><span class="l">Progress</span></div>
+          <div style="display:flex;flex-direction:column;gap:0.4rem"><button class="btn btn-p btn-sm">Message Client</button><button class="btn btn-s btn-sm">View Room</button></div>
+        </div>
+      </div>
+
+      <div class="two" style="gap:2.5rem">
+        <!-- Left: Timeline + Tasks -->
+        <div>
+          <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Phase Timeline</div>
+
+          <div class="timeline">
+            <!-- Completed phases -->
+            <div class="tl-item done">
+              <div class="tl-name"><span class="ph-dot ph-consultation" style="width:8px;height:8px"></span>Consultation</div>
+              <div class="tl-date">Jan 8 – Jan 18 · Complete</div>
+            </div>
+            <div class="tl-item done">
+              <div class="tl-name"><span class="ph-dot ph-concept" style="width:8px;height:8px"></span>Concept Development</div>
+              <div class="tl-date">Jan 20 – Feb 10 · Complete</div>
+            </div>
+            <div class="tl-item done">
+              <div class="tl-name"><span class="ph-dot ph-refinement" style="width:8px;height:8px"></span>Design Refinement</div>
+              <div class="tl-date">Feb 12 – Mar 8 · Complete</div>
+            </div>
+
+            <!-- Active phase — expanded with tasks -->
+            <div class="tl-item active">
+              <div class="tl-name" style="font-size:1rem"><span class="ph-dot ph-procurement" style="width:8px;height:8px"></span>Procurement</div>
+              <div class="tl-date">Started Mar 10 · In Progress · Est. 4 weeks remaining</div>
+
+              <ul class="tl-tasks" style="margin-top:0.75rem">
+                <li><span class="tl-check done">✓</span> <span>Nordic Atelier dining table — ordered, 6 weeks lead time</span></li>
+                <li><span class="tl-check done">✓</span> <span>Meadow sectional — ordered, shipping Apr 2</span></li>
+                <li><span class="tl-check done">✓</span> <span>Brass pendant lights × 3 — ordered, in stock</span></li>
+                <li><span class="tl-check"></span> <span>Jute area rug — awaiting client color confirmation</span></li>
+                <li><span class="tl-check"></span> <span>Window treatments — measuring scheduled Mar 28</span></li>
+                <li><span class="tl-check"></span> <span>Paint selection — Benjamin Moore samples delivered</span></li>
+                <li><span class="tl-check"></span> <span>Accent pillows + throws — final selections pending</span></li>
+              </ul>
+            </div>
+
+            <!-- Upcoming phases -->
+            <div class="tl-item upcoming">
+              <div class="tl-name"><span class="ph-dot ph-installation" style="width:8px;height:8px"></span>Installation</div>
+              <div class="tl-date">Estimated Apr 8 – Apr 18</div>
+            </div>
+            <div class="tl-item upcoming">
+              <div class="tl-name"><span class="ph-dot ph-walkthrough" style="width:8px;height:8px"></span>Final Walkthrough</div>
+              <div class="tl-date">Estimated Apr 20</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Financials + Documents + Activity -->
+        <div>
+          <!-- Financials -->
+          <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Budget & Spend</div>
+          <div class="fin-row"><div class="fin-label">Design Fee</div><div class="fin-budget">$3,000</div><div class="fin-actual">$3,000</div></div>
+          <div class="fin-row"><div class="fin-label">Furniture</div><div class="fin-budget">$16,000</div><div class="fin-actual">$14,850</div></div>
+          <div class="fin-row"><div class="fin-label">Lighting</div><div class="fin-budget">$2,500</div><div class="fin-actual">$2,670</div></div>
+          <div class="fin-row"><div class="fin-label">Textiles & Rugs</div><div class="fin-budget">$1,800</div><div class="fin-actual under">$1,200</div></div>
+          <div class="fin-row"><div class="fin-label">Paint & Finishing</div><div class="fin-budget">$700</div><div class="fin-actual nu">$0</div></div>
+          <div class="fin-row"><div class="fin-label">Installation</div><div class="fin-budget">$500</div><div class="fin-actual nu">$0</div></div>
+          <div class="fin-row fin-total"><div class="fin-label">Total</div><div class="fin-budget">$24,500</div><div class="fin-actual">$21,720</div></div>
+          <div style="margin-top:0.5rem"><span class="meta-s" style="color:var(--sa)">$2,780 under budget · 89% committed</span></div>
+
+          <div class="stm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+          <!-- Documents -->
+          <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Documents</div>
+          <div class="doc-item"><div class="doc-icon pdf">PDF</div><div><div class="doc-name">Design Proposal — v2.1</div><div class="doc-meta">Signed Feb 8 · 2.4 MB</div></div><div><button class="btn btn-g btn-sm">View</button></div></div>
+          <div class="doc-item"><div class="doc-icon pdf">PDF</div><div><div class="doc-name">Service Agreement</div><div class="doc-meta">Signed Jan 12 · 890 KB</div></div><div><button class="btn btn-g btn-sm">View</button></div></div>
+          <div class="doc-item"><div class="doc-icon img">IMG</div><div><div class="doc-name">Mood Board — Final Approved</div><div class="doc-meta">Approved Feb 5 · 8 images</div></div><div><button class="btn btn-g btn-sm">View</button></div></div>
+          <div class="doc-item"><div class="doc-icon doc">XLS</div><div><div class="doc-name">Purchase Order Log</div><div class="doc-meta">Updated Mar 22 · 340 KB</div></div><div><button class="btn btn-g btn-sm">View</button></div></div>
+          <div style="margin-top:0.75rem"><button class="btn btn-s btn-sm">+ Add Document</button></div>
+
+          <div class="stm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+          <!-- Activity -->
+          <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Recent Activity</div>
+          <div class="act"><div class="act-text"><strong>Leah</strong> marked "Brass pendant lights" as ordered</div><div class="act-time">2 hours ago</div></div>
+          <div class="act"><div class="act-text"><strong>James Chen</strong> sent a message about rug color options</div><div class="act-time">Yesterday, 3:14 PM</div></div>
+          <div class="act"><div class="act-text"><strong>Nordic Atelier</strong> confirmed dining table ship date: Apr 2</div><div class="act-time">Mar 21</div></div>
+          <div class="act"><div class="act-text"><strong>Leah</strong> uploaded paint samples photo to project</div><div class="act-time">Mar 20</div></div>
+          <div class="act"><div class="act-text"><strong>System</strong> moved project to Procurement phase</div><div class="act-time">Mar 10</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 3: NEW PROJECT ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">05 — Create Project</p>
+  <h2>Start with the client, <em>not the paperwork.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">When a lead is accepted, the system pre-fills the project from lead data — client name, room type, budget, style preferences, and room scan all carry over. The designer just confirms and adds her own scope notes. Projects can also be created manually for referral clients who bypass the app.</p>
+
+  <div class="sc">
+    <div class="sc-bar"><div class="sc-logo">Patina</div><div class="sc-nav"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sc-user"><span class="meta-s">Leah</span><div class="sc-av">LK</div></div></div>
+    <div class="sc-bd">
+      <div class="bc"><a>Projects</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> New Project</div>
+      <div class="ph"><div class="h2" style="font-size:1.5rem">New Project</div><div style="display:flex;gap:0.5rem"><button class="btn btn-p btn-sm">Create Project</button><button class="btn btn-g btn-sm">Cancel</button></div></div>
+
+      <div style="padding:0.85rem 1rem;background:rgba(196,165,123,0.04);border:1px solid rgba(196,165,123,0.15);border-radius:6px;margin-bottom:2rem"><p class="meta" style="color:var(--cl);margin-bottom:0.15rem">Pre-filled from Lead</p><p style="font-size:0.82rem;color:var(--bd)">This project was created from Sarah & James Whitfield's accepted lead. Room scan, style profile, and budget have been imported.</p></div>
+
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Client & Scope</div>
+      <div class="form-g">
+        <div class="form-f"><label>Project Name</label><input value="Whitfield Living Room"></div>
+        <div class="form-f"><label>Client</label><input value="Sarah & James Whitfield" style="background:var(--bg);color:var(--mu)"></div>
+        <div class="form-f"><label>Project Type</label><select><option selected>Full Room Design</option><option>Room Refresh</option><option>Consultation Only</option><option>Virtual Design</option></select></div>
+        <div class="form-f"><label>Rooms</label><input value="Living room"></div>
+        <div class="form-f"><label>Location</label><input value="Wauwatosa, WI"></div>
+        <div class="form-f"><label>Estimated Timeline</label><input value="3 months"></div>
+        <div class="form-f full"><label>Project Description</label><textarea rows="3">Complete living room transformation. 1960s ranch, south-facing bay window focal point. Original hardwood floors to keep. Kid-friendly fabrics, seating for 6+, reading nook, hidden storage.</textarea></div>
+      </div>
+
+      <div class="stm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Budget</div>
+      <div class="form-g">
+        <div class="form-f"><label>Total Budget</label><input value="$22,500"></div>
+        <div class="form-f"><label>Design Fee</label><input value="$2,500"></div>
+        <div class="form-f"><label>Furniture Budget</label><input value="$15,000"></div>
+        <div class="form-f"><label>Contingency</label><input value="$2,000"></div>
+      </div>
+
+      <div class="stm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Style Context</div>
+      <div class="field"><div class="fl">Imported Style Profile</div><div style="display:flex;gap:0.4rem;flex-wrap:wrap"><span class="tag on">Warm Minimalist</span><span class="tag on">Organic Modern</span><span class="tag">Natural Materials</span></div></div>
+      <div class="field"><div class="fl">Linked Room Scan</div><div style="background:var(--pe);border-radius:6px;height:120px;display:flex;align-items:center;justify-content:center;max-width:280px"><span class="meta-s">3D Room Scan · 18' × 14'</span></div></div>
+
+      <div style="display:flex;gap:0.5rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--su)"><button class="btn btn-p">Create Project</button><button class="btn btn-s">Save as Draft</button><button class="btn btn-g">Cancel</button></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 4: EDIT PROJECT ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">06 — Edit Project</p>
+  <h2>Adjust the scope <em>as the work evolves.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">Projects evolve. Budgets shift. Rooms get added. The edit view uses the same form structure as creation — client & scope, budget, timeline, and team. An inline change log shows what was modified and when.</p>
+
+  <div class="sc">
+    <div class="sc-bar"><div class="sc-logo">Patina</div><div class="sc-nav"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sc-user"><span class="meta-s">Leah</span><div class="sc-av">LK</div></div></div>
+    <div class="sc-bd">
+      <div class="bc"><a>Projects</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> <a>Chen Residence</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Edit</div>
+      <div class="ph"><div class="h2" style="font-size:1.5rem">Edit Project</div><div style="display:flex;gap:0.5rem"><button class="btn btn-p btn-sm">Save Changes</button><button class="btn btn-g btn-sm">Cancel</button></div></div>
+
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Client & Scope</div>
+      <div class="form-g">
+        <div class="form-f"><label>Project Name</label><input value="Chen Residence — Living & Dining"></div>
+        <div class="form-f"><label>Client</label><input value="James & Lin Chen" disabled style="background:var(--bg);color:var(--mu)"></div>
+        <div class="form-f"><label>Project Type</label><select><option selected>Full Room Design</option></select></div>
+        <div class="form-f"><label>Status</label><select><option selected>Active</option><option>On Hold</option><option>Completed</option><option>Cancelled</option></select></div>
+        <div class="form-f full"><label>Rooms Included</label><input value="Living room, Dining room"></div>
+        <div class="form-f full"><label>Scope Notes</label><textarea rows="3">Complete living and dining room redesign. Mid-century with warm wood tones. Focus on entertaining space. Client prefers natural materials, willing to invest in anchor pieces. Added dining room to scope on Feb 3 per client request.</textarea></div>
+      </div>
+
+      <div class="stm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Budget</div>
+      <div class="form-g">
+        <div class="form-f"><label>Original Budget</label><input value="$20,000" disabled style="background:var(--bg);color:var(--mu)"></div>
+        <div class="form-f"><label>Current Budget</label><input value="$24,500"></div>
+        <div class="form-f"><label>Design Fee</label><input value="$3,000"></div>
+        <div class="form-f"><label>Change Reason</label><input value="Dining room added to scope"></div>
+      </div>
+
+      <div class="stm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Timeline</div>
+      <div class="form-g">
+        <div class="form-f"><label>Start Date</label><input value="Jan 8, 2026"></div>
+        <div class="form-f"><label>Estimated Completion</label><input value="Apr 20, 2026"></div>
+        <div class="form-f"><label>Current Phase</label><select><option>Consultation</option><option>Concept Development</option><option>Design Refinement</option><option selected>Procurement</option><option>Installation</option><option>Final Walkthrough</option></select></div>
+      </div>
+
+      <div class="stm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- Change log -->
+      <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Change History</div>
+      <div class="act"><div class="act-text"><strong>Leah</strong> updated budget from $20,000 to $24,500 — dining room added</div><div class="act-time">Feb 3, 2026</div></div>
+      <div class="act"><div class="act-text"><strong>Leah</strong> changed project name to include "Living & Dining"</div><div class="act-time">Feb 3, 2026</div></div>
+      <div class="act"><div class="act-text"><strong>System</strong> project created from accepted lead</div><div class="act-time">Jan 8, 2026</div></div>
+
+      <div style="display:flex;gap:0.5rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--su)"><button class="btn btn-p">Save Changes</button><button class="btn btn-g">Cancel</button></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 5: TASK MANAGEMENT ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">07 — Phase Task View</p>
+  <h2>The work inside <em>each phase.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">When a phase is expanded in the project detail, this is the task view. Simple checkboxes with due dates — not a project management app competing with Asana. Tasks can have brief notes attached but no nested subtasks, no dependencies, no Gantt charts. This is a designer's to-do list, not a construction schedule.</p>
+
+  <div class="sc">
+    <div class="sc-bar"><div class="sc-logo">Patina</div><div class="sc-nav"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sc-user"><span class="meta-s">Leah</span><div class="sc-av">LK</div></div></div>
+    <div class="sc-bd">
+      <div class="bc"><a>Projects</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> <a>Chen Residence</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Procurement</div>
+
+      <div class="ph"><div><div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem"><span class="ph-dot ph-procurement"></span><span class="meta" style="color:var(--gh)">Phase 4 of 6</span></div><div class="h2" style="font-size:1.5rem">Procurement</div><div class="lbl-s">Chen Residence · Started Mar 10 · 4 of 7 tasks complete</div></div><div style="display:flex;gap:0.5rem"><button class="btn btn-s btn-sm">+ Add Task</button><button class="btn btn-s btn-sm">Advance Phase →</button></div></div>
+
+      <div class="prog" style="margin-bottom:2rem;height:4px"><div class="prog-f" style="width:57%"></div></div>
+
+      <!-- Tasks -->
+      <div class="task done"><div class="task-cb done">✓</div><div><div class="task-name">Order dining table from Nordic Atelier</div><div class="lbl-s" style="font-size:0.75rem">PO #NA-2026-041 · 8-week lead time · Ships Apr 2</div></div><div class="task-due">Mar 12</div></div>
+      <div class="task done"><div class="task-cb done">✓</div><div><div class="task-name">Order Meadow sectional from Woodward & Sons</div><div class="lbl-s" style="font-size:0.75rem">PO #WS-2026-018 · In stock · Shipping confirmed</div></div><div class="task-due">Mar 14</div></div>
+      <div class="task done"><div class="task-cb done">✓</div><div><div class="task-name">Order brass pendant lights × 3</div><div class="lbl-s" style="font-size:0.75rem">Schoolhouse Electric · In stock · Processing</div></div><div class="task-due">Mar 15</div></div>
+      <div class="task done"><div class="task-cb done">✓</div><div><div class="task-name">Send paint samples to client for review</div><div class="lbl-s" style="font-size:0.75rem">Benjamin Moore · 4 swatches delivered Mar 18</div></div><div class="task-due">Mar 18</div></div>
+      <div class="task"><div class="task-cb"></div><div><div class="task-name">Confirm rug color with client</div><div class="lbl-s" style="font-size:0.75rem">Waiting for James to review with Lin — follow up Friday</div></div><div class="task-due overdue">Due Mar 22</div></div>
+      <div class="task"><div class="task-cb"></div><div><div class="task-name">Schedule window treatment measurement</div><div class="lbl-s" style="font-size:0.75rem">Contact: Sarah's Drapes · Wauwatosa · Need access to home</div></div><div class="task-due">Due Mar 28</div></div>
+      <div class="task"><div class="task-cb"></div><div><div class="task-name">Finalize accent pillow + throw selections</div><div class="lbl-s" style="font-size:0.75rem">Pending rug color decision — these coordinate</div></div><div class="task-due">Due Apr 1</div></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 6: PROJECT FINANCIALS ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">08 — Project Financials</p>
+  <h2>The money reads like <em>an invoice.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">Budget vs. actual, line by line. No pie charts or donut graphs. Typography does the work — Playfair for amounts, mono for categories, sage for under-budget, terracotta for over. Payment milestones track what's been invoiced and what's outstanding.</p>
+
+  <div class="sc">
+    <div class="sc-bar"><div class="sc-logo">Patina</div><div class="sc-nav"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sc-user"><span class="meta-s">Leah</span><div class="sc-av">LK</div></div></div>
+    <div class="sc-bd">
+      <div class="bc"><a>Projects</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> <a>Chen Residence</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Financials</div>
+      <div class="ph"><div class="h2" style="font-size:1.5rem">Financials</div><div style="display:flex;gap:0.5rem"><button class="btn btn-s btn-sm">Create Invoice</button><button class="btn btn-s btn-sm">Export</button></div></div>
+
+      <!-- Summary metrics -->
+      <div class="met-row">
+        <div class="met"><div class="met-l">Total Budget</div><div class="met-v" style="font-size:1.6rem">$24,500</div></div>
+        <div class="met"><div class="met-l">Committed</div><div class="met-v" style="font-size:1.6rem">$21,720</div><div class="met-c up">$2,780 remaining</div></div>
+        <div class="met"><div class="met-l">Invoiced</div><div class="met-v" style="font-size:1.6rem">$10,500</div><div class="met-c nu">43% of total</div></div>
+        <div class="met"><div class="met-l">Collected</div><div class="met-v" style="font-size:1.6rem">$7,500</div><div class="met-c dn">$3,000 outstanding</div></div>
+      </div>
+
+      <div class="two" style="gap:2.5rem">
+        <div>
+          <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Budget vs. Actual</div>
+          <!-- Header row -->
+          <div style="display:grid;grid-template-columns:1fr auto auto;gap:1.5rem;padding:0.4rem 0;border-bottom:1px solid var(--su)"><span class="meta-s">Category</span><span class="meta-s" style="text-align:right">Budget</span><span class="meta-s" style="text-align:right">Actual</span></div>
+          <div class="fin-row"><div class="fin-label">Design Fee</div><div class="fin-budget">$3,000</div><div class="fin-actual">$3,000</div></div>
+          <div class="fin-row"><div class="fin-label">Dining Table</div><div class="fin-budget">$4,500</div><div class="fin-actual under">$4,200</div></div>
+          <div class="fin-row"><div class="fin-label">Sectional Sofa</div><div class="fin-budget">$7,000</div><div class="fin-actual under">$6,800</div></div>
+          <div class="fin-row"><div class="fin-label">Pendant Lights × 3</div><div class="fin-budget">$2,500</div><div class="fin-actual over">$2,670</div></div>
+          <div class="fin-row"><div class="fin-label">Dining Chairs × 6</div><div class="fin-budget">$2,400</div><div class="fin-actual">$2,400</div></div>
+          <div class="fin-row"><div class="fin-label">Area Rug</div><div class="fin-budget">$1,500</div><div class="fin-actual under">$1,200</div></div>
+          <div class="fin-row"><div class="fin-label">Textiles & Décor</div><div class="fin-budget">$1,600</div><div class="fin-actual nu" style="color:var(--mu)">$950</div></div>
+          <div class="fin-row"><div class="fin-label">Paint & Finishing</div><div class="fin-budget">$700</div><div class="fin-actual nu" style="color:var(--mu)">—</div></div>
+          <div class="fin-row"><div class="fin-label">Installation</div><div class="fin-budget">$500</div><div class="fin-actual nu" style="color:var(--mu)">—</div></div>
+          <div class="fin-row fin-total"><div class="fin-label">Total</div><div class="fin-budget">$24,500</div><div class="fin-actual under">$21,720</div></div>
+        </div>
+
+        <div>
+          <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Payment Milestones</div>
+          <div style="padding:0.65rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><div style="display:flex;justify-content:space-between;align-items:baseline"><span class="lbl" style="font-size:0.88rem">Deposit — 30%</span><span style="font-family:var(--fd);font-weight:600;font-size:0.95rem;color:var(--sa)">$7,500</span></div><div class="meta-s" style="margin-top:0.15rem;color:var(--sa)">Paid Jan 12</div></div>
+          <div style="padding:0.65rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><div style="display:flex;justify-content:space-between;align-items:baseline"><span class="lbl" style="font-size:0.88rem">Procurement — 40%</span><span style="font-family:var(--fd);font-weight:600;font-size:0.95rem;color:var(--te)">$3,000</span></div><div class="meta-s" style="margin-top:0.15rem;color:var(--te)">Invoiced Mar 10 · Outstanding</div></div>
+          <div style="padding:0.65rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><div style="display:flex;justify-content:space-between;align-items:baseline"><span class="lbl" style="font-size:0.88rem">Completion — 30%</span><span style="font-family:var(--fd);font-weight:600;font-size:0.95rem;color:var(--mu)">$7,350</span></div><div class="meta-s" style="margin-top:0.15rem">Due on final walkthrough</div></div>
+
+          <div class="stm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+          <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Your Earnings</div>
+          <div class="dr"><div class="dr-k">Design Fee</div><div class="dr-v">$3,000</div></div>
+          <div class="dr"><div class="dr-k">Commissions</div><div class="dr-v">$2,187 (12% avg on $18,225)</div></div>
+          <div class="dr"><div class="dr-k">Total Earned</div><div class="dr-v" style="font-weight:600;color:var(--tx)">$5,187</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 7: PROJECT CLOSURE ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">09 — Project Closure</p>
+  <h2>Finish strong, <em>build reputation.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">When a project reaches the Final Walkthrough phase, the closure flow guides the designer through punch list sign-off, final photography, portfolio capture, and review request. The project isn't archived until these steps are complete — ensuring every project contributes to the designer's portfolio and platform rating.</p>
+
+  <div class="sc">
+    <div class="sc-bar"><div class="sc-logo">Patina</div><div class="sc-nav"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sc-user"><span class="meta-s">Leah</span><div class="sc-av">LK</div></div></div>
+    <div class="sc-bd">
+      <div class="bc"><a>Projects</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> <a>Prairie Home</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Complete Project</div>
+
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem"><span class="ph-dot ph-walkthrough"></span><span class="meta" style="color:var(--sa)">Final Walkthrough</span></div>
+      <div class="h2" style="font-size:1.5rem;margin-bottom:0.2rem">Complete Project</div>
+      <div class="lbl-s" style="margin-bottom:2rem">Prairie Home — Full Redesign · Mark & Sarah Olsen · $62,000</div>
+
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Closure Checklist</div>
+      <div class="task done"><div class="task-cb done">✓</div><div><div class="task-name">Final walkthrough completed with client</div></div><div class="task-due" style="color:var(--sa)">Mar 22</div></div>
+      <div class="task done"><div class="task-cb done">✓</div><div><div class="task-name">All punch list items resolved</div></div><div class="task-due" style="color:var(--sa)">Mar 24</div></div>
+      <div class="task done"><div class="task-cb done">✓</div><div><div class="task-name">Final payment collected</div></div><div class="task-due" style="color:var(--sa)">Mar 24</div></div>
+      <div class="task done"><div class="task-cb done">✓</div><div><div class="task-name">Professional photography scheduled</div></div><div class="task-due" style="color:var(--sa)">Confirmed Apr 1</div></div>
+      <div class="task"><div class="task-cb"></div><div><div class="task-name">Upload final project photos (for portfolio)</div></div><div class="task-due">After Apr 1</div></div>
+      <div class="task"><div class="task-cb"></div><div><div class="task-name">Write project case study for portfolio</div></div><div class="task-due">By Apr 5</div></div>
+      <div class="task"><div class="task-cb"></div><div><div class="task-name">Send client review request</div></div><div class="task-due">Apr 2</div></div>
+
+      <div class="stm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- Portfolio capture -->
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Portfolio Snapshot</div>
+      <div class="form-g">
+        <div class="form-f full"><label>Project Headline</label><input placeholder="e.g. A Prairie Home Reimagined — Full Living Space Redesign"></div>
+        <div class="form-f full"><label>Brief Description (for portfolio card)</label><textarea rows="3" placeholder="2-3 sentences capturing the transformation, the challenge, and the result."></textarea></div>
+        <div class="form-f"><label>Project Value</label><input value="$62,000"></div>
+        <div class="form-f"><label>Duration</label><input value="5 months"></div>
+        <div class="form-f"><label>Rooms</label><input value="Living, Dining, Kitchen, Master Bedroom"></div>
+        <div class="form-f"><label>Style Tags</label><div style="display:flex;gap:0.3rem;flex-wrap:wrap;margin-top:0.3rem"><span class="tag on">Warm Minimalist</span><span class="tag on">Prairie Modern</span><span class="tag on">Natural Materials</span></div></div>
+      </div>
+
+      <div style="margin-top:1.5rem;padding:1rem;background:rgba(168,181,160,0.06);border:1px solid rgba(168,181,160,0.2);border-radius:6px"><p class="meta" style="color:var(--sa);margin-bottom:0.15rem">Almost Done</p><p style="font-size:0.82rem;color:var(--bd)">Once all checklist items are complete and photos are uploaded, this project will appear in your public portfolio and the client will receive a review request. Completed projects also improve your platform ranking and lead quality.</p></div>
+
+      <div style="display:flex;gap:0.5rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--su)"><button class="btn btn-p" style="background:var(--sa)">Complete & Archive Project</button><button class="btn btn-s">Save Progress</button></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== PULL QUOTE ============================== -->
+<section>
+<div class="n">
+  <div class="pq"><blockquote>"A project page should feel like the project itself — a clear beginning, a purposeful middle, and a satisfying close. Not a database of orphaned tasks."</blockquote><cite>Design Principle — Projects Are Stories</cite></div>
+</div>
+</section>
+
+<!-- ============================== CLOSING ============================== -->
+<section class="fade">
+<div class="w">
+  <div class="st"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <h2 style="margin-top:2rem;margin-bottom:1.5rem">What makes this <em>different.</em></h2>
+  <div class="two" style="gap:2rem">
+    <div>
+      <p class="bd" style="margin-bottom:1.5rem"><strong>Vertical timelines, not Kanban boards.</strong> Leah thinks in phases, not swimlanes. The timeline reads top to bottom like the work flows — consultation at the top, walkthrough at the bottom. Each phase has its own color dot so you can spot the current state at a glance.</p>
+      <p class="bd" style="margin-bottom:1.5rem"><strong>Tasks are to-dos, not tickets.</strong> Simple checkboxes with due dates and one-line notes. No assignees, no priorities, no labels, no comments threads. This is a designer's working list, not a team collaboration tool.</p>
+    </div>
+    <div>
+      <p class="bd" style="margin-bottom:1.5rem"><strong>Financials read like an invoice.</strong> Budget vs. actual in two columns with Playfair numerals. Sage for under-budget, terracotta for over. Payment milestones show exactly what's been collected and what's outstanding. No pie charts.</p>
+      <p class="bd"><strong>Closure earns reputation.</strong> The project doesn't just end — it becomes portfolio content, earns a client review, and improves lead quality. Every completed project compounds the designer's value on the platform. The interface makes this visible and motivating.</p>
+    </div>
+  </div>
+
+  <div class="stm" style="margin-top:3rem"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2rem;flex-wrap:wrap;gap:1rem">
+    <div><div style="font-family:var(--fd);font-weight:400;font-size:1.05rem">Patina</div><div style="font-family:var(--fd);font-style:italic;font-size:0.82rem;color:var(--ao)">Where Time Adds Value</div></div>
+    <div class="meta-s">Project Management Design v1.0 · March 2026 · 9 Screens · Kody & Leah</div>
+  </div>
+</div>
+</section>
+
+<script>
+const f=document.querySelectorAll('.fade');
+const o=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('vis')})},{threshold:0.08,rootMargin:'0px 0px -40px 0px'});
+f.forEach(s=>o.observe(s));
+</script>
+</body>
+</html>

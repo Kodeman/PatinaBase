@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { ClientHeader } from '@/components/layout/client-header';
+import { StrataMark } from '@/components/strata-mark';
 import { fetchClientProjects } from '@/lib/data/projects';
 import { formatPercentage } from '@/lib/utils/format';
 
@@ -10,59 +11,68 @@ export default async function ProjectsPage() {
   const unreadMessages = projects.reduce((total, project) => total + project.unreadMessages, 0);
 
   return (
-    <div className="min-h-screen bg-[var(--color-canvas)]">
+    <div className="min-h-screen bg-[var(--bg-primary)]">
       <ClientHeader
         projects={projects}
         approvalsPending={approvalsPending}
         unreadMessages={unreadMessages}
       />
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-6 py-12">
-        <section className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-card)] px-8 py-10 shadow-xl">
-          <p className="text-sm uppercase tracking-[0.4em] text-[var(--color-muted)]">Your projects</p>
-          <h1 className="mt-4 font-[var(--font-playfair)] text-4xl text-[var(--color-text)]">
+      <main className="mx-auto flex w-full max-w-6xl flex-col px-6 py-12">
+        {/* Hero */}
+        <section>
+          <p className="type-meta">Your projects</p>
+          <h1 className="type-page-title mt-4">
             Dive into each project timeline to see progress, review decisions, and stay in sync with your Patina team.
           </h1>
-          <p className="mt-4 max-w-2xl text-lg text-[var(--color-muted)]">
+          <p className="type-body mt-4">
             Choose a project below to open its immersive timeline. You can approve deliverables, review documents, and keep the
             conversation going directly in context.
           </p>
         </section>
 
-        <section className="grid gap-6 md:grid-cols-2">
-          {projects.map((project) => (
+        <StrataMark variant="mini" />
+
+        {/* Project list */}
+        <section>
+          {projects.map((project, index) => (
             <Link
               key={project.id}
               href={`/projects/${project.id}`}
-              className="group flex h-full flex-col gap-4 rounded-3xl border border-[var(--color-border)] bg-white/80 p-6 shadow-lg transition hover:border-[var(--color-accent)] focus-visible:focus-ring"
+              className="group block border-b border-[var(--border-default)] py-6 transition hover:bg-[rgba(196,165,123,0.04)]"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="font-[var(--font-playfair)] text-2xl text-[var(--color-text)]">{project.name}</h2>
+              <div className="flex items-start justify-between gap-6">
+                <div className="min-w-0 flex-1">
+                  <h2 className="type-item-name group-hover:text-[var(--accent-primary)] transition-colors">
+                    {project.name}
+                  </h2>
                   {project.location ? (
-                    <p className="text-sm text-[var(--color-muted)]">{project.location}</p>
+                    <p className="type-meta mt-1">{project.location}</p>
                   ) : null}
+
+                  {/* Thin progress bar */}
+                  <div className="mt-3 h-[2px] w-full overflow-hidden bg-[var(--border-default)]">
+                    <div
+                      className="h-full bg-[var(--accent-primary)] transition-[width] duration-300"
+                      style={{ width: `${Math.max(2, Math.round(project.progressPercentage))}%` }}
+                    />
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-4">
+                    {project.nextMilestoneTitle ? (
+                      <p className="type-body-small">
+                        Next: <span className="font-heading font-medium text-[var(--text-primary)]">{project.nextMilestoneTitle}</span>
+                      </p>
+                    ) : null}
+                    <span className="type-meta">{project.approvalsPending} approvals</span>
+                    <span className="type-meta">{project.unreadMessages} messages</span>
+                  </div>
                 </div>
-                <span className="text-sm font-medium text-[var(--color-muted)]">{project.status}</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm text-[var(--color-muted)]">
-                <span className="text-lg font-semibold text-[var(--color-text)]">
-                  {formatPercentage(project.progressPercentage)} complete
-                </span>
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--color-canvas)]">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-text)] transition-[width] duration-300"
-                    style={{ width: `${Math.max(6, Math.round(project.progressPercentage))}%` }}
-                  />
+
+                {/* Large progress numeral */}
+                <div className="flex flex-col items-end">
+                  <span className="type-data-large">{Math.round(project.progressPercentage)}</span>
+                  <span className="type-meta-small">% complete</span>
                 </div>
-              </div>
-              {project.nextMilestoneTitle ? (
-                <p className="text-sm text-[var(--color-muted)]">
-                  Next milestone: <span className="font-medium text-[var(--color-text)]">{project.nextMilestoneTitle}</span>
-                </p>
-              ) : null}
-              <div className="mt-auto flex items-center justify-between text-xs text-[var(--color-muted)]">
-                <span>{project.approvalsPending} approvals awaiting</span>
-                <span>{project.unreadMessages} new messages</span>
               </div>
             </Link>
           ))}

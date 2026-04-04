@@ -118,7 +118,7 @@ export type BudgetBand =
 /**
  * Client lifecycle stages
  */
-export type ClientStage = 'prospect' | 'lead' | 'active' | 'completed' | 'archived';
+export type ClientStage = 'lead' | 'proposal' | 'active' | 'completed' | 'nurture';
 
 /**
  * Client business segment

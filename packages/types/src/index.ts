@@ -31,6 +31,9 @@ export type {
 export * from './events';
 export * from './proposal';
 export * from './project';
+export * from './project-v2';
+export * from './scope';
+export * from './scope-change';
 export * from './comms';
 export * from './aesthete';
 export * from './timeline';

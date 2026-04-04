@@ -1,0 +1,4050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — iOS App Complete Design System</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500;1,600;1,700&family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================
+   PATINA iOS APP — COMPLETE DESIGN SYSTEM
+   Typography-Forward · Journey-Driven · Warm
+   ============================================ */
+
+:root {
+  --off-white: #FAF7F2;
+  --soft-cream: #F5F2ED;
+  --clay: #C4A57B;
+  --aged-oak: #8B7355;
+  --mocha: #5C4A3C;
+  --charcoal: #2C2926;
+  --sage: #A8B5A0;
+  --dusty-blue: #8B9CAD;
+  --terracotta: #D4A090;
+  --pearl: #E5E2DD;
+  --golden-hour: #E8C547;
+  --warm-white: #FAF7F2;
+  --success: #7A9B76;
+  --warning: #D4A574;
+  --error: #C77B6E;
+
+  --bg: var(--off-white);
+  --text: var(--charcoal);
+  --accent: var(--clay);
+  --muted: var(--aged-oak);
+  --subtle: var(--pearl);
+
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: 'Inter', -apple-system, sans-serif;
+  --font-mono: 'DM Mono', monospace;
+
+  --shadow-sm: 0 2px 8px rgba(92,74,60,0.06);
+  --shadow-md: 0 4px 16px rgba(92,74,60,0.08);
+  --shadow-lg: 0 8px 32px rgba(92,74,60,0.12);
+  --shadow-xl: 0 16px 64px rgba(92,74,60,0.16);
+
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+  --phone-w: 375px;
+  --phone-h: 812px;
+  --phone-radius: 44px;
+  --phone-bezel: 12px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html {
+  font-size: 17px;
+  scroll-behavior: smooth;
+  background: #E8E4DF;
+  color: var(--text);
+}
+
+body {
+  font-family: var(--font-body);
+  font-weight: 400;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* — DOCUMENT STRUCTURE — */
+.container { max-width: 1200px; margin: 0 auto; padding: 0 clamp(1.5rem, 4vw, 3rem); }
+.narrow { max-width: 800px; margin: 0 auto; padding: 0 clamp(1.5rem, 4vw, 3rem); }
+
+/* — TYPOGRAPHY — */
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+h1 { font-size: clamp(2.8rem, 6vw, 5rem); }
+h2 { font-size: clamp(1.8rem, 4vw, 3rem); }
+h3 { font-size: clamp(1.2rem, 2.2vw, 1.6rem); font-weight: 500; }
+
+h4 {
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+p { font-size: 1rem; color: var(--mocha); max-width: 640px; }
+
+em {
+  font-family: var(--font-display);
+  font-style: italic;
+  color: var(--aged-oak);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.large-body { font-size: 1.15rem; line-height: 1.8; }
+
+/* — STRATA MARK — */
+.strata { display: flex; flex-direction: column; gap: 5px; padding: 2.5rem 0; }
+.strata-line { height: 2px; background: var(--mocha); border-radius: 1px; }
+.strata-line:nth-child(1) { width: 100%; opacity: 1; }
+.strata-line:nth-child(2) { width: 80%; opacity: 0.7; }
+.strata-line:nth-child(3) { width: 60%; opacity: 0.4; }
+
+.strata-mini { display: flex; flex-direction: column; gap: 3px; width: 40px; }
+.strata-mini .strata-line { height: 1.5px; }
+
+/* — HEADER — */
+.doc-header {
+  padding: clamp(4rem, 10vh, 8rem) 0 3rem;
+  background: var(--off-white);
+  position: relative;
+}
+
+.doc-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--clay), transparent);
+}
+
+.doc-header .mono { margin-bottom: 1.5rem; display: block; }
+.doc-header h1 { margin-bottom: 1.5rem; max-width: 900px; }
+.doc-header p { font-size: 1.15rem; line-height: 1.8; max-width: 680px; }
+
+.doc-meta {
+  display: flex;
+  gap: 3rem;
+  margin-top: 2.5rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--pearl);
+}
+
+.doc-meta-item { }
+.doc-meta-item .mono { display: block; margin-bottom: 0.25rem; }
+.doc-meta-item span { font-family: var(--font-body); font-size: 0.9rem; color: var(--charcoal); font-weight: 500; }
+
+/* — SECTION STRUCTURE — */
+.section {
+  padding: clamp(3rem, 8vh, 6rem) 0;
+  background: var(--off-white);
+  position: relative;
+}
+
+.section.alt { background: var(--soft-cream); }
+.section.dark { background: var(--charcoal); color: var(--off-white); }
+.section.dark p { color: var(--pearl); }
+.section.dark h4 { color: var(--clay); }
+.section.dark .mono { color: var(--clay); }
+
+.section-header {
+  margin-bottom: 3rem;
+}
+
+.section-header .mono { display: block; margin-bottom: 0.75rem; }
+.section-header h2 { margin-bottom: 1rem; }
+.section-header p { max-width: 600px; }
+
+/* — PHONE FRAMES — */
+.phone-row {
+  display: flex;
+  gap: 2.5rem;
+  overflow-x: auto;
+  padding: 2rem 0;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.phone-row::-webkit-scrollbar { display: none; }
+
+.phone-group {
+  flex: 0 0 auto;
+  scroll-snap-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.phone-label {
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.phone-label h3 { font-size: 1.1rem; margin-bottom: 0.25rem; }
+.phone-label .mono { font-size: 0.65rem; }
+
+.phone-frame {
+  width: var(--phone-w);
+  height: var(--phone-h);
+  border-radius: var(--phone-radius);
+  background: var(--charcoal);
+  padding: var(--phone-bezel);
+  position: relative;
+  box-shadow: var(--shadow-xl), 0 0 0 1px rgba(0,0,0,0.1);
+  flex-shrink: 0;
+}
+
+.phone-screen {
+  width: 100%;
+  height: 100%;
+  border-radius: calc(var(--phone-radius) - var(--phone-bezel));
+  overflow: hidden;
+  position: relative;
+  background: var(--off-white);
+}
+
+/* Dynamic Island */
+.phone-screen::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 34px;
+  background: var(--charcoal);
+  border-radius: 20px;
+  z-index: 100;
+}
+
+/* Home Indicator */
+.phone-screen::after {
+  content: '';
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 134px;
+  height: 5px;
+  background: var(--charcoal);
+  border-radius: 3px;
+  z-index: 100;
+  opacity: 0.3;
+}
+
+/* — SCREEN CONTENT PATTERNS — */
+.screen { width: 100%; height: 100%; position: relative; overflow: hidden; }
+
+.screen-status {
+  padding: 14px 24px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 50px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--charcoal);
+  position: relative;
+  z-index: 50;
+}
+
+.screen-status.light { color: var(--off-white); }
+
+.screen-nav {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 84px;
+  padding-bottom: 20px;
+  background: var(--off-white);
+  border-top: 1px solid var(--pearl);
+  z-index: 90;
+}
+
+.screen-nav.translucent {
+  background: rgba(250,247,242,0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-body);
+  font-size: 10px;
+  color: var(--aged-oak);
+  letter-spacing: 0.02em;
+}
+
+.nav-item.active { color: var(--charcoal); }
+
+.nav-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.nav-item.active .nav-icon {
+  background: var(--clay);
+  color: white;
+  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+}
+
+/* — SPLASH SCREEN — */
+.screen-splash {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--off-white);
+  height: 100%;
+}
+
+.splash-wordmark {
+  font-family: var(--font-display);
+  font-size: 38px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--charcoal);
+  animation: splash-reveal 2s var(--ease) forwards;
+}
+
+.splash-strata {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 16px;
+  align-items: center;
+  animation: splash-strata 2s var(--ease) 0.5s forwards;
+  opacity: 0;
+}
+
+.splash-strata-line {
+  height: 2px;
+  border-radius: 1px;
+}
+
+.splash-strata-line:nth-child(1) { width: 60px; background: var(--mocha); }
+.splash-strata-line:nth-child(2) { width: 48px; background: var(--clay); }
+.splash-strata-line:nth-child(3) { width: 36px; background: var(--clay); opacity: 0.5; }
+
+@keyframes splash-reveal {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes splash-strata {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* — ONBOARDING SCREENS — */
+.screen-onboarding {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--off-white);
+}
+
+.onboarding-image {
+  flex: 1;
+  background: linear-gradient(180deg, var(--soft-cream) 0%, var(--pearl) 100%);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.onboarding-image .room-illust {
+  width: 80%;
+  height: 60%;
+  border-radius: 12px;
+  position: relative;
+}
+
+/* Abstract room illustrations */
+.room-abstract {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.room-abstract .wall { position: absolute; background: var(--pearl); }
+.room-abstract .floor { position: absolute; bottom: 0; left: 0; right: 0; height: 35%; background: var(--aged-oak); opacity: 0.15; }
+.room-abstract .window { position: absolute; background: var(--warm-white); border: 2px solid var(--clay); border-radius: 4px; }
+.room-abstract .furniture { position: absolute; border-radius: 6px; }
+.room-abstract .light-beam {
+  position: absolute;
+  background: linear-gradient(180deg, var(--golden-hour) 0%, transparent 100%);
+  opacity: 0.08;
+  transform: skewX(-15deg);
+}
+
+.onboarding-content {
+  padding: 32px 28px 100px;
+  text-align: center;
+}
+
+.onboarding-content h2 {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 400;
+  color: var(--charcoal);
+  margin-bottom: 12px;
+  line-height: 1.2;
+}
+
+.onboarding-content p {
+  font-size: 15px;
+  color: var(--mocha);
+  max-width: 300px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+.onboarding-dots {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.onboarding-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pearl);
+}
+
+.onboarding-dot.active { background: var(--clay); width: 24px; border-radius: 4px; }
+
+.onboarding-cta {
+  position: absolute;
+  bottom: 40px;
+  left: 28px;
+  right: 28px;
+  height: 52px;
+  border-radius: 26px;
+  background: var(--charcoal);
+  color: var(--off-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  z-index: 50;
+}
+
+.onboarding-skip {
+  position: absolute;
+  top: 58px;
+  right: 24px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--aged-oak);
+  z-index: 60;
+}
+
+/* — AUTH SCREEN — */
+.screen-auth {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--off-white);
+  padding: 60px 28px 40px;
+}
+
+.auth-logo {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--charcoal);
+  text-align: center;
+  margin-top: 20px;
+}
+
+.auth-strata-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+  margin-top: 10px;
+  margin-bottom: 40px;
+}
+
+.auth-strata-mini div:nth-child(1) { width: 40px; height: 1.5px; background: var(--mocha); }
+.auth-strata-mini div:nth-child(2) { width: 32px; height: 1.5px; background: var(--clay); }
+.auth-strata-mini div:nth-child(3) { width: 24px; height: 1.5px; background: var(--clay); opacity: 0.5; }
+
+.auth-title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--charcoal);
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.auth-subtitle {
+  font-size: 14px;
+  color: var(--aged-oak);
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.auth-btn {
+  width: 100%;
+  height: 50px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.auth-btn.apple { background: var(--charcoal); color: var(--off-white); }
+.auth-btn.google { background: var(--off-white); border: 1.5px solid var(--pearl); color: var(--charcoal); }
+.auth-btn.email { background: var(--off-white); border: 1.5px solid var(--pearl); color: var(--charcoal); }
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.auth-divider-line { flex: 1; height: 1px; background: var(--pearl); }
+.auth-divider-text { font-size: 12px; color: var(--aged-oak); }
+
+.auth-guest {
+  font-size: 14px;
+  color: var(--clay);
+  text-align: center;
+  margin-top: 8px;
+}
+
+.auth-footer {
+  margin-top: auto;
+  font-size: 11px;
+  color: var(--aged-oak);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* — STYLE QUIZ — */
+.screen-quiz {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--off-white);
+}
+
+.quiz-progress {
+  padding: 54px 24px 0;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.quiz-progress-dot {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--pearl);
+}
+
+.quiz-progress-dot.done { background: var(--clay); }
+.quiz-progress-dot.current { background: var(--mocha); }
+
+.quiz-question-num {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--aged-oak);
+  padding: 16px 24px 0;
+  text-transform: uppercase;
+}
+
+.quiz-question {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--charcoal);
+  padding: 8px 24px 0;
+  line-height: 1.25;
+}
+
+.quiz-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 20px 24px;
+  flex: 1;
+}
+
+.quiz-card {
+  border-radius: 14px;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.quiz-card-image {
+  flex: 1;
+  min-height: 120px;
+  position: relative;
+}
+
+.quiz-card-label {
+  padding: 10px 12px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--charcoal);
+  background: var(--soft-cream);
+}
+
+.quiz-card.selected {
+  outline: 2.5px solid var(--clay);
+  outline-offset: -2.5px;
+}
+
+.quiz-card.selected .quiz-card-label {
+  background: var(--clay);
+  color: white;
+}
+
+/* Material cards */
+.material-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.material-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--soft-cream);
+}
+
+.material-card.selected {
+  background: var(--clay);
+  color: white;
+}
+
+.material-swatch {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.material-info h5 {
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--charcoal);
+  margin-bottom: 2px;
+}
+
+.material-info p {
+  font-size: 12px;
+  color: var(--aged-oak);
+  margin: 0;
+}
+
+.material-card.selected .material-info h5,
+.material-card.selected .material-info p { color: white; }
+
+/* Budget slider */
+.budget-section {
+  flex: 1;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.budget-tiers {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.budget-tier {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--soft-cream);
+  cursor: pointer;
+}
+
+.budget-tier.selected {
+  background: var(--charcoal);
+  color: var(--off-white);
+}
+
+.budget-tier-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.budget-tier-info h5 {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.budget-tier-info p {
+  font-size: 12px;
+  color: var(--aged-oak);
+  margin: 0;
+}
+
+.budget-tier.selected .budget-tier-info p { color: var(--pearl); }
+
+/* — ROOM SCAN — */
+.screen-scan {
+  height: 100%;
+  position: relative;
+}
+
+.scan-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #d4cfc7 0%, #bfb8ad 50%, #a8a195 100%);
+}
+
+.scan-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(92,74,60,0.04);
+}
+
+.scan-particles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.scan-particle {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--clay);
+  opacity: 0.3;
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) translateX(0); }
+  50% { transform: translateY(-20px) translateX(5px); }
+}
+
+.scan-coaching {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  z-index: 10;
+}
+
+.scan-coaching-text {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--charcoal);
+  opacity: 0.8;
+  font-style: italic;
+}
+
+.scan-coaching-sub {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--mocha);
+  margin-top: 8px;
+}
+
+.scan-progress-ring {
+  position: absolute;
+  bottom: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.ring-outer {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 3px solid var(--pearl);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ring-fill {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 3px solid var(--clay);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  transform: rotate(45deg);
+}
+
+.ring-text {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--charcoal);
+}
+
+.ring-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--aged-oak);
+}
+
+/* Progress ribbon */
+.scan-ribbon {
+  position: absolute;
+  top: 60px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  z-index: 30;
+  padding: 12px 20px;
+  background: rgba(250,247,242,0.85);
+  backdrop-filter: blur(12px);
+  border-radius: 20px;
+}
+
+.ribbon-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  flex: 1;
+}
+
+.ribbon-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--pearl);
+  background: var(--off-white);
+}
+
+.ribbon-dot.done { background: var(--clay); border-color: var(--clay); }
+.ribbon-dot.current { border-color: var(--clay); box-shadow: 0 0 0 3px rgba(196,165,123,0.25); }
+
+.ribbon-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--aged-oak);
+}
+
+.ribbon-line {
+  width: 100%;
+  height: 2px;
+  background: var(--pearl);
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  z-index: -1;
+}
+
+.ribbon-line.done { background: var(--clay); }
+
+/* — FLOOR PLAN — */
+.screen-floorplan {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--off-white);
+}
+
+.floorplan-header {
+  padding: 56px 24px 16px;
+}
+
+.floorplan-header h2 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--charcoal);
+}
+
+.floorplan-header .mono { margin-top: 4px; }
+
+.floorplan-viewer {
+  flex: 1;
+  margin: 0 24px;
+  border-radius: 16px;
+  background: var(--soft-cream);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.floorplan-room {
+  width: 70%;
+  height: 60%;
+  border: 2px solid var(--mocha);
+  border-radius: 4px;
+  position: relative;
+}
+
+.floorplan-room .fp-window {
+  position: absolute;
+  background: var(--dusty-blue);
+  opacity: 0.3;
+  border-radius: 2px;
+}
+
+.floorplan-room .fp-door {
+  position: absolute;
+  border-bottom: 2px dashed var(--clay);
+}
+
+.floorplan-room .fp-dim {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--aged-oak);
+}
+
+.floorplan-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: var(--success);
+  color: white;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 10px;
+}
+
+.floorplan-metrics {
+  display: flex;
+  gap: 12px;
+  padding: 16px 24px;
+}
+
+.fp-metric {
+  flex: 1;
+  background: var(--soft-cream);
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+}
+
+.fp-metric-val {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--charcoal);
+}
+
+.fp-metric-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--aged-oak);
+  margin-top: 2px;
+}
+
+.floorplan-actions {
+  display: flex;
+  gap: 12px;
+  padding: 12px 24px 100px;
+}
+
+.fp-btn {
+  flex: 1;
+  height: 48px;
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.fp-btn.primary { background: var(--charcoal); color: var(--off-white); }
+.fp-btn.secondary { background: var(--soft-cream); color: var(--charcoal); }
+
+/* — RECOMMENDATIONS — */
+.screen-recs {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--off-white);
+}
+
+.recs-header {
+  padding: 56px 24px 12px;
+}
+
+.recs-header h2 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--charcoal);
+  line-height: 1.2;
+}
+
+.recs-header p {
+  font-size: 13px;
+  color: var(--aged-oak);
+  margin-top: 4px;
+}
+
+.recs-filter-bar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 24px 12px;
+  overflow-x: auto;
+}
+
+.filter-chip {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--soft-cream);
+  color: var(--mocha);
+  white-space: nowrap;
+}
+
+.filter-chip.active { background: var(--charcoal); color: var(--off-white); }
+
+.recs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 0 24px;
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 100px;
+  align-content: start;
+}
+
+.rec-card {
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--soft-cream);
+}
+
+.rec-card-image {
+  height: 160px;
+  position: relative;
+}
+
+.rec-card-match {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  background: rgba(250,247,242,0.9);
+  backdrop-filter: blur(8px);
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: var(--mocha);
+}
+
+.rec-card-save {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(250,247,242,0.9);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.rec-card-info { padding: 10px 12px; }
+
+.rec-card-name {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--charcoal);
+  margin-bottom: 2px;
+  line-height: 1.3;
+}
+
+.rec-card-maker {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--aged-oak);
+  margin-bottom: 4px;
+}
+
+.rec-card-price {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--charcoal);
+}
+
+/* — PRODUCT DETAIL — */
+.screen-product {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--off-white);
+  overflow-y: auto;
+}
+
+.product-hero {
+  height: 360px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.product-back {
+  position: absolute;
+  top: 56px;
+  left: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(250,247,242,0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  z-index: 20;
+}
+
+.product-actions-top {
+  position: absolute;
+  top: 56px;
+  right: 16px;
+  display: flex;
+  gap: 8px;
+  z-index: 20;
+}
+
+.product-action-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(250,247,242,0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.product-content { padding: 24px; }
+
+.product-maker-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--clay);
+  margin-bottom: 6px;
+}
+
+.product-name {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 400;
+  color: var(--charcoal);
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.product-subtitle {
+  font-size: 14px;
+  color: var(--aged-oak);
+  margin-bottom: 16px;
+}
+
+.product-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.product-price {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 500;
+  color: var(--charcoal);
+}
+
+.product-match-pill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: rgba(122,155,118,0.12);
+  color: var(--success);
+}
+
+/* Maker story */
+.maker-story {
+  margin: 20px 0;
+  padding: 20px;
+  background: var(--soft-cream);
+  border-radius: 14px;
+}
+
+.maker-story-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.maker-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.maker-name {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--charcoal);
+}
+
+.maker-location {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--aged-oak);
+}
+
+.maker-story p {
+  font-size: 14px;
+  color: var(--mocha);
+  line-height: 1.6;
+  font-style: italic;
+  max-width: 100%;
+}
+
+/* Material badges */
+.product-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+
+.product-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: var(--soft-cream);
+  font-size: 11px;
+  color: var(--mocha);
+}
+
+.product-badge-icon { font-size: 12px; }
+
+/* Bottom action bar */
+.product-bottom-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 12px;
+  padding: 16px 24px 36px;
+  background: var(--off-white);
+  border-top: 1px solid var(--pearl);
+}
+
+.product-btn {
+  height: 50px;
+  border-radius: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.product-btn.ar { flex: 0 0 50px; background: var(--soft-cream); font-size: 18px; }
+.product-btn.cart { flex: 1; background: var(--charcoal); color: var(--off-white); }
+
+/* — AR PLACEMENT — */
+.screen-ar {
+  height: 100%;
+  position: relative;
+}
+
+.ar-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #c8c1b8 0%, #d8d2c9 50%, #c2bbb1 100%);
+}
+
+.ar-furniture-ghost {
+  position: absolute;
+  bottom: 280px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 160px;
+  height: 80px;
+  border-radius: 12px;
+  border: 2px dashed var(--clay);
+  background: rgba(196,165,123,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ar-furniture-shadow {
+  position: absolute;
+  bottom: 265px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 140px;
+  height: 12px;
+  background: rgba(44,41,38,0.08);
+  border-radius: 50%;
+  filter: blur(4px);
+}
+
+.ar-controls {
+  position: absolute;
+  bottom: 100px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  z-index: 20;
+}
+
+.ar-name {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--charcoal);
+  text-align: center;
+  background: rgba(250,247,242,0.9);
+  backdrop-filter: blur(12px);
+  padding: 8px 20px;
+  border-radius: 20px;
+}
+
+.ar-control-row {
+  display: flex;
+  gap: 12px;
+}
+
+.ar-ctrl-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(250,247,242,0.9);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.ar-ctrl-btn.primary {
+  width: auto;
+  padding: 0 24px;
+  border-radius: 24px;
+  background: var(--charcoal);
+  color: var(--off-white);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ar-light-slider {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 20;
+}
+
+.ar-slider-track {
+  width: 4px;
+  height: 100px;
+  background: rgba(250,247,242,0.4);
+  border-radius: 2px;
+  position: relative;
+}
+
+.ar-slider-fill {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  height: 60%;
+  background: var(--golden-hour);
+  border-radius: 2px;
+}
+
+.ar-slider-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mocha);
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+}
+
+/* — COLLECTIONS / SAVED — */
+.screen-collections {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--off-white);
+}
+
+.collections-header {
+  padding: 56px 24px 16px;
+}
+
+.collections-header h2 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  color: var(--charcoal);
+}
+
+.collections-tabs {
+  display: flex;
+  gap: 24px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--pearl);
+}
+
+.collection-tab {
+  padding: 12px 0;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--aged-oak);
+  position: relative;
+}
+
+.collection-tab.active {
+  color: var(--charcoal);
+  font-weight: 500;
+}
+
+.collection-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--clay);
+}
+
+.collections-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 24px 100px;
+}
+
+.collection-board {
+  margin-bottom: 24px;
+}
+
+.collection-board-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.collection-board-title h3 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--charcoal);
+}
+
+.collection-board-title .mono { font-size: 10px; }
+
+.collection-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+.collection-thumb {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  position: relative;
+}
+
+.collection-thumb:first-child {
+  grid-row: span 2;
+  grid-column: span 2;
+  border-radius: 12px;
+  aspect-ratio: auto;
+}
+
+/* — PROFILE / DESIGN JOURNAL — */
+.screen-profile {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--off-white);
+  overflow-y: auto;
+}
+
+.profile-header {
+  padding: 56px 24px 24px;
+  text-align: center;
+}
+
+.profile-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 500;
+  color: var(--off-white);
+}
+
+.profile-name {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--charcoal);
+  margin-bottom: 4px;
+}
+
+.profile-tagline {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--aged-oak);
+}
+
+.profile-style-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 6px 16px;
+  border-radius: 20px;
+  background: var(--soft-cream);
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--mocha);
+}
+
+.profile-stats {
+  display: flex;
+  padding: 20px 24px;
+  gap: 0;
+  border-top: 1px solid var(--pearl);
+  border-bottom: 1px solid var(--pearl);
+}
+
+.profile-stat {
+  flex: 1;
+  text-align: center;
+  position: relative;
+}
+
+.profile-stat:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 20%;
+  height: 60%;
+  width: 1px;
+  background: var(--pearl);
+}
+
+.profile-stat-val {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--charcoal);
+}
+
+.profile-stat-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--aged-oak);
+  margin-top: 2px;
+}
+
+.profile-section {
+  padding: 20px 24px;
+}
+
+.profile-section h4 {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--aged-oak);
+  margin-bottom: 12px;
+}
+
+.profile-evolution {
+  display: flex;
+  gap: 8px;
+}
+
+.evolution-node {
+  flex: 1;
+  text-align: center;
+  position: relative;
+}
+
+.evolution-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin: 0 auto 6px;
+}
+
+.evolution-line {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  z-index: -1;
+}
+
+.evolution-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--aged-oak);
+}
+
+.profile-rooms {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.profile-room-card {
+  flex: 0 0 140px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--soft-cream);
+}
+
+.profile-room-img {
+  height: 100px;
+}
+
+.profile-room-info {
+  padding: 8px 10px;
+}
+
+.profile-room-name {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--charcoal);
+}
+
+.profile-room-date {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--aged-oak);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* — DESIGNER CONSULTATION — */
+.screen-designer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--off-white);
+  overflow-y: auto;
+}
+
+.designer-hero {
+  padding: 56px 24px 24px;
+  background: var(--charcoal);
+  color: var(--off-white);
+  position: relative;
+}
+
+.designer-hero::after {
+  content: '';
+  position: absolute;
+  bottom: -20px;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: linear-gradient(180deg, var(--charcoal), transparent);
+}
+
+.designer-hero h2 {
+  font-family: var(--font-display);
+  font-size: 26px;
+  color: var(--off-white);
+  margin-bottom: 8px;
+}
+
+.designer-hero p {
+  font-size: 14px;
+  color: var(--pearl);
+  line-height: 1.6;
+}
+
+.designer-card {
+  margin: 32px 24px 16px;
+  padding: 20px;
+  border-radius: 16px;
+  background: var(--soft-cream);
+  display: flex;
+  gap: 16px;
+}
+
+.designer-photo {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.designer-info h3 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--charcoal);
+  margin-bottom: 2px;
+}
+
+.designer-info .mono { margin-bottom: 8px; display: block; }
+
+.designer-info p {
+  font-size: 13px;
+  color: var(--mocha);
+  line-height: 1.5;
+  max-width: 100%;
+}
+
+.designer-form {
+  padding: 0 24px 120px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mocha);
+  margin-bottom: 6px;
+  display: block;
+}
+
+.form-input {
+  width: 100%;
+  height: 46px;
+  border-radius: 12px;
+  background: var(--soft-cream);
+  border: 1.5px solid var(--pearl);
+  padding: 0 16px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--charcoal);
+}
+
+.form-textarea {
+  width: 100%;
+  height: 90px;
+  border-radius: 12px;
+  background: var(--soft-cream);
+  border: 1.5px solid var(--pearl);
+  padding: 12px 16px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--charcoal);
+  resize: none;
+}
+
+.form-room-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.form-room-tag {
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--soft-cream);
+  color: var(--mocha);
+  border: 1.5px solid var(--pearl);
+}
+
+.form-room-tag.selected {
+  background: var(--clay);
+  color: white;
+  border-color: var(--clay);
+}
+
+/* — SETTINGS — */
+.screen-settings {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--off-white);
+  overflow-y: auto;
+}
+
+.settings-header {
+  padding: 56px 24px 16px;
+}
+
+.settings-header h2 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--charcoal);
+}
+
+.settings-group {
+  padding: 0 24px;
+  margin-bottom: 24px;
+}
+
+.settings-group-title {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--aged-oak);
+  margin-bottom: 8px;
+  padding-left: 4px;
+}
+
+.settings-items {
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--soft-cream);
+}
+
+.settings-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--pearl);
+}
+
+.settings-item:last-child { border-bottom: none; }
+
+.settings-item-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.settings-item-label {
+  font-size: 14px;
+  color: var(--charcoal);
+}
+
+.settings-chevron {
+  font-size: 14px;
+  color: var(--aged-oak);
+}
+
+.settings-toggle {
+  width: 44px;
+  height: 26px;
+  border-radius: 13px;
+  position: relative;
+}
+
+.settings-toggle.on { background: var(--clay); }
+.settings-toggle.off { background: var(--pearl); }
+
+.settings-toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+.settings-toggle.on::after { right: 3px; }
+.settings-toggle.off::after { left: 3px; }
+
+/* — HOME / DISCOVER — */
+.screen-home {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--off-white);
+  overflow-y: auto;
+}
+
+.home-greeting {
+  padding: 56px 24px 0;
+}
+
+.home-greeting .mono { display: block; margin-bottom: 4px; }
+
+.home-greeting h2 {
+  font-family: var(--font-display);
+  font-size: 26px;
+  color: var(--charcoal);
+}
+
+.home-search {
+  margin: 16px 24px;
+  height: 44px;
+  border-radius: 22px;
+  background: var(--soft-cream);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--aged-oak);
+}
+
+.home-section {
+  padding: 16px 0;
+}
+
+.home-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+  margin-bottom: 12px;
+}
+
+.home-section-header h3 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--charcoal);
+}
+
+.home-section-header a {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--clay);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.home-scroll {
+  display: flex;
+  gap: 12px;
+  padding: 0 24px;
+  overflow-x: auto;
+}
+
+.home-featured-card {
+  flex: 0 0 260px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--soft-cream);
+}
+
+.home-featured-img {
+  height: 160px;
+  position: relative;
+}
+
+.home-featured-info { padding: 12px 14px; }
+
+.home-featured-info h4 {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--charcoal);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-bottom: 2px;
+}
+
+.home-featured-info p {
+  font-size: 12px;
+  color: var(--aged-oak);
+  margin: 0;
+}
+
+.home-artisan-card {
+  flex: 0 0 200px;
+  text-align: center;
+}
+
+.home-artisan-img {
+  width: 100%;
+  height: 200px;
+  border-radius: 14px;
+  margin-bottom: 8px;
+}
+
+.home-artisan-card h5 {
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--charcoal);
+  margin-bottom: 2px;
+}
+
+.home-artisan-card p {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--aged-oak);
+  margin: 0;
+}
+
+/* Scan prompt card */
+.home-scan-prompt {
+  margin: 16px 24px;
+  padding: 24px;
+  border-radius: 16px;
+  background: var(--charcoal);
+  color: var(--off-white);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.scan-prompt-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: var(--clay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.scan-prompt-text h4 {
+  font-family: var(--font-display);
+  font-size: 17px;
+  color: var(--off-white);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  margin-bottom: 4px;
+}
+
+.scan-prompt-text p {
+  font-size: 12px;
+  color: var(--pearl);
+  margin: 0;
+  max-width: 100%;
+}
+
+/* — NOTIFICATION CENTER — */
+.screen-notif {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--off-white);
+  overflow-y: auto;
+}
+
+.notif-header {
+  padding: 56px 24px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.notif-header h2 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--charcoal);
+}
+
+.notif-header a {
+  font-size: 13px;
+  color: var(--clay);
+  text-decoration: none;
+}
+
+.notif-item {
+  display: flex;
+  gap: 14px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--pearl);
+}
+
+.notif-item.unread { background: rgba(196,165,123,0.05); }
+
+.notif-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.notif-content { flex: 1; }
+
+.notif-content h5 {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--charcoal);
+  margin-bottom: 2px;
+}
+
+.notif-content p {
+  font-size: 13px;
+  color: var(--aged-oak);
+  max-width: 100%;
+  margin: 0;
+}
+
+.notif-time {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--aged-oak);
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* ==========================================
+   ANNOTATION SYSTEM
+   ========================================== */
+.annotation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 2rem;
+  margin-top: 2rem;
+}
+
+.annotation-card {
+  padding: 1.5rem;
+  border-radius: 12px;
+  background: var(--soft-cream);
+}
+
+.annotation-card .mono { display: block; margin-bottom: 0.5rem; }
+.annotation-card h3 { font-size: 1.2rem; margin-bottom: 0.5rem; }
+.annotation-card p { font-size: 0.9rem; }
+
+/* Principles grid */
+.principle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  margin-top: 2rem;
+}
+
+.principle-item {
+  display: flex;
+  gap: 1rem;
+}
+
+.principle-num {
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+  font-weight: 400;
+  color: var(--clay);
+  line-height: 1;
+  flex-shrink: 0;
+  width: 50px;
+}
+
+.principle-item h3 { margin-bottom: 0.4rem; }
+
+/* COLOR SWATCHES FOR REFERENCE */
+.swatch-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch-circle {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+}
+
+.swatch-name {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--aged-oak);
+}
+
+.swatch-hex {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--muted);
+}
+
+/* TYPE SPECIMEN */
+.type-specimen {
+  margin-top: 1.5rem;
+}
+
+.type-row {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--pearl);
+}
+
+.type-sample { flex: 1; }
+.type-meta {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--aged-oak);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  text-align: right;
+  width: 160px;
+}
+
+/* FOOTER */
+.doc-footer {
+  padding: 4rem 0;
+  background: var(--charcoal);
+  color: var(--pearl);
+}
+
+.doc-footer-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.doc-footer h3 {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  color: var(--off-white);
+}
+
+.doc-footer em {
+  color: var(--clay);
+  display: block;
+  margin-top: 0.25rem;
+}
+
+.doc-footer .mono { color: var(--clay); }
+
+/* SCROLL ANIMATION */
+.fade-in {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+}
+
+.fade-in.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* RESPONSIVE */
+@media (max-width: 900px) {
+  .phone-row { gap: 1.5rem; padding: 1rem 1.5rem; }
+  .phone-frame {
+    width: 320px;
+    height: 693px;
+    --phone-w: 320px;
+    --phone-h: 693px;
+  }
+  .doc-meta { flex-wrap: wrap; gap: 1.5rem; }
+}
+
+@media (max-width: 600px) {
+  .phone-frame {
+    width: 280px;
+    height: 607px;
+    border-radius: 36px;
+  }
+  .phone-screen { border-radius: calc(36px - 10px); }
+  .container, .narrow { padding: 0 1rem; }
+}
+
+/* Placeholder color fills for screen mockups */
+.fill-cream { background: var(--soft-cream); }
+.fill-clay { background: var(--clay); }
+.fill-mocha { background: var(--mocha); }
+.fill-sage { background: var(--sage); }
+.fill-dusty { background: var(--dusty-blue); }
+.fill-terra { background: var(--terracotta); }
+.fill-pearl { background: var(--pearl); }
+.fill-charcoal { background: var(--charcoal); }
+.fill-golden { background: var(--golden-hour); }
+.fill-oak { background: var(--aged-oak); }
+
+.fill-gradient-warm { background: linear-gradient(135deg, var(--soft-cream), var(--clay)); }
+.fill-gradient-dusk { background: linear-gradient(180deg, var(--dusty-blue), var(--mocha)); }
+.fill-gradient-earth { background: linear-gradient(135deg, var(--aged-oak), var(--clay)); }
+.fill-gradient-sage { background: linear-gradient(135deg, var(--sage), var(--pearl)); }
+.fill-gradient-sunrise { background: linear-gradient(135deg, var(--off-white), var(--golden-hour), var(--clay)); }
+.fill-gradient-leather { background: linear-gradient(135deg, #8B6F47, #A3927C); }
+.fill-gradient-linen { background: linear-gradient(135deg, #D4CFC7, #E5E2DD); }
+.fill-gradient-stone { background: linear-gradient(135deg, #9E9689, #B8B0A5); }
+.fill-gradient-wood { background: linear-gradient(135deg, #6B5B4E, #8B7355); }
+.fill-gradient-metal { background: linear-gradient(135deg, #7A7B80, #A8A9AD); }
+.fill-gradient-rattan { background: linear-gradient(135deg, #B8A080, #D4C4A8); }
+
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     DOCUMENT HEADER
+     ============================================================ -->
+<header class="doc-header">
+  <div class="container">
+    <div class="strata-mini">
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+    </div>
+    <span class="mono" style="margin-top:1rem; display:block;">iOS Application Design · Complete Screen Reference</span>
+    <h1>Patina <em>iOS</em></h1>
+    <p class="large-body">A complete redesign of the Patina iOS application — every screen rendered in the typography-forward design language. Type weight replaces containers. Whitespace creates visual rooms. The interface becomes invisible, letting the journey speak.</p>
+
+    <div class="doc-meta">
+      <div class="doc-meta-item">
+        <span class="mono">Version</span>
+        <span>2.0 — Redesign</span>
+      </div>
+      <div class="doc-meta-item">
+        <span class="mono">Date</span>
+        <span>April 2026</span>
+      </div>
+      <div class="doc-meta-item">
+        <span class="mono">Screens</span>
+        <span>18 Core Screens</span>
+      </div>
+      <div class="doc-meta-item">
+        <span class="mono">Design Language</span>
+        <span>Typography-Forward</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ============================================================
+     SECTION 1: DESIGN PRINCIPLES
+     ============================================================ -->
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <span class="mono">01 · Foundation</span>
+      <h2>Design <em>Principles</em></h2>
+      <p>Five principles that govern every pixel of the Patina iOS experience. These aren't guidelines — they're the load-bearing walls of the entire interface.</p>
+    </div>
+
+    <div class="principle-grid">
+      <div class="principle-item fade-in">
+        <div class="principle-num">01</div>
+        <div>
+          <h3>Type Weight Replaces Containers</h3>
+          <p>A product name in 500-weight Playfair at 26px tells you it's the headline. A maker tag in 10px DM Mono uppercase tells you it's metadata. No card needed. No shadow. No border.</p>
+        </div>
+      </div>
+      <div class="principle-item fade-in">
+        <div class="principle-num">02</div>
+        <div>
+          <h3>Tactile Over Technical</h3>
+          <p>Every interaction should feel like touching fabric swatches or wood samples. Haptic taps on capture. Magnetic snapping in AR. Cards that stack like material samples in hand.</p>
+        </div>
+      </div>
+      <div class="principle-item fade-in">
+        <div class="principle-num">03</div>
+        <div>
+          <h3>Stories Over Specs</h3>
+          <p>Lead with provenance and craftsmanship, not dimensions and SKUs. "Hand-turned in Ohio since 1904" appears before "24" W × 18" D × 30" H."</p>
+        </div>
+      </div>
+      <div class="principle-item fade-in">
+        <div class="principle-num">04</div>
+        <div>
+          <h3>Journey Over Task</h3>
+          <p>Frame scanning as "walking your room together," not "capture data." The 5-act structure (Invitation → Room Walk → Discovery → Living Room → Collection) transforms utility into narrative.</p>
+        </div>
+      </div>
+      <div class="principle-item fade-in">
+        <div class="principle-num">05</div>
+        <div>
+          <h3>Whitespace as Architecture</h3>
+          <p>Generous margins and padding create visual "rooms" where related information lives together — without needing explicit containers to define boundaries.</p>
+        </div>
+      </div>
+      <div class="principle-item fade-in">
+        <div class="principle-num">06</div>
+        <div>
+          <h3>Layered Discovery</h3>
+          <p>Reveal complexity gradually, like peeling back layers of patina. Primary info is bold and large. Supporting details lighter and smaller. Metadata monospaced and muted.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SECTION 2: VISUAL SYSTEM REFERENCE
+     ============================================================ -->
+<section class="section alt">
+  <div class="container">
+    <div class="section-header">
+      <span class="mono">02 · Visual System</span>
+      <h2>Color & <em>Typography</em></h2>
+      <p>The palette and type system that carries the entire interface. Earth-born colors. Three typefaces each with a clear purpose. No decoration — only information.</p>
+    </div>
+
+    <h4 style="margin-top:2rem;">Core Palette</h4>
+    <div class="swatch-row" style="margin-bottom:2rem;">
+      <div class="swatch">
+        <div class="swatch-circle" style="background: #FAF7F2;"></div>
+        <span class="swatch-name">Off-White</span>
+        <span class="swatch-hex">#FAF7F2</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-circle" style="background: #F5F2ED;"></div>
+        <span class="swatch-name">Soft Cream</span>
+        <span class="swatch-hex">#F5F2ED</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-circle" style="background: #C4A57B;"></div>
+        <span class="swatch-name">Clay</span>
+        <span class="swatch-hex">#C4A57B</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-circle" style="background: #8B7355;"></div>
+        <span class="swatch-name">Aged Oak</span>
+        <span class="swatch-hex">#8B7355</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-circle" style="background: #5C4A3C;"></div>
+        <span class="swatch-name">Mocha</span>
+        <span class="swatch-hex">#5C4A3C</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-circle" style="background: #2C2926;"></div>
+        <span class="swatch-name">Charcoal</span>
+        <span class="swatch-hex">#2C2926</span>
+      </div>
+    </div>
+
+    <h4>Extended Palette</h4>
+    <div class="swatch-row" style="margin-bottom:2rem;">
+      <div class="swatch">
+        <div class="swatch-circle" style="background: #A8B5A0;"></div>
+        <span class="swatch-name">Sage</span>
+        <span class="swatch-hex">#A8B5A0</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-circle" style="background: #8B9CAD;"></div>
+        <span class="swatch-name">Dusty Blue</span>
+        <span class="swatch-hex">#8B9CAD</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-circle" style="background: #D4A090;"></div>
+        <span class="swatch-name">Terracotta</span>
+        <span class="swatch-hex">#D4A090</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-circle" style="background: #E5E2DD;"></div>
+        <span class="swatch-name">Pearl</span>
+        <span class="swatch-hex">#E5E2DD</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-circle" style="background: #E8C547;"></div>
+        <span class="swatch-name">Golden Hour</span>
+        <span class="swatch-hex">#E8C547</span>
+      </div>
+    </div>
+
+    <h4>Typography System</h4>
+    <div class="type-specimen">
+      <div class="type-row">
+        <div class="type-sample" style="font-family: var(--font-display); font-size: 2.2rem; font-weight: 400; color: var(--charcoal);">Every room tells a story</div>
+        <div class="type-meta">Playfair Display · Display</div>
+      </div>
+      <div class="type-row">
+        <div class="type-sample" style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 500; color: var(--charcoal);">Discover your unique style</div>
+        <div class="type-meta">Playfair Display · Heading</div>
+      </div>
+      <div class="type-row">
+        <div class="type-sample" style="font-family: var(--font-body); font-size: 1rem; color: var(--mocha);">Hand-crafted from solid American walnut with mortise-and-tenon joinery that speaks to generations of woodworking tradition.</div>
+        <div class="type-meta">Inter · Body</div>
+      </div>
+      <div class="type-row">
+        <div class="type-sample" style="font-family: var(--font-body); font-size: 0.85rem; font-weight: 500; color: var(--charcoal);">Add to Room · Save · Share</div>
+        <div class="type-meta">Inter Medium · UI / Actions</div>
+      </div>
+      <div class="type-row">
+        <div class="type-sample" style="font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--aged-oak);">HAND-TURNED IN OHIO SINCE 1904 · $2,850 · 92% MATCH</div>
+        <div class="type-meta">DM Mono · Metadata / Labels</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     ACT I: THE INVITATION
+     ============================================================ -->
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <span class="mono">Act I · The Invitation</span>
+      <h2>First <em>Impressions</em></h2>
+      <p>The opening moments. Logo reveals like sunlight through a window. Onboarding frames the philosophy — not the features. Auth feels like opening a front door, not filling out a form.</p>
+    </div>
+
+    <div class="phone-row">
+
+      <!-- SPLASH -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Splash</h3>
+          <span class="mono">2s · Launch</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-splash">
+              <div class="splash-wordmark">Patina</div>
+              <div class="splash-strata">
+                <div class="splash-strata-line"></div>
+                <div class="splash-strata-line"></div>
+                <div class="splash-strata-line"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ONBOARDING 1 -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Onboarding — Philosophy</h3>
+          <span class="mono">Screen 1 of 3</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-onboarding">
+              <div class="screen-status"><span>9:41</span><span>···</span></div>
+              <div class="onboarding-skip">Skip</div>
+              <div class="onboarding-image">
+                <div class="room-illust">
+                  <div class="room-abstract">
+                    <div class="floor"></div>
+                    <div class="light-beam" style="top:0;left:40%;width:30%;height:100%;"></div>
+                    <div class="furniture fill-gradient-leather" style="bottom:35%;left:15%;width:45%;height:20%;border-radius:8px 8px 4px 4px;opacity:0.6;"></div>
+                    <div class="furniture fill-gradient-wood" style="bottom:35%;right:12%;width:18%;height:28%;border-radius:4px;opacity:0.5;"></div>
+                    <div class="window" style="top:10%;right:20%;width:25%;height:35%;"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="onboarding-content">
+                <h2>Every room tells a story</h2>
+                <p>Let's discover yours. Walk your space, uncover your style, and find pieces that grow more beautiful with time.</p>
+                <div class="onboarding-dots">
+                  <div class="onboarding-dot active"></div>
+                  <div class="onboarding-dot"></div>
+                  <div class="onboarding-dot"></div>
+                </div>
+              </div>
+              <div class="onboarding-cta">Start Your Journey</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ONBOARDING 2 -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Onboarding — Promise</h3>
+          <span class="mono">Screen 2 of 3</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-onboarding">
+              <div class="screen-status"><span>9:41</span><span>···</span></div>
+              <div class="onboarding-skip">Skip</div>
+              <div class="onboarding-image" style="background: linear-gradient(180deg, var(--pearl) 0%, var(--sage) 30%, var(--pearl) 100%); opacity: 0.6;">
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+                  <div style="width:140px;height:280px;border-radius:24px;background:var(--charcoal);opacity:0.12;position:relative;">
+                    <div style="position:absolute;top:20%;left:15%;right:15%;bottom:30%;border-radius:8px;background:var(--clay);opacity:0.4;"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="onboarding-content">
+                <h2>See it in <em>your</em> space</h2>
+                <p>Walk your room. Our camera captures every corner. Then watch as perfectly matched furniture appears right where it belongs.</p>
+                <div class="onboarding-dots">
+                  <div class="onboarding-dot"></div>
+                  <div class="onboarding-dot active"></div>
+                  <div class="onboarding-dot"></div>
+                </div>
+              </div>
+              <div class="onboarding-cta">Continue</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ONBOARDING 3 — PERMISSION -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Onboarding — Permission</h3>
+          <span class="mono">Screen 3 of 3</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-onboarding">
+              <div class="screen-status"><span>9:41</span><span>···</span></div>
+              <div class="onboarding-image" style="background: var(--soft-cream);">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+                  <div style="width:80px;height:80px;border-radius:20px;background:var(--clay);opacity:0.2;display:flex;align-items:center;justify-content:center;">
+                    <div style="font-size:32px;">📷</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:var(--off-white);">
+                    <span style="font-size:12px;">🔒</span>
+                    <span style="font-family:var(--font-body);font-size:12px;color:var(--mocha);">Your room stays private</span>
+                  </div>
+                </div>
+              </div>
+              <div class="onboarding-content">
+                <h2>We'll need your camera</h2>
+                <p>To see your space and place furniture in it. Nothing leaves your device until you choose to share.</p>
+                <div class="onboarding-dots">
+                  <div class="onboarding-dot"></div>
+                  <div class="onboarding-dot"></div>
+                  <div class="onboarding-dot active"></div>
+                </div>
+              </div>
+              <div class="onboarding-cta">Let's Begin</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AUTH -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Authentication</h3>
+          <span class="mono">Sign In · Create Account</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-auth">
+              <div class="screen-status"><span>9:41</span><span>···</span></div>
+              <div class="auth-logo">Patina</div>
+              <div class="auth-strata-mini">
+                <div></div><div></div><div></div>
+              </div>
+              <div class="auth-title">Welcome home</div>
+              <div class="auth-subtitle">Join thousands of design enthusiasts</div>
+              <div class="auth-btn apple"> Continue with Apple</div>
+              <div class="auth-btn google">G  Continue with Google</div>
+              <div class="auth-btn email">✉  Continue with Email</div>
+              <div class="auth-divider">
+                <div class="auth-divider-line"></div>
+                <span class="auth-divider-text">or</span>
+                <div class="auth-divider-line"></div>
+              </div>
+              <div class="auth-guest">Browse as Guest</div>
+              <div class="auth-footer">By continuing, you agree to our Terms of Service<br>and Privacy Policy</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     ACT II: STYLE DISCOVERY
+     ============================================================ -->
+<section class="section alt">
+  <div class="container">
+    <div class="section-header">
+      <span class="mono">Act II · Style Discovery</span>
+      <h2>The <em>Five Questions</em></h2>
+      <p>Five carefully designed questions that feel simple but extract multi-dimensional preference data. Each answer refines the Aesthete Engine's understanding. The progress bar fills like tea steeping — organic, not mechanical.</p>
+    </div>
+
+    <div class="phone-row">
+
+      <!-- Q1: VISUAL RESONANCE -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Visual Resonance</h3>
+          <span class="mono">Q1 · Which room speaks to you?</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-quiz">
+              <div class="quiz-progress">
+                <div class="quiz-progress-dot current"></div>
+                <div class="quiz-progress-dot"></div>
+                <div class="quiz-progress-dot"></div>
+                <div class="quiz-progress-dot"></div>
+                <div class="quiz-progress-dot"></div>
+              </div>
+              <div class="quiz-question-num">Question 1 of 5</div>
+              <div class="quiz-question">Which room speaks to you?</div>
+              <div class="quiz-grid">
+                <div class="quiz-card selected">
+                  <div class="quiz-card-image fill-gradient-warm"></div>
+                  <div class="quiz-card-label">Warm Minimal</div>
+                </div>
+                <div class="quiz-card">
+                  <div class="quiz-card-image fill-gradient-metal"></div>
+                  <div class="quiz-card-label">Cool Modern</div>
+                </div>
+                <div class="quiz-card">
+                  <div class="quiz-card-image fill-gradient-linen"></div>
+                  <div class="quiz-card-label">Classic Comfort</div>
+                </div>
+                <div class="quiz-card">
+                  <div class="quiz-card-image fill-gradient-rattan"></div>
+                  <div class="quiz-card-label">Eclectic Curated</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Q2: LIFESTYLE -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Lifestyle Reality</h3>
+          <span class="mono">Q2 · How do you actually live?</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-quiz">
+              <div class="quiz-progress">
+                <div class="quiz-progress-dot done"></div>
+                <div class="quiz-progress-dot current"></div>
+                <div class="quiz-progress-dot"></div>
+                <div class="quiz-progress-dot"></div>
+                <div class="quiz-progress-dot"></div>
+              </div>
+              <div class="quiz-question-num">Question 2 of 5</div>
+              <div class="quiz-question">How do you actually live in your space?</div>
+              <div class="material-cards" style="padding-top:12px;">
+                <div class="material-card selected">
+                  <div style="font-size:24px;width:56px;text-align:center;">🍷</div>
+                  <div class="material-info">
+                    <h5>Love having people over</h5>
+                    <p>Entertaining & gathering</p>
+                  </div>
+                </div>
+                <div class="material-card">
+                  <div style="font-size:24px;width:56px;text-align:center;">🧘</div>
+                  <div class="material-info">
+                    <h5>My quiet sanctuary</h5>
+                    <p>Rest & recharge</p>
+                  </div>
+                </div>
+                <div class="material-card selected">
+                  <div style="font-size:24px;width:56px;text-align:center;">💻</div>
+                  <div class="material-info">
+                    <h5>Work from this room</h5>
+                    <p>Productivity & focus</p>
+                  </div>
+                </div>
+                <div class="material-card">
+                  <div style="font-size:24px;width:56px;text-align:center;">👨‍👩‍👧</div>
+                  <div class="material-info">
+                    <h5>Family central</h5>
+                    <p>Activity & play</p>
+                  </div>
+                </div>
+                <div class="material-card">
+                  <div style="font-size:24px;width:56px;text-align:center;">📚</div>
+                  <div class="material-info">
+                    <h5>Personal retreat</h5>
+                    <p>Reading & reflection</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Q3: MATERIAL -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Material Connection</h3>
+          <span class="mono">Q3 · What texture calls to you?</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-quiz">
+              <div class="quiz-progress">
+                <div class="quiz-progress-dot done"></div>
+                <div class="quiz-progress-dot done"></div>
+                <div class="quiz-progress-dot current"></div>
+                <div class="quiz-progress-dot"></div>
+                <div class="quiz-progress-dot"></div>
+              </div>
+              <div class="quiz-question-num">Question 3 of 5</div>
+              <div class="quiz-question">What texture calls to you?</div>
+              <div class="material-cards" style="padding-top:12px;">
+                <div class="material-card">
+                  <div class="material-swatch fill-gradient-wood"></div>
+                  <div class="material-info">
+                    <h5>Weathered Oak</h5>
+                    <p>Warmth & history</p>
+                  </div>
+                </div>
+                <div class="material-card">
+                  <div class="material-swatch fill-gradient-stone"></div>
+                  <div class="material-info">
+                    <h5>Smooth Marble</h5>
+                    <p>Cool & timeless</p>
+                  </div>
+                </div>
+                <div class="material-card selected">
+                  <div class="material-swatch fill-gradient-linen"></div>
+                  <div class="material-info">
+                    <h5>Soft Linen</h5>
+                    <p>Light & breathable</p>
+                  </div>
+                </div>
+                <div class="material-card">
+                  <div class="material-swatch fill-gradient-leather"></div>
+                  <div class="material-info">
+                    <h5>Aged Leather</h5>
+                    <p>Rich & evolving</p>
+                  </div>
+                </div>
+                <div class="material-card">
+                  <div class="material-swatch fill-gradient-metal"></div>
+                  <div class="material-info">
+                    <h5>Brushed Metal</h5>
+                    <p>Industrial & precise</p>
+                  </div>
+                </div>
+                <div class="material-card">
+                  <div class="material-swatch fill-gradient-rattan"></div>
+                  <div class="material-info">
+                    <h5>Woven Rattan</h5>
+                    <p>Natural & organic</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Q4: BUDGET -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Investment Perspective</h3>
+          <span class="mono">Q4 · Let's talk investment</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-quiz">
+              <div class="quiz-progress">
+                <div class="quiz-progress-dot done"></div>
+                <div class="quiz-progress-dot done"></div>
+                <div class="quiz-progress-dot done"></div>
+                <div class="quiz-progress-dot current"></div>
+                <div class="quiz-progress-dot"></div>
+              </div>
+              <div class="quiz-question-num">Question 4 of 5</div>
+              <div class="quiz-question">Let's talk about investment</div>
+              <div class="budget-section">
+                <div class="budget-tiers">
+                  <div class="budget-tier">
+                    <div class="budget-tier-icon fill-sage" style="color:white;">🌱</div>
+                    <div class="budget-tier-info">
+                      <h5>Thoughtful Starter</h5>
+                      <p>$500 – $2,000 per room</p>
+                    </div>
+                  </div>
+                  <div class="budget-tier selected">
+                    <div class="budget-tier-icon" style="background:var(--clay);color:white;">✦</div>
+                    <div class="budget-tier-info">
+                      <h5 style="color:var(--off-white);">Curated Comfort</h5>
+                      <p>$2,000 – $5,000 per room</p>
+                    </div>
+                  </div>
+                  <div class="budget-tier">
+                    <div class="budget-tier-icon" style="background:var(--golden-hour);color:var(--charcoal);">◆</div>
+                    <div class="budget-tier-info">
+                      <h5>Heirloom Investment</h5>
+                      <p>$5,000+ per room</p>
+                    </div>
+                  </div>
+                  <div class="budget-tier">
+                    <div class="budget-tier-icon" style="background:var(--dusty-blue);color:white;">💬</div>
+                    <div class="budget-tier-info">
+                      <h5>Let's Discuss</h5>
+                      <p>I'd like designer guidance</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Q5: CATALYST -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Change Catalyst</h3>
+          <span class="mono">Q5 · What's driving your journey?</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-quiz">
+              <div class="quiz-progress">
+                <div class="quiz-progress-dot done"></div>
+                <div class="quiz-progress-dot done"></div>
+                <div class="quiz-progress-dot done"></div>
+                <div class="quiz-progress-dot done"></div>
+                <div class="quiz-progress-dot current"></div>
+              </div>
+              <div class="quiz-question-num">Question 5 of 5</div>
+              <div class="quiz-question">What's driving your design journey?</div>
+              <div class="material-cards" style="padding-top:12px;">
+                <div class="material-card">
+                  <div style="font-size:24px;width:56px;text-align:center;">🏠</div>
+                  <div class="material-info">
+                    <h5>Fresh start, new space</h5>
+                    <p>Moving in or starting over</p>
+                  </div>
+                </div>
+                <div class="material-card selected">
+                  <div style="font-size:24px;width:56px;text-align:center;">✨</div>
+                  <div class="material-info">
+                    <h5>Finally making it mine</h5>
+                    <p>Ready to invest in this space</p>
+                  </div>
+                </div>
+                <div class="material-card">
+                  <div style="font-size:24px;width:56px;text-align:center;">🔄</div>
+                  <div class="material-info">
+                    <h5>Life change needs design change</h5>
+                    <p>New chapter, new environment</p>
+                  </div>
+                </div>
+                <div class="material-card">
+                  <div style="font-size:24px;width:56px;text-align:center;">💎</div>
+                  <div class="material-info">
+                    <h5>Ready to invest in quality</h5>
+                    <p>Upgrading to pieces that last</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     ACT III: THE ROOM WALK
+     ============================================================ -->
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <span class="mono">Act III · The Room Walk</span>
+      <h2>Scanning as <em>Choreography</em></h2>
+      <p>The room scan isn't a data capture exercise — it's a choreographed journey. Warm coaching text floats like conversation. Dust motes drift through the AR overlay. Progress fills like tea steeping. Style questions emerge seamlessly within the scanning flow.</p>
+    </div>
+
+    <div class="phone-row">
+
+      <!-- SCAN INITIATION -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Crossing the Threshold</h3>
+          <span class="mono">Scan Initiation</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-scan">
+              <div class="scan-bg"></div>
+              <div class="scan-overlay"></div>
+              <div class="screen-status light" style="position:absolute;top:0;left:0;right:0;z-index:40;"><span>9:41</span><span>···</span></div>
+              <div class="scan-particles">
+                <div class="scan-particle" style="top:20%;left:30%;animation-delay:0s;"></div>
+                <div class="scan-particle" style="top:40%;left:60%;animation-delay:1s;"></div>
+                <div class="scan-particle" style="top:60%;left:25%;animation-delay:2s;"></div>
+                <div class="scan-particle" style="top:30%;left:70%;animation-delay:3s;"></div>
+                <div class="scan-particle" style="top:55%;left:45%;animation-delay:4s;"></div>
+              </div>
+              <div class="scan-coaching">
+                <div class="scan-coaching-text">"Let's walk your room together"</div>
+                <div class="scan-coaching-sub">Start with any wall and move slowly</div>
+              </div>
+              <div class="scan-progress-ring">
+                <div class="ring-outer">
+                  <div class="ring-text">0%</div>
+                </div>
+                <span class="ring-label">Room Capture</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MID-SCAN WITH RIBBON -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Progressive Capture</h3>
+          <span class="mono">42% · Style Awakening</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-scan">
+              <div class="scan-bg" style="background: linear-gradient(135deg, #c9c2b8 0%, #b8b1a5 50%, #d4cfc7 100%);"></div>
+              <div class="scan-overlay"></div>
+              <div class="screen-status light" style="position:absolute;top:0;left:0;right:0;z-index:40;"><span>9:43</span><span>···</span></div>
+              <div class="scan-ribbon">
+                <div class="ribbon-step">
+                  <div class="ribbon-dot done"></div>
+                  <span class="ribbon-label">Scan</span>
+                </div>
+                <div class="ribbon-step">
+                  <div class="ribbon-dot current"></div>
+                  <span class="ribbon-label">Style</span>
+                </div>
+                <div class="ribbon-step">
+                  <div class="ribbon-dot"></div>
+                  <span class="ribbon-label">Budget</span>
+                </div>
+                <div class="ribbon-step">
+                  <div class="ribbon-dot"></div>
+                  <span class="ribbon-label">Focus</span>
+                </div>
+              </div>
+              <!-- Wall detection lines -->
+              <div style="position:absolute;top:30%;left:10%;width:80%;height:40%;border:1.5px dashed var(--clay);border-radius:8px;opacity:0.4;z-index:5;"></div>
+              <div style="position:absolute;top:35%;left:15%;width:70%;height:1px;background:var(--clay);opacity:0.2;z-index:5;"></div>
+              <div style="position:absolute;top:50%;left:15%;width:70%;height:1px;background:var(--clay);opacity:0.15;z-index:5;"></div>
+              <div class="scan-particles">
+                <div class="scan-particle" style="top:25%;left:35%;animation-delay:0.5s;"></div>
+                <div class="scan-particle" style="top:45%;left:55%;animation-delay:1.5s;"></div>
+                <div class="scan-particle" style="top:65%;left:30%;animation-delay:2.5s;"></div>
+              </div>
+              <div class="scan-progress-ring">
+                <div class="ring-outer">
+                  <div class="ring-fill" style="transform:rotate(195deg);"></div>
+                  <div class="ring-text">42%</div>
+                </div>
+                <span class="ring-label">Capturing Walls</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FLOOR PLAN PREVIEW -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Floor Plan Preview</h3>
+          <span class="mono">Scan Complete · Review</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-floorplan">
+              <div class="screen-status"><span>9:46</span><span>···</span></div>
+              <div class="floorplan-header">
+                <h2>Your Room</h2>
+                <span class="mono">Living Room · High Confidence</span>
+              </div>
+              <div class="floorplan-viewer">
+                <div class="floorplan-badge">✓ High Confidence</div>
+                <div class="floorplan-room">
+                  <!-- Simplified floor plan -->
+                  <div class="fp-window" style="top:0;left:25%;width:30%;height:3px;"></div>
+                  <div class="fp-window" style="top:0;left:65%;width:20%;height:3px;"></div>
+                  <div class="fp-door" style="bottom:0;left:40%;width:20%;"></div>
+                  <div class="fp-dim" style="top:50%;left:-40px;">14'3"</div>
+                  <div class="fp-dim" style="top:-18px;left:40%;">18'6"</div>
+                  <!-- Detected furniture -->
+                  <div style="position:absolute;bottom:20%;left:15%;width:35%;height:15%;border-radius:4px;background:var(--clay);opacity:0.2;"></div>
+                  <div style="position:absolute;top:25%;right:10%;width:12%;height:20%;border-radius:3px;background:var(--dusty-blue);opacity:0.2;"></div>
+                </div>
+              </div>
+              <div class="floorplan-metrics">
+                <div class="fp-metric">
+                  <div class="fp-metric-val">264</div>
+                  <div class="fp-metric-label">Sq Ft</div>
+                </div>
+                <div class="fp-metric">
+                  <div class="fp-metric-val">2</div>
+                  <div class="fp-metric-label">Windows</div>
+                </div>
+                <div class="fp-metric">
+                  <div class="fp-metric-val">3</div>
+                  <div class="fp-metric-label">Items Found</div>
+                </div>
+              </div>
+              <div class="floorplan-actions">
+                <div class="fp-btn secondary">Rescan</div>
+                <div class="fp-btn primary">Use This Scan</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     ACT IV: THE DISCOVERY
+     ============================================================ -->
+<section class="section alt">
+  <div class="container">
+    <div class="section-header">
+      <span class="mono">Act IV · The Discovery</span>
+      <h2>Curated <em>Recommendations</em></h2>
+      <p>Furniture arrives not as a catalog grid, but as a curated collection. Each piece carries a match score, a maker story, and material badges. The typography does the hierarchy — Playfair prices, DM Mono maker tags, Inter descriptions.</p>
+    </div>
+
+    <div class="phone-row">
+
+      <!-- RECOMMENDATIONS GRID -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Recommendation Feed</h3>
+          <span class="mono">Perfect for your space</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-recs">
+              <div class="screen-status"><span>9:47</span><span>···</span></div>
+              <div class="recs-header">
+                <h2>Perfect for your space</h2>
+                <p>18 pieces curated for your living room</p>
+              </div>
+              <div class="recs-filter-bar">
+                <div class="filter-chip active">All</div>
+                <div class="filter-chip">Seating</div>
+                <div class="filter-chip">Tables</div>
+                <div class="filter-chip">Lighting</div>
+                <div class="filter-chip">Storage</div>
+              </div>
+              <div class="recs-grid">
+                <div class="rec-card">
+                  <div class="rec-card-image fill-gradient-leather">
+                    <div class="rec-card-match">92% match</div>
+                    <div class="rec-card-save">♡</div>
+                  </div>
+                  <div class="rec-card-info">
+                    <div class="rec-card-maker">Chilton Furniture</div>
+                    <div class="rec-card-name">Walnut Lounge Chair</div>
+                    <div class="rec-card-price">$2,850</div>
+                  </div>
+                </div>
+                <div class="rec-card">
+                  <div class="rec-card-image fill-gradient-linen">
+                    <div class="rec-card-match">88% match</div>
+                    <div class="rec-card-save">♡</div>
+                  </div>
+                  <div class="rec-card-info">
+                    <div class="rec-card-maker">Shoppe Amber</div>
+                    <div class="rec-card-name">Linen Sectional Sofa</div>
+                    <div class="rec-card-price">$3,200</div>
+                  </div>
+                </div>
+                <div class="rec-card">
+                  <div class="rec-card-image fill-gradient-wood">
+                    <div class="rec-card-match">85% match</div>
+                    <div class="rec-card-save">♡</div>
+                  </div>
+                  <div class="rec-card-info">
+                    <div class="rec-card-maker">Thos. Moser</div>
+                    <div class="rec-card-name">Cherry Coffee Table</div>
+                    <div class="rec-card-price">$1,890</div>
+                  </div>
+                </div>
+                <div class="rec-card">
+                  <div class="rec-card-image fill-gradient-rattan">
+                    <div class="rec-card-match">82% match</div>
+                    <div class="rec-card-save">♡</div>
+                  </div>
+                  <div class="rec-card-info">
+                    <div class="rec-card-maker">Lostine</div>
+                    <div class="rec-card-name">Woven Floor Lamp</div>
+                    <div class="rec-card-price">$475</div>
+                  </div>
+                </div>
+              </div>
+              <div class="screen-nav translucent">
+                <div class="nav-item"><div class="nav-icon">⌂</div>Home</div>
+                <div class="nav-item"><div class="nav-icon">◎</div>Scan</div>
+                <div class="nav-item active"><div class="nav-icon">✦</div>For You</div>
+                <div class="nav-item"><div class="nav-icon">♡</div>Saved</div>
+                <div class="nav-item"><div class="nav-icon">◉</div>Profile</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PRODUCT DETAIL -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Product Detail</h3>
+          <span class="mono">Maker Story · Material Badges</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-product">
+              <div class="screen-status light" style="position:absolute;top:0;left:0;right:0;z-index:30;"><span>9:48</span><span>···</span></div>
+              <div class="product-hero fill-gradient-leather">
+                <div class="product-back">←</div>
+                <div class="product-actions-top">
+                  <div class="product-action-btn">↗</div>
+                  <div class="product-action-btn">♡</div>
+                </div>
+              </div>
+              <div class="product-content">
+                <div class="product-maker-tag">Chilton Furniture · Freeport, ME</div>
+                <div class="product-name">Walnut Lounge Chair</div>
+                <div class="product-subtitle">Hand-turned in Maine since 1904</div>
+                <div class="product-price-row">
+                  <div class="product-price">$2,850</div>
+                  <div class="product-match-pill">92% match</div>
+                </div>
+                <div class="product-badges">
+                  <div class="product-badge"><span class="product-badge-icon">🌿</span> FSC Certified</div>
+                  <div class="product-badge"><span class="product-badge-icon">✋</span> Handcrafted</div>
+                  <div class="product-badge"><span class="product-badge-icon">📍</span> Made in USA</div>
+                </div>
+                <div class="maker-story">
+                  <div class="maker-story-header">
+                    <div class="maker-avatar fill-gradient-earth"></div>
+                    <div>
+                      <div class="maker-name">Jonathan Chilton</div>
+                      <div class="maker-location">Third-Generation Woodworker</div>
+                    </div>
+                  </div>
+                  <p>"Each chair starts as a conversation with the wood. Walnut tells you where it wants to bend — you just have to listen."</p>
+                </div>
+              </div>
+              <div class="product-bottom-bar">
+                <div class="product-btn ar">◎</div>
+                <div class="product-btn cart">Add to Room</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AR PLACEMENT -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>AR Placement</h3>
+          <span class="mono">Living with the Piece</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-ar">
+              <div class="ar-bg"></div>
+              <div class="screen-status" style="position:absolute;top:0;left:0;right:0;z-index:40;"><span>9:49</span><span>···</span></div>
+              <div class="ar-furniture-shadow"></div>
+              <div class="ar-furniture-ghost">
+                <div style="font-size:28px;opacity:0.4;">🪑</div>
+              </div>
+              <div class="ar-light-slider">
+                <div class="ar-slider-label">Light</div>
+                <div class="ar-slider-track">
+                  <div class="ar-slider-fill"></div>
+                </div>
+                <div style="font-size:12px;">☀</div>
+              </div>
+              <div class="ar-controls">
+                <div class="ar-name">Walnut Lounge Chair</div>
+                <div class="ar-control-row">
+                  <div class="ar-ctrl-btn">↻</div>
+                  <div class="ar-ctrl-btn">⇔</div>
+                  <div class="ar-ctrl-btn primary">Save View</div>
+                  <div class="ar-ctrl-btn">📷</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     ACT V: THE LIVING APP
+     ============================================================ -->
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <span class="mono">Act V · The Living App</span>
+      <h2>Home, Collections & <em>Profile</em></h2>
+      <p>The ongoing experience. Home surfaces new discoveries and artisan spotlights. Collections organize saves into mood boards. The Profile is a design journal — showing style evolution over time, room scans as Polaroid memories, and a gateway to designer consultation.</p>
+    </div>
+
+    <div class="phone-row">
+
+      <!-- HOME / DISCOVER -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Home</h3>
+          <span class="mono">Discover · Explore</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-home">
+              <div class="screen-status"><span>9:41</span><span>···</span></div>
+              <div class="home-greeting">
+                <span class="mono">Good Morning</span>
+                <h2>Welcome back</h2>
+              </div>
+              <div class="home-search">
+                <span>🔍</span>
+                <span>Search furniture, makers, styles...</span>
+              </div>
+              <div class="home-scan-prompt">
+                <div class="scan-prompt-icon">◎</div>
+                <div class="scan-prompt-text">
+                  <h4>Scan a new room</h4>
+                  <p>Get personalized furniture picks in under 10 minutes</p>
+                </div>
+              </div>
+              <div class="home-section">
+                <div class="home-section-header">
+                  <h3>Picked for you</h3>
+                  <a>See all →</a>
+                </div>
+                <div class="home-scroll">
+                  <div class="home-featured-card">
+                    <div class="home-featured-img fill-gradient-warm"></div>
+                    <div class="home-featured-info">
+                      <h4>New from Thos. Moser</h4>
+                      <p>Cherry & walnut collection</p>
+                    </div>
+                  </div>
+                  <div class="home-featured-card">
+                    <div class="home-featured-img fill-gradient-sage"></div>
+                    <div class="home-featured-info">
+                      <h4>Spring Living Rooms</h4>
+                      <p>Curated for warm minimalists</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="home-section" style="padding-bottom:100px;">
+                <div class="home-section-header">
+                  <h3>Makers to know</h3>
+                  <a>Explore →</a>
+                </div>
+                <div class="home-scroll">
+                  <div class="home-artisan-card">
+                    <div class="home-artisan-img fill-gradient-earth"></div>
+                    <h5>Jonathan Chilton</h5>
+                    <p>Freeport, Maine</p>
+                  </div>
+                  <div class="home-artisan-card">
+                    <div class="home-artisan-img fill-gradient-dusk"></div>
+                    <h5>Sarah Weaver</h5>
+                    <p>Prairie du Sac, WI</p>
+                  </div>
+                </div>
+              </div>
+              <div class="screen-nav">
+                <div class="nav-item active"><div class="nav-icon">⌂</div>Home</div>
+                <div class="nav-item"><div class="nav-icon">◎</div>Scan</div>
+                <div class="nav-item"><div class="nav-icon">✦</div>For You</div>
+                <div class="nav-item"><div class="nav-icon">♡</div>Saved</div>
+                <div class="nav-item"><div class="nav-icon">◉</div>Profile</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COLLECTIONS -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Collections</h3>
+          <span class="mono">Saved · Mood Boards</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-collections">
+              <div class="screen-status"><span>9:41</span><span>···</span></div>
+              <div class="collections-header">
+                <h2>Saved</h2>
+              </div>
+              <div class="collections-tabs">
+                <div class="collection-tab active">Collections</div>
+                <div class="collection-tab">All Items</div>
+                <div class="collection-tab">Rooms</div>
+              </div>
+              <div class="collections-content">
+                <div class="collection-board">
+                  <div class="collection-board-title">
+                    <h3>Living Room Refresh</h3>
+                    <span class="mono">8 items</span>
+                  </div>
+                  <div class="collection-grid">
+                    <div class="collection-thumb fill-gradient-leather"></div>
+                    <div class="collection-thumb fill-gradient-wood"></div>
+                    <div class="collection-thumb fill-gradient-linen"></div>
+                    <div class="collection-thumb fill-gradient-rattan"></div>
+                  </div>
+                </div>
+                <div class="collection-board">
+                  <div class="collection-board-title">
+                    <h3>Bedroom Ideas</h3>
+                    <span class="mono">5 items</span>
+                  </div>
+                  <div class="collection-grid">
+                    <div class="collection-thumb fill-gradient-dusk"></div>
+                    <div class="collection-thumb fill-gradient-sage"></div>
+                    <div class="collection-thumb fill-gradient-stone"></div>
+                    <div class="collection-thumb fill-gradient-warm"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="screen-nav">
+                <div class="nav-item"><div class="nav-icon">⌂</div>Home</div>
+                <div class="nav-item"><div class="nav-icon">◎</div>Scan</div>
+                <div class="nav-item"><div class="nav-icon">✦</div>For You</div>
+                <div class="nav-item active"><div class="nav-icon">♡</div>Saved</div>
+                <div class="nav-item"><div class="nav-icon">◉</div>Profile</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PROFILE -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Design Journal</h3>
+          <span class="mono">Profile · Style Evolution</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-profile">
+              <div class="screen-status"><span>9:41</span><span>···</span></div>
+              <div class="profile-header">
+                <div class="profile-avatar fill-gradient-earth" style="color: var(--off-white);">K</div>
+                <div class="profile-name">Kody</div>
+                <div class="profile-tagline">Member since April 2026</div>
+                <div class="profile-style-badge">✦ Warm Minimalist</div>
+              </div>
+              <div class="profile-stats">
+                <div class="profile-stat">
+                  <div class="profile-stat-val">3</div>
+                  <div class="profile-stat-label">Rooms</div>
+                </div>
+                <div class="profile-stat">
+                  <div class="profile-stat-val">24</div>
+                  <div class="profile-stat-label">Saved</div>
+                </div>
+                <div class="profile-stat">
+                  <div class="profile-stat-val">87%</div>
+                  <div class="profile-stat-label">Style Match</div>
+                </div>
+              </div>
+              <div class="profile-section">
+                <h4>Style Evolution</h4>
+                <div class="profile-evolution">
+                  <div class="evolution-node">
+                    <div class="evolution-dot" style="background:var(--clay);"></div>
+                    <div class="evolution-line" style="background:var(--clay);"></div>
+                    <div class="evolution-label">Warm<br>Minimal</div>
+                  </div>
+                  <div class="evolution-node">
+                    <div class="evolution-dot" style="background:var(--sage);"></div>
+                    <div class="evolution-line" style="background:var(--sage);"></div>
+                    <div class="evolution-label">+ Natural<br>Elements</div>
+                  </div>
+                  <div class="evolution-node">
+                    <div class="evolution-dot" style="background:var(--aged-oak);"></div>
+                    <div class="evolution-label">Curated<br>Heritage</div>
+                  </div>
+                </div>
+              </div>
+              <div class="profile-section" style="padding-bottom:100px;">
+                <h4>Your Rooms</h4>
+                <div class="profile-rooms">
+                  <div class="profile-room-card">
+                    <div class="profile-room-img fill-gradient-warm"></div>
+                    <div class="profile-room-info">
+                      <div class="profile-room-name">Living Room</div>
+                      <div class="profile-room-date">Scanned Apr 2</div>
+                    </div>
+                  </div>
+                  <div class="profile-room-card">
+                    <div class="profile-room-img fill-gradient-dusk"></div>
+                    <div class="profile-room-info">
+                      <div class="profile-room-name">Bedroom</div>
+                      <div class="profile-room-date">Scanned Mar 28</div>
+                    </div>
+                  </div>
+                  <div class="profile-room-card">
+                    <div class="profile-room-img fill-gradient-sage"></div>
+                    <div class="profile-room-info">
+                      <div class="profile-room-name">Office</div>
+                      <div class="profile-room-date">Scanned Mar 15</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="screen-nav">
+                <div class="nav-item"><div class="nav-icon">⌂</div>Home</div>
+                <div class="nav-item"><div class="nav-icon">◎</div>Scan</div>
+                <div class="nav-item"><div class="nav-icon">✦</div>For You</div>
+                <div class="nav-item"><div class="nav-icon">♡</div>Saved</div>
+                <div class="nav-item active"><div class="nav-icon">◉</div>Profile</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     EXTENDED SCREENS
+     ============================================================ -->
+<section class="section alt">
+  <div class="container">
+    <div class="section-header">
+      <span class="mono">Extended Screens</span>
+      <h2>Designer, Notifications & <em>Settings</em></h2>
+      <p>The supporting cast. Designer consultation feels like asking a knowledgeable friend — not filling out a form. Notifications arrive with typographic purpose. Settings maintain the visual calm.</p>
+    </div>
+
+    <div class="phone-row">
+
+      <!-- DESIGNER CONSULTATION -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Designer Consultation</h3>
+          <span class="mono">Professional Hand-Off</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-designer">
+              <div class="screen-status light" style="position:absolute;top:0;left:0;right:0;z-index:30;"><span>9:50</span><span>···</span></div>
+              <div class="designer-hero">
+                <h2>Work with a designer</h2>
+                <p>Your room scan, style profile, and saved pieces give them everything they need to hit the ground running.</p>
+              </div>
+              <div class="designer-card">
+                <div class="designer-photo fill-gradient-warm"></div>
+                <div class="designer-info">
+                  <h3>Leah Wilson</h3>
+                  <span class="mono">Middlewest Studio · Prairie du Sac, WI</span>
+                  <p>Specializing in warm, livable spaces that feel collected over time.</p>
+                </div>
+              </div>
+              <div class="designer-form">
+                <div class="form-group">
+                  <span class="form-label">Which rooms need attention?</span>
+                  <div class="form-room-tags">
+                    <div class="form-room-tag selected">Living Room</div>
+                    <div class="form-room-tag">Bedroom</div>
+                    <div class="form-room-tag selected">Office</div>
+                    <div class="form-room-tag">Kitchen</div>
+                    <div class="form-room-tag">Dining</div>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <span class="form-label">Tell us about your vision</span>
+                  <div class="form-textarea" style="display:flex;align-items:flex-start;padding-top:12px;color:var(--aged-oak);font-style:italic;">I want a space that feels warm and collected, not showroom-perfect...</div>
+                </div>
+                <div style="margin-top:20px;height:50px;border-radius:25px;background:var(--charcoal);color:var(--off-white);display:flex;align-items:center;justify-content:center;font-family:var(--font-body);font-size:15px;font-weight:500;">Request Consultation</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOTIFICATIONS -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Notifications</h3>
+          <span class="mono">Updates & Activity</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-notif">
+              <div class="screen-status"><span>9:41</span><span>···</span></div>
+              <div class="notif-header">
+                <h2>Activity</h2>
+                <a>Mark all read</a>
+              </div>
+              <div class="notif-item unread">
+                <div class="notif-icon" style="background:rgba(196,165,123,0.12);">✦</div>
+                <div class="notif-content">
+                  <h5>New matches for your Living Room</h5>
+                  <p>4 pieces just added that fit your style</p>
+                </div>
+                <div class="notif-time">2m</div>
+              </div>
+              <div class="notif-item unread">
+                <div class="notif-icon" style="background:rgba(122,155,118,0.12);">💬</div>
+                <div class="notif-content">
+                  <h5>Leah responded to your request</h5>
+                  <p>She'd love to schedule a consultation...</p>
+                </div>
+                <div class="notif-time">1h</div>
+              </div>
+              <div class="notif-item">
+                <div class="notif-icon" style="background:rgba(232,197,71,0.12);">📦</div>
+                <div class="notif-content">
+                  <h5>Maker Spotlight: Lostine</h5>
+                  <p>New collection of hand-woven lighting</p>
+                </div>
+                <div class="notif-time">3h</div>
+              </div>
+              <div class="notif-item">
+                <div class="notif-icon" style="background:rgba(139,156,173,0.12);">📐</div>
+                <div class="notif-content">
+                  <h5>Your style profile updated</h5>
+                  <p>Trending toward Curated Heritage</p>
+                </div>
+                <div class="notif-time">1d</div>
+              </div>
+              <div class="notif-item">
+                <div class="notif-icon" style="background:rgba(168,181,160,0.12);">🌿</div>
+                <div class="notif-content">
+                  <h5>Sustainability story</h5>
+                  <p>The journey of reclaimed oak</p>
+                </div>
+                <div class="notif-time">2d</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Settings</h3>
+          <span class="mono">Preferences & Privacy</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-settings">
+              <div class="screen-status"><span>9:41</span><span>···</span></div>
+              <div class="settings-header">
+                <h2>Settings</h2>
+              </div>
+              <div class="settings-group">
+                <div class="settings-group-title">Account</div>
+                <div class="settings-items">
+                  <div class="settings-item">
+                    <div class="settings-item-left">
+                      <div class="settings-icon" style="background:rgba(196,165,123,0.12);">◉</div>
+                      <span class="settings-item-label">Edit Profile</span>
+                    </div>
+                    <span class="settings-chevron">›</span>
+                  </div>
+                  <div class="settings-item">
+                    <div class="settings-item-left">
+                      <div class="settings-icon" style="background:rgba(168,181,160,0.12);">✦</div>
+                      <span class="settings-item-label">Style Preferences</span>
+                    </div>
+                    <span class="settings-chevron">›</span>
+                  </div>
+                  <div class="settings-item">
+                    <div class="settings-item-left">
+                      <div class="settings-icon" style="background:rgba(139,156,173,0.12);">🔒</div>
+                      <span class="settings-item-label">Privacy & Data</span>
+                    </div>
+                    <span class="settings-chevron">›</span>
+                  </div>
+                </div>
+              </div>
+              <div class="settings-group">
+                <div class="settings-group-title">Notifications</div>
+                <div class="settings-items">
+                  <div class="settings-item">
+                    <div class="settings-item-left">
+                      <div class="settings-icon" style="background:rgba(232,197,71,0.12);">✦</div>
+                      <span class="settings-item-label">New Matches</span>
+                    </div>
+                    <div class="settings-toggle on"></div>
+                  </div>
+                  <div class="settings-item">
+                    <div class="settings-item-left">
+                      <div class="settings-icon" style="background:rgba(212,160,144,0.12);">📦</div>
+                      <span class="settings-item-label">Maker Stories</span>
+                    </div>
+                    <div class="settings-toggle on"></div>
+                  </div>
+                  <div class="settings-item">
+                    <div class="settings-item-left">
+                      <div class="settings-icon" style="background:rgba(229,226,221,0.5);">💬</div>
+                      <span class="settings-item-label">Designer Messages</span>
+                    </div>
+                    <div class="settings-toggle off"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="settings-group" style="padding-bottom:100px;">
+                <div class="settings-group-title">App</div>
+                <div class="settings-items">
+                  <div class="settings-item">
+                    <div class="settings-item-left">
+                      <div class="settings-icon" style="background:rgba(139,115,85,0.12);">🎨</div>
+                      <span class="settings-item-label">Appearance</span>
+                    </div>
+                    <span class="settings-chevron">›</span>
+                  </div>
+                  <div class="settings-item">
+                    <div class="settings-item-left">
+                      <div class="settings-icon" style="background:rgba(139,156,173,0.12);">ℹ</div>
+                      <span class="settings-item-label">About Patina</span>
+                    </div>
+                    <span class="settings-chevron">›</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     NAVIGATION SYSTEM
+     ============================================================ -->
+<section class="section dark">
+  <div class="container">
+    <div class="section-header">
+      <span class="mono">Navigation Architecture</span>
+      <h2 style="color:var(--off-white);">Five Tabs, <em>One Journey</em></h2>
+      <p>The bottom tab bar uses the Patina icon system — 2px strokes, rounded corners, warmth in every glyph. Active states use Clay-filled backgrounds instead of color tints. The tab bar itself uses frosted glass over content.</p>
+    </div>
+
+    <div class="annotation-grid">
+      <div class="annotation-card" style="background:rgba(250,247,242,0.08);">
+        <span class="mono" style="color:var(--clay);">Tab 1</span>
+        <h3 style="color:var(--off-white);">Home</h3>
+        <p style="color:var(--pearl);">Discovery feed with artisan spotlights, curated collections, and the scan-prompt card. The front door of the experience.</p>
+      </div>
+      <div class="annotation-card" style="background:rgba(250,247,242,0.08);">
+        <span class="mono" style="color:var(--clay);">Tab 2</span>
+        <h3 style="color:var(--off-white);">Scan</h3>
+        <p style="color:var(--pearl);">Direct entry to room scanning. Opens camera with coaching overlay. Most sessions start here after onboarding.</p>
+      </div>
+      <div class="annotation-card" style="background:rgba(250,247,242,0.08);">
+        <span class="mono" style="color:var(--clay);">Tab 3</span>
+        <h3 style="color:var(--off-white);">For You</h3>
+        <p style="color:var(--pearl);">Personalized recommendation feed. Filtered by room, category, and budget. Evolves as the Aesthete Engine learns preferences.</p>
+      </div>
+      <div class="annotation-card" style="background:rgba(250,247,242,0.08);">
+        <span class="mono" style="color:var(--clay);">Tab 4</span>
+        <h3 style="color:var(--off-white);">Saved</h3>
+        <p style="color:var(--pearl);">Collections organized as mood boards. Pinterest-meets-catalog. Items can be grouped by room, project, or aesthetic mood.</p>
+      </div>
+      <div class="annotation-card" style="background:rgba(250,247,242,0.08);">
+        <span class="mono" style="color:var(--clay);">Tab 5</span>
+        <h3 style="color:var(--off-white);">Profile</h3>
+        <p style="color:var(--pearl);">Design journal with style evolution tracking, room scan history, and the gateway to designer consultation. A living document, not a settings page.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     INTERACTION PATTERNS
+     ============================================================ -->
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <span class="mono">Interaction Patterns</span>
+      <h2>Gestures & <em>Feedback</em></h2>
+      <p>Every gesture has meaning. Swipe right to save. Swipe left to pass. Hold for a material close-up. Haptic taps confirm captures. The app teaches these through gentle coaching — never through tutorials.</p>
+    </div>
+
+    <div class="annotation-grid">
+      <div class="annotation-card">
+        <span class="mono">Gestures</span>
+        <h3>Swipe Vocabulary</h3>
+        <p>Right = Save (Love it). Left = Not for me (trains algorithm). Up = Share with someone. Down = Show me similar. Hold = Material close-up with texture detail.</p>
+      </div>
+      <div class="annotation-card">
+        <span class="mono">Haptics</span>
+        <h3>Tactile Feedback</h3>
+        <p>Gentle tap on wall recognition during scan. Soft impact when furniture snaps to floor in AR. Spring bounce on save confirmation. No haptic on negative actions — silence is intentional.</p>
+      </div>
+      <div class="annotation-card">
+        <span class="mono">Transitions</span>
+        <h3>Movement Language</h3>
+        <p>Cards slide forward from depth (vanishing point) on recommendation reveal. Quiz questions cross-dissolve with slight vertical offset. AR furniture fades in at 60% opacity, settling to 100%. Spring physics throughout — never linear.</p>
+      </div>
+      <div class="annotation-card">
+        <span class="mono">Loading</span>
+        <h3>Wait States</h3>
+        <p>The Strata Mark animates as a loading indicator — three lines drawing left to right with staggered timing. "Taking a moment to curate..." replaces generic spinners. Progress is organic, like tea steeping.</p>
+      </div>
+      <div class="annotation-card">
+        <span class="mono">Empty States</span>
+        <h3>Blank Canvas</h3>
+        <p>"A blank canvas — exciting!" for empty rooms. "Your collection starts here" for empty saves. Illustrations use the Patina illustration style — warm, hand-drawn, never clip-art.</p>
+      </div>
+      <div class="annotation-card">
+        <span class="mono">Error States</span>
+        <h3>Warm Recovery</h3>
+        <p>Errors use Terracotta, not red. "Let's brighten things up a bit" for poor lighting. "Taking a moment to curate..." for network issues. Always conversational, never technical.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     CLOSING
+     ============================================================ -->
+<section class="section alt">
+  <div class="container">
+    <div class="strata">
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+    </div>
+
+    <h2 style="margin-top:2rem; margin-bottom:1.5rem;">The type does the <em>work.</em></h2>
+    <p class="large-body" style="max-width:680px; margin-bottom:2rem;">Across all 18 screens, the hierarchy never relies on containers, card shadows, or colored backgrounds to communicate importance. Playfair carries the emotional weight. Inter does the utility work. DM Mono handles the metadata. The Strata Mark appears as a loading indicator, section divider, and brand signature — always three lines, always decreasing, always unmistakably Patina.</p>
+    <p class="large-body" style="max-width:680px; margin-bottom:2rem;">The five-act journey structure transforms a furniture shopping app into something that feels like walking through a design studio with a knowledgeable friend. Scanning is choreography. Discovery is curation. The collection is a design journal. And the maker stories remind you that behind every piece is a person with sawdust under their fingernails.</p>
+    <p class="large-body" style="max-width:680px;">That's Patina. Where time adds value — in the furniture, the interface, and the relationship between the two.</p>
+
+    <div class="strata-mini" style="margin-top:3rem;">
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     FOOTER
+     ============================================================ -->
+<footer class="doc-footer">
+  <div class="container">
+    <div class="doc-footer-inner">
+      <div>
+        <h3>Patina</h3>
+        <em>Where Time Adds Value</em>
+        <p style="margin-top:1.5rem; font-size:0.82rem; color:var(--clay);">iOS App Complete Design System · v2.0 · April 2026</p>
+      </div>
+      <div style="text-align:right;">
+        <span class="mono" style="color:var(--clay);">18 Screens · 6 Acts · 3 Typefaces</span>
+        <div class="strata-mini" style="margin-top:1rem; margin-left:auto;">
+          <div class="strata-line" style="background:var(--clay);"></div>
+          <div class="strata-line" style="background:var(--clay); opacity:0.6;"></div>
+          <div class="strata-line" style="background:var(--clay); opacity:0.3;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- SCROLL ANIMATION -->
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>

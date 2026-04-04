@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { MoreHorizontal, AlertCircle, CheckCircle2, Edit, Copy, Trash2, Eye } from 'lucide-react';
+import { MoreHorizontal, AlertCircle, CheckCircle2, Edit, Copy, Trash2, Eye, ExternalLink } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -187,6 +187,19 @@ export const AdminProductCard = memo(function AdminProductCard({ product, presen
                   Edit
                 </Link>
               </DropdownMenuItem>
+              {product.sourceUrl && (
+                <DropdownMenuItem asChild>
+                  <a
+                    href={product.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="cursor-pointer"
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
+                    View Original
+                  </a>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem>
                 <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
                 Duplicate

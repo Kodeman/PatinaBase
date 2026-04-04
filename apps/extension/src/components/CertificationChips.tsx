@@ -54,12 +54,12 @@ export function CertificationChips({
               onClick={() => toggleCertification(cert.key)}
               title={cert.description}
               className={`
-                px-2 py-1 text-xs rounded-full transition-all
+                px-2 py-1 text-[0.78rem] font-medium rounded-sm transition-all border
                 ${isSelected
-                  ? 'bg-patina-mocha-brown text-white shadow-patina-sm'
+                  ? 'border-clay bg-off-white text-charcoal'
                   : isDetected
-                    ? 'bg-patina-sage-green/20 text-patina-sage-green border border-patina-sage-green/40 hover:bg-patina-sage-green/30'
-                    : 'bg-white border border-patina-clay-beige/50 text-patina-mocha-brown/70 hover:border-patina-mocha-brown hover:text-patina-mocha-brown'
+                    ? 'bg-sage/15 text-sage border-sage/40 hover:bg-sage/25'
+                    : 'bg-off-white border-pearl text-mocha hover:border-clay/50'
                 }
               `}
             >
@@ -72,7 +72,7 @@ export function CertificationChips({
         })}
       </div>
       {detected.length > 0 && (
-        <p className="text-[10px] text-patina-mocha-brown/60">
+        <p className="font-mono text-[0.55rem] uppercase tracking-[0.06em] text-aged-oak">
           ✓ = Auto-detected from page
         </p>
       )}

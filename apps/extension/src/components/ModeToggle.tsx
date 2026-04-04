@@ -11,13 +11,13 @@ interface ModeToggleProps {
 export function ModeToggle({ mode, onModeChange, autoDetected = false }: ModeToggleProps) {
   return (
     <div className="space-y-1">
-      <div className="flex items-center bg-patina-off-white rounded-lg p-1">
+      <div className="flex items-center bg-pearl/40 rounded-[3px] p-1">
         <button
           onClick={() => onModeChange('product')}
-          className={`flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-all
+          className={`flex-1 px-3 py-1.5 text-sm font-medium rounded-[3px] transition-all
                    ${mode === 'product'
-                     ? 'bg-white text-patina-charcoal shadow-sm'
-                     : 'text-patina-mocha-brown hover:text-patina-charcoal'
+                     ? 'bg-white text-charcoal shadow-sm'
+                     : 'text-aged-oak hover:text-charcoal'
                    }`}
         >
           <div className="flex items-center justify-center gap-1.5">
@@ -34,10 +34,10 @@ export function ModeToggle({ mode, onModeChange, autoDetected = false }: ModeTog
         </button>
         <button
           onClick={() => onModeChange('vendor')}
-          className={`flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-all
+          className={`flex-1 px-3 py-1.5 text-sm font-medium rounded-[3px] transition-all
                    ${mode === 'vendor'
-                     ? 'bg-white text-patina-charcoal shadow-sm'
-                     : 'text-patina-mocha-brown hover:text-patina-charcoal'
+                     ? 'bg-white text-charcoal shadow-sm'
+                     : 'text-aged-oak hover:text-charcoal'
                    }`}
         >
           <div className="flex items-center justify-center gap-1.5">
@@ -56,7 +56,7 @@ export function ModeToggle({ mode, onModeChange, autoDetected = false }: ModeTog
 
       {/* Auto-detected indicator */}
       {autoDetected && (
-        <div className="flex items-center justify-center gap-1 text-xs text-patina-mocha-brown/70">
+        <div className="flex items-center justify-center gap-1 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-aged-oak">
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"

@@ -85,6 +85,10 @@ export interface ProductCardProps
    */
   showQuickActions?: boolean
   /**
+   * Original product page URL (opens in new tab)
+   */
+  sourceUrl?: string
+  /**
    * Custom quick actions
    */
   quickActions?: React.ReactNode
@@ -129,6 +133,7 @@ export const ProductCard = React.forwardRef<HTMLDivElement, ProductCardProps>(
       onFavoriteClick,
       onAddToProposal,
       onCardClick,
+      sourceUrl,
       showQuickActions = true,
       quickActions,
       rating,
@@ -194,23 +199,37 @@ export const ProductCard = React.forwardRef<HTMLDivElement, ProductCardProps>(
             </div>
           )}
 
-          {/* Favorite Button */}
-          {onFavoriteClick && (
-            <button
-              onClick={handleFavorite}
-              className="absolute top-2 right-2 p-2 bg-white/90 hover:bg-white rounded-full shadow-sm transition-all"
-              aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
-            >
-              <Icon
-                name="Heart"
-                size={18}
-                className={cn(
-                  'transition-colors',
-                  isFavorited ? 'fill-red-500 text-red-500' : 'text-gray-600'
-                )}
-              />
-            </button>
-          )}
+          {/* Top-right actions */}
+          <div className="absolute top-2 right-2 flex flex-col gap-1">
+            {onFavoriteClick && (
+              <button
+                onClick={handleFavorite}
+                className="p-2 bg-white/90 hover:bg-white rounded-full shadow-sm transition-all"
+                aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+              >
+                <Icon
+                  name="Heart"
+                  size={18}
+                  className={cn(
+                    'transition-colors',
+                    isFavorited ? 'fill-red-500 text-red-500' : 'text-gray-600'
+                  )}
+                />
+              </button>
+            )}
+            {sourceUrl && (
+              <a
+                href={sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="p-2 bg-white/90 hover:bg-white rounded-full shadow-sm transition-all"
+                aria-label="View original product page"
+              >
+                <Icon name="ExternalLink" size={18} className="text-gray-600" />
+              </a>
+            )}
+          </div>
 
           {/* Quick Actions */}
           {showQuickActions && (quickActions || onAddToProposal) && (

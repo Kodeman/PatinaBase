@@ -41,16 +41,18 @@ export function ProjectTimeline({ projectId, milestones }: ProjectTimelineProps)
 
   return (
     <div className="relative pb-24">
+      {/* Thin hairline timeline spine */}
       <motion.div
-        className="timeline-gradient absolute left-5 top-0 hidden h-full w-1 rounded-full sm:block"
+        className="absolute left-[7px] top-0 hidden h-full w-[1px] bg-[var(--border-default)] sm:block"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.4, delay: 0.1 }}
       />
-      <div className="space-y-6 sm:pl-12">
+      <div className="space-y-0 sm:pl-10">
         {milestones.map((milestone) => (
           <div key={milestone.id} className="relative">
-            <span className="timeline-gradient absolute -left-11 top-6 hidden h-6 w-6 rounded-full border border-white shadow-sm sm:block" />
+            {/* Small clay dot */}
+            <span className="absolute -left-[13px] top-8 hidden h-2 w-2 rounded-full bg-patina-clay sm:block" />
             <MilestoneCard
               projectId={projectId}
               milestone={milestone}

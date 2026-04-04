@@ -28,6 +28,7 @@ import { VendorCaptureForm } from './components/VendorCaptureForm';
 
 import { identifyUser, resetAnalytics, extensionEvents } from './lib/analytics';
 import { UpdateBanner } from './components/UpdateBanner';
+import { LoadingStrata } from './components/LoadingStrata';
 
 import './style.css';
 
@@ -1180,12 +1181,8 @@ function Popup() {
   // Loading state
   if (isAuthLoading || portalSession.isChecking) {
     return (
-      <div className="w-full min-w-[320px] max-w-[600px] h-screen p-4 bg-patina-off-white font-body">
-        <div className="animate-pulse space-y-3">
-          <div className="h-6 bg-patina-clay-beige/30 rounded w-1/3" />
-          <div className="h-48 bg-patina-clay-beige/20 rounded" />
-          <div className="h-10 bg-patina-clay-beige/30 rounded" />
-        </div>
+      <div className="w-full min-w-[320px] max-w-[600px] h-screen p-4 bg-off-white font-body flex items-center justify-center">
+        <LoadingStrata size="lg" />
       </div>
     );
   }
@@ -1197,14 +1194,14 @@ function Popup() {
 
   // Quick Capture Modal
   return (
-    <div className="w-full min-w-[320px] max-w-[600px] h-screen flex flex-col bg-patina-off-white font-body" onClick={() => setHasInteracted(true)}>
+    <div className="w-full min-w-[320px] max-w-[600px] h-screen flex flex-col bg-off-white font-body" onClick={() => setHasInteracted(true)}>
       {/* Update banner for self-hosted beta */}
       <UpdateBanner />
 
       {/* Header */}
-      <header className="px-4 py-3 border-b border-patina-clay-beige/30 shadow-patina-sm">
+      <header className="px-4 py-3 border-b border-pearl shadow-sm">
         <div className="flex items-center justify-between mb-2">
-          <h1 className="text-lg font-display font-medium text-patina-mocha-brown">
+          <h1 className="font-display font-normal text-[1.3rem] text-charcoal">
             {captureMode === 'product' ? 'Capture Product' : 'Capture Vendor'}
           </h1>
           <div className="flex items-center gap-2">
@@ -1212,7 +1209,7 @@ function Popup() {
               onClick={handleManualRefresh}
               disabled={isExtracting || !currentUrl}
               title="Re-extract page data"
-              className="p-1 text-patina-mocha-brown hover:text-patina-charcoal disabled:opacity-40 disabled:cursor-not-allowed"
+              className="p-1 text-aged-oak hover:text-charcoal disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <svg
                 className={`w-4 h-4 ${isExtracting ? 'animate-spin' : ''}`}
@@ -1226,7 +1223,7 @@ function Popup() {
             </button>
             <button
               onClick={handleSignOut}
-              className="text-xs text-patina-mocha-brown hover:text-patina-charcoal"
+              className="font-mono text-[0.62rem] uppercase tracking-[0.06em] text-aged-oak hover:text-charcoal"
             >
               Sign out
             </button>
@@ -1247,23 +1244,23 @@ function Popup() {
       <div className="flex-1 p-4 space-y-4 overflow-y-auto">
         {/* Error display */}
         {(extractionError || captureError) && (
-          <div className="p-2 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-xs text-red-600">{extractionError || captureError}</p>
+          <div className="p-2 bg-surface border-l-[3px] border-terracotta rounded-md shadow-sm">
+            <p className="text-[0.82rem] text-terracotta">{extractionError || captureError}</p>
           </div>
         )}
 
         {/* Already captured indicator */}
         {existingProduct && !isExtracting && (
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="p-3 bg-surface border-l-[3px] border-dusty-blue rounded-md shadow-sm">
             <div className="flex items-start gap-2">
-              <svg className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-4 h-4 text-dusty-blue mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div>
-                <p className="text-sm font-medium text-blue-800">Already in catalog</p>
-                <p className="text-xs text-blue-600 mt-0.5">
+                <p className="text-[0.85rem] font-medium text-charcoal">Already in catalog</p>
+                <p className="text-[0.82rem] text-aged-oak mt-0.5">
                   Captured {new Date(existingProduct.captured_at).toLocaleDateString()}
-                  {existingProduct.vendor?.name && ` • ${existingProduct.vendor.name}`}
+                  {existingProduct.vendor?.name && ` · ${existingProduct.vendor.name}`}
                 </p>
               </div>
             </div>
@@ -1273,8 +1270,8 @@ function Popup() {
         {/* Loading state */}
         {isExtracting && (
           <div className="py-8 text-center">
-            <div className="animate-spin w-8 h-8 border-2 border-patina-mocha-brown border-t-transparent rounded-full mx-auto mb-3" />
-            <p className="text-sm text-patina-mocha-brown">Extracting product data...</p>
+            <LoadingStrata size="md" />
+            <p className="font-mono text-[0.72rem] uppercase tracking-[0.06em] text-aged-oak mt-2">Extracting product data...</p>
           </div>
         )}
 
@@ -1336,14 +1333,14 @@ function Popup() {
 
         {/* Existing vendor indicator */}
         {existingVendor && captureMode === 'vendor' && !isExtracting && (
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="p-3 bg-surface border-l-[3px] border-dusty-blue rounded-md shadow-sm">
             <div className="flex items-start gap-2">
-              <svg className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-4 h-4 text-dusty-blue mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div>
-                <p className="text-sm font-medium text-blue-800">Vendor already in catalog</p>
-                <p className="text-xs text-blue-600 mt-0.5">
+                <p className="text-[0.85rem] font-medium text-charcoal">Vendor already in catalog</p>
+                <p className="text-[0.82rem] text-aged-oak mt-0.5">
                   &ldquo;{existingVendor.name}&rdquo; was added {new Date(existingVendor.created_at).toLocaleDateString()}
                 </p>
               </div>
@@ -1365,10 +1362,10 @@ function Popup() {
 
       {/* Extraction Debug Panel */}
       {extractionDiag.method && (
-        <div className="px-4 border-t border-patina-clay-beige/20">
+        <div className="px-4 border-t border-pearl">
           <button
             onClick={() => setShowDebug(!showDebug)}
-            className="w-full py-1.5 flex items-center justify-between text-xs text-patina-mocha-brown/60 hover:text-patina-mocha-brown"
+            className="w-full py-1.5 flex items-center justify-between font-mono text-[0.62rem] uppercase tracking-[0.04em] text-aged-oak hover:text-mocha"
           >
             <span>Debug: {extractionDiag.method}{extractionDiag.elapsed != null ? ` (${extractionDiag.elapsed}ms)` : ''}</span>
             <svg className={`w-3 h-3 transition-transform ${showDebug ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1376,15 +1373,15 @@ function Popup() {
             </svg>
           </button>
           {showDebug && (
-            <div className="pb-2 space-y-1 text-xs font-mono text-patina-charcoal/70">
+            <div className="pb-2 space-y-1 font-mono text-[0.62rem] text-mocha">
               {Object.entries(extractionDiag.fields).map(([key, value]) => (
                 <div key={key} className="flex justify-between">
-                  <span className="text-patina-mocha-brown/60">{key}:</span>
-                  <span className={value === '(empty)' || value === 'no' || value === '0' ? 'text-red-400' : ''}>{value}</span>
+                  <span className="text-aged-oak">{key}:</span>
+                  <span className={value === '(empty)' || value === 'no' || value === '0' ? 'text-terracotta' : ''}>{value}</span>
                 </div>
               ))}
               {extractionDiag.error && (
-                <div className="text-red-500 mt-1">Error: {extractionDiag.error}</div>
+                <div className="text-terracotta mt-1">Error: {extractionDiag.error}</div>
               )}
             </div>
           )}
@@ -1392,7 +1389,7 @@ function Popup() {
       )}
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t border-patina-clay-beige/30 bg-patina-off-white">
+      <div className="px-4 py-3 border-t border-pearl bg-off-white">
         {captureMode === 'vendor' ? (
           <button
             type="submit"
@@ -1403,30 +1400,30 @@ function Popup() {
               if (form) form.requestSubmit();
             }}
             disabled={isCapturing}
-            className={`w-full py-3 px-4 rounded-lg font-medium transition-all ${
+            className={`w-full py-3 px-4 rounded-[3px] text-[0.85rem] font-medium transition-all ${
               captureSuccess
-                ? 'bg-patina-success text-white shadow-patina-md'
-                : 'bg-patina-mocha-brown text-white hover:bg-patina-charcoal shadow-patina-md hover:shadow-patina-lg'
+                ? 'bg-sage text-white shadow-md'
+                : 'bg-charcoal text-off-white hover:bg-mocha shadow-md hover:shadow-lg'
             } disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none`}
           >
-            {isCapturing ? 'Saving...' : captureSuccess ? '✓ Vendor Saved!' : 'Save Vendor'}
+            {isCapturing ? 'Saving...' : captureSuccess ? 'Vendor Saved' : 'Save Vendor'}
           </button>
         ) : (
           <button
             onClick={existingProduct ? handleUpdate : handleCapture}
             disabled={isCapturing || isExtracting || !extractedData || (productValidation != null && !productValidation.isValid)}
-            className={`w-full py-3 px-4 rounded-lg font-medium transition-all ${
+            className={`w-full py-3 px-4 rounded-[3px] text-[0.85rem] font-medium transition-all ${
               captureSuccess
-                ? 'bg-patina-success text-white shadow-patina-md'
+                ? 'bg-sage text-white shadow-md'
                 : existingProduct
-                ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-patina-md hover:shadow-patina-lg'
-                : 'bg-patina-mocha-brown text-white hover:bg-patina-charcoal shadow-patina-md hover:shadow-patina-lg'
+                ? 'bg-dusty-blue text-white hover:bg-dusty-blue/90 shadow-md hover:shadow-lg'
+                : 'bg-charcoal text-off-white hover:bg-mocha shadow-md hover:shadow-lg'
             } disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none`}
           >
             {isCapturing
               ? (existingProduct ? 'Updating...' : 'Saving...')
               : captureSuccess
-              ? (existingProduct ? '✓ Updated!' : '✓ Saved to Catalog!')
+              ? (existingProduct ? 'Updated' : 'Saved to Catalog')
               : existingProduct
               ? 'Update Product'
               : 'Save to Catalog'}

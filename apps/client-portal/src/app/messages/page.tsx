@@ -4,11 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { MessageSquare, Search, ArrowLeft } from 'lucide-react';
 import {
-  Badge,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
   Input,
   MessageComposer,
   MessageThread,
@@ -270,27 +265,23 @@ export default function MessagesPage() {
   const lastUpdated = threadDetail?.lastMessageAt || threadDetail?.updatedAt;
 
   return (
-    <div className="min-h-screen bg-[var(--color-canvas)] p-4 md:p-6">
+    <div className="min-h-screen bg-[var(--bg-primary)] p-4 md:p-6">
       <div className="mx-auto max-w-6xl">
         <div className="mb-6">
-          <h1 className="font-[var(--font-playfair)] text-3xl text-[var(--color-text)]">
-            Messages
-          </h1>
-          <p className="mt-1 text-[var(--color-muted)]">
-            Communicate with your design team
-          </p>
+          <h1 className="type-page-title">Messages</h1>
+          <p className="type-body mt-1">Communicate with your design team</p>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[320px,1fr]">
+        <div className="grid gap-0 lg:grid-cols-[320px,1fr]">
           {/* Thread List */}
-          <Card className={cn(
-            'h-[70vh] overflow-hidden',
+          <div className={cn(
+            'h-[70vh] overflow-hidden border-r border-[var(--border-default)]',
             !showMobileList && 'hidden lg:block'
           )}>
-            <CardHeader className="space-y-4">
-              <CardTitle className="text-lg">Conversations</CardTitle>
+            <div className="p-4 space-y-4">
+              <h2 className="type-meta">Conversations</h2>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted)]" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
@@ -298,8 +289,8 @@ export default function MessagesPage() {
                   className="pl-10"
                 />
               </div>
-            </CardHeader>
-            <CardContent className="h-full overflow-y-auto p-0">
+            </div>
+            <div className="h-full overflow-y-auto">
               {threadsLoading ? (
                 <div className="space-y-4 p-4">
                   {[1, 2, 3].map((i) => (
@@ -307,7 +298,7 @@ export default function MessagesPage() {
                   ))}
                 </div>
               ) : filteredThreads.length > 0 ? (
-                <div className="divide-y divide-[var(--color-border)]">
+                <div className="divide-y divide-[var(--border-subtle)]">
                   {filteredThreads.map((thread) => {
                     const participants = extractParticipants(thread);
                     const name = buildThreadTitle(participants, currentUserId);
@@ -320,27 +311,25 @@ export default function MessagesPage() {
                         type="button"
                         onClick={() => handleSelectThread(thread.id!)}
                         className={cn(
-                          'w-full p-4 text-left transition-colors hover:bg-[var(--color-accent)]/5',
-                          isActive && 'bg-[var(--color-accent)]/10'
+                          'w-full p-4 text-left transition-colors hover:bg-[rgba(196,165,123,0.04)]',
+                          isActive && 'bg-[rgba(196,165,123,0.08)]'
                         )}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-accent)]/10 text-sm font-semibold text-[var(--color-accent)]">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--border-default)] text-sm font-medium text-[var(--text-muted)]">
                               {getInitials(name)}
                             </div>
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-[var(--color-text)]">{name}</p>
-                              <p className="truncate text-xs text-[var(--color-muted)]">{preview}</p>
+                              <p className="truncate text-sm font-medium text-[var(--text-primary)]">{name}</p>
+                              <p className="truncate type-meta-small mt-0.5">{preview}</p>
                             </div>
                           </div>
                           <div className="flex flex-col items-end gap-1 shrink-0">
                             {thread.status && (
-                              <Badge variant="outline" className="text-[10px] uppercase">
-                                {thread.status}
-                              </Badge>
+                              <span className="type-meta-small">{thread.status}</span>
                             )}
-                            <span className="text-xs text-[var(--color-muted)]">
+                            <span className="type-meta-small">
                               {formatRelativeTime(thread.lastMessageAt || thread.updatedAt)}
                             </span>
                           </div>
@@ -351,94 +340,88 @@ export default function MessagesPage() {
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center gap-3 p-6 text-center">
-                  <MessageSquare className="h-10 w-10 text-[var(--color-muted)]" />
-                  <p className="text-sm text-[var(--color-muted)]">
-                    No conversations yet
-                  </p>
+                  <MessageSquare className="h-8 w-8 text-[var(--text-muted)] opacity-50" />
+                  <p className="type-body-small">No conversations yet</p>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Message Thread */}
           <div className={cn(
-            'flex flex-col gap-4',
+            'flex flex-col',
             showMobileList && 'hidden lg:flex'
           )}>
-            <Card className="flex-1 overflow-hidden">
-              {activeThreadId && threadDetail ? (
-                <>
-                  <CardHeader className="flex flex-row items-center gap-4 border-b bg-[var(--color-accent)]/5">
-                    <button
-                      type="button"
-                      onClick={() => setShowMobileList(true)}
-                      className="lg:hidden p-2 -ml-2 rounded-lg hover:bg-[var(--color-accent)]/10"
-                    >
-                      <ArrowLeft className="h-5 w-5" />
-                    </button>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-lg">{threadTitle}</CardTitle>
-                        {threadDetail.status && (
-                          <Badge variant="subtle" color="neutral" className="text-[10px] uppercase">
-                            {threadDetail.status}
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-[var(--color-muted)]">
-                        Updated {formatRelativeTime(lastUpdated || new Date().toISOString())}
-                      </p>
+            {activeThreadId && threadDetail ? (
+              <>
+                {/* Thread header */}
+                <div className="flex items-center gap-4 border-b border-[var(--border-default)] px-6 py-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowMobileList(true)}
+                    className="lg:hidden p-1 -ml-1 hover:opacity-70 transition-opacity"
+                  >
+                    <ArrowLeft className="h-5 w-5" />
+                  </button>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h2 className="type-item-name">{threadTitle}</h2>
+                      {threadDetail.status && (
+                        <span className="type-meta-small">{threadDetail.status}</span>
+                      )}
                     </div>
-                  </CardHeader>
-                  <CardContent className="h-[400px] p-0">
-                    {threadLoading ? (
-                      <div className="space-y-4 p-6">
-                        {[1, 2, 3].map((i) => (
-                          <Skeleton key={i} className="h-16 w-full" />
-                        ))}
-                      </div>
-                    ) : (
-                      <MessageThread
-                        className="h-full rounded-none border-0"
-                        messages={conversationMessages}
-                        currentUserId={currentUserId}
-                        typingIndicators={typingIndicators}
-                        emptyState={
-                          <div className="text-center text-sm text-[var(--color-muted)]">
-                            No messages in this thread yet.
-                          </div>
-                        }
-                      />
-                    )}
-                  </CardContent>
-                </>
-              ) : (
-                <div className="flex h-[460px] flex-col items-center justify-center gap-3 text-center">
-                  <MessageSquare className="h-10 w-10 text-[var(--color-muted)]" />
-                  <p className="text-sm font-medium text-[var(--color-text)]">
-                    Select a conversation
-                  </p>
-                  <p className="text-xs text-[var(--color-muted)]">
-                    Choose a conversation to view messages from your designer
-                  </p>
+                    <p className="type-meta-small mt-0.5">
+                      Updated {formatRelativeTime(lastUpdated || new Date().toISOString())}
+                    </p>
+                  </div>
                 </div>
-              )}
-            </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Reply</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <MessageComposer
-                  disabled={!activeThreadId}
-                  busy={sendMessage.isPending}
-                  placeholder={activeThreadId ? 'Type your message...' : 'Select a conversation first'}
-                  onSend={handleSendMessage}
-                />
-                {sendError && <p className="mt-2 text-sm text-red-600">{sendError}</p>}
-              </CardContent>
-            </Card>
+                {/* Messages */}
+                <div className="h-[400px]">
+                  {threadLoading ? (
+                    <div className="space-y-4 p-6">
+                      {[1, 2, 3].map((i) => (
+                        <Skeleton key={i} className="h-16 w-full" />
+                      ))}
+                    </div>
+                  ) : (
+                    <MessageThread
+                      className="h-full rounded-none border-0"
+                      messages={conversationMessages}
+                      currentUserId={currentUserId}
+                      typingIndicators={typingIndicators}
+                      emptyState={
+                        <div className="text-center type-body-small py-8">
+                          No messages in this thread yet.
+                        </div>
+                      }
+                    />
+                  )}
+                </div>
+
+                {/* Reply */}
+                <div className="border-t border-[var(--border-default)] px-6 py-4">
+                  <p className="type-meta mb-3">Reply</p>
+                  <MessageComposer
+                    disabled={!activeThreadId}
+                    busy={sendMessage.isPending}
+                    placeholder={activeThreadId ? 'Type your message...' : 'Select a conversation first'}
+                    onSend={handleSendMessage}
+                  />
+                  {sendError && <p className="mt-2 type-meta text-patina-terracotta">{sendError}</p>}
+                </div>
+              </>
+            ) : (
+              <div className="flex h-[460px] flex-col items-center justify-center gap-3 text-center">
+                <MessageSquare className="h-8 w-8 text-[var(--text-muted)] opacity-50" />
+                <p className="text-sm font-medium text-[var(--text-primary)]">
+                  Select a conversation
+                </p>
+                <p className="type-body-small">
+                  Choose a conversation to view messages from your designer
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

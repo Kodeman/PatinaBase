@@ -12,6 +12,7 @@ import type {
   VendorCaptureInput,
 } from '@patina/shared';
 
+import { StrataMark } from './StrataMark';
 import { ImageCarousel } from './ImageCarousel';
 import { ProjectSelector } from './ProjectSelector';
 import { StyleChips } from './StyleChips';
@@ -153,7 +154,7 @@ export function ProductCaptureForm({
 
       {/* Product name */}
       <div>
-        <label className="block text-sm font-medium text-patina-charcoal mb-1">
+        <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">
           Product Name
         </label>
         <input
@@ -164,25 +165,25 @@ export function ProductCaptureForm({
             setProductName(e.target.value);
           }}
           placeholder="Enter product name"
-          className={`w-full px-3 py-2 text-sm rounded-lg border outline-none ${
+          className={`w-full px-3 py-2 text-[0.88rem] rounded-[3px] border outline-none placeholder-aged-oak ${
             nameError
               ? 'border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-500'
-              : 'border-patina-clay-beige/50 focus:border-patina-mocha-brown focus:ring-1 focus:ring-patina-mocha-brown'
+              : 'border-pearl focus:border-clay focus:ring-1 focus:ring-clay'
           }`}
         />
         {nameError && (
-          <p className="mt-1 text-xs text-red-600">{nameError}</p>
+          <p className="mt-1 text-[0.78rem] text-terracotta">{nameError}</p>
         )}
       </div>
 
       {/* Price and confidence */}
       <div className="flex gap-3">
         <div className="flex-1">
-          <label className="block text-sm font-medium text-patina-charcoal mb-1">
+          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">
             Price
           </label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-patina-mocha-brown">$</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-mocha">$</span>
             <input
               type="text"
               value={price}
@@ -191,15 +192,15 @@ export function ProductCaptureForm({
                 setPrice(e.target.value.replace(/[^0-9.]/g, ''));
               }}
               placeholder="0.00"
-              className={`w-full pl-7 pr-3 py-2 text-sm rounded-lg border outline-none ${
+              className={`w-full pl-7 pr-3 py-2 text-[0.88rem] rounded-[3px] border outline-none placeholder-aged-oak ${
                 priceError
                   ? 'border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-500'
-                  : 'border-patina-clay-beige/50 focus:border-patina-mocha-brown focus:ring-1 focus:ring-patina-mocha-brown'
+                  : 'border-pearl focus:border-clay focus:ring-1 focus:ring-clay'
               }`}
             />
           </div>
           {priceError && (
-            <p className="mt-1 text-xs text-red-600">{priceError}</p>
+            <p className="mt-1 text-[0.78rem] text-terracotta">{priceError}</p>
           )}
         </div>
         <div className="flex items-end pb-2">
@@ -232,7 +233,7 @@ export function ProductCaptureForm({
 
       {/* Manufacturer */}
       <div className="relative">
-        <label className="block text-sm font-medium text-patina-charcoal mb-1">
+        <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">
           Manufacturer
         </label>
         {showManufacturerForm ? (
@@ -271,13 +272,13 @@ export function ProductCaptureForm({
             onChangeClick={() => setShowManufacturerSelector(true)}
           />
         ) : (
-          <div className="p-3 bg-patina-clay-beige/20 rounded-lg border border-patina-clay-beige/30">
-            <p className="text-sm text-patina-mocha-brown">
+          <div className="p-3 bg-off-white rounded-md border border-pearl">
+            <p className="text-sm text-mocha">
               {extractedData.manufacturer ? `Detected: ${extractedData.manufacturer}` : 'No manufacturer detected'}
             </p>
             <button
               onClick={() => setShowManufacturerSelector(true)}
-              className="mt-2 text-xs text-patina-mocha-brown hover:text-patina-charcoal underline"
+              className="mt-2 text-xs text-mocha hover:text-charcoal underline"
             >
               + Link manufacturer
             </button>
@@ -305,8 +306,8 @@ export function ProductCaptureForm({
 
       {/* Retailer */}
       <div className="relative">
-        <label className="block text-sm font-medium text-patina-charcoal mb-1">
-          Retailer <span className="text-patina-mocha-brown/50">(where captured)</span>
+        <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">
+          Retailer <span className="text-aged-oak">(where captured)</span>
         </label>
         {showRetailerForm ? (
           <VendorInlineForm
@@ -344,13 +345,13 @@ export function ProductCaptureForm({
             onChangeClick={() => setShowRetailerSelector(true)}
           />
         ) : (
-          <div className="p-3 bg-patina-clay-beige/20 rounded-lg border border-patina-clay-beige/30">
-            <p className="text-sm text-patina-mocha-brown">
+          <div className="p-3 bg-off-white rounded-md border border-pearl">
+            <p className="text-sm text-mocha">
               Captured from: {new URL(extractedData.url).hostname}
             </p>
             <button
               onClick={() => setShowRetailerSelector(true)}
-              className="mt-2 text-xs text-patina-mocha-brown hover:text-patina-charcoal underline"
+              className="mt-2 text-xs text-mocha hover:text-charcoal underline"
             >
               + Link retailer
             </button>
@@ -378,7 +379,7 @@ export function ProductCaptureForm({
 
       {/* Project selector */}
       <div>
-        <label className="block text-sm font-medium text-patina-charcoal mb-1">
+        <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">
           Project
         </label>
         <ProjectSelector
@@ -399,8 +400,8 @@ export function ProductCaptureForm({
 
       {/* Quick note */}
       <div>
-        <label className="block text-sm font-medium text-patina-charcoal mb-1">
-          Quick Note <span className="text-patina-mocha-brown/50">(optional)</span>
+        <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">
+          Quick Note <span className="text-aged-oak">(optional)</span>
         </label>
         <textarea
           value={note}
@@ -411,16 +412,16 @@ export function ProductCaptureForm({
           placeholder="Add a note..."
           rows={2}
           maxLength={140}
-          className="w-full px-3 py-2 text-sm rounded-lg border border-patina-clay-beige/50
-                   focus:border-patina-mocha-brown focus:ring-1 focus:ring-patina-mocha-brown outline-none resize-none"
+          className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-pearl
+                   focus:border-clay focus:ring-1 focus:ring-clay outline-none resize-none placeholder-aged-oak"
         />
-        <p className="text-xs text-patina-mocha-brown/50 text-right">{note.length}/140</p>
+        <p className="text-xs text-aged-oak text-right">{note.length}/140</p>
       </div>
 
       {/* Style tags */}
       <div>
-        <label className="block text-sm font-medium text-patina-charcoal mb-2">
-          Style Tags <span className="text-patina-mocha-brown/50">(optional)</span>
+        <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-2">
+          Style Tags <span className="text-aged-oak">(optional)</span>
         </label>
         <StyleChips
           styles={styles}
@@ -432,9 +433,9 @@ export function ProductCaptureForm({
 
       {/* Validation warnings */}
       {validation && validation.warnings.length > 0 && (
-        <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+        <div className="p-2.5 bg-surface border-l-[3px] border-golden-hour rounded-md shadow-sm">
           {validation.warnings.map((w, i) => (
-            <p key={i} className="text-xs text-amber-700 flex items-start gap-1.5">
+            <p key={i} className="text-xs text-aged-oak flex items-start gap-1.5">
               <svg className="w-3 h-3 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
               </svg>

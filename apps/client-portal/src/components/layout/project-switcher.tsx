@@ -39,7 +39,7 @@ export function ProjectSwitcher({ projects, activeProjectId }: ProjectSwitcherPr
     <div className="relative">
       <button
         type="button"
-        className="flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-2 text-sm font-medium text-[var(--color-text)] shadow-sm transition hover:border-[var(--color-accent)] focus-visible:focus-ring"
+        className="flex items-center gap-2 rounded-[3px] border border-[var(--border-default)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--accent-primary)] focus-visible:focus-ring"
         onClick={() => setIsOpen((open) => !open)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
@@ -47,27 +47,27 @@ export function ProjectSwitcher({ projects, activeProjectId }: ProjectSwitcherPr
         <span className="truncate max-w-[12rem] text-left">
           {activeName ?? 'Select a project'}
         </span>
-        <ChevronDown className={`h-4 w-4 transition ${isOpen ? 'rotate-180' : ''}`} aria-hidden />
+        <ChevronDown className={`h-4 w-4 text-[var(--text-muted)] transition ${isOpen ? 'rotate-180' : ''}`} aria-hidden />
       </button>
 
       {isOpen ? (
-        <div className="absolute right-0 top-12 z-20 w-72 rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-3 shadow-lg">
-          <div className="flex items-center gap-2 rounded-full bg-white px-3 py-2 text-sm text-[var(--color-muted)] shadow-inner">
-            <Search className="h-4 w-4" aria-hidden />
+        <div className="absolute right-0 top-12 z-20 w-72 rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] shadow-sm">
+          <div className="flex items-center gap-2 border-b border-[var(--border-default)] px-3 py-2.5">
+            <Search className="h-4 w-4 text-[var(--text-muted)]" aria-hidden />
             <input
               autoFocus
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search projects"
-              className="w-full bg-transparent text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none"
+              className="w-full bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
             />
           </div>
           <ul
             role="listbox"
-            className="mt-3 max-h-64 overflow-y-auto rounded-xl bg-white p-1 text-sm shadow-inner"
+            className="max-h-64 overflow-y-auto py-1 text-sm"
           >
             {filtered.length === 0 ? (
-              <li className="px-3 py-2 text-[var(--color-muted)]">No projects found</li>
+              <li className="px-3 py-2 text-[var(--text-muted)]">No projects found</li>
             ) : (
               filtered.map((project) => {
                 const isActive = project.id === activeProjectId;
@@ -78,17 +78,17 @@ export function ProjectSwitcher({ projects, activeProjectId }: ProjectSwitcherPr
                       role="option"
                       aria-selected={isActive}
                       onClick={() => handleSelect(project.id)}
-                      className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left transition hover:bg-[var(--color-canvas)] ${
-                        isActive ? 'bg-[var(--color-canvas)] font-semibold text-[var(--color-text)]' : 'text-[var(--color-muted)]'
+                      className={`flex w-full items-center justify-between gap-2 border-b border-[var(--border-subtle)] px-3 py-2.5 text-left transition hover:bg-[rgba(196,165,123,0.06)] ${
+                        isActive ? 'font-medium text-[var(--text-primary)]' : 'text-[var(--text-body)]'
                       }`}
                     >
                       <span className="flex flex-col">
                         <span>{project.name}</span>
                         {project.location ? (
-                          <span className="text-xs text-[var(--color-muted)]">{project.location}</span>
+                          <span className="type-meta-small">{project.location}</span>
                         ) : null}
                       </span>
-                      {isActive ? <Check className="h-4 w-4 text-[var(--color-accent)]" aria-hidden /> : null}
+                      {isActive ? <Check className="h-4 w-4 text-[var(--accent-primary)]" aria-hidden /> : null}
                     </button>
                   </li>
                 );

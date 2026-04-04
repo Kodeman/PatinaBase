@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — Project Detail Page UX/UI Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--bg:var(--ow);--sf:#FFFFFF;--hv:rgba(196,165,123,0.06);--tx:var(--ch);--bd:var(--mo);--mu:var(--ao);--su:var(--pe);--fd:'Playfair Display',Georgia,serif;--fb:'Inter',-apple-system,sans-serif;--fm:'DM Mono','SF Mono',monospace;--e:cubic-bezier(0.4,0,0.2,1)}
+*{margin:0;padding:0;box-sizing:border-box}html{font-size:16px;scroll-behavior:smooth;background:var(--bg)}body{font-family:var(--fb);color:var(--tx);-webkit-font-smoothing:antialiased;line-height:1.6}
+.w{max-width:1120px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}.nr{max-width:800px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}section{padding:clamp(3rem,6vw,6rem) 0}
+h1{font-family:var(--fd);font-weight:400;font-size:clamp(2.2rem,5vw,3.8rem);line-height:1.12;letter-spacing:-0.02em}h2,.h2{font-family:var(--fd);font-weight:400;font-size:clamp(1.6rem,3.5vw,2.4rem);line-height:1.2;letter-spacing:-0.02em}h3,.h3{font-family:var(--fd);font-weight:500;font-size:1.25rem;line-height:1.35}
+.meta{font-family:var(--fm);font-size:0.68rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--mu)}.ms{font-family:var(--fm);font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mu)}
+.lbl{font-family:var(--fb);font-weight:500;font-size:0.95rem;color:var(--tx)}.ls{font-family:var(--fb);font-weight:400;font-size:0.82rem;color:var(--mu)}
+.bd{font-family:var(--fb);font-size:0.95rem;line-height:1.7;color:var(--bd);max-width:600px}em{font-family:var(--fd);font-style:italic;color:var(--ao)}
+.st{display:flex;flex-direction:column;gap:6px;padding:2.5rem 0}.st .s{height:2px;border-radius:1px}.st .s:nth-child(1){width:100%;background:var(--mo)}.st .s:nth-child(2){width:80%;background:var(--cl);opacity:.7}.st .s:nth-child(3){width:60%;background:var(--cl);opacity:.35}
+.sm{display:flex;flex-direction:column;gap:4px;padding:1.5rem 0}.sm .s{height:1.5px;border-radius:1px}.sm .s:nth-child(1){width:60px;background:var(--mo)}.sm .s:nth-child(2){width:48px;background:var(--cl);opacity:.7}.sm .s:nth-child(3){width:36px;background:var(--cl);opacity:.35}
+.cover{min-height:75vh;display:flex;flex-direction:column;justify-content:flex-end;padding:4rem clamp(1.5rem,5vw,4rem)}.cover h1 span{display:block;font-style:italic;color:var(--ao);font-weight:400;font-size:0.55em}.cover-sub{font-size:1.05rem;color:var(--bd);max-width:580px;margin:1rem 0 3rem;line-height:1.75}
+.cm{display:flex;gap:3rem;flex-wrap:wrap}.cm-i .meta{margin-bottom:0.2rem}.cm-i p{font-size:0.85rem;color:var(--tx)}
+.sc{background:var(--sf);border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(44,41,38,0.04),0 8px 32px rgba(44,41,38,0.05);margin:2rem 0}.sb{display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:48px;background:var(--sf);border-bottom:1px solid var(--su)}.sb-l{font-family:var(--fd);font-weight:500;font-size:0.72rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--tx)}.sb-n{display:flex;gap:1.2rem}.sb-n span{font-family:var(--fb);font-size:0.72rem;color:var(--mu)}.sb-n span.on{color:var(--tx);border-bottom:2px solid var(--cl);padding-bottom:2px}.sb-u{display:flex;align-items:center;gap:0.4rem}.sb-a{width:24px;height:24px;border-radius:50%;background:var(--pe);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-weight:500;font-size:0.55rem;color:var(--mo)}
+.sd{padding:clamp(1.5rem,3vw,2.5rem);background:var(--bg);min-height:200px}
+.btn{font-family:var(--fb);font-weight:500;font-size:0.8rem;padding:0.55rem 1.2rem;border:none;border-radius:3px;cursor:default;display:inline-flex;align-items:center;gap:0.4rem}.btn-p{background:var(--ch);color:var(--ow)}.btn-s{background:transparent;color:var(--tx);border:1px solid var(--pe)}.btn-g{background:transparent;color:var(--mu)}.btn-sm{font-size:0.72rem;padding:0.4rem 0.8rem}.btn-cl{background:var(--cl);color:white}.btn-sa{background:var(--sa);color:white}
+.tag{display:inline-flex;font-family:var(--fb);font-size:0.72rem;font-weight:500;color:var(--mo);padding:0.25rem 0.7rem;background:var(--ow);border:1px solid var(--pe);border-radius:2px;white-space:nowrap}.tag.on{border-color:var(--cl);color:var(--ch)}
+.bc{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:1.5rem}.bc a{color:var(--cl);text-decoration:none}
+.fl{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:0.4rem}
+.dr{display:grid;grid-template-columns:110px 1fr;gap:0.75rem;padding:0.3rem 0;font-size:0.85rem}.dr-k{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);padding-top:0.12rem}.dr-v{font-family:var(--fb);color:var(--bd);line-height:1.5}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:3rem}.three-one{display:grid;grid-template-columns:2fr 1fr;gap:2.5rem}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem 2rem}.ff{display:flex;flex-direction:column;gap:0.35rem}.ff.full{grid-column:1/-1}.ff label{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu)}.ff input,.ff textarea,.ff select{font-family:var(--fb);font-size:0.85rem;padding:0.55rem 0.7rem;border:1px solid var(--pe);border-radius:3px;background:var(--sf);color:var(--tx);outline:none}.ff textarea{resize:vertical;min-height:80px}
+.pq{padding:2.5rem 0;border-top:1px solid var(--su);border-bottom:1px solid var(--su);margin:2rem 0}.pq blockquote{font-family:var(--fd);font-size:clamp(1.2rem,2.5vw,1.8rem);font-weight:400;font-style:italic;line-height:1.45;color:var(--tx);max-width:620px}.pq cite{display:block;font-family:var(--fm);font-size:0.65rem;font-style:normal;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-top:1rem}
+.mr{display:flex;gap:0;padding-bottom:1.5rem;border-bottom:1px solid var(--su);margin-bottom:2rem}.mt{padding-right:2rem}.mt+.mt{padding-left:2rem;border-left:1px solid var(--su)}.mt-l{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:0.3rem}.mt-v{font-family:var(--fd);font-size:1.6rem;font-weight:700;color:var(--tx);line-height:1;margin-bottom:0.2rem}.mt-c{font-family:var(--fb);font-size:0.72rem}.mt-c.up{color:var(--sa)}.mt-c.dn{color:var(--te)}.mt-c.nu{color:var(--mu)}
+.prog{height:3px;background:var(--pe);border-radius:2px;overflow:hidden;width:100%}.pf{height:100%;border-radius:2px}
+
+/* Phase dots */
+.pd{display:flex;gap:0.5rem;align-items:center}.pd-dot{width:12px;height:12px;border-radius:50%;border:2px solid var(--pe);flex-shrink:0}.pd-dot.done{background:var(--sa);border-color:var(--sa)}.pd-dot.active{background:var(--cl);border-color:var(--cl)}.pd-dot.future{border-color:var(--pe)}.pd-line{width:28px;height:2px;background:var(--pe);flex-shrink:0}.pd-line.done{background:var(--sa)}
+
+/* Phase section */
+.phase{border-bottom:1px solid var(--su);padding:1.5rem 0}.phase:last-child{border-bottom:none}
+.phase-head{display:flex;align-items:center;gap:0.75rem;cursor:default;margin-bottom:0.75rem}
+.phase-dot{width:14px;height:14px;border-radius:50%;border:2.5px solid var(--pe);flex-shrink:0}.phase-dot.done{background:var(--sa);border-color:var(--sa)}.phase-dot.active{background:var(--cl);border-color:var(--cl)}.phase-dot.future{border-color:var(--pe)}
+.phase-name{font-family:var(--fb);font-weight:500;font-size:0.95rem;color:var(--tx)}.phase.done .phase-name{color:var(--mu)}.phase.future .phase-name{color:var(--pe);font-weight:400}
+.phase-dates{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);margin-left:auto}
+
+/* Tasks */
+.task{display:grid;grid-template-columns:20px 1fr auto;gap:0.75rem;padding:0.45rem 0 0.45rem 1.75rem;align-items:start}
+.t-check{width:18px;height:18px;border-radius:3px;border:1.5px solid var(--pe);display:flex;align-items:center;justify-content:center;font-size:0.6rem;flex-shrink:0;cursor:default}.t-check.done{border-color:var(--sa);color:var(--sa);background:rgba(122,155,118,0.08)}.t-check.blocked{border-color:var(--te);color:var(--te)}
+.t-name{font-family:var(--fb);font-size:0.85rem;color:var(--tx)}.task.done .t-name{color:var(--mu);text-decoration:line-through;text-decoration-color:var(--pe)}
+.t-date{font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);white-space:nowrap}
+.t-inline{display:inline-flex;align-items:center;gap:0.3rem;margin-top:0.2rem;padding:0.15rem 0.5rem;border-radius:3px;font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em}
+.t-decision{background:rgba(196,165,123,0.06);border:1px solid rgba(196,165,123,0.12);color:var(--cl)}
+.t-blocked{background:rgba(199,123,110,0.04);border:1px solid rgba(199,123,110,0.12);color:var(--te)}
+.t-resolved{background:rgba(122,155,118,0.04);border:1px solid rgba(122,155,118,0.12);color:var(--sa)}
+
+/* Financial rows */
+.fn-row{display:grid;grid-template-columns:1fr auto auto;gap:1rem;padding:0.45rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline}.fn-row:last-child{border-bottom:none}
+.fn-label{font-family:var(--fb);font-size:0.85rem;color:var(--tx)}.fn-label.sub{padding-left:1rem;color:var(--bd);font-size:0.78rem}
+.fn-bud{font-family:var(--fd);font-weight:500;font-size:0.88rem;color:var(--mu);text-align:right;min-width:70px}
+.fn-act{font-family:var(--fd);font-weight:600;font-size:0.88rem;color:var(--tx);text-align:right;min-width:70px}
+.fn-total .fn-label{font-weight:600}.fn-total{border-top:2px solid var(--su);padding-top:0.6rem;margin-top:0.3rem}
+
+/* Order row */
+.order{display:grid;grid-template-columns:1fr auto auto;gap:1rem;padding:0.65rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:center}
+.o-name{font-family:var(--fb);font-size:0.85rem;color:var(--tx)}.o-vendor{font-family:var(--fb);font-size:0.72rem;font-style:italic;color:var(--ao)}
+.o-stat{font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em;padding:3px 7px;border-radius:2px;white-space:nowrap}
+.o-ordered{color:var(--db);background:rgba(139,156,173,0.1)}.o-shipped{color:var(--gh);background:rgba(232,197,71,0.1)}.o-delivered{color:var(--sa);background:rgba(122,155,118,0.1)}.o-pending{color:var(--mu);background:rgba(139,115,85,0.06)}
+
+/* Activity */
+.act{padding:0.45rem 0;border-bottom:1px solid rgba(229,226,221,0.3)}.act-text{font-family:var(--fb);font-size:0.82rem;color:var(--bd);line-height:1.5}.act-text strong{font-weight:500;color:var(--tx)}.act-time{font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);margin-top:0.1rem}
+
+/* Image placeholder */
+.img-ph{background:var(--pe);border-radius:6px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}.img-ph::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 20px,rgba(196,165,123,0.03) 20px,rgba(196,165,123,0.03) 40px)}.img-ph span{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);z-index:1}
+
+/* Edit bar */
+.edit-bar{display:flex;justify-content:space-between;align-items:center;padding:0.5rem 1.5rem;background:rgba(196,165,123,0.06);border-bottom:1px solid rgba(196,165,123,0.15)}
+.edit-mode-label{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--cl);display:flex;align-items:center;gap:0.5rem}
+.edit-mode-dot{width:8px;height:8px;border-radius:50%;background:var(--cl);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* Client view header */
+.client-bar{display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:52px;background:var(--sf);border-bottom:1px solid var(--su)}
+
+/* Responsive */
+@media(max-width:768px){.two{grid-template-columns:1fr}.three-one{grid-template-columns:1fr}.fg{grid-template-columns:1fr}.mr{flex-direction:column;gap:1.5rem}.mt+.mt{border-left:none;padding-left:0}.cm{flex-direction:column;gap:1rem}}
+.fade{opacity:0;transform:translateY(16px);transition:opacity 0.7s ease,transform 0.7s ease}.fade.vis{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ============================== COVER ============================== -->
+<div class="cover">
+  <p class="meta" style="margin-bottom:1rem">Patina — Opus Project Detail Design</p>
+  <h1>The Project Page<span>Where design work becomes visible progress</span></h1>
+  <p class="cover-sub">The project detail page is the living document of a design engagement. Clients see a warm, transparent progress narrative — their room coming to life through phases, milestones, and photography. Designers see the same page with full operational control — task management, procurement tracking, financial oversight, and decision workflows. One URL. Two experiences. One toggle.</p>
+  <div class="st"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div class="cm">
+    <div class="cm-i"><p class="meta">Prepared for</p><p>Kody & Leah</p></div>
+    <div class="cm-i"><p class="meta">Version</p><p>1.0 — March 2026</p></div>
+    <div class="cm-i"><p class="meta">System</p><p>Opus Project Management</p></div>
+    <div class="cm-i"><p class="meta">Two Modes</p><p>Client View · Designer Edit</p></div>
+  </div>
+</div>
+
+<!-- ============================== SIX-PHASE FRAMEWORK ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">01 — The Six-Phase Framework</p>
+  <h2>Every project follows <em>the same arc.</em></h2>
+  <p class="bd" style="margin-bottom:2rem">Interior design projects progress through six phases. Each phase has a color-coded dot, a defined duration, specific deliverables, a communication cadence, and a set of tasks and decisions. The phase framework is the skeleton that every project detail page hangs on — not a Kanban board, not a Gantt chart, but a vertical timeline that reads like a story.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:0;border-top:1px solid var(--su)">
+    <div style="padding:1.25rem 0.6rem 1.25rem 0;border-bottom:1px solid var(--su)"><div style="width:14px;height:14px;border-radius:50%;background:var(--sa);margin-bottom:0.5rem"></div><div class="lbl" style="font-size:0.82rem;margin-bottom:0.2rem">Consultation</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Site visit, questionnaire, room scan, scope definition, service agreement</p><p class="ms" style="margin-top:0.4rem">1–2 weeks</p></div>
+    <div style="padding:1.25rem 0.6rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div style="width:14px;height:14px;border-radius:50%;background:var(--sa);margin-bottom:0.5rem"></div><div class="lbl" style="font-size:0.82rem;margin-bottom:0.2rem">Concept</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Mood boards, color palette, style direction, 2–3 design options presented</p><p class="ms" style="margin-top:0.4rem">2–4 weeks</p></div>
+    <div style="padding:1.25rem 0.6rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div style="width:14px;height:14px;border-radius:50%;background:var(--sa);margin-bottom:0.5rem"></div><div class="lbl" style="font-size:0.82rem;margin-bottom:0.2rem">Refinement</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Material finalization, product selections, client approvals, spec completion</p><p class="ms" style="margin-top:0.4rem">2–4 weeks</p></div>
+    <div style="padding:1.25rem 0.6rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div style="width:14px;height:14px;border-radius:50%;background:var(--cl);margin-bottom:0.5rem"></div><div class="lbl" style="font-size:0.82rem;margin-bottom:0.2rem">Procurement</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Orders placed, vendor coordination, delivery tracking, receiving & inspection</p><p class="ms" style="margin-top:0.4rem">4–12 weeks</p></div>
+    <div style="padding:1.25rem 0.6rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--pe);margin-bottom:0.5rem"></div><div class="lbl" style="font-size:0.82rem;margin-bottom:0.2rem">Installation</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Furniture delivery, placement, styling, accessories, construction oversight</p><p class="ms" style="margin-top:0.4rem">1–3 weeks</p></div>
+    <div style="padding:1.25rem 0 1.25rem 0.6rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--pe);margin-bottom:0.5rem"></div><div class="lbl" style="font-size:0.82rem;margin-bottom:0.2rem">Walkthrough</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Final review, punch list, photography, documentation handover, celebration</p><p class="ms" style="margin-top:0.4rem">1 week</p></div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== CLIENT PRESENTATION VIEW ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">02 — Client View</p>
+  <h2>What the client sees: <em>their room taking shape.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">The client's project page is a progress narrative. Phase dots show where the project stands. A visual progress bar. Key milestones listed beneath. Below, a photo timeline shows the room evolving. Pending decisions surface as interactive cards. Financial summary shows what's been invoiced and what's due. Messages accessible at the bottom. No task lists, no procurement spreadsheets — just the story of their project.</p>
+
+  <div class="sc">
+    <div class="client-bar"><div class="sb-l">Patina</div><div style="display:flex;gap:1.5rem"><span style="font-family:var(--fb);font-size:0.75rem;color:var(--mu)">Your Projects</span><span style="font-family:var(--fb);font-size:0.75rem;color:var(--mu)">Messages</span></div><div style="display:flex;align-items:center;gap:0.5rem"><span style="font-family:var(--fb);font-size:0.72rem;color:var(--tx)">James Chen</span><div class="sb-a" style="background:rgba(122,155,118,0.12);color:var(--sa)">JC</div></div></div>
+
+    <div style="padding:2.5rem;background:var(--bg)">
+      <!-- Project header for client -->
+      <div style="margin-bottom:2rem">
+        <div class="h2" style="font-size:clamp(1.8rem,3.5vw,2.4rem);margin-bottom:0.2rem">Your Living & Dining Room</div>
+        <div style="font-family:var(--fb);font-size:0.95rem;font-style:italic;color:var(--ao);margin-bottom:1.5rem">Designed by Leah Kirkland, Middlewest Studio</div>
+
+        <!-- Phase progress dots -->
+        <div class="pd" style="margin-bottom:1rem">
+          <div class="pd-dot done"></div><div class="pd-line done"></div>
+          <div class="pd-dot done"></div><div class="pd-line done"></div>
+          <div class="pd-dot done"></div><div class="pd-line done"></div>
+          <div class="pd-dot active"></div><div class="pd-line"></div>
+          <div class="pd-dot future"></div><div class="pd-line"></div>
+          <div class="pd-dot future"></div>
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem"><span class="lbl" style="font-size:0.88rem">Procurement Phase</span><span class="ms" style="color:var(--cl)">· Week 11 of ~19</span></div>
+        <div class="prog" style="height:6px;max-width:400px"><div class="pf" style="width:58%;background:var(--cl)"></div></div>
+      </div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- What's happening now -->
+      <div style="font-family:var(--fd);font-weight:400;font-size:1.3rem;color:var(--tx);margin-bottom:0.5rem">What's Happening Now</div>
+      <div style="font-family:var(--fb);font-size:0.92rem;line-height:1.75;color:var(--bd);max-width:640px;margin-bottom:1.5rem">Your dining table from Nordic Atelier ships April 2nd, and the dining chairs from Sawkille are confirmed for April 15th. We're waiting on your rug color decision before placing that order — see below. Paint samples are on your walls for review this weekend.</div>
+
+      <!-- Pending decisions for client -->
+      <div style="border:1.5px solid var(--cl);border-radius:8px;padding:1.25rem;background:rgba(196,165,123,0.02);margin-bottom:1rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem"><span class="ms" style="color:var(--cl)">Your Decision Needed</span><span style="font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--te)">Overdue 4 days</span></div>
+        <div class="lbl" style="font-size:0.9rem;margin-bottom:0.3rem">Rug Color — Natural vs Sand</div>
+        <p style="font-family:var(--fb);font-size:0.82rem;color:var(--bd);margin-bottom:0.75rem">This decision is delaying your rug order. Tap to view options and make your selection.</p>
+        <div style="display:flex;gap:0.5rem"><div style="width:48px;height:36px;border-radius:3px;background:#D4C8B0"></div><div style="width:48px;height:36px;border-radius:3px;background:#E8DCC8"></div></div>
+        <button class="btn btn-cl btn-sm" style="margin-top:0.75rem">View Options & Choose</button>
+      </div>
+
+      <div style="border:1.5px solid var(--pe);border-radius:8px;padding:1.25rem;margin-bottom:2rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem"><span class="ms" style="color:var(--cl)">Your Decision Needed</span><span class="ms">Due Apr 1</span></div>
+        <div class="lbl" style="font-size:0.9rem;margin-bottom:0.3rem">Wall Paint — Simply White vs Chantilly Lace</div>
+        <p style="font-family:var(--fb);font-size:0.82rem;color:var(--bd)">Samples are on your wall. Take your time reviewing over the weekend.</p>
+      </div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- Milestones the client can see -->
+      <div style="font-family:var(--fd);font-weight:400;font-size:1.3rem;color:var(--tx);margin-bottom:1rem">Upcoming Milestones</div>
+      <div style="padding:0.5rem 0;border-bottom:1px solid rgba(229,226,221,0.4);display:flex;justify-content:space-between;align-items:baseline"><span style="font-family:var(--fb);font-size:0.88rem;color:var(--tx)">Dining table arrives</span><span class="ms">Apr 2</span></div>
+      <div style="padding:0.5rem 0;border-bottom:1px solid rgba(229,226,221,0.4);display:flex;justify-content:space-between;align-items:baseline"><span style="font-family:var(--fb);font-size:0.88rem;color:var(--tx)">Dining chairs arrive</span><span class="ms">Apr 15</span></div>
+      <div style="padding:0.5rem 0;border-bottom:1px solid rgba(229,226,221,0.4);display:flex;justify-content:space-between;align-items:baseline"><span style="font-family:var(--fb);font-size:0.88rem;color:var(--tx)">Installation begins</span><span class="ms">Est. Apr 22</span></div>
+      <div style="padding:0.5rem 0;border-bottom:1px solid rgba(229,226,221,0.4);display:flex;justify-content:space-between;align-items:baseline"><span style="font-family:var(--fb);font-size:0.88rem;color:var(--tx)">Final walkthrough</span><span class="ms">Est. May 3</span></div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- Simple financial summary for client -->
+      <div style="font-family:var(--fd);font-weight:400;font-size:1.3rem;color:var(--tx);margin-bottom:1rem">Investment Summary</div>
+      <div class="dr" style="grid-template-columns:140px 1fr"><div class="dr-k">Project Total</div><div class="dr-v" style="font-weight:500;font-family:var(--fd);font-size:1.1rem">$24,500</div></div>
+      <div class="dr" style="grid-template-columns:140px 1fr"><div class="dr-k">Paid to Date</div><div class="dr-v">$7,500 (31%)</div></div>
+      <div class="dr" style="grid-template-columns:140px 1fr"><div class="dr-k">Next Payment</div><div class="dr-v" style="color:var(--cl)">$9,000 — due before procurement ordering</div></div>
+      <div class="dr" style="grid-template-columns:140px 1fr"><div class="dr-k">Remaining</div><div class="dr-v">$8,000</div></div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- Message shortcut -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:1rem;border:1px solid var(--pe);border-radius:6px"><div><div class="lbl" style="font-size:0.88rem">Questions for Leah?</div><div class="ls">Last message: today, 11:45 AM</div></div><button class="btn btn-cl btn-sm">Open Conversation</button></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== DESIGNER EDIT VIEW ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">03 — Designer Edit View</p>
+  <h2>The operational center, <em>not a separate tool.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">When Leah opens this project, she sees the same page the client sees — plus full operational controls. The vertical phase timeline expands to show every task, decision, and deliverable. Financials show budget vs. actual. Procurement orders are tracked inline. Activity and communications integrate at the bottom. One continuous scroll. No tabs. No sidebar navigation.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="edit-bar"><div class="edit-mode-label"><div class="edit-mode-dot"></div>Edit Mode</div><div style="display:flex;gap:0.5rem"><button class="btn btn-s btn-sm">Preview as Client</button><button class="btn btn-cl btn-sm">Send Update to Client</button></div></div>
+
+    <div class="sd">
+      <div class="bc"><a>Projects</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Chen Residence</div>
+
+      <!-- Project hero -->
+      <div style="display:grid;grid-template-columns:1fr auto;gap:2rem;align-items:start;margin-bottom:1.5rem;padding-bottom:1.5rem;border-bottom:1px solid var(--su)">
+        <div>
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem"><span style="width:10px;height:10px;border-radius:50%;background:var(--cl)"></span><span class="meta" style="color:var(--cl)">Procurement Phase</span></div>
+          <div class="h2" style="font-size:clamp(1.6rem,3vw,2rem);margin-bottom:0.15rem">Chen Residence — Living & Dining</div>
+          <div class="ls">James & Lin Chen · Wauwatosa, WI · Started Jan 8, 2026</div>
+          <div class="pd" style="margin-top:1rem">
+            <div class="pd-dot done"></div><div class="pd-line done"></div>
+            <div class="pd-dot done"></div><div class="pd-line done"></div>
+            <div class="pd-dot done"></div><div class="pd-line done"></div>
+            <div class="pd-dot active"></div><div class="pd-line"></div>
+            <div class="pd-dot future"></div><div class="pd-line"></div>
+            <div class="pd-dot future"></div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:0.4rem"><button class="btn btn-s btn-sm">View Proposal</button><button class="btn btn-s btn-sm">View Client Profile</button><button class="btn btn-s btn-sm">View Room Scan</button></div>
+      </div>
+
+      <!-- Summary metrics -->
+      <div class="mr">
+        <div class="mt"><div class="mt-l">Progress</div><div class="mt-v">58%</div><div class="mt-c nu">Week 11 of ~19</div></div>
+        <div class="mt"><div class="mt-l">Budget</div><div class="mt-v">$24.5k</div><div class="mt-c up">On target</div></div>
+        <div class="mt"><div class="mt-l">Spent</div><div class="mt-v">$10.5k</div><div class="mt-c nu">43% committed</div></div>
+        <div class="mt"><div class="mt-l">Open Decisions</div><div class="mt-v" style="color:var(--te)">2</div><div class="mt-c dn">1 overdue</div></div>
+        <div class="mt"><div class="mt-l">Orders</div><div class="mt-v">5/9</div><div class="mt-c nu">placed</div></div>
+      </div>
+
+      <!-- ===== PHASE TIMELINE ===== -->
+      <div class="h3" style="margin-bottom:0.25rem">Phase Timeline</div>
+      <div class="ls" style="margin-bottom:1.25rem">Expand any phase to see tasks, decisions, and deliverables</div>
+
+      <!-- Phase 1: Consultation — DONE -->
+      <div class="phase done">
+        <div class="phase-head"><div class="phase-dot done"></div><div class="phase-name">Consultation</div><div class="phase-dates">Jan 6–12 · Complete</div></div>
+        <div class="task done"><div class="t-check done">✓</div><div class="t-name">Initial site visit & room scan</div><div class="t-date">Jan 8</div></div>
+        <div class="task done"><div class="t-check done">✓</div><div class="t-name">Client questionnaire complete</div><div class="t-date">Jan 10</div></div>
+        <div class="task done"><div class="t-check done">✓</div><div class="t-name">Service agreement signed</div><div class="t-date">Jan 12</div></div>
+      </div>
+
+      <!-- Phase 2: Concept — DONE -->
+      <div class="phase done">
+        <div class="phase-head"><div class="phase-dot done"></div><div class="phase-name">Concept</div><div class="phase-dates">Jan 13–Feb 3 · Complete</div></div>
+        <div class="task done"><div class="t-check done">✓</div><div class="t-name">Mood boards & color palette created</div><div class="t-date">Jan 20</div></div>
+        <div class="task done"><div class="t-check done">✓</div><div class="t-name">3 design concepts presented to client</div><div class="t-date">Jan 25</div></div>
+        <div class="task done"><div class="t-check done">✓</div><div><div class="t-name">Concept direction approval</div><div class="t-inline t-resolved">✓ Resolved · Option B selected</div></div><div class="t-date">Jan 28</div></div>
+        <div class="task done"><div class="t-check done">✓</div><div class="t-name">Scope expanded — dining room added</div><div class="t-date">Feb 3</div></div>
+      </div>
+
+      <!-- Phase 3: Refinement — DONE -->
+      <div class="phase done">
+        <div class="phase-head"><div class="phase-dot done"></div><div class="phase-name">Refinement</div><div class="phase-dates">Feb 4–Mar 8 · Complete</div></div>
+        <div class="task done"><div class="t-check done">✓</div><div class="t-name">Material palette finalized</div><div class="t-date">Feb 15</div></div>
+        <div class="task done"><div class="t-check done">✓</div><div class="t-name">Product selections curated from catalog</div><div class="t-date">Feb 22</div></div>
+        <div class="task done"><div class="t-check done">✓</div><div class="t-name">Revised proposal sent — $24,500</div><div class="t-date">Feb 5</div></div>
+        <div class="task done"><div class="t-check done">✓</div><div><div class="t-name">Proposal signed by client</div><div class="t-inline t-resolved">✓ Signed Feb 8 · $24,500</div></div><div class="t-date">Feb 8</div></div>
+        <div class="task done"><div class="t-check done">✓</div><div class="t-name">Final specifications complete</div><div class="t-date">Mar 8</div></div>
+      </div>
+
+      <!-- Phase 4: Procurement — ACTIVE -->
+      <div class="phase">
+        <div class="phase-head"><div class="phase-dot active"></div><div class="phase-name" style="font-weight:600">Procurement</div><div class="phase-dates" style="color:var(--cl)">Mar 10–Present · Active</div></div>
+
+        <div class="task done"><div class="t-check done">✓</div><div class="t-name">Order dining table — Nordic Atelier</div><div class="t-date" style="color:var(--sa)">Mar 12</div></div>
+        <div class="task done"><div class="t-check done">✓</div><div class="t-name">Order sectional — Woodward & Sons</div><div class="t-date" style="color:var(--sa)">Mar 14</div></div>
+        <div class="task done"><div class="t-check done">✓</div><div><div class="t-name">Dining chair decision</div><div class="t-inline t-resolved">✓ Resolved Mar 26 · Shaker — Sawkille × 6</div></div><div class="t-date" style="color:var(--sa)">Mar 26</div></div>
+        <div class="task done"><div class="t-check done">✓</div><div class="t-name">Order dining chairs — Sawkille Co</div><div class="t-date" style="color:var(--sa)">Mar 26</div></div>
+        <div class="task done"><div class="t-check done">✓</div><div class="t-name">Order pendant lights × 3 — Schoolhouse</div><div class="t-date" style="color:var(--sa)">Mar 15</div></div>
+
+        <!-- Blocked by decision -->
+        <div class="task"><div class="t-check blocked">⚡</div><div><div class="t-name">Order jute area rug — Studio Piet</div><div class="t-inline t-blocked">⚡ Blocked · Waiting: Rug color decision (overdue 4 days)</div></div><div class="t-date" style="color:var(--te)">Blocked</div></div>
+
+        <!-- Pending decision -->
+        <div class="task"><div class="t-check" style="border-color:var(--gh);color:var(--gh)">◉</div><div><div class="t-name">Wall paint selection</div><div class="t-inline t-decision">◉ Pending decision · Simply White vs Chantilly Lace · Due Apr 1</div></div><div class="t-date">Apr 1</div></div>
+
+        <div class="task"><div class="t-check"></div><div class="t-name">Order throw pillows & textiles</div><div class="t-date">Apr 5</div></div>
+        <div class="task"><div class="t-check"></div><div class="t-name">Confirm all delivery dates align</div><div class="t-date">Apr 10</div></div>
+      </div>
+
+      <!-- Phase 5: Installation — FUTURE -->
+      <div class="phase future">
+        <div class="phase-head"><div class="phase-dot future"></div><div class="phase-name">Installation</div><div class="phase-dates">Est. Apr 22–May 1</div></div>
+        <div class="task" style="opacity:0.5"><div class="t-check"></div><div class="t-name">Receive & inspect all deliveries</div><div class="t-date">Apr 22</div></div>
+        <div class="task" style="opacity:0.5"><div class="t-check"></div><div class="t-name">Furniture placement & styling</div><div class="t-date">Apr 24</div></div>
+        <div class="task" style="opacity:0.5"><div class="t-check"></div><div class="t-name">Accessories & finishing details</div><div class="t-date">Apr 28</div></div>
+      </div>
+
+      <!-- Phase 6: Walkthrough — FUTURE -->
+      <div class="phase future">
+        <div class="phase-head"><div class="phase-dot future"></div><div class="phase-name">Walkthrough</div><div class="phase-dates">Est. May 1–3</div></div>
+        <div class="task" style="opacity:0.5"><div class="t-check"></div><div class="t-name">Final walkthrough with client</div><div class="t-date">May 1</div></div>
+        <div class="task" style="opacity:0.5"><div class="t-check"></div><div class="t-name">Punch list completion</div><div class="t-date">May 2</div></div>
+        <div class="task" style="opacity:0.5"><div class="t-check"></div><div class="t-name">Professional photography</div><div class="t-date">May 3</div></div>
+        <div class="task" style="opacity:0.5"><div class="t-check"></div><div class="t-name">Request client review</div><div class="t-date">May 6</div></div>
+      </div>
+
+      <div style="margin-top:1rem"><button class="btn btn-s btn-sm">+ Add Task</button></div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- ===== PROCUREMENT TRACKING ===== -->
+      <div class="h3" style="margin-bottom:0.25rem">Procurement Orders</div>
+      <div class="ls" style="margin-bottom:1rem">5 of 9 items ordered · 2 in transit · 1 blocked</div>
+
+      <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:1rem;padding:0.4rem 0;border-bottom:1px solid var(--su);margin-bottom:0.25rem"><span class="ms">Item</span><span class="ms" style="text-align:right">Value</span><span class="ms" style="text-align:right;min-width:80px">Status</span><span class="ms" style="text-align:right;min-width:80px">ETA</span></div>
+
+      <div class="order"><div><div class="o-name">Heirloom Oak Dining Table</div><div class="o-vendor">Nordic Atelier · PO #NA-2026-041</div></div><div style="font-family:var(--fd);font-weight:500;font-size:0.85rem;text-align:right">$4,200</div><div><span class="o-stat o-shipped">In Transit</span></div><div class="ms" style="text-align:right">Apr 2</div></div>
+      <div class="order"><div><div class="o-name">Meadow Linen Sectional</div><div class="o-vendor">Woodward & Sons · PO #WS-2026-188</div></div><div style="font-family:var(--fd);font-weight:500;font-size:0.85rem;text-align:right">$6,800</div><div><span class="o-stat o-shipped">In Transit</span></div><div class="ms" style="text-align:right">Apr 8</div></div>
+      <div class="order"><div><div class="o-name">Shaker Dining Chairs × 6</div><div class="o-vendor">Sawkille Co · PO #SK-2026-087</div></div><div style="font-family:var(--fd);font-weight:500;font-size:0.85rem;text-align:right">$2,400</div><div><span class="o-stat o-ordered">Ordered</span></div><div class="ms" style="text-align:right">Apr 15</div></div>
+      <div class="order"><div><div class="o-name">Brass Arc Pendant × 3</div><div class="o-vendor">Schoolhouse · PO #SH-2026-224</div></div><div style="font-family:var(--fd);font-weight:500;font-size:0.85rem;text-align:right">$2,670</div><div><span class="o-stat o-ordered">Ordered</span></div><div class="ms" style="text-align:right">Apr 12</div></div>
+      <div class="order"><div><div class="o-name">Woven Jute Area Rug 8×10</div><div class="o-vendor">Studio Piet</div></div><div style="font-family:var(--fd);font-weight:500;font-size:0.85rem;text-align:right;color:var(--mu)">$1,450</div><div><span class="o-stat o-pending">Blocked</span></div><div class="ms" style="text-align:right;color:var(--te)">Awaiting decision</div></div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- ===== FINANCIALS ===== -->
+      <div class="h3" style="margin-bottom:0.25rem">Financials</div>
+      <div class="ls" style="margin-bottom:1rem">Budget vs. Actual · Payment milestones · Designer earnings</div>
+
+      <div style="display:grid;grid-template-columns:1fr auto auto;gap:1rem;padding:0.4rem 0;border-bottom:1px solid var(--su);margin-bottom:0.25rem"><span class="ms">Category</span><span class="ms" style="text-align:right;min-width:80px">Budget</span><span class="ms" style="text-align:right;min-width:80px">Actual</span></div>
+
+      <div class="fn-row"><div class="fn-label">Design Fee</div><div class="fn-bud">$2,500</div><div class="fn-act">$2,500</div></div>
+      <div class="fn-row"><div class="fn-label">Furniture & Lighting</div><div class="fn-bud">$16,070</div><div class="fn-act" style="color:var(--sa)">$16,070</div></div>
+      <div class="fn-row"><div class="fn-label sub">Dining table</div><div class="fn-bud" style="font-size:0.78rem">$4,200</div><div class="fn-act" style="font-size:0.78rem">$4,200</div></div>
+      <div class="fn-row"><div class="fn-label sub">Sectional</div><div class="fn-bud" style="font-size:0.78rem">$6,800</div><div class="fn-act" style="font-size:0.78rem">$6,800</div></div>
+      <div class="fn-row"><div class="fn-label sub">Dining chairs × 6</div><div class="fn-bud" style="font-size:0.78rem">$2,400</div><div class="fn-act" style="font-size:0.78rem">$2,400</div></div>
+      <div class="fn-row"><div class="fn-label sub">Pendant lights × 3</div><div class="fn-bud" style="font-size:0.78rem">$2,670</div><div class="fn-act" style="font-size:0.78rem">$2,670</div></div>
+      <div class="fn-row"><div class="fn-label">Rugs & Textiles</div><div class="fn-bud">$2,180</div><div class="fn-act" style="color:var(--mu)">—</div></div>
+      <div class="fn-row"><div class="fn-label">Paint & Finishing</div><div class="fn-bud">$280</div><div class="fn-act" style="color:var(--mu)">—</div></div>
+      <div class="fn-row"><div class="fn-label">Delivery & Installation</div><div class="fn-bud">$800</div><div class="fn-act" style="color:var(--mu)">—</div></div>
+      <div class="fn-row"><div class="fn-label">Contingency (3%)</div><div class="fn-bud">$670</div><div class="fn-act" style="color:var(--sa)">$0</div></div>
+      <div class="fn-row fn-total"><div class="fn-label">Total</div><div class="fn-bud" style="font-size:1.1rem">$24,500</div><div class="fn-act" style="font-size:1.1rem">$18,570</div></div>
+
+      <div style="margin-top:1.5rem;padding:1rem;background:rgba(122,155,118,0.04);border:1px solid rgba(122,155,118,0.12);border-radius:6px"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.35rem"><span class="fl" style="margin-bottom:0">Payment Milestones</span></div>
+        <div class="dr" style="grid-template-columns:100px 1fr auto"><div class="dr-k">Deposit</div><div class="dr-v">$7,350 (30%)</div><div style="font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--sa)">Paid Feb 8</div></div>
+        <div class="dr" style="grid-template-columns:100px 1fr auto"><div class="dr-k">Procurement</div><div class="dr-v">$9,800 (40%)</div><div style="font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--te)">Due · Invoice sent</div></div>
+        <div class="dr" style="grid-template-columns:100px 1fr auto"><div class="dr-k">Completion</div><div class="dr-v">$7,350 (30%)</div><div style="font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu)">At walkthrough</div></div>
+      </div>
+
+      <div style="margin-top:1rem;padding:1rem;border:1px solid var(--su);border-radius:6px"><div class="fl">Your Earnings</div>
+        <div class="dr" style="grid-template-columns:120px 1fr"><div class="dr-k">Design Fee</div><div class="dr-v" style="font-weight:500">$2,500</div></div>
+        <div class="dr" style="grid-template-columns:120px 1fr"><div class="dr-k">Commissions</div><div class="dr-v" style="font-weight:500">$2,687 (est. product commissions)</div></div>
+        <div class="dr" style="grid-template-columns:120px 1fr"><div class="dr-k">Total Earnings</div><div class="dr-v" style="font-weight:600;color:var(--sa);font-family:var(--fd);font-size:1.1rem">$5,187</div></div>
+      </div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- ===== RECENT ACTIVITY ===== -->
+      <div class="h3" style="margin-bottom:0.25rem">Recent Activity</div>
+      <div class="ls" style="margin-bottom:1rem">All project events in one stream</div>
+
+      <div class="act"><div class="act-text"><strong>James Chen</strong> confirmed Thursday 3pm for rug sample review</div><div class="act-time">Today, 11:47 AM</div></div>
+      <div class="act"><div class="act-text"><strong>Decision resolved:</strong> Dining chairs → Shaker Chair — Sawkille Co × 6</div><div class="act-time">Mar 26, 1:02 PM</div></div>
+      <div class="act"><div class="act-text"><strong>Leah</strong> placed order with Sawkille Co · PO #SK-2026-087</div><div class="act-time">Mar 26, 2:30 PM</div></div>
+      <div class="act"><div class="act-text"><strong>Sawkille Co</strong> confirmed order · Est. delivery Apr 15</div><div class="act-time">Mar 27, 9:15 AM</div></div>
+      <div class="act"><div class="act-text"><strong>Leah</strong> sent weekly project update to client</div><div class="act-time">Mar 24</div></div>
+      <div class="act"><div class="act-text"><strong>Nordic Atelier</strong> shipped dining table · Tracking #NA-DK-8847</div><div class="act-time">Mar 22</div></div>
+      <div class="act"><div class="act-text"><strong>Leah</strong> uploaded paint samples photo to project</div><div class="act-time">Mar 20</div></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== PULL QUOTE ============================== -->
+<section>
+<div class="nr">
+  <div class="pq"><blockquote>"Leah doesn't think in swimlanes. She thinks in phases — consultation, concept, refinement, procurement, installation, walkthrough. The project view should be a vertical timeline that reads like a story, not a spreadsheet that reads like a chore."</blockquote><cite>Design Principle — Timelines, Not Kanban</cite></div>
+</div>
+</section>
+
+<!-- ============================== CLOSING ============================== -->
+<section class="fade">
+<div class="w">
+  <div class="st"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <h2 style="margin-top:2rem;margin-bottom:1.5rem">What makes this page <em>work.</em></h2>
+  <div class="two" style="gap:2rem">
+    <div>
+      <p class="bd" style="margin-bottom:1.5rem"><strong>Clients see a progress story.</strong> Phase dots, a "What's Happening Now" narrative, upcoming milestones, pending decisions as interactive cards, and a simple financial summary. No task checkboxes. No procurement spreadsheets. The room is coming to life — the page should feel like watching it happen.</p>
+      <p class="bd"><strong>Decisions live inline.</strong> On the designer's view, decisions appear as tagged objects within their phase — pending in golden-hour, resolved in sage, blocking in terracotta. A blocked procurement order shows exactly which decision is holding it. The designer can send a reminder with one click. The client sees decisions as interactive cards at the top of their view.</p>
+    </div>
+    <div>
+      <p class="bd" style="margin-bottom:1.5rem"><strong>Financials are transparent.</strong> Budget vs. actual in a simple table. Payment milestones with status (paid, due, upcoming). Designer earnings visible only in edit mode. The client sees "paid to date" and "next payment" — not the full procurement spreadsheet. The designer sees everything including line-item-level budget tracking.</p>
+      <p class="bd"><strong>One page, no tabs.</strong> Phase timeline → procurement orders → financials → activity feed. All in one continuous scroll. No tabbed navigation fragmenting the project across pages. The designer scrolls the same way a client scrolls — top to bottom, beginning to end. The phase timeline IS the navigation — expand any phase to see its details.</p>
+    </div>
+  </div>
+
+  <div class="sm" style="margin-top:3rem"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2rem;flex-wrap:wrap;gap:1rem">
+    <div><div style="font-family:var(--fd);font-weight:400;font-size:1.05rem">Patina</div><div style="font-family:var(--fd);font-style:italic;font-size:0.82rem;color:var(--ao)">Where Time Adds Value</div></div>
+    <div class="ms">Project Detail Page Design v1.0 · March 2026 · Opus Project Management · Kody & Leah</div>
+  </div>
+</div>
+</section>
+
+<script>
+const f=document.querySelectorAll('.fade');
+const o=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('vis')})},{threshold:0.08,rootMargin:'0px 0px -40px 0px'});
+f.forEach(s=>o.observe(s));
+</script>
+</body>
+</html>

@@ -23,30 +23,30 @@ export function ClientHeader({
   lastUpdated,
 }: ClientHeaderProps) {
   return (
-    <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-canvas)]/95 backdrop-blur supports-[backdrop-filter]:bg-[var(--color-canvas)]/80">
-      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/projects" className="rounded-full bg-[var(--color-card)] px-4 py-2 font-[var(--font-playfair)] text-lg font-semibold tracking-wide text-[var(--color-text)] shadow-sm">
+    <header className="sticky top-0 z-30 border-b border-[var(--border-default)] bg-[var(--bg-primary)]/95 backdrop-blur supports-[backdrop-filter]:bg-[var(--bg-primary)]/80">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <div className="flex items-center gap-6">
+          <Link href="/projects" className="font-heading text-lg tracking-wide text-[var(--text-primary)] transition-opacity hover:opacity-70">
             Patina
           </Link>
           <ProjectSwitcher projects={projects} activeProjectId={activeProjectId} />
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-3 text-sm text-[var(--color-muted)]">
-          <div className="flex items-center gap-2 rounded-full bg-[var(--color-card)] px-3 py-1.5 shadow-sm">
-            <Bell className="h-4 w-4 text-[var(--color-accent)]" aria-hidden />
-            <span className="font-medium text-[var(--color-text)]">{approvalsPending}</span>
-            <span className="hidden sm:inline">approvals awaiting you</span>
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <Bell className="h-3.5 w-3.5 text-[var(--accent-primary)]" aria-hidden />
+            <span className="font-heading text-lg font-bold text-[var(--text-primary)]">{approvalsPending}</span>
+            <span className="type-meta hidden sm:inline">approvals</span>
           </div>
           <Link
             href="/messages"
-            className="flex items-center gap-2 rounded-full bg-[var(--color-card)] px-3 py-1.5 shadow-sm hover:bg-[var(--color-accent)]/10 transition-colors"
+            className="flex items-center gap-2 transition-opacity hover:opacity-70"
           >
-            <MessageSquare className="h-4 w-4 text-[var(--color-info)]" aria-hidden />
-            <span className="font-medium text-[var(--color-text)]">{unreadMessages}</span>
-            <span className="hidden sm:inline">unread messages</span>
+            <MessageSquare className="h-3.5 w-3.5 text-[var(--accent-primary)]" aria-hidden />
+            <span className="font-heading text-lg font-bold text-[var(--text-primary)]">{unreadMessages}</span>
+            <span className="type-meta hidden sm:inline">messages</span>
           </Link>
           {lastUpdated ? (
-            <span className="rounded-full border border-[var(--color-border)] px-3 py-1.5">
+            <span className="type-meta">
               Updated {formatRelativeTime(lastUpdated) ?? 'recently'}
             </span>
           ) : null}

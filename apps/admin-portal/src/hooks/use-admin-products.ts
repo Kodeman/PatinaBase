@@ -51,6 +51,7 @@ function mapRowToProductListItem(row: Record<string, unknown>): ProductListItem 
     variantCount: 0,
     has3D: false,
     arSupported: false,
+    sourceUrl: (row.source_url as string) || undefined,
     publishedAt: row.published_at ? new Date(row.published_at as string) : undefined,
     updatedAt: new Date((row.updated_at as string) || Date.now()),
     createdAt: new Date((row.created_at as string) || Date.now()),
@@ -179,12 +180,58 @@ async function adminFetch(url: string, options: RequestInit = {}) {
 }
 
 /**
- * Hook for fetching a single product by ID
+ * Maps a raw Supabase product row to the camelCase shape expected by the edit form.
+ * DB columns: id, name, description, short_description, brand, category, status,
+ *   price_retail, price_trade, slug, sku, source_url, images, materials, tags,
+ *   style_tags, seo_title, seo_description, published_at, created_at, updated_at
+ */
+function mapRowToProduct(row: Record<string, unknown>) {
+  return {
+    id: row.id as string,
+    name: (row.name as string) || '',
+    brand: (row.brand as string) || '',
+    shortDescription: (row.short_description as string) || (row.description as string) || '',
+    longDescription: (row.description as string) || '',
+    category: (row.category as string) || '',
+    status: ((row.status as string) || 'draft') as 'draft' | 'in_review' | 'published' | 'deprecated',
+    price: row.price_retail != null ? (row.price_retail as number) / 100 : 0,
+    msrp: 0,
+    salePrice: 0,
+    currency: 'USD',
+    slug: (row.slug as string) || '',
+    sku: (row.sku as string) || '',
+    sourceUrl: (row.source_url as string) || '',
+    images: (row.images as string[]) || [],
+    materials: (row.materials as string[]) || [],
+    tags: (row.tags as string[]) || [],
+    styleTags: (row.style_tags as string[]) || [],
+    seoTitle: (row.seo_title as string) || '',
+    seoDescription: (row.seo_description as string) || '',
+    seoKeywords: [] as string[],
+    publishedAt: row.published_at ? new Date(row.published_at as string) : undefined,
+    updatedAt: new Date((row.updated_at as string) || Date.now()),
+    createdAt: new Date((row.created_at as string) || Date.now()),
+  };
+}
+
+/**
+ * Hook for fetching a single product by ID.
+ * Uses browser client directly (consistent with list query) instead of API route.
  */
 export function useProduct(id: string) {
   const query = useQuery({
     queryKey: adminProductsKeys.detail(id),
-    queryFn: () => adminFetch(`/api/catalog/products/${id}`),
+    queryFn: async () => {
+      const supabase = createBrowserClient();
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+      return mapRowToProduct(data as Record<string, unknown>);
+    },
     staleTime: 10 * 60 * 1000,
     enabled: !!id,
   });

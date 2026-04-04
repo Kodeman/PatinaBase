@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — Proposal ↔ Project Flow · Complete Redesign</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--bg:var(--ow);--sf:#FFFFFF;--hv:rgba(196,165,123,0.06);--tx:var(--ch);--bd:var(--mo);--mu:var(--ao);--su:var(--pe);--fd:'Playfair Display',Georgia,serif;--fb:'Inter',-apple-system,sans-serif;--fm:'DM Mono','SF Mono',monospace;--e:cubic-bezier(0.4,0,0.2,1)}
+*{margin:0;padding:0;box-sizing:border-box}html{font-size:16px;scroll-behavior:smooth;background:var(--bg)}body{font-family:var(--fb);color:var(--tx);-webkit-font-smoothing:antialiased;line-height:1.6}
+.w{max-width:1120px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}.nr{max-width:800px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}section{padding:clamp(2.5rem,5vw,5rem) 0}
+h1{font-family:var(--fd);font-weight:400;font-size:clamp(2rem,5vw,3.6rem);line-height:1.12;letter-spacing:-0.02em}h2,.h2{font-family:var(--fd);font-weight:400;font-size:clamp(1.5rem,3.5vw,2.2rem);line-height:1.2;letter-spacing:-0.02em}h3,.h3{font-family:var(--fd);font-weight:500;font-size:1.15rem;line-height:1.35}
+.meta{font-family:var(--fm);font-size:0.65rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--mu)}.ms{font-family:var(--fm);font-size:0.55rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mu)}
+.lbl{font-family:var(--fb);font-weight:500;font-size:0.92rem;color:var(--tx)}.ls{font-family:var(--fb);font-weight:400;font-size:0.8rem;color:var(--mu)}
+.bd{font-family:var(--fb);font-size:0.92rem;line-height:1.7;color:var(--bd);max-width:620px}em{font-family:var(--fd);font-style:italic;color:var(--ao)}
+.st{display:flex;flex-direction:column;gap:6px;padding:2.5rem 0}.st .s{height:2px;border-radius:1px}.st .s:nth-child(1){width:100%;background:var(--mo)}.st .s:nth-child(2){width:80%;background:var(--cl);opacity:.7}.st .s:nth-child(3){width:60%;background:var(--cl);opacity:.35}
+.sm{display:flex;flex-direction:column;gap:4px;padding:1.25rem 0}.sm .s{height:1.5px;border-radius:1px}.sm .s:nth-child(1){width:60px;background:var(--mo)}.sm .s:nth-child(2){width:48px;background:var(--cl);opacity:.7}.sm .s:nth-child(3){width:36px;background:var(--cl);opacity:.35}
+.cover{min-height:70vh;display:flex;flex-direction:column;justify-content:flex-end;padding:4rem clamp(1.5rem,5vw,4rem)}.cover h1 span{display:block;font-style:italic;color:var(--ao);font-weight:400;font-size:0.55em}.cover-sub{font-size:1rem;color:var(--bd);max-width:620px;margin:1rem 0 3rem;line-height:1.75}
+.cm{display:flex;gap:3rem;flex-wrap:wrap}.cm-i .meta{margin-bottom:0.2rem}.cm-i p{font-size:0.85rem;color:var(--tx)}
+.sc{background:var(--sf);border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(44,41,38,0.04),0 8px 32px rgba(44,41,38,0.05);margin:2rem 0}.sb{display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:46px;background:var(--sf);border-bottom:1px solid var(--su)}.sb-l{font-family:var(--fd);font-weight:500;font-size:0.7rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--tx)}.sb-n{display:flex;gap:1.2rem}.sb-n span{font-family:var(--fb);font-size:0.7rem;color:var(--mu)}.sb-n span.on{color:var(--tx);border-bottom:2px solid var(--cl);padding-bottom:2px}.sb-u{display:flex;align-items:center;gap:0.4rem}.sb-a{width:22px;height:22px;border-radius:50%;background:var(--pe);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-weight:500;font-size:0.5rem;color:var(--mo)}
+.sd{padding:clamp(1.25rem,3vw,2rem);background:var(--bg)}
+.btn{font-family:var(--fb);font-weight:500;font-size:0.78rem;padding:0.5rem 1rem;border:none;border-radius:3px;cursor:default;display:inline-flex;align-items:center;gap:0.35rem}.btn-p{background:var(--ch);color:var(--ow)}.btn-s{background:transparent;color:var(--tx);border:1px solid var(--pe)}.btn-g{background:transparent;color:var(--mu)}.btn-sm{font-size:0.7rem;padding:0.35rem 0.7rem}.btn-cl{background:var(--cl);color:white}.btn-sa{background:var(--sa);color:white}
+.tag{display:inline-flex;font-family:var(--fb);font-size:0.68rem;font-weight:500;color:var(--mo);padding:0.2rem 0.6rem;background:var(--ow);border:1px solid var(--pe);border-radius:2px;white-space:nowrap}.tag.on{border-color:var(--cl);color:var(--ch)}
+.bc{font-family:var(--fm);font-size:0.58rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:1.25rem}.bc a{color:var(--cl);text-decoration:none}
+.fl{font-family:var(--fm);font-size:0.58rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:0.35rem}
+.dr{display:grid;grid-template-columns:110px 1fr;gap:0.6rem;padding:0.2rem 0;font-size:0.82rem}.dr-k{font-family:var(--fm);font-size:0.58rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);padding-top:0.1rem}.dr-v{font-family:var(--fb);color:var(--bd);line-height:1.5}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:2.5rem}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem 1.5rem}.ff{display:flex;flex-direction:column;gap:0.3rem}.ff.full{grid-column:1/-1}.ff label{font-family:var(--fm);font-size:0.58rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu)}.ff input,.ff textarea,.ff select{font-family:var(--fb);font-size:0.82rem;padding:0.5rem 0.65rem;border:1px solid var(--pe);border-radius:3px;background:var(--sf);color:var(--tx);outline:none}.ff textarea{resize:vertical;min-height:70px}
+.pq{padding:2rem 0;border-top:1px solid var(--su);border-bottom:1px solid var(--su);margin:2rem 0}.pq blockquote{font-family:var(--fd);font-size:clamp(1.1rem,2.5vw,1.6rem);font-weight:400;font-style:italic;line-height:1.45;color:var(--tx);max-width:600px}.pq cite{display:block;font-family:var(--fm);font-size:0.6rem;font-style:normal;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-top:0.75rem}
+.prog{height:3px;background:var(--pe);border-radius:2px;overflow:hidden;width:100%}.pf{height:100%;border-radius:2px}
+
+/* Flow arrow chain */
+.flow{display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;padding:1.25rem 0;border-top:1px solid var(--su);border-bottom:1px solid var(--su);margin:1.5rem 0}
+.fn{display:inline-flex;align-items:center;justify-content:center;padding:0.4rem 0.8rem;border-radius:4px;font-family:var(--fb);font-size:0.68rem;font-weight:500;white-space:nowrap;flex-shrink:0}
+.fa{width:20px;height:1px;background:var(--pe);position:relative;flex-shrink:0}.fa::after{content:'';position:absolute;right:0;top:-2.5px;width:5px;height:5px;border-right:1px solid var(--pe);border-bottom:1px solid var(--pe);transform:rotate(-45deg)}
+
+/* Room scope card */
+.room{border:1px solid var(--su);border-radius:6px;padding:1rem;margin-bottom:0.6rem;transition:border-color 0.15s}.room:hover{border-color:var(--cl)}
+
+/* Phase row in proposal */
+.phase-row{display:grid;grid-template-columns:1fr auto auto;gap:1rem;padding:0.5rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline}
+.pr-name{font-family:var(--fb);font-size:0.82rem;color:var(--tx)}.pr-del{font-family:var(--fb);font-size:0.7rem;color:var(--mu)}.pr-fee{font-family:var(--fd);font-weight:600;font-size:0.85rem;text-align:right}.pr-dur{font-family:var(--fm);font-size:0.5rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);text-align:right;min-width:55px}
+
+/* FF&E line */
+.ffe{display:grid;grid-template-columns:1fr 50px 60px 70px;gap:0.5rem;padding:0.35rem 0;border-bottom:1px solid rgba(229,226,221,0.35);align-items:baseline;font-size:0.78rem}
+.ffe-name{font-family:var(--fb);color:var(--tx)}.ffe-maker{font-family:var(--fb);font-size:0.68rem;font-style:italic;color:var(--ao)}
+.ffe-qty{font-family:var(--fm);font-size:0.55rem;text-align:center;color:var(--mu)}.ffe-price{font-family:var(--fd);font-weight:500;font-size:0.78rem;text-align:right}
+.ffe-type{font-family:var(--fm);font-size:0.48rem;text-transform:uppercase;letter-spacing:0.04em;padding:2px 5px;border-radius:2px;text-align:center;white-space:nowrap}
+.t-fixed{color:var(--sa);background:rgba(122,155,118,0.06)}.t-allow{color:var(--gh);background:rgba(232,197,71,0.06)}.t-tbd{color:var(--mu);background:rgba(139,115,85,0.06)}
+
+/* Conversion mapping */
+.map{display:grid;grid-template-columns:1fr 36px 1fr;gap:0;align-items:center;margin:0.5rem 0}
+.map-from{padding:0.6rem 0.8rem;background:rgba(196,165,123,0.04);border:1px solid rgba(196,165,123,0.12);border-radius:4px;font-family:var(--fb);font-size:0.75rem;color:var(--bd)}
+.map-to{padding:0.6rem 0.8rem;background:rgba(122,155,118,0.04);border:1px solid rgba(122,155,118,0.12);border-radius:4px;font-family:var(--fb);font-size:0.75rem;color:var(--bd)}
+.map-arrow{text-align:center;font-size:0.7rem;color:var(--cl)}
+
+/* Exclusion row */
+.excl{padding:0.3rem 0 0.3rem 0.75rem;border-left:2px solid var(--te);margin-bottom:0.3rem;font-family:var(--fb);font-size:0.78rem;color:var(--bd)}
+
+/* Edit bar */
+.edit-bar{display:flex;justify-content:space-between;align-items:center;padding:0.4rem 1.5rem;background:rgba(196,165,123,0.06);border-bottom:1px solid rgba(196,165,123,0.15)}
+.eml{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--cl);display:flex;align-items:center;gap:0.4rem}
+.emd{width:7px;height:7px;border-radius:50%;background:var(--cl);animation:p 2s ease-in-out infinite}
+@keyframes p{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* Responsive */
+@media(max-width:768px){.two{grid-template-columns:1fr}.fg{grid-template-columns:1fr}.cm{flex-direction:column;gap:1rem}}
+.fade{opacity:0;transform:translateY(14px);transition:opacity 0.6s ease,transform 0.6s ease}.fade.vis{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ============================== COVER ============================== -->
+<div class="cover">
+  <p class="meta" style="margin-bottom:1rem">Patina — Proposal ↔ Project Flow Redesign</p>
+  <h1>The Proposal That<span>Becomes the Project</span></h1>
+  <p class="cover-sub">The previous proposal design treated proposals and projects as separate entities connected by a "Create Project" button. That's wrong. In real interior design practice, the proposal IS the project definition. When a client signs, every room, every phase, every line item, every exclusion, and every payment milestone should flow directly into the Opus project system with zero re-entry. This document redesigns the entire flow.</p>
+  <div class="st"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div class="cm">
+    <div class="cm-i"><p class="meta">Prepared for</p><p>Kody & Leah</p></div>
+    <div class="cm-i"><p class="meta">Version</p><p>2.0 — March 2026</p></div>
+    <div class="cm-i"><p class="meta">Replaces</p><p>Proposal System v1.0</p></div>
+    <div class="cm-i"><p class="meta">Core Insight</p><p>Proposal = Project Definition</p></div>
+  </div>
+</div>
+
+<!-- ============================== THE PROBLEM ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">01 — The Problem with v1</p>
+  <h2>Why proposals and projects <em>can't be separate.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">The v1 proposal was a beautiful document — vision, concept, selections, investment, timeline, terms. But it treated the proposal as a narrative and the project as a separate operational tool. When the client signed, a "Create Project" button spawned a new entity and someone had to manually re-enter the scope, budget, timeline, and FF&E schedule. That's where scope creep starts, where budgets diverge, and where designers lose hours.</p>
+
+  <div class="two" style="gap:2rem;margin-bottom:2rem">
+    <div>
+      <div class="h3" style="margin-bottom:0.5rem;color:var(--te)">What broke in v1</div>
+      <p style="font-family:var(--fb);font-size:0.82rem;color:var(--bd);line-height:1.65;margin-bottom:0.5rem">The proposal said "$24,500 for living and dining rooms" — but the project had no structured scope definition. Which rooms? What's in each room? What's included vs. excluded? How many revision rounds? What happens when the client adds a hallway mid-project?</p>
+      <p style="font-family:var(--fb);font-size:0.82rem;color:var(--bd);line-height:1.65">The FF&E schedule existed in the project but not in the proposal. The proposal had "Product Selections" as a narrative section with product cards. The project had a procurement pipeline with PO numbers. These were two completely different data structures describing the same furniture.</p>
+    </div>
+    <div>
+      <div class="h3" style="margin-bottom:0.5rem;color:var(--sa)">What v2 fixes</div>
+      <p style="font-family:var(--fb);font-size:0.82rem;color:var(--bd);line-height:1.65;margin-bottom:0.5rem">The proposal builds the project's data structure as it's written. Room scope, phase timeline, FF&E selections, budget, payment milestones, exclusions, revision limits, and change order process are all structured data underneath the narrative prose. When the client signs, the project doesn't get "created" — it gets "activated."</p>
+      <p style="font-family:var(--fb);font-size:0.82rem;color:var(--bd);line-height:1.65">Every product in the proposal's Selections section is a line item in the FF&E schedule. Every phase in the proposal's Timeline section is a phase in the Opus project. Every dollar in the Investment section maps to a budget row. The proposal and the project are the same object in two views.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== THE COMPLETE FLOW ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">02 — The Complete Flow</p>
+  <h2>From lead to living project, <em>one continuous thread.</em></h2>
+
+  <div class="flow">
+    <div class="fn" style="border:1.5px solid var(--db);color:var(--db)">Lead Accepted</div><div class="fa"></div>
+    <div class="fn" style="border:1.5px solid var(--cl);background:rgba(196,165,123,0.04)">Discovery</div><div class="fa"></div>
+    <div class="fn" style="border:1.5px solid var(--cl);background:rgba(196,165,123,0.04)">Scope Builder</div><div class="fa"></div>
+    <div class="fn" style="border:1.5px solid var(--cl);background:rgba(196,165,123,0.06)">Proposal Draft</div><div class="fa"></div>
+    <div class="fn" style="border:1.5px solid var(--cl)">Client Review</div><div class="fa"></div>
+    <div class="fn" style="border:1.5px solid var(--gh);color:var(--gh)">Revision?</div><div class="fa"></div>
+    <div class="fn" style="border:1.5px solid var(--sa);background:rgba(122,155,118,0.04)">Signed</div><div class="fa"></div>
+    <div class="fn" style="border:1.5px solid var(--sa);background:rgba(122,155,118,0.06);font-weight:600">Project Live</div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--su);margin-top:0.5rem">
+    <div style="padding:1rem 0.75rem 1rem 0;border-bottom:1px solid var(--su)"><div class="ms" style="color:var(--cl);margin-bottom:0.35rem">Step 1 · Discovery</div><div class="lbl" style="font-size:0.8rem;margin-bottom:0.2rem">Paid consultation</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Site visit, room scan, intake questionnaire, budget conversation, style assessment. Outputs a project brief. This step is billed separately ($150–500) and can happen before any proposal exists.</p></div>
+    <div style="padding:1rem 0.75rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div class="ms" style="color:var(--cl);margin-bottom:0.35rem">Step 2 · Scope Builder</div><div class="lbl" style="font-size:0.8rem;margin-bottom:0.2rem">Room-by-room definition</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Designer defines which rooms, what's in each room (FF&E categories), preliminary product selections vs. allowances, phase structure, fee model, revision limits, and exclusions. This builds the proposal's structural skeleton.</p></div>
+    <div style="padding:1rem 0.75rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div class="ms" style="color:var(--cl);margin-bottom:0.35rem">Step 3 · Proposal Document</div><div class="lbl" style="font-size:0.8rem;margin-bottom:0.2rem">Narrative wraps the data</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">The designer writes the vision, concept, and story prose around the structured scope. The client reads a beautiful document. The system stores structured data underneath. Same typography, same page — dual nature.</p></div>
+    <div style="padding:1rem 0 1rem 0.75rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div class="ms" style="color:var(--sa);margin-bottom:0.35rem">Step 4 · Activation</div><div class="lbl" style="font-size:0.8rem;margin-bottom:0.2rem">Signature → Project</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Client signs. The proposal's structured data activates as a live Opus project. Rooms → scope cards. FF&E → procurement pipeline. Phases → timeline. Budget → financials. Payment milestones → invoicing. Zero re-entry.</p></div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCOPE BUILDER ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">03 — Scope Builder</p>
+  <h2>Define the project <em>before writing the proposal.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">This is the new screen that didn't exist in v1. Before writing a single word of narrative, the designer builds the project's structural skeleton — rooms, FF&E categories per room, fee structure, phase timeline, and exclusions. This structured data then generates the proposal sections automatically, which the designer edits into polished prose.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="edit-bar"><div class="eml"><div class="emd"></div>Scope Builder</div><div style="display:flex;gap:0.5rem"><span class="ms" style="color:var(--sa)">● Auto-saved</span><button class="btn btn-cl btn-sm">Generate Proposal →</button></div></div>
+    <div class="sd">
+      <div class="bc"><a>Proposals</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Chen Residence <span style="margin:0 0.3rem;opacity:0.5">→</span> Scope Builder</div>
+
+      <div class="h2" style="font-size:1.4rem;margin-bottom:0.15rem">Define Project Scope</div>
+      <div class="ls" style="margin-bottom:1.5rem">Build the scope first, write the proposal second. Everything here becomes structured data in the proposal AND the project.</div>
+
+      <!-- ROOMS -->
+      <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.4rem;border-bottom:1px solid var(--su)">Rooms in Scope</div>
+
+      <div class="room">
+        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:0.5rem">
+          <div><div class="lbl" style="font-size:0.85rem">Living Room</div><div class="ls">18' × 22' · South-facing · From room scan Jan 8</div></div>
+          <div style="display:flex;gap:0.35rem"><button class="btn btn-g btn-sm">Edit</button><button class="btn btn-g btn-sm" style="color:var(--te)">Remove</button></div>
+        </div>
+        <div class="fl" style="margin-bottom:0.25rem">FF&E Categories Included</div>
+        <div style="display:flex;gap:0.3rem;flex-wrap:wrap;margin-bottom:0.5rem">
+          <span class="tag on" style="font-size:0.6rem">Seating</span><span class="tag on" style="font-size:0.6rem">Tables</span><span class="tag on" style="font-size:0.6rem">Lighting</span><span class="tag on" style="font-size:0.6rem">Rugs</span><span class="tag on" style="font-size:0.6rem">Window Treatments</span><span class="tag on" style="font-size:0.6rem">Art & Accessories</span><span class="tag on" style="font-size:0.6rem">Paint & Finish</span><span class="tag" style="font-size:0.6rem">Storage</span><span class="tag" style="font-size:0.6rem">Built-Ins</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="ls">7 categories · Est. 12 items · Budget allocation: $14,230</span><span class="ms" style="color:var(--cl)">60% of FF&E budget</span></div>
+      </div>
+
+      <div class="room">
+        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:0.5rem">
+          <div><div class="lbl" style="font-size:0.85rem">Dining Room</div><div class="ls">14' × 16' · Open to living · Added to scope Feb 3</div></div>
+          <div style="display:flex;gap:0.35rem"><button class="btn btn-g btn-sm">Edit</button><button class="btn btn-g btn-sm" style="color:var(--te)">Remove</button></div>
+        </div>
+        <div class="fl" style="margin-bottom:0.25rem">FF&E Categories Included</div>
+        <div style="display:flex;gap:0.3rem;flex-wrap:wrap;margin-bottom:0.5rem">
+          <span class="tag on" style="font-size:0.6rem">Dining Table</span><span class="tag on" style="font-size:0.6rem">Seating</span><span class="tag on" style="font-size:0.6rem">Lighting</span><span class="tag on" style="font-size:0.6rem">Storage/Sideboard</span><span class="tag on" style="font-size:0.6rem">Table Linens</span><span class="tag on" style="font-size:0.6rem">Accessories</span><span class="tag on" style="font-size:0.6rem">Paint</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="ls">7 categories · Est. 10 items · Budget allocation: $7,770</span><span class="ms" style="color:var(--cl)">33% of FF&E budget</span></div>
+      </div>
+
+      <div style="margin-bottom:0.5rem"><button class="btn btn-s btn-sm">+ Add Room</button></div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- PRELIMINARY FF&E -->
+      <div class="h3" style="margin-bottom:0.25rem">Preliminary FF&E Schedule</div>
+      <div class="ls" style="margin-bottom:0.75rem">Items are either Fixed (specific product selected), Allowance (budget range, product TBD), or TBD (category only). Allowances show the client a budget with flexibility built in.</div>
+
+      <div style="display:grid;grid-template-columns:1fr 50px 60px 70px;gap:0.5rem;padding:0.25rem 0;border-bottom:1px solid var(--su);margin-bottom:0.15rem"><span class="ms">Item</span><span class="ms" style="text-align:center">Qty</span><span class="ms" style="text-align:center">Type</span><span class="ms" style="text-align:right">Est. Cost</span></div>
+
+      <div class="fl" style="margin-top:0.5rem;color:var(--cl)">Living Room</div>
+      <div class="ffe"><div><div class="ffe-name">Meadow Linen Sectional</div><div class="ffe-maker">Woodward & Sons</div></div><div class="ffe-qty">1</div><div><span class="ffe-type t-fixed">Fixed</span></div><div class="ffe-price">$6,800</div></div>
+      <div class="ffe"><div><div class="ffe-name">Brass Arc Pendants</div><div class="ffe-maker">Schoolhouse</div></div><div class="ffe-qty">3</div><div><span class="ffe-type t-fixed">Fixed</span></div><div class="ffe-price">$2,670</div></div>
+      <div class="ffe"><div><div class="ffe-name">Area Rug — 8×10 jute/wool</div><div class="ffe-maker">TBD — natural fiber</div></div><div class="ffe-qty">1</div><div><span class="ffe-type t-allow">Allowance</span></div><div class="ffe-price">$1,200–1,800</div></div>
+      <div class="ffe"><div><div class="ffe-name">Coffee Table</div><div class="ffe-maker">TBD — wood, organic form</div></div><div class="ffe-qty">1</div><div><span class="ffe-type t-allow">Allowance</span></div><div class="ffe-price">$800–1,400</div></div>
+      <div class="ffe"><div><div class="ffe-name">Side Tables</div><div class="ffe-maker">TBD</div></div><div class="ffe-qty">2</div><div><span class="ffe-type t-allow">Allowance</span></div><div class="ffe-price">$400–600 ea</div></div>
+      <div class="ffe"><div><div class="ffe-name">Textiles — pillows, throws</div></div><div class="ffe-qty">—</div><div><span class="ffe-type t-tbd">TBD</span></div><div class="ffe-price">$500–800</div></div>
+      <div class="ffe"><div><div class="ffe-name">Wall paint</div></div><div class="ffe-qty">—</div><div><span class="ffe-type t-tbd">TBD</span></div><div class="ffe-price">$200–350</div></div>
+
+      <div class="fl" style="margin-top:0.75rem;color:var(--cl)">Dining Room</div>
+      <div class="ffe"><div><div class="ffe-name">Heirloom Oak Dining Table</div><div class="ffe-maker">Nordic Atelier</div></div><div class="ffe-qty">1</div><div><span class="ffe-type t-fixed">Fixed</span></div><div class="ffe-price">$4,200</div></div>
+      <div class="ffe"><div><div class="ffe-name">Dining Chairs</div><div class="ffe-maker">TBD — solid wood</div></div><div class="ffe-qty">6</div><div><span class="ffe-type t-allow">Allowance</span></div><div class="ffe-price">$300–450 ea</div></div>
+      <div class="ffe"><div><div class="ffe-name">Pendant / Chandelier</div></div><div class="ffe-qty">1</div><div><span class="ffe-type t-allow">Allowance</span></div><div class="ffe-price">$500–900</div></div>
+      <div class="ffe"><div><div class="ffe-name">Sideboard</div></div><div class="ffe-qty">1</div><div><span class="ffe-type t-allow">Allowance</span></div><div class="ffe-price">$800–1,200</div></div>
+
+      <div style="margin:0.75rem 0"><button class="btn btn-s btn-sm">+ Add Item</button> <button class="btn btn-s btn-sm">Import from Catalog</button></div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- PHASES & FEES -->
+      <div class="h3" style="margin-bottom:0.25rem">Phase Structure & Fees</div>
+      <div class="ls" style="margin-bottom:0.75rem">Define which phases are included, fee per phase, deliverables, and revision limits. This becomes both the proposal timeline AND the project phase structure.</div>
+
+      <div style="display:grid;grid-template-columns:1fr auto auto auto auto;gap:0.5rem;padding:0.25rem 0;border-bottom:1px solid var(--su);margin-bottom:0.15rem"><span class="ms">Phase</span><span class="ms" style="text-align:right;min-width:50px">Duration</span><span class="ms" style="text-align:right;min-width:50px">Fee</span><span class="ms" style="text-align:right;min-width:55px">Revisions</span><span class="ms" style="text-align:right;min-width:55px">Gate</span></div>
+
+      <div style="display:grid;grid-template-columns:1fr auto auto auto auto;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline"><div><div class="lbl" style="font-size:0.8rem">Schematic Design</div><div class="ls" style="font-size:0.68rem">Mood boards, test fits, 3D concepts, concept direction</div></div><div class="ms" style="text-align:right;min-width:50px">2–3 wk</div><div style="font-family:var(--fd);font-weight:500;font-size:0.78rem;text-align:right;min-width:50px">$800</div><div class="ms" style="text-align:right;min-width:55px">2 rounds</div><div class="ms" style="text-align:right;min-width:55px;color:var(--cl)">Client sign-off</div></div>
+
+      <div style="display:grid;grid-template-columns:1fr auto auto auto auto;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline"><div><div class="lbl" style="font-size:0.8rem">Design Development</div><div class="ls" style="font-size:0.68rem">Final floor plan, FF&E spec, material palette, lighting plan</div></div><div class="ms" style="text-align:right;min-width:50px">3–4 wk</div><div style="font-family:var(--fd);font-weight:500;font-size:0.78rem;text-align:right;min-width:50px">$1,200</div><div class="ms" style="text-align:right;min-width:55px">2 rounds</div><div class="ms" style="text-align:right;min-width:55px;color:var(--cl)">Signed proposal</div></div>
+
+      <div style="display:grid;grid-template-columns:1fr auto auto auto auto;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline"><div><div class="lbl" style="font-size:0.8rem">Procurement Management</div><div class="ls" style="font-size:0.68rem">Vendor coordination, ordering, tracking, receiving</div></div><div class="ms" style="text-align:right;min-width:50px">6–10 wk</div><div style="font-family:var(--fd);font-weight:500;font-size:0.78rem;text-align:right;min-width:50px">$500</div><div class="ms" style="text-align:right;min-width:55px">N/A</div><div class="ms" style="text-align:right;min-width:55px;color:var(--cl)">All ordered</div></div>
+
+      <div style="display:grid;grid-template-columns:1fr auto auto auto auto;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline"><div><div class="lbl" style="font-size:0.8rem">Installation & Styling</div><div class="ls" style="font-size:0.68rem">Delivery coordination, placement, styling, contractor oversight</div></div><div class="ms" style="text-align:right;min-width:50px">1–2 wk</div><div style="font-family:var(--fd);font-weight:500;font-size:0.78rem;text-align:right;min-width:50px">Included</div><div class="ms" style="text-align:right;min-width:55px">N/A</div><div class="ms" style="text-align:right;min-width:55px;color:var(--cl)">All delivered</div></div>
+
+      <div style="display:grid;grid-template-columns:1fr auto auto auto auto;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid var(--su);align-items:baseline"><div><div class="lbl" style="font-size:0.8rem">Completion & Handover</div><div class="ls" style="font-size:0.68rem">Walkthrough, punch list, photography, documentation</div></div><div class="ms" style="text-align:right;min-width:50px">1 wk</div><div style="font-family:var(--fd);font-weight:500;font-size:0.78rem;text-align:right;min-width:50px">Included</div><div class="ms" style="text-align:right;min-width:55px">N/A</div><div class="ms" style="text-align:right;min-width:55px;color:var(--cl)">Client sign-off</div></div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- EXCLUSIONS -->
+      <div class="h3" style="margin-bottom:0.25rem">Exclusions & Boundaries</div>
+      <div class="ls" style="margin-bottom:0.75rem">What is explicitly NOT included. This is the scope creep firewall. Each exclusion appears in the proposal terms and in the project scope card.</div>
+
+      <div class="excl">Structural changes, electrical rewiring, or plumbing work</div>
+      <div class="excl">Contractor selection, management, or construction oversight beyond design intent supervision</div>
+      <div class="excl">Permit applications or building code compliance documentation</div>
+      <div class="excl">Window treatments installation (hardware installation by others)</div>
+      <div class="excl">Rooms not listed in scope — additional rooms require a scope change authorization</div>
+      <div class="excl">Custom millwork or built-in cabinetry design (available as add-on service)</div>
+      <div class="excl">More than 2 revision rounds per phase without additional fee ($150/hr beyond limit)</div>
+
+      <div style="margin:0.5rem 0"><button class="btn btn-s btn-sm">+ Add Exclusion</button></div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- PAYMENT MILESTONES -->
+      <div class="h3" style="margin-bottom:0.25rem">Payment Milestones</div>
+      <div class="ls" style="margin-bottom:0.75rem">Tied to phase gates. Invoices auto-generate when milestones are reached.</div>
+
+      <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:0.75rem;padding:0.25rem 0;border-bottom:1px solid var(--su);margin-bottom:0.15rem"><span class="ms">Milestone</span><span class="ms" style="text-align:right;min-width:50px">%</span><span class="ms" style="text-align:right;min-width:60px">Amount</span><span class="ms" style="text-align:right;min-width:70px">Trigger</span></div>
+
+      <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:0.75rem;padding:0.4rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline"><div class="lbl" style="font-size:0.8rem">Project Deposit</div><div class="ms" style="text-align:right;min-width:50px">30%</div><div style="font-family:var(--fd);font-weight:500;font-size:0.82rem;text-align:right;min-width:60px">$7,350</div><div class="ms" style="text-align:right;min-width:70px;color:var(--cl)">On signing</div></div>
+      <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:0.75rem;padding:0.4rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline"><div class="lbl" style="font-size:0.8rem">Procurement Payment</div><div class="ms" style="text-align:right;min-width:50px">40%</div><div style="font-family:var(--fd);font-weight:500;font-size:0.82rem;text-align:right;min-width:60px">$9,800</div><div class="ms" style="text-align:right;min-width:70px;color:var(--cl)">Before ordering</div></div>
+      <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:0.75rem;padding:0.4rem 0;border-bottom:1px solid var(--su);align-items:baseline"><div class="lbl" style="font-size:0.8rem">Completion Balance</div><div class="ms" style="text-align:right;min-width:50px">30%</div><div style="font-family:var(--fd);font-weight:500;font-size:0.82rem;text-align:right;min-width:60px">$7,350</div><div class="ms" style="text-align:right;min-width:70px;color:var(--cl)">At walkthrough</div></div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- CHANGE ORDER PROCESS -->
+      <div class="h3" style="margin-bottom:0.25rem">Change Order Process</div>
+      <div class="ls" style="margin-bottom:0.75rem">Defined upfront in the proposal terms. When a client requests scope changes, this is the process.</div>
+
+      <div style="padding:1rem;border:1px solid var(--su);border-radius:6px;font-family:var(--fb);font-size:0.78rem;color:var(--bd);line-height:1.65">
+        <div class="lbl" style="font-size:0.8rem;margin-bottom:0.3rem">How scope changes work</div>
+        <p>Any modification to rooms, FF&E items, or service phases after proposal signing requires a <strong>Scope Change Authorization</strong> — a structured form showing: what changed, cost impact (up or down), timeline impact, and client approval signature. Changes are not verbal. The project budget and timeline update only after written authorization. Additional design fees for out-of-scope work are billed at $150/hr.</p>
+      </div>
+
+      <!-- Generate button -->
+      <div style="display:flex;gap:0.5rem;margin-top:2rem;padding-top:1.25rem;border-top:1px solid var(--su)"><button class="btn btn-cl">Generate Proposal from Scope →</button><button class="btn btn-s">Save Scope as Draft</button></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== CONVERSION MAPPING ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">04 — The Conversion Map</p>
+  <h2>What carries over <em>when the client signs.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">Every piece of structured data in the proposal maps directly to a field in the Opus project. Nothing is re-entered. Nothing is approximated. The proposal and the project are the same data structure rendered in two different views — one editorial (the client document), one operational (the designer's workspace).</p>
+
+  <div class="map"><div class="map-from"><strong>Proposal: Rooms in Scope</strong><br>Living Room, Dining Room with FF&E categories and budget per room</div><div class="map-arrow">→</div><div class="map-to"><strong>Project: Room Scope Cards</strong><br>Each room becomes a scope card with item count, budget, and progress tracker</div></div>
+  <div class="map"><div class="map-from"><strong>Proposal: Product Selections (Fixed)</strong><br>Specific products with vendor, price, and specs</div><div class="map-arrow">→</div><div class="map-to"><strong>Project: FF&E Schedule items at "Specified" stage</strong><br>Ready for quoting and ordering immediately</div></div>
+  <div class="map"><div class="map-from"><strong>Proposal: Allowances</strong><br>Category with budget range, product TBD</div><div class="map-arrow">→</div><div class="map-to"><strong>Project: FF&E Schedule items at "Allowance" stage</strong><br>Budget reserved, sourcing begins in Design Development</div></div>
+  <div class="map"><div class="map-from"><strong>Proposal: Phase Timeline</strong><br>Schematic → Development → Procurement → Install → Completion</div><div class="map-arrow">→</div><div class="map-to"><strong>Project: Opus Phase Structure</strong><br>Each phase with tasks, deliverables, approval gates, and duration</div></div>
+  <div class="map"><div class="map-from"><strong>Proposal: Investment Breakdown</strong><br>Design fees by phase + FF&E budget by room + delivery + contingency</div><div class="map-arrow">→</div><div class="map-to"><strong>Project: Financials</strong><br>Budget vs. committed vs. actual table with per-room and per-category tracking</div></div>
+  <div class="map"><div class="map-from"><strong>Proposal: Payment Milestones</strong><br>30/40/30 split tied to phase gates</div><div class="map-arrow">→</div><div class="map-to"><strong>Project: Invoicing Schedule</strong><br>Auto-generated invoices triggered by milestone completion</div></div>
+  <div class="map"><div class="map-from"><strong>Proposal: Exclusions</strong><br>What's NOT included — scope creep firewall</div><div class="map-arrow">→</div><div class="map-to"><strong>Project: Scope Boundaries</strong><br>Visible on project header. Scope Change Authorization required for anything outside</div></div>
+  <div class="map"><div class="map-from"><strong>Proposal: Revision Limits</strong><br>2 rounds per phase, $150/hr beyond</div><div class="map-arrow">→</div><div class="map-to"><strong>Project: Revision Counter</strong><br>Tracked per phase. System alerts designer when approaching limit</div></div>
+  <div class="map"><div class="map-from"><strong>Proposal: Change Order Process</strong><br>Written Scope Change Authorization required</div><div class="map-arrow">→</div><div class="map-to"><strong>Project: Change Order Module</strong><br>Structured form with cost/time impact, client digital signature</div></div>
+  <div class="map"><div class="map-from"><strong>Proposal: Design Vision narrative</strong><br>The "why" and "what" in prose</div><div class="map-arrow">→</div><div class="map-to"><strong>Project: Project Brief</strong><br>Stored as reference document, visible to anyone on the project</div></div>
+</div>
+</section>
+
+<!-- ============================== SCOPE CHANGE ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">05 — Scope Change Authorization</p>
+  <h2>When the client adds <em>the hallway.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">Scope creep is the number one profitability killer in interior design. The Scope Change Authorization is how Patina handles it — a structured form that captures what's changing, what it costs, what it does to the timeline, and requires a client signature before the work begins. This isn't punitive — it's transparent. Clients appreciate knowing exactly what a change costs before agreeing to it.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="bc"><a>Projects</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> <a>Chen Residence</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Scope Change</div>
+
+      <div class="h2" style="font-size:1.3rem;margin-bottom:0.15rem">Scope Change Authorization</div>
+      <div class="ls" style="margin-bottom:1.5rem">Chen Residence · Original scope: Living + Dining · Signed Feb 8</div>
+
+      <div class="fg" style="max-width:520px">
+        <div class="ff full"><label>What's Changing</label><input value="Add entryway to project scope" style="font-family:var(--fd);font-weight:500;font-size:0.95rem;padding:0.6rem"></div>
+        <div class="ff full"><label>Description</label><textarea rows="3" style="font-family:var(--fb)">Client requested design services for the front entryway (6' × 8') during the procurement phase. Includes: console table, mirror, pendant light, rug, hooks/storage, and paint. Not in original proposal scope.</textarea></div>
+
+        <div class="ff"><label>Additional FF&E Budget</label><input value="$2,800 – $3,500"></div>
+        <div class="ff"><label>Additional Design Fee</label><input value="$450 (3 hours @ $150/hr)"></div>
+        <div class="ff"><label>Timeline Impact</label><input value="+2 weeks (sourcing + installation)"></div>
+        <div class="ff"><label>New Total Project Value</label><input value="$27,750 – $28,450" style="font-weight:500"></div>
+      </div>
+
+      <div style="margin-top:1.25rem;padding:0.85rem;background:rgba(196,165,123,0.04);border:1px solid rgba(196,165,123,0.12);border-radius:6px;max-width:520px"><p class="ms" style="color:var(--cl);margin-bottom:0.1rem">What happens when approved</p><p style="font-size:0.75rem;color:var(--bd)">A new "Entryway" room scope card is added to the project. The FF&E schedule adds 6 items at Allowance stage. Budget and timeline update across the project. A new payment milestone may be added. The original signed proposal is annotated with this change order.</p></div>
+
+      <div style="display:flex;gap:0.5rem;margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--su)"><button class="btn btn-cl">Send to Client for Approval</button><button class="btn btn-s">Save Draft</button><button class="btn btn-g">Cancel</button></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== PULL QUOTE ============================== -->
+<section>
+<div class="nr">
+  <div class="pq"><blockquote>"Your fee proposal is not the project budget. Many clients mentally combine design, construction, and furnishings into one vague number. The gap between your signed proposal and the builder's estimate is the most dangerous moment in the project."</blockquote><cite>Interior Design Community · 2026</cite></div>
+</div>
+</section>
+
+<!-- ============================== CLOSING ============================== -->
+<section class="fade">
+<div class="w">
+  <div class="st"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <h2 style="margin-top:2rem;margin-bottom:1.5rem">What this changes <em>about everything.</em></h2>
+  <div class="two" style="gap:2rem">
+    <div>
+      <p class="bd" style="margin-bottom:1.25rem"><strong>Scope Builder creates the skeleton before the narrative.</strong> The designer defines rooms, FF&E categories, fee structure, revision limits, and exclusions in a structured interface. Then "Generate Proposal" wraps that data in the editorial typography the client sees. The client reads a beautiful document. The system stores structured, actionable data. Same page, dual nature.</p>
+      <p class="bd" style="margin-bottom:1.25rem"><strong>Fixed vs. Allowance vs. TBD replaces the fiction of exact pricing.</strong> Real proposals can't price every item — the dining chairs haven't been selected yet. Allowances give the client a budget range ("$300–450/chair × 6") while giving the designer sourcing flexibility. When the product is selected during Design Development, the allowance converts to a fixed line item. The budget math stays honest throughout.</p>
+      <p class="bd"><strong>Exclusions are a first-class section, not fine print.</strong> "What's not included" matters as much as "what is." Structural work, contractor management, permits, extra rooms — all stated explicitly. When the client asks about the hallway, the designer doesn't have an awkward conversation. She has a Scope Change Authorization form that makes it professional and transparent.</p>
+    </div>
+    <div>
+      <p class="bd" style="margin-bottom:1.25rem"><strong>Signing activates, it doesn't create.</strong> When the client signs, the proposal doesn't spawn a separate project. The structured data underneath the narrative prose activates as a live Opus project. Rooms become scope cards. FF&E lines enter the procurement pipeline. Phases become the timeline. Budget rows become the financial tracker. Payment milestones become invoicing triggers. The proposal and the project are the same entity in two views.</p>
+      <p class="bd" style="margin-bottom:1.25rem"><strong>Change orders reference the original scope.</strong> Every scope change shows what the original proposal included, what's being added, the cost impact, and the timeline impact. The client approves digitally. The project updates. The original proposal is annotated. There's never a question about "was this included?" — the answer is in the signed scope document.</p>
+      <p class="bd"><strong>Revision limits prevent invisible scope creep.</strong> "2 revision rounds per phase" is defined in the proposal, tracked in the project, and enforced with a counter. When the client requests a third round of mood boards, the system alerts the designer: "Revision limit reached. Additional revisions at $150/hr. Send notification to client?" This isn't about being inflexible — it's about making the cost of indecision visible.</p>
+    </div>
+  </div>
+
+  <div class="sm" style="margin-top:3rem"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2rem;flex-wrap:wrap;gap:1rem">
+    <div><div style="font-family:var(--fd);font-weight:400;font-size:1.05rem">Patina</div><div style="font-family:var(--fd);font-style:italic;font-size:0.82rem;color:var(--ao)">Where Time Adds Value</div></div>
+    <div class="ms">Proposal ↔ Project Flow v2.0 · March 2026 · Kody & Leah</div>
+  </div>
+</div>
+</section>
+
+<script>
+const f=document.querySelectorAll('.fade');
+const o=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('vis')})},{threshold:0.08,rootMargin:'0px 0px -40px 0px'});
+f.forEach(s=>o.observe(s));
+</script>
+</body>
+</html>

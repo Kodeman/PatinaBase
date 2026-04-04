@@ -3,7 +3,6 @@
 import * as React from 'react'
 import { motion, useTransform, useMotionValue, useMotionTemplate } from 'framer-motion'
 import { cn } from '../../utils/cn'
-import { Card } from '../Card'
 import type { MilestoneDetail } from '../ProjectMilestoneCard/types'
 import { useScrollSnap } from './useScrollSnap'
 import { useResponsiveConfig } from './useResponsiveConfig'
@@ -114,8 +113,7 @@ export const ImmersiveTimelineCarousel = React.forwardRef<
     // Magnetic snap zones
     useScrollSnap(snapPoints, magnetRangePx)
 
-    // Background fade to black
-    const blackOverlayOpacity = useTransform(scrollY, [0, 200], [0, 0.95])
+    // Background overlay removed — keep consistent bg throughout
 
     // Header fade out
     const headerOpacity = useTransform(scrollY, [100, 200], [1, 0])
@@ -202,11 +200,7 @@ export const ImmersiveTimelineCarousel = React.forwardRef<
           </div>
         )}
 
-        {/* Black background overlay */}
-        <motion.div
-          className="fixed inset-0 bg-black pointer-events-none z-0"
-          style={{ opacity: blackOverlayOpacity }}
-        />
+        {/* Background: transparent, inherits page bg */}
 
         {/* Header overlay (passed from parent, controlled by opacity) */}
         <motion.div
@@ -319,10 +313,11 @@ const TimelineCard3D: React.FC<TimelineCard3DProps> = ({
     [-500, 0, -300]
   )
 
+  // Cards fade out faster as they scroll up (top fade)
   const opacity = useTransform(
     scrollY,
     visibilityRange,
-    [0, 0.45, 1, 0.45, 0]
+    [0, 0.6, 1, 0.3, 0]
   )
 
   const blur = useTransform(
@@ -346,7 +341,8 @@ const TimelineCard3D: React.FC<TimelineCard3DProps> = ({
       className="absolute top-1/2 left-1/2 pointer-events-auto"
       style={{
         width: config.cardWidth,
-        maxHeight: '80vh',
+        maxHeight: '88vh',
+        overflowY: 'auto',
         transform,
         opacity,
         filter,
@@ -359,16 +355,14 @@ const TimelineCard3D: React.FC<TimelineCard3DProps> = ({
       aria-label={`Milestone ${index + 1}: ${milestone.title}`}
       tabIndex={isActive ? 0 : -1}
     >
-      <Card className="overflow-hidden shadow-2xl">
-        {renderContent ? (
-          renderContent(milestone, isActive)
-        ) : (
-          <div className="p-6">
-            <h3 className="text-2xl font-bold mb-4">{milestone.title}</h3>
-            <p className="text-muted-foreground">{milestone.description}</p>
-          </div>
-        )}
-      </Card>
+      {renderContent ? (
+        renderContent(milestone, isActive)
+      ) : (
+        <div className="p-6">
+          <h3 className="text-2xl font-bold mb-4">{milestone.title}</h3>
+          <p className="text-muted-foreground">{milestone.description}</p>
+        </div>
+      )}
     </motion.div>
   )
 }

@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — Client Management & Communication UX/UI Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--bg:var(--ow);--sf:#FFFFFF;--hv:rgba(196,165,123,0.06);--tx:var(--ch);--bd:var(--mo);--mu:var(--ao);--su:var(--pe);--fd:'Playfair Display',Georgia,serif;--fb:'Inter',-apple-system,sans-serif;--fm:'DM Mono','SF Mono',monospace;--e:cubic-bezier(0.4,0,0.2,1)}
+*{margin:0;padding:0;box-sizing:border-box}html{font-size:16px;scroll-behavior:smooth;background:var(--bg)}body{font-family:var(--fb);color:var(--tx);-webkit-font-smoothing:antialiased;line-height:1.6}
+.w{max-width:1120px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}.n{max-width:800px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}section{padding:clamp(3rem,6vw,6rem) 0}
+h1{font-family:var(--fd);font-weight:400;font-size:clamp(2.2rem,5vw,3.8rem);line-height:1.12;letter-spacing:-0.02em}h2,.h2{font-family:var(--fd);font-weight:400;font-size:clamp(1.6rem,3.5vw,2.4rem);line-height:1.2;letter-spacing:-0.02em}h3,.h3{font-family:var(--fd);font-weight:500;font-size:1.25rem;line-height:1.35}
+.meta{font-family:var(--fm);font-size:0.68rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--mu)}.ms{font-family:var(--fm);font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mu)}
+.lbl{font-family:var(--fb);font-weight:500;font-size:0.95rem;color:var(--tx)}.ls{font-family:var(--fb);font-weight:400;font-size:0.82rem;color:var(--mu)}
+.bd{font-family:var(--fb);font-size:0.95rem;line-height:1.7;color:var(--bd);max-width:600px}em{font-family:var(--fd);font-style:italic;color:var(--ao)}
+.dl{font-family:var(--fd);font-weight:700;font-size:2rem;line-height:1;color:var(--tx)}.du{font-family:var(--fb);font-size:0.8rem;color:var(--mu);margin-left:0.35rem}
+.st{display:flex;flex-direction:column;gap:6px;padding:2.5rem 0}.st .s{height:2px;border-radius:1px}.st .s:nth-child(1){width:100%;background:var(--mo)}.st .s:nth-child(2){width:80%;background:var(--cl);opacity:.7}.st .s:nth-child(3){width:60%;background:var(--cl);opacity:.35}
+.sm{display:flex;flex-direction:column;gap:4px;padding:1.5rem 0}.sm .s{height:1.5px;border-radius:1px}.sm .s:nth-child(1){width:60px;background:var(--mo)}.sm .s:nth-child(2){width:48px;background:var(--cl);opacity:.7}.sm .s:nth-child(3){width:36px;background:var(--cl);opacity:.35}
+.cover{min-height:70vh;display:flex;flex-direction:column;justify-content:flex-end;padding:4rem clamp(1.5rem,5vw,4rem)}.cover h1 span{display:block;font-style:italic;color:var(--ao);font-weight:400;font-size:0.55em}.cover-sub{font-size:1.05rem;color:var(--bd);max-width:540px;margin:1rem 0 3rem;line-height:1.75}
+.cm{display:flex;gap:3rem;flex-wrap:wrap}.cm-i .meta{margin-bottom:0.2rem}.cm-i p{font-size:0.85rem;color:var(--tx)}
+.sc{background:var(--sf);border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(44,41,38,0.04),0 8px 32px rgba(44,41,38,0.05);margin:2rem 0}
+.sb{display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:48px;background:var(--sf);border-bottom:1px solid var(--su)}.sb-l{font-family:var(--fd);font-weight:500;font-size:0.72rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--tx)}.sb-n{display:flex;gap:1.2rem}.sb-n span{font-family:var(--fb);font-size:0.72rem;color:var(--mu)}.sb-n span.on{color:var(--tx);border-bottom:2px solid var(--cl);padding-bottom:2px}.sb-u{display:flex;align-items:center;gap:0.4rem}.sb-a{width:24px;height:24px;border-radius:50%;background:var(--pe);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-weight:500;font-size:0.55rem;color:var(--mo)}
+.sd{padding:clamp(1.5rem,3vw,2.5rem);background:var(--bg);min-height:200px}
+.ph{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2rem;flex-wrap:wrap;gap:1rem}
+.fi{display:flex;gap:0;border-bottom:1px solid var(--su);margin-bottom:1.5rem}.fi-i{font-family:var(--fb);font-size:0.8rem;color:var(--mu);padding:0.5rem 1rem 0.6rem;border-bottom:2px solid transparent;white-space:nowrap;cursor:default}.fi-i:first-child{padding-left:0}.fi-i.on{color:var(--tx);border-bottom-color:var(--cl)}.fi-i .ct{font-family:var(--fm);font-size:0.58rem;color:var(--mu);margin-left:0.3rem}
+.btn{font-family:var(--fb);font-weight:500;font-size:0.8rem;padding:0.55rem 1.2rem;border:none;border-radius:3px;cursor:default;display:inline-flex;align-items:center;gap:0.4rem}.btn-p{background:var(--ch);color:var(--ow)}.btn-s{background:transparent;color:var(--tx);border:1px solid var(--pe)}.btn-g{background:transparent;color:var(--mu)}.btn-sm{font-size:0.72rem;padding:0.4rem 0.8rem}.btn-cl{background:var(--cl);color:white}.btn-sa{background:var(--sa);color:white}
+.tag{display:inline-flex;font-family:var(--fb);font-size:0.72rem;font-weight:500;color:var(--mo);padding:0.25rem 0.7rem;background:var(--ow);border:1px solid var(--pe);border-radius:2px;white-space:nowrap}.tag.on{border-color:var(--cl);color:var(--ch)}
+.bc{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:1.5rem}.bc a{color:var(--cl);text-decoration:none}
+.fl{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:0.4rem}
+.dr{display:grid;grid-template-columns:110px 1fr;gap:0.75rem;padding:0.3rem 0;font-size:0.85rem}.dr-k{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);padding-top:0.12rem}.dr-v{font-family:var(--fb);color:var(--bd);line-height:1.5}
+.prog{height:3px;background:var(--pe);border-radius:2px;overflow:hidden;width:100%}.pf{height:100%;background:var(--cl);border-radius:2px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:3rem}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem 2rem}.ff{display:flex;flex-direction:column;gap:0.35rem}.ff.full{grid-column:1/-1}.ff label{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu)}.ff input,.ff textarea,.ff select{font-family:var(--fb);font-size:0.85rem;padding:0.55rem 0.7rem;border:1px solid var(--pe);border-radius:3px;background:var(--sf);color:var(--tx);outline:none}.ff input:focus,.ff textarea:focus{border-color:var(--cl)}.ff textarea{resize:vertical;min-height:80px}
+.pq{padding:2.5rem 0;border-top:1px solid var(--su);border-bottom:1px solid var(--su);margin:2rem 0}.pq blockquote{font-family:var(--fd);font-size:clamp(1.2rem,2.5vw,1.8rem);font-weight:400;font-style:italic;line-height:1.45;color:var(--tx);max-width:620px}.pq cite{display:block;font-family:var(--fm);font-size:0.65rem;font-style:normal;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-top:1rem}
+.mr{display:flex;gap:0;padding-bottom:1.5rem;border-bottom:1px solid var(--su);margin-bottom:2rem}.mt{padding-right:2rem}.mt+.mt{padding-left:2rem;border-left:1px solid var(--su)}.mt-l{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:0.3rem}.mt-v{font-family:var(--fd);font-size:1.6rem;font-weight:700;color:var(--tx);line-height:1;margin-bottom:0.2rem}.mt-c{font-family:var(--fb);font-size:0.72rem}.mt-c.up{color:var(--sa)}.mt-c.dn{color:var(--te)}.mt-c.nu{color:var(--mu)}
+
+/* Stage badge */
+.stage{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.06em;padding:3px 8px;border-radius:2px;white-space:nowrap}
+.stage-lead{color:var(--db);background:rgba(139,156,173,0.1)}.stage-proposal{color:var(--gh);background:rgba(232,197,71,0.1)}.stage-active{color:var(--sa);background:rgba(122,155,118,0.1)}.stage-complete{color:var(--mu);background:rgba(139,115,85,0.08)}.stage-nurture{color:var(--cl);background:rgba(196,165,123,0.1)}
+
+/* Avatar */
+.av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-weight:500;flex-shrink:0}
+.av-md{width:44px;height:44px;font-size:0.82rem}.av-lg{width:64px;height:64px;font-size:1.1rem}.av-sm{width:32px;height:32px;font-size:0.62rem}
+
+/* Client list item */
+.cl-item{display:grid;grid-template-columns:44px 1fr auto auto;gap:1rem;padding:1rem 0;border-bottom:1px solid rgba(229,226,221,0.6);align-items:center;cursor:default;transition:background 0.15s var(--e)}.cl-item:hover{background:var(--hv)}
+
+/* Message bubble */
+.bubble{max-width:75%;padding:0.8rem 1rem;border-radius:12px 12px 12px 4px;margin-bottom:0.6rem}.bubble.in{background:var(--pe)}.bubble.out{background:var(--ch);color:var(--ow);border-radius:12px 12px 4px 12px;margin-left:auto}
+.bubble p{font-family:var(--fb);font-size:0.85rem;line-height:1.55}.bubble-t{font-family:var(--fm);font-size:0.5rem;text-transform:uppercase;letter-spacing:0.04em;margin-top:0.3rem}.bubble.in .bubble-t{color:var(--mu)}.bubble.out .bubble-t{color:rgba(250,247,242,0.4)}
+
+/* Approval card */
+.approval{border:1.5px solid var(--cl);border-radius:8px;padding:1.25rem;background:rgba(196,165,123,0.02);margin:0.75rem 0}
+.approval-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem}
+
+/* Activity item */
+.act{padding:0.55rem 0;border-bottom:1px solid rgba(229,226,221,0.3)}.act-text{font-family:var(--fb);font-size:0.82rem;color:var(--bd);line-height:1.5}.act-text strong{font-weight:500;color:var(--tx)}.act-time{font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);margin-top:0.1rem}
+
+/* Review stars */
+.stars{display:flex;gap:2px;font-size:1.1rem;color:var(--cl)}
+.stars .empty{color:var(--pe)}
+
+/* Timeline journey */
+.journey{position:relative;padding-left:2rem}.journey::before{content:'';position:absolute;left:5px;top:10px;bottom:10px;width:2px;background:var(--pe)}
+.j-item{padding:0.6rem 0;position:relative}.j-item::before{content:'';position:absolute;left:-2rem;top:0.8rem;width:12px;height:12px;border-radius:50%;border:2.5px solid var(--pe);background:var(--sf)}
+.j-item.done::before{border-color:var(--sa);background:var(--sa)}.j-item.active::before{border-color:var(--cl);background:var(--cl)}.j-item.future::before{border-color:var(--pe)}
+.j-label{font-family:var(--fb);font-size:0.88rem}.j-item.done .j-label{color:var(--mu)}.j-item.active .j-label{font-weight:500;color:var(--tx)}.j-item.future .j-label{color:var(--pe);font-weight:300}
+.j-date{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);margin-top:0.1rem}
+
+/* Room preview */
+.room-ph{background:var(--pe);border-radius:6px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}.room-ph::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 20px,rgba(196,165,123,0.03) 20px,rgba(196,165,123,0.03) 40px)}.room-ph span{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);z-index:1}
+
+/* Compose bar */
+.compose{display:flex;gap:0.5rem;padding:0.75rem;background:var(--sf);border-top:1px solid var(--su);border-radius:0 0 8px 8px}.compose input{flex:1;font-family:var(--fb);font-size:0.85rem;padding:0.55rem 0.8rem;border:1px solid var(--pe);border-radius:20px;background:var(--bg);color:var(--tx);outline:none}.compose input:focus{border-color:var(--cl)}
+
+/* Template pills */
+.tpl-row{display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.75rem}
+.tpl-pill{font-family:var(--fb);font-size:0.7rem;color:var(--cl);padding:0.3rem 0.7rem;background:rgba(196,165,123,0.06);border:1px solid rgba(196,165,123,0.2);border-radius:20px;cursor:default;white-space:nowrap}
+
+/* Responsive */
+@media(max-width:768px){.two{grid-template-columns:1fr}.fg{grid-template-columns:1fr}.mr{flex-direction:column;gap:1.5rem}.mt+.mt{border-left:none;padding-left:0}.cl-item{grid-template-columns:44px 1fr auto}.cl-item>:nth-child(3){display:none}.cm{flex-direction:column;gap:1rem}}
+.fade{opacity:0;transform:translateY(16px);transition:opacity 0.7s ease,transform 0.7s ease}.fade.vis{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ============================== COVER ============================== -->
+<div class="cover">
+  <p class="meta" style="margin-bottom:1rem">Patina — Client Management & Communication Design</p>
+  <h1>The Relationship<span>Client pages for the Designer Portal</span></h1>
+  <p class="cover-sub">Every client begins as a stranger and ends as a relationship. These screens track the full journey — from anonymous lead through active project through post-completion nurturing. The client profile is a living document that grows richer with every interaction, every decision, every message exchanged.</p>
+  <div class="st"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div class="cm">
+    <div class="cm-i"><p class="meta">Prepared for</p><p>Kody & Leah</p></div>
+    <div class="cm-i"><p class="meta">Version</p><p>1.0 — March 2026</p></div>
+    <div class="cm-i"><p class="meta">Screens</p><p>10 pages, 4 flows</p></div>
+  </div>
+</div>
+
+<!-- ============================== CLIENT LIFECYCLE ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">01 — The Client Lifecycle</p>
+  <h2>Five stages, <em>one continuous relationship.</em></h2>
+  <p class="bd" style="margin-bottom:2rem">A client isn't just a name on a project. They pass through five stages — each with different communication cadences, information needs, and decision points. The portal tracks where each client stands and surfaces the right tools for each stage.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;border-top:1px solid var(--su)">
+    <div style="padding:1.25rem 0.75rem 1.25rem 0;border-bottom:1px solid var(--su)"><div style="margin-bottom:0.5rem"><span class="stage stage-lead">Lead</span></div><div class="h3" style="font-size:1rem;margin-bottom:0.3rem">Discovery</div><p style="font-size:0.72rem;color:var(--bd);line-height:1.5">Anonymous → matched → accepted. Style profile, room scan, budget. Designer decides: accept, pass, or ask.</p><p class="ms" style="margin-top:0.5rem">Response: 2–24h</p></div>
+    <div style="padding:1.25rem 0.75rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div style="margin-bottom:0.5rem"><span class="stage stage-proposal">Proposal</span></div><div class="h3" style="font-size:1rem;margin-bottom:0.3rem">Courtship</div><p style="font-size:0.72rem;color:var(--bd);line-height:1.5">Consultation, concept development, proposal sent. Client reviews, asks questions, signs or revises.</p><p class="ms" style="margin-top:0.5rem">Cadence: 2–3× per week</p></div>
+    <div style="padding:1.25rem 0.75rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div style="margin-bottom:0.5rem"><span class="stage stage-active">Active</span></div><div class="h3" style="font-size:1rem;margin-bottom:0.3rem">Partnership</div><p style="font-size:0.72rem;color:var(--bd);line-height:1.5">Project underway. Decisions, approvals, procurement, installation. The deepest communication period.</p><p class="ms" style="margin-top:0.5rem">Cadence: Weekly updates</p></div>
+    <div style="padding:1.25rem 0.75rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div style="margin-bottom:0.5rem"><span class="stage stage-complete">Complete</span></div><div class="h3" style="font-size:1rem;margin-bottom:0.3rem">Celebration</div><p style="font-size:0.72rem;color:var(--bd);line-height:1.5">Final walkthrough, photography, review collection. The project becomes portfolio content and reputation capital.</p><p class="ms" style="margin-top:0.5rem">Review request: Day 3</p></div>
+    <div style="padding:1.25rem 0 1.25rem 0.75rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div style="margin-bottom:0.5rem"><span class="stage stage-nurture">Nurture</span></div><div class="h3" style="font-size:1rem;margin-bottom:0.3rem">Cultivation</div><p style="font-size:0.72rem;color:var(--bd);line-height:1.5">Ongoing relationship. Seasonal check-ins, referral opportunities, future projects. Where repeat business grows.</p><p class="ms" style="margin-top:0.5rem">Cadence: Quarterly</p></div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 1: CLIENT DIRECTORY ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">02 — Client Directory</p>
+  <h2>Every relationship, <em>one page.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">Not a CRM table. A scannable list showing name, lifecycle stage, project connection, last contact, and lifetime value. Filtered by stage so Leah can quickly find who needs attention — leads awaiting response, active clients needing updates, completed clients due for follow-up.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span>Work</span><span class="on">Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="ph"><div class="h2" style="font-size:1.5rem">Clients</div><div style="display:flex;gap:0.5rem"><button class="btn btn-s btn-sm">+ Add Client</button></div></div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <div style="position:relative;max-width:280px;width:100%"><span style="position:absolute;left:0.6rem;top:50%;transform:translateY(-50%);color:var(--mu);font-size:0.82rem">⌕</span><input style="width:100%;font-family:var(--fb);font-size:0.82rem;padding:0.5rem 0.7rem 0.5rem 1.8rem;border:1px solid var(--pe);border-radius:3px;background:var(--sf);color:var(--tx);outline:none" placeholder="Search clients…"></div>
+      </div>
+
+      <div class="fi">
+        <div class="fi-i on">All Clients<span class="ct">34</span></div>
+        <div class="fi-i">Leads<span class="ct">3</span></div>
+        <div class="fi-i">Proposal<span class="ct">4</span></div>
+        <div class="fi-i">Active<span class="ct">7</span></div>
+        <div class="fi-i">Completed<span class="ct">14</span></div>
+        <div class="fi-i">Nurture<span class="ct">6</span></div>
+      </div>
+
+      <div class="mr">
+        <div class="mt"><div class="mt-l">Active Clients</div><div class="mt-v">7</div><div class="mt-c nu">$142k in active projects</div></div>
+        <div class="mt"><div class="mt-l">Lifetime Revenue</div><div class="mt-v">$284k</div><div class="mt-c up">across 14 completed projects</div></div>
+        <div class="mt"><div class="mt-l">Avg. Satisfaction</div><div class="mt-v">4.8<span class="du">/ 5</span></div><div class="mt-c up">from 11 reviews</div></div>
+        <div class="mt"><div class="mt-l">Referral Rate</div><div class="mt-v">28%</div><div class="mt-c up">↑ 5% this quarter</div></div>
+      </div>
+
+      <!-- Client list -->
+      <div class="cl-item">
+        <div class="av av-md" style="background:rgba(196,165,123,0.15);color:var(--mo)">SW</div>
+        <div><div class="lbl" style="font-size:0.9rem">Sarah & James Whitfield</div><div class="ls">Living room redesign · Wauwatosa, WI</div></div>
+        <div style="text-align:right"><span class="stage stage-proposal">Proposal Sent</span><div class="ms" style="margin-top:0.25rem">Viewed 3× · 12 min reading</div></div>
+        <div style="text-align:right"><div style="font-family:var(--fd);font-weight:600;font-size:0.95rem">$22.5k</div><div class="ms" style="margin-top:0.15rem">Proposal value</div></div>
+      </div>
+      <div class="cl-item">
+        <div class="av av-md" style="background:rgba(122,155,118,0.12);color:var(--sa)">JC</div>
+        <div><div class="lbl" style="font-size:0.9rem">James & Lin Chen</div><div class="ls">Living & dining redesign · Wauwatosa, WI</div></div>
+        <div style="text-align:right"><span class="stage stage-active">Active</span><div class="ms" style="margin-top:0.25rem">Procurement phase</div></div>
+        <div style="text-align:right"><div style="font-family:var(--fd);font-weight:600;font-size:0.95rem">$24.5k</div><div class="ms" style="margin-top:0.15rem">Project value</div></div>
+      </div>
+      <div class="cl-item">
+        <div class="av av-md" style="background:rgba(139,156,173,0.12);color:var(--db)">MG</div>
+        <div><div class="lbl" style="font-size:0.9rem">Maria Gonzalez</div><div class="ls">Full home · Brookfield, WI</div></div>
+        <div style="text-align:right"><span class="stage stage-lead">New Lead</span><div class="ms" style="margin-top:0.25rem">94 match · Responds in 6h</div></div>
+        <div style="text-align:right"><div style="font-family:var(--fd);font-weight:600;font-size:0.95rem">$48k</div><div class="ms" style="margin-top:0.15rem">Budget range</div></div>
+      </div>
+      <div class="cl-item">
+        <div class="av av-md" style="background:rgba(196,165,123,0.15);color:var(--mo)">MO</div>
+        <div><div class="lbl" style="font-size:0.9rem">Mark & Sarah Olsen</div><div class="ls">Full home redesign · Prairie du Sac, WI</div></div>
+        <div style="text-align:right"><span class="stage stage-complete">Completed</span><div class="ms" style="margin-top:0.25rem">Review pending</div></div>
+        <div style="text-align:right"><div style="font-family:var(--fd);font-weight:600;font-size:0.95rem">$62k</div><div class="ms" style="margin-top:0.15rem">Final value</div></div>
+      </div>
+      <div class="cl-item">
+        <div class="av av-md" style="background:rgba(196,165,123,0.1);color:var(--cl)">KR</div>
+        <div><div class="lbl" style="font-size:0.9rem">Kate & Ryan Bergstrom</div><div class="ls">Kitchen renovation · Madison, WI</div></div>
+        <div style="text-align:right"><span class="stage stage-nurture">Nurture</span><div class="ms" style="margin-top:0.25rem">Last contact: 6 weeks ago</div></div>
+        <div style="text-align:right"><div style="font-family:var(--fd);font-weight:600;font-size:0.95rem">$38k</div><div class="ms" style="margin-top:0.15rem">Lifetime value</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 2: CLIENT PROFILE ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">03 — Client Profile</p>
+  <h2>Everything about this client, <em>in one read.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">The client profile is the single view Leah opens before any call, any message, any decision. It shows the relationship journey from first contact to now, their style DNA, active and past projects, room scans, financial history, and every communication — all flowing top to bottom in one continuous scroll.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span>Work</span><span class="on">Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="bc"><a>Clients</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> James & Lin Chen</div>
+
+      <!-- Profile hero -->
+      <div style="display:grid;grid-template-columns:64px 1fr auto;gap:1.5rem;align-items:start;margin-bottom:2rem;padding-bottom:1.5rem;border-bottom:1px solid var(--su)">
+        <div class="av av-lg" style="background:rgba(122,155,118,0.12);color:var(--sa)">JC</div>
+        <div>
+          <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.3rem"><span class="stage stage-active">Active Client</span><span class="ms">· Since Jan 8, 2026</span></div>
+          <div class="h2" style="font-size:1.8rem;margin-bottom:0.15rem">James & Lin Chen</div>
+          <div class="ls">Wauwatosa, WI · Referred by Kate Bergstrom</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:0.4rem"><button class="btn btn-p btn-sm">Message</button><button class="btn btn-s btn-sm">View Project</button></div>
+      </div>
+
+      <div class="two" style="gap:2.5rem">
+        <!-- Left column -->
+        <div>
+          <!-- Contact -->
+          <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Contact</div>
+          <div class="dr"><div class="dr-k">Email</div><div class="dr-v">james.chen@gmail.com</div></div>
+          <div class="dr"><div class="dr-k">Phone</div><div class="dr-v">(414) 555-0189</div></div>
+          <div class="dr"><div class="dr-k">Address</div><div class="dr-v">2847 N. Wauwatosa Ave, Wauwatosa, WI 53213</div></div>
+          <div class="dr"><div class="dr-k">Preferred</div><div class="dr-v">Email for updates, text for scheduling</div></div>
+
+          <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+          <!-- Style DNA -->
+          <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Style DNA</div>
+          <div style="margin-bottom:1rem"><div class="fl">Primary Styles</div><div style="display:flex;gap:0.4rem;flex-wrap:wrap"><span class="tag on">Midcentury Modern</span><span class="tag on">Warm Minimalist</span><span class="tag">Natural Materials</span></div></div>
+          <div style="margin-bottom:1rem"><div class="fl">Preferences Learned</div>
+            <div class="dr"><div class="dr-k">Materials</div><div class="dr-v">Natural wood, brass, linen — avoids chrome</div></div>
+            <div class="dr"><div class="dr-k">Color</div><div class="dr-v">Warm neutrals, earth tones, avoids cool grays</div></div>
+            <div class="dr"><div class="dr-k">Budget</div><div class="dr-v">Mid-to-upper · Invests in anchor pieces</div></div>
+            <div class="dr"><div class="dr-k">Lifestyle</div><div class="dr-v">Entertainers, no kids, one cat (Miso)</div></div>
+          </div>
+          <div><div class="fl">Inspiration Quote</div><p style="font-family:var(--fb);font-size:0.85rem;font-style:italic;color:var(--ao);line-height:1.6">"We want rooms that feel like they were furnished over decades, not a single weekend."</p></div>
+
+          <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+          <!-- Room Scans -->
+          <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Room Scans</div>
+          <div style="display:flex;gap:0.75rem;flex-wrap:wrap">
+            <div><div class="room-ph" style="width:140px;height:100px;margin-bottom:0.3rem"><span>Living Room</span></div><div class="ms">18' × 22' · Scanned Jan 8</div></div>
+            <div><div class="room-ph" style="width:140px;height:100px;margin-bottom:0.3rem"><span>Dining Room</span></div><div class="ms">14' × 16' · Scanned Jan 8</div></div>
+          </div>
+
+          <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+          <!-- Financial summary -->
+          <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Financial Summary</div>
+          <div class="dr"><div class="dr-k">Project Value</div><div class="dr-v" style="font-weight:500">$24,500</div></div>
+          <div class="dr"><div class="dr-k">Invoiced</div><div class="dr-v">$10,500 (43%)</div></div>
+          <div class="dr"><div class="dr-k">Collected</div><div class="dr-v">$7,500</div></div>
+          <div class="dr"><div class="dr-k">Outstanding</div><div class="dr-v" style="color:var(--te)">$3,000</div></div>
+          <div class="dr"><div class="dr-k">Your Earnings</div><div class="dr-v" style="color:var(--sa)">$5,187 (fee + commissions)</div></div>
+        </div>
+
+        <!-- Right column -->
+        <div>
+          <!-- Relationship Journey -->
+          <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Relationship Journey</div>
+          <div class="journey">
+            <div class="j-item done"><div class="j-label">Lead received — 87 match score</div><div class="j-date">Jan 6, 2026</div></div>
+            <div class="j-item done"><div class="j-label">Lead accepted · Welcome message sent</div><div class="j-date">Jan 8</div></div>
+            <div class="j-item done"><div class="j-label">Initial consultation at home</div><div class="j-date">Jan 12</div></div>
+            <div class="j-item done"><div class="j-label">Proposal sent — $20,000</div><div class="j-date">Jan 28</div></div>
+            <div class="j-item done"><div class="j-label">Scope expanded · Dining room added</div><div class="j-date">Feb 3</div></div>
+            <div class="j-item done"><div class="j-label">Revised proposal signed — $24,500</div><div class="j-date">Feb 8</div></div>
+            <div class="j-item done"><div class="j-label">Concept presented & approved</div><div class="j-date">Feb 10</div></div>
+            <div class="j-item done"><div class="j-label">Design refinement complete</div><div class="j-date">Mar 8</div></div>
+            <div class="j-item active"><div class="j-label">Procurement phase · 4 of 7 items ordered</div><div class="j-date">In progress</div></div>
+            <div class="j-item future"><div class="j-label">Installation</div><div class="j-date">Est. Apr 8</div></div>
+            <div class="j-item future"><div class="j-label">Final walkthrough</div><div class="j-date">Est. Apr 20</div></div>
+          </div>
+
+          <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+          <!-- Pending Decisions -->
+          <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Pending Decisions</div>
+          <div class="approval">
+            <div class="approval-head"><div class="lbl" style="font-size:0.88rem">Rug color confirmation</div><span class="ms" style="color:var(--te)">Due Mar 22 · Overdue</span></div>
+            <p style="font-family:var(--fb);font-size:0.82rem;color:var(--bd)">Waiting for James & Lin to choose between Natural and Sand. Samples delivered Mar 18.</p>
+            <div style="display:flex;gap:0.4rem;margin-top:0.75rem"><button class="btn btn-cl btn-sm">Send Reminder</button><button class="btn btn-s btn-sm">View Options</button></div>
+          </div>
+          <div class="approval">
+            <div class="approval-head"><div class="lbl" style="font-size:0.88rem">Paint color final selection</div><span class="ms">Due Apr 1</span></div>
+            <p style="font-family:var(--fb);font-size:0.82rem;color:var(--bd)">Four Benjamin Moore swatches applied to wall. Client reviewing over weekend.</p>
+          </div>
+
+          <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+          <!-- Recent Activity -->
+          <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Recent Activity</div>
+          <div class="act"><div class="act-text"><strong>James</strong> sent a message about rug options</div><div class="act-time">Yesterday, 3:14 PM</div></div>
+          <div class="act"><div class="act-text"><strong>Leah</strong> uploaded paint sample photos</div><div class="act-time">Mar 20</div></div>
+          <div class="act"><div class="act-text"><strong>Nordic Atelier</strong> confirmed table ship date</div><div class="act-time">Mar 21</div></div>
+          <div class="act"><div class="act-text"><strong>Leah</strong> sent weekly project update</div><div class="act-time">Mar 18</div></div>
+          <div class="act"><div class="act-text"><strong>System</strong> auto-sent procurement invoice #2</div><div class="act-time">Mar 10</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 3: CONVERSATION THREAD ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">04 — Conversation Thread</p>
+  <h2>Every message, <em>in context.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">Messages with a client live in one continuous thread — not scattered across email, text, and in-app. The thread shows the client's name and project context at the top. Decision requests and approval cards embed inline so clients can approve without leaving the conversation. Quick-reply templates sit above the compose bar for common responses.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span>Work</span><span class="on">Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd" style="padding-bottom:0">
+      <div class="bc"><a>Clients</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> <a>James & Lin Chen</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Messages</div>
+
+      <!-- Thread header -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--su)">
+        <div style="display:flex;align-items:center;gap:1rem">
+          <div class="av av-md" style="background:rgba(122,155,118,0.12);color:var(--sa)">JC</div>
+          <div><div class="lbl">James & Lin Chen</div><div class="ls">Chen Residence · Procurement phase</div></div>
+        </div>
+        <div style="display:flex;gap:0.5rem"><button class="btn btn-s btn-sm">View Profile</button><button class="btn btn-s btn-sm">View Project</button></div>
+      </div>
+
+      <!-- Messages -->
+      <div style="max-width:600px;margin:0 auto;padding-bottom:1rem">
+        <!-- Date divider -->
+        <div style="text-align:center;margin:1rem 0"><span class="ms" style="background:var(--bg);padding:0 0.75rem">March 24, 2026</span></div>
+
+        <div class="bubble out"><p>Hi James & Lin — quick update! The dining table from Nordic Atelier has been confirmed for April 2nd delivery. The Meadow sectional is shipping this week. We're making great progress.</p><div class="bubble-t">Today, 10:14 AM</div></div>
+
+        <div class="bubble out"><p>One item still waiting on you: the rug color. I know it's a tough call! Here's what I'd recommend — the Natural tone will warm up the oak floors beautifully, and it hides cat hair better than the Sand. 🐱</p><div class="bubble-t">Today, 10:16 AM</div></div>
+
+        <div class="bubble in"><p>Ha! Cat hair is definitely a factor. Lin and I talked about it last night and we're leaning Natural. Can we see it one more time against the table sample before we commit?</p><div class="bubble-t">Today, 11:42 AM</div></div>
+
+        <div class="bubble out"><p>Absolutely — I'll bring both the rug sample and the table finish swatch to your place this week. How's Thursday afternoon?</p><div class="bubble-t">Today, 11:45 AM</div></div>
+
+        <div class="bubble in"><p>Thursday after 3pm works perfectly. Thanks Leah!</p><div class="bubble-t">Today, 11:47 AM</div></div>
+
+        <!-- Inline approval card -->
+        <div class="approval" style="max-width:75%;margin:1rem 0">
+          <div class="approval-head"><div class="ms" style="color:var(--cl)">Decision Request</div></div>
+          <div class="lbl" style="font-size:0.88rem;margin-bottom:0.3rem">Rug Color — Final Selection</div>
+          <p style="font-family:var(--fb);font-size:0.82rem;color:var(--bd);margin-bottom:0.75rem">Please confirm your choice after Thursday's review:</p>
+          <div style="display:flex;gap:0.5rem">
+            <div style="flex:1;padding:0.6rem;border:1px solid var(--pe);border-radius:4px;text-align:center;cursor:default"><div style="width:100%;height:40px;background:#D4C8B0;border-radius:3px;margin-bottom:0.3rem"></div><span class="ms">Natural</span></div>
+            <div style="flex:1;padding:0.6rem;border:1px solid var(--pe);border-radius:4px;text-align:center;cursor:default"><div style="width:100%;height:40px;background:#E8DCC8;border-radius:3px;margin-bottom:0.3rem"></div><span class="ms">Sand</span></div>
+          </div>
+          <div class="ms" style="margin-top:0.5rem;color:var(--mu)">Awaiting client selection · Sent Mar 22</div>
+        </div>
+
+        <!-- Date divider -->
+        <div style="text-align:center;margin:1rem 0"><span class="ms" style="background:var(--bg);padding:0 0.75rem">March 18, 2026</span></div>
+
+        <div class="bubble out"><p>Weekly update: 3 of 7 procurement items ordered. Pending light shade and rug decisions. Dining chairs ship next week. Everything tracking on schedule for mid-April installation.</p><div class="bubble-t">Mar 18, 9:00 AM · Weekly Update</div></div>
+      </div>
+
+      <!-- Quick-reply templates -->
+      <div style="padding:0 1rem">
+        <div class="tpl-row">
+          <span class="tpl-pill">Schedule visit</span>
+          <span class="tpl-pill">Send weekly update</span>
+          <span class="tpl-pill">Request decision</span>
+          <span class="tpl-pill">Share photo</span>
+          <span class="tpl-pill">Confirm appointment</span>
+        </div>
+      </div>
+
+      <!-- Compose bar -->
+      <div class="compose">
+        <input placeholder="Type a message…">
+        <button class="btn btn-cl btn-sm" style="border-radius:20px">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 4: MESSAGE CENTER ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">05 — Message Center</p>
+  <h2>All conversations, <em>prioritized.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">The unified inbox across all client conversations. Unread messages surface with a Clay dot. Each row shows the client name, latest message preview, project context, and timestamp. Messages with pending decisions get a golden-hour accent to flag urgency.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span>Work</span><span class="on">Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="ph"><div class="h2" style="font-size:1.5rem">Messages</div></div>
+
+      <div class="fi">
+        <div class="fi-i on">All<span class="ct">12</span></div>
+        <div class="fi-i">Unread<span class="ct">3</span></div>
+        <div class="fi-i">Needs Decision<span class="ct">2</span></div>
+        <div class="fi-i">Archived</div>
+      </div>
+
+      <!-- Message rows -->
+      <div style="cursor:default">
+        <!-- Unread + decision pending -->
+        <div style="display:grid;grid-template-columns:44px 1fr auto;gap:1rem;padding:1rem 0;border-bottom:1px solid rgba(229,226,221,0.6);position:relative;background:rgba(196,165,123,0.03);transition:background 0.15s">
+          <div style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:6px;height:6px;border-radius:50%;background:var(--cl)"></div>
+          <div class="av av-md" style="background:rgba(122,155,118,0.12);color:var(--sa)">JC</div>
+          <div><div style="display:flex;align-items:center;gap:0.5rem"><span class="lbl" style="font-size:0.88rem;font-weight:600">James Chen</span><span style="font-family:var(--fm);font-size:0.48rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--gh);background:rgba(232,197,71,0.1);padding:2px 6px;border-radius:2px">Decision Pending</span></div><div class="ls" style="margin-top:0.1rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:420px">Thursday after 3pm works perfectly. Thanks Leah!</div><div class="ms" style="margin-top:0.2rem">Chen Residence · Procurement</div></div>
+          <div style="text-align:right"><div class="ms">11:47 AM</div></div>
+        </div>
+
+        <!-- Unread -->
+        <div style="display:grid;grid-template-columns:44px 1fr auto;gap:1rem;padding:1rem 0;border-bottom:1px solid rgba(229,226,221,0.6);position:relative;transition:background 0.15s">
+          <div style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:6px;height:6px;border-radius:50%;background:var(--cl)"></div>
+          <div class="av av-md" style="background:rgba(139,156,173,0.12);color:var(--db)">AN</div>
+          <div><div class="lbl" style="font-size:0.88rem;font-weight:600">Andrea Novak</div><div class="ls" style="margin-top:0.1rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:420px">Can we add a desk area near the window? Budget can flex a bit for that.</div><div class="ms" style="margin-top:0.2rem">Lakefront Condo · Proposal revision</div></div>
+          <div style="text-align:right"><div class="ms">Yesterday</div></div>
+        </div>
+
+        <!-- Unread -->
+        <div style="display:grid;grid-template-columns:44px 1fr auto;gap:1rem;padding:1rem 0;border-bottom:1px solid rgba(229,226,221,0.6);position:relative;transition:background 0.15s">
+          <div style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:6px;height:6px;border-radius:50%;background:var(--cl)"></div>
+          <div class="av av-md" style="background:rgba(196,165,123,0.15);color:var(--mo)">SW</div>
+          <div><div class="lbl" style="font-size:0.88rem;font-weight:600">Sarah Whitfield</div><div class="ls" style="margin-top:0.1rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:420px">We love the mood board! Quick question about the accent chair fabric…</div><div class="ms" style="margin-top:0.2rem">Whitfield Living Room · Proposal viewed</div></div>
+          <div style="text-align:right"><div class="ms">Yesterday</div></div>
+        </div>
+
+        <!-- Read -->
+        <div style="display:grid;grid-template-columns:44px 1fr auto;gap:1rem;padding:1rem 0;border-bottom:1px solid rgba(229,226,221,0.6);transition:background 0.15s">
+          <div class="av av-md" style="background:rgba(196,165,123,0.1);color:var(--cl)">DM</div>
+          <div><div class="lbl" style="font-size:0.88rem">David Morrison</div><div class="ls" style="margin-top:0.1rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:420px">Sounds great. We're free Saturday morning for the walk-through.</div><div class="ms" style="margin-top:0.2rem">Morrison Master Suite · Consultation</div></div>
+          <div style="text-align:right"><div class="ms">Mar 22</div></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:44px 1fr auto;gap:1rem;padding:1rem 0;border-bottom:1px solid rgba(229,226,221,0.6);transition:background 0.15s">
+          <div class="av av-md" style="background:rgba(196,165,123,0.15);color:var(--mo)">MO</div>
+          <div><div class="lbl" style="font-size:0.88rem">Mark Olsen</div><div class="ls" style="margin-top:0.1rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:420px">The photographer is confirmed for April 1st. So excited to see the final shots!</div><div class="ms" style="margin-top:0.2rem">Prairie Home · Final walkthrough complete</div></div>
+          <div style="text-align:right"><div class="ms">Mar 20</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 5: DECISION REQUEST ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">06 — Decision Request</p>
+  <h2>Ask clearly, <em>make it easy to choose.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">When Leah needs a client decision — rug color, fabric choice, layout approval — she creates a structured Decision Request that embeds in the conversation thread. Visual options with images, a clear deadline, and one-tap approval. Decisions are tracked on the client profile as pending, approved, or overdue.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span>Work</span><span class="on">Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="bc"><a>Clients</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> <a>Chen Residence</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> New Decision Request</div>
+
+      <div class="h2" style="font-size:1.5rem;margin-bottom:0.25rem">Create Decision Request</div>
+      <div class="ls" style="margin-bottom:2rem">This will be sent to James & Lin Chen and appear in your conversation thread.</div>
+
+      <div class="fg" style="max-width:560px">
+        <div class="ff full"><label>Decision Title</label><input value="Paint Color — Living Room Walls"></div>
+        <div class="ff full"><label>Context for Client</label><textarea rows="3" style="font-family:var(--fb)">We've narrowed it down to two beautiful options that both work with the oak floors and your linen sectional. Both are warm whites — the difference is subtle but meaningful in your south-facing light.</textarea></div>
+        <div class="ff"><label>Decision Due</label><input value="April 1, 2026"></div>
+        <div class="ff"><label>Linked Phase</label><input value="Procurement" disabled style="background:var(--bg);color:var(--mu)"></div>
+      </div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Options</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;max-width:560px">
+        <div style="border:1px solid var(--pe);border-radius:6px;padding:1rem">
+          <div style="width:100%;height:80px;background:linear-gradient(135deg,#FAF7F2,#F5F0E8);border-radius:4px;margin-bottom:0.75rem"></div>
+          <div class="ff" style="margin-bottom:0.5rem"><label>Option Name</label><input value="Simply White OC-117"></div>
+          <div class="ff"><label>Designer Note</label><textarea rows="2" style="font-family:var(--fb);font-size:0.8rem">Slightly warmer. Picks up the honey tones from the oak. My recommendation.</textarea></div>
+        </div>
+        <div style="border:1px solid var(--pe);border-radius:6px;padding:1rem">
+          <div style="width:100%;height:80px;background:linear-gradient(135deg,#FAFAFA,#F2F0ED);border-radius:4px;margin-bottom:0.75rem"></div>
+          <div class="ff" style="margin-bottom:0.5rem"><label>Option Name</label><input value="Chantilly Lace OC-65"></div>
+          <div class="ff"><label>Designer Note</label><textarea rows="2" style="font-family:var(--fb);font-size:0.8rem">Cleaner white. Creates more contrast with the wood tones. Feels slightly more modern.</textarea></div>
+        </div>
+      </div>
+
+      <div style="margin-top:1rem;max-width:560px"><button class="btn btn-s btn-sm">+ Add Another Option</button></div>
+
+      <div style="padding:1rem;background:rgba(196,165,123,0.04);border:1px solid rgba(196,165,123,0.15);border-radius:6px;margin-top:1.5rem;max-width:560px"><p class="meta" style="color:var(--cl);margin-bottom:0.15rem">What clients see</p><p style="font-size:0.82rem;color:var(--bd)">A visual card in their conversation thread with your context, swatchable options, your designer recommendation flagged, and a one-tap "Choose This" button. They can also add a note with their selection.</p></div>
+
+      <div style="display:flex;gap:0.5rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--su)"><button class="btn btn-cl">Send Decision Request</button><button class="btn btn-s">Save as Draft</button><button class="btn btn-g">Cancel</button></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 6: REVIEW COLLECTION ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">07 — Review & Feedback</p>
+  <h2>Earn the review, <em>grow the reputation.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">After project completion, the system prompts Leah to send a review request — timed for three days after walkthrough when satisfaction is highest. The request includes specific questions about the experience. Collected reviews appear on Leah's public portfolio and improve her lead quality score on the platform.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span>Work</span><span class="on">Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="ph"><div class="h2" style="font-size:1.5rem">Reviews & Feedback</div></div>
+
+      <div class="fi">
+        <div class="fi-i on">Collected<span class="ct">11</span></div>
+        <div class="fi-i">Pending<span class="ct">2</span></div>
+        <div class="fi-i">Request Queued<span class="ct">1</span></div>
+      </div>
+
+      <!-- Pending review request -->
+      <div style="padding:1.25rem;background:rgba(232,197,71,0.04);border:1px solid rgba(232,197,71,0.15);border-radius:6px;margin-bottom:2rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem"><div class="lbl" style="font-size:0.88rem">Prairie Home — Mark & Sarah Olsen</div><span class="ms" style="color:var(--gh)">Ready to send · Project completed Mar 22</span></div>
+        <p style="font-family:var(--fb);font-size:0.82rem;color:var(--bd);margin-bottom:0.75rem">Project completed 3 days ago. Recommended timing to request a review — client satisfaction peaks in the first week.</p>
+        <div style="display:flex;gap:0.5rem"><button class="btn btn-cl btn-sm">Send Review Request</button><button class="btn btn-s btn-sm">Customize Message</button><button class="btn btn-g btn-sm">Schedule for Later</button></div>
+      </div>
+
+      <!-- Collected reviews -->
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Recent Reviews</div>
+
+      <div style="padding:1.5rem 0;border-bottom:1px solid var(--su)">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem">
+          <div class="lbl">Kate & Ryan Bergstrom</div>
+          <div class="stars">★★★★★</div>
+        </div>
+        <div class="ls" style="margin-bottom:0.5rem">Kitchen renovation · $38,000 · Completed Dec 2025</div>
+        <p style="font-family:var(--fb);font-size:0.88rem;color:var(--bd);line-height:1.65;font-style:italic">"Leah transformed our kitchen beyond what we imagined. She listened to how we actually cook and live, not just what looks good on Pinterest. The materials she chose are aging beautifully — we actually love our kitchen more six months later than on install day."</p>
+        <div style="display:flex;gap:0.5rem;margin-top:0.75rem"><span class="tag on" style="font-size:0.62rem">Published to Portfolio</span><span class="tag" style="font-size:0.62rem">Referred 2 clients</span></div>
+      </div>
+
+      <div style="padding:1.5rem 0;border-bottom:1px solid var(--su)">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem">
+          <div class="lbl">Diane Patel</div>
+          <div class="stars">★★★★<span class="empty">★</span></div>
+        </div>
+        <div class="ls" style="margin-bottom:0.5rem">Master bedroom · $18,500 · Completed Oct 2025</div>
+        <p style="font-family:var(--fb);font-size:0.88rem;color:var(--bd);line-height:1.65;font-style:italic">"Beautiful result. The bedroom feels like a retreat. Only wish the procurement phase had moved a bit faster — some delays with the custom headboard. But the final product was worth the wait."</p>
+        <div style="display:flex;gap:0.5rem;margin-top:0.75rem"><span class="tag on" style="font-size:0.62rem">Published to Portfolio</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 7: NURTURE FLOW ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">08 — Relationship Nurture</p>
+  <h2>Stay close <em>without being clingy.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">Completed clients move to the Nurture stage. The system suggests touchpoints — seasonal check-ins, anniversary messages, "thinking of you" notes when new products match their style. Leah controls which to send and can personalize each. The goal: every past client should feel remembered, not marketed to.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span>Work</span><span class="on">Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="bc"><a>Clients</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Nurture Queue</div>
+      <div class="ph"><div><div class="h2" style="font-size:1.5rem;margin-bottom:0.15rem">Nurture Queue</div><div class="ls">Suggested touchpoints for past clients</div></div></div>
+
+      <!-- Suggested touchpoints -->
+      <div style="padding:1.25rem;border:1.5px solid var(--cl);border-radius:8px;background:rgba(196,165,123,0.02);margin-bottom:1.5rem">
+        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:0.5rem">
+          <div><div class="lbl" style="font-size:0.88rem">Kate & Ryan Bergstrom</div><div class="ls">Kitchen renovation · Completed Dec 2025 · Last contact: 6 weeks ago</div></div>
+          <div class="ms" style="color:var(--cl)">Suggested: This Week</div>
+        </div>
+        <p style="font-family:var(--fb);font-size:0.82rem;color:var(--bd);margin:0.75rem 0">A new oak dining table from Nordic Atelier just launched that perfectly matches their kitchen renovation style. Great excuse for a personal note.</p>
+        <div style="display:flex;gap:0.5rem">
+          <button class="btn btn-cl btn-sm">Send Personalized Note</button>
+          <button class="btn btn-s btn-sm">Schedule for Later</button>
+          <button class="btn btn-g btn-sm">Dismiss</button>
+        </div>
+      </div>
+
+      <div style="padding:1.25rem;border:1px solid var(--pe);border-radius:8px;margin-bottom:1.5rem">
+        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:0.5rem">
+          <div><div class="lbl" style="font-size:0.88rem">Diane Patel</div><div class="ls">Master bedroom · Completed Oct 2025 · Last contact: 3 months ago</div></div>
+          <div class="ms">Suggested: Next Week</div>
+        </div>
+        <p style="font-family:var(--fb);font-size:0.82rem;color:var(--bd);margin:0.75rem 0">Spring season — perfect time for a seasonal check-in. Ask how the bedroom is holding up and if she's thinking about any other rooms.</p>
+        <div style="display:flex;gap:0.5rem">
+          <button class="btn btn-s btn-sm">Send Check-In</button>
+          <button class="btn btn-s btn-sm">Schedule</button>
+          <button class="btn btn-g btn-sm">Dismiss</button>
+        </div>
+      </div>
+
+      <div style="padding:1.25rem;border:1px solid var(--pe);border-radius:8px;margin-bottom:1.5rem">
+        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:0.5rem">
+          <div><div class="lbl" style="font-size:0.88rem">Tom & Lisa Park</div><div class="ls">Living room · Completed Jul 2025 · Last contact: 5 months ago</div></div>
+          <div class="ms">Suggested: This Month</div>
+        </div>
+        <p style="font-family:var(--fb);font-size:0.82rem;color:var(--bd);margin:0.75rem 0">Approaching 1-year anniversary of project completion. A great milestone for a personal note and subtle referral ask.</p>
+        <div style="display:flex;gap:0.5rem">
+          <button class="btn btn-s btn-sm">Send Anniversary Note</button>
+          <button class="btn btn-g btn-sm">Dismiss</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== PULL QUOTE ============================== -->
+<section>
+<div class="n">
+  <div class="pq"><blockquote>"The best client relationships don't end at the final walkthrough. They deepen. Every seasonal check-in, every referral, every 'I saw this and thought of you' message compounds trust into repeat business."</blockquote><cite>Design Principle — Relationships Are Compounding Assets</cite></div>
+</div>
+</section>
+
+<!-- ============================== CLOSING ============================== -->
+<section class="fade">
+<div class="w">
+  <div class="st"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <h2 style="margin-top:2rem;margin-bottom:1.5rem">What makes this <em>different.</em></h2>
+  <div class="two" style="gap:2rem">
+    <div>
+      <p class="bd" style="margin-bottom:1.5rem"><strong>The profile is a living story.</strong> Not a CRM record with fields — a narrative of the relationship from first match to latest message. The journey timeline shows every milestone. The style DNA captures what Leah has learned about this person's taste. The pending decisions surface what needs attention right now.</p>
+      <p class="bd"><strong>Decisions are designed objects.</strong> When a client needs to choose between two rug colors, they don't get a text message saying "which one?" They get a visual card with swatches, the designer's recommendation, context for why each works, and a one-tap selection. Structured decisions reduce back-and-forth and capture choices permanently.</p>
+    </div>
+    <div>
+      <p class="bd" style="margin-bottom:1.5rem"><strong>Messages carry project context.</strong> Every conversation thread shows the project name and current phase. Quick-reply templates sit above the compose bar for common touchpoints — weekly updates, visit scheduling, decision requests. The designer never starts from a blank message; the system anticipates what she's likely sending.</p>
+      <p class="bd"><strong>Nurture is proactive, not reactive.</strong> The system watches for natural touchpoints — new products matching a past client's style, project anniversaries, seasonal timing — and suggests personalized notes. Leah controls what gets sent and personalizes each. The past client feels remembered. The referral pipeline stays warm.</p>
+    </div>
+  </div>
+
+  <div class="sm" style="margin-top:3rem"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2rem;flex-wrap:wrap;gap:1rem">
+    <div><div style="font-family:var(--fd);font-weight:400;font-size:1.05rem">Patina</div><div style="font-family:var(--fd);font-style:italic;font-size:0.82rem;color:var(--ao)">Where Time Adds Value</div></div>
+    <div class="ms">Client Management & Communication v1.0 · March 2026 · 10 Screens · Kody & Leah</div>
+  </div>
+</div>
+</section>
+
+<script>
+const f=document.querySelectorAll('.fade');
+const o=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('vis')})},{threshold:0.08,rootMargin:'0px 0px -40px 0px'});
+f.forEach(s=>o.observe(s));
+</script>
+</body>
+</html>

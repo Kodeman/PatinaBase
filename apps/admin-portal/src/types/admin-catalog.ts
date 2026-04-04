@@ -505,6 +505,7 @@ export interface ProductListItem {
   variantCount: number;
   has3D: boolean;
   arSupported: boolean;
+  sourceUrl?: string;
   publishedAt?: Date;
   updatedAt: Date;
   createdAt: Date;

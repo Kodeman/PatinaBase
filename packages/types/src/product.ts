@@ -12,12 +12,15 @@ export type ProductCategory =
 
 export type ProductStatus = 'draft' | 'in_review' | 'published' | 'deprecated';
 
+export type ProductTier = 'maker_piece' | 'designers_pick' | 'sourced';
+
 export type AvailabilityStatus = 'in_stock' | 'out_of_stock' | 'preorder' | 'discontinued' | 'backorder';
 
 export interface Product extends Timestamps {
   id: UUID;
   slug: string;
   externalId?: string;
+  sourceUrl?: string;
   name: string;
   brand: string;
   shortDescription: string;
@@ -26,6 +29,9 @@ export interface Product extends Timestamps {
   categoryId?: UUID;
   manufacturerId: UUID;
 
+  // Tier
+  tier?: ProductTier;
+
   // Pricing
   price: number;
   msrp?: number;
@@ -33,6 +39,9 @@ export interface Product extends Timestamps {
   salePriceStart?: Date;
   salePriceEnd?: Date;
   currency: string;
+  tradePrice?: number;
+  mapPrice?: number;
+  commissionRate?: number;
 
   // Physical properties
   dimensions?: Dimensions;
@@ -68,6 +77,13 @@ export interface Product extends Timestamps {
   scheduledPublishAt?: Date;
   scheduledUnpublishAt?: Date;
   restoredFromVersion?: number;
+
+  // Designer-specific
+  provenance?: string;
+  finish?: string;
+  assembly?: string;
+  arModelUrl?: string;
+  aiScore?: number;
 
   // Compliance
   fragile?: boolean;
@@ -209,4 +225,17 @@ export interface ProductVersion {
   createdBy?: UUID;
   parentVersion?: number; // Previous version number
   product?: Product;
+}
+
+export interface ProductTeaching {
+  productId: string;
+  primaryStyle?: string;
+  secondaryStyles?: string[];
+  spectrumValues?: Record<string, number>;
+  idealClient?: string;
+  lifestyleSignals?: string[];
+  avoidanceFlags?: string[];
+  designerNotes?: string;
+  bestContext?: string;
+  avoidWhen?: string;
 }

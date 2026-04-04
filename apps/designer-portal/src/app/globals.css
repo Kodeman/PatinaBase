@@ -2,6 +2,199 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== Portal Design Tokens ===== */
+:root {
+  /* — Primary Palette — */
+  --color-off-white: #FAF7F2;
+  --color-pearl: #E5E2DD;
+  --color-clay: #C4A57B;
+  --color-aged-oak: #8B7355;
+  --color-mocha: #5C4A3C;
+  --color-charcoal: #2C2926;
+
+  /* — Extended Palette — */
+  --color-sage: #A8B5A0;
+  --color-dusty-blue: #8B9CAD;
+  --color-terracotta: #D4A090;
+  --color-golden-hour: #E8C547;
+
+  /* — Semantic Assignments — */
+  --bg-primary: var(--color-off-white);
+  --bg-surface: #FFFFFF;
+  --bg-hover: rgba(196, 165, 123, 0.06);
+
+  --text-primary: var(--color-charcoal);
+  --text-body: var(--color-mocha);
+  --text-muted: var(--color-aged-oak);
+  --text-subtle: var(--color-pearl);
+
+  --accent-primary: var(--color-clay);
+  --accent-hover: var(--color-aged-oak);
+  --accent-active: var(--color-charcoal);
+
+  --border-default: var(--color-pearl);
+  --border-subtle: rgba(229, 226, 221, 0.6);
+
+  /* — Functional Colors — */
+  --color-success: #7A9B76;
+  --color-warning: #D4A574;
+  --color-error: #C77B6E;
+  --color-info: #8B9CAD;
+
+  /* — Phase Colors (Opus) — */
+  --phase-consultation: #8B9CAD;
+  --phase-concept: #C4A57B;
+  --phase-refinement: #8B7355;
+  --phase-procurement: #E8C547;
+  --phase-installation: #D4A090;
+  --phase-walkthrough: #A8B5A0;
+
+  /* — Animation Tokens — */
+  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --ease-editorial: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+  --duration-editorial: 700ms;
+
+  /* — Spacing Scale — */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+}
+
+/* ===== Portal Typography Utility Classes ===== */
+@layer components {
+  .type-page-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(2rem, 4vw, 3.5rem);
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+
+  .type-section-head {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+
+  .type-item-name {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 1.3rem;
+    line-height: 1.4;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+
+  .type-data-large {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 2.4rem;
+    line-height: 1.0;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+
+  .type-data-unit {
+    font-family: var(--font-body);
+    font-weight: 400;
+    font-size: 0.85rem;
+    line-height: 1.0;
+    color: var(--text-muted);
+  }
+
+  .type-body {
+    font-family: var(--font-body);
+    font-weight: 400;
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--text-body);
+  }
+
+  .type-body-small {
+    font-family: var(--font-body);
+    font-weight: 400;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--text-body);
+  }
+
+  /* Prose variants — body text with spec max-width for paragraphs */
+  .prose-body {
+    max-width: 640px;
+  }
+
+  .type-label {
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--text-primary);
+  }
+
+  .type-label-secondary {
+    font-family: var(--font-body);
+    font-weight: 400;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+  }
+
+  .type-meta {
+    font-family: var(--font-meta);
+    font-weight: 400;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .type-meta-small {
+    font-family: var(--font-meta);
+    font-weight: 400;
+    font-size: 0.62rem;
+    line-height: 1.5;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .type-btn-text {
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 0.85rem;
+    line-height: 1.0;
+    letter-spacing: 0.01em;
+  }
+
+  /* Divider patterns */
+  .divider {
+    border-bottom: 1px solid var(--border-default);
+  }
+  .divider-subtle {
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .divider-vertical {
+    border-left: 1px solid var(--border-default);
+  }
+}
+
 @layer base {
   :root {
     /* Brand Colors */
@@ -32,15 +225,7 @@
     --ring: 0.618 0.0778 65.5444;
     --radius: 0.75rem;
 
-    /* Sidebar Tokens */
-    --sidebar: 0.9239 0.019 83.0636;
-    --sidebar-foreground: 0.376 0.0225 64.3434;
-    --sidebar-primary: 0.618 0.0778 65.5444;
-    --sidebar-primary-foreground: 1 0 0;
-    --sidebar-accent: 0.8348 0.0426 88.8064;
-    --sidebar-accent-foreground: 0.376 0.0225 64.3434;
-    --sidebar-border: 0.8606 0.0321 84.5881;
-    --sidebar-ring: 0.618 0.0778 65.5444;
+    /* Sidebar tokens removed — portal uses TopBar navigation */
   }
 
   .dark {
@@ -65,19 +250,15 @@
     --input: 0.3795 0.0181 57.128;
     --ring: 0.7264 0.0581 66.6967;
 
-    /* Sidebar Dark */
-    --sidebar: 0.2747 0.0139 57.6523;
-    --sidebar-foreground: 0.9239 0.019 83.0636;
-    --sidebar-primary: 0.7264 0.0581 66.6967;
-    --sidebar-primary-foreground: 0.2747 0.0139 57.6523;
-    --sidebar-accent: 0.4186 0.0281 56.3404;
-    --sidebar-accent-foreground: 0.9239 0.019 83.0636;
-    --sidebar-border: 0.3795 0.0181 57.128;
-    --sidebar-ring: 0.7264 0.0581 66.6967;
+    /* Sidebar dark tokens removed — portal uses TopBar navigation */
   }
 }
 
 @layer base {
+  html {
+    font-size: 18px;
+  }
+
   * {
     @apply border-border;
   }
@@ -85,6 +266,12 @@
   body {
     @apply bg-background text-foreground font-sans overflow-x-hidden;
     font-feature-settings: "rlig" 1, "calt" 1;
+
+    /* Font stacks — must be on body (not :root) because next/font
+       sets --font-heading, --font-inter, --font-mono here via className */
+    --font-display: var(--font-heading), 'Playfair Display', Georgia, 'Times New Roman', serif;
+    --font-body: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-meta: var(--font-mono), 'DM Mono', 'SF Mono', 'Fira Code', monospace;
   }
 
   /* Typography defaults */
@@ -150,6 +337,21 @@
     to {
       opacity: 1;
     }
+  }
+
+  @keyframes page-enter {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-page-enter {
+    animation: page-enter var(--duration-normal) var(--ease-default);
   }
 
   @keyframes fade-out {
@@ -286,5 +488,93 @@
 
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background-color: oklch(var(--foreground) / 0.5);
+  }
+
+  /* ===== Editorial Animation Keyframes ===== */
+
+  /* Typography reveal — clip-path mask from bottom */
+  @keyframes text-reveal {
+    from {
+      clip-path: inset(0 0 100% 0);
+      transform: translateY(12px);
+    }
+    to {
+      clip-path: inset(0 0 0% 0);
+      transform: translateY(0);
+    }
+  }
+
+  /* Section entrance — fade + rise */
+  @keyframes section-enter {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* StrataMark line draw — extends from left */
+  @keyframes strata-draw {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  /* Progress bar fill — grows from left */
+  @keyframes bar-fill {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  .animate-text-reveal {
+    animation: text-reveal 600ms var(--ease-editorial) both;
+  }
+
+  .animate-section-enter {
+    animation: section-enter var(--duration-slow) var(--ease-editorial) both;
+  }
+
+  .animate-strata-draw {
+    transform-origin: left center;
+    animation: strata-draw 800ms var(--ease-editorial) both;
+  }
+
+  .animate-bar-fill {
+    transform-origin: left center;
+    animation: bar-fill 800ms var(--ease-editorial) both;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* Stagger delay — reads --stagger-index CSS var */
+  .stagger-delay {
+    animation-delay: calc(var(--stagger-index, 0) * 60ms);
+  }
+
+  /* Reduced motion — collapse all editorial animations */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-text-reveal,
+    .animate-section-enter,
+    .animate-page-enter,
+    .animate-strata-draw,
+    .animate-bar-fill {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+      clip-path: none !important;
+    }
   }
 }

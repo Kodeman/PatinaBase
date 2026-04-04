@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
 
+const TIER_VALUES = ['maker_piece', 'designers_pick', 'sourced'] as const;
+
 function snakeToCamel(product: Record<string, unknown>) {
+  const tags = (product.tags ?? []) as string[];
+  const tier = tags.find((t) => (TIER_VALUES as readonly string[]).includes(t)) ?? null;
+
   return {
     id: product.id,
     name: product.name,
@@ -14,13 +19,16 @@ function snakeToCamel(product: Record<string, unknown>) {
     sku: product.sku,
     price: product.price_retail ? (product.price_retail as number) / 100 : null,
     priceRetail: product.price_retail,
-    tradePrice: product.price_trade,
+    tradePrice: product.price_trade ? (product.price_trade as number) / 100 : null,
+    mapPrice: product.price_map ? (product.price_map as number) / 100 : null,
+    tier,
+    finish: product.finish,
     sourceUrl: product.source_url,
     capturedBy: product.captured_by,
     images: product.images ?? [],
     materials: product.materials ?? [],
     dimensions: product.dimensions,
-    tags: product.tags ?? [],
+    tags,
     styleTags: product.style_tags ?? [],
     seoTitle: product.seo_title,
     seoDescription: product.seo_description,

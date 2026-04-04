@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — Proposal System UX/UI Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;
+--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;
+--bg:var(--ow);--sf:#FFFFFF;--hv:rgba(196,165,123,0.06);
+--tx:var(--ch);--bd:var(--mo);--mu:var(--ao);--su:var(--pe);
+--fd:'Playfair Display',Georgia,serif;--fb:'Inter',-apple-system,sans-serif;--fm:'DM Mono','SF Mono',monospace;
+--e:cubic-bezier(0.4,0,0.2,1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:16px;scroll-behavior:smooth;background:var(--bg)}
+body{font-family:var(--fb);color:var(--tx);-webkit-font-smoothing:antialiased;line-height:1.6}
+.w{max-width:1120px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}
+.n{max-width:800px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}
+section{padding:clamp(3rem,6vw,6rem) 0}
+h1{font-family:var(--fd);font-weight:400;font-size:clamp(2.2rem,5vw,3.8rem);line-height:1.12;letter-spacing:-0.02em}
+h2,.h2{font-family:var(--fd);font-weight:400;font-size:clamp(1.6rem,3.5vw,2.4rem);line-height:1.2;letter-spacing:-0.02em}
+h3,.h3{font-family:var(--fd);font-weight:500;font-size:1.25rem;line-height:1.35}
+.meta{font-family:var(--fm);font-size:0.68rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--mu)}
+.ms{font-family:var(--fm);font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mu)}
+.lbl{font-family:var(--fb);font-weight:500;font-size:0.95rem;color:var(--tx)}
+.ls{font-family:var(--fb);font-weight:400;font-size:0.82rem;color:var(--mu)}
+.bd{font-family:var(--fb);font-size:0.95rem;line-height:1.7;color:var(--bd);max-width:600px}
+em{font-family:var(--fd);font-style:italic;color:var(--ao)}
+.dl{font-family:var(--fd);font-weight:700;font-size:2rem;line-height:1;color:var(--tx)}
+.du{font-family:var(--fb);font-size:0.8rem;color:var(--mu);margin-left:0.35rem}
+
+.st{display:flex;flex-direction:column;gap:6px;padding:2.5rem 0}.st .s{height:2px;border-radius:1px}.st .s:nth-child(1){width:100%;background:var(--mo)}.st .s:nth-child(2){width:80%;background:var(--cl);opacity:.7}.st .s:nth-child(3){width:60%;background:var(--cl);opacity:.35}
+.sm{display:flex;flex-direction:column;gap:4px;padding:1.5rem 0}.sm .s{height:1.5px;border-radius:1px}.sm .s:nth-child(1){width:60px;background:var(--mo)}.sm .s:nth-child(2){width:48px;background:var(--cl);opacity:.7}.sm .s:nth-child(3){width:36px;background:var(--cl);opacity:.35}
+
+.cover{min-height:70vh;display:flex;flex-direction:column;justify-content:flex-end;padding:4rem clamp(1.5rem,5vw,4rem)}.cover h1 span{display:block;font-style:italic;color:var(--ao);font-weight:400;font-size:0.55em}.cover-sub{font-size:1.05rem;color:var(--bd);max-width:520px;margin:1rem 0 3rem;line-height:1.75}
+.cm{display:flex;gap:3rem;flex-wrap:wrap}.cm-i .meta{margin-bottom:0.2rem}.cm-i p{font-size:0.85rem;color:var(--tx)}
+
+.sc{background:var(--sf);border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(44,41,38,0.04),0 8px 32px rgba(44,41,38,0.05);margin:2rem 0}
+.sb{display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:48px;background:var(--sf);border-bottom:1px solid var(--su)}
+.sb-l{font-family:var(--fd);font-weight:500;font-size:0.72rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--tx)}
+.sb-n{display:flex;gap:1.2rem}.sb-n span{font-family:var(--fb);font-size:0.72rem;color:var(--mu)}.sb-n span.on{color:var(--tx);border-bottom:2px solid var(--cl);padding-bottom:2px}
+.sb-u{display:flex;align-items:center;gap:0.4rem}.sb-a{width:24px;height:24px;border-radius:50%;background:var(--pe);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-weight:500;font-size:0.55rem;color:var(--mo)}
+.sd{padding:clamp(1.5rem,3vw,2.5rem);background:var(--bg);min-height:200px}
+
+.ph{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2rem;flex-wrap:wrap;gap:1rem}
+.fi{display:flex;gap:0;border-bottom:1px solid var(--su);margin-bottom:1.5rem}.fi-i{font-family:var(--fb);font-size:0.8rem;color:var(--mu);padding:0.5rem 1rem 0.6rem;border-bottom:2px solid transparent;white-space:nowrap;cursor:default}.fi-i:first-child{padding-left:0}.fi-i.on{color:var(--tx);border-bottom-color:var(--cl)}.fi-i .ct{font-family:var(--fm);font-size:0.58rem;color:var(--mu);margin-left:0.3rem}
+.btn{font-family:var(--fb);font-weight:500;font-size:0.8rem;padding:0.55rem 1.2rem;border:none;border-radius:3px;cursor:default;display:inline-flex;align-items:center;gap:0.4rem}.btn-p{background:var(--ch);color:var(--ow)}.btn-s{background:transparent;color:var(--tx);border:1px solid var(--pe)}.btn-g{background:transparent;color:var(--mu)}.btn-sm{font-size:0.72rem;padding:0.4rem 0.8rem}.btn-cl{background:var(--cl);color:white}.btn-sa{background:var(--sa);color:white}
+.tag{display:inline-flex;font-family:var(--fb);font-size:0.72rem;font-weight:500;color:var(--mo);padding:0.25rem 0.7rem;background:var(--ow);border:1px solid var(--pe);border-radius:2px;white-space:nowrap}.tag.on{border-color:var(--cl);color:var(--ch)}
+.bc{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:1.5rem}.bc a{color:var(--cl);text-decoration:none}
+.fl{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:0.4rem}
+.dr{display:grid;grid-template-columns:110px 1fr;gap:0.75rem;padding:0.3rem 0;font-size:0.85rem}.dr-k{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);padding-top:0.12rem}.dr-v{font-family:var(--fb);color:var(--bd);line-height:1.5}
+.prog{height:3px;background:var(--pe);border-radius:2px;overflow:hidden;width:100%}.pf{height:100%;background:var(--cl);border-radius:2px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:3rem}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem 2rem}.ff{display:flex;flex-direction:column;gap:0.35rem}.ff.full{grid-column:1/-1}.ff label{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu)}.ff input,.ff textarea,.ff select{font-family:var(--fb);font-size:0.85rem;padding:0.55rem 0.7rem;border:1px solid var(--pe);border-radius:3px;background:var(--sf);color:var(--tx);outline:none}.ff input:focus,.ff textarea:focus{border-color:var(--cl)}.ff textarea{resize:vertical;min-height:80px}.ff select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238B7355' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 0.7rem center}
+.pq{padding:2.5rem 0;border-top:1px solid var(--su);border-bottom:1px solid var(--su);margin:2rem 0}.pq blockquote{font-family:var(--fd);font-size:clamp(1.2rem,2.5vw,1.8rem);font-weight:400;font-style:italic;line-height:1.45;color:var(--tx);max-width:620px}.pq cite{display:block;font-family:var(--fm);font-size:0.65rem;font-style:normal;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-top:1rem}
+
+/* Metrics */
+.mr{display:flex;gap:0;padding-bottom:1.5rem;border-bottom:1px solid var(--su);margin-bottom:2rem}.mt{padding-right:2rem}.mt+.mt{padding-left:2rem;border-left:1px solid var(--su)}.mt-l{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:0.3rem}.mt-v{font-family:var(--fd);font-size:1.6rem;font-weight:700;color:var(--tx);line-height:1;margin-bottom:0.2rem}.mt-c{font-family:var(--fb);font-size:0.72rem}.mt-c.up{color:var(--sa)}.mt-c.dn{color:var(--te)}.mt-c.nu{color:var(--mu)}
+
+/* Proposal list item */
+.pr-item{display:grid;grid-template-columns:1fr 120px 100px;gap:1.5rem;padding:1.1rem 0;border-bottom:1px solid rgba(229,226,221,0.6);align-items:center;cursor:default;transition:background 0.15s var(--e)}.pr-item:hover{background:var(--hv)}
+.pr-name{font-family:var(--fb);font-weight:500;font-size:0.95rem;color:var(--tx);margin-bottom:0.1rem}
+.pr-client{font-family:var(--fb);font-size:0.78rem;color:var(--mu)}
+.pr-val{font-family:var(--fd);font-weight:600;font-size:1.05rem;color:var(--tx);text-align:right}
+
+/* Status badges */
+.stat{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.06em;padding:3px 8px;border-radius:2px;white-space:nowrap}
+.stat-draft{color:var(--mu);background:rgba(139,115,85,0.08)}
+.stat-sent{color:var(--db);background:rgba(139,156,173,0.1)}
+.stat-viewed{color:var(--cl);background:rgba(196,165,123,0.1)}
+.stat-signed{color:var(--sa);background:rgba(122,155,118,0.1)}
+.stat-expired{color:var(--te);background:rgba(199,123,110,0.08)}
+.stat-declined{color:var(--te);background:rgba(199,123,110,0.08)}
+.stat-revision{color:var(--gh);background:rgba(232,197,71,0.1)}
+
+/* Proposal doc sections */
+.p-sec{padding:2rem 0;border-top:1px solid var(--su)}
+.p-sec:first-child{border-top:none;padding-top:0}
+.p-sec-head{font-family:var(--fd);font-weight:400;font-size:1.4rem;color:var(--tx);margin-bottom:1.25rem}
+.p-body{font-family:var(--fb);font-size:0.92rem;line-height:1.75;color:var(--bd);max-width:640px}
+
+/* Product in proposal */
+.pp-item{display:grid;grid-template-columns:64px 1fr auto;gap:1rem;padding:1rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:center}
+.pp-thumb{width:64px;height:48px;background:var(--pe);border-radius:4px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}.pp-thumb::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 12px,rgba(196,165,123,0.04) 12px,rgba(196,165,123,0.04) 24px)}
+.pp-name{font-family:var(--fb);font-weight:500;font-size:0.88rem;color:var(--tx)}.pp-maker{font-family:var(--fb);font-size:0.75rem;font-style:italic;color:var(--ao);margin-top:0.1rem}
+.pp-price{font-family:var(--fd);font-weight:600;font-size:1rem;color:var(--tx)}
+
+/* Financial rows */
+.fn-row{display:grid;grid-template-columns:1fr auto;gap:1.5rem;padding:0.5rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:baseline}
+.fn-label{font-family:var(--fb);font-size:0.88rem;color:var(--tx)}.fn-label.sub{padding-left:1rem;color:var(--bd);font-size:0.82rem}
+.fn-amt{font-family:var(--fd);font-weight:600;font-size:0.95rem;text-align:right;color:var(--tx)}
+.fn-total{border-top:2px solid var(--su);border-bottom:none;padding-top:0.75rem;margin-top:0.25rem}.fn-total .fn-label{font-weight:600}.fn-total .fn-amt{font-size:1.3rem}
+
+/* Timeline in proposal */
+.tl-phase{display:grid;grid-template-columns:140px 1fr;gap:1rem;padding:0.5rem 0;border-bottom:1px solid rgba(229,226,221,0.3)}
+.tl-date{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);padding-top:0.15rem}
+.tl-name{font-family:var(--fb);font-size:0.88rem;color:var(--tx)}
+
+/* Engagement tracking */
+.eng{display:grid;grid-template-columns:auto 1fr auto;gap:1rem;padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.3);align-items:center}
+.eng-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.75rem}
+.eng-icon.open{background:rgba(196,165,123,0.1);color:var(--cl)}
+.eng-icon.view{background:rgba(139,156,173,0.1);color:var(--db)}
+.eng-icon.sign{background:rgba(122,155,118,0.1);color:var(--sa)}
+.eng-text{font-family:var(--fb);font-size:0.82rem;color:var(--bd)}.eng-text strong{font-weight:500;color:var(--tx)}
+.eng-time{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);white-space:nowrap}
+
+/* Upload zone */
+.uz{border:2px dashed var(--pe);border-radius:8px;padding:1.5rem;text-align:center;cursor:default;transition:border-color 0.2s}.uz:hover{border-color:var(--cl)}.uz p{font-family:var(--fb);font-size:0.82rem;color:var(--mu)}.uz .hint{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);margin-top:0.4rem}
+
+/* Image placeholder row */
+.img-row{display:flex;gap:0.6rem;flex-wrap:wrap;margin:0.75rem 0}
+.img-ph{width:100px;height:75px;background:var(--pe);border-radius:4px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}.img-ph::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 15px,rgba(196,165,123,0.03) 15px,rgba(196,165,123,0.03) 30px)}.img-ph span{font-family:var(--fm);font-size:0.48rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);z-index:1}
+
+/* Template card */
+.tpl{border:1.5px solid var(--pe);border-radius:6px;padding:1.25rem;cursor:default;transition:all 0.15s var(--e)}.tpl:hover{border-color:var(--cl)}.tpl.on{border-color:var(--cl);background:rgba(196,165,123,0.04)}
+.tpl-name{font-family:var(--fb);font-weight:500;font-size:0.9rem;color:var(--tx);margin-bottom:0.25rem}
+.tpl-desc{font-family:var(--fb);font-size:0.75rem;color:var(--mu);line-height:1.5}
+.tpl-sections{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--cl);margin-top:0.6rem}
+
+/* Signature block */
+.sig-block{border:1px solid var(--pe);border-radius:6px;padding:1.5rem;text-align:center;min-height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.sig-block .sig-line{width:200px;height:1px;background:var(--mo);margin-top:1rem;margin-bottom:0.35rem}
+.sig-block .sig-label{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu)}
+
+/* Responsive */
+@media(max-width:768px){.two{grid-template-columns:1fr}.fg{grid-template-columns:1fr}.mr{flex-direction:column;gap:1.5rem}.mt+.mt{border-left:none;padding-left:0}.pr-item{grid-template-columns:1fr auto}.pr-item>:nth-child(2){display:none}.cm{flex-direction:column;gap:1rem}.pp-item{grid-template-columns:1fr auto}.pp-thumb{display:none}}
+
+.fade{opacity:0;transform:translateY(16px);transition:opacity 0.7s ease,transform 0.7s ease}.fade.vis{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ============================== COVER ============================== -->
+<div class="cover">
+  <p class="meta" style="margin-bottom:1rem">Patina — Proposal System Design</p>
+  <h1>The Design Proposal<span>Proposal pages for the Designer Portal</span></h1>
+  <p class="cover-sub">A proposal isn't a form — it's the first thing a client reads from their designer. Every screen treats the proposal as a document: composed, not filled out. Edited in the same typography the client will see. No "preview mode" necessary because the edit mode is the preview.</p>
+  <div class="st"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div class="cm">
+    <div class="cm-i"><p class="meta">Prepared for</p><p>Kody & Leah</p></div>
+    <div class="cm-i"><p class="meta">Version</p><p>1.0 — March 2026</p></div>
+    <div class="cm-i"><p class="meta">Screens</p><p>9 pages, 3 flows</p></div>
+  </div>
+</div>
+
+<!-- ============================== ANATOMY ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">01 — Proposal Anatomy</p>
+  <h2>Seven sections, <em>one continuous scroll.</em></h2>
+  <p class="bd" style="margin-bottom:2rem">Not a step-by-step wizard. A proposal is a document that flows naturally from vision to investment. The designer writes it top to bottom. The client reads it top to bottom. Both see the same layout.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:0;border-top:1px solid var(--su)">
+    <div style="padding:1.15rem 0.75rem 1.15rem 0;border-bottom:1px solid var(--su)"><div class="ms" style="margin-bottom:0.35rem;color:var(--cl)">01</div><div style="font-family:var(--fb);font-weight:500;font-size:0.82rem;color:var(--tx);margin-bottom:0.2rem">Vision</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Project overview, design direction, what this room will become</p></div>
+    <div style="padding:1.15rem 0.75rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div class="ms" style="margin-bottom:0.35rem;color:var(--cl)">02</div><div style="font-family:var(--fb);font-weight:500;font-size:0.82rem;color:var(--tx);margin-bottom:0.2rem">Concept</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Mood board, color palette, material swatches, inspiration</p></div>
+    <div style="padding:1.15rem 0.75rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div class="ms" style="margin-bottom:0.35rem;color:var(--cl)">03</div><div style="font-family:var(--fb);font-weight:500;font-size:0.82rem;color:var(--tx);margin-bottom:0.2rem">Space Plan</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Floor plan, 3D views, furniture placement, traffic flow</p></div>
+    <div style="padding:1.15rem 0.75rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div class="ms" style="margin-bottom:0.35rem;color:var(--cl)">04</div><div style="font-family:var(--fb);font-weight:500;font-size:0.82rem;color:var(--tx);margin-bottom:0.2rem">Selections</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Every product with maker story, image, specifications, price</p></div>
+    <div style="padding:1.15rem 0.75rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div class="ms" style="margin-bottom:0.35rem;color:var(--cl)">05</div><div style="font-family:var(--fb);font-weight:500;font-size:0.82rem;color:var(--tx);margin-bottom:0.2rem">Investment</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Line-by-line breakdown: design fees, products, installation</p></div>
+    <div style="padding:1.15rem 0.75rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div class="ms" style="margin-bottom:0.35rem;color:var(--cl)">06</div><div style="font-family:var(--fb);font-weight:500;font-size:0.82rem;color:var(--tx);margin-bottom:0.2rem">Timeline</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Phase breakdown, milestones, decision points, completion</p></div>
+    <div style="padding:1.15rem 0 1.15rem 0.75rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)"><div class="ms" style="margin-bottom:0.35rem;color:var(--cl)">07</div><div style="font-family:var(--fb);font-weight:500;font-size:0.82rem;color:var(--tx);margin-bottom:0.2rem">Terms</div><p style="font-size:0.68rem;color:var(--bd);line-height:1.45">Payment schedule, revision policy, signature block</p></div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 1: PROPOSAL LIST ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">02 — Proposal List</p>
+  <h2>All proposals, <em>one clear view.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">Filtered by status — drafts, sent, viewed, signed, expired. Each row shows the proposal name, client, value, and a typographic status indicator. No colored circles or icon badges — the status word itself does the work.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="ph"><div class="h2" style="font-size:1.5rem">Proposals</div><div style="display:flex;gap:0.5rem"><button class="btn btn-p btn-sm">+ New Proposal</button></div></div>
+
+      <div class="fi">
+        <div class="fi-i on">All<span class="ct">18</span></div>
+        <div class="fi-i">Drafts<span class="ct">3</span></div>
+        <div class="fi-i">Sent<span class="ct">4</span></div>
+        <div class="fi-i">Viewed<span class="ct">2</span></div>
+        <div class="fi-i">Signed<span class="ct">8</span></div>
+        <div class="fi-i">Expired<span class="ct">1</span></div>
+      </div>
+
+      <div class="mr">
+        <div class="mt"><div class="mt-l">Active Value</div><div class="mt-v">$67.4k</div><div class="mt-c nu">6 awaiting response</div></div>
+        <div class="mt"><div class="mt-l">Win Rate</div><div class="mt-v">73%</div><div class="mt-c up">↑ 8% this quarter</div></div>
+        <div class="mt"><div class="mt-l">Avg. Response</div><div class="mt-v">3.2<span class="du">days</span></div><div class="mt-c up">↓ faster than avg</div></div>
+      </div>
+
+      <!-- Column headers -->
+      <div style="display:grid;grid-template-columns:1fr 120px 100px;gap:1.5rem;padding:0.4rem 0;border-bottom:1px solid var(--su)">
+        <span class="ms">Proposal</span><span class="ms" style="text-align:right">Value</span><span class="ms" style="text-align:right">Status</span>
+      </div>
+
+      <div class="pr-item">
+        <div><div class="pr-name">Whitfield Living Room — Full Design</div><div class="pr-client">Sarah & James Whitfield · Sent Mar 20 · Expires Apr 3</div></div>
+        <div class="pr-val">$22,500</div>
+        <div style="text-align:right"><span class="stat stat-viewed">Viewed</span><div class="ms" style="margin-top:0.3rem">Opened 3× · 12 min reading</div></div>
+      </div>
+      <div class="pr-item">
+        <div><div class="pr-name">Gonzalez Full Home — Phase 1</div><div class="pr-client">Maria Gonzalez · Sent Mar 18</div></div>
+        <div class="pr-val">$48,000</div>
+        <div style="text-align:right"><span class="stat stat-sent">Sent</span><div class="ms" style="margin-top:0.3rem">Not yet opened</div></div>
+      </div>
+      <div class="pr-item">
+        <div><div class="pr-name">Chen Residence — Living & Dining</div><div class="pr-client">James & Lin Chen · Signed Feb 8</div></div>
+        <div class="pr-val">$24,500</div>
+        <div style="text-align:right"><span class="stat stat-signed">Signed</span></div>
+      </div>
+      <div class="pr-item">
+        <div><div class="pr-name">Morrison Master Suite</div><div class="pr-client">David Morrison · Draft · Last edited today</div></div>
+        <div class="pr-val">$15,000</div>
+        <div style="text-align:right"><span class="stat stat-draft">Draft</span></div>
+      </div>
+      <div class="pr-item">
+        <div><div class="pr-name">Lakefront Condo — Unit 4B</div><div class="pr-client">Andrea Novak · Revision requested Mar 15</div></div>
+        <div class="pr-val">$18,000</div>
+        <div style="text-align:right"><span class="stat stat-revision">Revision</span></div>
+      </div>
+      <div class="pr-item">
+        <div><div class="pr-name">Prairie Home — Full Redesign</div><div class="pr-client">Mark & Sarah Olsen · Signed Nov 12</div></div>
+        <div class="pr-val">$62,000</div>
+        <div style="text-align:right"><span class="stat stat-signed">Signed</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 2: TEMPLATE SELECTION ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">03 — New Proposal — Template Selection</p>
+  <h2>Start with a shape, <em>not a blank page.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">Templates pre-populate sections and suggest structure. The designer selects one, then edits it as a document. Four templates cover the common project types. Custom starts blank. The linked project pre-fills client info, room scan, and budget automatically.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="bc"><a>Proposals</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> New Proposal</div>
+      <div class="h2" style="font-size:1.5rem;margin-bottom:0.25rem">New Proposal</div>
+      <div class="ls" style="margin-bottom:2rem">Select a template, then customize for your client.</div>
+
+      <!-- Project link -->
+      <div class="fg" style="margin-bottom:2rem;max-width:500px">
+        <div class="ff"><label>Linked Project</label><select><option selected>Whitfield Living Room</option><option>Morrison Master Suite</option><option>Lakefront Condo — 4B</option><option>— No linked project —</option></select></div>
+        <div class="ff"><label>Proposal Version</label><input value="v1.0" style="max-width:100px"></div>
+      </div>
+
+      <div class="fl" style="margin-bottom:0.75rem">Choose a Template</div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem">
+        <div class="tpl on">
+          <div class="tpl-name">Full Room Design</div>
+          <div class="tpl-desc">Complete design proposal with all seven sections. Vision, concept, space plan, products, investment, timeline, terms.</div>
+          <div class="tpl-sections">7 Sections · ~4 pages</div>
+        </div>
+        <div class="tpl">
+          <div class="tpl-name">Room Refresh</div>
+          <div class="tpl-desc">Lighter engagement — styling and product recommendations without full space planning or construction.</div>
+          <div class="tpl-sections">5 Sections · ~2 pages</div>
+        </div>
+        <div class="tpl">
+          <div class="tpl-name">Consultation Only</div>
+          <div class="tpl-desc">Paid consultation with design direction, mood board, and recommended next steps. No product selections.</div>
+          <div class="tpl-sections">3 Sections · ~1 page</div>
+        </div>
+        <div class="tpl">
+          <div class="tpl-name">Virtual Design</div>
+          <div class="tpl-desc">Remote-only engagement with room scan-based recommendations and shopping list. No on-site work.</div>
+          <div class="tpl-sections">6 Sections · ~3 pages</div>
+        </div>
+        <div class="tpl">
+          <div class="tpl-name">Custom</div>
+          <div class="tpl-desc">Start from scratch. Add sections as needed. Full control over structure and content.</div>
+          <div class="tpl-sections">You decide</div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:0.5rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--su)"><button class="btn btn-p">Create Proposal →</button><button class="btn btn-g">Cancel</button></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 3: PROPOSAL EDITOR ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">04 — Proposal Editor</p>
+  <h2>Write it like a letter, <em>not a form.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">The editor IS the proposal. Same Playfair headings. Same Inter body copy. Same strata dividers between sections. When Leah types, she sees exactly what the client will see. Each section is a content block — narrative text, images, product lists, financial tables — flowing continuously. The only chrome: a slim editing toolbar that appears on focus, and section anchors along the right edge for quick jumping.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd" style="padding:0">
+      <!-- Editor toolbar -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:0.6rem 2rem;border-bottom:1px solid var(--su);background:var(--sf)">
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <span class="ms" style="color:var(--sa)">● Auto-saved 2 min ago</span>
+          <span class="ms">·</span>
+          <span class="ms">v1.0</span>
+        </div>
+        <div style="display:flex;gap:0.5rem"><button class="btn btn-s btn-sm">Preview as Client</button><button class="btn btn-cl btn-sm">Send to Client</button></div>
+      </div>
+
+      <!-- The proposal document -->
+      <div style="max-width:760px;margin:0 auto;padding:3rem 2.5rem;background:var(--sf)">
+
+        <!-- Proposal header / letterhead -->
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2.5rem;padding-bottom:2rem;border-bottom:1px solid var(--su)">
+          <div>
+            <div style="font-family:var(--fd);font-weight:500;font-size:0.85rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--tx);margin-bottom:0.5rem">Patina</div>
+            <div style="font-family:var(--fd);font-style:italic;font-size:0.72rem;color:var(--ao)">Where Time Adds Value</div>
+          </div>
+          <div style="text-align:right">
+            <div class="ms" style="margin-bottom:0.15rem">Prepared for</div>
+            <div class="lbl" style="font-size:0.88rem">Sarah & James Whitfield</div>
+            <div class="ms" style="margin-top:0.5rem">March 20, 2026</div>
+          </div>
+        </div>
+
+        <!-- Section 1: Vision -->
+        <div class="p-sec">
+          <div class="p-sec-head">Design Vision</div>
+          <p class="p-body">A living room that honors the 1960s ranch architecture while creating a warm, collected feel for a young family. The south-facing bay window anchors the space with natural light, inviting a reading nook that doubles as a quiet retreat.</p>
+          <p class="p-body" style="margin-top:1rem">We'll work with natural materials throughout — oak, linen, jute — grounding the room in honest textures that only improve with time. The goal isn't a room that looks perfect on day one. It's a room that feels more like home with every passing season.</p>
+        </div>
+
+        <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+        <!-- Section 2: Concept -->
+        <div class="p-sec">
+          <div class="p-sec-head">Design Concept</div>
+          <div class="fl" style="margin-bottom:0.75rem">Mood Board</div>
+          <div class="img-row"><div class="img-ph"><span>Mood 1</span></div><div class="img-ph"><span>Mood 2</span></div><div class="img-ph"><span>Mood 3</span></div><div class="img-ph"><span>Mood 4</span></div><div class="img-ph"><span>Mood 5</span></div><div class="img-ph"><span>Mood 6</span></div></div>
+          <div class="fl" style="margin-top:1.5rem;margin-bottom:0.5rem">Color Palette</div>
+          <div style="display:flex;gap:0.4rem">
+            <div style="width:48px;height:48px;border-radius:4px;background:#E8DDD0"></div>
+            <div style="width:48px;height:48px;border-radius:4px;background:#C4A57B"></div>
+            <div style="width:48px;height:48px;border-radius:4px;background:#8B7355"></div>
+            <div style="width:48px;height:48px;border-radius:4px;background:#A8B5A0"></div>
+            <div style="width:48px;height:48px;border-radius:4px;background:#FAF7F2"></div>
+          </div>
+          <p class="p-body" style="margin-top:1rem">Warm neutrals anchored by natural oak and linen, with sage green accents that bring the outdoor landscape inside. The palette is intentionally restrained — allowing the materials and textures to do the speaking.</p>
+        </div>
+
+        <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+        <!-- Section 3: Space Plan -->
+        <div class="p-sec">
+          <div class="p-sec-head">Space Plan</div>
+          <div style="background:var(--pe);border-radius:8px;height:220px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;margin-bottom:1rem"><span class="ms" style="z-index:1">3D Room View — Imported from Room Scan</span><div style="position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 30px,rgba(196,165,123,0.04) 30px,rgba(196,165,123,0.04) 60px)"></div></div>
+          <p class="p-body">The sectional anchors the south wall, framing the bay window reading nook. Dining seating flows from the living area through an open sightline. Traffic path from the entry runs along the north wall, keeping the central living space uninterrupted.</p>
+        </div>
+
+        <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+        <!-- Section 4: Selections -->
+        <div class="p-sec">
+          <div class="p-sec-head">Product Selections</div>
+          <p class="p-body" style="margin-bottom:1.25rem">Every piece has been selected for this specific room — considering your light, your floors, and the way your family uses the space. Each comes with the maker's story, because knowing who made something changes how you live with it.</p>
+
+          <div class="fl" style="margin-bottom:0.5rem">Anchor Pieces</div>
+          <div class="pp-item"><div class="pp-thumb"><span class="ms" style="font-size:0.4rem;z-index:1">IMG</span></div><div><div class="pp-name">Heirloom Oak Dining Table</div><div class="pp-maker">Nordic Atelier · Aarhus, Denmark · Est. 1968</div></div><div class="pp-price">$4,200</div></div>
+          <div class="pp-item"><div class="pp-thumb"><span class="ms" style="font-size:0.4rem;z-index:1">IMG</span></div><div><div class="pp-name">Meadow Linen Sectional</div><div class="pp-maker">Woodward & Sons · Richmond, VA · Est. 1889</div></div><div class="pp-price">$6,800</div></div>
+
+          <div class="fl" style="margin-top:1.5rem;margin-bottom:0.5rem">Supporting Pieces</div>
+          <div class="pp-item"><div class="pp-thumb"><span class="ms" style="font-size:0.4rem;z-index:1">IMG</span></div><div><div class="pp-name">Shaker Dining Chairs × 6</div><div class="pp-maker">Sawkille Co · Rhinebeck, NY</div></div><div class="pp-price">$2,400</div></div>
+          <div class="pp-item"><div class="pp-thumb"><span class="ms" style="font-size:0.4rem;z-index:1">IMG</span></div><div><div class="pp-name">Brass Arc Pendant Lights × 3</div><div class="pp-maker">Schoolhouse · Portland, OR</div></div><div class="pp-price">$2,670</div></div>
+          <div class="pp-item"><div class="pp-thumb"><span class="ms" style="font-size:0.4rem;z-index:1">IMG</span></div><div><div class="pp-name">Woven Jute Area Rug 8×10</div><div class="pp-maker">Studio Piet · Copenhagen</div></div><div class="pp-price">$1,450</div></div>
+
+          <div class="fl" style="margin-top:1.5rem;margin-bottom:0.5rem">Finishing Details</div>
+          <div class="pp-item"><div class="pp-thumb"><span class="ms" style="font-size:0.4rem;z-index:1">IMG</span></div><div><div class="pp-name">Linen Throw Pillow Set (4)</div><div class="pp-maker">Coyuchi · San Francisco</div></div><div class="pp-price">$380</div></div>
+          <div class="pp-item"><div class="pp-thumb"><span class="ms" style="font-size:0.4rem;z-index:1">IMG</span></div><div><div class="pp-name">Cashmere Throw Blanket</div><div class="pp-maker">Evangeline Linens · New Brunswick</div></div><div class="pp-price">$350</div></div>
+          <div class="pp-item"><div class="pp-thumb"><span class="ms" style="font-size:0.4rem;z-index:1">IMG</span></div><div><div class="pp-name">Wall Paint — "Simply White" OC-117</div><div class="pp-maker">Benjamin Moore</div></div><div class="pp-price">$280</div></div>
+        </div>
+
+        <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+        <!-- Section 5: Investment -->
+        <div class="p-sec">
+          <div class="p-sec-head">Investment</div>
+          <div class="fn-row"><div class="fn-label">Design Fee</div><div class="fn-amt">$2,500</div></div>
+          <div class="fn-row"><div class="fn-label sub">Consultation + concept development</div><div class="fn-amt" style="color:var(--mu);font-weight:400;font-size:0.82rem"></div></div>
+          <div class="fn-row"><div class="fn-label">Furniture & Lighting</div><div class="fn-amt">$16,070</div></div>
+          <div class="fn-row"><div class="fn-label sub">Dining table, sectional, chairs, pendants</div><div class="fn-amt" style="color:var(--mu);font-weight:400;font-size:0.82rem"></div></div>
+          <div class="fn-row"><div class="fn-label">Rugs & Textiles</div><div class="fn-amt">$2,180</div></div>
+          <div class="fn-row"><div class="fn-label">Paint & Finishing</div><div class="fn-amt">$280</div></div>
+          <div class="fn-row"><div class="fn-label">Delivery & Installation</div><div class="fn-amt">$800</div></div>
+          <div class="fn-row"><div class="fn-label">Contingency (3%)</div><div class="fn-amt">$670</div></div>
+          <div class="fn-row fn-total"><div class="fn-label">Total Investment</div><div class="fn-amt">$22,500</div></div>
+
+          <div style="margin-top:1.5rem">
+            <div class="fl" style="margin-bottom:0.5rem">Payment Schedule</div>
+            <div class="dr"><div class="dr-k">Deposit</div><div class="dr-v">$6,750 (30%) — due on signing</div></div>
+            <div class="dr"><div class="dr-k">Procurement</div><div class="dr-v">$9,000 (40%) — due before ordering</div></div>
+            <div class="dr"><div class="dr-k">Completion</div><div class="dr-v">$6,750 (30%) — due on final walkthrough</div></div>
+          </div>
+        </div>
+
+        <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+        <!-- Section 6: Timeline -->
+        <div class="p-sec">
+          <div class="p-sec-head">Project Timeline</div>
+          <div class="tl-phase"><div class="tl-date">Weeks 1–2</div><div class="tl-name">Consultation & site documentation</div></div>
+          <div class="tl-phase"><div class="tl-date">Weeks 3–6</div><div class="tl-name">Concept development & design presentation</div></div>
+          <div class="tl-phase"><div class="tl-date">Weeks 7–10</div><div class="tl-name">Refinement, final selections, client approvals</div></div>
+          <div class="tl-phase"><div class="tl-date">Weeks 11–16</div><div class="tl-name">Procurement & order management</div></div>
+          <div class="tl-phase"><div class="tl-date">Weeks 17–18</div><div class="tl-name">Delivery, installation & styling</div></div>
+          <div class="tl-phase" style="border-bottom:none"><div class="tl-date">Week 19</div><div class="tl-name">Final walkthrough & photography</div></div>
+        </div>
+
+        <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+        <!-- Section 7: Terms & Signature -->
+        <div class="p-sec">
+          <div class="p-sec-head">Terms & Agreement</div>
+          <p class="p-body" style="font-size:0.82rem;color:var(--mu);margin-bottom:1rem">This proposal is valid for 14 days from the date above. Signing below constitutes agreement to the scope, investment, and payment schedule described in this document. Revisions to the design direction after the concept phase may incur additional fees. A full cancellation policy is included in the attached service agreement.</p>
+
+          <div class="two" style="gap:2rem;margin-top:2rem">
+            <div class="sig-block">
+              <div class="ms" style="margin-bottom:0.5rem">Client Signature</div>
+              <div class="sig-line"></div>
+              <div class="sig-label">Sarah & James Whitfield · Date</div>
+            </div>
+            <div class="sig-block">
+              <div class="ms" style="margin-bottom:0.5rem">Designer Signature</div>
+              <div style="font-family:var(--fd);font-style:italic;font-size:1.1rem;color:var(--cl);margin-top:0.25rem">Leah Kirkland</div>
+              <div class="sig-line"></div>
+              <div class="sig-label">Leah Kirkland, Middlewest Studio · Date</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--su);display:flex;justify-content:space-between;align-items:baseline">
+          <div style="font-family:var(--fd);font-weight:500;font-size:0.65rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--mu)">Patina</div>
+          <div class="ms">Whitfield Living Room · Proposal v1.0 · Page 1 of 4</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 4: SEND / DELIVERY ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">05 — Send to Client</p>
+  <h2>Deliver with a <em>personal note.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">When the proposal is ready, the send dialog captures delivery details: recipient email, expiration date, and a personal message. The client receives a branded email with a link to the live proposal — same typography, same layout, scrollable on any device.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="bc"><a>Proposals</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> <a>Whitfield Living Room</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Send</div>
+
+      <div class="h2" style="font-size:1.5rem;margin-bottom:0.25rem">Send Proposal</div>
+      <div class="ls" style="margin-bottom:2rem">Whitfield Living Room — Full Design · v1.0 · $22,500</div>
+
+      <div class="fg" style="max-width:520px">
+        <div class="ff full"><label>Recipient Email</label><input value="sarah.whitfield@gmail.com"></div>
+        <div class="ff"><label>CC (optional)</label><input placeholder="e.g. james.whitfield@gmail.com"></div>
+        <div class="ff"><label>Expires After</label><select><option selected>14 days</option><option>7 days</option><option>21 days</option><option>30 days</option><option>No expiration</option></select></div>
+        <div class="ff full"><label>Personal Message</label><textarea rows="4" style="font-family:var(--fb)">Hi Sarah & James —
+
+I'm so excited to share this proposal with you. I've put together a design that I think honors your beautiful ranch while making the living room work harder for your family.
+
+Take your time reviewing — I'm here for any questions. If it feels right, you can sign directly from the link.
+
+Looking forward to making this room everything it can be.
+
+— Leah</textarea></div>
+      </div>
+
+      <div style="padding:1rem;background:rgba(139,156,173,0.06);border:1px solid rgba(139,156,173,0.15);border-radius:6px;margin-top:1.5rem;max-width:520px">
+        <p class="meta" style="color:var(--db);margin-bottom:0.15rem">What the client will see</p>
+        <p style="font-size:0.82rem;color:var(--bd)">A branded email with your personal message and a "View Your Proposal" button. The link opens the full proposal in their browser — same design, same fonts, same layout. They can sign digitally at the bottom. You'll be notified when they open, view, and sign.</p>
+      </div>
+
+      <div style="display:flex;gap:0.5rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--su)"><button class="btn btn-cl">Send Proposal →</button><button class="btn btn-s">Save & Send Later</button><button class="btn btn-g">Back to Editor</button></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 5: ENGAGEMENT TRACKING ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">06 — Engagement Tracking</p>
+  <h2>Know when they're reading, <em>what they're reading.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">After sending, the proposal detail view transforms into an engagement dashboard. Every open, every section viewed, and every minute spent is captured — giving the designer the confidence to follow up at the right moment with the right context.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="bc"><a>Proposals</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Whitfield Living Room</div>
+
+      <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:2rem;flex-wrap:wrap;gap:1rem">
+        <div>
+          <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem"><span class="stat stat-viewed">Viewed</span><span class="ms">· Expires Apr 3</span></div>
+          <div class="h2" style="font-size:1.5rem;margin-bottom:0.15rem">Whitfield Living Room — Full Design</div>
+          <div class="ls">Sarah & James Whitfield · Sent Mar 20 · v1.0 · $22,500</div>
+        </div>
+        <div style="display:flex;gap:0.5rem"><button class="btn btn-s btn-sm">Edit Proposal</button><button class="btn btn-s btn-sm">Resend</button><button class="btn btn-s btn-sm">Duplicate</button></div>
+      </div>
+
+      <div class="mr">
+        <div class="mt"><div class="mt-l">Times Opened</div><div class="mt-v">3</div><div class="mt-c nu">Last: today, 9:14 AM</div></div>
+        <div class="mt"><div class="mt-l">Total Reading Time</div><div class="mt-v">12<span class="du">min</span></div><div class="mt-c nu">across 3 sessions</div></div>
+        <div class="mt"><div class="mt-l">Most Viewed</div><div class="mt-v" style="font-size:1.1rem;font-weight:500;font-family:var(--fb)">Selections</div><div class="mt-c nu">4 min 22 sec</div></div>
+        <div class="mt"><div class="mt-l">Status</div><div class="mt-v" style="font-size:1.1rem;font-weight:500;font-family:var(--fb);color:var(--cl)">Awaiting Signature</div><div class="mt-c dn">11 days remaining</div></div>
+      </div>
+
+      <div class="two" style="gap:2.5rem">
+        <div>
+          <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Activity Timeline</div>
+          <div class="eng"><div class="eng-icon open">◉</div><div class="eng-text"><strong>Sarah Whitfield</strong> opened the proposal</div><div class="eng-time">Today, 9:14 AM</div></div>
+          <div class="eng"><div class="eng-icon view">◎</div><div class="eng-text">Viewed <strong>Product Selections</strong> for 2 min 10 sec</div><div class="eng-time">Today, 9:16 AM</div></div>
+          <div class="eng"><div class="eng-icon view">◎</div><div class="eng-text">Viewed <strong>Investment</strong> for 1 min 45 sec</div><div class="eng-time">Today, 9:18 AM</div></div>
+          <div class="eng"><div class="eng-icon view">◎</div><div class="eng-text">Viewed <strong>Timeline</strong> for 48 sec</div><div class="eng-time">Today, 9:20 AM</div></div>
+          <div class="eng"><div class="eng-icon open">◉</div><div class="eng-text"><strong>Sarah Whitfield</strong> opened the proposal (2nd time)</div><div class="eng-time">Mar 22, 7:42 PM</div></div>
+          <div class="eng"><div class="eng-icon view">◎</div><div class="eng-text">Viewed <strong>Design Vision</strong> for 1 min 5 sec</div><div class="eng-time">Mar 22, 7:43 PM</div></div>
+          <div class="eng"><div class="eng-icon view">◎</div><div class="eng-text">Viewed <strong>Product Selections</strong> for 2 min 12 sec</div><div class="eng-time">Mar 22, 7:44 PM</div></div>
+          <div class="eng"><div class="eng-icon open">◉</div><div class="eng-text"><strong>Sarah Whitfield</strong> first opened the proposal</div><div class="eng-time">Mar 20, 6:31 PM</div></div>
+        </div>
+
+        <div>
+          <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Section Engagement</div>
+          <div style="margin-bottom:1.5rem">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.35rem"><span class="lbl" style="font-size:0.85rem">Selections</span><span class="ms">4:22 total</span></div>
+            <div class="prog" style="height:5px"><div class="pf" style="width:88%"></div></div>
+          </div>
+          <div style="margin-bottom:1.5rem">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.35rem"><span class="lbl" style="font-size:0.85rem">Investment</span><span class="ms">2:45 total</span></div>
+            <div class="prog" style="height:5px"><div class="pf" style="width:55%"></div></div>
+          </div>
+          <div style="margin-bottom:1.5rem">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.35rem"><span class="lbl" style="font-size:0.85rem">Design Vision</span><span class="ms">1:42 total</span></div>
+            <div class="prog" style="height:5px"><div class="pf" style="width:34%"></div></div>
+          </div>
+          <div style="margin-bottom:1.5rem">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.35rem"><span class="lbl" style="font-size:0.85rem">Concept</span><span class="ms">1:18 total</span></div>
+            <div class="prog" style="height:5px"><div class="pf" style="width:26%"></div></div>
+          </div>
+          <div style="margin-bottom:1.5rem">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.35rem"><span class="lbl" style="font-size:0.85rem">Timeline</span><span class="ms">0:48 total</span></div>
+            <div class="prog" style="height:5px"><div class="pf" style="width:16%"></div></div>
+          </div>
+          <div style="margin-bottom:1.5rem">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.35rem"><span class="lbl" style="font-size:0.85rem">Space Plan</span><span class="ms">0:35 total</span></div>
+            <div class="prog" style="height:5px"><div class="pf" style="width:12%"></div></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.35rem"><span class="lbl" style="font-size:0.85rem">Terms</span><span class="ms">0:22 total</span></div>
+            <div class="prog" style="height:5px"><div class="pf" style="width:7%"></div></div>
+          </div>
+
+          <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+          <div style="padding:1rem;background:rgba(196,165,123,0.04);border:1px solid rgba(196,165,123,0.15);border-radius:6px">
+            <p class="meta" style="color:var(--cl);margin-bottom:0.15rem">Insight</p>
+            <p style="font-size:0.82rem;color:var(--bd)">Sarah has viewed the product selections three times and spent the most time there. She may want to discuss specific pieces or see alternates. Consider a follow-up message about the anchor furniture.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 6: REVISION ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">07 — Revision Workflow</p>
+  <h2>Revise without <em>starting over.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">When a client requests changes, the proposal version increments (v1.0 → v1.1). The designer edits the existing document — same layout, same sections. A revision summary captures what changed and why, visible to the client at the top of the updated proposal.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="bc"><a>Proposals</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> <a>Lakefront Condo — 4B</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Revise</div>
+
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem"><span class="stat stat-revision">Revision Requested</span></div>
+      <div class="h2" style="font-size:1.5rem;margin-bottom:0.25rem">Revise Proposal</div>
+      <div class="ls" style="margin-bottom:1.5rem">Lakefront Condo — Unit 4B · Andrea Novak · $18,000 · v1.0 → v1.1</div>
+
+      <!-- Client's revision request -->
+      <div style="padding:1.25rem;background:rgba(232,197,71,0.04);border:1px solid rgba(232,197,71,0.2);border-radius:6px;margin-bottom:2rem">
+        <div class="meta" style="color:var(--gh);margin-bottom:0.5rem">Client Feedback — Mar 15</div>
+        <p style="font-family:var(--fb);font-size:0.88rem;color:var(--bd);line-height:1.6;font-style:italic">"Love the direction! Two things: (1) The dining table feels too large for the space — can we look at something more compact? (2) Can we add a small desk area near the window for working from home? Budget can flex a bit for that."</p>
+        <div class="ms" style="margin-top:0.5rem">— Andrea Novak</div>
+      </div>
+
+      <!-- Revision notes -->
+      <div class="fg" style="max-width:520px;margin-bottom:2rem">
+        <div class="ff full"><label>Revision Summary (visible to client)</label><textarea rows="3" style="font-family:var(--fb)">Updated the dining table to a more compact option that better fits the condo's proportions. Added a slim writing desk and task chair near the east window for a work-from-home nook. Budget adjusted +$1,200 to accommodate the addition.</textarea></div>
+      </div>
+
+      <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:1.5rem">
+        <span class="ms">Version History:</span>
+        <span class="tag on">v1.1 (current draft)</span>
+        <span class="tag">v1.0 (sent Mar 12)</span>
+      </div>
+
+      <div style="display:flex;gap:0.5rem"><button class="btn btn-p">Open Editor →</button><button class="btn btn-s">View v1.0</button><button class="btn btn-g">Cancel Revision</button></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 7: SIGNED CONFIRMATION ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">08 — Signed Proposal</p>
+  <h2>The moment it becomes <em>a project.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">When the client signs, the proposal status updates to Signed and the system offers to create the project automatically — importing the timeline, budget, and product selections directly into the Opus project management system. The designer can also download a PDF copy for records.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="bc"><a>Proposals</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Whitfield Living Room</div>
+
+      <!-- Success state -->
+      <div style="text-align:center;padding:2rem 0 2.5rem">
+        <div style="width:64px;height:64px;border-radius:50%;background:rgba(122,155,118,0.1);display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;font-size:1.5rem;color:var(--sa)">✓</div>
+        <div class="h2" style="font-size:1.6rem;margin-bottom:0.25rem">Proposal Signed</div>
+        <div class="ls">Sarah & James Whitfield signed on March 25, 2026 at 2:14 PM</div>
+      </div>
+
+      <div style="max-width:520px;margin:0 auto">
+        <div style="border-top:1px solid var(--su);padding-top:1.5rem">
+          <div class="h3" style="margin-bottom:1rem">What's Next?</div>
+
+          <div style="padding:1.25rem;background:rgba(122,155,118,0.04);border:1px solid rgba(122,155,118,0.15);border-radius:6px;margin-bottom:1rem">
+            <div class="lbl" style="margin-bottom:0.3rem">Create Project from Proposal</div>
+            <p style="font-size:0.82rem;color:var(--bd);margin-bottom:1rem">Import the timeline, budget, and product selections into the Opus project management system. The project starts in the Consultation phase.</p>
+            <button class="btn btn-sa btn-sm">Create Project →</button>
+          </div>
+
+          <div style="display:flex;gap:1rem;margin-top:1.25rem;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px;padding:1rem;border:1px solid var(--pe);border-radius:6px"><div class="lbl" style="font-size:0.85rem;margin-bottom:0.15rem">Download PDF</div><p style="font-size:0.72rem;color:var(--mu)">Signed copy with digital signatures</p></div>
+            <div style="flex:1;min-width:200px;padding:1rem;border:1px solid var(--pe);border-radius:6px"><div class="lbl" style="font-size:0.85rem;margin-bottom:0.15rem">Send Confirmation</div><p style="font-size:0.72rem;color:var(--mu)">Email signed copy to client</p></div>
+          </div>
+
+          <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--su)">
+            <div class="fl" style="margin-bottom:0.5rem">Signed Document Details</div>
+            <div class="dr"><div class="dr-k">Signed By</div><div class="dr-v">Sarah Whitfield</div></div>
+            <div class="dr"><div class="dr-k">Signed At</div><div class="dr-v">March 25, 2026, 2:14 PM CST</div></div>
+            <div class="dr"><div class="dr-k">IP Address</div><div class="dr-v">72.184.xxx.xxx (Milwaukee, WI)</div></div>
+            <div class="dr"><div class="dr-k">Version</div><div class="dr-v">v1.0 — Original</div></div>
+            <div class="dr"><div class="dr-k">Value</div><div class="dr-v">$22,500</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== PULL QUOTE ============================== -->
+<section>
+<div class="n">
+  <div class="pq"><blockquote>"The proposal is the first piece of design a client receives. If it looks like a spreadsheet, they'll treat you like a vendor. If it reads like a vision, they'll trust you as a partner."</blockquote><cite>Design Principle — The Proposal Is the First Impression</cite></div>
+</div>
+</section>
+
+<!-- ============================== CLOSING ============================== -->
+<section class="fade">
+<div class="w">
+  <div class="st"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <h2 style="margin-top:2rem;margin-bottom:1.5rem">What makes this <em>different.</em></h2>
+  <div class="two" style="gap:2rem">
+    <div>
+      <p class="bd" style="margin-bottom:1.5rem"><strong>The editor is the preview.</strong> Leah writes in the same Playfair and Inter typography the client will see. Same strata dividers. Same product layout. When she finishes editing, the proposal is ready — no "preview mode" toggle, no formatting surprises.</p>
+      <p class="bd"><strong>Products tell their story.</strong> Every selection shows the maker name in italic with their location and founding year. This isn't a shopping list — it's a curated collection with provenance. The anchor pieces are separated from supporting pieces and finishing details, matching the three-tier Curated Shelf architecture.</p>
+    </div>
+    <div>
+      <p class="bd" style="margin-bottom:1.5rem"><strong>Engagement gives confidence.</strong> Knowing that Sarah viewed the product selections three times in twelve minutes tells Leah more than any status badge. The section-by-section time breakdown reveals exactly where the client's attention lives — and where a follow-up conversation should start.</p>
+      <p class="bd"><strong>Signing creates momentum.</strong> A signed proposal doesn't just change a status label. It offers to create the project — importing the entire budget, timeline, and product list into Opus. The moment of commitment flows directly into the moment of action. No manual re-entry. No lost context.</p>
+    </div>
+  </div>
+
+  <div class="sm" style="margin-top:3rem"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2rem;flex-wrap:wrap;gap:1rem">
+    <div><div style="font-family:var(--fd);font-weight:400;font-size:1.05rem">Patina</div><div style="font-family:var(--fd);font-style:italic;font-size:0.82rem;color:var(--ao)">Where Time Adds Value</div></div>
+    <div class="ms">Proposal System Design v1.0 · March 2026 · 9 Screens · Kody & Leah</div>
+  </div>
+</div>
+</section>
+
+<script>
+const f=document.querySelectorAll('.fade');
+const o=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('vis')})},{threshold:0.08,rootMargin:'0px 0px -40px 0px'});
+f.forEach(s=>o.observe(s));
+</script>
+</body>
+</html>

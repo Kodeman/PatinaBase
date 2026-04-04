@@ -2,16 +2,26 @@
 //  CompanionOverlay.swift
 //  Patina
 //
-//  The Companion - Floating Patina button that morphs into assistant panel
-//  Tap to expand, tap outside or swipe down to collapse
-//  Clay-colored with texture overlay
-//  Auth-gated: shows login panel for unauthenticated users
+//  The Companion — A living Strata Mark that replaces the tab bar
+//  5 states: Resting, Nudging, Expanded, Journey Mode, Minimal
 //
 
 import SwiftUI
 import Supabase
 
-/// The Companion - Floating button that morphs into assistant panel
+// MARK: - Companion Display State
+
+/// The visual display state of The Companion (separate from internal CompanionState)
+enum CompanionDisplayMode: Equatable {
+    case resting
+    case nudging(label: String)
+    case expanded
+    case journeyMode(progress: Double, step: Int, totalSteps: Int, stepLabel: String)
+    case minimal
+    case hidden
+}
+
+/// The Companion — Floating Strata Mark that serves as the app's primary navigation
 public struct CompanionOverlay: View {
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -20,25 +30,44 @@ public struct CompanionOverlay: View {
     @State private var voiceInputState: VoiceInputState = .idle
     @State private var contentOpacity: Double = 0
     @State private var showingAuthPanel = false
-
-    /// Track auth state for view updates
     @State private var isAuthenticated = AuthService.shared.isAuthenticated
+    @State private var panelOpenTime: Date?
 
-    /// Whether current screen is AR placement mode
-    private var isARMode: Bool {
-        // Detect AR placement screens
-        switch coordinator.currentScreen {
-        case .pieceDetail, .emergence:
-            // These screens may have AR placement
-            return coordinator.companionContext.viewingPiece != nil
-        default:
-            return false
+    /// Computed display mode based on current screen context
+    private var displayMode: CompanionDisplayMode {
+        // Hidden during certain flows
+        if state == .hidden { return .hidden }
+
+        // If expanded, show expanded
+        if state.isExpanded { return .expanded }
+
+        let screen = coordinator.currentScreen
+
+        // Journey mode during walks
+        if case .walk = screen, let progress = coordinator.companionContext.walkProgress {
+            return .journeyMode(progress: Double(progress), step: 2, totalSteps: 4, stepLabel: "Capturing walls")
         }
-    }
+        if case .walkSession = screen, let progress = coordinator.companionContext.walkProgress {
+            let step = Int(progress * 4) + 1
+            let labels = ["Scanning room", "Capturing walls", "Finding details", "Almost done"]
+            let label = labels[min(step - 1, labels.count - 1)]
+            return .journeyMode(progress: Double(progress), step: step, totalSteps: 4, stepLabel: label)
+        }
 
-    /// Current button size based on mode
-    private var currentButtonSize: CGFloat {
-        isARMode ? CompanionConstants.arButtonSize : CompanionConstants.buttonSize
+        // Minimal in AR / immersive views
+        if case .pieceDetail = screen { return .minimal }
+
+        // Nudging based on context
+        switch screen {
+        case .heroFrame:
+            return .nudging(label: "Scan a room \u{2192}")
+        case .emergence, .roomEmergence:
+            return .nudging(label: "Try in your room \u{2192}")
+        case .table:
+            return .nudging(label: "Find more pieces \u{2192}")
+        default:
+            return .resting
+        }
     }
 
     public init() {}
@@ -46,44 +75,49 @@ public struct CompanionOverlay: View {
     public var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Dimming overlay when expanded
-                if state.isExpanded || state.isMorphing {
-                    Color.black
-                        .opacity(0.3 * state.morphProgress)
+                // Backdrop when expanded
+                if state.isExpanded {
+                    Color.black.opacity(0.3)
+                        .background(.ultraThinMaterial.opacity(0.5))
                         .ignoresSafeArea()
-                        .onTapGesture {
-                            collapseToButton()
-                        }
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityLabel("Close companion panel")
+                        .onTapGesture { collapseToButton() }
                 }
 
-                // Position based on AR mode
-                if isARMode {
-                    // AR Mode: FAB at top-right, panel slides from top
-                    VStack {
-                        morphingContainer(geometry: geometry, fromTop: true)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                } else {
-                    // Normal mode: FAB at bottom center, panel slides from bottom
-                    VStack {
-                        Spacer()
-                        morphingContainer(geometry: geometry, fromTop: false)
-                    }
-                    .frame(maxWidth: .infinity)
+                // Render based on display mode
+                switch displayMode {
+                case .hidden:
+                    EmptyView()
+
+                case .resting:
+                    restingView
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                        .padding(.bottom, 28 + geometry.safeAreaInsets.bottom)
+
+                case .nudging(let label):
+                    nudgingView(label: label)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                        .padding(.bottom, 28 + geometry.safeAreaInsets.bottom)
+
+                case .expanded:
+                    expandedView(geometry: geometry)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                        .padding(.bottom, 24 + geometry.safeAreaInsets.bottom)
+
+                case .journeyMode(let progress, let step, let totalSteps, let stepLabel):
+                    journeyModeView(progress: progress, step: step, totalSteps: totalSteps, stepLabel: stepLabel)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                        .padding(.bottom, 28 + geometry.safeAreaInsets.bottom)
+
+                case .minimal:
+                    minimalView
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                        .padding(.bottom, 28 + geometry.safeAreaInsets.bottom)
+                        .padding(.trailing, 20)
                 }
             }
         }
-        .ignoresSafeArea(edges: isARMode ? .top : .bottom)
-        .onChange(of: viewModel.hasPendingMessage) { _, hasPending in
-            if hasPending && state == .button {
-                withAnimation {
-                    state = .pulsing
-                }
-            }
-        }
+        .ignoresSafeArea(edges: .bottom)
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: displayMode)
         .onChange(of: coordinator.companionContext) { _, newContext in
             viewModel.updateContext(newContext)
         }
@@ -91,333 +125,327 @@ public struct CompanionOverlay: View {
             viewModel.updateContext(coordinator.companionContext)
         }
         .onAppear {
-            // Sync auth state on appear
             isAuthenticated = AuthService.shared.isAuthenticated
             viewModel.updateContext(coordinator.companionContext)
         }
         .task {
-            // Monitor auth state changes
             for await (event, _) in supabase.auth.authStateChanges {
                 await MainActor.run {
                     let newAuthState = AuthService.shared.isAuthenticated
                     if newAuthState != isAuthenticated {
                         isAuthenticated = newAuthState
-                        if newAuthState && state.isExpanded {
-                            viewModel.updateContext(coordinator.companionContext)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - State 1: Resting
+
+    private var restingView: some View {
+        companionMark
+            .onTapGesture { expandToPanel() }
+    }
+
+    // MARK: - State 2: Nudging
+
+    private func nudgingView(label: String) -> some View {
+        VStack(spacing: 0) {
+            // Floating label
+            Text(label)
+                .font(PatinaTypography.caption)
+                .foregroundColor(PatinaColors.offWhite)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background(PatinaColors.charcoal)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .patinaShadow(PatinaShadows.md)
+                .padding(.bottom, 8)
+
+            companionMark
+                .onTapGesture { expandToPanel() }
+        }
+    }
+
+    // MARK: - State 3: Expanded
+
+    private func expandedView(geometry: GeometryProxy) -> some View {
+        VStack(spacing: 0) {
+            // Panel
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Text("What next?")
+                        .font(.custom("PlayfairDisplay-Italic", size: 16))
+                        .foregroundColor(PatinaColors.offWhite)
+
+                    Spacer()
+
+                    Button { collapseToButton() } label: {
+                        Circle()
+                            .fill(Color.white.opacity(0.1))
+                            .frame(width: 28, height: 28)
+                            .overlay(
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(PatinaColors.pearl)
+                            )
+                    }
+                }
+                .padding(.bottom, 16)
+
+                // Actions
+                VStack(spacing: 6) {
+                    companionAction(
+                        icon: "viewfinder",
+                        label: "Scan a room",
+                        hint: "Suggested next step",
+                        isSuggested: true
+                    ) {
+                        handleNavigate(to: .walk)
+                    }
+
+                    companionAction(
+                        icon: "sparkles",
+                        label: "Your recommendations",
+                        hint: "18 items \u{00B7} Living room",
+                        isSuggested: false
+                    ) {
+                        handleNavigate(to: .emergence(pieceId: nil))
+                    }
+
+                    companionAction(
+                        icon: "heart",
+                        label: "Collections",
+                        hint: "2 boards \u{00B7} 13 items",
+                        isSuggested: false
+                    ) {
+                        handleNavigate(to: .table)
+                    }
+
+                    companionAction(
+                        icon: "qrcode.viewfinder",
+                        label: "Connect to portal",
+                        hint: "Scan QR \u{00B7} patina.cloud",
+                        isSuggested: false
+                    ) {
+                        collapseToButton()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            coordinator.showingQRScanner = true
                         }
                     }
+
+                    companionAction(
+                        icon: "person.circle",
+                        label: "Your profile",
+                        hint: "Style \u{00B7} Rooms \u{00B7} Settings",
+                        isSuggested: false
+                    ) {
+                        handleNavigate(to: .settings)
+                    }
                 }
             }
+            .padding(20)
+            .background(PatinaColors.charcoal)
+            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .patinaShadow(PatinaShadows.companion)
         }
+        .padding(.horizontal, 24)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
-    // MARK: - Morphing Container
+    // MARK: - State 4: Journey Mode
 
-    @ViewBuilder
-    private func morphingContainer(geometry: GeometryProxy, fromTop: Bool = false) -> some View {
-        let progress = state.morphProgress
-        let screenWidth = geometry.size.width
-        let safeAreaBottom = geometry.safeAreaInsets.bottom
-        let safeAreaTop = geometry.safeAreaInsets.top
-
-        // Calculate morphing dimensions - use appropriate button size for mode
-        let buttonSize = currentButtonSize
-        let buttonCornerRadius = isARMode ? CompanionConstants.arButtonCornerRadius : CompanionConstants.buttonCornerRadius
-        let panelWidth = screenWidth  // Full width when expanded
-        let panelHeight = min(
-            CompanionConstants.expandedMaxHeight,
-            geometry.size.height * 0.6
-        )
-
-        // Interpolate dimensions
-        let currentWidth = buttonSize + (panelWidth - buttonSize) * progress
-        let currentHeight = buttonSize + (panelHeight - buttonSize) * progress
-        let currentCornerRadius = buttonCornerRadius -
-            (buttonCornerRadius - CompanionConstants.panelCornerRadius) * progress
-
-        // Container
-        ZStack {
-            // Background - warmWhite with paper texture throughout
-            PaperBackground(cornerRadius: currentCornerRadius, textureIntensity: 0.4)
-
-            // Shadow
-            RoundedRectangle(cornerRadius: currentCornerRadius, style: .continuous)
-                .fill(Color.clear)
-                .shadow(
-                    color: PatinaColors.mochaBrown.opacity(0.15 + 0.1 * progress),
-                    radius: 8 + 12 * progress,
-                    y: fromTop ? -(4 + 4 * progress) : (4 + 4 * progress)
-                )
-
-            // Content
+    private func journeyModeView(progress: Double, step: Int, totalSteps: Int, stepLabel: String) -> some View {
+        HStack(spacing: 12) {
+            // Progress ring
             ZStack {
-                // Button content (Strata Mark)
-                buttonContent
-                    .opacity(1 - progress)
-
-                // Panel content
-                if progress > 0.5 {
-                    panelContent
-                        .opacity(contentOpacity)
-                }
-            }
-        }
-        .frame(width: currentWidth, height: currentHeight)
-        // Ensure minimum touch target for accessibility
-        .frame(
-            minWidth: CompanionConstants.minimumTouchTarget,
-            minHeight: CompanionConstants.minimumTouchTarget
-        )
-        .padding(
-            fromTop ? .top : .bottom,
-            fromTop
-                ? CompanionConstants.arButtonTopPadding + safeAreaTop
-                : CompanionConstants.buttonBottomPadding + safeAreaBottom
-        )
-        .padding(
-            fromTop ? .trailing : .horizontal,
-            fromTop ? CompanionConstants.arButtonRightPadding : 0
-        )
-        .onTapGesture {
-            if state.isButton {
-                expandToPanel()
-            }
-        }
-        .gesture(
-            DragGesture(minimumDistance: 20)
-                .onEnded { value in
-                    // Swipe to collapse (down for bottom, up for top)
-                    let threshold: CGFloat = 50
-                    let shouldCollapse = fromTop
-                        ? value.translation.height < -threshold
-                        : value.translation.height > threshold
-                    if shouldCollapse && state.isExpanded {
-                        collapseToButton()
-                    }
-                }
-        )
-        .animation(
-            reduceMotion
-                ? .easeInOut(duration: 0.2)
-                : .spring(response: CompanionConstants.springResponse, dampingFraction: CompanionConstants.springDamping),
-            value: state
-        )
-        // Accessibility
-        .accessibilityElement(children: state.isExpanded ? .contain : .ignore)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint(accessibilityHint)
-        .accessibilityAddTraits(state.isExpanded ? [] : .isButton)
-    }
-
-    // MARK: - Accessibility
-
-    private var accessibilityLabel: String {
-        if state.isExpanded {
-            return isAuthenticated
-                ? "Companion panel, showing quick actions"
-                : "Companion panel, sign in required"
-        } else if state.isPulsing {
-            return "Companion assistant, has new message"
-        } else {
-            return "Companion assistant"
-        }
-    }
-
-    private var accessibilityHint: String {
-        if state.isExpanded {
-            return "Swipe \(isARMode ? "up" : "down") or tap outside to close"
-        } else {
-            return "Double tap to open quick actions. Long press for voice input."
-        }
-    }
-
-    // MARK: - Button Content
-
-    /// Whether breathing animation should be active (respects reduce motion)
-    private var shouldBreath: Bool {
-        state.isBreathing && !reduceMotion
-    }
-
-    /// Scale factor for AR mode button
-    private var buttonScale: CGFloat {
-        isARMode ? CompanionConstants.arButtonSize / CompanionConstants.buttonSize : 1.0
-    }
-
-    private var buttonContent: some View {
-        ZStack {
-            // Pulse animation for notifications (skip if reduce motion)
-            if state.isPulsing && !reduceMotion {
-                PulseAnimation(color: PatinaColors.clayBeige, isActive: true)
-                    .frame(width: 50 * buttonScale, height: 50 * buttonScale)
-            }
-
-            // The Strata Mark - uses spec colors (mochaBrown → clayBeige)
-            StrataMarkView(
-                color: PatinaColors.mochaBrown,
-                scale: buttonScale,
-                breathing: shouldBreath,
-                useSpecColors: true
-            )
-
-            // Notification dot (static indicator when reduce motion or pulsing)
-            if state.isPulsing {
                 Circle()
-                    .fill(PatinaColors.clayBeige)
-                    .frame(width: 10 * buttonScale, height: 10 * buttonScale)
-                    .offset(x: 15 * buttonScale, y: -15 * buttonScale)
-                    .accessibilityHidden(true)
+                    .stroke(Color.white.opacity(0.15), lineWidth: 2.5)
+                    .frame(width: 40, height: 40)
+
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(PatinaColors.clay, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .frame(width: 40, height: 40)
+                    .rotationEffect(.degrees(-90))
+
+                Text("\(Int(progress * 100))%")
+                    .font(.custom("PlayfairDisplay-Medium", size: 13))
+                    .foregroundColor(PatinaColors.offWhite)
+            }
+
+            // Text
+            VStack(alignment: .leading, spacing: 1) {
+                Text(stepLabel)
+                    .font(PatinaTypography.uiSmall)
+                    .foregroundColor(PatinaColors.offWhite)
+
+                MonoLabel(text: "Step \(step) of \(totalSteps)", size: PatinaTypography.monoSmall, color: PatinaColors.clay)
+            }
+
+            Spacer()
+
+            // Step dots
+            HStack(spacing: 4) {
+                ForEach(1...totalSteps, id: \.self) { i in
+                    Circle()
+                        .fill(dotColor(step: i, currentStep: step))
+                        .frame(width: 6, height: 6)
+                }
             }
         }
-        .companionLongPressGesture(onActivate: handleVoiceInput)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(PatinaColors.charcoal)
+        .clipShape(Capsule())
+        .patinaShadow(PatinaShadows.companion)
+        .padding(.horizontal, 40)
     }
 
-    // MARK: - Panel Content
+    // MARK: - State 5: Minimal
 
-    private var panelContent: some View {
-        VStack(spacing: 0) {
-            // Collapse handle
-            Capsule()
-                .fill(PatinaColors.clayBeige.opacity(0.4))
-                .frame(width: 36, height: 4)
-                .padding(.top, PatinaSpacing.sm)
-                .padding(.bottom, PatinaSpacing.xs)
-                .accessibilityLabel("Drag handle")
-                .accessibilityHint("Swipe \(isARMode ? "up" : "down") to close panel")
+    private var minimalView: some View {
+        Button { expandToPanel() } label: {
+            ZStack {
+                Circle()
+                    .fill(PatinaColors.charcoal.opacity(0.7))
+                    .frame(width: 44, height: 44)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Circle())
 
-            // Show auth panel or quick actions based on auth state
-            if isAuthenticated {
-                // Quick actions content (authenticated)
-                CompanionSheet(viewModel: viewModel, onQuickAction: handleQuickAction)
-                    .accessibilityElement(children: .contain)
-            } else {
-                // Auth panel (unauthenticated)
-                CompanionAuthPanel(
-                    onAuthComplete: {
-                        // Update auth state to trigger view refresh
-                        isAuthenticated = true
-                        // Refresh quick actions after auth
-                        viewModel.updateContext(coordinator.companionContext)
-                        // Provide visual feedback
-                        HapticManager.shared.notification(.success)
-                    },
-                    onDismiss: {
-                        collapseToButton()
-                    }
-                )
-                .accessibilityElement(children: .contain)
+                VStack(spacing: 2.5) {
+                    Capsule().fill(PatinaColors.offWhite).frame(width: 16, height: 1.5)
+                    Capsule().fill(PatinaColors.offWhite.opacity(0.7)).frame(width: 12, height: 1.5)
+                    Capsule().fill(PatinaColors.offWhite.opacity(0.4)).frame(width: 9, height: 1.5)
+                }
+            }
+            .patinaShadow(PatinaShadows.md)
+        }
+    }
+
+    // MARK: - Shared: Companion Mark (Resting circle with strata lines)
+
+    private var companionMark: some View {
+        ZStack {
+            // Breathing glow ring
+            Circle()
+                .stroke(PatinaColors.clay.opacity(0.35), lineWidth: 1.5)
+                .frame(width: 58, height: 58)
+                .scaleEffect(reduceMotion ? 1.0 : breatheScale)
+
+            // Main circle
+            Circle()
+                .fill(PatinaColors.charcoal)
+                .frame(width: 52, height: 52)
+                .patinaShadow(PatinaShadows.companion)
+
+            // Strata lines (white on charcoal)
+            VStack(spacing: 3) {
+                Capsule().fill(PatinaColors.offWhite).frame(width: 20, height: 1.5)
+                Capsule().fill(PatinaColors.offWhite.opacity(0.7)).frame(width: 16, height: 1.5)
+                Capsule().fill(PatinaColors.offWhite.opacity(0.4)).frame(width: 12, height: 1.5)
             }
         }
+    }
+
+    @State private var breatheScale: CGFloat = 1.0
+
+    // MARK: - Companion Action Row
+
+    private func companionAction(icon: String, label: String, hint: String, isSuggested: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                // Icon
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(isSuggested ? PatinaColors.clay : Color.white.opacity(0.08))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: icon)
+                        .font(.system(size: 16))
+                        .foregroundColor(isSuggested ? PatinaColors.offWhite : PatinaColors.pearl)
+                }
+
+                // Text
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(label)
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundColor(PatinaColors.offWhite)
+                    Text(hint)
+                        .font(PatinaTypography.monoSmall)
+                        .foregroundColor(PatinaColors.clay)
+                        .tracking(0.3)
+                        .textCase(.uppercase)
+                }
+
+                Spacer()
+
+                Text("\u{203A}")
+                    .font(.system(size: 14))
+                    .foregroundColor(PatinaColors.agedOak)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(isSuggested ? PatinaColors.clay.opacity(0.15) : Color.white.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Actions
 
     private func expandToPanel() {
         HapticManager.shared.companionPulse()
+        CompanionAnalytics.shared.trackFABTapped(screen: coordinator.currentScreen.displayName)
 
-        // Track FAB tap and panel open
-        let screenName = coordinator.currentScreen.displayName
-        CompanionAnalytics.shared.trackFABTapped(screen: screenName)
-        CompanionAnalytics.shared.trackPanelOpened(screen: screenName, isAuthenticated: isAuthenticated)
-
-        // Track auth prompt if not authenticated
-        if !isAuthenticated {
-            CompanionAnalytics.shared.trackAuthPromptShown(screen: screenName)
-        }
-
-        if viewModel.hasPendingMessage {
-            viewModel.markMessageRead()
-        }
-
-        withAnimation(.spring(response: CompanionConstants.springResponse, dampingFraction: CompanionConstants.springDamping)) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
             state = .expanded
         }
-
-        // Fade in content after morph starts
         withAnimation(.easeIn(duration: 0.2).delay(0.15)) {
             contentOpacity = 1
         }
-
         coordinator.isCompanionExpanded = true
         panelOpenTime = Date()
     }
 
-    /// Time when panel was opened (for tracking dwell time)
-    @State private var panelOpenTime: Date?
-
     private func collapseToButton() {
         HapticManager.shared.impact(.light)
-
-        // Track panel close
-        let screenName = coordinator.currentScreen.displayName
         let dwellTime = panelOpenTime.map { Date().timeIntervalSince($0) } ?? 0
         CompanionAnalytics.shared.trackPanelClosed(
-            screen: screenName,
-            interactionCount: viewModel.conversationMessages.count,
+            screen: coordinator.currentScreen.displayName,
+            interactionCount: 0,
             dwellTime: dwellTime
         )
         panelOpenTime = nil
 
-        // Fade out content first
-        withAnimation(.easeOut(duration: 0.1)) {
-            contentOpacity = 0
+        withAnimation(.easeOut(duration: 0.1)) { contentOpacity = 0 }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85).delay(0.05)) {
+            state = .button
         }
-
-        // Then morph back to button
-        withAnimation(.spring(response: CompanionConstants.springResponse, dampingFraction: CompanionConstants.springDamping).delay(0.05)) {
-            state = viewModel.hasPendingMessage ? .pulsing : .button
-        }
-
         coordinator.isCompanionExpanded = false
     }
 
-    private func handleQuickAction(_ action: QuickAction) {
-        HapticManager.shared.impact(.light)
-
-        if action.intent.triggersNavigation {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                state = .navigating
-            }
-
-            _ = coordinator.handleIntent(action.intent)
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                    state = .button
-                    contentOpacity = 0
-                }
-            }
-        } else {
-            _ = viewModel.handleQuickAction(action)
+    private func handleNavigate(to route: AppRoute) {
+        collapseToButton()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            coordinator.navigate(to: route)
         }
     }
 
-    private func handleVoiceInput() {
-        guard voiceInputState == .idle else { return }
-
-        voiceInputState = .listening
-        expandToPanel()
+    private func dotColor(step: Int, currentStep: Int) -> Color {
+        if step < currentStep { return PatinaColors.clay }
+        if step == currentStep { return PatinaColors.offWhite }
+        return Color.white.opacity(0.2)
     }
 }
 
 // MARK: - Preview
 
-#Preview("Floating Button") {
+#Preview("Resting") {
     ZStack {
-        PatinaColors.Background.primary
-            .ignoresSafeArea()
-
-        Text("Main Content")
-            .foregroundColor(PatinaColors.Text.secondary)
-
+        PatinaColors.offWhite.ignoresSafeArea()
+        Text("Home Screen Content")
         CompanionOverlay()
     }
-}
-
-#Preview("With Notification") {
-    ZStack {
-        PatinaColors.Background.primary
-            .ignoresSafeArea()
-
-        CompanionOverlay()
-    }
+    .environment(\.appCoordinator, AppCoordinator())
 }

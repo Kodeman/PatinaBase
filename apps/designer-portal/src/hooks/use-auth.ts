@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession as useSupabaseSession } from '@patina/supabase';
+import { useSession as useSupabaseSession, useProfile as useSupabaseProfile } from '@patina/supabase';
 import { Permission, Role, hasPermission, hasRole, type Session } from '@/lib/rbac';
 
 export function useAuth() {
   const { session: supabaseSession, isLoading } = useSupabaseSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: profile } = useSupabaseProfile() as { data: any };
   const router = useRouter();
 
   const session: Session | null = useMemo(() => {
@@ -16,11 +18,19 @@ export function useAuth() {
                   (user.user_metadata?.roles as string[]) ||
                   ['designer'];
     const permissions = (user.app_metadata?.permissions as string[]) || [];
+
+    // Merge: prefer profile table data over auth metadata for display name
+    const name = (profile?.display_name as string)
+      || (profile?.full_name as string)
+      || (user.user_metadata?.displayName as string)
+      || (user.user_metadata?.name as string)
+      || null;
+
     return {
       user: {
         id: user.id,
         email: user.email || '',
-        name: (user.user_metadata?.displayName as string) || (user.user_metadata?.name as string) || null,
+        name,
         roles,
         permissions,
       },
@@ -29,7 +39,7 @@ export function useAuth() {
         ? new Date(supabaseSession.expires_at * 1000).toISOString()
         : undefined,
     };
-  }, [supabaseSession]);
+  }, [supabaseSession, profile]);
 
   const isAuthenticated = !!session?.user;
   const user = session?.user ?? undefined;

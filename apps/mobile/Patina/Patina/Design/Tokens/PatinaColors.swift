@@ -14,16 +14,19 @@ public enum PatinaColors {
     // MARK: - Core Palette
 
     /// Primary background - warm, inviting canvas
-    public static let offWhite = Color(hex: "EDE9E4")
+    public static let offWhite = Color(hex: "FAF7F2")
 
-    /// Interactive elements, accents
-    public static let clayBeige = Color(hex: "A3927C")
+    /// Interactive elements, accents — warm clay gold
+    public static let clay = Color(hex: "C4A57B")
 
-    /// Headlines, emphasis
-    public static let mochaBrown = Color(hex: "655B52")
+    /// Muted text, metadata, secondary interactive
+    public static let agedOak = Color(hex: "8B7355")
+
+    /// Headlines, emphasis — rich brown
+    public static let mocha = Color(hex: "5C4A3C")
 
     /// Primary text, dark backgrounds
-    public static let charcoal = Color(hex: "3F3B37")
+    public static let charcoal = Color(hex: "2C2926")
 
     // MARK: - Extended Palette
 
@@ -32,6 +35,32 @@ public enum PatinaColors {
 
     /// Hero sections, special backgrounds
     public static let warmWhite = Color(hex: "FAF7F2")
+
+    /// Borders, dividers, inactive states
+    public static let pearl = Color(hex: "E5E2DD")
+
+    /// Extended — natural green
+    public static let sage = Color(hex: "A8B5A0")
+
+    /// Extended — cool accent
+    public static let dustyBlue = Color(hex: "8B9CAD")
+
+    /// Extended — warm accent
+    public static let terracotta = Color(hex: "D4A090")
+
+    /// AR light slider, highlights
+    public static let goldenHour = Color(hex: "E8C547")
+
+    // MARK: - Status Colors
+
+    /// Success, match badges
+    public static let success = Color(hex: "7A9B76")
+
+    /// Warning states
+    public static let warning = Color(hex: "D4A574")
+
+    /// Error states
+    public static let error = Color(hex: "C77B6E")
 
     // MARK: - Semantic Colors
 
@@ -44,24 +73,32 @@ public enum PatinaColors {
 
     public enum Text {
         public static let primary = charcoal
-        public static let secondary = mochaBrown
-        public static let muted = clayBeige
+        public static let secondary = mocha
+        public static let muted = agedOak
         public static let inverse = offWhite
     }
 
     public enum Interactive {
-        public static let `default` = clayBeige
-        public static let hover = mochaBrown
+        public static let `default` = clay
+        public static let hover = agedOak
         public static let active = charcoal
     }
 
     // MARK: - Strata Mark Colors
 
     public enum Strata {
-        public static let line1 = mochaBrown
-        public static let line2 = clayBeige
-        public static let line3 = clayBeige.opacity(0.5)
+        public static let line1 = mocha
+        public static let line2 = clay
+        public static let line3 = clay.opacity(0.5)
     }
+
+    // MARK: - Deprecated (use new names)
+
+    @available(*, deprecated, renamed: "clay")
+    public static let clayBeige = clay
+
+    @available(*, deprecated, renamed: "mocha")
+    public static let mochaBrown = mocha
 }
 
 // MARK: - Color Extension for Hex Values

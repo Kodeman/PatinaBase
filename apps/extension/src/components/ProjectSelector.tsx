@@ -4,6 +4,7 @@
 
 import { useState, useEffect } from 'react';
 import type { Project, UUID } from '@patina/shared';
+import { StrataMark } from './StrataMark';
 
 interface ProjectSelectorProps {
   projects: Project[];
@@ -63,15 +64,15 @@ export function ProjectSelector({
         <button
           onClick={() => setIsOpen(!isOpen)}
           disabled={isLoading}
-          className="w-full px-3 py-2 text-left bg-white border border-patina-clay-beige/50 rounded-lg
-                   hover:border-patina-mocha-brown focus:border-patina-mocha-brown focus:ring-1 focus:ring-patina-mocha-brown
+          className="w-full px-3 py-2 text-left bg-surface border border-pearl rounded-[3px]
+                   hover:border-clay focus:border-clay focus:ring-1 focus:ring-clay
                    transition-colors flex items-center justify-between"
         >
-          <span className={selectedProject ? 'text-patina-charcoal' : 'text-patina-mocha-brown/50'}>
+          <span className={selectedProject ? 'text-charcoal text-[0.88rem]' : 'text-aged-oak text-[0.85rem]'}>
             {isLoading ? 'Loading projects...' : selectedProject?.name || 'Select project...'}
           </span>
           <svg
-            className={`w-4 h-4 text-patina-mocha-brown transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            className={`w-4 h-4 text-aged-oak transition-transform ${isOpen ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -82,16 +83,16 @@ export function ProjectSelector({
 
         {/* Dropdown menu */}
         {isOpen && !isLoading && (
-          <div className="absolute z-10 w-full mt-1 bg-white border border-patina-clay-beige/50 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          <div className="absolute z-10 w-full mt-1 bg-surface border border-pearl rounded-md shadow-lg max-h-60 overflow-y-auto">
             {activeProjects.length > 0 ? (
               activeProjects.map(project => (
                 <button
                   key={project.id}
                   onClick={() => handleSelectProject(project.id)}
-                  className={`w-full px-3 py-2 text-left hover:bg-patina-off-white transition-colors flex items-center gap-2
-                           ${project.id === selectedProjectId ? 'bg-patina-clay-beige/20' : ''}`}
+                  className={`w-full px-3 py-2 text-left hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-2
+                           ${project.id === selectedProjectId ? 'bg-off-white' : ''}`}
                 >
-                  <svg className="w-4 h-4 text-patina-mocha-brown" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-aged-oak" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -99,9 +100,9 @@ export function ProjectSelector({
                       d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
                     />
                   </svg>
-                  <span className="text-patina-charcoal">{project.name}</span>
+                  <span className="text-[0.88rem] text-charcoal">{project.name}</span>
                   {project.id === selectedProjectId && (
-                    <svg className="w-4 h-4 text-patina-mocha-brown ml-auto" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-4 h-4 text-clay ml-auto" fill="currentColor" viewBox="0 0 20 20">
                       <path
                         fillRule="evenodd"
                         d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -112,23 +113,42 @@ export function ProjectSelector({
                 </button>
               ))
             ) : (
-              <div className="px-3 py-2 text-patina-mocha-brown/70 text-sm">
+              <div className="px-3 py-2 text-aged-oak text-[0.85rem] font-display italic">
                 No active projects
               </div>
             )}
+
+            <StrataMark variant="micro" className="mx-3" />
+
+            {/* Personal catalog toggle inside dropdown */}
+            <button
+              onClick={handleTogglePersonal}
+              className={`w-full px-3 py-2 text-left hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-2
+                       ${isPersonalCatalog ? 'bg-off-white' : ''}`}
+            >
+              <svg className="w-4 h-4 text-aged-oak" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+              </svg>
+              <span className="text-[0.88rem] text-charcoal">Personal catalog</span>
+              {isPersonalCatalog && (
+                <svg className="w-4 h-4 text-clay ml-auto" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              )}
+            </button>
           </div>
         )}
       </div>
 
-      {/* Personal catalog checkbox */}
+      {/* Personal catalog checkbox (outside dropdown) */}
       <label className="flex items-center gap-2 cursor-pointer">
         <input
           type="checkbox"
           checked={isPersonalCatalog}
           onChange={handleTogglePersonal}
-          className="w-4 h-4 rounded border-patina-clay-beige text-patina-mocha-brown focus:ring-patina-mocha-brown"
+          className="w-4 h-4 rounded-[3px] border-pearl text-clay focus:ring-clay"
         />
-        <span className="text-sm text-patina-charcoal">Save to personal catalog only</span>
+        <span className="text-[0.85rem] text-charcoal">Save to personal catalog only</span>
       </label>
     </div>
   );

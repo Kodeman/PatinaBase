@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, Playfair_Display } from 'next/font/google';
+import { Inter, Playfair_Display, DM_Mono } from 'next/font/google';
 
 import { Providers } from './providers';
 import './globals.css';
@@ -12,7 +12,15 @@ const inter = Inter({
 
 const playfair = Playfair_Display({
   subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
   variable: '--font-playfair',
+  display: 'swap',
+});
+
+const dmMono = DM_Mono({
+  subsets: ['latin'],
+  weight: ['300', '400', '500'],
+  variable: '--font-mono',
   display: 'swap',
 });
 
@@ -26,14 +34,14 @@ interface RootLayoutProps {
   children: React.ReactNode;
 }
 
-const bodyClassName = `${inter.variable} ${playfair.variable} bg-[var(--color-canvas)] text-[var(--color-text)] antialiased`;
+const bodyClassName = `${inter.variable} ${playfair.variable} ${dmMono.variable} bg-[var(--bg-primary)] text-[var(--text-primary)] antialiased`;
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="en" className="bg-[var(--color-canvas)]">
+    <html lang="en" className="bg-[var(--bg-primary)]">
       <body className={bodyClassName}>
         <Providers>
-          <div className="min-h-screen bg-[var(--color-canvas)]">
+          <div className="min-h-screen bg-[var(--bg-primary)]">
             {children}
           </div>
         </Providers>

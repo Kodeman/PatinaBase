@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — The Aesthete Engine UX/UI Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--bg:var(--ow);--sf:#FFFFFF;--hv:rgba(196,165,123,0.06);--tx:var(--ch);--bd:var(--mo);--mu:var(--ao);--su:var(--pe);--fd:'Playfair Display',Georgia,serif;--fb:'Inter',-apple-system,sans-serif;--fm:'DM Mono','SF Mono',monospace;--e:cubic-bezier(0.4,0,0.2,1)}
+*{margin:0;padding:0;box-sizing:border-box}html{font-size:16px;scroll-behavior:smooth;background:var(--bg)}body{font-family:var(--fb);color:var(--tx);-webkit-font-smoothing:antialiased;line-height:1.6}
+.w{max-width:1120px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}.nr{max-width:800px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}section{padding:clamp(3rem,6vw,6rem) 0}
+h1{font-family:var(--fd);font-weight:400;font-size:clamp(2.2rem,5vw,3.8rem);line-height:1.12;letter-spacing:-0.02em}h2,.h2{font-family:var(--fd);font-weight:400;font-size:clamp(1.6rem,3.5vw,2.4rem);line-height:1.2;letter-spacing:-0.02em}h3,.h3{font-family:var(--fd);font-weight:500;font-size:1.25rem;line-height:1.35}
+.meta{font-family:var(--fm);font-size:0.68rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--mu)}.ms{font-family:var(--fm);font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mu)}
+.lbl{font-family:var(--fb);font-weight:500;font-size:0.95rem;color:var(--tx)}.ls{font-family:var(--fb);font-weight:400;font-size:0.82rem;color:var(--mu)}
+.bd{font-family:var(--fb);font-size:0.95rem;line-height:1.7;color:var(--bd);max-width:600px}em{font-family:var(--fd);font-style:italic;color:var(--ao)}
+.st{display:flex;flex-direction:column;gap:6px;padding:2.5rem 0}.st .s{height:2px;border-radius:1px}.st .s:nth-child(1){width:100%;background:var(--mo)}.st .s:nth-child(2){width:80%;background:var(--cl);opacity:.7}.st .s:nth-child(3){width:60%;background:var(--cl);opacity:.35}
+.sm{display:flex;flex-direction:column;gap:4px;padding:1.5rem 0}.sm .s{height:1.5px;border-radius:1px}.sm .s:nth-child(1){width:60px;background:var(--mo)}.sm .s:nth-child(2){width:48px;background:var(--cl);opacity:.7}.sm .s:nth-child(3){width:36px;background:var(--cl);opacity:.35}
+.cover{min-height:75vh;display:flex;flex-direction:column;justify-content:flex-end;padding:4rem clamp(1.5rem,5vw,4rem)}.cover h1 span{display:block;font-style:italic;color:var(--ao);font-weight:400;font-size:0.55em}.cover-sub{font-size:1.05rem;color:var(--bd);max-width:560px;margin:1rem 0 3rem;line-height:1.75}
+.cm{display:flex;gap:3rem;flex-wrap:wrap}.cm-i .meta{margin-bottom:0.2rem}.cm-i p{font-size:0.85rem;color:var(--tx)}
+.sc{background:var(--sf);border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(44,41,38,0.04),0 8px 32px rgba(44,41,38,0.05);margin:2rem 0}.sb{display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:48px;background:var(--sf);border-bottom:1px solid var(--su)}.sb-l{font-family:var(--fd);font-weight:500;font-size:0.72rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--tx)}.sb-n{display:flex;gap:1.2rem}.sb-n span{font-family:var(--fb);font-size:0.72rem;color:var(--mu)}.sb-n span.on{color:var(--tx);border-bottom:2px solid var(--cl);padding-bottom:2px}.sb-u{display:flex;align-items:center;gap:0.4rem}.sb-a{width:24px;height:24px;border-radius:50%;background:var(--pe);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-weight:500;font-size:0.55rem;color:var(--mo)}
+.sd{padding:clamp(1.5rem,3vw,2.5rem);background:var(--bg);min-height:200px}
+.ph{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2rem;flex-wrap:wrap;gap:1rem}
+.fi{display:flex;gap:0;border-bottom:1px solid var(--su);margin-bottom:1.5rem}.fi-i{font-family:var(--fb);font-size:0.8rem;color:var(--mu);padding:0.5rem 1rem 0.6rem;border-bottom:2px solid transparent;white-space:nowrap;cursor:default}.fi-i:first-child{padding-left:0}.fi-i.on{color:var(--tx);border-bottom-color:var(--cl)}.fi-i .ct{font-family:var(--fm);font-size:0.58rem;color:var(--mu);margin-left:0.3rem}
+.btn{font-family:var(--fb);font-weight:500;font-size:0.8rem;padding:0.55rem 1.2rem;border:none;border-radius:3px;cursor:default;display:inline-flex;align-items:center;gap:0.4rem}.btn-p{background:var(--ch);color:var(--ow)}.btn-s{background:transparent;color:var(--tx);border:1px solid var(--pe)}.btn-g{background:transparent;color:var(--mu)}.btn-sm{font-size:0.72rem;padding:0.4rem 0.8rem}.btn-cl{background:var(--cl);color:white}.btn-sa{background:var(--sa);color:white}
+.tag{display:inline-flex;font-family:var(--fb);font-size:0.72rem;font-weight:500;color:var(--mo);padding:0.25rem 0.7rem;background:var(--ow);border:1px solid var(--pe);border-radius:2px;white-space:nowrap}.tag.on{border-color:var(--cl);color:var(--ch)}
+.bc{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:1.5rem}.bc a{color:var(--cl);text-decoration:none}
+.fl{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:0.4rem}
+.dr{display:grid;grid-template-columns:110px 1fr;gap:0.75rem;padding:0.3rem 0;font-size:0.85rem}.dr-k{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);padding-top:0.12rem}.dr-v{font-family:var(--fb);color:var(--bd);line-height:1.5}
+.prog{height:3px;background:var(--pe);border-radius:2px;overflow:hidden;width:100%}.pf{height:100%;background:var(--cl);border-radius:2px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:3rem}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem 2rem}.ff{display:flex;flex-direction:column;gap:0.35rem}.ff.full{grid-column:1/-1}.ff label{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu)}.ff input,.ff textarea,.ff select{font-family:var(--fb);font-size:0.85rem;padding:0.55rem 0.7rem;border:1px solid var(--pe);border-radius:3px;background:var(--sf);color:var(--tx);outline:none}.ff input:focus,.ff textarea:focus{border-color:var(--cl)}.ff textarea{resize:vertical;min-height:80px}.ff select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238B7355' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 0.7rem center}
+.pq{padding:2.5rem 0;border-top:1px solid var(--su);border-bottom:1px solid var(--su);margin:2rem 0}.pq blockquote{font-family:var(--fd);font-size:clamp(1.2rem,2.5vw,1.8rem);font-weight:400;font-style:italic;line-height:1.45;color:var(--tx);max-width:620px}.pq cite{display:block;font-family:var(--fm);font-size:0.65rem;font-style:normal;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-top:1rem}
+.mr{display:flex;gap:0;padding-bottom:1.5rem;border-bottom:1px solid var(--su);margin-bottom:2rem}.mt{padding-right:2rem}.mt+.mt{padding-left:2rem;border-left:1px solid var(--su)}.mt-l{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:0.3rem}.mt-v{font-family:var(--fd);font-size:1.6rem;font-weight:700;color:var(--tx);line-height:1;margin-bottom:0.2rem}.mt-c{font-family:var(--fb);font-size:0.72rem}.mt-c.up{color:var(--sa)}.mt-c.dn{color:var(--te)}.mt-c.nu{color:var(--mu)}
+
+/* Spectrum */
+.sp{margin:0.5rem 0}.sp-r{display:grid;grid-template-columns:70px 1fr 70px;gap:0.4rem;align-items:center;margin-bottom:0.45rem}.sp-l{font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu)}.sp-l:last-child{text-align:right}
+.sp-t{height:4px;background:var(--pe);border-radius:2px;position:relative}.sp-d{position:absolute;top:-4px;width:12px;height:12px;border-radius:50%;background:var(--cl);border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.12)}
+
+/* Engine panel */
+.eng-panel{background:linear-gradient(135deg,rgba(92,74,60,0.03),rgba(196,165,123,0.04));border:1px solid rgba(196,165,123,0.15);border-radius:8px;padding:1.5rem}
+.eng-badge{font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.08em;color:white;background:var(--cl);padding:2px 8px;border-radius:2px}
+
+/* Confidence meter */
+.conf{display:flex;align-items:center;gap:0.5rem}.conf-bar{flex:1;height:6px;background:var(--pe);border-radius:3px;overflow:hidden;max-width:120px}.conf-fill{height:100%;border-radius:3px}.conf-fill.hi{background:var(--sa)}.conf-fill.md{background:var(--cl)}.conf-fill.lo{background:var(--te)}.conf-pct{font-family:var(--fm);font-size:0.6rem;letter-spacing:0.04em;color:var(--mu)}
+
+/* Match card */
+.match{border:1px solid var(--su);border-radius:8px;padding:1.25rem;margin-bottom:1rem;transition:border-color 0.2s var(--e)}.match:hover{border-color:var(--cl)}
+
+/* Radio group */
+.rad{display:flex;flex-direction:column;gap:0.5rem}.rad-i{display:flex;align-items:flex-start;gap:0.6rem;padding:0.5rem 0;cursor:default}.rad-dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--pe);flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:1px}.rad-dot.on{border-color:var(--cl)}.rad-dot.on::after{content:'';width:8px;height:8px;border-radius:50%;background:var(--cl)}.rad-text{font-family:var(--fb);font-size:0.85rem;color:var(--tx)}.rad-desc{font-family:var(--fb);font-size:0.75rem;color:var(--mu);margin-top:0.15rem}
+
+/* Taxonomy tree */
+.tax-node{padding:0.4rem 0;padding-left:1.5rem;position:relative}.tax-node::before{content:'';position:absolute;left:0;top:0;bottom:0;width:1px;background:var(--pe)}.tax-node::after{content:'';position:absolute;left:0;top:1rem;width:1rem;height:1px;background:var(--pe)}
+.tax-root{padding-left:0}.tax-root::before,.tax-root::after{display:none}
+.tax-name{font-family:var(--fb);font-size:0.88rem;color:var(--tx)}.tax-count{font-family:var(--fm);font-size:0.55rem;color:var(--mu);margin-left:0.4rem}
+.tax-root>.tax-name{font-weight:500;font-size:0.95rem}
+
+/* Rule card */
+.rule{border:1px solid var(--su);border-radius:6px;padding:1rem;margin-bottom:0.75rem;font-family:var(--fm);font-size:0.72rem;color:var(--bd);line-height:1.8}.rule strong{font-family:var(--fb);font-weight:500;color:var(--tx);font-size:0.82rem}
+.rule-kw{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.04em;padding:1px 5px;border-radius:2px;font-weight:500}
+.rule-if{color:var(--db);background:rgba(139,156,173,0.1)}.rule-then{color:var(--sa);background:rgba(122,155,118,0.1)}.rule-conf{color:var(--cl);background:rgba(196,165,123,0.1)}
+
+/* Image placeholder */
+.img-ph{background:var(--pe);border-radius:6px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}.img-ph::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 20px,rgba(196,165,123,0.03) 20px,rgba(196,165,123,0.03) 40px)}.img-ph span{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);z-index:1}
+
+/* Activity */
+.act{padding:0.5rem 0;border-bottom:1px solid rgba(229,226,221,0.3)}.act-text{font-family:var(--fb);font-size:0.82rem;color:var(--bd);line-height:1.5}.act-text strong{font-weight:500;color:var(--tx)}.act-time{font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);margin-top:0.1rem}
+
+/* Responsive */
+@media(max-width:768px){.two{grid-template-columns:1fr}.fg{grid-template-columns:1fr}.mr{flex-direction:column;gap:1.5rem}.mt+.mt{border-left:none;padding-left:0}.cm{flex-direction:column;gap:1rem}}
+.fade{opacity:0;transform:translateY(16px);transition:opacity 0.7s ease,transform 0.7s ease}.fade.vis{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ============================== COVER ============================== -->
+<div class="cover">
+  <p class="meta" style="margin-bottom:1rem">Patina — Intelligence Layer Design</p>
+  <h1>The Aesthete Engine<span>Teaching, tuning, and learning interfaces for the Designer Portal</span></h1>
+  <p class="cover-sub">The Aesthete Engine doesn't live behind an admin panel. It lives in the work itself — in every product Leah classifies, every match she corrects, every pattern she teaches. These screens make the intelligence visible, the teaching rewarding, and the learning transparent. A designer doesn't "use" The Aesthete Engine. She shapes it.</p>
+  <div class="st"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div class="cm">
+    <div class="cm-i"><p class="meta">Prepared for</p><p>Kody & Leah</p></div>
+    <div class="cm-i"><p class="meta">Version</p><p>1.0 — March 2026</p></div>
+    <div class="cm-i"><p class="meta">Screens</p><p>10 pages, 5 flows</p></div>
+    <div class="cm-i"><p class="meta">Philosophy</p><p>Designer as Teacher, not User</p></div>
+  </div>
+</div>
+
+<!-- ============================== THE LEARNING LOOP ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">01 — The Learning Loop</p>
+  <h2>Three teachers, <em>one growing intelligence.</em></h2>
+  <p class="bd" style="margin-bottom:2rem">The Aesthete Engine learns from three sources simultaneously: designers who teach it through classification and correction, clients who train it through behavior and decisions, and the system itself which refines through pattern recognition. Each source feeds the next. The interfaces below make this loop visible and interactive.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1px solid var(--su)">
+    <div style="padding:1.5rem 1.25rem 1.5rem 0;border-bottom:1px solid var(--su)">
+      <div class="ms" style="color:var(--cl);margin-bottom:0.5rem">Source 01</div>
+      <div class="h3" style="font-size:1.05rem;margin-bottom:0.4rem">Designer Teaching</div>
+      <p style="font-size:0.78rem;color:var(--bd);line-height:1.55">Style classification, client matching, compatibility rules, designer notes, pattern documentation, ML corrections</p>
+      <p class="ms" style="margin-top:0.6rem">234 items taught / day</p>
+    </div>
+    <div style="padding:1.5rem 1.25rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)">
+      <div class="ms" style="color:var(--sa);margin-bottom:0.5rem">Source 02</div>
+      <div class="h3" style="font-size:1.05rem;margin-bottom:0.4rem">Client Behavior</div>
+      <p style="font-size:0.78rem;color:var(--bd);line-height:1.55">Swipe patterns, dwell time, AR placements, save actions, purchase decisions, style quiz responses</p>
+      <p class="ms" style="margin-top:0.6rem">1,200 signals / hour</p>
+    </div>
+    <div style="padding:1.5rem 0 1.5rem 1.25rem;border-left:1px solid var(--su);border-bottom:1px solid var(--su)">
+      <div class="ms" style="color:var(--db);margin-bottom:0.5rem">Source 03</div>
+      <div class="h3" style="font-size:1.05rem;margin-bottom:0.4rem">System Learning</div>
+      <p style="font-size:0.78rem;color:var(--bd);line-height:1.55">Pattern recognition, collaborative filtering, visual similarity, embedding refinement, A/B test results</p>
+      <p class="ms" style="margin-top:0.6rem">Nightly retraining cycle</p>
+    </div>
+  </div>
+
+  <!-- Flow arrows -->
+  <div style="display:flex;align-items:center;justify-content:center;gap:1rem;margin:2.5rem 0;flex-wrap:wrap">
+    <div style="text-align:center"><div style="width:130px;height:65px;border:1.5px solid var(--cl);border-radius:5px;display:flex;align-items:center;justify-content:center;background:rgba(196,165,123,0.04)"><span style="font-size:0.72rem;font-weight:500;color:var(--tx)">Teach</span></div><span class="ms" style="display:block;margin-top:0.3rem">Designer classifies</span></div>
+    <div style="width:28px;height:1px;background:var(--pe);position:relative;flex-shrink:0"><div style="position:absolute;right:0;top:-3px;width:6px;height:6px;border-right:1px solid var(--pe);border-bottom:1px solid var(--pe);transform:rotate(-45deg)"></div></div>
+    <div style="text-align:center"><div style="width:130px;height:65px;border:1.5px solid var(--pe);border-radius:5px;display:flex;align-items:center;justify-content:center"><span style="font-size:0.72rem;font-weight:500;color:var(--mo)">Learn</span></div><span class="ms" style="display:block;margin-top:0.3rem">Engine absorbs</span></div>
+    <div style="width:28px;height:1px;background:var(--pe);position:relative;flex-shrink:0"><div style="position:absolute;right:0;top:-3px;width:6px;height:6px;border-right:1px solid var(--pe);border-bottom:1px solid var(--pe);transform:rotate(-45deg)"></div></div>
+    <div style="text-align:center"><div style="width:130px;height:65px;border:1.5px solid var(--pe);border-radius:5px;display:flex;align-items:center;justify-content:center"><span style="font-size:0.72rem;font-weight:500;color:var(--mo)">Recommend</span></div><span class="ms" style="display:block;margin-top:0.3rem">Client receives match</span></div>
+    <div style="width:28px;height:1px;background:var(--pe);position:relative;flex-shrink:0"><div style="position:absolute;right:0;top:-3px;width:6px;height:6px;border-right:1px solid var(--pe);border-bottom:1px solid var(--pe);transform:rotate(-45deg)"></div></div>
+    <div style="text-align:center"><div style="width:130px;height:65px;border:1.5px solid var(--pe);border-radius:5px;display:flex;align-items:center;justify-content:center"><span style="font-size:0.72rem;font-weight:500;color:var(--mo)">React</span></div><span class="ms" style="display:block;margin-top:0.3rem">Behavior feeds back</span></div>
+    <div style="width:28px;height:1px;background:var(--pe);position:relative;flex-shrink:0"><div style="position:absolute;right:0;top:-3px;width:6px;height:6px;border-right:1px solid var(--pe);border-bottom:1px solid var(--pe);transform:rotate(-45deg)"></div></div>
+    <div style="text-align:center"><div style="width:130px;height:65px;border:1.5px solid var(--sa);border-radius:5px;display:flex;align-items:center;justify-content:center;background:rgba(122,155,118,0.04)"><span style="font-size:0.72rem;font-weight:500;color:var(--tx)">Correct</span></div><span class="ms" style="display:block;margin-top:0.3rem">Designer refines</span></div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 1: ENGINE DASHBOARD ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">02 — Engine Dashboard</p>
+  <h2>The health of <em>the intelligence.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">Leah's view into how The Aesthete Engine is performing and growing. Not an admin control panel — a teaching dashboard that shows her impact, the system's confidence, what needs attention, and where her expertise matters most today.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="ph"><div><div class="h2" style="font-size:1.5rem;margin-bottom:0.15rem">The Aesthete Engine</div><div class="ls">Your teaching dashboard</div></div><div style="display:flex;gap:0.5rem"><button class="btn btn-cl btn-sm">Start Teaching Session →</button></div></div>
+
+      <!-- Intelligence score hero -->
+      <div style="display:grid;grid-template-columns:180px 1fr;gap:2.5rem;margin-bottom:2rem;padding-bottom:2rem;border-bottom:1px solid var(--su);align-items:center">
+        <div style="text-align:center">
+          <div style="width:140px;height:140px;border-radius:50%;border:4px solid var(--cl);display:flex;flex-direction:column;align-items:center;justify-content:center;margin:0 auto">
+            <div style="font-family:var(--fd);font-size:3rem;font-weight:700;color:var(--tx);line-height:1">87.3</div>
+            <div class="ms">Intelligence Score</div>
+          </div>
+          <div style="font-family:var(--fb);font-size:0.75rem;color:var(--sa);margin-top:0.5rem">↑ 2.1% this month</div>
+        </div>
+        <div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+            <div>
+              <div class="fl">Match Accuracy</div>
+              <div style="display:flex;align-items:baseline;gap:0.3rem;margin-bottom:0.3rem"><span style="font-family:var(--fd);font-weight:700;font-size:1.5rem;color:var(--tx)">92.4%</span><span style="font-family:var(--fb);font-size:0.72rem;color:var(--sa)">↑ 0.8%</span></div>
+              <div class="prog" style="height:5px"><div class="pf" style="width:92.4%;background:var(--sa)"></div></div>
+            </div>
+            <div>
+              <div class="fl">Catalog Coverage</div>
+              <div style="display:flex;align-items:baseline;gap:0.3rem;margin-bottom:0.3rem"><span style="font-family:var(--fd);font-weight:700;font-size:1.5rem;color:var(--tx)">76.8%</span><span style="font-family:var(--fb);font-size:0.72rem;color:var(--sa)">↑ 3.2%</span></div>
+              <div class="prog" style="height:5px"><div class="pf" style="width:76.8%"></div></div>
+            </div>
+            <div>
+              <div class="fl">Learning Velocity</div>
+              <div style="display:flex;align-items:baseline;gap:0.3rem;margin-bottom:0.3rem"><span style="font-family:var(--fd);font-weight:700;font-size:1.5rem;color:var(--tx)">+2.1%</span><span style="font-family:var(--fb);font-size:0.72rem;color:var(--mu)">monthly improvement</span></div>
+              <div class="prog" style="height:5px"><div class="pf" style="width:65%"></div></div>
+            </div>
+            <div>
+              <div class="fl">Active Learning Loops</div>
+              <div style="display:flex;align-items:baseline;gap:0.3rem;margin-bottom:0.3rem"><span style="font-family:var(--fd);font-weight:700;font-size:1.5rem;color:var(--tx)">4</span><span style="font-family:var(--fb);font-size:0.72rem;color:var(--mu)">A/B tests running</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="two" style="gap:2.5rem">
+        <!-- Left: Your Impact -->
+        <div>
+          <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Your Teaching Impact</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem">
+            <div><div class="fl">Products Taught</div><div style="font-family:var(--fd);font-weight:700;font-size:1.8rem;color:var(--tx)">342</div><div class="ms" style="margin-top:0.15rem">All time</div></div>
+            <div><div class="fl">Your Accuracy</div><div style="font-family:var(--fd);font-weight:700;font-size:1.8rem;color:var(--tx)">94.2%</div><div style="font-family:var(--fb);font-size:0.72rem;color:var(--sa)">↑ 1.4% this week</div></div>
+            <div><div class="fl">Matches Improved</div><div style="font-family:var(--fd);font-weight:700;font-size:1.8rem;color:var(--tx)">4,847</div><div class="ms" style="margin-top:0.15rem">Future recommendations</div></div>
+            <div><div class="fl">Corrections Made</div><div style="font-family:var(--fd);font-weight:700;font-size:1.8rem;color:var(--tx)">89</div><div class="ms" style="margin-top:0.15rem">ML mistakes caught</div></div>
+          </div>
+
+          <div class="fl" style="margin-bottom:0.5rem">Your Specializations</div>
+          <div style="margin-bottom:0.5rem"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.25rem"><span class="lbl" style="font-size:0.82rem">Modern & Organic</span><span class="ms">Expert</span></div><div class="prog" style="height:5px"><div class="pf" style="width:95%;background:var(--sa)"></div></div></div>
+          <div style="margin-bottom:0.5rem"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.25rem"><span class="lbl" style="font-size:0.82rem">Warm Minimalist</span><span class="ms">Advanced</span></div><div class="prog" style="height:5px"><div class="pf" style="width:82%"></div></div></div>
+          <div style="margin-bottom:0.5rem"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.25rem"><span class="lbl" style="font-size:0.82rem">Midcentury</span><span class="ms">Advanced</span></div><div class="prog" style="height:5px"><div class="pf" style="width:78%"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.25rem"><span class="lbl" style="font-size:0.82rem">Traditional</span><span class="ms">Learning</span></div><div class="prog" style="height:5px"><div class="pf" style="width:45%"></div></div></div>
+        </div>
+
+        <!-- Right: Needs Attention -->
+        <div>
+          <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Needs Your Attention</div>
+
+          <div style="padding:1rem;background:rgba(232,197,71,0.04);border:1px solid rgba(232,197,71,0.15);border-radius:6px;margin-bottom:1rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem"><span class="lbl" style="font-size:0.85rem">67 products need teaching</span><span class="ms" style="color:var(--gh)">Priority</span></div>
+            <p style="font-size:0.78rem;color:var(--bd);margin-bottom:0.6rem">Including 12 new Maker Pieces from this week's imports. Your expertise is needed on style classification.</p>
+            <button class="btn btn-cl btn-sm">Start Teaching →</button>
+          </div>
+
+          <div style="padding:1rem;border:1px solid var(--su);border-radius:6px;margin-bottom:1rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem"><span class="lbl" style="font-size:0.85rem">8 matches need correction</span><span class="ms">Review</span></div>
+            <p style="font-size:0.78rem;color:var(--bd);margin-bottom:0.6rem">The Engine recommended these to clients but confidence is below 70%. Your feedback will improve accuracy.</p>
+            <button class="btn btn-s btn-sm">Review Matches →</button>
+          </div>
+
+          <div style="padding:1rem;border:1px solid var(--su);border-radius:6px;margin-bottom:1rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem"><span class="lbl" style="font-size:0.85rem">3 peer validations waiting</span><span class="ms">Validate</span></div>
+            <p style="font-size:0.78rem;color:var(--bd);margin-bottom:0.6rem">Other designers' classifications need a second opinion. Quick 2-minute review per product.</p>
+            <button class="btn btn-s btn-sm">Validate →</button>
+          </div>
+
+          <div style="padding:1rem;border:1px solid rgba(139,156,173,0.15);border-radius:6px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem"><span class="lbl" style="font-size:0.85rem">Style drift detected</span><span class="ms" style="color:var(--db)">Alert</span></div>
+            <p style="font-size:0.78rem;color:var(--bd)">The "Farmhouse" category is trending 12% warmer than last quarter. The Engine wants your opinion on whether to adapt or hold the current classification.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 2: ML CORRECTION ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">03 — Match Correction</p>
+  <h2>When the Engine gets it wrong, <em>teach it why.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">The Aesthete Engine recommends products to clients based on style matching. Sometimes it's wrong. This screen shows Leah a recommendation the system made, the client it was made for, and asks her assessment. Her correction improves fifty or more future matches — the highest-leverage teaching activity in the system.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="bc"><a>Aesthete Engine</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Match Corrections</div>
+      <div class="ph"><div><div class="h2" style="font-size:1.5rem;margin-bottom:0.15rem">Review Match</div><div class="ls">Correction 5 of 8 · Each correction improves 50+ future matches</div></div><div style="display:flex;gap:0.5rem"><button class="btn btn-g btn-sm">Skip</button><div class="ms" style="padding-top:0.3rem">5 of 8</div></div></div>
+
+      <div class="two" style="gap:2.5rem">
+        <!-- Left: The Recommendation -->
+        <div>
+          <div class="eng-panel" style="margin-bottom:1.5rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem"><span class="fl" style="margin-bottom:0">The Engine Recommended</span><span class="eng-badge">89% confidence</span></div>
+            <div class="img-ph" style="height:200px;margin-bottom:1rem"><span>Industrial Pipe Bookshelf — West Elm</span></div>
+            <div class="lbl" style="margin-bottom:0.1rem">Industrial Pipe Bookshelf</div>
+            <div class="ls">West Elm · $1,295 · Industrial Modern</div>
+            <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:0.75rem"><span class="tag">Industrial</span><span class="tag">Statement Piece</span><span class="tag">Metal + Wood</span></div>
+          </div>
+
+          <div class="fl" style="margin-bottom:0.5rem">Recommended For This Client</div>
+          <div class="dr"><div class="dr-k">Style Profile</div><div class="dr-v">Soft Modern · Natural Materials</div></div>
+          <div class="dr"><div class="dr-k">Preferences</div><div class="dr-v">Loves warmth, avoids cold/harsh edges</div></div>
+          <div class="dr"><div class="dr-k">Budget</div><div class="dr-v">$800 – $1,200</div></div>
+          <div class="dr"><div class="dr-k">Room</div><div class="dr-v">Living room · 14' × 18' · South-facing</div></div>
+          <div class="dr"><div class="dr-k">Engine Reasoning</div><div class="dr-v" style="font-style:italic;color:var(--ao)">"Wood and metal combination scored high for 'Modern' tag. Price within range. Similar products saved by profile."</div></div>
+        </div>
+
+        <!-- Right: Designer Assessment -->
+        <div>
+          <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Your Assessment</div>
+
+          <div class="rad" style="margin-bottom:1.5rem">
+            <div class="rad-i"><div class="rad-dot"></div><div><div class="rad-text">Perfect match</div><div class="rad-desc">The Engine got this right — I'd recommend this too</div></div></div>
+            <div class="rad-i"><div class="rad-dot on"></div><div><div class="rad-text">Close, but needs adjustment</div><div class="rad-desc">Right direction, wrong specific product or context</div></div></div>
+            <div class="rad-i"><div class="rad-dot"></div><div><div class="rad-text">Wrong match</div><div class="rad-desc">This product doesn't belong with this client profile</div></div></div>
+          </div>
+
+          <div class="ff full" style="margin-bottom:1.25rem"><label>What's the issue?</label><select><option>Style mismatch — too industrial for "Soft Modern"</option><option>Material conflict — client avoids cold metal</option><option>Price outside actual comfort zone</option><option>Scale wrong for the room</option><option>Other — explain below</option></select></div>
+
+          <div class="ff full" style="margin-bottom:1.25rem"><label>Teach the Engine (What should it learn?)</label><textarea rows="3" style="font-family:var(--fb)">"Industrial" and "Modern" are not interchangeable. This client's "Modern" is warm and organic — think rounded edges, natural wood tones, minimal metal. The pipe/industrial aesthetic reads as cold and masculine for this profile. The Engine is over-indexing on the "Modern" tag without distinguishing warm modern from industrial modern.</textarea></div>
+
+          <div class="ff full" style="margin-bottom:1.5rem"><label>What would you recommend instead?</label><input placeholder="Search the catalog for a better match…" value="Solid oak open bookshelf — Nordic Atelier"></div>
+
+          <div style="display:flex;gap:0.5rem"><button class="btn btn-cl">Submit Correction →</button><button class="btn btn-g">Skip This Match</button></div>
+
+          <div style="padding:0.85rem;background:rgba(196,165,123,0.04);border:1px solid rgba(196,165,123,0.12);border-radius:6px;margin-top:1.5rem"><p class="ms" style="color:var(--cl);margin-bottom:0.15rem">Impact Preview</p><p style="font-size:0.78rem;color:var(--bd)">This correction will adjust the "Modern" → "Industrial" disambiguation for 127 similar client profiles. Estimated impact: 54 improved future recommendations.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 3: VALIDATION ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">04 — Peer Validation</p>
+  <h2>A second pair of <em>trained eyes.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">When another designer classifies a product, the system asks Leah to validate — do you agree with this assessment? Quick two-minute reviews that build consensus. Disagreements trigger a resolution flow. Three validations per product create high-confidence intelligence.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="bc"><a>Aesthete Engine</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Validation Queue</div>
+      <div class="ph"><div><div class="h2" style="font-size:1.5rem;margin-bottom:0.15rem">Validate Classification</div><div class="ls">Product 1 of 3 · ~2 min per validation</div></div></div>
+
+      <div class="two" style="gap:2.5rem">
+        <div>
+          <div class="img-ph" style="height:240px;margin-bottom:1rem"><span>Ceramic Table Lamp — Local Potter</span></div>
+          <div class="lbl" style="margin-bottom:0.1rem">Handmade Ceramic Table Lamp</div>
+          <div class="ls" style="margin-bottom:0.75rem">Local Potter · Mineral Point, WI · $420 · ★ Maker Piece</div>
+          <div class="dr"><div class="dr-k">Material</div><div class="dr-v">Hand-thrown stoneware, linen shade</div></div>
+          <div class="dr"><div class="dr-k">Dimensions</div><div class="dr-v">14" diameter × 22" height</div></div>
+          <div class="dr"><div class="dr-k">Finish</div><div class="dr-v">Matte sage glaze with natural variations</div></div>
+        </div>
+
+        <div>
+          <div class="eng-panel" style="margin-bottom:1.5rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem"><span class="fl" style="margin-bottom:0">Another Designer Classified This As</span><span class="ms">Validated by 1 of 3 needed</span></div>
+
+            <div style="margin-bottom:1rem"><div class="fl">Primary Style</div><div class="lbl" style="font-size:0.88rem">Organic Modern</div></div>
+
+            <div class="fl" style="margin-bottom:0.4rem">Style Spectrum</div>
+            <div class="sp">
+              <div class="sp-r"><span class="sp-l">Cold</span><div class="sp-t"><div class="sp-d" style="left:75%"></div></div><span class="sp-l">Warm</span></div>
+              <div class="sp-r"><span class="sp-l">Minimal</span><div class="sp-t"><div class="sp-d" style="left:40%"></div></div><span class="sp-l">Ornate</span></div>
+              <div class="sp-r"><span class="sp-l">Mass</span><div class="sp-t"><div class="sp-d" style="left:92%"></div></div><span class="sp-l">Artisan</span></div>
+            </div>
+
+            <div style="margin-top:1rem"><div class="fl">Designer Note</div><p style="font-family:var(--fb);font-size:0.82rem;font-style:italic;color:var(--ao)">"Each lamp is unique due to hand-thrown process. The sage glaze reads as earthy, not cold green. Pairs beautifully with warm wood tones. Best as a bedside or reading nook light — too delicate for high-traffic tables."</p></div>
+          </div>
+
+          <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Do You Agree?</div>
+
+          <div class="rad" style="margin-bottom:1.5rem">
+            <div class="rad-i"><div class="rad-dot on"></div><div><div class="rad-text">Agree — classification is accurate</div></div></div>
+            <div class="rad-i"><div class="rad-dot"></div><div><div class="rad-text">Mostly agree — minor refinements needed</div></div></div>
+            <div class="rad-i"><div class="rad-dot"></div><div><div class="rad-text">Disagree — needs reclassification</div></div></div>
+          </div>
+
+          <div class="ff full" style="margin-bottom:1rem"><label>Add Your Own Note (Optional)</label><textarea rows="2" style="font-family:var(--fb)" placeholder="Anything to add? A nuance the first reviewer missed?"></textarea></div>
+
+          <div style="display:flex;gap:0.5rem"><button class="btn btn-sa btn-sm">Confirm & Next →</button><button class="btn btn-g btn-sm">Skip</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 4: PATTERN TEACHING ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">05 — Pattern Teaching</p>
+  <h2>Teach a rule, <em>not just a tag.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">Beyond classifying individual products, designers can teach The Aesthete Engine about patterns — relationships, misconceptions, and nuanced rules that transcend any single item. "Scandinavian doesn't mean cold." "Pet owners need performance fabric, not just stain resistance." These rules become permanent intelligence.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="bc"><a>Aesthete Engine</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Teach a Pattern</div>
+      <div class="h2" style="font-size:1.5rem;margin-bottom:0.25rem">Teach a Pattern</div>
+      <div class="ls" style="margin-bottom:2rem">Document a design rule, a common misconception, or a nuanced relationship that The Aesthete Engine should learn.</div>
+
+      <div class="fg" style="max-width:580px">
+        <div class="ff full"><label>Pattern Name</label><input value='Warm Wood ≠ "Rustic"' style="font-family:var(--fd);font-size:1rem;font-weight:500;padding:0.7rem"></div>
+
+        <div class="ff full"><label>Pattern Type</label><div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.3rem"><span class="tag on">Style Misconception</span><span class="tag">Compatibility Rule</span><span class="tag">Client Signal</span><span class="tag">Material Relationship</span><span class="tag">Room Context</span></div></div>
+
+        <div class="ff full"><label>The Problem (What is the Engine getting wrong?)</label><textarea rows="3" style="font-family:var(--fb)">The Engine currently associates warm wood tones (oak, walnut, cherry) with "Rustic" and "Farmhouse" styles. This causes it to recommend rustic accessories and décor to clients who love natural wood but prefer Modern or Scandinavian aesthetics. Warm wood is a material preference, not a style indicator.</textarea></div>
+
+        <div class="ff full"><label>The Rule (What should the Engine learn?)</label><textarea rows="3" style="font-family:var(--fb)">IF client saves products with warm wood tones AND client style profile includes "Modern", "Minimalist", or "Scandinavian" THEN do NOT increase "Rustic" or "Farmhouse" scores. Instead, maintain existing style classification and recommend warm wood pieces WITHIN their stated style preference.</textarea></div>
+
+        <div class="ff full"><label>Examples (Show specific products where this applies)</label><textarea rows="2" style="font-family:var(--fb)" placeholder="e.g. Nordic Atelier dining table — warm oak but clearly Modern, not Rustic">Nordic Atelier dining table (Modern), Sawkille dining chairs (Minimalist), Heritage Lumber coffee table (Organic Modern) — all warm wood, none Rustic.</textarea></div>
+
+        <div class="ff"><label>Confidence Level</label><select><option selected>High — I'm very sure about this</option><option>Medium — applies in most cases</option><option>Low — I think so, but want validation</option></select></div>
+        <div class="ff"><label>Scope</label><select><option selected>Broad — applies across many products</option><option>Narrow — specific to certain categories</option></select></div>
+      </div>
+
+      <div style="padding:1rem;background:rgba(196,165,123,0.04);border:1px solid rgba(196,165,123,0.12);border-radius:6px;margin-top:1.5rem;max-width:580px"><p class="ms" style="color:var(--cl);margin-bottom:0.15rem">Impact Estimate</p><p style="font-size:0.78rem;color:var(--bd)">This pattern would affect 234 products currently tagged with warm wood tones and improve recommendations for an estimated 1,400 client profiles with Modern/Scandinavian preferences.</p></div>
+
+      <div style="display:flex;gap:0.5rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--su)"><button class="btn btn-cl">Submit Pattern for Review</button><button class="btn btn-s">Save as Draft</button><button class="btn btn-g">Cancel</button></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 5: STYLE TAXONOMY ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">06 — Style Taxonomy</p>
+  <h2>The language <em>the Engine speaks.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">The style taxonomy is the classification tree that organizes every product and client preference in Patina. Designers can browse, understand, and propose refinements. Each style shows its product count, substyles, spectrum attributes, and active rules. This is the shared vocabulary between human and machine.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="bc"><a>Aesthete Engine</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Style Taxonomy</div>
+      <div class="ph"><div class="h2" style="font-size:1.5rem">Style Taxonomy</div><div><button class="btn btn-s btn-sm">Propose New Style</button></div></div>
+
+      <div class="two" style="gap:2.5rem">
+        <!-- Left: Taxonomy tree -->
+        <div>
+          <div class="fl" style="margin-bottom:0.75rem">Primary Styles</div>
+          <div class="tax-root" style="margin-bottom:0.25rem;padding:0.5rem 0;border-bottom:1px solid var(--su);cursor:default"><span class="tax-name" style="color:var(--cl)">▾ Modern</span><span class="tax-count">2,847 products</span></div>
+          <div class="tax-node"><span class="tax-name">Modern Minimalist</span><span class="tax-count">892</span></div>
+          <div class="tax-node"><span class="tax-name" style="font-weight:500;color:var(--tx)">Modern Organic</span><span class="tax-count">743</span></div>
+          <div class="tax-node"><span class="tax-name">Modern Industrial</span><span class="tax-count">456</span></div>
+          <div class="tax-node"><span class="tax-name">Modern Glam</span><span class="tax-count">398</span></div>
+          <div class="tax-node"><span class="tax-name">Modern Coastal</span><span class="tax-count">358</span></div>
+
+          <div class="tax-root" style="margin-top:1rem;margin-bottom:0.25rem;padding:0.5rem 0;border-bottom:1px solid var(--su)"><span class="tax-name">▸ Traditional</span><span class="tax-count">1,423 products</span></div>
+          <div class="tax-root" style="margin-bottom:0.25rem;padding:0.5rem 0;border-bottom:1px solid var(--su)"><span class="tax-name">▸ Transitional</span><span class="tax-count">1,108 products</span></div>
+          <div class="tax-root" style="margin-bottom:0.25rem;padding:0.5rem 0;border-bottom:1px solid var(--su)"><span class="tax-name">▸ Scandinavian</span><span class="tax-count">687 products</span></div>
+          <div class="tax-root" style="margin-bottom:0.25rem;padding:0.5rem 0;border-bottom:1px solid var(--su)"><span class="tax-name">▸ Rustic & Farmhouse</span><span class="tax-count">534 products</span></div>
+          <div class="tax-root" style="padding:0.5rem 0;border-bottom:1px solid var(--su)"><span class="tax-name">▸ Eclectic</span><span class="tax-count">412 products</span></div>
+        </div>
+
+        <!-- Right: Selected style detail -->
+        <div>
+          <div class="eng-panel">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem"><div class="h3" style="font-size:1.1rem">Modern Organic</div><span class="eng-badge">743 Products</span></div>
+
+            <div style="margin-bottom:1rem"><div class="fl">Definition</div><p style="font-family:var(--fb);font-size:0.82rem;color:var(--bd);line-height:1.55">Clean contemporary forms softened by natural materials, organic curves, and earth-inspired palettes. Where modern structure meets nature's imperfection. Think rounded edges on natural wood, textured ceramics, undyed linen.</p></div>
+
+            <div class="fl" style="margin-bottom:0.4rem">Spectrum Position</div>
+            <div class="sp">
+              <div class="sp-r"><span class="sp-l">Cold</span><div class="sp-t"><div class="sp-d" style="left:72%"></div></div><span class="sp-l">Warm</span></div>
+              <div class="sp-r"><span class="sp-l">Minimal</span><div class="sp-t"><div class="sp-d" style="left:38%"></div></div><span class="sp-l">Ornate</span></div>
+              <div class="sp-r"><span class="sp-l">Formal</span><div class="sp-t"><div class="sp-d" style="left:30%"></div></div><span class="sp-l">Casual</span></div>
+              <div class="sp-r"><span class="sp-l">Trendy</span><div class="sp-t"><div class="sp-d" style="left:65%"></div></div><span class="sp-l">Timeless</span></div>
+            </div>
+
+            <div style="margin-top:1rem"><div class="fl">Active Rules</div>
+              <div class="rule"><span class="rule-kw rule-if">IF</span> style = "Modern Organic" <span class="rule-kw rule-then">THEN</span> prioritize natural materials (wood, stone, linen, ceramic) <span class="rule-kw rule-conf">Confidence: 0.95</span></div>
+              <div class="rule"><span class="rule-kw rule-if">IF</span> style = "Modern Organic" <span class="rule-kw rule-then">THEN</span> exclude highly polished/lacquered finishes <span class="rule-kw rule-conf">Confidence: 0.88</span></div>
+              <div class="rule"><span class="rule-kw rule-if">IF</span> style = "Modern Organic" <strong>AND</strong> room has natural light <span class="rule-kw rule-then">THEN</span> boost earth-tone palette products <span class="rule-kw rule-conf">Confidence: 0.82</span></div>
+            </div>
+
+            <div style="margin-top:1rem"><div class="fl">Confidence</div>
+              <div class="conf"><span class="lbl" style="font-size:0.82rem;min-width:60px">Overall</span><div class="conf-bar"><div class="conf-fill hi" style="width:91%"></div></div><span class="conf-pct">91%</span></div>
+              <div class="conf" style="margin-top:0.35rem"><span class="lbl" style="font-size:0.82rem;min-width:60px">Matching</span><div class="conf-bar"><div class="conf-fill hi" style="width:88%"></div></div><span class="conf-pct">88%</span></div>
+              <div class="conf" style="margin-top:0.35rem"><span class="lbl" style="font-size:0.82rem;min-width:60px">Consensus</span><div class="conf-bar"><div class="conf-fill hi" style="width:94%"></div></div><span class="conf-pct">94%</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 6: STYLE DRIFT ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">07 — Style Drift Alert</p>
+  <h2>The Engine noticed <em>something shifting.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">Style isn't static. Trends evolve. Client preferences drift. When The Aesthete Engine detects a meaningful shift in how a style category is being used or classified, it surfaces an alert asking the designer: is this a real trend we should adapt to, or noise we should resist? The designer's answer calibrates the system's sensitivity.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <div class="sd">
+      <div class="bc"><a>Aesthete Engine</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Style Drift Alert</div>
+
+      <div style="padding:1.25rem;background:rgba(139,156,173,0.04);border:1px solid rgba(139,156,173,0.15);border-radius:8px;margin-bottom:2rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem"><div class="h3" style="font-size:1.1rem">Drift Detected: "Farmhouse"</div><span class="ms" style="color:var(--db)">Detected Mar 22</span></div>
+        <p class="bd" style="font-size:0.88rem;margin-bottom:1rem">Over the past 90 days, products classified as "Farmhouse" by both designers and clients have shifted 12% warmer on the warmth spectrum and 8% more refined on the complexity spectrum. This may indicate the style is evolving from rustic farmhouse toward a more curated, modern interpretation.</p>
+
+        <div class="two" style="gap:2rem">
+          <div>
+            <div class="fl">90 Days Ago</div>
+            <div class="sp" style="margin-top:0.3rem">
+              <div class="sp-r"><span class="sp-l">Cold</span><div class="sp-t"><div class="sp-d" style="left:58%"></div></div><span class="sp-l">Warm</span></div>
+              <div class="sp-r"><span class="sp-l">Minimal</span><div class="sp-t"><div class="sp-d" style="left:62%"></div></div><span class="sp-l">Ornate</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="fl">Today</div>
+            <div class="sp" style="margin-top:0.3rem">
+              <div class="sp-r"><span class="sp-l">Cold</span><div class="sp-t"><div class="sp-d" style="left:70%"></div></div><span class="sp-l">Warm</span></div>
+              <div class="sp-r"><span class="sp-l">Minimal</span><div class="sp-t"><div class="sp-d" style="left:54%"></div></div><span class="sp-l">Ornate</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="h3" style="margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">What should The Aesthete Engine do?</div>
+
+      <div class="rad" style="margin-bottom:1.5rem">
+        <div class="rad-i"><div class="rad-dot on"></div><div><div class="rad-text">Adapt — this is a real trend</div><div class="rad-desc">The "Modern Farmhouse" movement is real and growing. Update the Farmhouse spectrum to reflect warmer, more refined interpretations. Consider adding a "Modern Farmhouse" substyle.</div></div></div>
+        <div class="rad-i"><div class="rad-dot"></div><div><div class="rad-text">Hold — this is noise</div><div class="rad-desc">Seasonal fluctuation or sampling bias. Keep the current Farmhouse classification. The core definition shouldn't shift with short-term trends.</div></div></div>
+        <div class="rad-i"><div class="rad-dot"></div><div><div class="rad-text">Split — create a substyle</div><div class="rad-desc">The original "Rustic Farmhouse" and the evolving "Modern Farmhouse" are becoming distinct enough to warrant separate classifications.</div></div></div>
+      </div>
+
+      <div class="ff full" style="margin-bottom:1.5rem;max-width:560px"><label>Your Reasoning</label><textarea rows="3" style="font-family:var(--fb)" placeholder="Why do you think this is a real trend (or not)?">The "Modern Farmhouse" aesthetic has been steadily growing for years — shiplap + clean lines, white oak + minimal hardware. I'd recommend splitting into "Rustic Farmhouse" (traditional) and "Modern Farmhouse" (evolved). They attract fundamentally different client profiles.</textarea></div>
+
+      <div style="display:flex;gap:0.5rem"><button class="btn btn-cl">Submit Recommendation</button><button class="btn btn-g">Defer — Need More Data</button></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== PULL QUOTE ============================== -->
+<section>
+<div class="nr">
+  <div class="pq"><blockquote>"You're not just tagging products. You're teaching The Aesthete Engine to see through a designer's eyes — to become a true aesthete. Every correction, every pattern, every nuance you capture becomes permanent intelligence."</blockquote><cite>The Aesthete Engine Teaching Guide</cite></div>
+</div>
+</section>
+
+<!-- ============================== CLOSING ============================== -->
+<section class="fade">
+<div class="w">
+  <div class="st"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <h2 style="margin-top:2rem;margin-bottom:1.5rem">What makes this <em>different.</em></h2>
+  <div class="two" style="gap:2rem">
+    <div>
+      <p class="bd" style="margin-bottom:1.5rem"><strong>Teaching is the work, not extra work.</strong> The Aesthete Engine interfaces embed within the designer's existing workflow. Correcting a match takes two minutes. Validating a classification takes two minutes. Teaching a pattern takes five. None of these require leaving the portal or switching mental modes.</p>
+      <p class="bd"><strong>Impact is immediate and visible.</strong> Every correction shows "this will improve 54 future recommendations." Every teaching session ends with "you improved 847 matches today." The designer sees her expertise compounding in real time — not disappearing into a black box.</p>
+    </div>
+    <div>
+      <p class="bd" style="margin-bottom:1.5rem"><strong>The Engine explains itself.</strong> When showing a match for correction, the system includes its reasoning: "Wood and metal combination scored high for 'Modern' tag." When detecting style drift, it shows the before/after spectrums. Transparency builds trust and makes corrections more precise.</p>
+      <p class="bd"><strong>The taxonomy is shared vocabulary.</strong> The style taxonomy browser lets designers see exactly how The Aesthete Engine categorizes the world — definitions, spectrum positions, active rules, confidence levels. When a designer and the system disagree, they can identify precisely where the misunderstanding lives.</p>
+    </div>
+  </div>
+
+  <div class="sm" style="margin-top:3rem"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2rem;flex-wrap:wrap;gap:1rem">
+    <div><div style="font-family:var(--fd);font-weight:400;font-size:1.05rem">Patina</div><div style="font-family:var(--fd);font-style:italic;font-size:0.82rem;color:var(--ao)">Where Time Adds Value</div></div>
+    <div class="ms">The Aesthete Engine Design v1.0 · March 2026 · 10 Screens · Kody & Leah</div>
+  </div>
+</div>
+</section>
+
+<script>
+const f=document.querySelectorAll('.fade');
+const o=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('vis')})},{threshold:0.08,rootMargin:'0px 0px -40px 0px'});
+f.forEach(s=>o.observe(s));
+</script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useMemo } from 'react';
-import { Heart, Plus, Eye, Edit2, Trash2, Search as SearchIcon } from 'lucide-react';
+import { Heart, Plus, Eye, Edit2, Trash2, Search as SearchIcon, ExternalLink } from 'lucide-react';
 import { Badge, Button, Card, CardContent, Skeleton } from '@patina/design-system';
 
 import { ImageZoom, MediaBadges } from '@/components/media';
@@ -195,6 +195,24 @@ export function CatalogResults({
                             Delete
                           </Button>
                         )}
+                        {product.sourceUrl && (
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8"
+                            asChild
+                          >
+                            <a
+                              href={product.sourceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(event) => event.stopPropagation()}
+                              aria-label="View original product page"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"
@@ -266,6 +284,23 @@ export function CatalogResults({
                           >
                             <Trash2 className="mr-1 h-3 w-3" />
                             Delete
+                          </Button>
+                        )}
+                        {product.sourceUrl && (
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            asChild
+                          >
+                            <a
+                              href={product.sourceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(event) => event.stopPropagation()}
+                              aria-label="View original product page"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
                           </Button>
                         )}
                         <Button size="icon" variant="outline">

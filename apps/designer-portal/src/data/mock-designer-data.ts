@@ -49,17 +49,26 @@ type MockClient = {
   scans: MockScan[];
 };
 
+type MockProjectPhase = 'consultation' | 'concept_development' | 'design_refinement' | 'procurement' | 'installation' | 'final_walkthrough';
+
 type MockProject = {
   id: string;
   clientId: string;
   name: string;
-  status: 'planning' | 'active' | 'on-hold' | 'completed';
+  status: 'planning' | 'active' | 'on-hold' | 'completed' | 'proposal_sent';
   budget: number;
   startDate: string;
   endDate?: string;
   progress: number;
   description: string;
   tasks: { total: number; completed: number };
+  // Opus additions
+  current_phase: MockProjectPhase;
+  client_name: string;
+  client_location: string;
+  design_fee: number;
+  project_type: string;
+  rooms: string;
 };
 
 type MockOrder = {
@@ -479,40 +488,129 @@ designerMockState.clients = [
 
 designerMockState.projects = [
   {
-    id: 'project-sarah-living',
+    id: 'project-chen-residence',
     clientId: 'client-sarah',
-    name: 'Montclair Living Refresh',
+    name: 'Chen Residence — Living & Dining',
     status: 'active',
-    budget: 380000000,
-    startDate: '2024-02-05T09:00:00Z',
-    endDate: '2024-05-18T09:00:00Z',
-    progress: 68,
-    description: 'Living + dining overhaul with custom millwork, sculpted seating, and layered lighting.',
-    tasks: { total: 18, completed: 12 },
+    budget: 2450000,
+    startDate: '2026-01-08T09:00:00Z',
+    endDate: '2026-04-20T09:00:00Z',
+    progress: 72,
+    description: 'Complete living and dining room redesign. Mid-century with warm wood tones.',
+    tasks: { total: 7, completed: 4 },
+    current_phase: 'procurement',
+    client_name: 'James & Lin Chen',
+    client_location: 'Wauwatosa, WI',
+    design_fee: 300000,
+    project_type: 'Full Room Design',
+    rooms: 'Living room, Dining room',
   },
   {
-    id: 'project-helix-lab',
+    id: 'project-lakefront-condo',
     clientId: 'client-helix',
-    name: 'Helix Bio Innovation Hub',
+    name: 'Lakefront Condo — Unit 4B',
     status: 'active',
-    budget: 1120000000,
-    startDate: '2023-12-01T09:00:00Z',
-    endDate: '2024-07-30T09:00:00Z',
-    progress: 54,
-    description: 'Lab lobby, touchdown lounges, and acoustic envelope upgrades with performance lighting.',
-    tasks: { total: 26, completed: 14 },
+    budget: 1800000,
+    startDate: '2026-02-14T09:00:00Z',
+    endDate: '2026-06-15T09:00:00Z',
+    progress: 35,
+    description: 'Open-plan living space with lake views. Coastal modern palette with warm neutrals.',
+    tasks: { total: 12, completed: 4 },
+    current_phase: 'concept_development',
+    client_name: 'Andrea Novak',
+    client_location: 'Milwaukee, WI',
+    design_fee: 250000,
+    project_type: 'Full Room Design',
+    rooms: 'Living room, Kitchen',
   },
   {
-    id: 'project-emily-boutique',
+    id: 'project-prairie-home',
     clientId: 'client-emily',
-    name: 'Nova Boutique Concept',
-    status: 'planning',
-    budget: 620000000,
-    startDate: '2024-03-15T09:00:00Z',
-    endDate: '2024-08-12T09:00:00Z',
-    progress: 28,
-    description: 'Hospitality concept kit-of-parts with dusk-inspired palette and transformable fixtures.',
-    tasks: { total: 22, completed: 6 },
+    name: 'Prairie Home — Full Redesign',
+    status: 'active',
+    budget: 6200000,
+    startDate: '2025-11-02T09:00:00Z',
+    endDate: '2026-04-01T09:00:00Z',
+    progress: 92,
+    description: 'Complete home redesign. Prairie modern style with natural materials and warm tones.',
+    tasks: { total: 28, completed: 26 },
+    current_phase: 'final_walkthrough',
+    client_name: 'Mark & Sarah Olsen',
+    client_location: 'Prairie du Sac, WI',
+    design_fee: 500000,
+    project_type: 'Full Room Design',
+    rooms: 'Living, Dining, Kitchen, Master Bedroom',
+  },
+  {
+    id: 'project-morrison-suite',
+    clientId: 'client-sarah',
+    name: 'Morrison Master Suite',
+    status: 'active',
+    budget: 1500000,
+    startDate: '2026-03-10T09:00:00Z',
+    endDate: '2026-07-10T09:00:00Z',
+    progress: 12,
+    description: 'Master suite transformation with walk-in closet and spa-inspired bath.',
+    tasks: { total: 6, completed: 1 },
+    current_phase: 'consultation',
+    client_name: 'David Morrison',
+    client_location: 'Brookfield, WI',
+    design_fee: 200000,
+    project_type: 'Full Room Design',
+    rooms: 'Master bedroom, Bathroom',
+  },
+  {
+    id: 'project-whitfield-living',
+    clientId: 'client-helix',
+    name: 'Whitfield Living Room',
+    status: 'active',
+    budget: 2250000,
+    startDate: '2026-02-01T09:00:00Z',
+    endDate: '2026-05-15T09:00:00Z',
+    progress: 55,
+    description: 'Complete living room transformation. 1960s ranch, kid-friendly fabrics.',
+    tasks: { total: 14, completed: 8 },
+    current_phase: 'design_refinement',
+    client_name: 'Sarah & James Whitfield',
+    client_location: 'Wauwatosa, WI',
+    design_fee: 250000,
+    project_type: 'Full Room Design',
+    rooms: 'Living room',
+  },
+  {
+    id: 'project-novak-kitchen',
+    clientId: 'client-emily',
+    name: 'Novak Kitchen Refresh',
+    status: 'proposal_sent',
+    budget: 3500000,
+    startDate: '2026-03-20T09:00:00Z',
+    progress: 0,
+    description: 'Kitchen and breakfast nook refresh with new cabinetry and appliances.',
+    tasks: { total: 0, completed: 0 },
+    current_phase: 'consultation',
+    client_name: 'Andrea Novak',
+    client_location: 'Milwaukee, WI',
+    design_fee: 350000,
+    project_type: 'Room Refresh',
+    rooms: 'Kitchen',
+  },
+  {
+    id: 'project-completed-maple',
+    clientId: 'client-sarah',
+    name: 'Maple Street Townhouse',
+    status: 'completed',
+    budget: 4200000,
+    startDate: '2025-06-01T09:00:00Z',
+    endDate: '2025-11-15T09:00:00Z',
+    progress: 100,
+    description: 'Full townhouse transformation with modern farmhouse aesthetic.',
+    tasks: { total: 32, completed: 32 },
+    current_phase: 'final_walkthrough',
+    client_name: 'Rebecca Tan',
+    client_location: 'Madison, WI',
+    design_fee: 400000,
+    project_type: 'Full Room Design',
+    rooms: 'Living, Dining, Kitchen',
   },
 ];
 
@@ -1735,6 +1833,391 @@ function getProjectById(id: string) {
   return project ? clone(project) : null;
 }
 
+// ── Opus: Task data per project ──
+
+// ── Opus v2: Room scope per project ──
+
+const mockProjectRooms: Record<string, Array<{
+  id: string; projectId: string; name: string; dimensions: string; notes: string;
+  budget: number; itemCount: number; orderedCount: number; progress: number;
+  itemNames: string[];
+}>> = {
+  'project-chen-residence': [
+    {
+      id: 'room-chen-living', projectId: 'project-chen-residence',
+      name: 'Living Room', dimensions: "18' × 22'", notes: 'South-facing · Primary space',
+      budget: 1673000, itemCount: 12, orderedCount: 7, progress: 58,
+      itemNames: ['Sectional', 'Area Rug', 'Pendants ×3', 'Coffee Table', 'Side Tables ×2', 'Floor Lamp', 'Throw Pillows ×4', 'Throw Blanket', 'Wall Art ×2', 'Paint'],
+    },
+    {
+      id: 'room-chen-dining', projectId: 'project-chen-residence',
+      name: 'Dining Room', dimensions: "14' × 16'", notes: 'Open to living · Added Feb 3',
+      budget: 777000, itemCount: 10, orderedCount: 7, progress: 70,
+      itemNames: ['Dining Table', 'Chairs ×6', 'Sideboard', 'Table Runner', 'Candleholders ×2', 'Pendant Light', 'Vase', 'Napkins ×8', 'Placemats ×8', 'Wall Paint'],
+    },
+  ],
+  'project-prairie-home': [
+    {
+      id: 'room-prairie-great', projectId: 'project-prairie-home',
+      name: 'Great Room', dimensions: "24' × 30'", notes: 'Open plan living/dining · Cathedral ceiling',
+      budget: 3200000, itemCount: 18, orderedCount: 18, progress: 100,
+      itemNames: ['Sectional', 'Dining Set', 'Lighting', 'Rugs', 'Art'],
+    },
+    {
+      id: 'room-prairie-primary', projectId: 'project-prairie-home',
+      name: 'Primary Suite', dimensions: "16' × 20'", notes: 'Walk-in closet + ensuite',
+      budget: 2800000, itemCount: 14, orderedCount: 14, progress: 100,
+      itemNames: ['Bed Frame', 'Nightstands', 'Dresser', 'Lighting', 'Textiles'],
+    },
+  ],
+};
+
+function getProjectRooms(projectId: string) {
+  return clone(mockProjectRooms[projectId] || []);
+}
+
+// ── Opus v2: FF&E schedule per project ──
+
+type MockFFEStatus = 'specified' | 'quoted' | 'approved' | 'ordered' | 'production' | 'shipped' | 'delivered' | 'installed';
+
+const mockFFEItems: Record<string, Array<{
+  id: string; projectId: string; roomId: string; roomName: string;
+  name: string; vendor: string; poNumber?: string; qty: number | string;
+  unitPrice: number; status: MockFFEStatus; eta?: string;
+  blocked?: boolean; blockedReason?: string;
+}>> = {
+  'project-chen-residence': [
+    // Living Room
+    { id: 'ffe-1', projectId: 'project-chen-residence', roomId: 'room-chen-living', roomName: 'Living Room', name: 'Meadow Linen Sectional', vendor: 'Woodward & Sons', poNumber: 'PO #WS-188', qty: 1, unitPrice: 680000, status: 'shipped', eta: 'Apr 8' },
+    { id: 'ffe-2', projectId: 'project-chen-residence', roomId: 'room-chen-living', roomName: 'Living Room', name: 'Brass Arc Pendants', vendor: 'Schoolhouse', poNumber: 'PO #SH-224', qty: 3, unitPrice: 89000, status: 'ordered', eta: 'Apr 12' },
+    { id: 'ffe-3', projectId: 'project-chen-residence', roomId: 'room-chen-living', roomName: 'Living Room', name: 'Woven Jute Area Rug 8×10', vendor: 'Studio Piet · Copenhagen', qty: 1, unitPrice: 145000, status: 'specified', blocked: true, blockedReason: 'Blocked by rug color decision · Overdue 4 days' },
+    { id: 'ffe-4', projectId: 'project-chen-residence', roomId: 'room-chen-living', roomName: 'Living Room', name: 'Coffee Table', vendor: '3 options being evaluated', qty: 1, unitPrice: 120000, status: 'quoted' },
+    { id: 'ffe-5', projectId: 'project-chen-residence', roomId: 'room-chen-living', roomName: 'Living Room', name: 'Linen Throw Pillows', vendor: 'Coyuchi · San Francisco', qty: 4, unitPrice: 9500, status: 'approved', eta: 'Apr 5' },
+    { id: 'ffe-6', projectId: 'project-chen-residence', roomId: 'room-chen-living', roomName: 'Living Room', name: 'Wall Paint — "Simply White" OC-117', vendor: 'Benjamin Moore', qty: '3 gal', unitPrice: 9300, status: 'specified' },
+    // Dining Room
+    { id: 'ffe-7', projectId: 'project-chen-residence', roomId: 'room-chen-dining', roomName: 'Dining Room', name: 'Heirloom Oak Dining Table', vendor: 'Nordic Atelier', poNumber: 'PO #NA-041', qty: 1, unitPrice: 420000, status: 'shipped', eta: 'Apr 2' },
+    { id: 'ffe-8', projectId: 'project-chen-residence', roomId: 'room-chen-dining', roomName: 'Dining Room', name: 'Shaker Dining Chairs', vendor: 'Sawkille Co', poNumber: 'PO #SK-087', qty: 6, unitPrice: 40000, status: 'production', eta: 'Apr 15' },
+    { id: 'ffe-9', projectId: 'project-chen-residence', roomId: 'room-chen-dining', roomName: 'Dining Room', name: 'Dining Pendant Light', vendor: 'Sourcing in progress', qty: 1, unitPrice: 65000, status: 'specified' },
+  ],
+};
+
+function getProjectFFEItems(projectId: string) {
+  return clone(mockFFEItems[projectId] || []);
+}
+
+// ── Opus v2: Expanded financials (4-column) ──
+
+const mockProjectFinancials: Record<string, Array<{
+  id: string; category: string; label: string;
+  budget: number; committed: number; actual: number; variance: number;
+}>> = {
+  'project-chen-residence': [
+    { id: 'fin-1', category: 'fee', label: 'Design Fee', budget: 250000, committed: 250000, actual: 250000, variance: 0 },
+    { id: 'fin-2', category: 'ffe', label: 'Living Room FF&E', budget: 1423000, committed: 1134000, actual: 947000, variance: -476000 },
+    { id: 'fin-3', category: 'ffe', label: 'Dining Room FF&E', budget: 527000, committed: 660000, actual: 660000, variance: 133000 },
+    { id: 'fin-4', category: 'logistics', label: 'Delivery & Shipping', budget: 80000, committed: 54000, actual: 34000, variance: -46000 },
+    { id: 'fin-5', category: 'labor', label: 'Installation Labor', budget: 103000, committed: 0, actual: 0, variance: 0 },
+    { id: 'fin-6', category: 'contingency', label: 'Contingency (3%)', budget: 67000, committed: 0, actual: 0, variance: 0 },
+  ],
+};
+
+function getProjectFinancials(projectId: string) {
+  return clone(mockProjectFinancials[projectId] || []);
+}
+
+// ── Opus v2: Time tracking per project ──
+
+const mockTimeTracking: Record<string, {
+  entries: Array<{ phase: MockProjectPhase; hoursSpent: number; hoursEstimated: number }>;
+  totalSpent: number; totalEstimated: number; effectiveRate: number;
+}> = {
+  'project-chen-residence': {
+    entries: [
+      { phase: 'consultation', hoursSpent: 6.5, hoursEstimated: 6.5 },
+      { phase: 'concept_development', hoursSpent: 12, hoursEstimated: 12 },
+      { phase: 'design_refinement', hoursSpent: 18, hoursEstimated: 18 },
+      { phase: 'procurement', hoursSpent: 11, hoursEstimated: 20 },
+    ],
+    totalSpent: 47.5,
+    totalEstimated: 60,
+    effectiveRate: 5263,
+  },
+};
+
+function getProjectTimeTracking(projectId: string) {
+  return clone(mockTimeTracking[projectId] || null);
+}
+
+// ── Opus v2: Key metrics aggregate ──
+
+function getProjectKeyMetrics(projectId: string) {
+  const project = designerMockState.projects.find((p) => p.id === projectId);
+  if (!project) return null;
+
+  const rooms = mockProjectRooms[projectId] || [];
+  const ffeItems = mockFFEItems[projectId] || [];
+  const financials = mockProjectFinancials[projectId] || [];
+  const timeTracking = mockTimeTracking[projectId];
+  const milestones = mockProjectMilestones[projectId] || [];
+
+  const budgetTotal = financials.reduce((sum, f) => sum + f.budget, 0);
+  const committed = financials.reduce((sum, f) => sum + f.committed, 0);
+  const actual = financials.reduce((sum, f) => sum + f.actual, 0);
+  const paidMilestones = milestones.filter((m) => m.status === 'paid').reduce((sum, m) => sum + m.amount, 0);
+  const outstandingMilestones = milestones.filter((m) => m.status === 'outstanding').reduce((sum, m) => sum + m.amount, 0);
+
+  const ffeOrdered = ffeItems.filter((i) =>
+    ['ordered', 'production', 'shipped', 'delivered', 'installed'].includes(i.status)
+  ).length;
+
+  // Calculate week number from start date
+  const startMs = new Date(project.startDate).getTime();
+  const nowMs = Date.now();
+  const weekNumber = Math.ceil((nowMs - startMs) / (7 * 24 * 60 * 60 * 1000));
+  const endMs = project.endDate ? new Date(project.endDate).getTime() : startMs + 19 * 7 * 24 * 60 * 60 * 1000;
+  const totalWeeks = Math.ceil((endMs - startMs) / (7 * 24 * 60 * 60 * 1000));
+
+  return {
+    progress: project.progress,
+    weekNumber,
+    totalWeeks,
+    budgetTotal,
+    budgetStatus: actual <= budgetTotal ? 'On target' : 'Over budget',
+    committed,
+    committedPct: budgetTotal > 0 ? Math.round((committed / budgetTotal) * 100) : 0,
+    invoiced: paidMilestones + outstandingMilestones,
+    outstanding: outstandingMilestones,
+    ffeTotal: ffeItems.length,
+    ffeOrdered,
+    decisionsOpen: 2,
+    decisionsOverdue: 1,
+    hoursSpent: timeTracking?.totalSpent ?? 0,
+    hoursEstimated: timeTracking?.totalEstimated ?? 0,
+  };
+}
+
+// ── Opus v2: Expanded tasks with indicators ──
+
+const mockProjectTasks: Record<string, Array<{
+  id: string; projectId: string; phase: string; title: string; description: string;
+  status: 'todo' | 'done' | 'blocked'; dueDate?: string; completedAt?: string;
+  indicators?: ('decision' | 'blocked' | 'deliverable' | 'gate')[]; indicatorText?: string;
+}>> = {
+  'project-chen-residence': [
+    // Phase 1: Consultation (done)
+    { id: 'task-chen-c1', projectId: 'project-chen-residence', phase: 'consultation', title: 'Initial site visit, room measurements, photo documentation', description: '', status: 'done', dueDate: '2026-01-08', completedAt: '2026-01-08' },
+    { id: 'task-chen-c2', projectId: 'project-chen-residence', phase: 'consultation', title: 'Client intake questionnaire (30 topics) completed', description: '', status: 'done', dueDate: '2026-01-10', completedAt: '2026-01-10' },
+    { id: 'task-chen-c3', projectId: 'project-chen-residence', phase: 'consultation', title: 'AR room scan captured — Living room + Dining room', description: '', status: 'done', dueDate: '2026-01-08', completedAt: '2026-01-08' },
+    { id: 'task-chen-c4', projectId: 'project-chen-residence', phase: 'consultation', title: 'Project scope of work defined', description: '', status: 'done', dueDate: '2026-01-11', completedAt: '2026-01-11' },
+    { id: 'task-chen-c5', projectId: 'project-chen-residence', phase: 'consultation', title: 'Service agreement signed · Design fee: $2,500', description: '', status: 'done', dueDate: '2026-01-12', completedAt: '2026-01-12' },
+    { id: 'task-chen-c6', projectId: 'project-chen-residence', phase: 'consultation', title: 'Deposit invoice collected — $7,350 (30%)', description: '', status: 'done', dueDate: '2026-01-12', completedAt: '2026-01-12', indicators: ['deliverable'], indicatorText: 'Deliverable: Project brief + signed agreement' },
+    // Phase 2: Schematic Design (done)
+    { id: 'task-chen-s1', projectId: 'project-chen-residence', phase: 'concept_development', title: 'Mood boards created — 3 style directions presented', description: '', status: 'done', dueDate: '2026-01-18', completedAt: '2026-01-18' },
+    { id: 'task-chen-s2', projectId: 'project-chen-residence', phase: 'concept_development', title: 'Color palette development — warm neutrals with sage accents', description: '', status: 'done', dueDate: '2026-01-20', completedAt: '2026-01-20' },
+    { id: 'task-chen-s3', projectId: 'project-chen-residence', phase: 'concept_development', title: 'Test fit floor plans — 2 layout options for living room', description: '', status: 'done', dueDate: '2026-01-22', completedAt: '2026-01-22' },
+    { id: 'task-chen-s4', projectId: 'project-chen-residence', phase: 'concept_development', title: 'Concept direction approval — client selected Option B', description: '', status: 'done', dueDate: '2026-01-28', completedAt: '2026-01-28', indicators: ['decision'], indicatorText: 'Decision resolved Jan 28' },
+    { id: 'task-chen-s5', projectId: 'project-chen-residence', phase: 'concept_development', title: 'Client requested dining room addition to scope', description: '', status: 'done', dueDate: '2026-02-03', completedAt: '2026-02-03', indicators: ['deliverable'], indicatorText: 'Scope change: +$4,500 budget · Approved Feb 3' },
+    // Phase 3: Design Development (done)
+    { id: 'task-chen-d1', projectId: 'project-chen-residence', phase: 'design_refinement', title: 'Detailed floor plan — final furniture dimensions and placement', description: '', status: 'done', dueDate: '2026-02-10', completedAt: '2026-02-10' },
+    { id: 'task-chen-d2', projectId: 'project-chen-residence', phase: 'design_refinement', title: 'Material palette finalized — oak, linen, jute, brass', description: '', status: 'done', dueDate: '2026-02-15', completedAt: '2026-02-15' },
+    { id: 'task-chen-d3', projectId: 'project-chen-residence', phase: 'design_refinement', title: 'FF&E specification schedule built — 22 line items across 2 rooms', description: '', status: 'done', dueDate: '2026-02-20', completedAt: '2026-02-20' },
+    { id: 'task-chen-d4', projectId: 'project-chen-residence', phase: 'design_refinement', title: 'Revised proposal sent with full FF&E schedule — $24,500', description: '', status: 'done', dueDate: '2026-02-05', completedAt: '2026-02-05' },
+    { id: 'task-chen-d5', projectId: 'project-chen-residence', phase: 'design_refinement', title: 'Proposal signed by client · Contract value: $24,500', description: '', status: 'done', dueDate: '2026-02-08', completedAt: '2026-02-08', indicators: ['gate'], indicatorText: 'Phase gate: Signed proposal required before procurement' },
+    // Phase 4: Procurement (active)
+    { id: 'task-chen-p1', projectId: 'project-chen-residence', phase: 'procurement', title: 'Procurement invoice sent — $9,800 (40% milestone)', description: '', status: 'done', dueDate: '2026-03-10', completedAt: '2026-03-10' },
+    { id: 'task-chen-p2', projectId: 'project-chen-residence', phase: 'procurement', title: 'PO #NA-041 · Dining table — Nordic Atelier · $4,200', description: '', status: 'done', dueDate: '2026-03-12', completedAt: '2026-03-12' },
+    { id: 'task-chen-p3', projectId: 'project-chen-residence', phase: 'procurement', title: 'PO #WS-188 · Meadow sectional — Woodward & Sons · $6,800', description: '', status: 'done', dueDate: '2026-03-14', completedAt: '2026-03-14' },
+    { id: 'task-chen-p4', projectId: 'project-chen-residence', phase: 'procurement', title: 'Dining chair decision resolved — Shaker Chair, Sawkille', description: '', status: 'done', dueDate: '2026-03-26', completedAt: '2026-03-26', indicators: ['decision'], indicatorText: 'Selected by James Chen · Mar 26 · $400 × 6' },
+    { id: 'task-chen-p5', projectId: 'project-chen-residence', phase: 'procurement', title: 'PO #SK-087 · Shaker chairs ×6 — Sawkille Co · $2,400', description: '', status: 'done', dueDate: '2026-03-26', completedAt: '2026-03-26' },
+    { id: 'task-chen-p6', projectId: 'project-chen-residence', phase: 'procurement', title: 'PO pending · Jute area rug — Studio Piet · $1,450', description: '', status: 'blocked', indicators: ['blocked'], indicatorText: 'Blocked by rug color decision · Overdue 4 days' },
+    { id: 'task-chen-p7', projectId: 'project-chen-residence', phase: 'procurement', title: 'Wall paint selection — Simply White vs Chantilly Lace', description: '', status: 'todo', dueDate: '2026-04-01', indicators: ['decision'], indicatorText: 'Pending client decision · Due Apr 1' },
+    { id: 'task-chen-p8', projectId: 'project-chen-residence', phase: 'procurement', title: 'Order accent pillows ×4 & throw — pending rug color coordination', description: '', status: 'todo', dueDate: '2026-04-05' },
+    { id: 'task-chen-p9', projectId: 'project-chen-residence', phase: 'procurement', title: 'Source coffee table — 3 options being evaluated', description: '', status: 'todo', dueDate: '2026-04-03' },
+    { id: 'task-chen-p10', projectId: 'project-chen-residence', phase: 'procurement', title: 'Confirm all delivery dates align for install week', description: '', status: 'todo', dueDate: '2026-04-15', indicators: ['gate'], indicatorText: 'Phase gate: All items delivered before installation begins' },
+    // Phase 5: Installation (future)
+    { id: 'task-chen-i1', projectId: 'project-chen-residence', phase: 'installation', title: 'Receive & inspect all deliveries against spec sheets', description: '', status: 'todo', dueDate: '2026-04-22' },
+    { id: 'task-chen-i2', projectId: 'project-chen-residence', phase: 'installation', title: 'Furniture placement per approved floor plan', description: '', status: 'todo', dueDate: '2026-04-24' },
+    { id: 'task-chen-i3', projectId: 'project-chen-residence', phase: 'installation', title: 'Lighting installation — electrician for pendant hardwiring', description: '', status: 'todo', dueDate: '2026-04-25' },
+    { id: 'task-chen-i4', projectId: 'project-chen-residence', phase: 'installation', title: 'Art hanging — client present for placement approval', description: '', status: 'todo', dueDate: '2026-04-29' },
+    // Phase 6: Completion (future)
+    { id: 'task-chen-w1', projectId: 'project-chen-residence', phase: 'final_walkthrough', title: 'Final walkthrough with James & Lin', description: '', status: 'todo', dueDate: '2026-05-01' },
+    { id: 'task-chen-w2', projectId: 'project-chen-residence', phase: 'final_walkthrough', title: 'Punch list creation — note any defects or adjustments', description: '', status: 'todo', dueDate: '2026-05-01' },
+    { id: 'task-chen-w3', projectId: 'project-chen-residence', phase: 'final_walkthrough', title: 'Client sign-off — project acceptance document', description: '', status: 'todo', dueDate: '2026-05-03' },
+    { id: 'task-chen-w4', projectId: 'project-chen-residence', phase: 'final_walkthrough', title: 'Documentation handover — warranties, care guides, vendor contacts', description: '', status: 'todo', dueDate: '2026-05-05', indicators: ['deliverable'], indicatorText: 'Deliverable: Close-out package' },
+    { id: 'task-chen-w5', projectId: 'project-chen-residence', phase: 'final_walkthrough', title: 'Final invoice — $7,350 (30% completion payment)', description: '', status: 'todo', dueDate: '2026-05-05' },
+  ],
+  'project-prairie-home': [
+    { id: 'task-prairie-1', projectId: 'project-prairie-home', phase: 'final_walkthrough', title: 'Final walkthrough completed with client', description: '', status: 'done', dueDate: '2026-03-22', completedAt: '2026-03-22' },
+    { id: 'task-prairie-2', projectId: 'project-prairie-home', phase: 'final_walkthrough', title: 'All punch list items resolved', description: '', status: 'done', dueDate: '2026-03-24', completedAt: '2026-03-24' },
+    { id: 'task-prairie-3', projectId: 'project-prairie-home', phase: 'final_walkthrough', title: 'Final payment collected', description: '', status: 'done', dueDate: '2026-03-24', completedAt: '2026-03-24' },
+    { id: 'task-prairie-4', projectId: 'project-prairie-home', phase: 'final_walkthrough', title: 'Professional photography scheduled', description: 'Confirmed Apr 1', status: 'done', dueDate: '2026-03-25', completedAt: '2026-03-25' },
+    { id: 'task-prairie-5', projectId: 'project-prairie-home', phase: 'final_walkthrough', title: 'Upload final project photos (for portfolio)', description: '', status: 'todo', dueDate: '2026-04-02' },
+    { id: 'task-prairie-6', projectId: 'project-prairie-home', phase: 'final_walkthrough', title: 'Write project case study for portfolio', description: '', status: 'todo', dueDate: '2026-04-05' },
+    { id: 'task-prairie-7', projectId: 'project-prairie-home', phase: 'final_walkthrough', title: 'Send client review request', description: '', status: 'todo', dueDate: '2026-04-02' },
+  ],
+};
+
+function getProjectTasks(projectId: string) {
+  return clone(mockProjectTasks[projectId] || []);
+}
+
+// ── Opus: Timeline segments per project ──
+
+const allPhases: MockProjectPhase[] = ['consultation', 'concept_development', 'design_refinement', 'procurement', 'installation', 'final_walkthrough'];
+
+function getProjectTimeline(projectId: string) {
+  const project = designerMockState.projects.find((p) => p.id === projectId);
+  if (!project) return [];
+  const currentIndex = allPhases.indexOf(project.current_phase);
+  const start = new Date(project.startDate);
+  const end = project.endDate ? new Date(project.endDate) : new Date(start.getTime() + 120 * 24 * 60 * 60 * 1000);
+  const totalDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+  const phaseDays = totalDays / allPhases.length;
+
+  return allPhases.map((phase, i) => {
+    const phaseStart = new Date(start.getTime() + i * phaseDays * 24 * 60 * 60 * 1000);
+    const phaseEnd = new Date(start.getTime() + (i + 1) * phaseDays * 24 * 60 * 60 * 1000);
+    const isCompleted = i < currentIndex;
+    const isActive = i === currentIndex;
+
+    return {
+      id: `${projectId}-seg-${i}`,
+      phase,
+      status: isCompleted ? 'completed' as const : isActive ? 'in_progress' as const : 'pending' as const,
+      startDate: isCompleted || isActive ? phaseStart.toISOString() : undefined,
+      endDate: isCompleted ? phaseEnd.toISOString() : undefined,
+      progress: isCompleted ? 100 : isActive ? project.progress : 0,
+    };
+  });
+}
+
+// ── Opus: Documents per project ──
+
+const mockProjectDocuments: Record<string, Array<{
+  id: string; projectId: string; title: string; type: string;
+  category?: 'contract' | 'drawing' | 'photo' | 'spec';
+  date: string; size: string; status?: string; version?: string;
+}>> = {
+  'project-chen-residence': [
+    { id: 'doc-chen-1', projectId: 'project-chen-residence', title: 'Service Agreement — Chen Residence', type: 'pdf', category: 'contract', date: 'Signed Jan 12', size: '890 KB', version: 'v1.0' },
+    { id: 'doc-chen-2', projectId: 'project-chen-residence', title: 'Floor Plan — Living & Dining Final', type: 'dwg', category: 'drawing', date: 'Updated Mar 8', size: '1.2 MB', version: 'v3.2' },
+    { id: 'doc-chen-3', projectId: 'project-chen-residence', title: 'FF&E Specification Schedule', type: 'xlsx', category: 'spec', date: '22 items · Updated Mar 26', size: '340 KB', version: 'v2.1' },
+    { id: 'doc-chen-4', projectId: 'project-chen-residence', title: 'Proposal — Signed v1.1', type: 'pdf', category: 'contract', date: '$24,500 · Signed Feb 8', size: '2.4 MB', version: 'v1.1' },
+    { id: 'doc-chen-5', projectId: 'project-chen-residence', title: 'Lighting Plan — Pendant Layout', type: 'pdf', category: 'drawing', date: 'Feb 25', size: '780 KB', version: 'v1.0' },
+    { id: 'doc-chen-6', projectId: 'project-chen-residence', title: 'Mood Boards — 3 Concepts', type: 'pdf', category: 'photo', date: 'Jan 18', size: '8 images' },
+    { id: 'doc-chen-7', projectId: 'project-chen-residence', title: '3D Renderings — Option B Selected', type: 'png', category: 'photo', date: 'Jan 25', size: '12.4 MB', version: 'v2.0' },
+    { id: 'doc-chen-8', projectId: 'project-chen-residence', title: 'Material Palette — Final Selections', type: 'pdf', category: 'spec', date: 'Feb 15', size: '1.1 MB', version: 'v1.0' },
+  ],
+  'project-prairie-home': [
+    { id: 'doc-prairie-1', projectId: 'project-prairie-home', title: 'Design Proposal — Final', type: 'pdf', category: 'contract', date: 'Signed Nov 15', size: '3.1 MB', version: 'v2.0' },
+    { id: 'doc-prairie-2', projectId: 'project-prairie-home', title: 'Service Agreement', type: 'pdf', category: 'contract', date: 'Signed Nov 5', size: '920 KB', version: 'v1.0' },
+    { id: 'doc-prairie-3', projectId: 'project-prairie-home', title: 'Final Room Photos', type: 'img', category: 'photo', date: 'Mar 22', size: '24 images' },
+  ],
+};
+
+function getProjectDocuments(projectId: string) {
+  return clone(mockProjectDocuments[projectId] || []);
+}
+
+// ── Opus: Payment milestones per project ──
+
+const mockProjectMilestones: Record<string, Array<{
+  id: string; title: string; percentage: number; amount: number;
+  status: 'paid' | 'outstanding' | 'pending'; date?: string; note?: string;
+}>> = {
+  'project-chen-residence': [
+    { id: 'ms-chen-1', title: 'Deposit — 30%', percentage: 30, amount: 735000, status: 'paid', date: 'Paid Feb 8' },
+    { id: 'ms-chen-2', title: 'Procurement — 40%', percentage: 40, amount: 980000, status: 'outstanding', date: 'Due', note: 'Outstanding' },
+    { id: 'ms-chen-3', title: 'Completion — 30%', percentage: 30, amount: 735000, status: 'pending', note: 'At walkthrough' },
+  ],
+  'project-prairie-home': [
+    { id: 'ms-prairie-1', title: 'Deposit — 30%', percentage: 30, amount: 1860000, status: 'paid', date: 'Paid Nov 10' },
+    { id: 'ms-prairie-2', title: 'Procurement — 40%', percentage: 40, amount: 2480000, status: 'paid', date: 'Paid Jan 15' },
+    { id: 'ms-prairie-3', title: 'Completion — 30%', percentage: 30, amount: 1860000, status: 'paid', date: 'Paid Mar 24' },
+  ],
+};
+
+function getProjectMilestones(projectId: string) {
+  return clone(mockProjectMilestones[projectId] || []);
+}
+
+// ── Opus: Activity feed per project ──
+
+const mockProjectActivity: Record<string, Array<{
+  id: string; actorName: string; title: string; timestamp: string;
+}>> = {
+  'project-chen-residence': [
+    { id: 'act-chen-1', actorName: 'James', title: 'confirmed Thursday for rug review', timestamp: 'Today, 11:47 AM' },
+    { id: 'act-chen-2', actorName: 'Decision', title: '· Dining chairs → Shaker — Sawkille ×6', timestamp: 'Mar 26' },
+    { id: 'act-chen-3', actorName: 'Leah', title: 'placed PO #SK-087 with Sawkille Co', timestamp: 'Mar 26' },
+    { id: 'act-chen-4', actorName: 'Nordic Atelier', title: 'shipped dining table #NA-DK-8847', timestamp: 'Mar 22' },
+    { id: 'act-chen-5', actorName: 'Leah', title: 'uploaded paint sample photos', timestamp: 'Mar 20' },
+    { id: 'act-chen-6', actorName: 'Leah', title: 'sent weekly update to client', timestamp: 'Mar 18' },
+  ],
+  'project-prairie-home': [
+    { id: 'act-prairie-1', actorName: 'Leah', title: 'completed final walkthrough with client', timestamp: 'Mar 22' },
+    { id: 'act-prairie-2', actorName: 'Mark Olsen', title: 'signed off on punch list', timestamp: 'Mar 24' },
+    { id: 'act-prairie-3', actorName: 'System', title: 'final payment of $18,600 collected', timestamp: 'Mar 24' },
+    { id: 'act-prairie-4', actorName: 'Leah', title: 'scheduled professional photography for Apr 1', timestamp: 'Mar 25' },
+  ],
+};
+
+function getProjectActivity(projectId: string) {
+  return clone(mockProjectActivity[projectId] || []);
+}
+
+// ── Opus: Budget line items per project ──
+
+const mockBudgetLineItems: Record<string, Array<{
+  id: string; category: string; label: string; budgeted: number; actual: number;
+}>> = {
+  'project-chen-residence': [
+    { id: 'bli-1', category: 'fee', label: 'Design Fee', budgeted: 300000, actual: 300000 },
+    { id: 'bli-2', category: 'furniture', label: 'Dining Table', budgeted: 450000, actual: 420000 },
+    { id: 'bli-3', category: 'furniture', label: 'Sectional Sofa', budgeted: 700000, actual: 680000 },
+    { id: 'bli-4', category: 'lighting', label: 'Pendant Lights × 3', budgeted: 250000, actual: 267000 },
+    { id: 'bli-5', category: 'furniture', label: 'Dining Chairs × 6', budgeted: 240000, actual: 240000 },
+    { id: 'bli-6', category: 'textiles', label: 'Area Rug', budgeted: 150000, actual: 120000 },
+    { id: 'bli-7', category: 'textiles', label: 'Textiles & Décor', budgeted: 160000, actual: 95000 },
+    { id: 'bli-8', category: 'finishing', label: 'Paint & Finishing', budgeted: 70000, actual: 0 },
+    { id: 'bli-9', category: 'installation', label: 'Installation', budgeted: 50000, actual: 0 },
+  ],
+};
+
+function getProjectBudgetItems(projectId: string) {
+  return clone(mockBudgetLineItems[projectId] || []);
+}
+
+function getProjectListMetrics() {
+  const active = designerMockState.projects.filter(
+    (p) => p.status === 'active' || p.status === 'planning'
+  );
+  const activeValue = active.reduce((sum, p) => sum + p.budget, 0);
+
+  // Avg timeline in months for active projects with endDate
+  const withEnd = active.filter((p) => p.endDate);
+  const avgMonths = withEnd.length > 0
+    ? withEnd.reduce((sum, p) => {
+        const start = new Date(p.startDate).getTime();
+        const end = new Date(p.endDate!).getTime();
+        return sum + (end - start) / (1000 * 60 * 60 * 24 * 30.44);
+      }, 0) / withEnd.length
+    : 0;
+
+  // Invoiced MTD — sum of paid + outstanding milestones across all projects
+  const allMilestones = Object.values(mockProjectMilestones).flat();
+  const invoiced = allMilestones
+    .filter((m) => m.status === 'paid' || m.status === 'outstanding')
+    .reduce((sum, m) => sum + m.amount, 0);
+
+  return {
+    activeValue,
+    activeCount: active.length,
+    avgTimeline: Math.round(avgMonths * 10) / 10,
+    invoicedMTD: invoiced,
+  };
+}
+
 export const mockData = {
   getClients,
   getClientById,
@@ -1757,4 +2240,16 @@ export const mockData = {
   getFeaturedCollections,
   getProjects,
   getProjectById,
+  getProjectTasks,
+  getProjectTimeline,
+  getProjectDocuments,
+  getProjectMilestones,
+  getProjectActivity,
+  getProjectBudgetItems,
+  getProjectListMetrics,
+  getProjectRooms,
+  getProjectFFEItems,
+  getProjectFinancials,
+  getProjectTimeTracking,
+  getProjectKeyMetrics,
 };

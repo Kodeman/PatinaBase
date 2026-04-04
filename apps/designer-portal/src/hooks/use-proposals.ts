@@ -16,6 +16,28 @@ export {
   useUpdateProposalItem,
   useRemoveProposalItem,
   useSendProposal,
+  // Sections
+  useProposalSections,
+  useUpsertProposalSection,
+  useDeleteProposalSection,
+  // Templates
+  useProposalTemplates,
+  // Engagement
+  useProposalEngagement,
+  useProposalEngagementStats,
+  // Versions & Revisions
+  useProposalVersions,
+  useCreateProposalRevision,
+  // Signing
+  useSignProposal,
 } from '@patina/supabase';
 
-export type { Proposal, ProposalItem, ProposalFilters } from '@patina/supabase';
+export type {
+  Proposal,
+  ProposalItem,
+  ProposalFilters,
+  ProposalSection,
+  ProposalTemplate,
+  ProposalEngagementEvent,
+  ProposalEngagementStats,
+} from '@patina/supabase';

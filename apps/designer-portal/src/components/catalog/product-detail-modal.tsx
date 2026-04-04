@@ -14,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@patina/design-system'
 import {
   Heart,
   Share2,
+  ExternalLink,
   Ruler,
   Package,
   Star,
@@ -159,6 +160,18 @@ export function ProductDetailModal({
                   <h2 className="text-2xl font-bold">{product.name}</h2>
                 </div>
                 <div className="flex gap-2">
+                  {product.sourceUrl && (
+                    <Button variant="ghost" size="icon" asChild>
+                      <a
+                        href={product.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="View original product page"
+                      >
+                        <ExternalLink className="h-5 w-5" />
+                      </a>
+                    </Button>
+                  )}
                   <Button variant="ghost" size="icon">
                     <Heart className="h-5 w-5" />
                   </Button>

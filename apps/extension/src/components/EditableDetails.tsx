@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import type { ExtractedDimensions } from '@patina/shared';
+import { StrataMark } from './StrataMark';
 
 interface EditableDetailsProps {
   description: string;
@@ -114,7 +115,7 @@ export function EditableDetails({
 
   const dimInput = (label: string, field: keyof EditableDimensions) => (
     <div className="flex-1">
-      <label className="block text-xs text-patina-mocha-brown/60 mb-0.5">{label}</label>
+      <label className="block font-mono text-[0.55rem] uppercase tracking-[0.06em] text-aged-oak mb-0.5">{label}</label>
       <input
         type="text"
         inputMode="decimal"
@@ -124,25 +125,25 @@ export function EditableDetails({
           setDimensions({ ...dimensions, [field]: e.target.value.replace(/[^0-9.]/g, '') });
         }}
         placeholder="—"
-        className="w-full px-2 py-1 text-xs rounded border border-patina-clay-beige/50 focus:border-patina-mocha-brown focus:ring-1 focus:ring-patina-mocha-brown outline-none"
+        className="w-full px-2 py-1 text-[0.85rem] rounded-[3px] border border-pearl focus:border-clay focus:ring-1 focus:ring-clay outline-none"
       />
     </div>
   );
 
   return (
-    <div className="rounded-lg border border-patina-clay-beige/30 overflow-hidden">
+    <div className="rounded-md border border-pearl overflow-hidden">
       {/* Header / toggle */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-3 py-2 flex items-center justify-between bg-patina-clay-beige/10 hover:bg-patina-clay-beige/20 transition-colors"
+        className="w-full px-3 py-2 flex items-center justify-between bg-off-white hover:bg-pearl/40 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <p className="text-xs font-medium text-patina-charcoal/70 uppercase tracking-wide">Details</p>
+          <p className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak">Details</p>
           {!isExpanded && (
-            <p className="text-xs text-patina-mocha-brown/60 truncate max-w-[220px]">{summary}</p>
+            <p className="text-[0.78rem] text-aged-oak truncate max-w-[220px]">{summary}</p>
           )}
         </div>
-        <svg className={`w-4 h-4 text-patina-mocha-brown/50 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className={`w-4 h-4 text-aged-oak transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
@@ -151,26 +152,28 @@ export function EditableDetails({
         <div className="px-3 py-3 space-y-3">
           {/* Description */}
           <div>
-            <label className="block text-xs font-medium text-patina-charcoal/70 mb-1">Description</label>
+            <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">Description</label>
             <textarea
               value={description}
               onChange={(e) => { setHasInteracted(true); setDescription(e.target.value.slice(0, 1000)); }}
               placeholder="Product description..."
               rows={3}
               maxLength={1000}
-              className="w-full px-2 py-1.5 text-xs rounded border border-patina-clay-beige/50 focus:border-patina-mocha-brown focus:ring-1 focus:ring-patina-mocha-brown outline-none resize-none"
+              className="w-full px-2 py-1.5 text-[0.88rem] rounded-[3px] border border-pearl focus:border-clay focus:ring-1 focus:ring-clay outline-none resize-none"
             />
-            <p className="text-right text-xs text-patina-mocha-brown/40">{description.length}/1000</p>
+            <p className="text-right font-mono text-[0.55rem] text-aged-oak">{description.length}/1000</p>
           </div>
+
+          <StrataMark variant="micro" />
 
           {/* Materials */}
           <div>
-            <label className="block text-xs font-medium text-patina-charcoal/70 mb-1">Materials</label>
+            <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">Materials</label>
             <div className="flex flex-wrap gap-1 mb-1.5">
               {materials.map((m, i) => (
-                <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-patina-clay-beige/30 rounded text-xs text-patina-charcoal">
+                <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-off-white border border-pearl rounded-sm text-[0.78rem] text-charcoal">
                   {m}
-                  <button onClick={() => handleRemoveChip(i, materials, setMaterials)} className="text-patina-mocha-brown/50 hover:text-red-500">
+                  <button onClick={() => handleRemoveChip(i, materials, setMaterials)} className="text-aged-oak hover:text-terracotta">
                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </span>
@@ -182,18 +185,18 @@ export function EditableDetails({
               onChange={(e) => setNewMaterial(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddChip(newMaterial, setNewMaterial, materials, setMaterials); } }}
               placeholder="Add material (Enter)"
-              className="w-full px-2 py-1 text-xs rounded border border-patina-clay-beige/50 focus:border-patina-mocha-brown focus:ring-1 focus:ring-patina-mocha-brown outline-none"
+              className="w-full px-2 py-1 text-[0.85rem] rounded-[3px] border border-pearl focus:border-clay focus:ring-1 focus:ring-clay outline-none"
             />
           </div>
 
           {/* Colors */}
           <div>
-            <label className="block text-xs font-medium text-patina-charcoal/70 mb-1">Colors</label>
+            <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">Colors</label>
             <div className="flex flex-wrap gap-1 mb-1.5">
               {colors.map((c, i) => (
-                <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-patina-clay-beige/30 rounded text-xs text-patina-charcoal">
+                <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-off-white border border-pearl rounded-sm text-[0.78rem] text-charcoal">
                   {c}
-                  <button onClick={() => handleRemoveChip(i, colors, setColors)} className="text-patina-mocha-brown/50 hover:text-red-500">
+                  <button onClick={() => handleRemoveChip(i, colors, setColors)} className="text-aged-oak hover:text-terracotta">
                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </span>
@@ -205,30 +208,32 @@ export function EditableDetails({
               onChange={(e) => setNewColor(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddChip(newColor, setNewColor, colors, setColors); } }}
               placeholder="Add color (Enter)"
-              className="w-full px-2 py-1 text-xs rounded border border-patina-clay-beige/50 focus:border-patina-mocha-brown focus:ring-1 focus:ring-patina-mocha-brown outline-none"
+              className="w-full px-2 py-1 text-[0.85rem] rounded-[3px] border border-pearl focus:border-clay focus:ring-1 focus:ring-clay outline-none"
             />
           </div>
 
+          <StrataMark variant="micro" />
+
           {/* Finish */}
           <div>
-            <label className="block text-xs font-medium text-patina-charcoal/70 mb-1">Finish</label>
+            <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">Finish</label>
             <input
               type="text"
               value={finish}
               onChange={(e) => { setHasInteracted(true); setFinish(e.target.value); }}
               placeholder="e.g., Matte, Polished, Natural"
-              className="w-full px-2 py-1 text-xs rounded border border-patina-clay-beige/50 focus:border-patina-mocha-brown focus:ring-1 focus:ring-patina-mocha-brown outline-none"
+              className="w-full px-2 py-1 text-[0.85rem] rounded-[3px] border border-pearl focus:border-clay focus:ring-1 focus:ring-clay outline-none"
             />
           </div>
 
           {/* Dimensions */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-medium text-patina-charcoal/70">Dimensions</label>
+              <label className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak">Dimensions</label>
               <select
                 value={dimensions.unit}
                 onChange={(e) => { setHasInteracted(true); setDimensions({ ...dimensions, unit: e.target.value as 'in' | 'cm' }); }}
-                className="text-xs px-1 py-0.5 rounded border border-patina-clay-beige/50 outline-none"
+                className="font-mono text-[0.65rem] px-1 py-0.5 rounded-[3px] border border-pearl outline-none"
               >
                 <option value="in">inches</option>
                 <option value="cm">cm</option>
@@ -236,16 +241,16 @@ export function EditableDetails({
             </div>
             <div className="flex gap-2">
               {dimInput('W', 'width')}
-              <span className="self-end pb-1 text-xs text-patina-mocha-brown/40">x</span>
+              <span className="self-end pb-1 text-[0.78rem] text-aged-oak">x</span>
               {dimInput('H', 'height')}
-              <span className="self-end pb-1 text-xs text-patina-mocha-brown/40">x</span>
+              <span className="self-end pb-1 text-[0.78rem] text-aged-oak">x</span>
               {dimInput('D', 'depth')}
             </div>
 
             {/* Furniture-specific dimensions */}
             <button
               onClick={() => setShowFurnitureDims(!showFurnitureDims)}
-              className="mt-1.5 text-xs text-patina-mocha-brown/60 hover:text-patina-mocha-brown"
+              className="mt-1.5 font-mono text-[0.62rem] uppercase tracking-[0.04em] text-aged-oak hover:text-mocha"
             >
               {showFurnitureDims ? '- Hide' : '+ Show'} furniture details
             </button>

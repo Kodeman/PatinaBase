@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — iOS Application Design Document · v4 · The Companion</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500;1,600;1,700&family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ow:#FAF7F2;--sc:#F5F2ED;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sg:#A8B5A0;--db:#8B9CAD;--tc:#D4A090;--pl:#E5E2DD;--gh:#E8C547;--ok:#7A9B76;--fd:'Playfair Display',Georgia,serif;--fb:'Inter',-apple-system,sans-serif;--fm:'DM Mono',monospace;--sh:0 4px 24px rgba(92,74,60,.18),0 0 0 1px rgba(196,165,123,.15);--e:cubic-bezier(.4,0,.2,1)}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:17px;scroll-behavior:smooth;background:#E8E4DF;color:var(--ch)}
+body{font-family:var(--fb);font-weight:400;line-height:1.7;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.ct{max-width:1200px;margin:0 auto;padding:0 clamp(1.5rem,4vw,3rem)}
+.nr{max-width:800px;margin:0 auto;padding:0 clamp(1.5rem,4vw,3rem)}
+h1,h2,h3{font-family:var(--fd);font-weight:400;line-height:1.15;letter-spacing:-.02em}
+h1{font-size:clamp(2.6rem,5.5vw,4.5rem)}h2{font-size:clamp(1.8rem,4vw,3rem)}h3{font-size:clamp(1.2rem,2vw,1.5rem);font-weight:500}
+h4{font-family:var(--fb);font-size:.8rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ao)}
+p{font-size:1rem;color:var(--mo);max-width:640px}
+em{font-family:var(--fd);font-style:italic;color:var(--ao)}
+.mn{font-family:var(--fm);font-size:.7rem;letter-spacing:.05em;text-transform:uppercase;color:var(--ao)}
+.lb{font-size:1.12rem;line-height:1.8}
+
+/* STRATA */
+.st{display:flex;flex-direction:column;gap:5px;padding:2rem 0}
+.sl{height:2px;background:var(--mo);border-radius:1px}
+.sl:nth-child(1){width:100%}.sl:nth-child(2){width:80%;opacity:.7}.sl:nth-child(3){width:60%;opacity:.4}
+.sm{display:flex;flex-direction:column;gap:3px;width:40px}
+.sm .sl{height:1.5px}
+
+/* HEADER */
+.dh{padding:clamp(3.5rem,8vh,7rem) 0 2.5rem;background:var(--ow);position:relative}
+.dh::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cl),transparent)}
+.dh .mn{margin-bottom:1.2rem;display:block}
+.dh h1{margin-bottom:1.2rem;max-width:900px}
+.dm{display:flex;gap:2.5rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--pl);flex-wrap:wrap}
+.dm-i .mn{display:block;margin-bottom:.2rem}
+.dm-i span{font-family:var(--fb);font-size:.88rem;color:var(--ch);font-weight:500}
+
+/* SECTIONS */
+.s{padding:clamp(2.5rem,7vh,5rem) 0;background:var(--ow);position:relative}
+.s.a{background:var(--sc)}.s.d{background:var(--ch);color:var(--ow)}
+.s.d p{color:var(--pl)}.s.d h4{color:var(--cl)}.s.d .mn{color:var(--cl)}
+.sh{margin-bottom:2.5rem}
+.sh .mn{display:block;margin-bottom:.6rem}.sh h2{margin-bottom:.8rem}
+
+/* TOC */
+.toc{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1px;background:var(--pl);border-radius:16px;overflow:hidden;margin-top:2rem}
+.toc-i{background:var(--ow);padding:1.2rem 1.4rem;display:flex;gap:1rem;align-items:flex-start}
+.toc-n{font-family:var(--fd);font-size:1.8rem;color:var(--cl);line-height:1;font-weight:400;flex-shrink:0;width:36px}
+.toc-t{font-family:var(--fb);font-size:.9rem;font-weight:500;color:var(--ch);line-height:1.3}
+.toc-d{font-family:var(--fm);font-size:.6rem;letter-spacing:.04em;text-transform:uppercase;color:var(--ao);margin-top:3px}
+
+/* PHONE FRAMES */
+.pr{display:flex;gap:2.2rem;overflow-x:auto;padding:1.5rem 0;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.pr::-webkit-scrollbar{display:none}
+.pg{flex:0 0 auto;scroll-snap-align:center;display:flex;flex-direction:column;align-items:center}
+.pl{margin-bottom:.8rem;text-align:center}
+.pl h3{font-size:1rem;margin-bottom:.2rem}.pl .mn{font-size:.6rem}
+.pf{width:375px;height:812px;border-radius:44px;background:var(--ch);padding:12px;position:relative;box-shadow:0 16px 64px rgba(92,74,60,.18),0 0 0 1px rgba(0,0,0,.1);flex-shrink:0}
+.ps{width:100%;height:100%;border-radius:32px;overflow:hidden;position:relative;background:var(--ow)}
+.ps::before{content:'';position:absolute;top:8px;left:50%;transform:translateX(-50%);width:120px;height:34px;background:var(--ch);border-radius:20px;z-index:100}
+.ps::after{content:'';position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:134px;height:5px;background:var(--ch);border-radius:3px;z-index:100;opacity:.3}
+.ss{padding:14px 24px 0;display:flex;justify-content:space-between;align-items:center;height:50px;font-family:var(--fb);font-size:12px;font-weight:600;color:var(--ch);position:relative;z-index:50}
+.ss.l{color:var(--ow)}
+
+/* ========================================
+   THE COMPANION — All 5 States
+   ======================================== */
+
+/* State 1: Resting */
+.comp{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);z-index:95}
+.comp-m{width:52px;height:52px;border-radius:50%;background:var(--ch);box-shadow:var(--sh);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;position:relative}
+.comp-m .cl{height:1.5px;border-radius:1px;background:var(--ow)}
+.comp-m .cl:nth-child(1){width:20px}.comp-m .cl:nth-child(2){width:16px;opacity:.7}.comp-m .cl:nth-child(3){width:12px;opacity:.4}
+.comp-m::after{content:'';position:absolute;inset:-3px;border-radius:50%;border:1.5px solid var(--cl);opacity:.3;animation:cb 3s ease-in-out infinite}
+@keyframes cb{0%,100%{opacity:.2;transform:scale(1)}50%{opacity:.45;transform:scale(1.06)}}
+
+/* State 2: Nudge */
+.comp-n{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);white-space:nowrap;padding:6px 14px;border-radius:14px;background:var(--ch);color:var(--ow);font-family:var(--fb);font-size:12px;font-weight:500;box-shadow:0 4px 16px rgba(92,74,60,.12);z-index:96}
+.comp-n::after{content:'';position:absolute;bottom:-5px;left:50%;width:10px;height:10px;background:var(--ch);border-radius:2px;transform:translateX(-50%) rotate(45deg)}
+
+/* State 3: Expanded */
+.comp-e{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);z-index:95;width:calc(100% - 48px)}
+.comp-p{width:100%;background:var(--ch);border-radius:24px;padding:18px;box-shadow:var(--sh)}
+.comp-ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.comp-pt{font-family:var(--fd);font-size:15px;color:var(--ow);font-style:italic}
+.comp-x{width:26px;height:26px;border-radius:50%;background:rgba(250,247,242,.1);display:flex;align-items:center;justify-content:center;color:var(--pl);font-size:13px}
+.comp-as{display:flex;flex-direction:column;gap:5px}
+.comp-a{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:rgba(250,247,242,.05)}
+.comp-a.sg{background:rgba(196,165,123,.15)}
+.comp-ai{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;background:rgba(250,247,242,.08);color:var(--pl)}
+.comp-a.sg .comp-ai{background:var(--cl);color:var(--ow)}
+.comp-al{font-family:var(--fb);font-size:13px;font-weight:500;color:var(--ow)}
+.comp-ah{font-family:var(--fm);font-size:8px;letter-spacing:.04em;text-transform:uppercase;color:var(--cl);margin-top:1px}
+.comp-ar{color:var(--ao);font-size:13px;margin-left:auto;flex-shrink:0}
+.comp-bk{position:absolute;inset:0;background:rgba(44,41,38,.35);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:94;border-radius:32px}
+
+/* State 4: Journey */
+.comp-j{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);z-index:95;display:flex;align-items:center;gap:12px;padding:12px 18px;background:var(--ch);border-radius:26px;box-shadow:var(--sh)}
+.cj-ring{width:38px;height:38px;border-radius:50%;border:2.5px solid rgba(250,247,242,.15);display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0}
+.cj-fill{position:absolute;inset:-2.5px;border-radius:50%;border:2.5px solid var(--cl);border-right-color:transparent;border-bottom-color:transparent}
+.cj-pct{font-family:var(--fd);font-size:12px;font-weight:500;color:var(--ow)}
+.cj-txt{flex:1}
+.cj-t{font-family:var(--fb);font-size:12px;font-weight:500;color:var(--ow)}
+.cj-s{font-family:var(--fm);font-size:8px;letter-spacing:.04em;text-transform:uppercase;color:var(--cl)}
+.cj-dots{display:flex;gap:4px}
+.cj-d{width:6px;height:6px;border-radius:50%;background:rgba(250,247,242,.2)}
+.cj-d.dn{background:var(--cl)}.cj-d.cr{background:var(--ow)}
+
+/* State 5: Minimal */
+.comp-min{position:absolute;bottom:28px;right:20px;z-index:95;width:44px;height:44px;border-radius:50%;background:rgba(44,41,38,.65);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.5px;box-shadow:0 4px 16px rgba(0,0,0,.12)}
+.comp-min .cl{height:1.5px;border-radius:1px;background:var(--ow)}
+.comp-min .cl:nth-child(1){width:16px}.comp-min .cl:nth-child(2){width:12px;opacity:.7}.comp-min .cl:nth-child(3){width:9px;opacity:.4}
+
+/* ========================================
+   SCREEN CONTENT
+   ======================================== */
+
+/* Splash */
+.scr-sp{display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--ow);height:100%}
+.sp-wm{font-family:var(--fd);font-size:38px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;color:var(--ch)}
+.sp-st{display:flex;flex-direction:column;gap:4px;margin-top:14px;align-items:center}
+.sp-sl{height:2px;border-radius:1px}
+.sp-sl:nth-child(1){width:60px;background:var(--mo)}.sp-sl:nth-child(2){width:48px;background:var(--cl)}.sp-sl:nth-child(3){width:36px;background:var(--cl);opacity:.5}
+
+/* Onboarding */
+.scr-ob{height:100%;display:flex;flex-direction:column;background:var(--ow)}
+.ob-img{flex:1;background:linear-gradient(180deg,var(--sc),var(--pl));position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.ob-ct{padding:28px 28px 96px;text-align:center}
+.ob-ct h2{font-family:var(--fd);font-size:25px;font-weight:400;color:var(--ch);margin-bottom:10px;line-height:1.2}
+.ob-ct p{font-size:14px;color:var(--mo);max-width:290px;margin:0 auto;line-height:1.55}
+.ob-dots{display:flex;gap:8px;justify-content:center;margin-top:18px}
+.ob-dot{width:8px;height:8px;border-radius:50%;background:var(--pl)}
+.ob-dot.ac{background:var(--cl);width:24px;border-radius:4px}
+.ob-cta{position:absolute;bottom:38px;left:28px;right:28px;height:50px;border-radius:25px;background:var(--ch);color:var(--ow);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-size:14px;font-weight:500;z-index:50}
+.ob-sk{position:absolute;top:56px;right:24px;font-family:var(--fb);font-size:13px;color:var(--ao);z-index:60}
+
+/* Auth */
+.scr-au{height:100%;display:flex;flex-direction:column;background:var(--ow);padding:58px 28px 36px}
+.au-lg{font-family:var(--fd);font-size:30px;font-weight:500;letter-spacing:.15em;text-transform:uppercase;color:var(--ch);text-align:center;margin-top:18px}
+.au-sm{display:flex;flex-direction:column;gap:3px;align-items:center;margin:8px 0 36px}
+.au-sm div:nth-child(1){width:40px;height:1.5px;background:var(--mo)}.au-sm div:nth-child(2){width:32px;height:1.5px;background:var(--cl)}.au-sm div:nth-child(3){width:24px;height:1.5px;background:var(--cl);opacity:.5}
+.au-t{font-family:var(--fd);font-size:22px;color:var(--ch);text-align:center;margin-bottom:4px}
+.au-sub{font-size:13px;color:var(--ao);text-align:center;margin-bottom:28px}
+.au-btn{width:100%;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;gap:8px;font-family:var(--fb);font-size:14px;font-weight:500;margin-bottom:10px}
+.au-btn.ap{background:var(--ch);color:var(--ow)}.au-btn.gl{background:var(--ow);border:1.5px solid var(--pl);color:var(--ch)}.au-btn.em{background:var(--ow);border:1.5px solid var(--pl);color:var(--ch)}
+.au-dv{display:flex;align-items:center;gap:14px;margin:16px 0}
+.au-dv-l{flex:1;height:1px;background:var(--pl)}.au-dv-t{font-size:11px;color:var(--ao)}
+.au-gu{font-size:13px;color:var(--cl);text-align:center;margin-top:6px}
+.au-ft{margin-top:auto;font-size:10px;color:var(--ao);text-align:center;line-height:1.5}
+
+/* Quiz */
+.scr-qz{height:100%;display:flex;flex-direction:column;background:var(--ow)}
+.qz-pg{padding:52px 24px 0;display:flex;gap:5px}
+.qz-pgd{flex:1;height:3px;border-radius:2px;background:var(--pl)}.qz-pgd.dn{background:var(--cl)}.qz-pgd.cr{background:var(--mo)}
+.qz-num{font-family:var(--fm);font-size:9px;letter-spacing:.08em;color:var(--ao);padding:14px 24px 0;text-transform:uppercase}
+.qz-q{font-family:var(--fd);font-size:23px;font-weight:400;color:var(--ch);padding:6px 24px 0;line-height:1.25}
+.qz-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px 24px;flex:1}
+.qz-c{border-radius:13px;overflow:hidden;display:flex;flex-direction:column}
+.qz-ci{flex:1;min-height:110px}.qz-cl{padding:9px 11px;font-family:var(--fb);font-size:12px;font-weight:500;color:var(--ch);background:var(--sc)}
+.qz-c.sel{outline:2.5px solid var(--cl);outline-offset:-2.5px}
+.qz-c.sel .qz-cl{background:var(--cl);color:#fff}
+
+/* Material/lifestyle cards */
+.mc-list{display:flex;flex-direction:column;gap:8px;padding:16px 24px;flex:1;overflow-y:auto}
+.mc{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:13px;background:var(--sc)}
+.mc.sel{background:var(--cl);color:#fff}
+.mc-sw{width:48px;height:48px;border-radius:9px;flex-shrink:0}
+.mc-ic{font-size:22px;width:48px;text-align:center;flex-shrink:0}
+.mc h5{font-family:var(--fb);font-size:14px;font-weight:500;color:var(--ch);margin-bottom:1px}
+.mc p{font-size:11px;color:var(--ao);margin:0}
+.mc.sel h5,.mc.sel p{color:#fff}
+
+/* Budget */
+.bt-list{display:flex;flex-direction:column;gap:8px;padding:16px 24px;flex:1}
+.bt{display:flex;align-items:center;gap:12px;padding:14px;border-radius:13px;background:var(--sc)}
+.bt.sel{background:var(--ch);color:var(--ow)}
+.bt-ic{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.bt h5{font-family:var(--fd);font-size:15px;font-weight:500;margin-bottom:1px}
+.bt p{font-size:11px;color:var(--ao);margin:0}.bt.sel p{color:var(--pl)}
+
+/* Style Result */
+.scr-sr{height:100%;display:flex;flex-direction:column;background:var(--ow);align-items:center;justify-content:center;padding:60px 28px 100px;text-align:center}
+.sr-badge{width:96px;height:96px;border-radius:50%;border:2.5px solid var(--cl);display:flex;align-items:center;justify-content:center;margin-bottom:24px}
+.sr-badge-inner{width:76px;height:76px;border-radius:50%;background:var(--sc);display:flex;align-items:center;justify-content:center;font-size:32px}
+.sr-t{font-family:var(--fd);font-size:28px;color:var(--ch);margin-bottom:4px}
+.sr-sub{font-family:var(--fm);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ao);margin-bottom:24px}
+.sr-attrs{display:flex;gap:16px;margin-bottom:32px}
+.sr-attr{text-align:center}
+.sr-attr-v{font-family:var(--fd);font-size:20px;font-weight:500;color:var(--ch)}
+.sr-attr-l{font-family:var(--fm);font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:var(--ao);margin-top:2px}
+.sr-bar{width:200px;height:6px;border-radius:3px;background:var(--pl);margin-bottom:8px;overflow:hidden}
+.sr-bar-fill{height:100%;border-radius:3px;background:var(--cl)}
+.sr-match{font-family:var(--fm);font-size:10px;color:var(--ao);letter-spacing:.04em;margin-bottom:32px}
+
+/* Scan */
+.scr-sc{height:100%;position:relative}
+.sc-bg{position:absolute;inset:0;background:linear-gradient(135deg,#d4cfc7,#bfb8ad 50%,#a8a195)}
+.sc-ov{position:absolute;inset:0;background:rgba(92,74,60,.03)}
+.sc-pt{position:absolute;width:3px;height:3px;border-radius:50%;background:var(--cl);opacity:.3;animation:fl 5s ease-in-out infinite}
+@keyframes fl{0%,100%{transform:translateY(0)}50%{transform:translateY(-18px)}}
+.sc-coach{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);text-align:center;z-index:10}
+.sc-coach-t{font-family:var(--fd);font-size:20px;font-weight:400;color:var(--ch);opacity:.75;font-style:italic}
+.sc-coach-s{font-family:var(--fb);font-size:12px;color:var(--mo);margin-top:6px}
+
+/* Pre-scan checklist */
+.scr-pre{height:100%;display:flex;flex-direction:column;background:var(--ow);padding:56px 24px 100px}
+.pre-t{font-family:var(--fd);font-size:24px;color:var(--ch);margin-bottom:4px}
+.pre-sub{font-size:13px;color:var(--ao);margin-bottom:24px}
+.pre-items{display:flex;flex-direction:column;gap:10px;flex:1}
+.pre-item{display:flex;align-items:center;gap:14px;padding:16px;border-radius:14px;background:var(--sc)}
+.pre-check{width:28px;height:28px;border-radius:50%;background:rgba(122,155,118,.15);display:flex;align-items:center;justify-content:center;color:var(--ok);font-size:14px;flex-shrink:0}
+.pre-item h5{font-family:var(--fb);font-size:14px;font-weight:500;color:var(--ch);margin-bottom:1px}
+.pre-item p{font-size:11px;color:var(--ao);margin:0}
+
+/* Floor Plan */
+.scr-fp{height:100%;display:flex;flex-direction:column;background:var(--ow)}
+.fp-hd{padding:54px 24px 12px}
+.fp-hd h2{font-family:var(--fd);font-size:22px;color:var(--ch)}
+.fp-hd .mn{margin-top:3px}
+.fp-view{flex:1;margin:0 24px;border-radius:14px;background:var(--sc);position:relative;display:flex;align-items:center;justify-content:center}
+.fp-room{width:65%;height:55%;border:2px solid var(--mo);border-radius:3px;position:relative}
+.fp-bdg{position:absolute;top:10px;right:10px;background:var(--ok);color:#fff;font-family:var(--fm);font-size:8px;letter-spacing:.05em;text-transform:uppercase;padding:3px 8px;border-radius:8px}
+.fp-mets{display:flex;gap:10px;padding:12px 24px}
+.fp-met{flex:1;background:var(--sc);border-radius:10px;padding:10px;text-align:center}
+.fp-met-v{font-family:var(--fd);font-size:18px;font-weight:500;color:var(--ch)}
+.fp-met-l{font-family:var(--fm);font-size:7px;letter-spacing:.08em;text-transform:uppercase;color:var(--ao);margin-top:1px}
+.fp-acts{display:flex;gap:10px;padding:10px 24px 96px}
+.fp-btn{flex:1;height:46px;border-radius:23px;display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-size:13px;font-weight:500}
+.fp-btn.pri{background:var(--ch);color:var(--ow)}.fp-btn.sec{background:var(--sc);color:var(--ch)}
+
+/* Recommendations */
+.scr-rc{height:100%;display:flex;flex-direction:column;background:var(--ow)}
+.rc-hd{padding:54px 24px 8px}
+.rc-hd h2{font-family:var(--fd);font-size:21px;color:var(--ch)}
+.rc-hd p{font-size:12px;color:var(--ao);margin-top:3px}
+.rc-fb{display:flex;gap:7px;padding:6px 24px 10px;overflow-x:auto}
+.rc-fc{flex-shrink:0;padding:5px 12px;border-radius:18px;font-family:var(--fb);font-size:11px;font-weight:500;background:var(--sc);color:var(--mo);white-space:nowrap}
+.rc-fc.ac{background:var(--ch);color:var(--ow)}
+.rc-gd{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 24px 96px;flex:1;overflow-y:auto;align-content:start}
+.rc-cd{border-radius:13px;overflow:hidden;background:var(--sc)}
+.rc-ci{height:150px;position:relative}
+.rc-cm{position:absolute;top:7px;left:7px;font-family:var(--fm);font-size:8px;letter-spacing:.03em;background:rgba(250,247,242,.9);backdrop-filter:blur(6px);padding:2px 7px;border-radius:5px;color:var(--mo)}
+.rc-cs{position:absolute;top:7px;right:7px;width:28px;height:28px;border-radius:50%;background:rgba(250,247,242,.9);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;font-size:13px}
+.rc-cn{padding:8px 10px}
+.rc-mk{font-family:var(--fm);font-size:8px;letter-spacing:.03em;text-transform:uppercase;color:var(--ao);margin-bottom:1px}
+.rc-nm{font-family:var(--fb);font-size:12px;font-weight:500;color:var(--ch);margin-bottom:3px;line-height:1.3}
+.rc-pr{font-family:var(--fd);font-size:15px;font-weight:500;color:var(--ch)}
+
+/* Product Detail */
+.scr-pd{height:100%;display:flex;flex-direction:column;background:var(--ow);overflow-y:auto}
+.pd-hero{height:320px;position:relative;flex-shrink:0}
+.pd-bk{position:absolute;top:54px;left:14px;width:34px;height:34px;border-radius:50%;background:rgba(250,247,242,.85);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;font-size:15px;z-index:20}
+.pd-at{position:absolute;top:54px;right:14px;display:flex;gap:7px;z-index:20}
+.pd-ab{width:34px;height:34px;border-radius:50%;background:rgba(250,247,242,.85);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;font-size:13px}
+.pd-ct{padding:20px 24px 96px}
+.pd-mk{font-family:var(--fm);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--cl);margin-bottom:5px}
+.pd-nm{font-family:var(--fd);font-size:24px;font-weight:400;color:var(--ch);line-height:1.2;margin-bottom:3px}
+.pd-sub{font-size:13px;color:var(--ao);margin-bottom:14px}
+.pd-row{display:flex;align-items:baseline;gap:10px;margin-bottom:16px}
+.pd-pr{font-family:var(--fd);font-size:26px;font-weight:500;color:var(--ch)}
+.pd-mp{font-family:var(--fm);font-size:9px;letter-spacing:.03em;padding:3px 8px;border-radius:8px;background:rgba(122,155,118,.12);color:var(--ok)}
+.pd-bg{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
+.pd-bdg{display:flex;align-items:center;gap:4px;padding:5px 10px;border-radius:16px;background:var(--sc);font-size:10px;color:var(--mo)}
+.ms{margin:18px 0;padding:16px;background:var(--sc);border-radius:13px}
+.ms-hd{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.ms-av{width:40px;height:40px;border-radius:50%;flex-shrink:0}
+.ms-nm{font-family:var(--fb);font-size:13px;font-weight:500;color:var(--ch)}
+.ms-loc{font-family:var(--fm);font-size:8px;letter-spacing:.05em;text-transform:uppercase;color:var(--ao)}
+.ms>p{font-size:13px;color:var(--mo);line-height:1.55;font-style:italic;max-width:100%}
+
+/* AR */
+.scr-ar{height:100%;position:relative}
+.ar-bg{position:absolute;inset:0;background:linear-gradient(180deg,#c8c1b8,#d8d2c9 50%,#c2bbb1)}
+.ar-ghost{position:absolute;bottom:290px;left:50%;transform:translateX(-50%);width:150px;height:75px;border-radius:10px;border:2px dashed var(--cl);background:rgba(196,165,123,.07);display:flex;align-items:center;justify-content:center;font-size:26px;opacity:.5}
+.ar-shadow{position:absolute;bottom:278px;left:50%;transform:translateX(-50%);width:130px;height:10px;background:rgba(44,41,38,.07);border-radius:50%;filter:blur(4px)}
+.ar-nm{position:absolute;bottom:100px;left:50%;transform:translateX(-50%);font-family:var(--fd);font-size:17px;color:var(--ch);background:rgba(250,247,242,.9);backdrop-filter:blur(12px);padding:7px 18px;border-radius:18px;z-index:20;white-space:nowrap}
+.ar-ctrls{position:absolute;bottom:54px;left:50%;transform:translateX(-50%);display:flex;gap:10px;z-index:20}
+.ar-cb{width:46px;height:46px;border-radius:50%;background:rgba(250,247,242,.9);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;font-size:17px}
+.ar-cb.pri{width:auto;padding:0 20px;border-radius:23px;background:var(--ch);color:var(--ow);font-family:var(--fb);font-size:13px;font-weight:500}
+.ar-sl{position:absolute;right:14px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;z-index:20}
+.ar-sl-trk{width:3px;height:90px;background:rgba(250,247,242,.3);border-radius:2px;position:relative}
+.ar-sl-fl{position:absolute;bottom:0;width:100%;height:60%;background:var(--gh);border-radius:2px}
+.ar-sl-lb{font-family:var(--fm);font-size:7px;color:var(--mo);writing-mode:vertical-rl;transform:rotate(180deg);letter-spacing:.04em;text-transform:uppercase}
+
+/* Home */
+.scr-hm{height:100%;display:flex;flex-direction:column;background:var(--ow);overflow-y:auto}
+.hm-gr{padding:54px 24px 0}
+.hm-gr .mn{display:block;margin-bottom:3px}
+.hm-gr h2{font-family:var(--fd);font-size:24px;color:var(--ch)}
+.hm-sr{margin:14px 24px;height:42px;border-radius:21px;background:var(--sc);display:flex;align-items:center;padding:0 14px;gap:8px;font-size:13px;color:var(--ao)}
+.hm-sp{margin:0 24px 14px;padding:20px;border-radius:14px;background:var(--ch);color:var(--ow);display:flex;align-items:center;gap:14px}
+.hm-spi{width:50px;height:50px;border-radius:12px;background:var(--cl);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.hm-spt h4{font-family:var(--fd);font-size:16px;color:var(--ow);font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:3px}
+.hm-spt p{font-size:11px;color:var(--pl);margin:0;max-width:100%}
+.hm-sec{padding:14px 0}
+.hm-sh{display:flex;justify-content:space-between;align-items:center;padding:0 24px;margin-bottom:10px}
+.hm-sh h3{font-family:var(--fd);font-size:17px;color:var(--ch)}
+.hm-sh a{font-family:var(--fb);font-size:12px;color:var(--cl);text-decoration:none;font-weight:500}
+.hm-scr{display:flex;gap:10px;padding:0 24px;overflow-x:auto}
+.hm-fc{flex:0 0 240px;border-radius:14px;overflow:hidden;background:var(--sc)}
+.hm-fi{height:150px}.hm-fn{padding:10px 12px}
+.hm-fn h4{font-family:var(--fb);font-size:13px;font-weight:500;color:var(--ch);text-transform:none;letter-spacing:0;margin-bottom:1px}
+.hm-fn p{font-size:11px;color:var(--ao);margin:0}
+
+/* Collections */
+.scr-cl{height:100%;display:flex;flex-direction:column;background:var(--ow)}
+.cl-hd{padding:54px 24px 14px}
+.cl-hd h2{font-family:var(--fd);font-size:26px;color:var(--ch)}
+.cl-tabs{display:flex;gap:20px;padding:0 24px;border-bottom:1px solid var(--pl)}
+.cl-tab{padding:10px 0;font-family:var(--fb);font-size:13px;color:var(--ao);position:relative}
+.cl-tab.ac{color:var(--ch);font-weight:500}
+.cl-tab.ac::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:2px;background:var(--cl)}
+.cl-ct{flex:1;overflow-y:auto;padding:14px 24px 96px}
+.cl-bd{margin-bottom:20px}
+.cl-bdt{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.cl-bdt h3{font-family:var(--fd);font-size:17px;color:var(--ch)}
+.cl-bdt .mn{font-size:9px}
+.cl-grd{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+.cl-th{aspect-ratio:1;border-radius:7px}
+.cl-th:first-child{grid-row:span 2;grid-column:span 2;border-radius:10px;aspect-ratio:auto}
+
+/* Profile */
+.scr-pf{height:100%;display:flex;flex-direction:column;background:var(--ow);overflow-y:auto}
+.pf-hd{padding:54px 24px 20px;text-align:center}
+.pf-av{width:76px;height:76px;border-radius:50%;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-family:var(--fd);font-size:26px;font-weight:500;color:var(--ow)}
+.pf-nm{font-family:var(--fd);font-size:22px;color:var(--ch);margin-bottom:3px}
+.pf-tg{font-family:var(--fm);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--ao)}
+.pf-sb{display:inline-flex;align-items:center;gap:5px;margin-top:10px;padding:5px 14px;border-radius:18px;background:var(--sc);font-family:var(--fb);font-size:12px;color:var(--mo)}
+.pf-sts{display:flex;padding:16px 24px;border-top:1px solid var(--pl);border-bottom:1px solid var(--pl)}
+.pf-st{flex:1;text-align:center;position:relative}
+.pf-st:not(:last-child)::after{content:'';position:absolute;right:0;top:15%;height:70%;width:1px;background:var(--pl)}
+.pf-st-v{font-family:var(--fd);font-size:20px;font-weight:500;color:var(--ch)}
+.pf-st-l{font-family:var(--fm);font-size:7px;letter-spacing:.08em;text-transform:uppercase;color:var(--ao);margin-top:1px}
+.pf-sec{padding:16px 24px}
+.pf-sec h4{font-family:var(--fb);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ao);margin-bottom:10px}
+.pf-rms{display:flex;gap:10px;overflow-x:auto}
+.pf-rc{flex:0 0 130px;border-radius:10px;overflow:hidden;background:var(--sc)}
+.pf-ri{height:90px}
+.pf-rn{padding:7px 9px}
+.pf-rn h5{font-family:var(--fb);font-size:12px;font-weight:500;color:var(--ch)}
+.pf-rn span{font-family:var(--fm);font-size:7px;color:var(--ao);letter-spacing:.03em;text-transform:uppercase}
+
+/* Designer */
+.scr-ds{height:100%;display:flex;flex-direction:column;background:var(--ow);overflow-y:auto}
+.ds-hero{padding:54px 24px 20px;background:var(--ch);color:var(--ow)}
+.ds-hero h2{font-family:var(--fd);font-size:24px;color:var(--ow);margin-bottom:6px}
+.ds-hero p{font-size:13px;color:var(--pl);line-height:1.55}
+.ds-card{margin:28px 24px 14px;padding:16px;border-radius:14px;background:var(--sc);display:flex;gap:14px}
+.ds-photo{width:56px;height:56px;border-radius:50%;flex-shrink:0}
+.ds-info h3{font-family:var(--fd);font-size:16px;color:var(--ch);margin-bottom:1px}
+.ds-info .mn{margin-bottom:6px;display:block}
+.ds-info p{font-size:12px;color:var(--mo);line-height:1.45;max-width:100%}
+.ds-form{padding:0 24px 100px}
+.ds-fg{margin-bottom:14px}
+.ds-fl{font-family:var(--fb);font-size:11px;font-weight:500;color:var(--mo);margin-bottom:4px;display:block}
+.ds-tags{display:flex;gap:6px;flex-wrap:wrap}
+.ds-tag{padding:7px 12px;border-radius:18px;font-size:11px;font-weight:500;background:var(--sc);color:var(--mo);border:1.5px solid var(--pl)}
+.ds-tag.sel{background:var(--cl);color:#fff;border-color:var(--cl)}
+.ds-ta{width:100%;height:80px;border-radius:10px;background:var(--sc);border:1.5px solid var(--pl);padding:10px 14px;font-family:var(--fb);font-size:13px;color:var(--ao);font-style:italic;display:flex;align-items:flex-start}
+
+/* QR Auth */
+.scr-qr{height:100%;background:var(--ch);display:flex;flex-direction:column}
+.qr-cam{flex:1;position:relative;background:linear-gradient(135deg,#1a1816,#2a2724 50%,#1a1816);display:flex;align-items:center;justify-content:center}
+.qr-ret{width:200px;height:200px;position:relative}
+.qr-co{position:absolute;width:24px;height:24px;border-color:var(--cl);border-style:solid;border-width:0}
+.qr-co.tl{top:0;left:0;border-top-width:3px;border-left-width:3px;border-radius:3px 0 0 0}
+.qr-co.tr{top:0;right:0;border-top-width:3px;border-right-width:3px;border-radius:0 3px 0 0}
+.qr-co.bl{bottom:0;left:0;border-bottom-width:3px;border-left-width:3px;border-radius:0 0 0 3px}
+.qr-co.br{bottom:0;right:0;border-bottom-width:3px;border-right-width:3px;border-radius:0 0 3px 0}
+.qr-scanl{position:absolute;top:30%;left:10%;right:10%;height:2px;background:linear-gradient(90deg,transparent,var(--cl),transparent);animation:qrs 2s ease-in-out infinite}
+@keyframes qrs{0%{top:10%;opacity:0}20%{opacity:1}80%{opacity:1}100%{top:85%;opacity:0}}
+.qr-inst{text-align:center;padding:28px 24px 44px;background:var(--ch)}
+.qr-inst h3{font-family:var(--fd);font-size:18px;color:var(--ow);margin-bottom:5px}
+.qr-inst p{font-size:13px;color:var(--pl);max-width:260px;margin:0 auto;line-height:1.45}
+
+/* QR Success */
+.scr-qs{height:100%;background:var(--ch);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px}
+.qs-ring{width:76px;height:76px;border-radius:50%;border:3px solid var(--cl);display:flex;align-items:center;justify-content:center;font-size:30px;color:var(--cl)}
+.qs-t{font-family:var(--fd);font-size:22px;color:var(--ow)}
+.qs-p{font-size:13px;color:var(--pl);text-align:center;max-width:240px}
+.qs-portal{margin-top:10px;padding:10px 16px;border-radius:12px;background:rgba(250,247,242,.06);display:flex;align-items:center;gap:10px}
+.qs-pi{width:36px;height:36px;border-radius:8px;background:var(--cl);display:flex;align-items:center;justify-content:center;font-size:16px}
+.qs-pt h5{font-family:var(--fb);font-size:13px;font-weight:500;color:var(--ow)}
+.qs-pt span{font-family:var(--fm);font-size:8px;letter-spacing:.03em;text-transform:uppercase;color:var(--cl)}
+.qs-btn{margin-top:20px;padding:10px 26px;border-radius:22px;background:var(--cl);color:var(--ow);font-family:var(--fb);font-size:13px;font-weight:500}
+
+/* Notifications */
+.scr-nt{height:100%;display:flex;flex-direction:column;background:var(--ow);overflow-y:auto}
+.nt-hd{padding:54px 24px 14px;display:flex;justify-content:space-between;align-items:flex-end}
+.nt-hd h2{font-family:var(--fd);font-size:22px;color:var(--ch)}
+.nt-hd a{font-size:12px;color:var(--cl);text-decoration:none}
+.nt-i{display:flex;gap:12px;padding:14px 24px;border-bottom:1px solid var(--pl)}
+.nt-i.ur{background:rgba(196,165,123,.04)}
+.nt-ic{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.nt-ct{flex:1}
+.nt-ct h5{font-family:var(--fb);font-size:13px;font-weight:500;color:var(--ch);margin-bottom:1px}
+.nt-ct p{font-size:12px;color:var(--ao);max-width:100%;margin:0}
+.nt-tm{font-family:var(--fm);font-size:8px;color:var(--ao);letter-spacing:.03em;flex-shrink:0;margin-top:1px}
+
+/* Settings */
+.scr-st{height:100%;display:flex;flex-direction:column;background:var(--ow);overflow-y:auto}
+.st-hd{padding:54px 24px 14px}
+.st-hd h2{font-family:var(--fd);font-size:22px;color:var(--ch)}
+.st-grp{padding:0 24px;margin-bottom:20px}
+.st-gt{font-family:var(--fm);font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--ao);margin-bottom:6px;padding-left:4px}
+.st-its{border-radius:13px;overflow:hidden;background:var(--sc)}
+.st-it{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--pl)}
+.st-it:last-child{border-bottom:none}
+.st-il{display:flex;align-items:center;gap:10px}
+.st-ii{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px}
+.st-in{font-size:13px;color:var(--ch)}
+.st-ch{font-size:13px;color:var(--ao)}
+.st-tg{width:40px;height:24px;border-radius:12px;position:relative}
+.st-tg.on{background:var(--cl)}.st-tg.of{background:var(--pl)}
+.st-tg::after{content:'';position:absolute;top:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.st-tg.on::after{right:2px}.st-tg.of::after{left:2px}
+
+/* ========================================
+   NAV FLOW DIAGRAM
+   ======================================== */
+.flow{margin-top:2rem}
+.flow-row{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.flow-node{padding:8px 14px;border-radius:10px;font-family:var(--fb);font-size:11px;font-weight:500;text-align:center;white-space:nowrap}
+.flow-node.primary{background:var(--ch);color:var(--ow)}
+.flow-node.secondary{background:var(--sc);color:var(--ch);border:1px solid var(--pl)}
+.flow-node.accent{background:var(--cl);color:#fff}
+.flow-node.companion{background:var(--ch);color:var(--cl);border:1.5px solid var(--cl);border-radius:20px;font-family:var(--fm);font-size:9px;letter-spacing:.04em;text-transform:uppercase}
+.flow-arr{color:var(--ao);font-size:16px;flex-shrink:0}
+.flow-down{display:flex;justify-content:center;margin:4px 0;color:var(--ao);font-size:14px}
+.flow-label{font-family:var(--fm);font-size:8px;letter-spacing:.04em;text-transform:uppercase;color:var(--ao);text-align:center;margin:4px 0}
+
+/* ANNOTATION */
+.ag{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.5rem;margin-top:1.5rem}
+.ac{padding:1.3rem;border-radius:11px;background:var(--sc)}
+.ac .mn{display:block;margin-bottom:.4rem}.ac h3{font-size:1.1rem;margin-bottom:.4rem}.ac p{font-size:.88rem}
+
+/* STATE CARDS */
+.stc-row{display:flex;gap:1.5rem;margin-top:1.5rem;flex-wrap:wrap}
+.stc{flex:1;min-width:180px;padding:1.2rem;border-radius:13px;background:var(--ch);text-align:center}
+.stc h3{color:var(--ow);font-size:.95rem;margin-bottom:.4rem}.stc p{color:var(--pl);font-size:.82rem;max-width:100%}
+.stc .mn{color:var(--cl)}
+.stc-vis{margin:.8rem 0;display:flex;justify-content:center}
+
+/* GRADIENT FILLS */
+.fg-w{background:linear-gradient(135deg,var(--sc),var(--cl))}
+.fg-d{background:linear-gradient(180deg,var(--db),var(--mo))}
+.fg-e{background:linear-gradient(135deg,var(--ao),var(--cl))}
+.fg-s{background:linear-gradient(135deg,var(--sg),var(--pl))}
+.fg-l{background:linear-gradient(135deg,#8B6F47,#A3927C)}
+.fg-ln{background:linear-gradient(135deg,#D4CFC7,#E5E2DD)}
+.fg-st{background:linear-gradient(135deg,#9E9689,#B8B0A5)}
+.fg-wd{background:linear-gradient(135deg,#6B5B4E,#8B7355)}
+.fg-mt{background:linear-gradient(135deg,#7A7B80,#A8A9AD)}
+.fg-rt{background:linear-gradient(135deg,#B8A080,#D4C4A8)}
+
+/* FOOTER */
+.df{padding:3.5rem 0;background:var(--ch);color:var(--pl)}
+.df-inner{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:2rem}
+.df h3{font-family:var(--fd);font-size:1.3rem;color:var(--ow)}
+.df em{color:var(--cl);display:block;margin-top:.2rem}
+
+.fi{opacity:0;transform:translateY(18px);transition:opacity .6s var(--e),transform .6s var(--e)}.fi.v{opacity:1;transform:translateY(0)}
+
+@media(max-width:900px){.pr{gap:1.5rem;padding:1rem 1.5rem}.pf{width:320px;height:693px}.ps{border-radius:28px}.dm{gap:1.5rem}}
+@media(max-width:600px){.pf{width:280px;height:607px;border-radius:36px}.ps{border-radius:26px}.ct,.nr{padding:0 1rem}}
+</style>
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- HEADER                                                        -->
+<!-- ============================================================ -->
+<header class="dh">
+  <div class="ct">
+    <div class="sm"><div class="sl"></div><div class="sl"></div><div class="sl"></div></div>
+    <span class="mn" style="margin-top:.8rem;display:block">iOS Application Design Document · v4 · The Companion</span>
+    <h1>Patina <em>iOS</em></h1>
+    <p class="lb" style="max-width:720px">The definitive design document for the Patina iOS application. Twenty-eight screens. Five Companion states. Zero tab bars. Every interaction guided by a single living element born from the Strata Mark — breathing, contextual, and always one step ahead of where you need to go.</p>
+    <div class="dm">
+      <div class="dm-i"><span class="mn">Version</span><span>4.0 — Final</span></div>
+      <div class="dm-i"><span class="mn">Date</span><span>April 2026</span></div>
+      <div class="dm-i"><span class="mn">Screens</span><span>28 Complete</span></div>
+      <div class="dm-i"><span class="mn">Navigation</span><span>The Companion</span></div>
+      <div class="dm-i"><span class="mn">Auth</span><span>QR Portal Connect</span></div>
+    </div>
+  </div>
+</header>
+
+<!-- ============================================================ -->
+<!-- TABLE OF CONTENTS                                              -->
+<!-- ============================================================ -->
+<section class="s a">
+  <div class="ct">
+    <div class="sh">
+      <span class="mn">Contents</span>
+      <h2>Screen <em>Inventory</em></h2>
+    </div>
+    <div class="toc">
+      <div class="toc-i"><div class="toc-n">I</div><div><div class="toc-t">The Invitation</div><div class="toc-d">Splash · Onboarding · Auth — 5 screens</div></div></div>
+      <div class="toc-i"><div class="toc-n">II</div><div><div class="toc-t">Style Discovery</div><div class="toc-d">5 Questions · Profile Result — 6 screens</div></div></div>
+      <div class="toc-i"><div class="toc-n">III</div><div><div class="toc-t">The Room Walk</div><div class="toc-d">Pre-scan · Scan · Floor Plan — 4 screens</div></div></div>
+      <div class="toc-i"><div class="toc-n">IV</div><div><div class="toc-t">The Revelation</div><div class="toc-d">Recommendations · Detail · AR — 3 screens</div></div></div>
+      <div class="toc-i"><div class="toc-n">V</div><div><div class="toc-t">The Living App</div><div class="toc-d">Home · Collections · Profile — 5 screens</div></div></div>
+      <div class="toc-i"><div class="toc-n">VI</div><div><div class="toc-t">Connection</div><div class="toc-d">QR Scanner · Success · Notifications · Settings — 5 screens</div></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- THE COMPANION — DEEP DIVE                                      -->
+<!-- ============================================================ -->
+<section class="s d">
+  <div class="ct">
+    <div class="sh">
+      <span class="mn">Core Innovation</span>
+      <h2 style="color:var(--ow)">The <em>Companion</em></h2>
+      <p>Five static tabs ask "where can I go?" The Companion asks "what should I do next?" Built from the Strata Mark — three lines of decreasing width that are the DNA of Patina's brand identity — it floats at the bottom of every screen, breathing. It's not navigation. It's guidance.</p>
+    </div>
+
+    <div class="stc-row">
+      <div class="stc">
+        <span class="mn">State 1</span>
+        <div class="stc-vis">
+          <div style="width:50px;height:50px;border-radius:50%;background:var(--ow);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;box-shadow:0 0 0 2px rgba(196,165,123,.3);animation:cb 3s ease-in-out infinite">
+            <div style="width:18px;height:1.5px;border-radius:1px;background:var(--ch)"></div>
+            <div style="width:14px;height:1.5px;border-radius:1px;background:var(--ch);opacity:.7"></div>
+            <div style="width:10px;height:1.5px;border-radius:1px;background:var(--ch);opacity:.4"></div>
+          </div>
+        </div>
+        <h3>Resting</h3>
+        <p>Center-bottom. Three Strata lines. Breathing Clay glow. Always there, never in the way.</p>
+      </div>
+      <div class="stc">
+        <span class="mn">State 2</span>
+        <div class="stc-vis">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+            <div style="padding:5px 12px;border-radius:12px;background:var(--ow);font-family:var(--fb);font-size:11px;color:var(--ch);font-weight:500">Scan a room →</div>
+            <div style="width:30px;height:30px;border-radius:50%;background:var(--ow);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
+              <div style="width:12px;height:1px;background:var(--ch)"></div>
+              <div style="width:9px;height:1px;background:var(--ch);opacity:.7"></div>
+              <div style="width:7px;height:1px;background:var(--ch);opacity:.4"></div>
+            </div>
+          </div>
+        </div>
+        <h3>Nudging</h3>
+        <p>Context label above the mark. Changes per screen. Always the best next action.</p>
+      </div>
+      <div class="stc">
+        <span class="mn">State 3</span>
+        <div class="stc-vis">
+          <div style="width:180px;padding:12px;border-radius:16px;background:rgba(250,247,242,.06);border:1px solid rgba(250,247,242,.08)">
+            <div style="font-family:var(--fd);font-size:12px;color:var(--ow);margin-bottom:8px;font-style:italic">What next?</div>
+            <div style="display:flex;flex-direction:column;gap:3px">
+              <div style="padding:6px 8px;border-radius:8px;background:rgba(196,165,123,.15);font-size:10px;color:var(--ow);font-family:var(--fb)">◎ Scan a room</div>
+              <div style="padding:6px 8px;border-radius:8px;background:rgba(250,247,242,.03);font-size:10px;color:var(--pl);font-family:var(--fb)">♡ Collections</div>
+              <div style="padding:6px 8px;border-radius:8px;background:rgba(250,247,242,.03);font-size:10px;color:var(--pl);font-family:var(--fb)">⊞ Connect portal</div>
+            </div>
+          </div>
+        </div>
+        <h3>Expanded</h3>
+        <p>Tap to reveal context-aware actions. Top is suggested, Clay-highlighted. QR connect always present.</p>
+      </div>
+      <div class="stc">
+        <span class="mn">State 4</span>
+        <div class="stc-vis">
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:20px;background:rgba(250,247,242,.06);border:1px solid rgba(250,247,242,.08)">
+            <div style="width:28px;height:28px;border-radius:50%;border:2px solid var(--cl);display:flex;align-items:center;justify-content:center;font-family:var(--fd);font-size:10px;color:var(--ow)">42%</div>
+            <div><div style="font-size:10px;color:var(--ow);font-family:var(--fb)">Capturing walls</div><div style="font-size:8px;color:var(--cl);font-family:var(--fm)">STEP 2 OF 4</div></div>
+          </div>
+        </div>
+        <h3>Journey</h3>
+        <p>During scanning, morphs into progress capsule. Completion %, step name, dot indicators.</p>
+      </div>
+      <div class="stc">
+        <span class="mn">State 5</span>
+        <div class="stc-vis">
+          <div style="width:40px;height:40px;border-radius:50%;background:rgba(250,247,242,.1);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
+            <div style="width:14px;height:1px;background:var(--ow)"></div>
+            <div style="width:10px;height:1px;background:var(--ow);opacity:.7"></div>
+            <div style="width:7px;height:1px;background:var(--ow);opacity:.4"></div>
+          </div>
+        </div>
+        <h3>Minimal</h3>
+        <p>AR and immersive views. Translucent orb, bottom-right. Tap to access controls.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- NAVIGATION ARCHITECTURE                                        -->
+<!-- ============================================================ -->
+<section class="s">
+  <div class="ct">
+    <div class="sh">
+      <span class="mn">Navigation Architecture</span>
+      <h2>Flow & <em>Context Map</em></h2>
+      <p>The Companion doesn't just replace tab navigation — it reimagines the relationship between screens. Every destination is reachable from any screen through The Companion's contextual menu, but the suggested action always guides the user toward the most productive next step.</p>
+    </div>
+
+    <h4 style="margin-top:2rem;margin-bottom:.5rem">Primary Flow</h4>
+    <div class="flow">
+      <div class="flow-row">
+        <div class="flow-node primary">Splash</div>
+        <span class="flow-arr">→</span>
+        <div class="flow-node secondary">Onboarding ×3</div>
+        <span class="flow-arr">→</span>
+        <div class="flow-node secondary">Auth</div>
+        <span class="flow-arr">→</span>
+        <div class="flow-node accent">Style Quiz ×5</div>
+        <span class="flow-arr">→</span>
+        <div class="flow-node primary">Style Result</div>
+      </div>
+      <div class="flow-down">↓</div>
+      <div class="flow-row">
+        <div class="flow-node primary">Home</div>
+        <span class="flow-arr">⇄</span>
+        <div class="flow-node companion">The Companion</div>
+        <span class="flow-arr">⇄</span>
+        <div class="flow-node secondary">Any Screen</div>
+      </div>
+      <div class="flow-down">↕</div>
+      <div class="flow-row">
+        <div class="flow-node accent">Room Scan</div>
+        <span class="flow-arr">→</span>
+        <div class="flow-node secondary">Floor Plan</div>
+        <span class="flow-arr">→</span>
+        <div class="flow-node primary">Recommendations</div>
+        <span class="flow-arr">→</span>
+        <div class="flow-node secondary">Product Detail</div>
+        <span class="flow-arr">→</span>
+        <div class="flow-node accent">AR Placement</div>
+      </div>
+    </div>
+
+    <h4 style="margin-top:2.5rem;margin-bottom:.8rem">Context-Aware Actions by Screen</h4>
+    <div class="ag">
+      <div class="ac"><span class="mn">Home</span><h3>Discovery</h3><p><strong style="color:var(--cl)">◎ Scan a room</strong> · Recommendations · Collections · Connect portal · Profile</p></div>
+      <div class="ac"><span class="mn">Recommendations</span><h3>Browsing</h3><p><strong style="color:var(--cl)">♡ Save to collection</strong> · Filter by room · Scan another · Connect portal · Profile</p></div>
+      <div class="ac"><span class="mn">Product Detail</span><h3>Evaluation</h3><p><strong style="color:var(--cl)">◎ Place in AR</strong> · Save · Share · Find similar · Ask a designer</p></div>
+      <div class="ac"><span class="mn">Room Scan</span><h3>Journey Mode</h3><p>Transforms into progress capsule. 42% · Step 2 of 4 · Coaching text. No menu — pure focus.</p></div>
+      <div class="ac"><span class="mn">AR Placement</span><h3>Minimal</h3><p>Translucent dot, bottom-right. Tap expands: <strong style="color:var(--cl)">Save view</strong> · Swap item · Share · Light slider · Exit</p></div>
+      <div class="ac"><span class="mn">Profile</span><h3>Reflection</h3><p><strong style="color:var(--cl)">💬 Work with designer</strong> · Edit style · Your rooms · Connect portal · Settings</p></div>
+      <div class="ac"><span class="mn">Collections</span><h3>Curation</h3><p><strong style="color:var(--cl)">Start a project</strong> · Scan a room · Share board · Connect portal · Profile</p></div>
+      <div class="ac"><span class="mn">Designer Consult</span><h3>Connection</h3><p><strong style="color:var(--cl)">Submit request</strong> · Attach rooms · Edit preferences · Connect portal</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- ACT I: THE INVITATION                                          -->
+<!-- ============================================================ -->
+<section class="s a">
+  <div class="ct">
+    <div class="sh"><span class="mn">Act I · The Invitation</span><h2>First <em>Impressions</em></h2><p>The opening moments. No Companion yet — these screens establish trust before introducing the guide. The Strata Mark appears only as brand identity until the user reaches Home, where it comes alive.</p></div>
+
+    <div class="pr">
+      <!-- SPLASH -->
+      <div class="pg"><div class="pl"><h3>Splash</h3><span class="mn">2s · Strata Mark Reveal</span></div>
+        <div class="pf"><div class="ps"><div class="scr-sp"><div class="sp-wm">Patina</div><div class="sp-st"><div class="sp-sl"></div><div class="sp-sl"></div><div class="sp-sl"></div></div></div></div></div>
+      </div>
+
+      <!-- ONBOARDING 1 -->
+      <div class="pg"><div class="pl"><h3>Philosophy</h3><span class="mn">Onboarding · 1 of 3</span></div>
+        <div class="pf"><div class="ps"><div class="scr-ob">
+          <div class="ss"><span>9:41</span><span>···</span></div><div class="ob-sk">Skip</div>
+          <div class="ob-img">
+            <div style="width:75%;height:55%;border-radius:10px;position:relative">
+              <div style="position:absolute;inset:0;background:var(--pl);border-radius:10px"></div>
+              <div style="position:absolute;bottom:0;left:0;right:0;height:30%;background:var(--ao);opacity:.12;border-radius:0 0 10px 10px"></div>
+              <div style="position:absolute;top:0;left:38%;width:28%;height:100%;background:linear-gradient(180deg,var(--gh),transparent);opacity:.06;transform:skewX(-12deg)"></div>
+              <div style="position:absolute;bottom:28%;left:12%;width:42%;height:18%;border-radius:6px;background:var(--ao);opacity:.15"></div>
+              <div style="position:absolute;top:8%;right:18%;width:22%;height:32%;border-radius:3px;border:2px solid var(--cl);opacity:.4"></div>
+            </div>
+          </div>
+          <div class="ob-ct"><h2>Every room tells a story</h2><p>Let's discover yours. Walk your space, uncover your style, find pieces that grow more beautiful with time.</p>
+            <div class="ob-dots"><div class="ob-dot ac"></div><div class="ob-dot"></div><div class="ob-dot"></div></div>
+          </div><div class="ob-cta">Start Your Journey</div>
+        </div></div></div>
+      </div>
+
+      <!-- ONBOARDING 2 -->
+      <div class="pg"><div class="pl"><h3>Promise</h3><span class="mn">Onboarding · 2 of 3</span></div>
+        <div class="pf"><div class="ps"><div class="scr-ob">
+          <div class="ss"><span>9:41</span><span>···</span></div><div class="ob-sk">Skip</div>
+          <div class="ob-img" style="background:linear-gradient(180deg,var(--pl),var(--sg) 40%,var(--pl))">
+            <div style="width:120px;height:240px;border-radius:20px;background:var(--ch);opacity:.1;position:relative">
+              <div style="position:absolute;top:18%;left:12%;right:12%;bottom:28%;border-radius:7px;background:var(--cl);opacity:.4"></div>
+            </div>
+          </div>
+          <div class="ob-ct"><h2>See it in <em>your</em> space</h2><p>Walk your room. Our camera captures every corner. Then watch as perfectly matched furniture appears right where it belongs.</p>
+            <div class="ob-dots"><div class="ob-dot"></div><div class="ob-dot ac"></div><div class="ob-dot"></div></div>
+          </div><div class="ob-cta">Continue</div>
+        </div></div></div>
+      </div>
+
+      <!-- ONBOARDING 3 -->
+      <div class="pg"><div class="pl"><h3>Permission</h3><span class="mn">Onboarding · 3 of 3</span></div>
+        <div class="pf"><div class="ps"><div class="scr-ob">
+          <div class="ss"><span>9:41</span><span>···</span></div>
+          <div class="ob-img" style="background:var(--sc)">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+              <div style="width:70px;height:70px;border-radius:18px;background:var(--cl);opacity:.18;display:flex;align-items:center;justify-content:center;font-size:28px">📷</div>
+              <div style="display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:16px;background:var(--ow)">
+                <span style="font-size:11px">🔒</span><span style="font-family:var(--fb);font-size:11px;color:var(--mo)">Your room stays private</span>
+              </div>
+            </div>
+          </div>
+          <div class="ob-ct"><h2>We'll need your camera</h2><p>To see your space and place furniture in it. Nothing leaves your device until you choose to share.</p>
+            <div class="ob-dots"><div class="ob-dot"></div><div class="ob-dot"></div><div class="ob-dot ac"></div></div>
+          </div><div class="ob-cta">Let's Begin</div>
+        </div></div></div>
+      </div>
+
+      <!-- AUTH -->
+      <div class="pg"><div class="pl"><h3>Authentication</h3><span class="mn">Sign In · Create Account</span></div>
+        <div class="pf"><div class="ps"><div class="scr-au">
+          <div class="ss"><span>9:41</span><span>···</span></div>
+          <div class="au-lg">Patina</div>
+          <div class="au-sm"><div></div><div></div><div></div></div>
+          <div class="au-t">Welcome home</div>
+          <div class="au-sub">Join thousands of design enthusiasts</div>
+          <div class="au-btn ap"> Continue with Apple</div>
+          <div class="au-btn gl">G  Continue with Google</div>
+          <div class="au-btn em">✉  Continue with Email</div>
+          <div class="au-dv"><div class="au-dv-l"></div><span class="au-dv-t">or</span><div class="au-dv-l"></div></div>
+          <div class="au-gu">Browse as Guest</div>
+          <div class="au-ft">By continuing, you agree to our Terms<br>and Privacy Policy</div>
+        </div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- ACT II: STYLE DISCOVERY                                        -->
+<!-- ============================================================ -->
+<section class="s">
+  <div class="ct">
+    <div class="sh"><span class="mn">Act II · Style Discovery</span><h2>The Five <em>Questions</em></h2><p>Five questions that feel simple but extract multi-dimensional preference data. The Companion appears as a gentle "Next" nudge — its first appearance in the user's life. By the time they finish, it already feels like a guide they trust.</p></div>
+
+    <div class="pr">
+      <!-- Q1 -->
+      <div class="pg"><div class="pl"><h3>Visual Resonance</h3><span class="mn">Q1 · Which room speaks?</span></div>
+        <div class="pf"><div class="ps"><div class="scr-qz">
+          <div class="qz-pg"><div class="qz-pgd cr"></div><div class="qz-pgd"></div><div class="qz-pgd"></div><div class="qz-pgd"></div><div class="qz-pgd"></div></div>
+          <div class="qz-num">Question 1 of 5</div>
+          <div class="qz-q">Which room speaks to you?</div>
+          <div class="qz-grid">
+            <div class="qz-c sel"><div class="qz-ci fg-w"></div><div class="qz-cl">Warm Minimal</div></div>
+            <div class="qz-c"><div class="qz-ci fg-mt"></div><div class="qz-cl">Cool Modern</div></div>
+            <div class="qz-c"><div class="qz-ci fg-ln"></div><div class="qz-cl">Classic Comfort</div></div>
+            <div class="qz-c"><div class="qz-ci fg-rt"></div><div class="qz-cl">Eclectic Curated</div></div>
+          </div></div>
+          <div class="comp-n">Next question →</div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+
+      <!-- Q2 -->
+      <div class="pg"><div class="pl"><h3>Lifestyle Reality</h3><span class="mn">Q2 · How do you live?</span></div>
+        <div class="pf"><div class="ps"><div class="scr-qz">
+          <div class="qz-pg"><div class="qz-pgd dn"></div><div class="qz-pgd cr"></div><div class="qz-pgd"></div><div class="qz-pgd"></div><div class="qz-pgd"></div></div>
+          <div class="qz-num">Question 2 of 5</div>
+          <div class="qz-q">How do you actually live in your space?</div>
+          <div class="mc-list">
+            <div class="mc sel"><div class="mc-ic">🍷</div><div><h5>Love having people over</h5><p>Entertaining & gathering</p></div></div>
+            <div class="mc"><div class="mc-ic">🧘</div><div><h5>My quiet sanctuary</h5><p>Rest & recharge</p></div></div>
+            <div class="mc sel"><div class="mc-ic">💻</div><div><h5>Work from this room</h5><p>Productivity & focus</p></div></div>
+            <div class="mc"><div class="mc-ic">👨‍👩‍👧</div><div><h5>Family central</h5><p>Activity & play</p></div></div>
+            <div class="mc"><div class="mc-ic">📚</div><div><h5>Personal retreat</h5><p>Reading & reflection</p></div></div>
+          </div></div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+
+      <!-- Q3 -->
+      <div class="pg"><div class="pl"><h3>Material Connection</h3><span class="mn">Q3 · What texture calls?</span></div>
+        <div class="pf"><div class="ps"><div class="scr-qz">
+          <div class="qz-pg"><div class="qz-pgd dn"></div><div class="qz-pgd dn"></div><div class="qz-pgd cr"></div><div class="qz-pgd"></div><div class="qz-pgd"></div></div>
+          <div class="qz-num">Question 3 of 5</div>
+          <div class="qz-q">What texture calls to you?</div>
+          <div class="mc-list">
+            <div class="mc"><div class="mc-sw fg-wd"></div><div><h5>Weathered Oak</h5><p>Warmth & history</p></div></div>
+            <div class="mc sel"><div class="mc-sw fg-ln"></div><div><h5>Soft Linen</h5><p>Light & breathable</p></div></div>
+            <div class="mc"><div class="mc-sw fg-l"></div><div><h5>Aged Leather</h5><p>Rich & evolving</p></div></div>
+            <div class="mc"><div class="mc-sw fg-mt"></div><div><h5>Brushed Metal</h5><p>Industrial & precise</p></div></div>
+            <div class="mc"><div class="mc-sw fg-rt"></div><div><h5>Woven Rattan</h5><p>Natural & organic</p></div></div>
+          </div></div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+
+      <!-- Q4 -->
+      <div class="pg"><div class="pl"><h3>Investment</h3><span class="mn">Q4 · Budget tiers</span></div>
+        <div class="pf"><div class="ps"><div class="scr-qz">
+          <div class="qz-pg"><div class="qz-pgd dn"></div><div class="qz-pgd dn"></div><div class="qz-pgd dn"></div><div class="qz-pgd cr"></div><div class="qz-pgd"></div></div>
+          <div class="qz-num">Question 4 of 5</div>
+          <div class="qz-q">Let's talk about investment</div>
+          <div class="bt-list">
+            <div class="bt"><div class="bt-ic" style="background:var(--sg);color:#fff">🌱</div><div><h5>Thoughtful Starter</h5><p>$500 – $2,000 per room</p></div></div>
+            <div class="bt sel"><div class="bt-ic" style="background:var(--cl);color:#fff">✦</div><div><h5 style="color:var(--ow)">Curated Comfort</h5><p>$2,000 – $5,000 per room</p></div></div>
+            <div class="bt"><div class="bt-ic" style="background:var(--gh);color:var(--ch)">◆</div><div><h5>Heirloom Investment</h5><p>$5,000+ per room</p></div></div>
+            <div class="bt"><div class="bt-ic" style="background:var(--db);color:#fff">💬</div><div><h5>Let's Discuss</h5><p>I'd like designer guidance</p></div></div>
+          </div></div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+
+      <!-- Q5 -->
+      <div class="pg"><div class="pl"><h3>Change Catalyst</h3><span class="mn">Q5 · What's driving you?</span></div>
+        <div class="pf"><div class="ps"><div class="scr-qz">
+          <div class="qz-pg"><div class="qz-pgd dn"></div><div class="qz-pgd dn"></div><div class="qz-pgd dn"></div><div class="qz-pgd dn"></div><div class="qz-pgd cr"></div></div>
+          <div class="qz-num">Question 5 of 5</div>
+          <div class="qz-q">What's driving your design journey?</div>
+          <div class="mc-list">
+            <div class="mc"><div class="mc-ic">🏠</div><div><h5>Fresh start, new space</h5><p>Moving in or starting over</p></div></div>
+            <div class="mc sel"><div class="mc-ic">✨</div><div><h5>Finally making it mine</h5><p>Ready to invest in this space</p></div></div>
+            <div class="mc"><div class="mc-ic">🔄</div><div><h5>Life change, design change</h5><p>New chapter, new environment</p></div></div>
+            <div class="mc"><div class="mc-ic">💎</div><div><h5>Ready to invest in quality</h5><p>Upgrading to pieces that last</p></div></div>
+          </div></div>
+          <div class="comp-n">See your style →</div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+
+      <!-- STYLE RESULT -->
+      <div class="pg"><div class="pl"><h3>Style Profile Result</h3><span class="mn">Your Aesthete Profile</span></div>
+        <div class="pf"><div class="ps">
+          <div class="scr-sr">
+            <div class="ss" style="position:absolute;top:0;left:0;right:0"><span>9:42</span><span>···</span></div>
+            <div class="sr-badge"><div class="sr-badge-inner">✦</div></div>
+            <div class="sr-t">Warm Minimalist</div>
+            <div class="sr-sub">Your Primary Style</div>
+            <div class="sr-attrs">
+              <div class="sr-attr"><div class="sr-attr-v">Linen</div><div class="sr-attr-l">Material</div></div>
+              <div class="sr-attr"><div class="sr-attr-v">Warm</div><div class="sr-attr-l">Palette</div></div>
+              <div class="sr-attr"><div class="sr-attr-v">$2-5K</div><div class="sr-attr-l">Budget</div></div>
+            </div>
+            <div class="sr-bar"><div class="sr-bar-fill" style="width:87%"></div></div>
+            <div class="sr-match">87% Style Confidence</div>
+            <div style="width:100%;height:48px;border-radius:24px;background:var(--ch);color:var(--ow);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-size:14px;font-weight:500">View Recommendations</div>
+            <div style="margin-top:10px;font-size:13px;color:var(--cl)">Refine your style →</div>
+          </div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- ACT III: THE ROOM WALK                                         -->
+<!-- ============================================================ -->
+<section class="s a">
+  <div class="ct">
+    <div class="sh"><span class="mn">Act III · The Room Walk</span><h2>Scanning as <em>Choreography</em></h2><p>The room scan isn't data capture — it's a guided journey. The Companion transforms into Journey Mode, becoming the user's progress companion. Warm coaching text floats like conversation. Dust motes drift. Progress fills like tea steeping.</p></div>
+
+    <div class="pr">
+      <!-- PRE-SCAN -->
+      <div class="pg"><div class="pl"><h3>Pre-Scan Checklist</h3><span class="mn">Preparing the space</span></div>
+        <div class="pf"><div class="ps"><div class="scr-pre">
+          <div class="ss"><span>9:43</span><span>···</span></div>
+          <div class="pre-t">Before we begin</div>
+          <div class="pre-sub">A quick check to get the best results</div>
+          <div class="pre-items">
+            <div class="pre-item"><div class="pre-check">✓</div><div><h5>Good lighting</h5><p>Natural light works best</p></div></div>
+            <div class="pre-item"><div class="pre-check">✓</div><div><h5>Clear walking path</h5><p>Room to move around edges</p></div></div>
+            <div class="pre-item"><div class="pre-check">✓</div><div><h5>Tidy surfaces</h5><p>Remove clutter from tables</p></div></div>
+            <div class="pre-item"><div class="pre-check" style="background:rgba(196,165,123,.12);color:var(--cl)">→</div><div><h5>Stay in one room</h5><p>We'll scan one at a time</p></div></div>
+          </div>
+          <div style="position:absolute;bottom:38px;left:28px;right:28px;height:50px;border-radius:25px;background:var(--ch);color:var(--ow);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-size:14px;font-weight:500">Ready to Scan</div>
+        </div></div></div>
+      </div>
+
+      <!-- SCAN INITIATION -->
+      <div class="pg"><div class="pl"><h3>Scan Initiation</h3><span class="mn">"Let's walk together"</span></div>
+        <div class="pf"><div class="ps">
+          <div class="scr-sc"><div class="sc-bg"></div><div class="sc-ov"></div>
+            <div class="ss l" style="position:absolute;top:0;left:0;right:0;z-index:40"><span>9:43</span><span>···</span></div>
+            <div class="sc-pt" style="top:22%;left:32%;animation-delay:0s"></div>
+            <div class="sc-pt" style="top:42%;left:58%;animation-delay:1.2s"></div>
+            <div class="sc-pt" style="top:58%;left:28%;animation-delay:2.4s"></div>
+            <div class="sc-pt" style="top:32%;left:68%;animation-delay:3.6s"></div>
+            <div class="sc-coach"><div class="sc-coach-t">"Let's walk your room together"</div><div class="sc-coach-s">Start with any wall and move slowly</div></div>
+          </div>
+          <!-- Companion: Journey Mode at 0% -->
+          <div class="comp-j">
+            <div class="cj-ring"><span class="cj-pct">0%</span></div>
+            <div class="cj-txt"><div class="cj-t">Starting scan</div><div class="cj-s">Step 1 of 4</div></div>
+            <div class="cj-dots"><div class="cj-d cr"></div><div class="cj-d"></div><div class="cj-d"></div><div class="cj-d"></div></div>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- MID-SCAN -->
+      <div class="pg"><div class="pl"><h3>Progressive Capture</h3><span class="mn">42% · Style Awakening</span></div>
+        <div class="pf"><div class="ps">
+          <div class="scr-sc"><div class="sc-bg" style="background:linear-gradient(135deg,#c9c2b8,#b8b1a5 50%,#d4cfc7)"></div><div class="sc-ov"></div>
+            <div class="ss" style="position:absolute;top:0;left:0;right:0;z-index:40"><span>9:45</span><span>···</span></div>
+            <div style="position:absolute;top:28%;left:8%;width:84%;height:42%;border:1.5px dashed var(--cl);border-radius:6px;opacity:.3"></div>
+            <div style="position:absolute;top:38%;left:14%;width:72%;height:1px;background:var(--cl);opacity:.15"></div>
+            <div class="sc-pt" style="top:24%;left:38%;animation-delay:.5s"></div>
+            <div class="sc-pt" style="top:48%;left:55%;animation-delay:1.8s"></div>
+          </div>
+          <!-- Companion: Journey Mode at 42% -->
+          <div class="comp-j">
+            <div class="cj-ring"><div class="cj-fill" style="transform:rotate(195deg)"></div><span class="cj-pct">42%</span></div>
+            <div class="cj-txt"><div class="cj-t">Capturing walls</div><div class="cj-s">Step 2 of 4</div></div>
+            <div class="cj-dots"><div class="cj-d dn"></div><div class="cj-d cr"></div><div class="cj-d"></div><div class="cj-d"></div></div>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- FLOOR PLAN -->
+      <div class="pg"><div class="pl"><h3>Floor Plan Preview</h3><span class="mn">Scan Complete · Review</span></div>
+        <div class="pf"><div class="ps"><div class="scr-fp">
+          <div class="ss"><span>9:47</span><span>···</span></div>
+          <div class="fp-hd"><h2>Your Room</h2><span class="mn">Living Room · High Confidence</span></div>
+          <div class="fp-view">
+            <div class="fp-bdg">✓ High Confidence</div>
+            <div class="fp-room">
+              <div style="position:absolute;top:0;left:22%;width:28%;height:3px;background:var(--db);opacity:.3;border-radius:1px"></div>
+              <div style="position:absolute;top:0;left:62%;width:18%;height:3px;background:var(--db);opacity:.3;border-radius:1px"></div>
+              <div style="position:absolute;bottom:0;left:38%;width:18%;border-bottom:2px dashed var(--cl)"></div>
+              <div style="position:absolute;top:48%;left:-36px;font-family:var(--fm);font-size:8px;color:var(--ao)">14'3"</div>
+              <div style="position:absolute;top:-16px;left:38%;font-family:var(--fm);font-size:8px;color:var(--ao)">18'6"</div>
+              <div style="position:absolute;bottom:18%;left:12%;width:32%;height:14%;border-radius:3px;background:var(--cl);opacity:.15"></div>
+              <div style="position:absolute;top:22%;right:8%;width:10%;height:18%;border-radius:2px;background:var(--db);opacity:.15"></div>
+            </div>
+          </div>
+          <div class="fp-mets">
+            <div class="fp-met"><div class="fp-met-v">264</div><div class="fp-met-l">Sq Ft</div></div>
+            <div class="fp-met"><div class="fp-met-v">2</div><div class="fp-met-l">Windows</div></div>
+            <div class="fp-met"><div class="fp-met-v">3</div><div class="fp-met-l">Items</div></div>
+          </div>
+          <div class="fp-acts"><div class="fp-btn sec">Rescan</div><div class="fp-btn pri">Use This Scan</div></div>
+        </div>
+          <div class="comp-n">See your matches →</div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- ACT IV: THE REVELATION                                         -->
+<!-- ============================================================ -->
+<section class="s">
+  <div class="ct">
+    <div class="sh"><span class="mn">Act IV · The Revelation</span><h2>Curated <em>Recommendations</em></h2><p>Furniture arrives as a curated collection, not a catalog dump. Each piece carries a match score in DM Mono, maker tag as provenance, and Playfair price as the headline number. The Companion rests on browse, nudges "Place in AR" on product detail, and minimizes during AR.</p></div>
+
+    <div class="pr">
+      <!-- RECOMMENDATIONS -->
+      <div class="pg"><div class="pl"><h3>Recommendation Feed</h3><span class="mn">Companion · Resting</span></div>
+        <div class="pf"><div class="ps"><div class="scr-rc">
+          <div class="ss"><span>9:48</span><span>···</span></div>
+          <div class="rc-hd"><h2>Perfect for your space</h2><p>18 pieces curated for your living room</p></div>
+          <div class="rc-fb"><div class="rc-fc ac">All</div><div class="rc-fc">Seating</div><div class="rc-fc">Tables</div><div class="rc-fc">Lighting</div><div class="rc-fc">Storage</div></div>
+          <div class="rc-gd">
+            <div class="rc-cd"><div class="rc-ci fg-l"><div class="rc-cm">92% match</div><div class="rc-cs">♡</div></div><div class="rc-cn"><div class="rc-mk">Chilton Furniture</div><div class="rc-nm">Walnut Lounge Chair</div><div class="rc-pr">$2,850</div></div></div>
+            <div class="rc-cd"><div class="rc-ci fg-ln"><div class="rc-cm">88% match</div><div class="rc-cs">♡</div></div><div class="rc-cn"><div class="rc-mk">Shoppe Amber</div><div class="rc-nm">Linen Sectional Sofa</div><div class="rc-pr">$3,200</div></div></div>
+            <div class="rc-cd"><div class="rc-ci fg-wd"><div class="rc-cm">85% match</div><div class="rc-cs">♡</div></div><div class="rc-cn"><div class="rc-mk">Thos. Moser</div><div class="rc-nm">Cherry Coffee Table</div><div class="rc-pr">$1,890</div></div></div>
+            <div class="rc-cd"><div class="rc-ci fg-rt"><div class="rc-cm">82% match</div><div class="rc-cs">♡</div></div><div class="rc-cn"><div class="rc-mk">Lostine</div><div class="rc-nm">Woven Floor Lamp</div><div class="rc-pr">$475</div></div></div>
+          </div></div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+
+      <!-- PRODUCT DETAIL -->
+      <div class="pg"><div class="pl"><h3>Product Detail</h3><span class="mn">Companion · Nudge "Place in AR"</span></div>
+        <div class="pf"><div class="ps"><div class="scr-pd">
+          <div class="ss l" style="position:absolute;top:0;left:0;right:0;z-index:30"><span>9:49</span><span>···</span></div>
+          <div class="pd-hero fg-l"><div class="pd-bk">←</div><div class="pd-at"><div class="pd-ab">↗</div><div class="pd-ab">♡</div></div></div>
+          <div class="pd-ct">
+            <div class="pd-mk">Chilton Furniture · Freeport, ME</div>
+            <div class="pd-nm">Walnut Lounge Chair</div>
+            <div class="pd-sub">Hand-turned in Maine since 1904</div>
+            <div class="pd-row"><div class="pd-pr">$2,850</div><div class="pd-mp">92% match</div></div>
+            <div class="pd-bg"><div class="pd-bdg"><span>🌿</span> FSC Certified</div><div class="pd-bdg"><span>✋</span> Handcrafted</div><div class="pd-bdg"><span>📍</span> Made in USA</div></div>
+            <div class="ms"><div class="ms-hd"><div class="ms-av fg-e"></div><div><div class="ms-nm">Jonathan Chilton</div><div class="ms-loc">Third-Generation Woodworker</div></div></div>
+            <p>"Each chair starts as a conversation with the wood. Walnut tells you where it wants to bend — you just have to listen."</p></div>
+          </div></div>
+          <div class="comp-n">Place in your room →</div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+
+      <!-- AR PLACEMENT -->
+      <div class="pg"><div class="pl"><h3>AR Placement</h3><span class="mn">Companion · Minimal</span></div>
+        <div class="pf"><div class="ps"><div class="scr-ar">
+          <div class="ar-bg"></div>
+          <div class="ss" style="position:absolute;top:0;left:0;right:0;z-index:40"><span>9:50</span><span>···</span></div>
+          <div class="ar-shadow"></div><div class="ar-ghost">🪑</div>
+          <div class="ar-sl"><div class="ar-sl-lb">Light</div><div class="ar-sl-trk"><div class="ar-sl-fl"></div></div><div style="font-size:11px">☀</div></div>
+          <div class="ar-nm">Walnut Lounge Chair</div>
+          <div class="ar-ctrls"><div class="ar-cb">↻</div><div class="ar-cb pri">Save View</div><div class="ar-cb">📷</div></div>
+        </div>
+          <div class="comp-min"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- ACT V: THE LIVING APP                                          -->
+<!-- ============================================================ -->
+<section class="s a">
+  <div class="ct">
+    <div class="sh"><span class="mn">Act V · The Living App</span><h2>Home, Collections & <em>Profile</em></h2><p>The ongoing experience. Home surfaces new discoveries. Collections organize saves into mood boards. The Profile is a design journal showing style evolution. The Companion suggests scanning on Home, starting a project on Collections, and talking to a designer on Profile.</p></div>
+
+    <div class="pr">
+      <!-- HOME -->
+      <div class="pg"><div class="pl"><h3>Home</h3><span class="mn">Companion · Nudge "Scan"</span></div>
+        <div class="pf"><div class="ps"><div class="scr-hm" style="padding-bottom:0">
+          <div class="ss"><span>9:41</span><span>···</span></div>
+          <div class="hm-gr"><span class="mn">Good Morning</span><h2>Welcome back</h2></div>
+          <div class="hm-sr"><span>🔍</span><span>Search furniture, makers, styles...</span></div>
+          <div class="hm-sp"><div class="hm-spi">◎</div><div class="hm-spt"><h4>Scan a new room</h4><p>Get personalized picks in under 10 minutes</p></div></div>
+          <div class="hm-sec"><div class="hm-sh"><h3>Picked for you</h3><a>See all →</a></div>
+            <div class="hm-scr">
+              <div class="hm-fc"><div class="hm-fi fg-w"></div><div class="hm-fn"><h4>New from Thos. Moser</h4><p>Cherry & walnut collection</p></div></div>
+              <div class="hm-fc"><div class="hm-fi fg-s"></div><div class="hm-fn"><h4>Spring Living Rooms</h4><p>Curated for warm minimalists</p></div></div>
+            </div>
+          </div></div>
+          <div class="comp-n">Scan a room →</div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+
+      <!-- HOME EXPANDED -->
+      <div class="pg"><div class="pl"><h3>Home — Expanded</h3><span class="mn">Full context menu</span></div>
+        <div class="pf"><div class="ps">
+          <div class="scr-hm" style="padding-bottom:0;filter:brightness(.65)">
+            <div class="ss"><span>9:41</span><span>···</span></div>
+            <div class="hm-gr"><span class="mn">Good Morning</span><h2>Welcome back</h2></div>
+            <div class="hm-sr"><span>🔍</span><span>Search...</span></div>
+          </div>
+          <div class="comp-bk"></div>
+          <div class="comp-e"><div class="comp-p">
+            <div class="comp-ph"><span class="comp-pt">What next?</span><div class="comp-x">✕</div></div>
+            <div class="comp-as">
+              <div class="comp-a sg"><div class="comp-ai">◎</div><div class="comp-at" style="flex:1"><div class="comp-al">Scan a room</div><div class="comp-ah">Suggested next step</div></div><span class="comp-ar">›</span></div>
+              <div class="comp-a"><div class="comp-ai">✦</div><div style="flex:1"><div class="comp-al">Your recommendations</div><div class="comp-ah">18 items · Living room</div></div><span class="comp-ar">›</span></div>
+              <div class="comp-a"><div class="comp-ai">♡</div><div style="flex:1"><div class="comp-al">Collections</div><div class="comp-ah">2 boards · 13 items</div></div><span class="comp-ar">›</span></div>
+              <div class="comp-a"><div class="comp-ai">⊞</div><div style="flex:1"><div class="comp-al">Connect to portal</div><div class="comp-ah">Scan QR · patina.cloud</div></div><span class="comp-ar">›</span></div>
+              <div class="comp-a"><div class="comp-ai">◉</div><div style="flex:1"><div class="comp-al">Your profile</div><div class="comp-ah">Style · Rooms · Settings</div></div><span class="comp-ar">›</span></div>
+            </div>
+          </div></div>
+        </div></div>
+      </div>
+
+      <!-- COLLECTIONS -->
+      <div class="pg"><div class="pl"><h3>Collections</h3><span class="mn">Saved · Mood Boards</span></div>
+        <div class="pf"><div class="ps"><div class="scr-cl">
+          <div class="ss"><span>9:41</span><span>···</span></div>
+          <div class="cl-hd"><h2>Saved</h2></div>
+          <div class="cl-tabs"><div class="cl-tab ac">Collections</div><div class="cl-tab">All Items</div><div class="cl-tab">Rooms</div></div>
+          <div class="cl-ct">
+            <div class="cl-bd"><div class="cl-bdt"><h3>Living Room Refresh</h3><span class="mn">8 items</span></div>
+              <div class="cl-grd"><div class="cl-th fg-l"></div><div class="cl-th fg-wd"></div><div class="cl-th fg-ln"></div><div class="cl-th fg-rt"></div></div>
+            </div>
+            <div class="cl-bd"><div class="cl-bdt"><h3>Bedroom Ideas</h3><span class="mn">5 items</span></div>
+              <div class="cl-grd"><div class="cl-th fg-d"></div><div class="cl-th fg-s"></div><div class="cl-th fg-st"></div><div class="cl-th fg-w"></div></div>
+            </div>
+          </div></div>
+          <div class="comp-n">Start a project →</div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+
+      <!-- PROFILE -->
+      <div class="pg"><div class="pl"><h3>Design Journal</h3><span class="mn">Profile · Style Evolution</span></div>
+        <div class="pf"><div class="ps"><div class="scr-pf">
+          <div class="ss"><span>9:41</span><span>···</span></div>
+          <div class="pf-hd">
+            <div class="pf-av fg-e" style="color:var(--ow)">K</div>
+            <div class="pf-nm">Kody</div>
+            <div class="pf-tg">Member since April 2026</div>
+            <div class="pf-sb">✦ Warm Minimalist</div>
+          </div>
+          <div class="pf-sts">
+            <div class="pf-st"><div class="pf-st-v">3</div><div class="pf-st-l">Rooms</div></div>
+            <div class="pf-st"><div class="pf-st-v">24</div><div class="pf-st-l">Saved</div></div>
+            <div class="pf-st"><div class="pf-st-v">87%</div><div class="pf-st-l">Match</div></div>
+          </div>
+          <div class="pf-sec"><h4>Your Rooms</h4>
+            <div class="pf-rms">
+              <div class="pf-rc"><div class="pf-ri fg-w"></div><div class="pf-rn"><h5>Living Room</h5><span>Scanned Apr 2</span></div></div>
+              <div class="pf-rc"><div class="pf-ri fg-d"></div><div class="pf-rn"><h5>Bedroom</h5><span>Scanned Mar 28</span></div></div>
+              <div class="pf-rc"><div class="pf-ri fg-s"></div><div class="pf-rn"><h5>Office</h5><span>Scanned Mar 15</span></div></div>
+            </div>
+          </div></div>
+          <div class="comp-n">Talk to a designer →</div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+
+      <!-- DESIGNER -->
+      <div class="pg"><div class="pl"><h3>Designer Consultation</h3><span class="mn">Professional Hand-Off</span></div>
+        <div class="pf"><div class="ps"><div class="scr-ds">
+          <div class="ss l" style="position:absolute;top:0;left:0;right:0;z-index:30"><span>9:51</span><span>···</span></div>
+          <div class="ds-hero"><h2>Work with a designer</h2><p>Your room scan, style profile, and saved pieces give them everything they need.</p></div>
+          <div class="ds-card"><div class="ds-photo fg-w"></div><div class="ds-info"><h3>Leah Wilson</h3><span class="mn">Middlewest Studio · Prairie du Sac, WI</span><p>Warm, livable spaces that feel collected over time.</p></div></div>
+          <div class="ds-form">
+            <div class="ds-fg"><span class="ds-fl">Which rooms?</span><div class="ds-tags"><div class="ds-tag sel">Living Room</div><div class="ds-tag">Bedroom</div><div class="ds-tag sel">Office</div><div class="ds-tag">Kitchen</div></div></div>
+            <div class="ds-fg"><span class="ds-fl">Your vision</span><div class="ds-ta">I want a space that feels warm and collected, not showroom-perfect...</div></div>
+            <div style="margin-top:16px;height:48px;border-radius:24px;background:var(--ch);color:var(--ow);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-size:14px;font-weight:500">Request Consultation</div>
+          </div></div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- ACT VI: CONNECTION                                              -->
+<!-- ============================================================ -->
+<section class="s">
+  <div class="ct">
+    <div class="sh"><span class="mn">Act VI · Connection</span><h2>QR Auth, Notifications & <em>Settings</em></h2><p>Your phone is the key. When you visit patina.cloud on your laptop, tap "Connect to portal" in The Companion, scan the QR code, and you're in. No passwords. The phone holds your identity — the web just needs to ask.</p></div>
+
+    <div class="pr">
+      <!-- QR SCANNER -->
+      <div class="pg"><div class="pl"><h3>QR Scanner</h3><span class="mn">Connect to Portal</span></div>
+        <div class="pf"><div class="ps"><div class="scr-qr">
+          <div class="ss l" style="position:absolute;top:0;left:0;right:0;z-index:40"><span>9:52</span><span>···</span></div>
+          <div style="position:absolute;top:54px;left:14px;width:34px;height:34px;border-radius:50%;background:rgba(250,247,242,.12);display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--ow);z-index:40">←</div>
+          <div style="position:absolute;top:58px;left:50%;transform:translateX(-50%);font-family:var(--fm);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--cl);z-index:40">Connect to Portal</div>
+          <div class="qr-cam"><div class="qr-ret"><div class="qr-co tl"></div><div class="qr-co tr"></div><div class="qr-co bl"></div><div class="qr-co br"></div><div class="qr-scanl"></div></div></div>
+          <div class="qr-inst"><h3>Point at the QR code</h3><p>Open patina.cloud on your computer and scan the code shown on screen</p></div>
+        </div></div></div>
+      </div>
+
+      <!-- QR SUCCESS -->
+      <div class="pg"><div class="pl"><h3>Connected</h3><span class="mn">Portal Authenticated</span></div>
+        <div class="pf"><div class="ps"><div class="scr-qs">
+          <div class="ss l" style="position:absolute;top:0;left:0;right:0;z-index:40"><span>9:52</span><span>···</span></div>
+          <div class="qs-ring">✓</div>
+          <div class="qs-t">Connected</div>
+          <div class="qs-p">You're now signed into the Designer Portal on your computer</div>
+          <div class="qs-portal"><div class="qs-pi">◎</div><div class="qs-pt"><h5>Designer Portal</h5><span>patina.cloud/designer</span></div></div>
+          <div class="qs-btn">Done</div>
+        </div></div></div>
+      </div>
+
+      <!-- NOTIFICATIONS -->
+      <div class="pg"><div class="pl"><h3>Notifications</h3><span class="mn">Activity Feed</span></div>
+        <div class="pf"><div class="ps"><div class="scr-nt">
+          <div class="ss"><span>9:41</span><span>···</span></div>
+          <div class="nt-hd"><h2>Activity</h2><a>Mark all read</a></div>
+          <div class="nt-i ur"><div class="nt-ic" style="background:rgba(196,165,123,.1)">✦</div><div class="nt-ct"><h5>New matches for your Living Room</h5><p>4 pieces just added that fit your style</p></div><div class="nt-tm">2m</div></div>
+          <div class="nt-i ur"><div class="nt-ic" style="background:rgba(122,155,118,.1)">💬</div><div class="nt-ct"><h5>Leah responded to your request</h5><p>She'd love to schedule a consultation</p></div><div class="nt-tm">1h</div></div>
+          <div class="nt-i"><div class="nt-ic" style="background:rgba(232,197,71,.1)">📦</div><div class="nt-ct"><h5>Maker Spotlight: Lostine</h5><p>New collection of hand-woven lighting</p></div><div class="nt-tm">3h</div></div>
+          <div class="nt-i"><div class="nt-ic" style="background:rgba(139,156,173,.1)">📐</div><div class="nt-ct"><h5>Your style profile updated</h5><p>Trending toward Curated Heritage</p></div><div class="nt-tm">1d</div></div>
+          <div class="nt-i"><div class="nt-ic" style="background:rgba(168,181,160,.1)">🌿</div><div class="nt-ct"><h5>Sustainability story</h5><p>The journey of reclaimed oak</p></div><div class="nt-tm">2d</div></div>
+        </div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div class="pg"><div class="pl"><h3>Settings</h3><span class="mn">Account · Privacy · App</span></div>
+        <div class="pf"><div class="ps"><div class="scr-st">
+          <div class="ss"><span>9:41</span><span>···</span></div>
+          <div class="st-hd"><h2>Settings</h2></div>
+          <div class="st-grp"><div class="st-gt">Account</div><div class="st-its">
+            <div class="st-it"><div class="st-il"><div class="st-ii" style="background:rgba(196,165,123,.1)">◉</div><span class="st-in">Edit Profile</span></div><span class="st-ch">›</span></div>
+            <div class="st-it"><div class="st-il"><div class="st-ii" style="background:rgba(168,181,160,.1)">✦</div><span class="st-in">Style Preferences</span></div><span class="st-ch">›</span></div>
+            <div class="st-it"><div class="st-il"><div class="st-ii" style="background:rgba(139,156,173,.1)">🔒</div><span class="st-in">Privacy & Data</span></div><span class="st-ch">›</span></div>
+          </div></div>
+          <div class="st-grp"><div class="st-gt">Notifications</div><div class="st-its">
+            <div class="st-it"><div class="st-il"><div class="st-ii" style="background:rgba(232,197,71,.1)">✦</div><span class="st-in">New Matches</span></div><div class="st-tg on"></div></div>
+            <div class="st-it"><div class="st-il"><div class="st-ii" style="background:rgba(212,160,144,.1)">📦</div><span class="st-in">Maker Stories</span></div><div class="st-tg on"></div></div>
+            <div class="st-it"><div class="st-il"><div class="st-ii" style="background:rgba(229,226,221,.4)">💬</div><span class="st-in">Designer Messages</span></div><div class="st-tg of"></div></div>
+          </div></div>
+          <div class="st-grp" style="padding-bottom:96px"><div class="st-gt">App</div><div class="st-its">
+            <div class="st-it"><div class="st-il"><div class="st-ii" style="background:rgba(139,115,85,.1)">🎨</div><span class="st-in">Appearance</span></div><span class="st-ch">›</span></div>
+            <div class="st-it"><div class="st-il"><div class="st-ii" style="background:rgba(139,156,173,.1)">ℹ</div><span class="st-in">About Patina</span></div><span class="st-ch">›</span></div>
+          </div></div>
+        </div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- INTERACTION PATTERNS & EDGE CASES                              -->
+<!-- ============================================================ -->
+<section class="s d">
+  <div class="ct">
+    <div class="sh"><span class="mn">Interaction Patterns</span><h2 style="color:var(--ow)">Gestures, Edges & <em>Accessibility</em></h2></div>
+    <div class="ag">
+      <div class="ac" style="background:rgba(250,247,242,.06)"><span class="mn" style="color:var(--cl)">Gestures</span><h3 style="color:var(--ow)">Swipe Vocabulary</h3><p style="color:var(--pl)">Right = Save. Left = Not for me (trains Aesthete Engine). Up = Share. Hold = Material close-up. All gestures have tap alternatives for accessibility.</p></div>
+      <div class="ac" style="background:rgba(250,247,242,.06)"><span class="mn" style="color:var(--cl)">Haptics</span><h3 style="color:var(--ow)">Tactile Feedback</h3><p style="color:var(--pl)">Gentle tap on wall recognition. Soft impact on AR floor snap. Spring bounce on save. No haptic on negative actions — silence is intentional.</p></div>
+      <div class="ac" style="background:rgba(250,247,242,.06)"><span class="mn" style="color:var(--cl)">Transitions</span><h3 style="color:var(--ow)">Movement Language</h3><p style="color:var(--pl)">Cards cascade from vanishing point. Quiz questions cross-dissolve with vertical offset. AR furniture fades 60%→100%. Spring physics throughout — never linear easing.</p></div>
+      <div class="ac" style="background:rgba(250,247,242,.06)"><span class="mn" style="color:var(--cl)">Loading</span><h3 style="color:var(--ow)">Strata Animation</h3><p style="color:var(--pl)">Three lines draw left to right with staggered timing. "Taking a moment to curate..." replaces spinners. Progress is organic, like tea steeping.</p></div>
+      <div class="ac" style="background:rgba(250,247,242,.06)"><span class="mn" style="color:var(--cl)">Edge Cases</span><h3 style="color:var(--ow)">Warm Recovery</h3><p style="color:var(--pl)">Poor light: "Let's brighten things up." Complex room: "Large space! Let's focus on one area." Network fail: "Taking a moment to curate..." Empty room: "A blank canvas — exciting!"</p></div>
+      <div class="ac" style="background:rgba(250,247,242,.06)"><span class="mn" style="color:var(--cl)">Accessibility</span><h3 style="color:var(--ow)">WCAG AA+</h3><p style="color:var(--pl)">44pt minimum touch targets. VoiceOver labels on all elements. Reduced motion mode. High contrast maintaining brand warmth. Text scaling 100-150%. AR audio cues for guidance.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- CLOSING                                                        -->
+<!-- ============================================================ -->
+<section class="s a">
+  <div class="ct">
+    <div class="st"><div class="sl"></div><div class="sl"></div><div class="sl"></div></div>
+    <h2 style="margin-top:1.5rem;margin-bottom:1.2rem">Five tabs became <em>one mark.</em></h2>
+    <p class="lb" style="max-width:700px;margin-bottom:1.5rem">Twenty-eight screens. Five Companion states. Zero tab bars. The Strata Mark — three lines of decreasing width — carries the entire navigation of the application. It breathes when resting, nudges when you need direction, expands when you ask, tracks your journey during scanning, and whispers in the corner during AR.</p>
+    <p class="lb" style="max-width:700px;margin-bottom:1.5rem">And when you sit down at your laptop and visit patina.cloud, the same mark that guided your style discovery becomes the key that unlocks the door. Scan, confirm, connected. No password. No friction. Your phone holds your identity. The web just asks.</p>
+    <p class="lb" style="max-width:700px">The type does the hierarchy. The whitespace builds the rooms. The Companion guides the journey. And the interface becomes invisible — letting you focus on what matters: creating a space that tells your story.</p>
+    <div class="sm" style="margin-top:2.5rem"><div class="sl"></div><div class="sl"></div><div class="sl"></div></div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="df">
+  <div class="ct">
+    <div class="df-inner">
+      <div><h3>Patina</h3><em>Where Time Adds Value</em><p style="margin-top:1.2rem;font-size:.8rem;color:var(--cl)">iOS Application Design Document · v4 · April 2026</p></div>
+      <div style="text-align:right"><span class="mn" style="color:var(--cl)">28 Screens · 5 States · 1 Mark · 0 Tab Bars</span>
+        <div class="sm" style="margin-top:.8rem;margin-left:auto"><div class="sl" style="background:var(--cl)"></div><div class="sl" style="background:var(--cl);opacity:.6"></div><div class="sl" style="background:var(--cl);opacity:.3"></div></div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+const o=new IntersectionObserver(e=>{e.forEach(t=>{t.isIntersecting&&t.target.classList.add('v')})},{threshold:.1,rootMargin:'0px 0px -50px 0px'});
+document.querySelectorAll('.fi').forEach(e=>o.observe(e));
+</script>
+</body>
+</html>

@@ -3,7 +3,6 @@ import { notFound } from 'next/navigation';
 import { ClientHeader } from '@/components/layout/client-header';
 import { ProjectViewWrapper } from '@/components/project-view-wrapper';
 import { fetchClientProjectView, fetchClientProjects } from '@/lib/data/projects';
-import { formatDate, formatPercentage, formatStatusLabel } from '@/lib/utils/format';
 
 interface ProjectPageProps {
   params: Promise<{ projectId: string }>;
@@ -25,7 +24,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   const { project, milestones, lastUpdated } = projectView;
 
   return (
-    <div className="min-h-screen bg-[var(--color-canvas)]">
+    <div className="min-h-screen bg-[var(--bg-primary)]">
       <ClientHeader
         projects={projects}
         activeProjectId={project.id}

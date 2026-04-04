@@ -1,0 +1,1621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — iOS App Design v3 · The Companion</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500;1,600;1,700&family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================
+   PATINA iOS · V3 — THE COMPANION
+   Context-Aware Navigation · QR Auth · 
+   Typography-Forward · Journey-Driven
+   ============================================ */
+
+:root {
+  --off-white: #FAF7F2;
+  --soft-cream: #F5F2ED;
+  --clay: #C4A57B;
+  --aged-oak: #8B7355;
+  --mocha: #5C4A3C;
+  --charcoal: #2C2926;
+  --sage: #A8B5A0;
+  --dusty-blue: #8B9CAD;
+  --terracotta: #D4A090;
+  --pearl: #E5E2DD;
+  --golden-hour: #E8C547;
+  --warm-white: #FAF7F2;
+  --success: #7A9B76;
+
+  --bg: var(--off-white);
+  --text: var(--charcoal);
+
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: 'Inter', -apple-system, sans-serif;
+  --font-mono: 'DM Mono', monospace;
+
+  --shadow-sm: 0 2px 8px rgba(92,74,60,0.06);
+  --shadow-md: 0 4px 16px rgba(92,74,60,0.10);
+  --shadow-lg: 0 8px 32px rgba(92,74,60,0.14);
+  --shadow-xl: 0 16px 64px rgba(92,74,60,0.18);
+  --shadow-companion: 0 4px 24px rgba(92,74,60,0.20), 0 0 0 1px rgba(196,165,123,0.15);
+
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html {
+  font-size: 17px;
+  scroll-behavior: smooth;
+  background: #E8E4DF;
+  color: var(--text);
+}
+
+body {
+  font-family: var(--font-body);
+  font-weight: 400;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* ==========================================
+   DOCUMENT LAYOUT
+   ========================================== */
+.container { max-width: 1200px; margin: 0 auto; padding: 0 clamp(1.5rem, 4vw, 3rem); }
+.narrow { max-width: 800px; margin: 0 auto; padding: 0 clamp(1.5rem, 4vw, 3rem); }
+
+h1, h2, h3 { font-family: var(--font-display); font-weight: 400; line-height: 1.15; letter-spacing: -0.02em; }
+h1 { font-size: clamp(2.8rem, 6vw, 5rem); }
+h2 { font-size: clamp(1.8rem, 4vw, 3rem); }
+h3 { font-size: clamp(1.2rem, 2.2vw, 1.6rem); font-weight: 500; }
+h4 { font-family: var(--font-body); font-size: 0.82rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--aged-oak); }
+p { font-size: 1rem; color: var(--mocha); max-width: 640px; }
+em { font-family: var(--font-display); font-style: italic; color: var(--aged-oak); }
+.mono { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--aged-oak); }
+.large-body { font-size: 1.15rem; line-height: 1.8; }
+
+/* STRATA MARK (document) */
+.strata { display: flex; flex-direction: column; gap: 5px; padding: 2.5rem 0; }
+.strata-line { height: 2px; background: var(--mocha); border-radius: 1px; }
+.strata-line:nth-child(1) { width: 100%; }
+.strata-line:nth-child(2) { width: 80%; opacity: 0.7; }
+.strata-line:nth-child(3) { width: 60%; opacity: 0.4; }
+
+.strata-mini { display: flex; flex-direction: column; gap: 3px; width: 40px; }
+.strata-mini .strata-line { height: 1.5px; }
+
+/* ==========================================
+   DOCUMENT HEADER
+   ========================================== */
+.doc-header {
+  padding: clamp(4rem, 10vh, 8rem) 0 3rem;
+  background: var(--off-white);
+  position: relative;
+}
+.doc-header::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--clay), transparent); }
+.doc-header .mono { margin-bottom: 1.5rem; display: block; }
+.doc-header h1 { margin-bottom: 1.5rem; max-width: 900px; }
+.doc-header p { font-size: 1.15rem; line-height: 1.8; max-width: 700px; }
+.doc-meta { display: flex; gap: 3rem; margin-top: 2.5rem; padding-top: 2rem; border-top: 1px solid var(--pearl); flex-wrap: wrap; }
+.doc-meta-item .mono { display: block; margin-bottom: 0.25rem; }
+.doc-meta-item span { font-family: var(--font-body); font-size: 0.9rem; color: var(--charcoal); font-weight: 500; }
+
+/* ==========================================
+   SECTIONS
+   ========================================== */
+.section { padding: clamp(3rem, 8vh, 6rem) 0; background: var(--off-white); position: relative; }
+.section.alt { background: var(--soft-cream); }
+.section.dark { background: var(--charcoal); color: var(--off-white); }
+.section.dark p { color: var(--pearl); }
+.section.dark h4 { color: var(--clay); }
+.section.dark .mono { color: var(--clay); }
+.section-header { margin-bottom: 3rem; }
+.section-header .mono { display: block; margin-bottom: 0.75rem; }
+.section-header h2 { margin-bottom: 1rem; }
+
+/* ==========================================
+   PHONE FRAMES
+   ========================================== */
+.phone-row {
+  display: flex;
+  gap: 2.5rem;
+  overflow-x: auto;
+  padding: 2rem 0;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.phone-row::-webkit-scrollbar { display: none; }
+
+.phone-group { flex: 0 0 auto; scroll-snap-align: center; display: flex; flex-direction: column; align-items: center; }
+.phone-label { margin-bottom: 1rem; text-align: center; }
+.phone-label h3 { font-size: 1.1rem; margin-bottom: 0.25rem; }
+.phone-label .mono { font-size: 0.65rem; }
+
+.phone-frame {
+  width: 375px; height: 812px;
+  border-radius: 44px; background: var(--charcoal);
+  padding: 12px; position: relative;
+  box-shadow: var(--shadow-xl), 0 0 0 1px rgba(0,0,0,0.1);
+  flex-shrink: 0;
+}
+
+.phone-screen {
+  width: 100%; height: 100%;
+  border-radius: 32px; overflow: hidden;
+  position: relative; background: var(--off-white);
+}
+
+/* Dynamic Island */
+.phone-screen::before {
+  content: ''; position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  width: 120px; height: 34px; background: var(--charcoal);
+  border-radius: 20px; z-index: 100;
+}
+/* Home Indicator */
+.phone-screen::after {
+  content: ''; position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+  width: 134px; height: 5px; background: var(--charcoal);
+  border-radius: 3px; z-index: 100; opacity: 0.3;
+}
+
+.screen-status {
+  padding: 14px 24px 0; display: flex; justify-content: space-between; align-items: center;
+  height: 50px; font-family: var(--font-body); font-size: 12px; font-weight: 600;
+  color: var(--charcoal); position: relative; z-index: 50;
+}
+.screen-status.light { color: var(--off-white); }
+
+/* ==========================================
+   THE COMPANION — Core Navigation Element
+   The Strata Mark as a living, breathing guide
+   ========================================== */
+
+/* --- Resting State --- */
+.companion {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.companion-mark {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--charcoal);
+  box-shadow: var(--shadow-companion);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  cursor: pointer;
+  position: relative;
+}
+
+.companion-mark .c-line {
+  height: 1.5px;
+  border-radius: 1px;
+  background: var(--off-white);
+}
+.companion-mark .c-line:nth-child(1) { width: 20px; }
+.companion-mark .c-line:nth-child(2) { width: 16px; opacity: 0.7; }
+.companion-mark .c-line:nth-child(3) { width: 12px; opacity: 0.4; }
+
+/* Breathing glow */
+.companion-mark::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid var(--clay);
+  opacity: 0.35;
+  animation: companion-breathe 3s ease-in-out infinite;
+}
+
+@keyframes companion-breathe {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(1.06); }
+}
+
+/* --- Nudge Label --- */
+.companion-nudge {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 6px 14px;
+  border-radius: 14px;
+  background: var(--charcoal);
+  color: var(--off-white);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: var(--shadow-md);
+  z-index: 96;
+}
+
+.companion-nudge::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 10px;
+  background: var(--charcoal);
+  border-radius: 2px;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+/* --- Expanded State --- */
+.companion-expanded {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  width: calc(100% - 48px);
+}
+
+.companion-panel {
+  width: 100%;
+  background: var(--charcoal);
+  border-radius: 24px;
+  padding: 20px;
+  box-shadow: var(--shadow-companion);
+  position: relative;
+}
+
+.companion-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.companion-panel-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--off-white);
+  font-style: italic;
+}
+
+.companion-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(250,247,242,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pearl);
+  font-size: 14px;
+}
+
+.companion-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.companion-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(250,247,242,0.06);
+}
+
+.companion-action:hover,
+.companion-action.suggested {
+  background: rgba(196,165,123,0.15);
+}
+
+.companion-action-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.companion-action-text {
+  flex: 1;
+}
+
+.companion-action-label {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--off-white);
+}
+
+.companion-action-hint {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--clay);
+  margin-top: 1px;
+}
+
+.companion-action-arrow {
+  color: var(--aged-oak);
+  font-size: 14px;
+}
+
+/* Suggested glow */
+.companion-action.suggested .companion-action-icon {
+  background: var(--clay);
+  color: var(--off-white);
+}
+
+/* Backdrop blur when expanded */
+.companion-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(44,41,38,0.3);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 94;
+  border-radius: 32px;
+}
+
+/* --- Journey Mode (during scan) --- */
+.companion-journey {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 95;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: var(--charcoal);
+  border-radius: 28px;
+  box-shadow: var(--shadow-companion);
+}
+
+.journey-progress-ring {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2.5px solid rgba(250,247,242,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.journey-progress-fill {
+  position: absolute;
+  inset: -2.5px;
+  border-radius: 50%;
+  border: 2.5px solid var(--clay);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+}
+
+.journey-percent {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--off-white);
+}
+
+.journey-text {
+  flex: 1;
+}
+
+.journey-title {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--off-white);
+}
+
+.journey-subtitle {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--clay);
+}
+
+.journey-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.journey-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(250,247,242,0.2);
+}
+.journey-dot.done { background: var(--clay); }
+.journey-dot.current { background: var(--off-white); }
+
+/* --- Minimal State (AR, immersive) --- */
+.companion-minimal {
+  position: absolute;
+  bottom: 28px;
+  right: 20px;
+  z-index: 95;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(44,41,38,0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2.5px;
+  box-shadow: var(--shadow-md);
+}
+
+.companion-minimal .c-line {
+  height: 1.5px;
+  border-radius: 1px;
+  background: var(--off-white);
+}
+.companion-minimal .c-line:nth-child(1) { width: 16px; }
+.companion-minimal .c-line:nth-child(2) { width: 12px; opacity: 0.7; }
+.companion-minimal .c-line:nth-child(3) { width: 9px; opacity: 0.4; }
+
+/* ==========================================
+   QR AUTH SCREEN
+   ========================================== */
+.qr-viewport {
+  position: absolute;
+  inset: 0;
+  background: var(--charcoal);
+  display: flex;
+  flex-direction: column;
+}
+
+.qr-camera {
+  flex: 1;
+  position: relative;
+  background: linear-gradient(135deg, #1a1816 0%, #2a2724 50%, #1a1816 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-reticle {
+  width: 220px;
+  height: 220px;
+  position: relative;
+}
+
+.qr-corner {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border-color: var(--clay);
+  border-style: solid;
+  border-width: 0;
+}
+
+.qr-corner.tl { top: 0; left: 0; border-top-width: 3px; border-left-width: 3px; border-radius: 4px 0 0 0; }
+.qr-corner.tr { top: 0; right: 0; border-top-width: 3px; border-right-width: 3px; border-radius: 0 4px 0 0; }
+.qr-corner.bl { bottom: 0; left: 0; border-bottom-width: 3px; border-left-width: 3px; border-radius: 0 0 0 4px; }
+.qr-corner.br { bottom: 0; right: 0; border-bottom-width: 3px; border-right-width: 3px; border-radius: 0 0 4px 0; }
+
+.qr-scan-line {
+  position: absolute;
+  top: 30%;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--clay), transparent);
+  animation: qr-sweep 2s ease-in-out infinite;
+}
+
+@keyframes qr-sweep {
+  0% { top: 10%; opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { top: 85%; opacity: 0; }
+}
+
+.qr-instruction {
+  text-align: center;
+  padding: 32px 24px 48px;
+  background: var(--charcoal);
+}
+
+.qr-instruction h3 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: var(--off-white);
+  margin-bottom: 6px;
+}
+
+.qr-instruction p {
+  font-size: 14px;
+  color: var(--pearl);
+  max-width: 280px;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+/* QR Success state */
+.qr-success {
+  position: absolute;
+  inset: 0;
+  background: var(--charcoal);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
+.qr-success-ring {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 3px solid var(--clay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+}
+
+.qr-success h3 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--off-white);
+}
+
+.qr-success p {
+  font-size: 14px;
+  color: var(--pearl);
+  text-align: center;
+  max-width: 260px;
+}
+
+.qr-success-portal {
+  margin-top: 12px;
+  padding: 12px 20px;
+  border-radius: 14px;
+  background: rgba(250,247,242,0.06);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.qr-portal-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--clay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.qr-portal-text h5 {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--off-white);
+}
+
+.qr-portal-text span {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--clay);
+}
+
+/* ==========================================
+   SCREEN CONTENT STYLES
+   (Carried forward, bottom nav removed)
+   ========================================== */
+
+/* --- Onboarding --- */
+.screen-onboarding { height: 100%; display: flex; flex-direction: column; background: var(--off-white); }
+.onboarding-image { flex: 1; background: linear-gradient(180deg, var(--soft-cream) 0%, var(--pearl) 100%); position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.onboarding-content { padding: 32px 28px 100px; text-align: center; }
+.onboarding-content h2 { font-family: var(--font-display); font-size: 26px; font-weight: 400; color: var(--charcoal); margin-bottom: 12px; line-height: 1.2; }
+.onboarding-content p { font-size: 15px; color: var(--mocha); max-width: 300px; margin: 0 auto; line-height: 1.6; }
+.onboarding-dots { display: flex; gap: 8px; justify-content: center; margin-top: 20px; }
+.onboarding-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pearl); }
+.onboarding-dot.active { background: var(--clay); width: 24px; border-radius: 4px; }
+.onboarding-cta { position: absolute; bottom: 40px; left: 28px; right: 28px; height: 52px; border-radius: 26px; background: var(--charcoal); color: var(--off-white); display: flex; align-items: center; justify-content: center; font-family: var(--font-body); font-size: 15px; font-weight: 500; z-index: 50; }
+.onboarding-skip { position: absolute; top: 58px; right: 24px; font-family: var(--font-body); font-size: 13px; color: var(--aged-oak); z-index: 60; }
+
+/* --- Auth --- */
+.screen-auth { height: 100%; display: flex; flex-direction: column; background: var(--off-white); padding: 60px 28px 40px; }
+.auth-logo { font-family: var(--font-display); font-size: 32px; font-weight: 500; letter-spacing: 0.15em; text-transform: uppercase; color: var(--charcoal); text-align: center; margin-top: 20px; }
+.auth-strata-mini { display: flex; flex-direction: column; gap: 3px; align-items: center; margin: 10px 0 40px; }
+.auth-strata-mini div:nth-child(1) { width: 40px; height: 1.5px; background: var(--mocha); }
+.auth-strata-mini div:nth-child(2) { width: 32px; height: 1.5px; background: var(--clay); }
+.auth-strata-mini div:nth-child(3) { width: 24px; height: 1.5px; background: var(--clay); opacity: 0.5; }
+.auth-title { font-family: var(--font-display); font-size: 24px; color: var(--charcoal); text-align: center; margin-bottom: 6px; }
+.auth-subtitle { font-size: 14px; color: var(--aged-oak); text-align: center; margin-bottom: 32px; }
+.auth-btn { width: 100%; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 10px; font-family: var(--font-body); font-size: 15px; font-weight: 500; margin-bottom: 12px; }
+.auth-btn.apple { background: var(--charcoal); color: var(--off-white); }
+.auth-btn.google { background: var(--off-white); border: 1.5px solid var(--pearl); color: var(--charcoal); }
+.auth-btn.email { background: var(--off-white); border: 1.5px solid var(--pearl); color: var(--charcoal); }
+.auth-divider { display: flex; align-items: center; gap: 16px; margin: 20px 0; }
+.auth-divider-line { flex: 1; height: 1px; background: var(--pearl); }
+.auth-guest { font-size: 14px; color: var(--clay); text-align: center; margin-top: 8px; }
+.auth-footer { margin-top: auto; font-size: 11px; color: var(--aged-oak); text-align: center; line-height: 1.5; }
+
+/* --- Quiz --- */
+.screen-quiz { height: 100%; display: flex; flex-direction: column; background: var(--off-white); }
+.quiz-progress { padding: 54px 24px 0; display: flex; gap: 6px; }
+.quiz-progress-dot { flex: 1; height: 3px; border-radius: 2px; background: var(--pearl); }
+.quiz-progress-dot.done { background: var(--clay); }
+.quiz-progress-dot.current { background: var(--mocha); }
+.quiz-question-num { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; color: var(--aged-oak); padding: 16px 24px 0; text-transform: uppercase; }
+.quiz-question { font-family: var(--font-display); font-size: 24px; font-weight: 400; color: var(--charcoal); padding: 8px 24px 0; line-height: 1.25; }
+.quiz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 20px 24px; flex: 1; }
+.quiz-card { border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+.quiz-card-image { flex: 1; min-height: 120px; }
+.quiz-card-label { padding: 10px 12px; font-family: var(--font-body); font-size: 13px; font-weight: 500; color: var(--charcoal); background: var(--soft-cream); }
+.quiz-card.selected { outline: 2.5px solid var(--clay); outline-offset: -2.5px; }
+.quiz-card.selected .quiz-card-label { background: var(--clay); color: white; }
+
+/* Material/lifestyle cards */
+.material-cards { display: flex; flex-direction: column; gap: 10px; padding: 20px 24px; flex: 1; overflow-y: auto; }
+.material-card { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 14px; background: var(--soft-cream); }
+.material-card.selected { background: var(--clay); color: white; }
+.material-swatch { width: 52px; height: 52px; border-radius: 10px; flex-shrink: 0; }
+.material-info h5 { font-family: var(--font-body); font-size: 15px; font-weight: 500; color: var(--charcoal); margin-bottom: 2px; }
+.material-info p { font-size: 12px; color: var(--aged-oak); margin: 0; }
+.material-card.selected .material-info h5, .material-card.selected .material-info p { color: white; }
+
+/* Budget tiers */
+.budget-section { flex: 1; padding: 20px 24px; display: flex; flex-direction: column; }
+.budget-tiers { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.budget-tier { display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 14px; background: var(--soft-cream); }
+.budget-tier.selected { background: var(--charcoal); color: var(--off-white); }
+.budget-tier-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+.budget-tier-info h5 { font-family: var(--font-display); font-size: 16px; font-weight: 500; margin-bottom: 2px; }
+.budget-tier-info p { font-size: 12px; color: var(--aged-oak); margin: 0; }
+.budget-tier.selected .budget-tier-info p { color: var(--pearl); }
+
+/* --- Recs --- */
+.screen-recs { height: 100%; display: flex; flex-direction: column; background: var(--off-white); }
+.recs-header { padding: 56px 24px 12px; }
+.recs-header h2 { font-family: var(--font-display); font-size: 22px; color: var(--charcoal); }
+.recs-header p { font-size: 13px; color: var(--aged-oak); margin-top: 4px; }
+.recs-filter-bar { display: flex; gap: 8px; padding: 8px 24px 12px; overflow-x: auto; }
+.filter-chip { flex-shrink: 0; padding: 6px 14px; border-radius: 20px; font-family: var(--font-body); font-size: 12px; font-weight: 500; background: var(--soft-cream); color: var(--mocha); white-space: nowrap; }
+.filter-chip.active { background: var(--charcoal); color: var(--off-white); }
+.recs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 24px 100px; flex: 1; overflow-y: auto; align-content: start; }
+.rec-card { border-radius: 14px; overflow: hidden; background: var(--soft-cream); }
+.rec-card-image { height: 160px; position: relative; }
+.rec-card-match { position: absolute; top: 8px; left: 8px; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.04em; background: rgba(250,247,242,0.9); backdrop-filter: blur(8px); padding: 3px 8px; border-radius: 6px; color: var(--mocha); }
+.rec-card-save { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 50%; background: rgba(250,247,242,0.9); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.rec-card-info { padding: 10px 12px; }
+.rec-card-maker { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--aged-oak); margin-bottom: 2px; }
+.rec-card-name { font-family: var(--font-body); font-size: 13px; font-weight: 500; color: var(--charcoal); margin-bottom: 4px; line-height: 1.3; }
+.rec-card-price { font-family: var(--font-display); font-size: 16px; font-weight: 500; color: var(--charcoal); }
+
+/* --- Product Detail --- */
+.screen-product { height: 100%; display: flex; flex-direction: column; background: var(--off-white); overflow-y: auto; }
+.product-hero { height: 340px; position: relative; flex-shrink: 0; }
+.product-back { position: absolute; top: 56px; left: 16px; width: 36px; height: 36px; border-radius: 50%; background: rgba(250,247,242,0.85); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; font-size: 16px; z-index: 20; }
+.product-actions-top { position: absolute; top: 56px; right: 16px; display: flex; gap: 8px; z-index: 20; }
+.product-action-btn { width: 36px; height: 36px; border-radius: 50%; background: rgba(250,247,242,0.85); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.product-content { padding: 24px 24px 100px; }
+.product-maker-tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--clay); margin-bottom: 6px; }
+.product-name { font-family: var(--font-display); font-size: 26px; font-weight: 400; color: var(--charcoal); line-height: 1.2; margin-bottom: 4px; }
+.product-subtitle { font-size: 14px; color: var(--aged-oak); margin-bottom: 16px; }
+.product-price-row { display: flex; align-items: baseline; gap: 12px; margin-bottom: 20px; }
+.product-price { font-family: var(--font-display); font-size: 28px; font-weight: 500; color: var(--charcoal); }
+.product-match-pill { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; padding: 4px 10px; border-radius: 10px; background: rgba(122,155,118,0.12); color: var(--success); }
+.maker-story { margin: 20px 0; padding: 20px; background: var(--soft-cream); border-radius: 14px; }
+.maker-story-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.maker-avatar { width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0; }
+.maker-name { font-family: var(--font-body); font-size: 14px; font-weight: 500; color: var(--charcoal); }
+.maker-location { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--aged-oak); }
+.maker-story > p { font-size: 14px; color: var(--mocha); line-height: 1.6; font-style: italic; max-width: 100%; }
+.product-badges { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+.product-badge { display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 20px; background: var(--soft-cream); font-size: 11px; color: var(--mocha); }
+
+/* --- Home --- */
+.screen-home { height: 100%; display: flex; flex-direction: column; background: var(--off-white); overflow-y: auto; }
+.home-greeting { padding: 56px 24px 0; }
+.home-greeting .mono { display: block; margin-bottom: 4px; }
+.home-greeting h2 { font-family: var(--font-display); font-size: 26px; color: var(--charcoal); }
+.home-search { margin: 16px 24px; height: 44px; border-radius: 22px; background: var(--soft-cream); display: flex; align-items: center; padding: 0 16px; gap: 10px; font-size: 14px; color: var(--aged-oak); }
+.home-section { padding: 16px 0; }
+.home-section-header { display: flex; justify-content: space-between; align-items: center; padding: 0 24px; margin-bottom: 12px; }
+.home-section-header h3 { font-family: var(--font-display); font-size: 18px; color: var(--charcoal); }
+.home-section-header a { font-family: var(--font-body); font-size: 13px; color: var(--clay); text-decoration: none; font-weight: 500; }
+.home-scroll { display: flex; gap: 12px; padding: 0 24px; overflow-x: auto; }
+.home-featured-card { flex: 0 0 260px; border-radius: 16px; overflow: hidden; background: var(--soft-cream); }
+.home-featured-img { height: 160px; }
+.home-featured-info { padding: 12px 14px; }
+.home-featured-info h4 { font-family: var(--font-body); font-size: 14px; font-weight: 500; color: var(--charcoal); text-transform: none; letter-spacing: 0; margin-bottom: 2px; }
+.home-featured-info p { font-size: 12px; color: var(--aged-oak); margin: 0; }
+.home-scan-prompt { margin: 0 24px 16px; padding: 24px; border-radius: 16px; background: var(--charcoal); color: var(--off-white); display: flex; align-items: center; gap: 16px; }
+.scan-prompt-icon { width: 56px; height: 56px; border-radius: 14px; background: var(--clay); display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
+.scan-prompt-text h4 { font-family: var(--font-display); font-size: 17px; color: var(--off-white); font-weight: 400; text-transform: none; letter-spacing: 0; margin-bottom: 4px; }
+.scan-prompt-text p { font-size: 12px; color: var(--pearl); margin: 0; max-width: 100%; }
+
+/* --- Profile --- */
+.screen-profile { height: 100%; display: flex; flex-direction: column; background: var(--off-white); overflow-y: auto; }
+.profile-header { padding: 56px 24px 24px; text-align: center; }
+.profile-avatar { width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 28px; font-weight: 500; color: var(--off-white); }
+.profile-name { font-family: var(--font-display); font-size: 24px; color: var(--charcoal); margin-bottom: 4px; }
+.profile-tagline { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--aged-oak); }
+.profile-style-badge { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 6px 16px; border-radius: 20px; background: var(--soft-cream); font-family: var(--font-body); font-size: 13px; color: var(--mocha); }
+.profile-stats { display: flex; padding: 20px 24px; border-top: 1px solid var(--pearl); border-bottom: 1px solid var(--pearl); }
+.profile-stat { flex: 1; text-align: center; position: relative; }
+.profile-stat:not(:last-child)::after { content: ''; position: absolute; right: 0; top: 20%; height: 60%; width: 1px; background: var(--pearl); }
+.profile-stat-val { font-family: var(--font-display); font-size: 22px; font-weight: 500; color: var(--charcoal); }
+.profile-stat-label { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--aged-oak); margin-top: 2px; }
+.profile-section { padding: 20px 24px; }
+.profile-section h4 { font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--aged-oak); margin-bottom: 12px; }
+.profile-rooms { display: flex; gap: 12px; overflow-x: auto; }
+.profile-room-card { flex: 0 0 140px; border-radius: 12px; overflow: hidden; background: var(--soft-cream); }
+.profile-room-img { height: 100px; }
+.profile-room-info { padding: 8px 10px; }
+.profile-room-name { font-family: var(--font-body); font-size: 13px; font-weight: 500; color: var(--charcoal); }
+.profile-room-date { font-family: var(--font-mono); font-size: 8px; color: var(--aged-oak); letter-spacing: 0.04em; text-transform: uppercase; }
+
+/* ==========================================
+   UTILITY / GRADIENT FILLS
+   ========================================== */
+.fill-gradient-warm { background: linear-gradient(135deg, var(--soft-cream), var(--clay)); }
+.fill-gradient-dusk { background: linear-gradient(180deg, var(--dusty-blue), var(--mocha)); }
+.fill-gradient-earth { background: linear-gradient(135deg, var(--aged-oak), var(--clay)); }
+.fill-gradient-sage { background: linear-gradient(135deg, var(--sage), var(--pearl)); }
+.fill-gradient-leather { background: linear-gradient(135deg, #8B6F47, #A3927C); }
+.fill-gradient-linen { background: linear-gradient(135deg, #D4CFC7, #E5E2DD); }
+.fill-gradient-stone { background: linear-gradient(135deg, #9E9689, #B8B0A5); }
+.fill-gradient-wood { background: linear-gradient(135deg, #6B5B4E, #8B7355); }
+.fill-gradient-metal { background: linear-gradient(135deg, #7A7B80, #A8A9AD); }
+.fill-gradient-rattan { background: linear-gradient(135deg, #B8A080, #D4C4A8); }
+
+/* ==========================================
+   ANNOTATION & LAYOUT
+   ========================================== */
+.annotation-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; margin-top: 2rem; }
+.annotation-card { padding: 1.5rem; border-radius: 12px; background: var(--soft-cream); }
+.annotation-card .mono { display: block; margin-bottom: 0.5rem; }
+.annotation-card h3 { font-size: 1.2rem; margin-bottom: 0.5rem; }
+.annotation-card p { font-size: 0.9rem; }
+.principle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin-top: 2rem; }
+.principle-item { display: flex; gap: 1rem; }
+.principle-num { font-family: var(--font-display); font-size: 2.5rem; font-weight: 400; color: var(--clay); line-height: 1; flex-shrink: 0; width: 50px; }
+.principle-item h3 { margin-bottom: 0.4rem; }
+.fade-in { opacity: 0; transform: translateY(20px); transition: opacity 0.7s var(--ease), transform 0.7s var(--ease); }
+.fade-in.visible { opacity: 1; transform: translateY(0); }
+
+/* COMPANION STATE DIAGRAMS */
+.state-row { display: flex; gap: 2rem; margin-top: 2rem; flex-wrap: wrap; }
+.state-card { flex: 1; min-width: 200px; padding: 1.5rem; border-radius: 14px; background: var(--charcoal); text-align: center; }
+.state-card h3 { color: var(--off-white); font-size: 1rem; margin-bottom: 0.5rem; }
+.state-card p { color: var(--pearl); font-size: 0.85rem; max-width: 100%; }
+.state-card .mono { color: var(--clay); }
+.state-visual { margin: 1rem 0; display: flex; justify-content: center; }
+
+/* FOOTER */
+.doc-footer { padding: 4rem 0; background: var(--charcoal); color: var(--pearl); }
+.doc-footer-inner { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 2rem; }
+.doc-footer h3 { font-family: var(--font-display); font-size: 1.4rem; color: var(--off-white); }
+.doc-footer em { color: var(--clay); display: block; margin-top: 0.25rem; }
+
+/* RESPONSIVE */
+@media (max-width: 900px) {
+  .phone-row { gap: 1.5rem; padding: 1rem 1.5rem; }
+  .phone-frame { width: 320px; height: 693px; }
+  .phone-screen { border-radius: 28px; }
+  .doc-meta { gap: 1.5rem; }
+}
+@media (max-width: 600px) {
+  .phone-frame { width: 280px; height: 607px; border-radius: 36px; }
+  .phone-screen { border-radius: 26px; }
+  .container, .narrow { padding: 0 1rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     HEADER
+     ============================================================ -->
+<header class="doc-header">
+  <div class="container">
+    <div class="strata-mini"><div class="strata-line"></div><div class="strata-line"></div><div class="strata-line"></div></div>
+    <span class="mono" style="margin-top:1rem;display:block;">iOS Application Design · v3 · The Companion</span>
+    <h1>The <em>Companion</em></h1>
+    <p class="large-body">A complete reimagination of Patina's iOS navigation. The bottom tab bar is gone. In its place: a single, living element — The Companion — built from the Strata Mark itself. It breathes. It knows where you are. It suggests what's next. And it holds the key that connects your phone to every Patina portal.</p>
+    <div class="doc-meta">
+      <div class="doc-meta-item"><span class="mono">Version</span><span>3.0</span></div>
+      <div class="doc-meta-item"><span class="mono">Date</span><span>April 2026</span></div>
+      <div class="doc-meta-item"><span class="mono">Key Change</span><span>Tab Bar → Companion</span></div>
+      <div class="doc-meta-item"><span class="mono">New Feature</span><span>QR Portal Auth</span></div>
+    </div>
+  </div>
+</header>
+
+
+<!-- ============================================================
+     THE COMPANION — CONCEPT
+     ============================================================ -->
+<section class="section dark">
+  <div class="container">
+    <div class="section-header">
+      <span class="mono">Core Concept</span>
+      <h2 style="color:var(--off-white);">The Strata Mark, <em>alive.</em></h2>
+      <p>Five static tabs treat navigation as a wayfinding problem — "where can I go?" The Companion treats it as a guidance problem — "what should I do next?" It's the difference between a building directory and a knowledgeable friend walking beside you.</p>
+    </div>
+
+    <div class="state-row">
+      <div class="state-card">
+        <span class="mono">State 1</span>
+        <div class="state-visual">
+          <div style="width:52px;height:52px;border-radius:50%;background:var(--off-white);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;box-shadow:0 0 0 2px rgba(196,165,123,0.3);animation:companion-breathe 3s ease-in-out infinite;">
+            <div style="width:20px;height:1.5px;border-radius:1px;background:var(--charcoal);"></div>
+            <div style="width:16px;height:1.5px;border-radius:1px;background:var(--charcoal);opacity:0.7;"></div>
+            <div style="width:12px;height:1.5px;border-radius:1px;background:var(--charcoal);opacity:0.4;"></div>
+          </div>
+        </div>
+        <h3>Resting</h3>
+        <p>Floating center-bottom. The three Strata lines breathe with a subtle glow ring. Always accessible, never in the way.</p>
+      </div>
+      <div class="state-card">
+        <span class="mono">State 2</span>
+        <div class="state-visual">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <div style="padding:6px 14px;border-radius:14px;background:var(--off-white);font-family:var(--font-body);font-size:12px;color:var(--charcoal);font-weight:500;">Scan a room →</div>
+            <div style="width:52px;height:52px;border-radius:50%;background:var(--off-white);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;">
+              <div style="width:20px;height:1.5px;border-radius:1px;background:var(--charcoal);"></div>
+              <div style="width:16px;height:1.5px;border-radius:1px;background:var(--charcoal);opacity:0.7;"></div>
+              <div style="width:12px;height:1.5px;border-radius:1px;background:var(--charcoal);opacity:0.4;"></div>
+            </div>
+          </div>
+        </div>
+        <h3>Nudging</h3>
+        <p>A label floats above the mark suggesting the next contextual action. "Scan a room" on Home. "Try in your room" on Product Detail.</p>
+      </div>
+      <div class="state-card">
+        <span class="mono">State 3</span>
+        <div class="state-visual">
+          <div style="width:200px;padding:16px;border-radius:20px;background:rgba(250,247,242,0.08);border:1px solid rgba(250,247,242,0.1);">
+            <div style="font-family:var(--font-display);font-size:14px;color:var(--off-white);margin-bottom:10px;font-style:italic;">What next?</div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <div style="padding:8px 10px;border-radius:10px;background:rgba(196,165,123,0.15);font-size:11px;color:var(--off-white);font-family:var(--font-body);">◎ Scan a room</div>
+              <div style="padding:8px 10px;border-radius:10px;background:rgba(250,247,242,0.04);font-size:11px;color:var(--pearl);font-family:var(--font-body);">♡ Your collections</div>
+              <div style="padding:8px 10px;border-radius:10px;background:rgba(250,247,242,0.04);font-size:11px;color:var(--pearl);font-family:var(--font-body);">⊞ Connect portal</div>
+            </div>
+          </div>
+        </div>
+        <h3>Expanded</h3>
+        <p>Tap the mark to reveal context-aware actions. The top action is always the suggested next step, highlighted in Clay. Includes QR portal connect.</p>
+      </div>
+      <div class="state-card">
+        <span class="mono">State 4</span>
+        <div class="state-visual">
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:24px;background:rgba(250,247,242,0.08);border:1px solid rgba(250,247,242,0.1);">
+            <div style="width:32px;height:32px;border-radius:50%;border:2px solid var(--clay);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:11px;color:var(--off-white);">42%</div>
+            <div><div style="font-size:11px;color:var(--off-white);font-family:var(--font-body);">Capturing walls</div><div style="font-size:9px;color:var(--clay);font-family:var(--font-mono);">STEP 2 OF 4</div></div>
+          </div>
+        </div>
+        <h3>Journey Mode</h3>
+        <p>During scanning, The Companion morphs into a progress tracker. Shows completion percentage, current step, and the 4-step dot indicator.</p>
+      </div>
+      <div class="state-card">
+        <span class="mono">State 5</span>
+        <div class="state-visual">
+          <div style="width:44px;height:44px;border-radius:50%;background:rgba(250,247,242,0.12);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.5px;backdrop-filter:blur(12px);">
+            <div style="width:16px;height:1.5px;border-radius:1px;background:var(--off-white);"></div>
+            <div style="width:12px;height:1.5px;border-radius:1px;background:var(--off-white);opacity:0.7;"></div>
+            <div style="width:9px;height:1.5px;border-radius:1px;background:var(--off-white);opacity:0.4;"></div>
+          </div>
+        </div>
+        <h3>Minimal</h3>
+        <p>In AR placement and other immersive views, The Companion shrinks to a translucent dot in the bottom-right. Tap to access controls without leaving the experience.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     CONTEXT AWARENESS MAP
+     ============================================================ -->
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <span class="mono">Context Map</span>
+      <h2>It knows where <em>you are</em></h2>
+      <p>The Companion's suggestions change based on the current screen, your journey stage, and your history. The top action is always the most likely next step — highlighted and ready.</p>
+    </div>
+
+    <div class="annotation-grid">
+      <div class="annotation-card">
+        <span class="mono">On Home Screen</span>
+        <h3>Discovery Mode</h3>
+        <p><strong style="color:var(--clay);">Suggested:</strong> "Scan a room" — the primary gateway.<br>Also: Your collections, Style profile, Connect portal, Settings.</p>
+      </div>
+      <div class="annotation-card">
+        <span class="mono">On Recommendations</span>
+        <h3>Browsing Mode</h3>
+        <p><strong style="color:var(--clay);">Suggested:</strong> "Try in your room" if a product is focused.<br>Also: Filter by room, Save collection, Back to home, Connect portal.</p>
+      </div>
+      <div class="annotation-card">
+        <span class="mono">On Product Detail</span>
+        <h3>Evaluation Mode</h3>
+        <p><strong style="color:var(--clay);">Suggested:</strong> "Place in AR" — see it in your space.<br>Also: Save to collection, Share, Find similar, Ask a designer.</p>
+      </div>
+      <div class="annotation-card">
+        <span class="mono">During Room Scan</span>
+        <h3>Journey Mode</h3>
+        <p>Transforms into progress tracker. Shows step (Scan → Style → Budget → Focus), completion percentage, and current coaching instruction.</p>
+      </div>
+      <div class="annotation-card">
+        <span class="mono">In AR Placement</span>
+        <h3>Minimal Mode</h3>
+        <p>Shrinks to translucent mark in bottom-right. Tap expands to: Save view, Swap item, Share scene, Time-of-day slider, Exit AR.</p>
+      </div>
+      <div class="annotation-card">
+        <span class="mono">On Profile</span>
+        <h3>Reflection Mode</h3>
+        <p><strong style="color:var(--clay);">Suggested:</strong> "Work with a designer" if style profile is mature.<br>Also: Edit style, Your rooms, Connect portal, Settings.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SCREENS: THE COMPANION IN CONTEXT
+     ============================================================ -->
+<section class="section alt">
+  <div class="container">
+    <div class="section-header">
+      <span class="mono">Screens · The Companion in Context</span>
+      <h2>Every Screen, <em>One Guide</em></h2>
+      <p>See how The Companion adapts across the full app — resting, nudging, expanded, in journey mode, and minimized. No tab bar. Just a friend who knows what you need.</p>
+    </div>
+
+    <div class="phone-row">
+
+      <!-- HOME — Companion Resting with Nudge -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Home — Resting + Nudge</h3>
+          <span class="mono">The Companion suggests scanning</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-home" style="padding-bottom:0;">
+              <div class="screen-status"><span>9:41</span><span>···</span></div>
+              <div class="home-greeting">
+                <span class="mono">Good Morning</span>
+                <h2>Welcome back</h2>
+              </div>
+              <div class="home-search"><span>🔍</span><span>Search furniture, makers, styles...</span></div>
+              <div class="home-scan-prompt">
+                <div class="scan-prompt-icon">◎</div>
+                <div class="scan-prompt-text">
+                  <h4>Scan a new room</h4>
+                  <p>Get personalized picks in under 10 minutes</p>
+                </div>
+              </div>
+              <div class="home-section">
+                <div class="home-section-header"><h3>Picked for you</h3><a>See all →</a></div>
+                <div class="home-scroll">
+                  <div class="home-featured-card">
+                    <div class="home-featured-img fill-gradient-warm"></div>
+                    <div class="home-featured-info"><h4>New from Thos. Moser</h4><p>Cherry & walnut collection</p></div>
+                  </div>
+                  <div class="home-featured-card">
+                    <div class="home-featured-img fill-gradient-sage"></div>
+                    <div class="home-featured-info"><h4>Spring Living Rooms</h4><p>Curated for warm minimalists</p></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- THE COMPANION — Resting with Nudge -->
+            <div class="companion-nudge">Scan a room →</div>
+            <div class="companion">
+              <div class="companion-mark">
+                <div class="c-line"></div><div class="c-line"></div><div class="c-line"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HOME — Companion Expanded -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Home — Expanded</h3>
+          <span class="mono">Full context menu with QR connect</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-home" style="padding-bottom:0;filter:brightness(0.7);">
+              <div class="screen-status"><span>9:41</span><span>···</span></div>
+              <div class="home-greeting"><span class="mono">Good Morning</span><h2>Welcome back</h2></div>
+              <div class="home-search"><span>🔍</span><span>Search furniture, makers...</span></div>
+              <div class="home-scan-prompt">
+                <div class="scan-prompt-icon">◎</div>
+                <div class="scan-prompt-text"><h4>Scan a new room</h4><p>Get personalized picks</p></div>
+              </div>
+            </div>
+            <!-- Backdrop -->
+            <div class="companion-backdrop"></div>
+            <!-- Expanded Panel -->
+            <div class="companion-expanded">
+              <div class="companion-panel">
+                <div class="companion-panel-header">
+                  <span class="companion-panel-title">What next?</span>
+                  <div class="companion-close">✕</div>
+                </div>
+                <div class="companion-actions">
+                  <div class="companion-action suggested">
+                    <div class="companion-action-icon" style="background:var(--clay);color:var(--off-white);">◎</div>
+                    <div class="companion-action-text">
+                      <div class="companion-action-label">Scan a room</div>
+                      <div class="companion-action-hint">Suggested next step</div>
+                    </div>
+                    <span class="companion-action-arrow">›</span>
+                  </div>
+                  <div class="companion-action">
+                    <div class="companion-action-icon" style="background:rgba(250,247,242,0.08);color:var(--pearl);">✦</div>
+                    <div class="companion-action-text">
+                      <div class="companion-action-label">Your recommendations</div>
+                      <div class="companion-action-hint">18 items · Living room</div>
+                    </div>
+                    <span class="companion-action-arrow">›</span>
+                  </div>
+                  <div class="companion-action">
+                    <div class="companion-action-icon" style="background:rgba(250,247,242,0.08);color:var(--pearl);">♡</div>
+                    <div class="companion-action-text">
+                      <div class="companion-action-label">Collections</div>
+                      <div class="companion-action-hint">2 boards · 13 items</div>
+                    </div>
+                    <span class="companion-action-arrow">›</span>
+                  </div>
+                  <div class="companion-action">
+                    <div class="companion-action-icon" style="background:rgba(250,247,242,0.08);color:var(--pearl);">⊞</div>
+                    <div class="companion-action-text">
+                      <div class="companion-action-label">Connect to portal</div>
+                      <div class="companion-action-hint">Scan QR · patina.cloud</div>
+                    </div>
+                    <span class="companion-action-arrow">›</span>
+                  </div>
+                  <div class="companion-action">
+                    <div class="companion-action-icon" style="background:rgba(250,247,242,0.08);color:var(--pearl);">◉</div>
+                    <div class="companion-action-text">
+                      <div class="companion-action-label">Your profile</div>
+                      <div class="companion-action-hint">Style · Rooms · Settings</div>
+                    </div>
+                    <span class="companion-action-arrow">›</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCAN — Journey Mode -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Room Scan — Journey Mode</h3>
+          <span class="mono">The Companion as progress tracker</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div style="position:absolute;inset:0;background:linear-gradient(135deg, #d4cfc7 0%, #bfb8ad 50%, #a8a195 100%);">
+              <div class="screen-status" style="position:absolute;top:0;left:0;right:0;z-index:40;"><span>9:43</span><span>···</span></div>
+              <!-- Scan overlay elements -->
+              <div style="position:absolute;top:30%;left:10%;width:80%;height:40%;border:1.5px dashed var(--clay);border-radius:8px;opacity:0.3;"></div>
+              <div style="position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);text-align:center;z-index:10;">
+                <div style="font-family:var(--font-display);font-size:20px;font-weight:400;color:var(--charcoal);opacity:0.7;font-style:italic;">"Step toward the window"</div>
+              </div>
+              <!-- Floating dust particles -->
+              <div style="position:absolute;top:20%;left:35%;width:3px;height:3px;border-radius:50%;background:var(--clay);opacity:0.3;animation:float 5s ease-in-out infinite;"></div>
+              <div style="position:absolute;top:50%;left:60%;width:3px;height:3px;border-radius:50%;background:var(--clay);opacity:0.25;animation:float 6s ease-in-out 1s infinite;"></div>
+            </div>
+            @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+            <!-- THE COMPANION — Journey Mode -->
+            <div class="companion-journey">
+              <div class="journey-progress-ring">
+                <div class="journey-progress-fill" style="transform:rotate(195deg);"></div>
+                <span class="journey-percent">42%</span>
+              </div>
+              <div class="journey-text">
+                <div class="journey-title">Capturing walls</div>
+                <div class="journey-subtitle">Step 2 of 4</div>
+              </div>
+              <div class="journey-dots">
+                <div class="journey-dot done"></div>
+                <div class="journey-dot current"></div>
+                <div class="journey-dot"></div>
+                <div class="journey-dot"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RECOMMENDATIONS — Resting -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Recommendations</h3>
+          <span class="mono">Companion resting · browsing mode</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-recs">
+              <div class="screen-status"><span>9:47</span><span>···</span></div>
+              <div class="recs-header"><h2>Perfect for your space</h2><p>18 pieces curated for your living room</p></div>
+              <div class="recs-filter-bar">
+                <div class="filter-chip active">All</div><div class="filter-chip">Seating</div><div class="filter-chip">Tables</div><div class="filter-chip">Lighting</div>
+              </div>
+              <div class="recs-grid">
+                <div class="rec-card"><div class="rec-card-image fill-gradient-leather"><div class="rec-card-match">92% match</div><div class="rec-card-save">♡</div></div><div class="rec-card-info"><div class="rec-card-maker">Chilton Furniture</div><div class="rec-card-name">Walnut Lounge Chair</div><div class="rec-card-price">$2,850</div></div></div>
+                <div class="rec-card"><div class="rec-card-image fill-gradient-linen"><div class="rec-card-match">88% match</div><div class="rec-card-save">♡</div></div><div class="rec-card-info"><div class="rec-card-maker">Shoppe Amber</div><div class="rec-card-name">Linen Sectional Sofa</div><div class="rec-card-price">$3,200</div></div></div>
+                <div class="rec-card"><div class="rec-card-image fill-gradient-wood"><div class="rec-card-match">85% match</div><div class="rec-card-save">♡</div></div><div class="rec-card-info"><div class="rec-card-maker">Thos. Moser</div><div class="rec-card-name">Cherry Coffee Table</div><div class="rec-card-price">$1,890</div></div></div>
+                <div class="rec-card"><div class="rec-card-image fill-gradient-rattan"><div class="rec-card-match">82% match</div><div class="rec-card-save">♡</div></div><div class="rec-card-info"><div class="rec-card-maker">Lostine</div><div class="rec-card-name">Woven Floor Lamp</div><div class="rec-card-price">$475</div></div></div>
+              </div>
+            </div>
+            <!-- THE COMPANION — Resting -->
+            <div class="companion">
+              <div class="companion-mark">
+                <div class="c-line"></div><div class="c-line"></div><div class="c-line"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PRODUCT DETAIL — Nudge -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Product Detail — Nudge</h3>
+          <span class="mono">Suggests "Place in AR"</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-product">
+              <div class="screen-status light" style="position:absolute;top:0;left:0;right:0;z-index:30;"><span>9:48</span><span>···</span></div>
+              <div class="product-hero fill-gradient-leather">
+                <div class="product-back">←</div>
+                <div class="product-actions-top"><div class="product-action-btn">↗</div><div class="product-action-btn">♡</div></div>
+              </div>
+              <div class="product-content">
+                <div class="product-maker-tag">Chilton Furniture · Freeport, ME</div>
+                <div class="product-name">Walnut Lounge Chair</div>
+                <div class="product-subtitle">Hand-turned in Maine since 1904</div>
+                <div class="product-price-row"><div class="product-price">$2,850</div><div class="product-match-pill">92% match</div></div>
+                <div class="product-badges">
+                  <div class="product-badge"><span>🌿</span> FSC Certified</div>
+                  <div class="product-badge"><span>✋</span> Handcrafted</div>
+                  <div class="product-badge"><span>📍</span> Made in USA</div>
+                </div>
+                <div class="maker-story">
+                  <div class="maker-story-header"><div class="maker-avatar fill-gradient-earth"></div><div><div class="maker-name">Jonathan Chilton</div><div class="maker-location">Third-Generation Woodworker</div></div></div>
+                  <p>"Each chair starts as a conversation with the wood. Walnut tells you where it wants to bend."</p>
+                </div>
+              </div>
+            </div>
+            <!-- THE COMPANION — Nudge: Place in AR -->
+            <div class="companion-nudge">Place in your room →</div>
+            <div class="companion">
+              <div class="companion-mark">
+                <div class="c-line"></div><div class="c-line"></div><div class="c-line"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AR PLACEMENT — Minimal -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>AR Placement — Minimal</h3>
+          <span class="mono">Companion shrinks to corner</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div style="position:absolute;inset:0;background:linear-gradient(180deg, #c8c1b8 0%, #d8d2c9 50%, #c2bbb1 100%);">
+              <div class="screen-status" style="position:absolute;top:0;left:0;right:0;z-index:40;"><span>9:49</span><span>···</span></div>
+              <!-- Ghost furniture -->
+              <div style="position:absolute;bottom:300px;left:50%;transform:translateX(-50%);width:160px;height:80px;border-radius:12px;border:2px dashed var(--clay);background:rgba(196,165,123,0.08);display:flex;align-items:center;justify-content:center;font-size:28px;opacity:0.4;">🪑</div>
+              <div style="position:absolute;bottom:285px;left:50%;transform:translateX(-50%);width:140px;height:12px;background:rgba(44,41,38,0.08);border-radius:50%;filter:blur(4px);"></div>
+              <!-- AR name label -->
+              <div style="position:absolute;bottom:100px;left:50%;transform:translateX(-50%);font-family:var(--font-display);font-size:18px;color:var(--charcoal);background:rgba(250,247,242,0.9);backdrop-filter:blur(12px);padding:8px 20px;border-radius:20px;z-index:20;">Walnut Lounge Chair</div>
+              <!-- Control row -->
+              <div style="position:absolute;bottom:56px;left:50%;transform:translateX(-50%);display:flex;gap:12px;z-index:20;">
+                <div style="width:48px;height:48px;border-radius:50%;background:rgba(250,247,242,0.9);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;font-size:18px;">↻</div>
+                <div style="padding:0 24px;height:48px;border-radius:24px;background:var(--charcoal);color:var(--off-white);display:flex;align-items:center;justify-content:center;font-family:var(--font-body);font-size:14px;font-weight:500;">Save View</div>
+                <div style="width:48px;height:48px;border-radius:50%;background:rgba(250,247,242,0.9);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;font-size:18px;">📷</div>
+              </div>
+              <!-- Light slider -->
+              <div style="position:absolute;right:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;z-index:20;">
+                <div style="font-family:var(--font-mono);font-size:8px;color:var(--mocha);writing-mode:vertical-rl;transform:rotate(180deg);">LIGHT</div>
+                <div style="width:4px;height:100px;background:rgba(250,247,242,0.3);border-radius:2px;position:relative;"><div style="position:absolute;bottom:0;width:100%;height:60%;background:var(--golden-hour);border-radius:2px;"></div></div>
+                <div style="font-size:12px;">☀</div>
+              </div>
+            </div>
+            <!-- THE COMPANION — Minimal (bottom right) -->
+            <div class="companion-minimal">
+              <div class="c-line"></div><div class="c-line"></div><div class="c-line"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     QR PORTAL AUTHENTICATION
+     ============================================================ -->
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <span class="mono">QR Portal Connect</span>
+      <h2>Your Phone is <em>the Key</em></h2>
+      <p>No passwords for patina.cloud. When you visit the Designer Portal, Client Portal, or any Patina web property on your laptop, you see a QR code. Tap "Connect to portal" in The Companion, scan the code, and you're in. The phone holds your identity — the web portal just needs to ask.</p>
+    </div>
+
+    <div class="phone-row">
+
+      <!-- QR SCANNER -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>QR Scanner</h3>
+          <span class="mono">Scanning patina.cloud code</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="qr-viewport">
+              <div class="screen-status light" style="position:absolute;top:0;left:0;right:0;z-index:40;"><span>9:50</span><span>···</span></div>
+              <!-- Back button -->
+              <div style="position:absolute;top:56px;left:16px;width:36px;height:36px;border-radius:50%;background:rgba(250,247,242,0.15);display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--off-white);z-index:40;">←</div>
+              <!-- Title -->
+              <div style="position:absolute;top:60px;left:50%;transform:translateX(-50%);font-family:var(--font-mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--clay);z-index:40;">Connect to Portal</div>
+              <div class="qr-camera">
+                <div class="qr-reticle">
+                  <div class="qr-corner tl"></div>
+                  <div class="qr-corner tr"></div>
+                  <div class="qr-corner bl"></div>
+                  <div class="qr-corner br"></div>
+                  <div class="qr-scan-line"></div>
+                </div>
+              </div>
+              <div class="qr-instruction">
+                <h3>Point at the QR code</h3>
+                <p>Open patina.cloud on your computer and scan the code shown on screen</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- QR SUCCESS -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Connected</h3>
+          <span class="mono">Portal authenticated</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="qr-success">
+              <div class="screen-status light" style="position:absolute;top:0;left:0;right:0;z-index:40;"><span>9:50</span><span>···</span></div>
+              <div class="qr-success-ring">✓</div>
+              <h3>Connected</h3>
+              <p>You're now signed into the Designer Portal on your computer</p>
+              <div class="qr-success-portal">
+                <div class="qr-portal-icon">◎</div>
+                <div class="qr-portal-text">
+                  <h5>Designer Portal</h5>
+                  <span>patina.cloud/designer</span>
+                </div>
+              </div>
+              <div style="margin-top:24px;padding:12px 28px;border-radius:24px;background:var(--clay);color:var(--off-white);font-family:var(--font-body);font-size:14px;font-weight:500;">Done</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PROFILE — Companion Expanded -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Profile — Expanded</h3>
+          <span class="mono">Suggests "Work with a designer"</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-profile" style="filter:brightness(0.7);">
+              <div class="screen-status"><span>9:41</span><span>···</span></div>
+              <div class="profile-header">
+                <div class="profile-avatar fill-gradient-earth" style="color:var(--off-white);">K</div>
+                <div class="profile-name">Kody</div>
+                <div class="profile-tagline">Member since April 2026</div>
+                <div class="profile-style-badge">✦ Warm Minimalist</div>
+              </div>
+              <div class="profile-stats">
+                <div class="profile-stat"><div class="profile-stat-val">3</div><div class="profile-stat-label">Rooms</div></div>
+                <div class="profile-stat"><div class="profile-stat-val">24</div><div class="profile-stat-label">Saved</div></div>
+                <div class="profile-stat"><div class="profile-stat-val">87%</div><div class="profile-stat-label">Match</div></div>
+              </div>
+            </div>
+            <div class="companion-backdrop"></div>
+            <div class="companion-expanded">
+              <div class="companion-panel">
+                <div class="companion-panel-header">
+                  <span class="companion-panel-title">What next?</span>
+                  <div class="companion-close">✕</div>
+                </div>
+                <div class="companion-actions">
+                  <div class="companion-action suggested">
+                    <div class="companion-action-icon" style="background:var(--clay);color:var(--off-white);">💬</div>
+                    <div class="companion-action-text">
+                      <div class="companion-action-label">Work with a designer</div>
+                      <div class="companion-action-hint">Your profile is ready</div>
+                    </div>
+                    <span class="companion-action-arrow">›</span>
+                  </div>
+                  <div class="companion-action">
+                    <div class="companion-action-icon" style="background:rgba(250,247,242,0.08);color:var(--pearl);">✦</div>
+                    <div class="companion-action-text">
+                      <div class="companion-action-label">Edit style preferences</div>
+                      <div class="companion-action-hint">Retake quiz · Refine</div>
+                    </div>
+                    <span class="companion-action-arrow">›</span>
+                  </div>
+                  <div class="companion-action">
+                    <div class="companion-action-icon" style="background:rgba(250,247,242,0.08);color:var(--pearl);">⊞</div>
+                    <div class="companion-action-text">
+                      <div class="companion-action-label">Connect to portal</div>
+                      <div class="companion-action-hint">Scan QR · patina.cloud</div>
+                    </div>
+                    <span class="companion-action-arrow">›</span>
+                  </div>
+                  <div class="companion-action">
+                    <div class="companion-action-icon" style="background:rgba(250,247,242,0.08);color:var(--pearl);">⚙</div>
+                    <div class="companion-action-text">
+                      <div class="companion-action-label">Settings</div>
+                      <div class="companion-action-hint">Account · Privacy · App</div>
+                    </div>
+                    <span class="companion-action-arrow">›</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     QR AUTH FLOW DETAIL
+     ============================================================ -->
+<section class="section dark">
+  <div class="container">
+    <div class="section-header">
+      <span class="mono">Authentication Architecture</span>
+      <h2 style="color:var(--off-white);">The QR <em>Handshake</em></h2>
+      <p>A four-step flow that eliminates passwords entirely for web portals. The phone is the authenticator. The web is the display.</p>
+    </div>
+
+    <div class="annotation-grid">
+      <div class="annotation-card" style="background:rgba(250,247,242,0.06);">
+        <span class="mono" style="color:var(--clay);">Step 1</span>
+        <h3 style="color:var(--off-white);">Portal Displays Code</h3>
+        <p style="color:var(--pearl);">User visits patina.cloud/designer (or /client, /admin). Instead of a login form, the page displays a QR code with a session token. The code refreshes every 60 seconds. Copy reads: "Scan with your Patina app to sign in."</p>
+      </div>
+      <div class="annotation-card" style="background:rgba(250,247,242,0.06);">
+        <span class="mono" style="color:var(--clay);">Step 2</span>
+        <h3 style="color:var(--off-white);">User Opens Scanner</h3>
+        <p style="color:var(--pearl);">User taps The Companion → "Connect to portal." Camera opens in QR mode with the Clay-cornered reticle. The scan line sweeps. DM Mono instruction text reads: "Point at the code on your screen."</p>
+      </div>
+      <div class="annotation-card" style="background:rgba(250,247,242,0.06);">
+        <span class="mono" style="color:var(--clay);">Step 3</span>
+        <h3 style="color:var(--off-white);">Phone Confirms</h3>
+        <p style="color:var(--pearl);">QR decoded. Phone shows which portal is requesting access (Designer Portal, patina.cloud/designer) and asks for confirmation. Single tap "Confirm" sends the auth token. Biometric (Face ID / Touch ID) optionally gates the confirmation.</p>
+      </div>
+      <div class="annotation-card" style="background:rgba(250,247,242,0.06);">
+        <span class="mono" style="color:var(--clay);">Step 4</span>
+        <h3 style="color:var(--off-white);">Portal Unlocks</h3>
+        <p style="color:var(--pearl);">Web portal receives the authenticated session via WebSocket. Page transitions from QR code to the logged-in dashboard with a smooth fade. Phone shows the success screen with a check mark and "Connected" confirmation.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     STYLE QUIZ + REMAINING SCREENS (with Companion)
+     ============================================================ -->
+<section class="section alt">
+  <div class="container">
+    <div class="section-header">
+      <span class="mono">Remaining Screens</span>
+      <h2>Quiz, Collections, <em>Profile</em></h2>
+      <p>The Companion adapts to every context. During the style quiz, it becomes a simple "Next" indicator. On collections, it nudges toward "Start a project." On the profile, it suggests working with a designer when your style profile is mature enough.</p>
+    </div>
+
+    <div class="phone-row">
+
+      <!-- STYLE QUIZ — Visual Resonance -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Style Quiz</h3>
+          <span class="mono">Q1 · Visual Resonance</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-quiz">
+              <div class="quiz-progress"><div class="quiz-progress-dot current"></div><div class="quiz-progress-dot"></div><div class="quiz-progress-dot"></div><div class="quiz-progress-dot"></div><div class="quiz-progress-dot"></div></div>
+              <div class="quiz-question-num">Question 1 of 5</div>
+              <div class="quiz-question">Which room speaks to you?</div>
+              <div class="quiz-grid">
+                <div class="quiz-card selected"><div class="quiz-card-image fill-gradient-warm"></div><div class="quiz-card-label">Warm Minimal</div></div>
+                <div class="quiz-card"><div class="quiz-card-image fill-gradient-metal"></div><div class="quiz-card-label">Cool Modern</div></div>
+                <div class="quiz-card"><div class="quiz-card-image fill-gradient-linen"></div><div class="quiz-card-label">Classic Comfort</div></div>
+                <div class="quiz-card"><div class="quiz-card-image fill-gradient-rattan"></div><div class="quiz-card-label">Eclectic Curated</div></div>
+              </div>
+            </div>
+            <!-- Companion — simple nudge during quiz -->
+            <div class="companion-nudge">Next question →</div>
+            <div class="companion">
+              <div class="companion-mark"><div class="c-line"></div><div class="c-line"></div><div class="c-line"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MATERIAL QUIZ -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Material Connection</h3>
+          <span class="mono">Q3 · Texture preference</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-quiz">
+              <div class="quiz-progress"><div class="quiz-progress-dot done"></div><div class="quiz-progress-dot done"></div><div class="quiz-progress-dot current"></div><div class="quiz-progress-dot"></div><div class="quiz-progress-dot"></div></div>
+              <div class="quiz-question-num">Question 3 of 5</div>
+              <div class="quiz-question">What texture calls to you?</div>
+              <div class="material-cards" style="padding-top:12px;">
+                <div class="material-card"><div class="material-swatch fill-gradient-wood"></div><div class="material-info"><h5>Weathered Oak</h5><p>Warmth & history</p></div></div>
+                <div class="material-card selected"><div class="material-swatch fill-gradient-linen"></div><div class="material-info"><h5>Soft Linen</h5><p>Light & breathable</p></div></div>
+                <div class="material-card"><div class="material-swatch fill-gradient-leather"></div><div class="material-info"><h5>Aged Leather</h5><p>Rich & evolving</p></div></div>
+                <div class="material-card"><div class="material-swatch fill-gradient-rattan"></div><div class="material-info"><h5>Woven Rattan</h5><p>Natural & organic</p></div></div>
+              </div>
+            </div>
+            <div class="companion"><div class="companion-mark"><div class="c-line"></div><div class="c-line"></div><div class="c-line"></div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PROFILE — Resting -->
+      <div class="phone-group">
+        <div class="phone-label">
+          <h3>Design Journal</h3>
+          <span class="mono">Profile with style evolution</span>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="screen-profile">
+              <div class="screen-status"><span>9:41</span><span>···</span></div>
+              <div class="profile-header">
+                <div class="profile-avatar fill-gradient-earth" style="color:var(--off-white);">K</div>
+                <div class="profile-name">Kody</div>
+                <div class="profile-tagline">Member since April 2026</div>
+                <div class="profile-style-badge">✦ Warm Minimalist</div>
+              </div>
+              <div class="profile-stats">
+                <div class="profile-stat"><div class="profile-stat-val">3</div><div class="profile-stat-label">Rooms</div></div>
+                <div class="profile-stat"><div class="profile-stat-val">24</div><div class="profile-stat-label">Saved</div></div>
+                <div class="profile-stat"><div class="profile-stat-val">87%</div><div class="profile-stat-label">Match</div></div>
+              </div>
+              <div class="profile-section">
+                <h4>Your Rooms</h4>
+                <div class="profile-rooms">
+                  <div class="profile-room-card"><div class="profile-room-img fill-gradient-warm"></div><div class="profile-room-info"><div class="profile-room-name">Living Room</div><div class="profile-room-date">Scanned Apr 2</div></div></div>
+                  <div class="profile-room-card"><div class="profile-room-img fill-gradient-dusk"></div><div class="profile-room-info"><div class="profile-room-name">Bedroom</div><div class="profile-room-date">Scanned Mar 28</div></div></div>
+                  <div class="profile-room-card"><div class="profile-room-img fill-gradient-sage"></div><div class="profile-room-info"><div class="profile-room-name">Office</div><div class="profile-room-date">Scanned Mar 15</div></div></div>
+                </div>
+              </div>
+            </div>
+            <!-- Companion with designer nudge -->
+            <div class="companion-nudge">Talk to a designer →</div>
+            <div class="companion"><div class="companion-mark"><div class="c-line"></div><div class="c-line"></div><div class="c-line"></div></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     CLOSING
+     ============================================================ -->
+<section class="section">
+  <div class="container">
+    <div class="strata"><div class="strata-line"></div><div class="strata-line"></div><div class="strata-line"></div></div>
+
+    <h2 style="margin-top:2rem;margin-bottom:1.5rem;">One mark. <em>Every context.</em></h2>
+    <p class="large-body" style="max-width:700px;margin-bottom:2rem;">The Companion is the Strata Mark made alive. It breathes at the bottom of every screen — three lines that carry the entire brand. Tap it, and it reveals exactly what you need based on where you are. During a scan, it becomes your progress tracker. In AR, it shrinks to a whisper. On the home screen, it nudges you to scan a room. On your profile, it suggests talking to a designer.</p>
+    <p class="large-body" style="max-width:700px;margin-bottom:2rem;">And when you sit down at your laptop and visit patina.cloud, the same Companion that's been guiding your style journey becomes the key that unlocks the door. No password. No email verification. Just scan, confirm, connected. Your phone holds your identity. The web just needs to ask.</p>
+    <p class="large-body" style="max-width:700px;">Five tab bars became one living mark. That's The Companion. That's Patina.</p>
+
+    <div class="strata-mini" style="margin-top:3rem;"><div class="strata-line"></div><div class="strata-line"></div><div class="strata-line"></div></div>
+  </div>
+</section>
+
+
+<!-- FOOTER -->
+<footer class="doc-footer">
+  <div class="container">
+    <div class="doc-footer-inner">
+      <div>
+        <h3>Patina</h3>
+        <em>Where Time Adds Value</em>
+        <p style="margin-top:1.5rem;font-size:0.82rem;color:var(--clay);">iOS Design v3 · The Companion · April 2026</p>
+      </div>
+      <div style="text-align:right;">
+        <span class="mono" style="color:var(--clay);">5 States · 1 Mark · 0 Tab Bars</span>
+        <div class="strata-mini" style="margin-top:1rem;margin-left:auto;">
+          <div class="strata-line" style="background:var(--clay);"></div>
+          <div class="strata-line" style="background:var(--clay);opacity:0.6;"></div>
+          <div class="strata-line" style="background:var(--clay);opacity:0.3;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add('visible'); });
+}, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>

@@ -11,14 +11,20 @@ const getSupabase = () => createBrowserClient();
 export interface DesignerEarning {
   id: string;
   designer_id: string;
-  source_type: 'proposal' | 'commission' | 'referral' | 'other';
-  source_id: string | null;
-  amount: number;
-  status: 'pending' | 'confirmed' | 'paid';
+  source_type: 'product_commission' | 'referral' | 'bonus' | 'adjustment';
+  proposal_id: string | null;
+  proposal_item_id: string | null;
+  order_id: string | null;
+  gross_amount: number;
+  platform_fee: number;
+  net_amount: number;
+  commission_rate: number | null;
   description: string | null;
+  status: 'pending' | 'confirmed' | 'paid' | 'cancelled';
   payout_id: string | null;
+  paid_at: string | null;
+  earned_at: string;
   created_at: string;
-  updated_at: string;
   // Joined data
   proposal?: {
     id: string;
@@ -66,13 +72,13 @@ export function useEarnings(filters?: EarningsFilters) {
         .from('designer_earnings')
         .select(`
           *,
-          proposal:proposals(
+          proposal:proposals!proposal_id(
             id,
             title,
             client:profiles!client_id(full_name, email)
           )
         `)
-        .order('created_at', { ascending: false });
+        .order('earned_at', { ascending: false });
 
       // Apply filters
       if (filters?.status) {
@@ -115,7 +121,7 @@ export function useEarningsStats() {
 
       const { data, error } = await supabase
         .from('designer_earnings')
-        .select('amount, status, source_type, created_at');
+        .select('net_amount, status, source_type, created_at');
 
       if (error) throw error;
 
@@ -126,38 +132,38 @@ export function useEarningsStats() {
       const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
       const stats = {
-        totalEarnings: earnings.reduce((sum: number, e: DesignerEarning) => sum + e.amount, 0),
+        totalEarnings: earnings.reduce((sum: number, e: DesignerEarning) => sum + e.net_amount, 0),
         pendingEarnings: earnings
           .filter((e: DesignerEarning) => e.status === 'pending')
-          .reduce((sum: number, e: DesignerEarning) => sum + e.amount, 0),
+          .reduce((sum: number, e: DesignerEarning) => sum + e.net_amount, 0),
         confirmedEarnings: earnings
           .filter((e: DesignerEarning) => e.status === 'confirmed')
-          .reduce((sum: number, e: DesignerEarning) => sum + e.amount, 0),
+          .reduce((sum: number, e: DesignerEarning) => sum + e.net_amount, 0),
         paidEarnings: earnings
           .filter((e: DesignerEarning) => e.status === 'paid')
-          .reduce((sum: number, e: DesignerEarning) => sum + e.amount, 0),
+          .reduce((sum: number, e: DesignerEarning) => sum + e.net_amount, 0),
         thisMonthEarnings: earnings
           .filter((e: DesignerEarning) => new Date(e.created_at) >= thisMonth)
-          .reduce((sum: number, e: DesignerEarning) => sum + e.amount, 0),
+          .reduce((sum: number, e: DesignerEarning) => sum + e.net_amount, 0),
         lastMonthEarnings: earnings
           .filter((e: DesignerEarning) => {
             const date = new Date(e.created_at);
             return date >= lastMonth && date <= lastMonthEnd;
           })
-          .reduce((sum: number, e: DesignerEarning) => sum + e.amount, 0),
+          .reduce((sum: number, e: DesignerEarning) => sum + e.net_amount, 0),
         bySource: {
-          proposal: earnings
-            .filter((e: DesignerEarning) => e.source_type === 'proposal')
-            .reduce((sum: number, e: DesignerEarning) => sum + e.amount, 0),
-          commission: earnings
-            .filter((e: DesignerEarning) => e.source_type === 'commission')
-            .reduce((sum: number, e: DesignerEarning) => sum + e.amount, 0),
+          product_commission: earnings
+            .filter((e: DesignerEarning) => e.source_type === 'product_commission')
+            .reduce((sum: number, e: DesignerEarning) => sum + e.net_amount, 0),
           referral: earnings
             .filter((e: DesignerEarning) => e.source_type === 'referral')
-            .reduce((sum: number, e: DesignerEarning) => sum + e.amount, 0),
-          other: earnings
-            .filter((e: DesignerEarning) => e.source_type === 'other')
-            .reduce((sum: number, e: DesignerEarning) => sum + e.amount, 0),
+            .reduce((sum: number, e: DesignerEarning) => sum + e.net_amount, 0),
+          bonus: earnings
+            .filter((e: DesignerEarning) => e.source_type === 'bonus')
+            .reduce((sum: number, e: DesignerEarning) => sum + e.net_amount, 0),
+          adjustment: earnings
+            .filter((e: DesignerEarning) => e.source_type === 'adjustment')
+            .reduce((sum: number, e: DesignerEarning) => sum + e.net_amount, 0),
         },
         transactionCount: earnings.length,
       };
@@ -182,7 +188,7 @@ export function useMonthlyEarnings(months: number = 12) {
 
       const { data, error } = await supabase
         .from('designer_earnings')
-        .select('amount, created_at')
+        .select('net_amount, created_at')
         .gte('created_at', startDate.toISOString())
         .order('created_at', { ascending: true });
 
@@ -201,11 +207,11 @@ export function useMonthlyEarnings(months: number = 12) {
       }
 
       // Sum earnings by month
-      earnings.forEach((e: { amount: number; created_at: string }) => {
+      earnings.forEach((e: { net_amount: number; created_at: string }) => {
         const date = new Date(e.created_at);
         const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
         if (key in monthlyData) {
-          monthlyData[key] += e.amount;
+          monthlyData[key] += e.net_amount;
         }
       });
 

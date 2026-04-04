@@ -13,8 +13,25 @@ const config: Config = {
         heading: ['var(--font-heading)', 'Playfair Display', 'serif'],
         body: ['var(--font-inter)', 'Inter', 'system-ui', 'sans-serif'],
         sans: ['var(--font-inter)', 'Inter', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'DM Mono', 'SF Mono', 'Fira Code', 'monospace'],
+      },
+      maxWidth: {
+        portal: '1800px',
+        'portal-narrow': '900px',
       },
       colors: {
+        patina: {
+          'off-white': '#FAF7F2',
+          pearl: '#E5E2DD',
+          clay: '#C4A57B',
+          'aged-oak': '#8B7355',
+          mocha: '#5C4A3C',
+          charcoal: '#2C2926',
+          sage: '#A8B5A0',
+          'dusty-blue': '#8B9CAD',
+          terracotta: '#D4A090',
+          'golden-hour': '#E8C547',
+        },
         border: 'oklch(var(--border))',
         input: 'oklch(var(--input))',
         ring: 'oklch(var(--ring))',
@@ -47,16 +64,6 @@ const config: Config = {
         card: {
           DEFAULT: 'oklch(var(--card))',
           foreground: 'oklch(var(--card-foreground))',
-        },
-        sidebar: {
-          DEFAULT: 'oklch(var(--sidebar))',
-          foreground: 'oklch(var(--sidebar-foreground))',
-          primary: 'oklch(var(--sidebar-primary))',
-          'primary-foreground': 'oklch(var(--sidebar-primary-foreground))',
-          accent: 'oklch(var(--sidebar-accent))',
-          'accent-foreground': 'oklch(var(--sidebar-accent-foreground))',
-          border: 'oklch(var(--sidebar-border))',
-          ring: 'oklch(var(--sidebar-ring))',
         },
       },
       borderRadius: {

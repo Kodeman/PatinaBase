@@ -12,23 +12,23 @@ interface VendorCardProps {
 
 const CONFIDENCE_CONFIG: Record<VendorMatchConfidence, { bgColor: string; textColor: string; label: string }> = {
   exact: {
-    bgColor: 'bg-patina-success/15',
-    textColor: 'text-patina-success',
+    bgColor: 'bg-sage/15',
+    textColor: 'text-sage',
     label: 'Exact match',
   },
   high: {
-    bgColor: 'bg-patina-success/15',
-    textColor: 'text-patina-success',
+    bgColor: 'bg-sage/15',
+    textColor: 'text-sage',
     label: 'High match',
   },
   medium: {
-    bgColor: 'bg-patina-warning/15',
-    textColor: 'text-patina-warning',
+    bgColor: 'bg-golden-hour/15',
+    textColor: 'text-aged-oak',
     label: 'Possible match',
   },
   low: {
-    bgColor: 'bg-patina-error/15',
-    textColor: 'text-patina-error',
+    bgColor: 'bg-terracotta/15',
+    textColor: 'text-terracotta',
     label: 'Low match',
   },
 };
@@ -56,23 +56,23 @@ function StarRating({ rating }: { rating: number }) {
   return (
     <div className="flex items-center gap-0.5">
       {[...Array(fullStars)].map((_, i) => (
-        <svg key={`full-${i}`} className="w-3 h-3 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+        <svg key={`full-${i}`} className="w-3 h-3 text-golden-hour" fill="currentColor" viewBox="0 0 20 20">
           <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
         </svg>
       ))}
       {hasHalfStar && (
-        <svg className="w-3 h-3 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+        <svg className="w-3 h-3 text-golden-hour" fill="currentColor" viewBox="0 0 20 20">
           <defs>
             <linearGradient id="halfStar">
               <stop offset="50%" stopColor="currentColor" />
-              <stop offset="50%" stopColor="#d1d5db" />
+              <stop offset="50%" stopColor="#E5E2DD" />
             </linearGradient>
           </defs>
           <path fill="url(#halfStar)" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
         </svg>
       )}
       {[...Array(emptyStars)].map((_, i) => (
-        <svg key={`empty-${i}`} className="w-3 h-3 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+        <svg key={`empty-${i}`} className="w-3 h-3 text-pearl" fill="currentColor" viewBox="0 0 20 20">
           <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
         </svg>
       ))}
@@ -84,10 +84,10 @@ export function VendorCard({ vendor, matchConfidence, onChangeClick }: VendorCar
   const confidenceConfig = CONFIDENCE_CONFIG[matchConfidence];
 
   return (
-    <div className="p-3 bg-white border border-patina-clay-beige/30 rounded-lg shadow-patina-sm hover:shadow-patina-md transition-shadow">
+    <div className="p-3 bg-surface border border-pearl rounded-md shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-start gap-3">
         {/* Logo / Avatar */}
-        <div className="flex-shrink-0 w-8 h-8 rounded-lg overflow-hidden bg-patina-off-white flex items-center justify-center">
+        <div className="flex-shrink-0 w-8 h-8 rounded-md overflow-hidden bg-off-white flex items-center justify-center">
           {vendor.logoUrl ? (
             <img
               src={vendor.logoUrl}
@@ -102,7 +102,7 @@ export function VendorCard({ vendor, matchConfidence, onChangeClick }: VendorCar
             />
           ) : null}
           <span
-            className="w-full h-full flex items-center justify-center text-patina-mocha-brown font-medium text-sm"
+            className="w-full h-full flex items-center justify-center text-charcoal font-medium text-sm"
             style={{ display: vendor.logoUrl ? 'none' : 'flex' }}
           >
             {vendor.name.charAt(0).toUpperCase()}
@@ -112,21 +112,21 @@ export function VendorCard({ vendor, matchConfidence, onChangeClick }: VendorCar
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h4 className="text-sm font-medium text-patina-charcoal truncate">
+            <h4 className="font-display font-medium text-[1rem] text-charcoal truncate">
               {vendor.name}
             </h4>
-            <span className={`px-1.5 py-0.5 text-xs rounded-full ${confidenceConfig.bgColor} ${confidenceConfig.textColor}`}>
+            <span className={`px-1.5 py-0.5 font-mono text-[0.55rem] uppercase tracking-[0.06em] rounded-[3px] ${confidenceConfig.bgColor} ${confidenceConfig.textColor}`}>
               {confidenceConfig.label}
             </span>
           </div>
 
           {/* Details row */}
-          <div className="flex items-center gap-2 mt-1 text-xs text-patina-mocha-brown">
+          <div className="flex items-center gap-2 mt-1 font-mono text-[0.62rem] uppercase tracking-[0.04em] text-aged-oak">
             {vendor.marketPosition && (
               <span>{MARKET_POSITION_LABELS[vendor.marketPosition] || vendor.marketPosition}</span>
             )}
             {vendor.marketPosition && vendor.productionModel && (
-              <span className="text-patina-clay-beige">|</span>
+              <span className="text-pearl">|</span>
             )}
             {vendor.productionModel && (
               <span>{PRODUCTION_MODEL_LABELS[vendor.productionModel] || vendor.productionModel}</span>
@@ -138,7 +138,7 @@ export function VendorCard({ vendor, matchConfidence, onChangeClick }: VendorCar
             <div className="flex items-center gap-1.5 mt-1">
               <StarRating rating={vendor.rating} />
               {vendor.reviewCount > 0 && (
-                <span className="text-xs text-patina-mocha-brown/70">
+                <span className="font-mono text-[0.55rem] text-aged-oak">
                   ({vendor.reviewCount})
                 </span>
               )}
@@ -149,8 +149,8 @@ export function VendorCard({ vendor, matchConfidence, onChangeClick }: VendorCar
         {/* Change button */}
         <button
           onClick={onChangeClick}
-          className="flex-shrink-0 px-2 py-1 text-xs text-patina-mocha-brown hover:text-patina-charcoal
-                   hover:bg-patina-off-white rounded transition-colors"
+          className="flex-shrink-0 px-2 py-1 font-mono text-[0.72rem] uppercase tracking-[0.04em] text-aged-oak hover:text-charcoal
+                   transition-colors"
         >
           Change
         </button>

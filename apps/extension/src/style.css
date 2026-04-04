@@ -1,10 +1,24 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg-primary: #FAF7F2;
+  --bg-surface: #FFFFFF;
+  --bg-hover: rgba(196, 165, 123, 0.06);
+  --text-primary: #2C2926;
+  --text-body: #5C4A3C;
+  --text-muted: #8B7355;
+  --accent-primary: #C4A57B;
+  --border-default: #E5E2DD;
+  --border-subtle: rgba(229, 226, 221, 0.6);
+}
+
 /* Apply Inter as default body font */
 body {
   font-family: 'Inter', system-ui, sans-serif;
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
 }

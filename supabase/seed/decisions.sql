@@ -1,0 +1,75 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Seed: Decision Workflow Sample Data
+-- Prerequisites: designer_clients, projects, and auth.users must exist
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- NOTE: This seed assumes you have at least one designer user and
+-- designer_client relationships. Adjust UUIDs to match your local seed data.
+-- The decisions below use placeholder UUIDs that should be replaced with
+-- real IDs from your local database.
+
+-- Example decisions (replace UUIDs with your actual data):
+
+-- 1. Resolved product decision
+-- INSERT INTO client_decisions (
+--   designer_client_id, designer_id, project_id,
+--   title, context, due_date, linked_phase,
+--   decision_type, blocking_status, status,
+--   sent_at, responded_at, viewed_at
+-- ) VALUES (
+--   '<designer_client_uuid>', '<designer_uuid>', '<project_uuid>',
+--   'Dining Chairs — Shaker Oak vs Windsor Elm',
+--   'Six chairs to pair with the Nordic Atelier table. Both are solid wood with hand-finished joints — different personalities for the room.',
+--   '2026-04-05T00:00:00Z', 'Procurement',
+--   'product', 'blocks_procurement', 'responded',
+--   '2026-03-26T10:14:00Z', '2026-03-26T13:02:00Z', '2026-03-26T12:30:00Z'
+-- );
+
+-- 2. Overdue material decision
+-- INSERT INTO client_decisions (
+--   designer_client_id, designer_id, project_id,
+--   title, context, due_date, linked_phase,
+--   decision_type, blocking_status, status,
+--   sent_at
+-- ) VALUES (
+--   '<designer_client_uuid>', '<designer_uuid>', '<project_uuid>',
+--   'Rug color — Natural vs Sand',
+--   'The jute rug from Studio Piet comes in two tones. Natural is warmer, Sand is more neutral.',
+--   '2026-03-22T00:00:00Z', 'Procurement',
+--   'material', 'blocks_procurement', 'pending',
+--   '2026-03-18T09:00:00Z'
+-- );
+
+-- 3. Pending layout decision
+-- INSERT INTO client_decisions (
+--   designer_client_id, designer_id, project_id,
+--   title, context, due_date, linked_phase,
+--   decision_type, blocking_status, status,
+--   sent_at
+-- ) VALUES (
+--   '<designer_client_uuid>', '<designer_uuid>', '<project_uuid>',
+--   'Wall paint — Simply White vs Chantilly Lace',
+--   'Both are Benjamin Moore whites. Simply White has the faintest warm undertone, Chantilly Lace is pure cool.',
+--   '2026-04-01T00:00:00Z', 'Procurement',
+--   'material', 'non_blocking', 'pending',
+--   '2026-03-25T14:00:00Z'
+-- );
+
+-- 4. Concept approval
+-- INSERT INTO client_decisions (
+--   designer_client_id, designer_id, project_id,
+--   title, context, due_date, linked_phase,
+--   decision_type, blocking_status, status,
+--   sent_at
+-- ) VALUES (
+--   '<designer_client_uuid>', '<designer_uuid>', '<project_uuid>',
+--   'Concept direction approval',
+--   'Review the mood board and concept direction for the living room. Two approaches: Scandinavian Warm or Modern Organic.',
+--   '2026-04-03T00:00:00Z', 'Concept',
+--   'approval', 'blocks_phase', 'pending',
+--   '2026-03-24T11:00:00Z'
+-- );
+
+-- To use: uncomment the INSERTs above and replace placeholder UUIDs
+-- with actual values from your local Supabase database.
+-- Run: psql $DATABASE_URL -f supabase/seed/decisions.sql

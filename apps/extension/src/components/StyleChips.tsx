@@ -28,7 +28,7 @@ export function StyleChips({
         {[...Array(6)].map((_, i) => (
           <div
             key={i}
-            className="h-7 w-20 bg-patina-clay-beige/30 rounded-full animate-pulse"
+            className="h-7 w-20 bg-pearl rounded-sm animate-pulse"
           />
         ))}
       </div>
@@ -37,7 +37,7 @@ export function StyleChips({
 
   if (styles.length === 0) {
     return (
-      <p className="text-sm text-patina-mocha-brown/50">
+      <p className="font-mono text-[0.62rem] uppercase tracking-[0.06em] text-aged-oak">
         No styles available
       </p>
     );
@@ -53,10 +53,10 @@ export function StyleChips({
             <button
               key={style.id}
               onClick={() => onToggle(style.id)}
-              className={`px-3 py-1 rounded-full text-sm transition-colors flex items-center gap-1
+              className={`px-3 py-1.5 rounded-sm text-[0.78rem] font-medium transition-colors flex items-center gap-1 border
                        ${isSelected
-                         ? 'bg-patina-mocha-brown text-white'
-                         : 'bg-patina-clay-beige/30 text-patina-charcoal hover:bg-patina-clay-beige/50'
+                         ? 'border-clay text-charcoal bg-off-white'
+                         : 'border-pearl text-mocha bg-off-white hover:border-clay/50'
                        }`}
               style={
                 style.colorHex && !isSelected
@@ -80,7 +80,7 @@ export function StyleChips({
       </div>
 
       {selectedIds.length > 0 && (
-        <p className="text-xs text-patina-mocha-brown">
+        <p className="font-mono text-[0.62rem] uppercase tracking-[0.06em] text-aged-oak">
           {selectedIds.length} style{selectedIds.length !== 1 ? 's' : ''} selected
         </p>
       )}

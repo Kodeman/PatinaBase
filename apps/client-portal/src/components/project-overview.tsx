@@ -1,22 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Avatar,
   AvatarGroup,
-  Badge,
-  Button,
-  Card,
-  ProgressRing,
-  Tag,
   Tooltip,
   TooltipTrigger,
   TooltipContent,
 } from '@patina/design-system';
-import { Calendar, Users, MessageSquare, Bell, TrendingUp, Clock, CheckCircle, AlertCircle, FileText } from 'lucide-react';
+import { Calendar, Users, MessageSquare, Clock, CheckCircle, AlertCircle, FileText } from 'lucide-react';
 import Image from 'next/image';
 
+import { StrataMark } from '@/components/strata-mark';
 import { useActivityFeed, useTeamPresence } from '@/lib/websocket';
 import { formatDate, formatPercentage, formatRelativeTime, formatStatusLabel } from '@/lib/utils/format';
 
@@ -58,10 +54,7 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
   const teamPresence = useTeamPresence();
   const [showAllActivities, setShowAllActivities] = useState(false);
 
-  // Get online team members
   const onlineTeamMembers = teamPresence.filter(p => p.status === 'online');
-
-  // Recent activities to display
   const displayActivities = showAllActivities ? activities : activities.slice(0, 3);
 
   return (
@@ -69,211 +62,158 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="space-y-6"
     >
-      {/* Hero Section with Background Image */}
-      <Card className="relative overflow-hidden">
+      {/* Hero Section */}
+      <div className="relative">
         {project.heroImage && (
-          <div className="absolute inset-0 z-0">
+          <div className="absolute inset-0 -z-10 overflow-hidden rounded-[3px]">
             <Image
               src={project.heroImage}
               alt={project.name}
               fill
-              className="object-cover opacity-20"
+              className="object-cover opacity-10"
               priority
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-white via-white/90 to-transparent" />
           </div>
         )}
 
-        <div className="relative z-10 p-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-            {/* Project Info */}
-            <div className="max-w-2xl">
-              <p className="text-sm uppercase tracking-[0.4em] text-[var(--color-muted)]">
-                Project overview
-              </p>
-              <h1 className="mt-3 font-[var(--font-playfair)] text-4xl text-[var(--color-text)]">
-                {project.name}
-              </h1>
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+          {/* Project Info */}
+          <div className="max-w-2xl">
+            <p className="type-meta">Project overview</p>
+            <h1 className="type-page-title mt-3">{project.name}</h1>
 
-              {project.summary && (
-                <p className="mt-4 text-base text-[var(--color-muted)]">{project.summary}</p>
+            {project.summary && (
+              <p className="type-body mt-4">{project.summary}</p>
+            )}
+
+            {/* Metadata as mono text */}
+            <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
+              {project.currentPhase && (
+                <span className="type-meta">Phase: {project.currentPhase}</span>
               )}
-
-              {/* Project Metadata Tags */}
-              <div className="mt-6 flex flex-wrap items-center gap-3">
-                {project.currentPhase && (
-                  <Badge variant="subtle" color="neutral" className="px-4 py-1.5">
-                    Phase: {project.currentPhase}
-                  </Badge>
-                )}
-
-                {project.startDate && project.endDate && (
-                  <Tag variant="outline" className="gap-1">
-                    <Calendar className="h-3 w-3" />
-                    {formatDate(project.startDate)} - {formatDate(project.endDate)}
-                  </Tag>
-                )}
-
-                {project.budget && (
-                  <Tag variant="outline">
-                    Budget: {formatCurrency(project.budget, project.currency || 'USD')}
-                  </Tag>
-                )}
-
-                <Tag variant="outline">
-                  {project.completedMilestones} of {project.totalMilestones} milestones
-                </Tag>
-              </div>
-
-              {/* Action Indicators */}
-              <div className="mt-6 flex items-center gap-4">
-                {project.approvalsPending && project.approvalsPending > 0 && (
-                  <motion.div
-                    animate={{ scale: [1, 1.05, 1] }}
-                    transition={{ repeat: Infinity, duration: 2 }}
-                  >
-                    <Badge variant="subtle" color="warning" className="gap-1">
-                      <AlertCircle className="h-3 w-3" />
-                      {project.approvalsPending} Pending Approval{project.approvalsPending > 1 ? 's' : ''}
-                    </Badge>
-                  </motion.div>
-                )}
-
-                {project.unreadMessages && project.unreadMessages > 0 && (
-                  <Badge variant="subtle" color="info" className="gap-1">
-                    <MessageSquare className="h-3 w-3" />
-                    {project.unreadMessages} Unread Message{project.unreadMessages > 1 ? 's' : ''}
-                  </Badge>
-                )}
-
-                {onlineTeamMembers.length > 0 && (
-                  <Badge variant="subtle" color="success" className="gap-1">
-                    <Users className="h-3 w-3" />
-                    {onlineTeamMembers.length} Team Member{onlineTeamMembers.length > 1 ? 's' : ''} Online
-                  </Badge>
-                )}
-              </div>
+              {project.startDate && project.endDate && (
+                <span className="type-meta flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  {formatDate(project.startDate)} – {formatDate(project.endDate)}
+                </span>
+              )}
+              {project.budget && (
+                <span className="type-meta">
+                  Budget: {formatCurrency(project.budget, project.currency || 'USD')}
+                </span>
+              )}
+              <span className="type-meta">
+                {project.completedMilestones} of {project.totalMilestones} milestones
+              </span>
             </div>
 
-            {/* Progress Section */}
-            <div className="flex flex-col items-center gap-6">
-              {/* Circular Progress Ring */}
-              <div className="relative">
-                <ProgressRing
-                  value={project.progressPercentage}
-                  size="xl"
-                  strokeWidth={12}
-                  className="text-[var(--color-accent)]"
-                  showLabel={false}
-                />
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-3xl font-bold text-[var(--color-text)]">
-                    {formatPercentage(project.progressPercentage)}
-                  </span>
-                  <span className="text-xs uppercase tracking-wider text-[var(--color-muted)]">
-                    Complete
-                  </span>
-                </div>
-              </div>
-
-              {/* Next Milestone Card */}
-              {project.nextMilestone && (
-                <Card className="w-full max-w-xs p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Clock className="h-4 w-4 text-[var(--color-muted)]" />
-                    <span className="text-xs uppercase tracking-wider text-[var(--color-muted)]">
-                      Next Milestone
-                    </span>
-                  </div>
-                  <p className="font-medium text-sm text-[var(--color-text)]">
-                    {project.nextMilestone.title}
-                  </p>
-                  {project.nextMilestone.targetDate && (
-                    <p className="text-xs text-[var(--color-muted)] mt-1">
-                      Due {formatDate(project.nextMilestone.targetDate)}
-                    </p>
-                  )}
-                  <Badge
-                    variant="subtle"
-                    color={project.nextMilestone.status === 'attention' ? 'warning' : 'neutral'}
-                    className="mt-2"
-                  >
-                    {formatStatusLabel(project.nextMilestone.status as any)}
-                  </Badge>
-                </Card>
+            {/* Action Indicators */}
+            <div className="mt-6 flex flex-wrap items-center gap-4">
+              {project.approvalsPending && project.approvalsPending > 0 && (
+                <span className="type-meta text-patina-terracotta flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" />
+                  {project.approvalsPending} Pending Approval{project.approvalsPending > 1 ? 's' : ''}
+                </span>
+              )}
+              {project.unreadMessages && project.unreadMessages > 0 && (
+                <span className="type-meta text-patina-dusty-blue flex items-center gap-1">
+                  <MessageSquare className="h-3 w-3" />
+                  {project.unreadMessages} Unread
+                </span>
+              )}
+              {onlineTeamMembers.length > 0 && (
+                <span className="type-meta text-patina-sage flex items-center gap-1">
+                  <Users className="h-3 w-3" />
+                  {onlineTeamMembers.length} Online
+                </span>
               )}
             </div>
           </div>
-        </div>
-      </Card>
 
-      {/* Team & Activity Section */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Team Members */}
-        {project.team && project.team.length > 0 && (
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-[var(--color-text)]">Project Team</h3>
-              <Badge variant="outline" className="gap-1">
-                <Users className="h-3 w-3" />
-                {project.team.length} members
-              </Badge>
+          {/* Progress + Next Milestone */}
+          <div className="flex flex-col items-end gap-6">
+            <div className="text-right">
+              <span className="type-data-large">{Math.round(project.progressPercentage)}</span>
+              <span className="type-meta ml-2">% complete</span>
             </div>
 
-            <div className="space-y-3">
-              <AvatarGroup max={5}>
-                {project.team.map((member) => {
-                  const isOnline = teamPresence.some(p => p.userId === member.id && p.status === 'online');
-                  return (
-                    <Tooltip key={member.id}>
-                      <TooltipTrigger asChild>
-                        <div className="relative">
-                          <Avatar
-                            src={member.avatar}
-                            alt={member.name}
-                            name={member.name}
-                            className="border-2 border-white"
-                            status={isOnline ? 'online' : undefined}
-                          />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {member.name} - {member.role}{isOnline ? ' (Online)' : ''}
-                      </TooltipContent>
-                    </Tooltip>
-                  );
-                })}
-              </AvatarGroup>
-
-              <div className="pt-3 border-t">
-                <p className="text-sm text-[var(--color-muted)]">
-                  Your dedicated team is here to bring your vision to life.
-                  {onlineTeamMembers.length > 0 && (
-                    <span className="text-green-600 font-medium">
-                      {' '}• {onlineTeamMembers.length} available now
-                    </span>
-                  )}
+            {project.nextMilestone && (
+              <div className="border-t border-[var(--border-default)] pt-4">
+                <p className="type-meta-small flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  Next milestone
+                </p>
+                <p className="type-item-name mt-1">{project.nextMilestone.title}</p>
+                {project.nextMilestone.targetDate && (
+                  <p className="type-meta mt-1">Due {formatDate(project.nextMilestone.targetDate)}</p>
+                )}
+                <p className={`type-meta mt-1 ${project.nextMilestone.status === 'attention' ? 'text-patina-terracotta' : ''}`}>
+                  {formatStatusLabel(project.nextMilestone.status as any)}
                 </p>
               </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <StrataMark variant="mini" />
+
+      {/* Team & Activity */}
+      <div className="grid gap-8 lg:grid-cols-2">
+        {/* Team Members */}
+        {project.team && project.team.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="type-section-head">Your Team</h3>
+              <span className="type-meta">{project.team.length} members</span>
             </div>
-          </Card>
+
+            <AvatarGroup max={5}>
+              {project.team.map((member) => {
+                const isOnline = teamPresence.some(p => p.userId === member.id && p.status === 'online');
+                return (
+                  <Tooltip key={member.id}>
+                    <TooltipTrigger asChild>
+                      <div className="relative">
+                        <Avatar
+                          src={member.avatar}
+                          alt={member.name}
+                          name={member.name}
+                          className="border-2 border-[var(--bg-primary)]"
+                          status={isOnline ? 'online' : undefined}
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {member.name} — {member.role}{isOnline ? ' (Online)' : ''}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </AvatarGroup>
+
+            <p className="type-body-small mt-4">
+              Your dedicated team is here to bring your vision to life.
+              {onlineTeamMembers.length > 0 && (
+                <span className="text-patina-sage font-medium">
+                  {' '}· {onlineTeamMembers.length} available now
+                </span>
+              )}
+            </p>
+          </div>
         )}
 
         {/* Recent Activity Feed */}
-        <Card className="p-6">
+        <div>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-[var(--color-text)]">Recent Activity</h3>
-            <Badge variant="outline" className="gap-1">
-              <TrendingUp className="h-3 w-3" />
-              Live
-            </Badge>
+            <h3 className="type-section-head">Recent Activity</h3>
+            <span className="type-meta text-patina-sage">Live</span>
           </div>
 
           <AnimatePresence mode="popLayout">
             {displayActivities.length > 0 ? (
-              <div className="space-y-3">
+              <div>
                 {displayActivities.map((activity) => (
                   <motion.div
                     key={activity.id}
@@ -281,48 +221,43 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 20 }}
                     transition={{ duration: 0.2 }}
-                    className="flex items-start gap-3"
+                    className="flex items-start gap-3 border-b border-[var(--border-subtle)] py-3"
                   >
-                    <div className="mt-1">
-                      {activity.type === 'milestone' && <CheckCircle className="h-4 w-4 text-green-500" />}
-                      {activity.type === 'message' && <MessageSquare className="h-4 w-4 text-blue-500" />}
-                      {activity.type === 'approval' && <AlertCircle className="h-4 w-4 text-amber-500" />}
-                      {activity.type === 'document' && <FileText className="h-4 w-4 text-gray-500" />}
+                    <div className="mt-0.5">
+                      {activity.type === 'milestone' && <CheckCircle className="h-4 w-4 text-patina-sage" />}
+                      {activity.type === 'message' && <MessageSquare className="h-4 w-4 text-patina-dusty-blue" />}
+                      {activity.type === 'approval' && <AlertCircle className="h-4 w-4 text-patina-terracotta" />}
+                      {activity.type === 'document' && <FileText className="h-4 w-4 text-patina-aged-oak" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-[var(--color-text)]">{activity.title}</p>
+                      <p className="text-sm text-[var(--text-primary)]">{activity.title}</p>
                       {activity.description && (
-                        <p className="text-xs text-[var(--color-muted)] mt-0.5 truncate">
-                          {activity.description}
-                        </p>
+                        <p className="type-body-small mt-0.5 truncate">{activity.description}</p>
                       )}
-                      <p className="text-xs text-[var(--color-muted)] mt-1">
-                        {formatRelativeTime(activity.createdAt)}
-                      </p>
+                      <p className="type-meta-small mt-1">{formatRelativeTime(activity.createdAt)}</p>
                     </div>
                   </motion.div>
                 ))}
 
                 {activities.length > 3 && !showAllActivities && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
+                  <button
+                    type="button"
                     onClick={() => setShowAllActivities(true)}
-                    className="w-full"
+                    className="mt-3 type-meta text-[var(--accent-primary)] hover:text-[var(--text-primary)] transition-colors"
                   >
                     Show all ({activities.length} total)
-                  </Button>
+                  </button>
                 )}
               </div>
             ) : (
-              <div className="text-center py-8 text-[var(--color-muted)]">
-                <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No recent activity</p>
-                <p className="text-xs mt-1">Updates will appear here in real-time</p>
+              <div className="py-8 text-center">
+                <Clock className="h-6 w-6 mx-auto mb-2 text-[var(--text-muted)] opacity-50" />
+                <p className="type-body-small">No recent activity</p>
+                <p className="type-meta mt-1">Updates will appear here in real-time</p>
               </div>
             )}
           </AnimatePresence>
-        </Card>
+        </div>
       </div>
     </motion.div>
   );

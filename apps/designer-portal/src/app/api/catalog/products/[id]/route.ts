@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
 
+const TIER_VALUES = ['maker_piece', 'designers_pick', 'sourced'] as const;
+
 function snakeToCamel(product: Record<string, unknown>) {
+  const tags = (product.tags ?? []) as string[];
+  const tier = tags.find((t) => (TIER_VALUES as readonly string[]).includes(t)) ?? null;
+
   return {
     id: product.id,
     name: product.name,
@@ -14,13 +19,23 @@ function snakeToCamel(product: Record<string, unknown>) {
     sku: product.sku,
     price: product.price_retail ? (product.price_retail as number) / 100 : null,
     priceRetail: product.price_retail,
-    tradePrice: product.price_trade,
+    tradePrice: product.price_trade ? (product.price_trade as number) / 100 : null,
+    mapPrice: product.price_map ? (product.price_map as number) / 100 : null,
+    tier,
+    finish: product.finish,
+    assembly: product.assembly,
+    provenance: product.provenance,
+    careInstructions: product.care_instructions,
+    arModelUrl: product.ar_model_url,
+    has3D: !!product.ar_model_url,
+    weight: product.weight,
+    commissionRate: product.commission_rate,
     sourceUrl: product.source_url,
     capturedBy: product.captured_by,
     images: product.images ?? [],
     materials: product.materials ?? [],
     dimensions: product.dimensions,
-    tags: product.tags ?? [],
+    tags,
     styleTags: product.style_tags ?? [],
     seoTitle: product.seo_title,
     seoDescription: product.seo_description,
@@ -101,6 +116,14 @@ export async function PATCH(
     if (body.seoTitle !== undefined) updateData.seo_title = body.seoTitle;
     if (body.seoDescription !== undefined) updateData.seo_description = body.seoDescription;
     if (body.vendorId !== undefined) updateData.vendor_id = body.vendorId;
+    if (body.finish !== undefined) updateData.finish = body.finish;
+    if (body.assembly !== undefined) updateData.assembly = body.assembly;
+    if (body.provenance !== undefined) updateData.provenance = body.provenance;
+    if (body.careInstructions !== undefined) updateData.care_instructions = body.careInstructions;
+    if (body.arModelUrl !== undefined) updateData.ar_model_url = body.arModelUrl;
+    if (body.mapPrice !== undefined) updateData.price_map = Math.round(body.mapPrice * 100);
+    if (body.commissionRate !== undefined) updateData.commission_rate = body.commissionRate;
+    if (body.weight !== undefined) updateData.weight = body.weight;
 
     updateData.updated_at = new Date().toISOString();
 

@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — Designer Portal Component Catalog</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --off-white:#FAF7F2;--pearl:#E5E2DD;--clay:#C4A57B;--aged-oak:#8B7355;
+  --mocha:#5C4A3C;--charcoal:#2C2926;--sage:#A8B5A0;--dusty-blue:#8B9CAD;
+  --terracotta:#D4A090;--golden-hour:#E8C547;
+  --bg-primary:var(--off-white);--bg-surface:#FFFFFF;--bg-hover:rgba(196,165,123,0.06);
+  --text-primary:var(--charcoal);--text-body:var(--mocha);--text-muted:var(--aged-oak);
+  --accent-primary:var(--clay);--border-default:var(--pearl);--border-subtle:rgba(229,226,221,0.6);
+  --font-display:'Playfair Display',Georgia,serif;
+  --font-body:'Inter',-apple-system,sans-serif;
+  --font-mono:'DM Mono','SF Mono',monospace;
+  --ease:cubic-bezier(0.4,0,0.2,1);--dur-fast:150ms;--dur-norm:300ms;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:16px;scroll-behavior:smooth;background:#f3f0eb}
+body{font-family:var(--font-body);color:var(--text-primary);-webkit-font-smoothing:antialiased;line-height:1.6}
+
+/* === CATALOG CHROME === */
+.catalog-shell{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+.catalog-sidebar{position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--charcoal);padding:2rem 0;scrollbar-width:thin;scrollbar-color:var(--mocha) transparent}
+.catalog-sidebar::-webkit-scrollbar{width:4px}
+.catalog-sidebar::-webkit-scrollbar-thumb{background:var(--mocha);border-radius:2px}
+.catalog-main{padding:3rem clamp(2rem,4vw,4rem);background:var(--bg-primary);overflow-y:auto}
+
+.sidebar-logo{padding:0 1.5rem;margin-bottom:2.5rem}
+.sidebar-logo h1{font-family:var(--font-display);font-weight:500;font-size:1.1rem;color:var(--off-white);letter-spacing:0.15em;text-transform:uppercase}
+.sidebar-logo p{font-family:var(--font-mono);font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--aged-oak);margin-top:0.25rem}
+
+.sidebar-section{margin-bottom:1.5rem}
+.sidebar-section-label{font-family:var(--font-mono);font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--aged-oak);padding:0 1.5rem;margin-bottom:0.5rem}
+.sidebar-link{display:block;font-family:var(--font-body);font-size:0.8rem;color:rgba(250,247,242,0.5);padding:0.3rem 1.5rem;text-decoration:none;transition:all var(--dur-fast) var(--ease);cursor:pointer}
+.sidebar-link:hover,.sidebar-link.active{color:var(--off-white);background:rgba(196,165,123,0.1)}
+.sidebar-link .count{font-family:var(--font-mono);font-size:0.6rem;color:var(--aged-oak);margin-left:0.5rem}
+
+.catalog-header{margin-bottom:3rem}
+.catalog-header h2{font-family:var(--font-display);font-weight:400;font-size:clamp(2rem,4vw,3rem);color:var(--text-primary);margin-bottom:0.5rem;line-height:1.15}
+.catalog-header p{font-family:var(--font-body);font-size:0.95rem;color:var(--text-body);max-width:600px;line-height:1.7}
+
+/* === COMPONENT SECTION === */
+.comp-section{margin-bottom:4rem;scroll-margin-top:2rem}
+.comp-section-title{font-family:var(--font-display);font-weight:500;font-size:1.4rem;color:var(--text-primary);margin-bottom:0.5rem}
+.comp-section-desc{font-family:var(--font-body);font-size:0.88rem;color:var(--text-body);margin-bottom:1.5rem;max-width:560px;line-height:1.65}
+
+.comp-card{background:var(--bg-surface);border-radius:10px;overflow:hidden;margin-bottom:2rem;box-shadow:0 1px 3px rgba(44,41,38,0.04),0 6px 24px rgba(44,41,38,0.04)}
+.comp-card-header{padding:1.25rem 1.5rem;border-bottom:1px solid var(--border-default);display:flex;justify-content:space-between;align-items:center}
+.comp-card-name{font-family:var(--font-body);font-weight:600;font-size:0.82rem;color:var(--text-primary);letter-spacing:0.02em}
+.comp-card-file{font-family:var(--font-mono);font-size:0.62rem;color:var(--text-muted);letter-spacing:0.04em}
+.comp-card-body{padding:2rem 1.5rem}
+.comp-card-body.dark{background:var(--charcoal)}
+.comp-card-body.surface{background:var(--bg-primary)}
+
+.comp-variant-label{font-family:var(--font-mono);font-size:0.6rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.75rem;margin-top:1.5rem}
+.comp-variant-label:first-child{margin-top:0}
+
+.comp-row{display:flex;gap:1.5rem;align-items:flex-start;flex-wrap:wrap}
+.comp-col{display:flex;flex-direction:column;gap:1rem}
+
+/* === DIVIDER === */
+.cat-divider{display:flex;flex-direction:column;gap:5px;padding:2.5rem 0}
+.cat-divider .l{height:1.5px;background:var(--mocha);border-radius:1px}
+.cat-divider .l:nth-child(1){width:100%;opacity:1}
+.cat-divider .l:nth-child(2){width:80%;opacity:.7}
+.cat-divider .l:nth-child(3){width:60%;opacity:.35}
+
+/* ======================================================
+   COMPONENT STYLES — EXACTLY AS THEY'LL RENDER IN PORTAL
+   ====================================================== */
+
+/* --- Strata Mark --- */
+.strata-full{display:flex;flex-direction:column;gap:6px;padding:2rem 0}
+.strata-full .sl{height:2px;border-radius:1px}
+.strata-full .sl:nth-child(1){width:100%;background:var(--mocha)}
+.strata-full .sl:nth-child(2){width:80%;background:var(--clay);opacity:.7}
+.strata-full .sl:nth-child(3){width:60%;background:var(--clay);opacity:.35}
+
+.strata-mini{display:flex;flex-direction:column;gap:4px;padding:1rem 0}
+.strata-mini .sl{height:1.5px;border-radius:1px}
+.strata-mini .sl:nth-child(1){width:60px;background:var(--mocha)}
+.strata-mini .sl:nth-child(2){width:48px;background:var(--clay);opacity:.7}
+.strata-mini .sl:nth-child(3){width:36px;background:var(--clay);opacity:.35}
+
+.strata-micro{height:1px;background:var(--pearl);width:100%}
+
+/* --- Type Specimens --- */
+.type-page-title{font-family:var(--font-display);font-weight:400;font-size:2.5rem;line-height:1.15;letter-spacing:-0.02em;color:var(--text-primary)}
+.type-page-title em{font-style:italic;color:var(--aged-oak)}
+.type-section-head{font-family:var(--font-display);font-weight:400;font-size:1.6rem;line-height:1.3;letter-spacing:-0.02em;color:var(--text-primary)}
+.type-item-name{font-family:var(--font-display);font-weight:500;font-size:1.2rem;line-height:1.4;letter-spacing:-0.02em;color:var(--text-primary)}
+.type-data-lg{font-family:var(--font-display);font-weight:700;font-size:2.4rem;line-height:1;letter-spacing:-0.02em;color:var(--text-primary)}
+.type-data-unit{font-family:var(--font-body);font-weight:400;font-size:0.85rem;color:var(--text-muted);margin-left:0.4rem}
+.type-body{font-family:var(--font-body);font-weight:400;font-size:1rem;line-height:1.7;color:var(--text-body);max-width:560px}
+.type-body-sm{font-family:var(--font-body);font-weight:400;font-size:0.88rem;line-height:1.6;color:var(--text-body)}
+.type-label{font-family:var(--font-body);font-weight:500;font-size:0.95rem;line-height:1.5;color:var(--text-primary)}
+.type-label-sec{font-family:var(--font-body);font-weight:400;font-size:0.82rem;line-height:1.5;color:var(--text-muted)}
+.type-meta{font-family:var(--font-mono);font-weight:400;font-size:0.72rem;line-height:1.5;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted)}
+.type-meta-sm{font-family:var(--font-mono);font-weight:400;font-size:0.62rem;line-height:1.5;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)}
+
+/* --- Buttons --- */
+.btn{font-family:var(--font-body);font-weight:500;font-size:0.85rem;padding:0.65rem 1.5rem;border:none;border-radius:3px;cursor:pointer;letter-spacing:0.01em;transition:all var(--dur-fast) var(--ease);display:inline-flex;align-items:center;gap:0.5rem}
+.btn-primary{background:var(--charcoal);color:var(--off-white)}
+.btn-primary:hover{background:var(--mocha)}
+.btn-secondary{background:transparent;color:var(--charcoal);border:1px solid var(--pearl)}
+.btn-secondary:hover{background:var(--bg-hover)}
+.btn-ghost{background:transparent;color:var(--text-muted);border:none;padding:0.65rem 1rem}
+.btn-ghost:hover{color:var(--text-primary)}
+.btn-sm{font-size:0.78rem;padding:0.45rem 1rem}
+.btn-danger{background:transparent;color:var(--terracotta);border:1px solid rgba(199,123,110,0.3)}
+.btn-danger:hover{background:rgba(199,123,110,0.06)}
+
+/* --- Metric Block --- */
+.metric{display:flex;flex-direction:column}
+.metric-label{font-family:var(--font-mono);font-size:0.65rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:0.4rem}
+.metric-value{font-family:var(--font-display);font-size:2.2rem;font-weight:700;color:var(--text-primary);line-height:1;margin-bottom:0.3rem}
+.metric-change{font-family:var(--font-body);font-size:0.78rem}
+.metric-change.up{color:var(--sage)}
+.metric-change.down{color:var(--terracotta)}
+.metric-change.neutral{color:var(--text-muted)}
+
+.metric-row{display:flex;gap:0}
+.metric-row .metric{padding-right:2rem}
+.metric-row .metric+.metric{padding-left:2rem;border-left:1px solid var(--border-default)}
+
+/* --- Score Circle --- */
+.score-circle{width:80px;height:80px;border-radius:50%;border:3px solid var(--clay);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.score-circle .num{font-family:var(--font-display);font-size:1.8rem;font-weight:700;color:var(--text-primary);line-height:1}
+.score-circle .lbl{font-family:var(--font-mono);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted)}
+.score-circle.sm{width:52px;height:52px;border-width:2px}
+.score-circle.sm .num{font-size:1.2rem}
+.score-circle.sm .lbl{font-size:0.48rem}
+.score-circle.lg{width:100px;height:100px}
+.score-circle.lg .num{font-size:2.2rem}
+
+/* --- Progress Bar --- */
+.progress{height:3px;background:var(--pearl);border-radius:2px;overflow:hidden;width:100%}
+.progress-fill{height:100%;background:var(--clay);border-radius:2px;transition:width var(--dur-norm) var(--ease)}
+.progress.thick{height:5px}
+.progress.thin{height:2px}
+
+/* --- Style Tag --- */
+.style-tag{display:inline-flex;font-family:var(--font-body);font-size:0.78rem;font-weight:500;color:var(--mocha);padding:0.3rem 0.85rem;background:var(--off-white);border:1px solid var(--pearl);border-radius:2px;white-space:nowrap}
+.style-tag.active{border-color:var(--clay);color:var(--charcoal)}
+
+/* --- Field Group --- */
+.field-group{margin-bottom:1.75rem}
+.field-group-label{font-family:var(--font-mono);font-size:0.65rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:0.5rem}
+
+/* --- Detail Row --- */
+.detail-row{display:grid;grid-template-columns:110px 1fr;gap:0.75rem;padding:0.35rem 0;font-size:0.88rem}
+.detail-row-key{font-family:var(--font-mono);font-size:0.68rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);padding-top:0.15rem}
+.detail-row-val{font-family:var(--font-body);color:var(--text-body);line-height:1.5}
+
+/* --- Lead List Item --- */
+.lead-item{display:grid;grid-template-columns:1fr auto;gap:1rem;padding:1.15rem 0;border-bottom:1px solid var(--border-subtle);transition:background var(--dur-fast) var(--ease);cursor:pointer;position:relative}
+.lead-item:hover{background:var(--bg-hover)}
+.lead-item-name{font-family:var(--font-body);font-weight:500;font-size:0.95rem;color:var(--text-primary);margin-bottom:0.15rem}
+.lead-item-detail{font-family:var(--font-body);font-size:0.82rem;color:var(--text-muted);line-height:1.5}
+.lead-item-score{font-family:var(--font-display);font-size:1.5rem;font-weight:600;color:var(--clay);text-align:right;line-height:1}
+.lead-item-score-label{font-family:var(--font-mono);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);text-align:right;margin-top:0.15rem}
+.lead-item .hover-actions{position:absolute;right:0;top:50%;transform:translateY(-50%);display:flex;gap:0.5rem;opacity:0;transition:opacity var(--dur-fast)}
+.lead-item:hover .hover-actions{opacity:1}
+.lead-item:hover .lead-item-score-wrap{opacity:0}
+
+/* --- Project List Item --- */
+.project-item{padding:1rem 0;border-bottom:1px solid var(--border-subtle)}
+.project-item-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.25rem}
+.project-item-name{font-family:var(--font-body);font-weight:500;font-size:0.9rem;color:var(--text-primary)}
+.project-item-phase{font-family:var(--font-mono);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted)}
+
+/* --- Client List Item --- */
+.client-item{display:grid;grid-template-columns:40px 1fr auto;gap:1rem;padding:1rem 0;border-bottom:1px solid var(--border-subtle);align-items:center;cursor:pointer;transition:background var(--dur-fast) var(--ease)}
+.client-item:hover{background:var(--bg-hover)}
+.client-avatar{width:40px;height:40px;border-radius:50%;background:var(--pearl);display:flex;align-items:center;justify-content:center;font-family:var(--font-body);font-weight:500;font-size:0.82rem;color:var(--mocha)}
+.client-item-info .type-label{margin-bottom:0}
+.client-item-meta{font-family:var(--font-mono);font-size:0.6rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted)}
+
+/* --- Message Item --- */
+.message-item{display:grid;grid-template-columns:40px 1fr auto;gap:1rem;padding:1rem 0;border-bottom:1px solid var(--border-subtle);cursor:pointer;transition:background var(--dur-fast) var(--ease)}
+.message-item:hover{background:var(--bg-hover)}
+.message-item.unread .message-item-name{font-weight:600}
+.message-item.unread::before{content:'';position:absolute;left:-8px;top:50%;transform:translateY(-50%);width:6px;height:6px;border-radius:50%;background:var(--clay)}
+.message-item{position:relative}
+.message-item-name{font-family:var(--font-body);font-weight:400;font-size:0.9rem;color:var(--text-primary)}
+.message-item-preview{font-family:var(--font-body);font-size:0.8rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:400px}
+.message-item-time{font-family:var(--font-mono);font-size:0.58rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);white-space:nowrap}
+
+/* --- Transaction Item --- */
+.transaction-item{display:grid;grid-template-columns:1fr auto;padding:1rem 0;border-bottom:1px solid var(--border-subtle);align-items:center}
+.transaction-desc{font-family:var(--font-body);font-weight:500;font-size:0.9rem;color:var(--text-primary)}
+.transaction-meta{font-family:var(--font-mono);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);margin-top:0.15rem}
+.transaction-amount{font-family:var(--font-display);font-weight:600;font-size:1.15rem;text-align:right}
+.transaction-amount.credit{color:var(--sage)}
+.transaction-amount.debit{color:var(--terracotta)}
+
+/* --- Room Preview --- */
+.room-preview{background:var(--pearl);border-radius:8px;height:180px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;cursor:pointer;transition:all var(--dur-norm) var(--ease)}
+.room-preview:hover{box-shadow:0 4px 16px rgba(44,41,38,0.08)}
+.room-preview::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 30px,rgba(196,165,123,0.04) 30px,rgba(196,165,123,0.04) 60px)}
+.room-preview-text{font-family:var(--font-mono);font-size:0.72rem;color:var(--text-muted);letter-spacing:0.04em;text-transform:uppercase;z-index:1;text-align:center;line-height:1.8}
+
+/* --- Breadcrumb --- */
+.breadcrumb{font-family:var(--font-mono);font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted)}
+.breadcrumb a{color:var(--clay);text-decoration:none}
+.breadcrumb a:hover{color:var(--aged-oak)}
+.breadcrumb span{margin:0 0.4rem;opacity:0.5}
+
+/* --- Filter Row --- */
+.filter-row{display:flex;gap:0;border-bottom:1px solid var(--border-default);margin-bottom:1.5rem}
+.filter-item{font-family:var(--font-body);font-size:0.85rem;color:var(--text-muted);padding:0.6rem 1.2rem 0.7rem;cursor:pointer;border-bottom:2px solid transparent;transition:all var(--dur-fast) var(--ease);position:relative}
+.filter-item:first-child{padding-left:0}
+.filter-item:hover{color:var(--text-primary)}
+.filter-item.active{color:var(--text-primary);border-bottom-color:var(--clay)}
+.filter-item .filter-count{font-family:var(--font-mono);font-size:0.6rem;color:var(--text-muted);margin-left:0.3rem}
+
+/* --- Search Input --- */
+.search-input{position:relative;width:100%;max-width:360px}
+.search-input input{width:100%;font-family:var(--font-body);font-size:0.88rem;padding:0.6rem 0.8rem 0.6rem 2.2rem;border:1px solid var(--pearl);border-radius:3px;background:var(--bg-surface);color:var(--text-primary);outline:none;transition:border-color var(--dur-fast) var(--ease)}
+.search-input input::placeholder{color:var(--text-muted);font-size:0.85rem}
+.search-input input:focus{border-color:var(--clay)}
+.search-input .search-icon{position:absolute;left:0.7rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:0.85rem}
+
+/* --- Text Input --- */
+.text-input{display:flex;flex-direction:column;gap:0.4rem}
+.text-input label{font-family:var(--font-mono);font-size:0.65rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted)}
+.text-input input,.text-input textarea{font-family:var(--font-body);font-size:0.92rem;padding:0.6rem 0.75rem;border:1px solid var(--pearl);border-radius:3px;background:var(--bg-surface);color:var(--text-primary);outline:none;transition:border-color var(--dur-fast) var(--ease);resize:vertical}
+.text-input input:focus,.text-input textarea:focus{border-color:var(--clay)}
+.text-input.error input,.text-input.error textarea{border-color:var(--terracotta)}
+.text-input .error-msg{font-family:var(--font-body);font-size:0.75rem;color:var(--terracotta)}
+
+/* --- Select --- */
+.select-wrap select{font-family:var(--font-body);font-size:0.88rem;padding:0.6rem 2rem 0.6rem 0.75rem;border:1px solid var(--pearl);border-radius:3px;background:var(--bg-surface);color:var(--text-primary);appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238B7355' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 0.75rem center;outline:none;cursor:pointer;transition:border-color var(--dur-fast)}
+.select-wrap select:focus{border-color:var(--clay)}
+
+/* --- Toggle --- */
+.toggle{display:flex;align-items:center;gap:0.6rem;cursor:pointer}
+.toggle-track{width:38px;height:20px;border-radius:10px;background:var(--pearl);position:relative;transition:background var(--dur-fast)}
+.toggle-track.on{background:var(--clay)}
+.toggle-thumb{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:white;box-shadow:0 1px 3px rgba(0,0,0,0.15);transition:transform var(--dur-fast) var(--ease)}
+.toggle-track.on .toggle-thumb{transform:translateX(18px)}
+.toggle-label{font-family:var(--font-body);font-size:0.85rem;color:var(--text-body)}
+
+/* --- Toast --- */
+.toast{display:flex;align-items:center;gap:0.75rem;padding:0.85rem 1.25rem;background:var(--bg-surface);border-radius:6px;box-shadow:0 4px 20px rgba(44,41,38,0.12);border-left:3px solid var(--clay);max-width:380px}
+.toast-msg{font-family:var(--font-body);font-size:0.85rem;color:var(--text-primary)}
+.toast.success{border-left-color:var(--sage)}
+.toast.error{border-left-color:var(--terracotta)}
+.toast.info{border-left-color:var(--dusty-blue)}
+
+/* --- Empty State --- */
+.empty-state{text-align:center;padding:3rem 2rem}
+.empty-state-title{font-family:var(--font-display);font-weight:400;font-style:italic;font-size:1.3rem;color:var(--text-muted);margin-bottom:0.5rem}
+.empty-state-desc{font-family:var(--font-body);font-size:0.88rem;color:var(--text-muted);max-width:360px;margin:0 auto 1.5rem}
+
+/* --- Loading Strata --- */
+.loading-strata{display:flex;flex-direction:column;gap:5px;align-items:center;padding:2rem}
+.loading-strata .ls{height:2px;border-radius:1px;animation:strata-pulse 1.5s ease-in-out infinite}
+.loading-strata .ls:nth-child(1){width:50px;background:var(--mocha);animation-delay:0s}
+.loading-strata .ls:nth-child(2){width:40px;background:var(--clay);animation-delay:0.15s}
+.loading-strata .ls:nth-child(3){width:30px;background:var(--clay);opacity:.5;animation-delay:0.3s}
+@keyframes strata-pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+
+/* --- Proposal Section --- */
+.proposal-section{padding:2rem 0;border-top:1px solid var(--pearl)}
+.proposal-section-head{font-family:var(--font-display);font-weight:400;font-size:1.4rem;color:var(--text-primary);margin-bottom:1rem}
+
+/* --- Product Line Item --- */
+.product-line{display:grid;grid-template-columns:1fr auto;gap:1rem;padding:1.25rem 0;border-bottom:1px solid var(--border-subtle);align-items:baseline}
+.product-line-name{font-family:var(--font-body);font-weight:500;font-size:0.95rem;color:var(--text-primary)}
+.product-line-maker{font-family:var(--font-body);font-size:0.82rem;font-style:italic;color:var(--aged-oak);margin-top:0.1rem}
+.product-line-price{font-family:var(--font-display);font-weight:600;font-size:1.15rem;color:var(--text-primary)}
+
+/* --- Phase Timeline --- */
+.phase-timeline{position:relative;padding-left:1.5rem}
+.phase-timeline::before{content:'';position:absolute;left:4px;top:8px;bottom:8px;width:2px;background:var(--pearl)}
+.phase{padding:0.6rem 0;position:relative}
+.phase::before{content:'';position:absolute;left:-1.5rem;top:0.85rem;width:10px;height:10px;border-radius:50%;border:2px solid var(--pearl);background:var(--bg-surface)}
+.phase.active::before{border-color:var(--clay);background:var(--clay)}
+.phase.complete::before{border-color:var(--sage);background:var(--sage)}
+.phase-name{font-family:var(--font-body);font-size:0.9rem}
+.phase.active .phase-name{font-weight:500;color:var(--text-primary)}
+.phase.complete .phase-name{color:var(--text-muted)}
+.phase.upcoming .phase-name{color:var(--pearl);font-weight:300}
+.phase-date{font-family:var(--font-mono);font-size:0.6rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);margin-top:0.1rem}
+
+/* --- Message Bubble --- */
+.msg-bubble{max-width:70%;padding:0.85rem 1.1rem;border-radius:12px 12px 12px 4px;background:var(--pearl);margin-bottom:0.75rem}
+.msg-bubble.outgoing{background:var(--charcoal);color:var(--off-white);border-radius:12px 12px 4px 12px;margin-left:auto}
+.msg-bubble p{font-family:var(--font-body);font-size:0.88rem;line-height:1.55}
+.msg-bubble-time{font-family:var(--font-mono);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);margin-top:0.35rem}
+.msg-bubble.outgoing .msg-bubble-time{color:rgba(250,247,242,0.5)}
+
+/* --- Top Bar (miniature for display) --- */
+.topbar-demo{display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:52px;background:var(--bg-surface);border-bottom:1px solid var(--border-default);border-radius:6px 6px 0 0}
+.topbar-logo{font-family:var(--font-display);font-weight:500;font-size:0.75rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-primary)}
+.topbar-nav{display:flex;gap:1.5rem}
+.topbar-nav-item{font-family:var(--font-body);font-size:0.75rem;color:var(--text-muted);cursor:pointer;padding:0.3rem 0;border-bottom:2px solid transparent}
+.topbar-nav-item.active{color:var(--text-primary);border-bottom-color:var(--clay)}
+.topbar-user{display:flex;align-items:center;gap:0.5rem}
+.topbar-avatar{width:28px;height:28px;border-radius:50%;background:var(--pearl);display:flex;align-items:center;justify-content:center;font-family:var(--font-body);font-weight:500;font-size:0.62rem;color:var(--mocha)}
+
+/* --- Mobile Tab Bar --- */
+.mobile-tabs{display:flex;background:var(--bg-surface);border-top:1px solid var(--border-default);border-radius:0 0 6px 6px;padding:0.4rem 0;max-width:360px}
+.mobile-tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:0.2rem;padding:0.4rem;cursor:pointer}
+.mobile-tab-icon{font-size:1rem;color:var(--text-muted)}
+.mobile-tab-label{font-family:var(--font-mono);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted)}
+.mobile-tab.active .mobile-tab-icon,.mobile-tab.active .mobile-tab-label{color:var(--clay)}
+
+/* --- Notification Dot --- */
+.notif-dot{width:7px;height:7px;border-radius:50%;background:var(--terracotta);display:inline-block;margin-left:0.3rem;vertical-align:middle}
+
+/* --- Responsive --- */
+@media(max-width:900px){
+  .catalog-shell{grid-template-columns:1fr}
+  .catalog-sidebar{display:none}
+  .comp-row{flex-direction:column}
+  .metric-row{flex-direction:column;gap:1.5rem}
+  .metric-row .metric+.metric{border-left:none;padding-left:0}
+}
+</style>
+</head>
+<body>
+<div class="catalog-shell">
+
+<!-- ========== SIDEBAR NAV ========== -->
+<nav class="catalog-sidebar">
+  <div class="sidebar-logo">
+    <h1>Patina</h1>
+    <p>Component Catalog v1.0</p>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Foundation</div>
+    <a class="sidebar-link" href="#colors">Color Palette</a>
+    <a class="sidebar-link" href="#typography">Typography Scale</a>
+    <a class="sidebar-link" href="#strata">Strata Mark</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Layout</div>
+    <a class="sidebar-link" href="#topbar">Top Bar</a>
+    <a class="sidebar-link" href="#mobiletabs">Mobile Tab Bar</a>
+    <a class="sidebar-link" href="#breadcrumb">Breadcrumb</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Navigation</div>
+    <a class="sidebar-link" href="#filterrow">Filter Row</a>
+    <a class="sidebar-link" href="#search">Search Input</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Data Display</div>
+    <a class="sidebar-link" href="#metric">Metric Block</a>
+    <a class="sidebar-link" href="#scorecircle">Score Circle</a>
+    <a class="sidebar-link" href="#progressbar">Progress Bar</a>
+    <a class="sidebar-link" href="#fieldgroup">Field Group</a>
+    <a class="sidebar-link" href="#detailrow">Detail Row</a>
+    <a class="sidebar-link" href="#roompreview">Room Preview</a>
+    <a class="sidebar-link" href="#phasetimeline">Phase Timeline</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">List Items</div>
+    <a class="sidebar-link" href="#leaditem">Lead List Item</a>
+    <a class="sidebar-link" href="#projectitem">Project List Item</a>
+    <a class="sidebar-link" href="#clientitem">Client List Item</a>
+    <a class="sidebar-link" href="#messageitem">Message Item</a>
+    <a class="sidebar-link" href="#transactionitem">Transaction Item</a>
+    <a class="sidebar-link" href="#productline">Product Line Item</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Actions & Inputs</div>
+    <a class="sidebar-link" href="#buttons">Buttons</a>
+    <a class="sidebar-link" href="#styletag">Style Tags</a>
+    <a class="sidebar-link" href="#textinput">Text Input</a>
+    <a class="sidebar-link" href="#select">Select</a>
+    <a class="sidebar-link" href="#toggle">Toggle</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Communication</div>
+    <a class="sidebar-link" href="#msgbubble">Message Bubble</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Proposal</div>
+    <a class="sidebar-link" href="#proposalsection">Proposal Section</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Feedback & State</div>
+    <a class="sidebar-link" href="#toast">Toast Notification</a>
+    <a class="sidebar-link" href="#emptystate">Empty State</a>
+    <a class="sidebar-link" href="#loading">Loading Strata</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Compositions</div>
+    <a class="sidebar-link" href="#comp-dashboard">Dashboard</a>
+    <a class="sidebar-link" href="#comp-leadbrief">Lead Brief</a>
+  </div>
+</nav>
+
+<!-- ========== MAIN CONTENT ========== -->
+<main class="catalog-main">
+
+<div class="catalog-header">
+  <h2>Designer Portal<br>Component Catalog</h2>
+  <p>Every component needed to build the full portal. Each renders exactly as it will appear in production — same fonts, same colors, same spacing. This is the single source of truth for implementation.</p>
+</div>
+
+<!-- ===================================
+     FOUNDATION
+     =================================== -->
+<div class="cat-divider"><div class="l"></div><div class="l"></div><div class="l"></div></div>
+
+<!-- COLORS -->
+<div class="comp-section" id="colors">
+  <div class="comp-section-title">Color Palette</div>
+  <div class="comp-section-desc">Six primary colors plus four extended. Colors serve meaning — not decoration. No arbitrary accent colors.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">Primary Palette</span><span class="comp-card-file">tokens.css</span></div>
+    <div class="comp-card-body">
+      <div style="display:flex;gap:0;border-radius:6px;overflow:hidden;height:80px;margin-bottom:1rem">
+        <div style="flex:1;background:var(--off-white);display:flex;align-items:flex-end;padding:8px"><span class="type-meta-sm" style="color:var(--text-muted)">Off-White</span></div>
+        <div style="flex:1;background:var(--pearl);display:flex;align-items:flex-end;padding:8px"><span class="type-meta-sm" style="color:var(--text-muted)">Pearl</span></div>
+        <div style="flex:1;background:var(--clay);display:flex;align-items:flex-end;padding:8px"><span class="type-meta-sm" style="color:#fff">Clay</span></div>
+        <div style="flex:1;background:var(--aged-oak);display:flex;align-items:flex-end;padding:8px"><span class="type-meta-sm" style="color:#fff">Aged Oak</span></div>
+        <div style="flex:1;background:var(--mocha);display:flex;align-items:flex-end;padding:8px"><span class="type-meta-sm" style="color:#fff">Mocha</span></div>
+        <div style="flex:1;background:var(--charcoal);display:flex;align-items:flex-end;padding:8px"><span class="type-meta-sm" style="color:#fff">Charcoal</span></div>
+      </div>
+      <div class="comp-variant-label">Extended &amp; Functional</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <div style="width:70px;height:44px;border-radius:4px;background:var(--sage);display:flex;align-items:flex-end;padding:4px"><span class="type-meta-sm" style="color:#fff;font-size:0.5rem">Sage</span></div>
+        <div style="width:70px;height:44px;border-radius:4px;background:var(--dusty-blue);display:flex;align-items:flex-end;padding:4px"><span class="type-meta-sm" style="color:#fff;font-size:0.5rem">Blue</span></div>
+        <div style="width:70px;height:44px;border-radius:4px;background:var(--terracotta);display:flex;align-items:flex-end;padding:4px"><span class="type-meta-sm" style="color:#fff;font-size:0.5rem">Terra</span></div>
+        <div style="width:70px;height:44px;border-radius:4px;background:var(--golden-hour);display:flex;align-items:flex-end;padding:4px"><span class="type-meta-sm" style="color:#fff;font-size:0.5rem">Gold</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TYPOGRAPHY -->
+<div class="comp-section" id="typography">
+  <div class="comp-section-title">Typography Scale</div>
+  <div class="comp-section-desc">Three voices — Playfair Display for hierarchy, Inter for content, DM Mono for metadata. Every element maps to exactly one.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">Complete Type Scale</span><span class="comp-card-file">globals.css</span></div>
+    <div class="comp-card-body">
+      <div style="border-bottom:1px solid var(--border-default);padding-bottom:1rem;margin-bottom:1rem">
+        <div class="type-meta-sm" style="margin-bottom:0.3rem">Page Title — Playfair 400 / 2.5rem</div>
+        <div class="type-page-title">Good morning, <em>Leah</em></div>
+      </div>
+      <div style="border-bottom:1px solid var(--border-default);padding-bottom:1rem;margin-bottom:1rem">
+        <div class="type-meta-sm" style="margin-bottom:0.3rem">Section Head — Playfair 400 / 1.6rem</div>
+        <div class="type-section-head">Leads waiting for you</div>
+      </div>
+      <div style="border-bottom:1px solid var(--border-default);padding-bottom:1rem;margin-bottom:1rem">
+        <div class="type-meta-sm" style="margin-bottom:0.3rem">Item Name — Playfair 500 / 1.2rem</div>
+        <div class="type-item-name">Sarah & James — Living Room Redesign</div>
+      </div>
+      <div style="border-bottom:1px solid var(--border-default);padding-bottom:1rem;margin-bottom:1rem">
+        <div class="type-meta-sm" style="margin-bottom:0.3rem">Data Large — Playfair 700 / 2.4rem</div>
+        <span class="type-data-lg">$12.4k</span><span class="type-data-unit">this month</span>
+      </div>
+      <div style="border-bottom:1px solid var(--border-default);padding-bottom:1rem;margin-bottom:1rem">
+        <div class="type-meta-sm" style="margin-bottom:0.3rem">Label — Inter 500 / 0.95rem</div>
+        <div class="type-label">Sarah & James Whitfield</div>
+      </div>
+      <div style="border-bottom:1px solid var(--border-default);padding-bottom:1rem;margin-bottom:1rem">
+        <div class="type-meta-sm" style="margin-bottom:0.3rem">Label Secondary — Inter 400 / 0.82rem</div>
+        <div class="type-label-sec">Living room redesign · Wauwatosa · $15k–$25k · Responds in 18h</div>
+      </div>
+      <div style="border-bottom:1px solid var(--border-default);padding-bottom:1rem;margin-bottom:1rem">
+        <div class="type-meta-sm" style="margin-bottom:0.3rem">Body — Inter 400 / 1rem</div>
+        <div class="type-body">Complete room scan available. Three-bedroom ranch in Wauwatosa with south-facing windows and original hardwood floors. Budget range indicates mid-tier, with flexibility for anchor pieces.</div>
+      </div>
+      <div style="border-bottom:1px solid var(--border-default);padding-bottom:1rem;margin-bottom:1rem">
+        <div class="type-meta-sm" style="margin-bottom:0.3rem">Meta — DM Mono 400 / 0.72rem / Uppercase</div>
+        <div class="type-meta">Received Mar 22 · Responds in 18h · Milwaukee, WI</div>
+      </div>
+      <div>
+        <div class="type-meta-sm" style="margin-bottom:0.3rem">Meta Small — DM Mono 400 / 0.62rem / Uppercase</div>
+        <div class="type-meta-sm">Match Score · Last Updated 2 hours ago</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STRATA MARK -->
+<div class="comp-section" id="strata">
+  <div class="comp-section-title">Strata Mark</div>
+  <div class="comp-section-desc">Brand signature divider. Three lines, decreasing width. Replaces generic horizontal rules throughout the interface.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">StrataMark</span><span class="comp-card-file">components/ui/strata-mark.tsx</span></div>
+    <div class="comp-card-body">
+      <div class="comp-variant-label">Full — Between Major Sections</div>
+      <div class="strata-full"><div class="sl"></div><div class="sl"></div><div class="sl"></div></div>
+      <div class="comp-variant-label">Mini — Between Subsections</div>
+      <div class="strata-mini"><div class="sl"></div><div class="sl"></div><div class="sl"></div></div>
+      <div class="comp-variant-label">Micro — Inline Separation</div>
+      <div class="strata-micro" style="margin:1rem 0"></div>
+    </div>
+  </div>
+</div>
+
+<div class="cat-divider"><div class="l"></div><div class="l"></div><div class="l"></div></div>
+
+<!-- ===================================
+     LAYOUT
+     =================================== -->
+
+<!-- TOP BAR -->
+<div class="comp-section" id="topbar">
+  <div class="comp-section-title">Top Bar</div>
+  <div class="comp-section-desc">Primary navigation shell. Three zone labels, logo left, user right. Active zone underlined in Clay.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">TopBar</span><span class="comp-card-file">components/layout/top-bar.tsx</span></div>
+    <div class="comp-card-body" style="padding:0">
+      <div class="topbar-demo">
+        <div class="topbar-logo">Patina</div>
+        <div class="topbar-nav">
+          <div class="topbar-nav-item active">Work</div>
+          <div class="topbar-nav-item">Clients</div>
+          <div class="topbar-nav-item">Studio</div>
+        </div>
+        <div class="topbar-user">
+          <span class="type-meta-sm">Leah</span>
+          <div class="topbar-avatar">LK</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MOBILE TABS -->
+<div class="comp-section" id="mobiletabs">
+  <div class="comp-section-title">Mobile Tab Bar</div>
+  <div class="comp-section-desc">Bottom navigation for screens under 768px. Four zones with line icons. Active state uses Clay color.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">MobileTabBar</span><span class="comp-card-file">components/layout/mobile-tab-bar.tsx</span></div>
+    <div class="comp-card-body" style="padding:0">
+      <div class="mobile-tabs">
+        <div class="mobile-tab active"><div class="mobile-tab-icon">◇</div><div class="mobile-tab-label">Work</div></div>
+        <div class="mobile-tab"><div class="mobile-tab-icon">◯</div><div class="mobile-tab-label">Clients</div></div>
+        <div class="mobile-tab"><div class="mobile-tab-icon">□</div><div class="mobile-tab-label">Rooms</div></div>
+        <div class="mobile-tab"><div class="mobile-tab-icon">△</div><div class="mobile-tab-label">Studio</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BREADCRUMB -->
+<div class="comp-section" id="breadcrumb">
+  <div class="comp-section-title">Breadcrumb</div>
+  <div class="comp-section-desc">DM Mono uppercase path. Links in Clay, current page in muted. Arrow separator.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">Breadcrumb</span><span class="comp-card-file">components/ui/breadcrumb.tsx</span></div>
+    <div class="comp-card-body">
+      <div class="breadcrumb"><a>Leads</a><span>→</span> Sarah & James Whitfield</div>
+      <div style="margin-top:1rem"></div>
+      <div class="breadcrumb"><a>Projects</a><span>→</span><a>Chen Residence</a><span>→</span> Procurement</div>
+    </div>
+  </div>
+</div>
+
+<!-- FILTER ROW -->
+<div class="comp-section" id="filterrow">
+  <div class="comp-section-title">Filter Row</div>
+  <div class="comp-section-desc">Horizontal text tabs for filtering list views. Active item underlined. Counts in mono.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">FilterRow</span><span class="comp-card-file">components/ui/filter-row.tsx</span></div>
+    <div class="comp-card-body">
+      <div class="filter-row">
+        <div class="filter-item active">All<span class="filter-count">12</span></div>
+        <div class="filter-item">New<span class="filter-count">3</span></div>
+        <div class="filter-item">Saved<span class="filter-count">2</span></div>
+        <div class="filter-item">Archived</div>
+      </div>
+      <div class="comp-variant-label">Period Variant (Earnings)</div>
+      <div class="filter-row">
+        <div class="filter-item active">This Month</div>
+        <div class="filter-item">Quarter</div>
+        <div class="filter-item">Year</div>
+        <div class="filter-item">All Time</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SEARCH INPUT -->
+<div class="comp-section" id="search">
+  <div class="comp-section-title">Search Input</div>
+  <div class="comp-section-desc">Minimal search field with left-aligned icon. Focus state shows Clay border.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">SearchInput</span><span class="comp-card-file">components/ui/search-input.tsx</span></div>
+    <div class="comp-card-body">
+      <div class="search-input"><span class="search-icon">⌕</span><input placeholder="Search leads, projects, clients…"></div>
+    </div>
+  </div>
+</div>
+
+<div class="cat-divider"><div class="l"></div><div class="l"></div><div class="l"></div></div>
+
+<!-- ===================================
+     DATA DISPLAY
+     =================================== -->
+
+<!-- METRIC BLOCK -->
+<div class="comp-section" id="metric">
+  <div class="comp-section-title">Metric Block</div>
+  <div class="comp-section-desc">Dashboard KPI display. Label in mono, value in Playfair bold, change indicator below. Vertical dividers between metrics in row layout.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">MetricBlock</span><span class="comp-card-file">components/ui/metric-block.tsx</span></div>
+    <div class="comp-card-body">
+      <div class="comp-variant-label">Row Layout (Dashboard)</div>
+      <div class="metric-row" style="padding-bottom:1.5rem;border-bottom:1px solid var(--border-default)">
+        <div class="metric"><div class="metric-label">New Leads</div><div class="metric-value">3</div><div class="metric-change up">↑ 2 since Friday</div></div>
+        <div class="metric"><div class="metric-label">Active Projects</div><div class="metric-value">7</div><div class="metric-change neutral">1 awaiting review</div></div>
+        <div class="metric"><div class="metric-label">This Month</div><div class="metric-value">$12.4k</div><div class="metric-change up">↑ 18% vs. Feb</div></div>
+        <div class="metric"><div class="metric-label">Response Time</div><div class="metric-value">1.8h</div><div class="metric-change down">↓ target: 2h</div></div>
+      </div>
+      <div class="comp-variant-label">Single (Inline)</div>
+      <div class="metric"><div class="metric-label">Total Commissions</div><div class="metric-value">$3,240</div><div class="metric-change up">↑ 12% this quarter</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- SCORE CIRCLE -->
+<div class="comp-section" id="scorecircle">
+  <div class="comp-section-title">Score Circle</div>
+  <div class="comp-section-desc">Match score display for lead briefs. Clay border, Playfair number, mono label. Three sizes.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">ScoreCircle</span><span class="comp-card-file">components/ui/score-circle.tsx</span></div>
+    <div class="comp-card-body">
+      <div class="comp-row">
+        <div style="text-align:center"><div class="score-circle sm"><span class="num">72</span><span class="lbl">Match</span></div><div class="type-meta-sm" style="margin-top:0.5rem">Small</div></div>
+        <div style="text-align:center"><div class="score-circle"><span class="num">87</span><span class="lbl">Match</span></div><div class="type-meta-sm" style="margin-top:0.5rem">Default</div></div>
+        <div style="text-align:center"><div class="score-circle lg"><span class="num">94</span><span class="lbl">Match</span></div><div class="type-meta-sm" style="margin-top:0.5rem">Large</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PROGRESS BAR -->
+<div class="comp-section" id="progressbar">
+  <div class="comp-section-title">Progress Bar</div>
+  <div class="comp-section-desc">Thin horizontal fill bar. Pearl background, Clay fill. Three weights.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">ProgressBar</span><span class="comp-card-file">components/ui/progress-bar.tsx</span></div>
+    <div class="comp-card-body">
+      <div class="comp-variant-label">Default (3px)</div>
+      <div class="progress"><div class="progress-fill" style="width:72%"></div></div>
+      <div class="comp-variant-label">Thick (5px)</div>
+      <div class="progress thick"><div class="progress-fill" style="width:45%"></div></div>
+      <div class="comp-variant-label">Thin (2px)</div>
+      <div class="progress thin"><div class="progress-fill" style="width:90%"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- FIELD GROUP -->
+<div class="comp-section" id="fieldgroup">
+  <div class="comp-section-title">Field Group</div>
+  <div class="comp-section-desc">Mono uppercase label + content block. The universal pattern for displaying labeled information throughout detail views.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">FieldGroup</span><span class="comp-card-file">components/ui/field-group.tsx</span></div>
+    <div class="comp-card-body">
+      <div class="field-group"><div class="field-group-label">Style Profile</div><div style="display:flex;gap:0.5rem;flex-wrap:wrap"><span class="style-tag">Warm Minimalist</span><span class="style-tag">Organic Modern</span><span class="style-tag">Natural Materials</span></div></div>
+      <div class="field-group"><div class="field-group-label">What they're looking for</div><div class="type-body">Complete living room transformation. South-facing bay window is the focal point. Original hardwood floors they want to keep.</div></div>
+      <div class="field-group" style="margin-bottom:0"><div class="field-group-label">Inspiration</div><div class="type-body" style="font-style:italic;color:var(--aged-oak)">"We want it to feel collected over time, not like we bought everything on the same weekend."</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL ROW -->
+<div class="comp-section" id="detailrow">
+  <div class="comp-section-title">Detail Row</div>
+  <div class="comp-section-desc">Key-value pairs for structured data. Mono key at 110px, body value fills remaining width.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">DetailRow</span><span class="comp-card-file">components/ui/detail-row.tsx</span></div>
+    <div class="comp-card-body">
+      <div class="detail-row"><div class="detail-row-key">Dimensions</div><div class="detail-row-val">18' × 14' — 252 sq ft</div></div>
+      <div class="detail-row"><div class="detail-row-key">Windows</div><div class="detail-row-val">Bay (south), double-hung (west)</div></div>
+      <div class="detail-row"><div class="detail-row-key">Flooring</div><div class="detail-row-val">Original red oak hardwood</div></div>
+      <div class="detail-row"><div class="detail-row-key">Light</div><div class="detail-row-val">Strong south, warm afternoon</div></div>
+      <div class="detail-row"><div class="detail-row-key">Ceiling</div><div class="detail-row-val">8 ft, smooth finish</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ROOM PREVIEW -->
+<div class="comp-section" id="roompreview">
+  <div class="comp-section-title">Room Preview</div>
+  <div class="comp-section-desc">Placeholder for 3D room scan embed. Hatched pattern indicates interactive content. Clickable to open full viewer.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">RoomPreview</span><span class="comp-card-file">components/ui/room-preview.tsx</span></div>
+    <div class="comp-card-body">
+      <div class="room-preview"><div class="room-preview-text">3D Room Preview<br>Tap to explore</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- PHASE TIMELINE -->
+<div class="comp-section" id="phasetimeline">
+  <div class="comp-section-title">Phase Timeline</div>
+  <div class="comp-section-desc">Vertical project phase display. Replaces Kanban boards. Dot indicators: sage for complete, clay for active, pearl for upcoming.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">PhaseTimeline</span><span class="comp-card-file">components/projects/phase-timeline.tsx</span></div>
+    <div class="comp-card-body">
+      <div class="phase-timeline">
+        <div class="phase complete"><div class="phase-name">Initial Consultation</div><div class="phase-date">Completed Feb 12</div></div>
+        <div class="phase complete"><div class="phase-name">Concept Development</div><div class="phase-date">Completed Feb 28</div></div>
+        <div class="phase complete"><div class="phase-name">Design Refinement</div><div class="phase-date">Completed Mar 10</div></div>
+        <div class="phase active"><div class="phase-name">Procurement</div><div class="phase-date">Started Mar 15 · In progress</div></div>
+        <div class="phase upcoming"><div class="phase-name">Installation</div><div class="phase-date">Estimated Apr 8</div></div>
+        <div class="phase upcoming"><div class="phase-name">Final Walkthrough</div><div class="phase-date">Estimated Apr 15</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="cat-divider"><div class="l"></div><div class="l"></div><div class="l"></div></div>
+
+<!-- ===================================
+     LIST ITEMS
+     =================================== -->
+
+<!-- LEAD LIST ITEM -->
+<div class="comp-section" id="leaditem">
+  <div class="comp-section-title">Lead List Item</div>
+  <div class="comp-section-desc">Primary inbox item. Name + detail left, score right. Hover reveals Accept/Pass actions on desktop. No card wrapper — just type and a hairline.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">LeadListItem</span><span class="comp-card-file">components/leads/lead-list-item.tsx</span></div>
+    <div class="comp-card-body surface">
+      <div class="lead-item">
+        <div><div class="lead-item-name">Sarah & James Whitfield</div><div class="lead-item-detail">Living room redesign · Wauwatosa · $15k–$25k · 18h</div></div>
+        <div class="lead-item-score-wrap"><div class="lead-item-score">87</div><div class="lead-item-score-label">Match</div></div>
+        <div class="hover-actions"><button class="btn btn-sm btn-primary">Accept</button><button class="btn btn-sm btn-ghost">Pass</button></div>
+      </div>
+      <div class="lead-item">
+        <div><div class="lead-item-name">Maria Gonzalez</div><div class="lead-item-detail">Full home · Brookfield · $40k–$60k · 6h</div></div>
+        <div class="lead-item-score-wrap"><div class="lead-item-score">94</div><div class="lead-item-score-label">Match</div></div>
+        <div class="hover-actions"><button class="btn btn-sm btn-primary">Accept</button><button class="btn btn-sm btn-ghost">Pass</button></div>
+      </div>
+      <div class="lead-item">
+        <div><div class="lead-item-name">Tom Brennan</div><div class="lead-item-detail">Home office · Milwaukee · $5k–$8k · 2d</div></div>
+        <div class="lead-item-score-wrap"><div class="lead-item-score">72</div><div class="lead-item-score-label">Match</div></div>
+        <div class="hover-actions"><button class="btn btn-sm btn-primary">Accept</button><button class="btn btn-sm btn-ghost">Pass</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PROJECT LIST ITEM -->
+<div class="comp-section" id="projectitem">
+  <div class="comp-section-title">Project List Item</div>
+  <div class="comp-section-desc">Active project row. Name left, phase right in mono, thin progress bar below. Clickable to expand inline.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">ProjectListItem</span><span class="comp-card-file">components/projects/project-list-item.tsx</span></div>
+    <div class="comp-card-body surface">
+      <div class="project-item"><div class="project-item-top"><div class="project-item-name">Chen Residence</div><div class="project-item-phase">Procurement</div></div><div class="progress" style="margin-top:0.5rem"><div class="progress-fill" style="width:72%"></div></div></div>
+      <div class="project-item"><div class="project-item-top"><div class="project-item-name">Lakefront Condo — Unit 4B</div><div class="project-item-phase">Design Review</div></div><div class="progress" style="margin-top:0.5rem"><div class="progress-fill" style="width:45%"></div></div></div>
+      <div class="project-item"><div class="project-item-top"><div class="project-item-name">Morrison Master Suite</div><div class="project-item-phase">Consultation</div></div><div class="progress" style="margin-top:0.5rem"><div class="progress-fill" style="width:15%"></div></div></div>
+      <div class="project-item"><div class="project-item-top"><div class="project-item-name">Prairie Home — Full Redesign</div><div class="project-item-phase">Installation</div></div><div class="progress" style="margin-top:0.5rem"><div class="progress-fill" style="width:90%"></div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- CLIENT LIST ITEM -->
+<div class="comp-section" id="clientitem">
+  <div class="comp-section-title">Client List Item</div>
+  <div class="comp-section-desc">Client directory row. Initials avatar, name, and last project or contact info. Used on Clients page.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">ClientListItem</span><span class="comp-card-file">components/clients/client-list-item.tsx</span></div>
+    <div class="comp-card-body surface">
+      <div class="client-item"><div class="client-avatar">SW</div><div class="client-item-info"><div class="type-label">Sarah Whitfield</div><div class="type-label-sec">Living room redesign · Active</div></div><div class="client-item-meta">Last contact 2d ago</div></div>
+      <div class="client-item"><div class="client-avatar">MG</div><div class="client-item-info"><div class="type-label">Maria Gonzalez</div><div class="type-label-sec">Full home · Proposal sent</div></div><div class="client-item-meta">Last contact 5d ago</div></div>
+      <div class="client-item"><div class="client-avatar">JC</div><div class="client-item-info"><div class="type-label">James Chen</div><div class="type-label-sec">Kitchen renovation · Completed</div></div><div class="client-item-meta">Last contact 3w ago</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- MESSAGE ITEM -->
+<div class="comp-section" id="messageitem">
+  <div class="comp-section-title">Message Item</div>
+  <div class="comp-section-desc">Message inbox row. Avatar, name + preview, timestamp. Unread state uses bold name and Clay dot indicator.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">MessageItem</span><span class="comp-card-file">components/messages/message-item.tsx</span></div>
+    <div class="comp-card-body surface">
+      <div class="message-item unread"><div class="client-avatar">SW</div><div><div class="message-item-name">Sarah Whitfield</div><div class="message-item-preview">We love the mood board! Quick question about the accent chair fabric…</div></div><div class="message-item-time">2h ago</div></div>
+      <div class="message-item"><div class="client-avatar">JC</div><div><div class="message-item-name">James Chen</div><div class="message-item-preview">Perfect, the delivery works for Saturday morning.</div></div><div class="message-item-time">Yesterday</div></div>
+      <div class="message-item"><div class="client-avatar">TB</div><div><div class="message-item-name">Tom Brennan</div><div class="message-item-preview">Thanks for sending that over. I'll review with my wife this weekend.</div></div><div class="message-item-time">Mar 20</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- TRANSACTION ITEM -->
+<div class="comp-section" id="transactionitem">
+  <div class="comp-section-title">Transaction Item</div>
+  <div class="comp-section-desc">Earnings page row. Description + date left, amount right. Sage for credits, Terracotta for debits.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">TransactionItem</span><span class="comp-card-file">components/earnings/transaction-item.tsx</span></div>
+    <div class="comp-card-body surface">
+      <div class="transaction-item"><div><div class="transaction-desc">Commission — Nordic Atelier Dining Table</div><div class="transaction-meta">Mar 22 · Chen Residence</div></div><div class="transaction-amount credit">+$840</div></div>
+      <div class="transaction-item"><div><div class="transaction-desc">Design Fee — Initial Consultation</div><div class="transaction-meta">Mar 18 · Whitfield Project</div></div><div class="transaction-amount credit">+$350</div></div>
+      <div class="transaction-item"><div><div class="transaction-desc">Platform Fee — March</div><div class="transaction-meta">Mar 1 · Monthly</div></div><div class="transaction-amount debit">−$49</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- PRODUCT LINE ITEM -->
+<div class="comp-section" id="productline">
+  <div class="comp-section-title">Product Line Item</div>
+  <div class="comp-section-desc">Proposal product selection row. Name + maker story left, price right in Playfair. Used in proposal builder.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">ProductLineItem</span><span class="comp-card-file">components/proposals/product-line-item.tsx</span></div>
+    <div class="comp-card-body surface">
+      <div class="product-line"><div><div class="product-line-name">Heirloom Oak Dining Table</div><div class="product-line-maker">Nordic Atelier · Aarhus, Denmark · Est. 1968</div></div><div class="product-line-price">$4,200</div></div>
+      <div class="product-line"><div><div class="product-line-name">Meadow Linen Sectional</div><div class="product-line-maker">Woodward & Sons · Richmond, VA · Est. 1889</div></div><div class="product-line-price">$6,800</div></div>
+      <div class="product-line"><div><div class="product-line-name">Woven Jute Area Rug 8×10</div><div class="product-line-maker">Studio Piet · Copenhagen · Est. 2015</div></div><div class="product-line-price">$1,450</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="cat-divider"><div class="l"></div><div class="l"></div><div class="l"></div></div>
+
+<!-- ===================================
+     ACTIONS & INPUTS
+     =================================== -->
+
+<!-- BUTTONS -->
+<div class="comp-section" id="buttons">
+  <div class="comp-section-title">Buttons</div>
+  <div class="comp-section-desc">Three tiers plus danger variant. Primary for the main action, secondary for alternatives, ghost for dismissals. No icon-only buttons in primary flows.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">Button</span><span class="comp-card-file">components/ui/button.tsx</span></div>
+    <div class="comp-card-body">
+      <div class="comp-variant-label">Default Size</div>
+      <div class="comp-row">
+        <button class="btn btn-primary">Accept & Introduce</button>
+        <button class="btn btn-secondary">Request More Context</button>
+        <button class="btn btn-ghost">Pass on This Lead</button>
+        <button class="btn btn-danger">Decline Project</button>
+      </div>
+      <div class="comp-variant-label">Small Size</div>
+      <div class="comp-row">
+        <button class="btn btn-sm btn-primary">Accept</button>
+        <button class="btn btn-sm btn-secondary">Save</button>
+        <button class="btn btn-sm btn-ghost">Pass</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STYLE TAGS -->
+<div class="comp-section" id="styletag">
+  <div class="comp-section-title">Style Tags</div>
+  <div class="comp-section-desc">Style preference pills for client profiles. Off-white with pearl border. Active variant adds Clay border.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">StyleTag</span><span class="comp-card-file">components/ui/style-tag.tsx</span></div>
+    <div class="comp-card-body">
+      <div class="comp-variant-label">Default</div>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap"><span class="style-tag">Warm Minimalist</span><span class="style-tag">Organic Modern</span><span class="style-tag">Natural Materials</span><span class="style-tag">Midcentury</span></div>
+      <div class="comp-variant-label">Active (Selected)</div>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap"><span class="style-tag active">Warm Minimalist</span><span class="style-tag">Organic Modern</span><span class="style-tag active">Natural Materials</span><span class="style-tag">Midcentury</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- TEXT INPUT -->
+<div class="comp-section" id="textinput">
+  <div class="comp-section-title">Text Input</div>
+  <div class="comp-section-desc">Labeled text fields and textareas. Mono uppercase label above, Clay focus border. Error state uses Terracotta.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">TextInput / TextArea</span><span class="comp-card-file">components/ui/text-input.tsx</span></div>
+    <div class="comp-card-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;max-width:560px">
+        <div class="text-input"><label>Client Name</label><input value="Sarah Whitfield"></div>
+        <div class="text-input"><label>Project Type</label><input placeholder="e.g. Living room redesign"></div>
+        <div class="text-input error"><label>Budget Range</label><input value=""><span class="error-msg">Budget range is required</span></div>
+        <div class="text-input"><label>Timeline</label><input value="3 months"></div>
+      </div>
+      <div class="comp-variant-label">Textarea</div>
+      <div class="text-input" style="max-width:560px"><label>Design Vision</label><textarea rows="3" placeholder="Describe the design direction for this project…"></textarea></div>
+    </div>
+  </div>
+</div>
+
+<!-- SELECT -->
+<div class="comp-section" id="select">
+  <div class="comp-section-title">Select</div>
+  <div class="comp-section-desc">Dropdown select with custom caret. Same border and focus behavior as text inputs.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">Select</span><span class="comp-card-file">components/ui/select.tsx</span></div>
+    <div class="comp-card-body">
+      <div class="text-input" style="max-width:280px"><label>Project Phase</label><div class="select-wrap"><select><option>Consultation</option><option>Concept Development</option><option>Design Refinement</option><option>Procurement</option><option>Installation</option></select></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- TOGGLE -->
+<div class="comp-section" id="toggle">
+  <div class="comp-section-title">Toggle</div>
+  <div class="comp-section-desc">On/off switch for settings. Pearl track, Clay when active. Used on settings and notification preferences.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">Toggle</span><span class="comp-card-file">components/ui/toggle.tsx</span></div>
+    <div class="comp-card-body">
+      <div style="display:flex;flex-direction:column;gap:1rem">
+        <div class="toggle"><div class="toggle-track on"><div class="toggle-thumb"></div></div><div class="toggle-label">Email notifications for new leads</div></div>
+        <div class="toggle"><div class="toggle-track"><div class="toggle-thumb"></div></div><div class="toggle-label">SMS notifications for messages</div></div>
+        <div class="toggle"><div class="toggle-track on"><div class="toggle-thumb"></div></div><div class="toggle-label">Auto-accept leads above 90 match score</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="cat-divider"><div class="l"></div><div class="l"></div><div class="l"></div></div>
+
+<!-- ===================================
+     COMMUNICATION
+     =================================== -->
+<div class="comp-section" id="msgbubble">
+  <div class="comp-section-title">Message Bubble</div>
+  <div class="comp-section-desc">Chat messages between designer and client. Incoming in Pearl, outgoing in Charcoal. Rounded with directional tails.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">MessageBubble</span><span class="comp-card-file">components/messages/message-bubble.tsx</span></div>
+    <div class="comp-card-body" style="max-width:480px">
+      <div class="msg-bubble"><p>Hi Leah! We're so excited to work with you. Quick question — do you think the bay window area could work as a reading nook?</p><div class="msg-bubble-time">10:24 AM</div></div>
+      <div class="msg-bubble outgoing"><p>Absolutely — that's actually what I had in mind. The south light there is perfect for it. I'll include a few options in the proposal.</p><div class="msg-bubble-time">10:31 AM</div></div>
+      <div class="msg-bubble"><p>That sounds wonderful. Can't wait to see it!</p><div class="msg-bubble-time">10:33 AM</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================================
+     PROPOSAL
+     =================================== -->
+<div class="comp-section" id="proposalsection">
+  <div class="comp-section-title">Proposal Section</div>
+  <div class="comp-section-desc">Reusable section block for the proposal document editor. Playfair heading with strata divider, editable content area below.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">ProposalSection</span><span class="comp-card-file">components/proposals/proposal-section.tsx</span></div>
+    <div class="comp-card-body surface">
+      <div class="proposal-section" style="border-top:none;padding-top:0">
+        <div class="proposal-section-head">Design Vision</div>
+        <div class="type-body">A living room that honors the 1960s ranch architecture while creating a warm, collected feel for a young family. The south-facing bay window anchors the space with natural light, inviting a reading nook that doubles as a quiet retreat. Natural materials throughout — oak, linen, jute — grounding the room in honest textures that will only improve with time.</div>
+      </div>
+      <div class="strata-mini"><div class="sl"></div><div class="sl"></div><div class="sl"></div></div>
+      <div class="proposal-section">
+        <div class="proposal-section-head">Product Selections</div>
+        <div class="product-line"><div><div class="product-line-name">Heirloom Oak Dining Table</div><div class="product-line-maker">Nordic Atelier · Aarhus, Denmark</div></div><div class="product-line-price">$4,200</div></div>
+        <div class="product-line"><div><div class="product-line-name">Meadow Linen Sectional</div><div class="product-line-maker">Woodward & Sons · Richmond, VA</div></div><div class="product-line-price">$6,800</div></div>
+      </div>
+      <div class="strata-mini"><div class="sl"></div><div class="sl"></div><div class="sl"></div></div>
+      <div class="proposal-section">
+        <div class="proposal-section-head">Investment</div>
+        <div class="detail-row"><div class="detail-row-key">Products</div><div class="detail-row-val">$12,450</div></div>
+        <div class="detail-row"><div class="detail-row-key">Design Fee</div><div class="detail-row-val">$2,500</div></div>
+        <div class="detail-row"><div class="detail-row-key">Installation</div><div class="detail-row-val">$800</div></div>
+        <div style="border-top:1px solid var(--border-default);margin-top:0.75rem;padding-top:0.75rem;display:flex;justify-content:space-between;align-items:baseline">
+          <span class="type-meta">Total Investment</span>
+          <span class="type-data-lg" style="font-size:1.8rem">$15,750</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="cat-divider"><div class="l"></div><div class="l"></div><div class="l"></div></div>
+
+<!-- ===================================
+     FEEDBACK & STATE
+     =================================== -->
+
+<!-- TOAST -->
+<div class="comp-section" id="toast">
+  <div class="comp-section-title">Toast Notification</div>
+  <div class="comp-section-desc">Ephemeral feedback messages. Left border colored by type. Appears bottom-right, auto-dismisses after 4 seconds.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">Toast</span><span class="comp-card-file">components/ui/toast.tsx</span></div>
+    <div class="comp-card-body">
+      <div class="comp-col" style="gap:1rem">
+        <div class="toast"><div class="toast-msg">Lead accepted. Welcome message sent to Sarah.</div></div>
+        <div class="toast success"><div class="toast-msg">Proposal sent successfully.</div></div>
+        <div class="toast error"><div class="toast-msg">Unable to save changes. Please try again.</div></div>
+        <div class="toast info"><div class="toast-msg">New lead from Brookfield — 94% match.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EMPTY STATE -->
+<div class="comp-section" id="emptystate">
+  <div class="comp-section-title">Empty State</div>
+  <div class="comp-section-desc">Shown when a list has no items. Playfair italic heading, body description, optional action button.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">EmptyState</span><span class="comp-card-file">components/ui/empty-state.tsx</span></div>
+    <div class="comp-card-body surface">
+      <div class="empty-state">
+        <div class="empty-state-title">No new leads right now</div>
+        <div class="empty-state-desc">They'll appear here when clients match your style and availability.</div>
+        <button class="btn btn-secondary btn-sm">Update your preferences</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div class="comp-section" id="loading">
+  <div class="comp-section-title">Loading Strata</div>
+  <div class="comp-section-desc">Animated loading indicator using the Strata Mark. Three lines pulse in sequence. Used instead of spinners or skeleton screens.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">LoadingStrata</span><span class="comp-card-file">components/ui/loading-strata.tsx</span></div>
+    <div class="comp-card-body">
+      <div class="loading-strata"><div class="ls"></div><div class="ls"></div><div class="ls"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="cat-divider"><div class="l"></div><div class="l"></div><div class="l"></div></div>
+
+<!-- ===================================
+     COMPOSITIONS
+     =================================== -->
+
+<!-- DASHBOARD COMPOSITION -->
+<div class="comp-section" id="comp-dashboard">
+  <div class="comp-section-title">Composition — Dashboard</div>
+  <div class="comp-section-desc">Full dashboard page assembled from catalog components. Shows how individual pieces combine in context.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">Dashboard Page</span><span class="comp-card-file">app/(portal)/page.tsx</span></div>
+    <div class="comp-card-body" style="padding:0">
+      <div class="topbar-demo">
+        <div class="topbar-logo">Patina</div>
+        <div class="topbar-nav"><div class="topbar-nav-item active">Work</div><div class="topbar-nav-item">Clients</div><div class="topbar-nav-item">Studio</div></div>
+        <div class="topbar-user"><span class="type-meta-sm">Leah</span><div class="topbar-avatar">LK</div></div>
+      </div>
+      <div style="padding:2.5rem;background:var(--bg-primary)">
+        <!-- Greeting -->
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2.5rem">
+          <div class="type-page-title" style="font-size:2rem">Good morning, <em>Leah</em></div>
+          <div class="type-meta">Tuesday, March 25, 2026</div>
+        </div>
+        <!-- Metrics -->
+        <div class="metric-row" style="padding-bottom:2rem;border-bottom:1px solid var(--border-default);margin-bottom:2.5rem">
+          <div class="metric"><div class="metric-label">New Leads</div><div class="metric-value" style="font-size:2rem">3</div><div class="metric-change up">↑ 2 since Friday</div></div>
+          <div class="metric"><div class="metric-label">Active Projects</div><div class="metric-value" style="font-size:2rem">7</div><div class="metric-change neutral">1 awaiting review</div></div>
+          <div class="metric"><div class="metric-label">This Month</div><div class="metric-value" style="font-size:2rem">$12.4k</div><div class="metric-change up">↑ 18%</div></div>
+          <div class="metric"><div class="metric-label">Response Time</div><div class="metric-value" style="font-size:2rem">1.8h</div><div class="metric-change down">target: 2h</div></div>
+        </div>
+        <!-- Two columns -->
+        <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:3rem">
+          <div>
+            <div class="type-section-head" style="font-size:1.15rem;margin-bottom:1.25rem;padding-bottom:0.75rem;border-bottom:1px solid var(--border-default)">Leads waiting for you</div>
+            <div class="lead-item"><div><div class="lead-item-name">Sarah & James Whitfield</div><div class="lead-item-detail">Living room · Wauwatosa · $15k–$25k · 18h</div></div><div><div class="lead-item-score">87</div><div class="lead-item-score-label">Match</div></div></div>
+            <div class="lead-item"><div><div class="lead-item-name">Maria Gonzalez</div><div class="lead-item-detail">Full home · Brookfield · $40k–$60k · 6h</div></div><div><div class="lead-item-score">94</div><div class="lead-item-score-label">Match</div></div></div>
+          </div>
+          <div>
+            <div class="type-section-head" style="font-size:1.15rem;margin-bottom:1.25rem;padding-bottom:0.75rem;border-bottom:1px solid var(--border-default)">Active work</div>
+            <div class="project-item"><div class="project-item-top"><div class="project-item-name">Chen Residence</div><div class="project-item-phase">Procurement</div></div><div class="progress" style="margin-top:0.5rem"><div class="progress-fill" style="width:72%"></div></div></div>
+            <div class="project-item"><div class="project-item-top"><div class="project-item-name">Lakefront Condo</div><div class="project-item-phase">Design Review</div></div><div class="progress" style="margin-top:0.5rem"><div class="progress-fill" style="width:45%"></div></div></div>
+            <div class="project-item"><div class="project-item-top"><div class="project-item-name">Prairie Home</div><div class="project-item-phase">Installation</div></div><div class="progress" style="margin-top:0.5rem"><div class="progress-fill" style="width:90%"></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LEAD BRIEF COMPOSITION -->
+<div class="comp-section" id="comp-leadbrief">
+  <div class="comp-section-title">Composition — Lead Brief</div>
+  <div class="comp-section-desc">Full lead detail page. Reads like a design brief — not a database record. Breadcrumb, hero with score, two-column details, action bar.</div>
+  <div class="comp-card">
+    <div class="comp-card-header"><span class="comp-card-name">Lead Brief Page</span><span class="comp-card-file">app/(portal)/leads/[id]/page.tsx</span></div>
+    <div class="comp-card-body" style="padding:0">
+      <div class="topbar-demo">
+        <div class="topbar-logo">Patina</div>
+        <div class="topbar-nav"><div class="topbar-nav-item active">Work</div><div class="topbar-nav-item">Clients</div><div class="topbar-nav-item">Studio</div></div>
+        <div class="topbar-user"><span class="type-meta-sm">Leah</span><div class="topbar-avatar">LK</div></div>
+      </div>
+      <div style="padding:2rem 2.5rem;background:var(--bg-primary)">
+        <div class="breadcrumb" style="margin-bottom:1.5rem"><a>Leads</a><span>→</span> Sarah & James Whitfield</div>
+        <!-- Hero -->
+        <div style="display:grid;grid-template-columns:1fr auto;align-items:start;margin-bottom:2rem;padding-bottom:1.5rem;border-bottom:1px solid var(--border-default)">
+          <div><div class="type-page-title" style="font-size:1.8rem;margin-bottom:0.2rem">Sarah & James Whitfield</div><div class="type-label-sec">Living room redesign · Wauwatosa, WI<br>Budget: $15,000 – $25,000 · Timeline: 3 months</div></div>
+          <div class="score-circle"><span class="num">87</span><span class="lbl">Match</span></div>
+        </div>
+        <!-- Two columns -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:2.5rem">
+          <div>
+            <div class="field-group"><div class="field-group-label">Style Profile</div><div style="display:flex;gap:0.5rem;flex-wrap:wrap"><span class="style-tag">Warm Minimalist</span><span class="style-tag">Organic Modern</span></div></div>
+            <div class="field-group"><div class="field-group-label">What they're looking for</div><div class="type-body" style="font-size:0.9rem">Complete living room transformation. South-facing bay window is the focal point. Original hardwood floors they want to keep.</div></div>
+            <div class="field-group" style="margin-bottom:0"><div class="field-group-label">Inspiration</div><div class="type-body" style="font-size:0.9rem;font-style:italic;color:var(--aged-oak)">"We want it to feel collected over time."</div></div>
+          </div>
+          <div>
+            <div class="field-group"><div class="field-group-label">Room Scan</div><div class="room-preview" style="height:140px"><div class="room-preview-text">3D Room Preview<br>Tap to explore</div></div></div>
+            <div class="field-group"><div class="field-group-label">Room Details</div>
+              <div class="detail-row"><div class="detail-row-key">Dimensions</div><div class="detail-row-val">18' × 14'</div></div>
+              <div class="detail-row"><div class="detail-row-key">Windows</div><div class="detail-row-val">Bay (south)</div></div>
+              <div class="detail-row"><div class="detail-row-key">Flooring</div><div class="detail-row-val">Red oak hardwood</div></div>
+            </div>
+          </div>
+        </div>
+        <!-- Actions -->
+        <div style="display:flex;gap:0.75rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--border-default)">
+          <button class="btn btn-primary">Accept & Introduce</button>
+          <button class="btn btn-secondary">Request Context</button>
+          <button class="btn btn-ghost">Pass</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div style="margin-top:4rem;padding-top:2rem;border-top:1px solid var(--border-default)">
+  <div style="display:flex;justify-content:space-between;align-items:baseline">
+    <div>
+      <div style="font-family:var(--font-display);font-weight:400;font-size:1.1rem;color:var(--text-primary)">Patina</div>
+      <div style="font-family:var(--font-display);font-style:italic;font-size:0.85rem;color:var(--aged-oak)">Where Time Adds Value</div>
+    </div>
+    <div class="type-meta-sm">Component Catalog v1.0 · March 2026 · 42 Components</div>
+  </div>
+</div>
+
+</main>
+</div>
+</body>
+</html>

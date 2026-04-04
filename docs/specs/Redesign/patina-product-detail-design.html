@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — Product Detail Page UX/UI Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--bg:var(--ow);--sf:#FFFFFF;--hv:rgba(196,165,123,0.06);--tx:var(--ch);--bd:var(--mo);--mu:var(--ao);--su:var(--pe);--fd:'Playfair Display',Georgia,serif;--fb:'Inter',-apple-system,sans-serif;--fm:'DM Mono','SF Mono',monospace;--e:cubic-bezier(0.4,0,0.2,1)}
+*{margin:0;padding:0;box-sizing:border-box}html{font-size:16px;scroll-behavior:smooth;background:var(--bg)}body{font-family:var(--fb);color:var(--tx);-webkit-font-smoothing:antialiased;line-height:1.6}
+.w{max-width:1120px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}.nr{max-width:800px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}section{padding:clamp(3rem,6vw,6rem) 0}
+h1{font-family:var(--fd);font-weight:400;font-size:clamp(2.2rem,5vw,3.8rem);line-height:1.12;letter-spacing:-0.02em}h2,.h2{font-family:var(--fd);font-weight:400;font-size:clamp(1.6rem,3.5vw,2.4rem);line-height:1.2;letter-spacing:-0.02em}h3,.h3{font-family:var(--fd);font-weight:500;font-size:1.25rem;line-height:1.35}
+.meta{font-family:var(--fm);font-size:0.68rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--mu)}.ms{font-family:var(--fm);font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mu)}
+.lbl{font-family:var(--fb);font-weight:500;font-size:0.95rem;color:var(--tx)}.ls{font-family:var(--fb);font-weight:400;font-size:0.82rem;color:var(--mu)}
+.bd{font-family:var(--fb);font-size:0.95rem;line-height:1.7;color:var(--bd);max-width:600px}em{font-family:var(--fd);font-style:italic;color:var(--ao)}
+.st{display:flex;flex-direction:column;gap:6px;padding:2.5rem 0}.st .s{height:2px;border-radius:1px}.st .s:nth-child(1){width:100%;background:var(--mo)}.st .s:nth-child(2){width:80%;background:var(--cl);opacity:.7}.st .s:nth-child(3){width:60%;background:var(--cl);opacity:.35}
+.sm{display:flex;flex-direction:column;gap:4px;padding:1.5rem 0}.sm .s{height:1.5px;border-radius:1px}.sm .s:nth-child(1){width:60px;background:var(--mo)}.sm .s:nth-child(2){width:48px;background:var(--cl);opacity:.7}.sm .s:nth-child(3){width:36px;background:var(--cl);opacity:.35}
+.cover{min-height:75vh;display:flex;flex-direction:column;justify-content:flex-end;padding:4rem clamp(1.5rem,5vw,4rem)}.cover h1 span{display:block;font-style:italic;color:var(--ao);font-weight:400;font-size:0.55em}.cover-sub{font-size:1.05rem;color:var(--bd);max-width:580px;margin:1rem 0 3rem;line-height:1.75}
+.cm{display:flex;gap:3rem;flex-wrap:wrap}.cm-i .meta{margin-bottom:0.2rem}.cm-i p{font-size:0.85rem;color:var(--tx)}
+.sc{background:var(--sf);border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(44,41,38,0.04),0 8px 32px rgba(44,41,38,0.05);margin:2rem 0}.sb{display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:48px;background:var(--sf);border-bottom:1px solid var(--su)}.sb-l{font-family:var(--fd);font-weight:500;font-size:0.72rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--tx)}.sb-n{display:flex;gap:1.2rem}.sb-n span{font-family:var(--fb);font-size:0.72rem;color:var(--mu)}.sb-n span.on{color:var(--tx);border-bottom:2px solid var(--cl);padding-bottom:2px}.sb-u{display:flex;align-items:center;gap:0.4rem}.sb-a{width:24px;height:24px;border-radius:50%;background:var(--pe);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-weight:500;font-size:0.55rem;color:var(--mo)}
+.sd{padding:clamp(1.5rem,3vw,2.5rem);background:var(--bg);min-height:200px}
+.btn{font-family:var(--fb);font-weight:500;font-size:0.8rem;padding:0.55rem 1.2rem;border:none;border-radius:3px;cursor:default;display:inline-flex;align-items:center;gap:0.4rem}.btn-p{background:var(--ch);color:var(--ow)}.btn-s{background:transparent;color:var(--tx);border:1px solid var(--pe)}.btn-g{background:transparent;color:var(--mu)}.btn-sm{font-size:0.72rem;padding:0.4rem 0.8rem}.btn-cl{background:var(--cl);color:white}.btn-sa{background:var(--sa);color:white}
+.tag{display:inline-flex;font-family:var(--fb);font-size:0.72rem;font-weight:500;color:var(--mo);padding:0.25rem 0.7rem;background:var(--ow);border:1px solid var(--pe);border-radius:2px;white-space:nowrap}.tag.on{border-color:var(--cl);color:var(--ch)}
+.bc{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:1.5rem}.bc a{color:var(--cl);text-decoration:none}
+.fl{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-bottom:0.4rem}
+.dr{display:grid;grid-template-columns:110px 1fr;gap:0.75rem;padding:0.3rem 0;font-size:0.85rem}.dr-k{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);padding-top:0.12rem}.dr-v{font-family:var(--fb);color:var(--bd);line-height:1.5}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:3rem}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem 2rem}.ff{display:flex;flex-direction:column;gap:0.35rem}.ff.full{grid-column:1/-1}.ff label{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu)}.ff input,.ff textarea,.ff select{font-family:var(--fb);font-size:0.85rem;padding:0.55rem 0.7rem;border:1px solid var(--pe);border-radius:3px;background:var(--sf);color:var(--tx);outline:none}.ff textarea{resize:vertical;min-height:80px}
+.pq{padding:2.5rem 0;border-top:1px solid var(--su);border-bottom:1px solid var(--su);margin:2rem 0}.pq blockquote{font-family:var(--fd);font-size:clamp(1.2rem,2.5vw,1.8rem);font-weight:400;font-style:italic;line-height:1.45;color:var(--tx);max-width:620px}.pq cite{display:block;font-family:var(--fm);font-size:0.65rem;font-style:normal;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);margin-top:1rem}
+
+/* Gallery */
+.gal-hero{width:100%;aspect-ratio:4/3;border-radius:8px;overflow:hidden;position:relative;background:var(--pe)}
+.gal-hero .gph{position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 40px,rgba(196,165,123,0.03) 40px,rgba(196,165,123,0.03) 80px)}
+.gal-hero .gph-label{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:var(--fm);font-size:0.82rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--mu);text-align:center;line-height:2}
+.gal-hero .gal-nav{position:absolute;bottom:1.25rem;right:1.25rem;display:flex;gap:0.35rem}
+.gal-hero .gal-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.4);cursor:default}.gal-dot.on{background:white}
+.gal-hero .gal-counter{position:absolute;top:1.25rem;right:1.25rem;font-family:var(--fm);font-size:0.6rem;color:white;background:rgba(44,41,38,0.5);padding:3px 10px;border-radius:12px;letter-spacing:0.04em}
+.gal-hero .gal-3d{position:absolute;bottom:1.25rem;left:1.25rem;font-family:var(--fb);font-size:0.72rem;font-weight:500;color:white;background:rgba(44,41,38,0.6);padding:0.4rem 0.9rem;border-radius:4px;cursor:default;backdrop-filter:blur(8px);display:flex;align-items:center;gap:0.4rem}
+.gal-strip{display:flex;gap:0.5rem;margin-top:0.75rem;overflow-x:auto;padding-bottom:0.25rem}
+.gal-thumb{width:72px;height:54px;border-radius:4px;background:var(--pe);flex-shrink:0;border:2px solid transparent;cursor:default;position:relative;overflow:hidden}.gal-thumb.on{border-color:var(--cl)}.gal-thumb::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 12px,rgba(196,165,123,0.03) 12px,rgba(196,165,123,0.03) 24px)}
+.gal-thumb .t-label{position:absolute;bottom:2px;left:3px;font-family:var(--fm);font-size:0.4rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);z-index:1;background:rgba(255,255,255,0.7);padding:1px 3px;border-radius:1px}
+.gal-thumb.t-3d{background:linear-gradient(135deg,var(--pe),rgba(196,165,123,0.15))}
+
+/* 3D Viewer mockup */
+.viewer-3d{width:100%;aspect-ratio:4/3;border-radius:8px;background:linear-gradient(160deg,#f0ede8,#e8e4de,#f5f2ed);position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.viewer-3d::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 60% 40%,rgba(196,165,123,0.06),transparent 70%)}
+.viewer-3d .v-label{font-family:var(--fm);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--mu);text-align:center;z-index:1}
+.viewer-3d .v-label span{display:block;font-family:var(--fb);font-size:0.72rem;font-weight:400;text-transform:none;letter-spacing:0;margin-top:0.3rem;color:var(--bd)}
+.viewer-3d .v-controls{position:absolute;bottom:1rem;left:50%;transform:translateX(-50%);display:flex;gap:0.75rem;background:rgba(44,41,38,0.6);backdrop-filter:blur(8px);padding:0.45rem 1rem;border-radius:20px}
+.v-ctrl{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.04em;color:rgba(255,255,255,0.6);cursor:default;padding:0.2rem 0.4rem}.v-ctrl.on{color:white}
+.viewer-3d .v-ar{position:absolute;top:1rem;right:1rem;font-family:var(--fb);font-size:0.72rem;font-weight:500;color:white;background:var(--cl);padding:0.4rem 1rem;border-radius:4px;cursor:default;display:flex;align-items:center;gap:0.4rem}
+
+/* Material swatch */
+.mat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:1rem}
+.mat-swatch{border-radius:6px;overflow:hidden;cursor:default;transition:transform 0.2s var(--e)}.mat-swatch:hover{transform:translateY(-2px)}
+.mat-img{aspect-ratio:1;background:var(--pe);position:relative;overflow:hidden}.mat-img::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 15px,rgba(196,165,123,0.03) 15px,rgba(196,165,123,0.03) 30px)}
+.mat-name{font-family:var(--fb);font-weight:500;font-size:0.8rem;color:var(--tx);padding:0.5rem 0 0.1rem}.mat-desc{font-family:var(--fb);font-size:0.7rem;color:var(--mu);line-height:1.4}
+
+/* Edit gallery */
+.edit-gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0.75rem}
+.edit-thumb{aspect-ratio:4/3;border-radius:6px;background:var(--pe);position:relative;overflow:hidden;cursor:default;border:2px solid transparent;transition:border-color 0.15s}
+.edit-thumb:hover{border-color:var(--cl)}
+.edit-thumb::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 15px,rgba(196,165,123,0.03) 15px,rgba(196,165,123,0.03) 30px)}
+.edit-thumb .e-badge{position:absolute;top:6px;left:6px;font-family:var(--fm);font-size:0.45rem;text-transform:uppercase;letter-spacing:0.04em;padding:2px 6px;border-radius:2px;z-index:2}
+.e-badge.hero{background:var(--cl);color:white}.e-badge.lifestyle{background:var(--sa);color:white}.e-badge.detail{background:var(--db);color:white}.e-badge.material{background:var(--ao);color:white}.e-badge.model{background:var(--ch);color:var(--ow)}
+.edit-thumb .e-actions{position:absolute;bottom:0;left:0;right:0;padding:6px;background:linear-gradient(transparent,rgba(44,41,38,0.7));display:flex;justify-content:space-between;align-items:center;opacity:0;transition:opacity 0.15s;z-index:2}
+.edit-thumb:hover .e-actions{opacity:1}
+.e-action{font-family:var(--fm);font-size:0.48rem;text-transform:uppercase;letter-spacing:0.04em;color:white;cursor:default;padding:2px 5px}
+.edit-thumb .e-drag{position:absolute;top:6px;right:6px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;background:rgba(44,41,38,0.4);border-radius:3px;font-size:0.6rem;color:white;z-index:2;cursor:grab;opacity:0;transition:opacity 0.15s}.edit-thumb:hover .e-drag{opacity:1}
+
+/* Upload zone */
+.uz{border:2px dashed var(--pe);border-radius:8px;padding:2rem;text-align:center;cursor:default;transition:border-color 0.2s;aspect-ratio:4/3;display:flex;flex-direction:column;align-items:center;justify-content:center}.uz:hover{border-color:var(--cl)}.uz p{font-family:var(--fb);font-size:0.82rem;color:var(--mu)}.uz .hint{font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu);margin-top:0.4rem}
+
+/* Companion product */
+.comp-prod{display:grid;grid-template-columns:80px 1fr;gap:0.75rem;padding:0.85rem 0;border-bottom:1px solid rgba(229,226,221,0.4);align-items:center;cursor:default;transition:background 0.15s}.comp-prod:hover{background:var(--hv)}
+.comp-img{width:80px;height:60px;border-radius:4px;background:var(--pe);position:relative;overflow:hidden}.comp-img::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 12px,rgba(196,165,123,0.03) 12px,rgba(196,165,123,0.03) 24px)}
+.comp-name{font-family:var(--fb);font-weight:500;font-size:0.85rem;color:var(--tx)}.comp-maker{font-family:var(--fb);font-size:0.72rem;font-style:italic;color:var(--ao)}.comp-price{font-family:var(--fd);font-weight:600;font-size:0.88rem;color:var(--tx);margin-top:0.15rem}.comp-rel{font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--sa);margin-top:0.1rem}
+
+/* Spectrum */
+.sp{margin:0.5rem 0}.sp-r{display:grid;grid-template-columns:70px 1fr 70px;gap:0.4rem;align-items:center;margin-bottom:0.45rem}.sp-l{font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--mu)}.sp-l:last-child{text-align:right}
+.sp-t{height:4px;background:var(--pe);border-radius:2px;position:relative}.sp-d{position:absolute;top:-4px;width:12px;height:12px;border-radius:50%;background:var(--cl);border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.12)}
+
+/* Eng panel */
+.eng{background:linear-gradient(135deg,rgba(92,74,60,0.02),rgba(196,165,123,0.03));border:1px solid rgba(196,165,123,0.12);border-radius:8px;padding:1.5rem}
+
+/* Edit mode bar */
+.edit-bar{display:flex;justify-content:space-between;align-items:center;padding:0.5rem 1.5rem;background:rgba(196,165,123,0.06);border-bottom:1px solid rgba(196,165,123,0.15)}
+.edit-mode-label{font-family:var(--fm);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--cl);display:flex;align-items:center;gap:0.5rem}
+.edit-mode-dot{width:8px;height:8px;border-radius:50%;background:var(--cl);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* Inline edit */
+.editable{border-bottom:1px dashed transparent;transition:border-color 0.15s;cursor:text}.editable:hover{border-color:rgba(196,165,123,0.4)}.editable:focus{border-color:var(--cl);outline:none}
+
+/* Responsive */
+@media(max-width:768px){.two{grid-template-columns:1fr}.fg{grid-template-columns:1fr}.cm{flex-direction:column;gap:1rem}.mat-grid{grid-template-columns:repeat(2,1fr)}.edit-gal{grid-template-columns:repeat(2,1fr)}}
+.fade{opacity:0;transform:translateY(16px);transition:opacity 0.7s ease,transform 0.7s ease}.fade.vis{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ============================== COVER ============================== -->
+<div class="cover">
+  <p class="meta" style="margin-bottom:1rem">Patina — Product Detail Page Design</p>
+  <h1>The Product Page<span>Two experiences, one continuous surface</span></h1>
+  <p class="cover-sub">The product detail page serves two audiences from the same URL. Clients see an immersive editorial presentation — story, images, 3D models, materials, maker provenance. Designers see the same page with edit controls overlaid — inline text editing, drag-and-drop gallery management, 3D model upload, and Aesthete intelligence panels. Switch between modes with one toggle. What you edit is what they see.</p>
+  <div class="st"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div class="cm">
+    <div class="cm-i"><p class="meta">Prepared for</p><p>Kody & Leah</p></div>
+    <div class="cm-i"><p class="meta">Version</p><p>1.0 — March 2026</p></div>
+    <div class="cm-i"><p class="meta">Two Modes</p><p>Present (client) · Edit (designer)</p></div>
+    <div class="cm-i"><p class="meta">Media Types</p><p>Images, 3D Models, Video, Materials</p></div>
+  </div>
+</div>
+
+<!-- ============================== PAGE ANATOMY ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">01 — Page Anatomy</p>
+  <h2>One page, <em>two experiences.</em></h2>
+  <p class="bd" style="margin-bottom:2rem">The product detail page is a single continuous scroll with eight content zones. In presentation mode, the client sees an editorial layout — images and story first, specs and intelligence later. In edit mode, the designer sees the same layout with editing controls revealed on hover and a gallery management panel at the top. The toggle between modes takes zero page reloads — it's a CSS-class switch.</p>
+
+  <div style="display:grid;grid-template-columns:40px 1fr 1fr;gap:1.5rem;border-top:1px solid var(--su);margin-top:1.5rem">
+    <div></div><div style="padding:0.75rem 0;border-bottom:1px solid var(--su)"><span class="ms" style="color:var(--sa)">Present Mode (Client/Web)</span></div><div style="padding:0.75rem 0;border-bottom:1px solid var(--su)"><span class="ms" style="color:var(--cl)">Edit Mode (Designer)</span></div>
+
+    <div style="padding:0.6rem 0;font-family:var(--fm);font-size:0.55rem;color:var(--mu);text-align:center">01</div><div style="padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><span class="lbl" style="font-size:0.82rem">Hero Gallery + 3D Viewer</span><br><span class="ls">Full-width hero with thumbnail strip. 3D model accessible via tab. Swipe/arrow navigation.</span></div><div style="padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><span class="lbl" style="font-size:0.82rem">Gallery Manager</span><br><span class="ls">Drag-to-reorder thumbnails. Badge each image by type. Upload zone. 3D model upload with preview.</span></div>
+
+    <div style="padding:0.6rem 0;font-family:var(--fm);font-size:0.55rem;color:var(--mu);text-align:center">02</div><div style="padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><span class="lbl" style="font-size:0.82rem">Product Identity</span><br><span class="ls">Name in Playfair, maker in italic, price, tier badge, style tags. Read-only.</span></div><div style="padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><span class="lbl" style="font-size:0.82rem">Inline Identity Editor</span><br><span class="ls">All text fields editable inline. Dashed underline on hover. Click to type.</span></div>
+
+    <div style="padding:0.6rem 0;font-family:var(--fm);font-size:0.55rem;color:var(--mu);text-align:center">03</div><div style="padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><span class="lbl" style="font-size:0.82rem">Product Story</span><br><span class="ls">Narrative description. Provenance. Care philosophy. The maker's voice.</span></div><div style="padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><span class="lbl" style="font-size:0.82rem">Rich Text Editor</span><br><span class="ls">Minimal toolbar on focus. Same typography the client sees.</span></div>
+
+    <div style="padding:0.6rem 0;font-family:var(--fm);font-size:0.55rem;color:var(--mu);text-align:center">04</div><div style="padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><span class="lbl" style="font-size:0.82rem">Material Close-Ups</span><br><span class="ls">Grid of material swatches with names. Tap to zoom. Texture is the star.</span></div><div style="padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><span class="lbl" style="font-size:0.82rem">Material Manager</span><br><span class="ls">Upload close-up photos. Tag material type. Add descriptions.</span></div>
+
+    <div style="padding:0.6rem 0;font-family:var(--fm);font-size:0.55rem;color:var(--mu);text-align:center">05</div><div style="padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><span class="lbl" style="font-size:0.82rem">Specifications</span><br><span class="ls">Dimensions, materials, weight, care, assembly. Detail rows.</span></div><div style="padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><span class="lbl" style="font-size:0.82rem">Spec Editor</span><br><span class="ls">Each field editable inline. Add/remove spec rows.</span></div>
+
+    <div style="padding:0.6rem 0;font-family:var(--fm);font-size:0.55rem;color:var(--mu);text-align:center">06</div><div style="padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><span class="lbl" style="font-size:0.82rem">Maker Story</span><br><span class="ls">Heritage section. Workshop photo. Founding year. Craft philosophy.</span></div><div style="padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><span class="lbl" style="font-size:0.82rem">Maker Editor</span><br><span class="ls">Linked to manufacturer profile. Override or extend maker narrative.</span></div>
+
+    <div style="padding:0.6rem 0;font-family:var(--fm);font-size:0.55rem;color:var(--mu);text-align:center">07</div><div style="padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><span class="lbl" style="font-size:0.82rem">Pairs With</span><br><span class="ls">Companion products. Thumbnail, name, maker, relationship.</span></div><div style="padding:0.6rem 0;border-bottom:1px solid rgba(229,226,221,0.4)"><span class="lbl" style="font-size:0.82rem">Compatibility Editor</span><br><span class="ls">Search catalog to add. Set relationship type. Reorder.</span></div>
+
+    <div style="padding:0.6rem 0;font-family:var(--fm);font-size:0.55rem;color:var(--mu);text-align:center">08</div><div style="padding:0.6rem 0;border-bottom:1px solid var(--su)"><span class="lbl" style="font-size:0.82rem">Designer Intelligence</span><br><span class="ls">Hidden from clients. Style spectrum, ideal client, notes.</span></div><div style="padding:0.6rem 0;border-bottom:1px solid var(--su)"><span class="lbl" style="font-size:0.82rem">Aesthete Panel</span><br><span class="ls">Full teaching interface. Spectrum sliders. Matching. Avoidance.</span></div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 1: PRESENTATION MODE ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">02 — Presentation Mode</p>
+  <h2>What the client sees <em>on the web.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">An editorial product experience. The hero gallery fills the top with full-bleed imagery. The 3D viewer is one tap away. The story unfolds below — identity, narrative, materials, maker, specs. No chrome. No admin controls. Just the product, presented with the same typography and warmth as the patina.cloud website.</p>
+
+  <div class="sc">
+    <!-- Patina web header (client view) -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:52px;background:var(--sf);border-bottom:1px solid var(--su)">
+      <div class="sb-l">Patina</div>
+      <div style="display:flex;gap:1.5rem"><span style="font-family:var(--fb);font-size:0.75rem;color:var(--mu)">Your Room</span><span style="font-family:var(--fb);font-size:0.75rem;color:var(--mu)">Our Makers</span><span style="font-family:var(--fb);font-size:0.75rem;color:var(--mu)">For Designers</span></div>
+      <div><span style="font-family:var(--fb);font-size:0.72rem;color:var(--cl)">Sign In</span></div>
+    </div>
+
+    <div style="padding:0;background:var(--bg)">
+      <!-- HERO GALLERY -->
+      <div style="padding:1.5rem 2.5rem 0">
+        <div class="gal-hero">
+          <div class="gph"></div>
+          <div class="gph-label">Hero Product Image<br><span style="font-size:0.6rem;opacity:0.7">Heirloom Oak Dining Table — 45° angle, morning light</span></div>
+          <div class="gal-counter">1 / 8</div>
+          <div class="gal-3d">◇ View in 3D</div>
+          <div class="gal-nav"><div class="gal-dot on"></div><div class="gal-dot"></div><div class="gal-dot"></div><div class="gal-dot"></div><div class="gal-dot"></div><div class="gal-dot"></div><div class="gal-dot"></div><div class="gal-dot"></div></div>
+        </div>
+        <div class="gal-strip">
+          <div class="gal-thumb on"><div class="t-label">Hero</div></div>
+          <div class="gal-thumb"><div class="t-label">Angle</div></div>
+          <div class="gal-thumb"><div class="t-label">Detail</div></div>
+          <div class="gal-thumb" style="background:linear-gradient(135deg,#d4c4ae,#c4b49e)"><div class="t-label">Grain</div></div>
+          <div class="gal-thumb"><div class="t-label">Context</div></div>
+          <div class="gal-thumb"><div class="t-label">Scale</div></div>
+          <div class="gal-thumb t-3d"><div class="t-label">3D</div></div>
+          <div class="gal-thumb"><div class="t-label">Maker</div></div>
+        </div>
+      </div>
+
+      <!-- PRODUCT IDENTITY -->
+      <div style="padding:2rem 2.5rem 0">
+        <div style="display:grid;grid-template-columns:1fr auto;gap:2rem;align-items:start;padding-bottom:2rem;border-bottom:1px solid var(--su)">
+          <div>
+            <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.6rem"><span class="tag" style="background:rgba(196,165,123,0.1);border-color:var(--cl);font-size:0.65rem">★ Maker Piece</span><span class="ms" style="color:var(--sa)">● In Stock</span></div>
+            <div style="font-family:var(--fd);font-weight:400;font-size:clamp(1.8rem,3.5vw,2.6rem);line-height:1.15;letter-spacing:-0.02em;color:var(--tx);margin-bottom:0.3rem">Heirloom Oak Dining Table</div>
+            <div style="font-family:var(--fb);font-size:0.95rem;font-style:italic;color:var(--ao);margin-bottom:1.25rem">Nordic Atelier · Aarhus, Denmark · Est. 1968</div>
+
+            <div style="font-family:var(--fd);font-weight:700;font-size:2.2rem;color:var(--tx);margin-bottom:0.25rem">$4,200</div>
+            <div class="meta" style="margin-bottom:1.25rem">Trade: $3,360 · Lead Time: 8–12 weeks · Made to order</div>
+
+            <div style="display:flex;gap:0.4rem;flex-wrap:wrap"><span class="tag on">Warm Minimalist</span><span class="tag on">Organic Modern</span><span class="tag">Scandinavian</span><span class="tag">Natural Materials</span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:0.5rem;min-width:180px">
+            <button class="btn btn-p" style="width:100%;justify-content:center">Add to Proposal</button>
+            <button class="btn btn-s" style="width:100%;justify-content:center">Try in Your Room</button>
+            <button class="btn btn-g" style="width:100%;justify-content:center;font-size:0.75rem">Save to Collection</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PRODUCT STORY -->
+      <div style="padding:2rem 2.5rem 0">
+        <div style="font-family:var(--fd);font-weight:400;font-size:1.4rem;color:var(--tx);margin-bottom:1rem">The Story</div>
+        <div style="font-family:var(--fb);font-size:0.95rem;line-height:1.8;color:var(--bd);max-width:680px;margin-bottom:1rem">Solid quarter-sawn white oak with a hand-rubbed tung oil finish that deepens with age. Each table is made to order by a three-person workshop outside Aarhus, Denmark. The grain pattern on the top surface is bookmatched from a single log, meaning no two tables are identical.</div>
+        <div style="font-family:var(--fb);font-size:0.95rem;line-height:1.8;color:var(--bd);max-width:680px">The tung oil finish is deliberately imperfect — it shows the touch of the hand that applied it. Over years of meals, homework, and Sunday mornings, this surface develops a patina that tells your family's story. Seats six comfortably, eight with the extension leaves that store in a custom felt sleeve beneath the frame.</div>
+      </div>
+
+      <!-- 3D VIEWER (separate view within page) -->
+      <div style="padding:2rem 2.5rem">
+        <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+        <div style="font-family:var(--fd);font-weight:400;font-size:1.4rem;color:var(--tx);margin-bottom:0.5rem">Explore in 3D</div>
+        <div class="ls" style="margin-bottom:1rem">Orbit, zoom, and inspect every joint and grain line. Tap "View in AR" to place this table in your actual room.</div>
+
+        <div class="viewer-3d">
+          <div class="v-label">Interactive 3D Model<span>Drag to orbit · Pinch to zoom · Double-tap to reset</span></div>
+          <div class="v-controls"><span class="v-ctrl on">Orbit</span><span class="v-ctrl">Zoom</span><span class="v-ctrl">Details</span><span class="v-ctrl">Underside</span></div>
+          <div class="v-ar">◇ View in AR</div>
+        </div>
+      </div>
+
+      <!-- MATERIALS -->
+      <div style="padding:0 2.5rem 2rem">
+        <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+        <div style="font-family:var(--fd);font-weight:400;font-size:1.4rem;color:var(--tx);margin-bottom:0.5rem">Materials</div>
+        <div class="ls" style="margin-bottom:1.25rem">Every material chosen for longevity. Tap to see close-up texture.</div>
+        <div class="mat-grid">
+          <div class="mat-swatch"><div class="mat-img" style="background:linear-gradient(135deg,#d4c4ae,#c4b49e)"></div><div class="mat-name">Quarter-Sawn White Oak</div><div class="mat-desc">FSC-certified Danish forest, naturally dried 18 months</div></div>
+          <div class="mat-swatch"><div class="mat-img" style="background:linear-gradient(135deg,#c8b8a0,#b8a890)"></div><div class="mat-name">Tung Oil Finish</div><div class="mat-desc">Hand-rubbed, food-safe, deepens with age</div></div>
+          <div class="mat-swatch"><div class="mat-img" style="background:linear-gradient(135deg,#b8a88c,#a89878)"></div><div class="mat-name">Brass Hardware</div><div class="mat-desc">Solid unlacquered brass, develops natural patina</div></div>
+          <div class="mat-swatch"><div class="mat-img" style="background:linear-gradient(135deg,#e0d8cc,#d0c8bc)"></div><div class="mat-name">Felt Leaf Sleeve</div><div class="mat-desc">Merino wool felt, protects stored extension leaves</div></div>
+        </div>
+      </div>
+
+      <!-- SPECIFICATIONS -->
+      <div style="padding:0 2.5rem 2rem">
+        <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:3rem">
+          <div>
+            <div style="font-family:var(--fd);font-weight:400;font-size:1.4rem;color:var(--tx);margin-bottom:1rem">Specifications</div>
+            <div class="dr"><div class="dr-k">Dimensions</div><div class="dr-v">72"L × 36"W × 30"H</div></div>
+            <div class="dr"><div class="dr-k">With Leaves</div><div class="dr-v">96"L × 36"W × 30"H</div></div>
+            <div class="dr"><div class="dr-k">Weight</div><div class="dr-v">145 lbs</div></div>
+            <div class="dr"><div class="dr-k">Seats</div><div class="dr-v">6 (8 with leaves)</div></div>
+            <div class="dr"><div class="dr-k">Assembly</div><div class="dr-v">Attach legs — 15 minutes</div></div>
+            <div class="dr"><div class="dr-k">Origin</div><div class="dr-v">Aarhus, Denmark</div></div>
+            <div class="dr"><div class="dr-k">Certifications</div><div class="dr-v">FSC Certified · Carbon Neutral Workshop</div></div>
+          </div>
+          <div>
+            <div style="font-family:var(--fd);font-weight:400;font-size:1.4rem;color:var(--tx);margin-bottom:1rem">Care</div>
+            <div style="font-family:var(--fb);font-size:0.9rem;line-height:1.75;color:var(--bd)">Wipe with a damp cloth for daily cleaning. Re-oil with food-grade tung oil once per year — a 15-minute ritual that becomes part of living with this table. Avoid prolonged moisture contact. Use coasters for hot beverages. Water rings can be buffed out with fine steel wool and fresh oil.</div>
+            <div style="font-family:var(--fb);font-size:0.9rem;font-style:italic;color:var(--ao);margin-top:1rem">"This table will look better in ten years than it does today. The oil finish ages like leather — developing depth and warmth that no factory can replicate."</div>
+            <div class="ms" style="margin-top:0.5rem">— Jørgen Holm, Nordic Atelier</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MAKER STORY -->
+      <div style="padding:0 2.5rem 2rem">
+        <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+        <div style="display:grid;grid-template-columns:1fr 1.2fr;gap:3rem;align-items:start">
+          <div>
+            <div style="font-family:var(--fd);font-weight:400;font-size:1.4rem;color:var(--tx);margin-bottom:1rem">The Maker</div>
+            <div style="font-family:var(--fd);font-weight:500;font-size:1.1rem;color:var(--tx);margin-bottom:0.15rem">Nordic Atelier</div>
+            <div class="ls" style="margin-bottom:1rem">Aarhus, Denmark · Founded 1968 · 3rd Generation</div>
+            <div style="font-family:var(--fb);font-size:0.9rem;line-height:1.75;color:var(--bd)">Founded in 1968 by Jørgen Holm, Nordic Atelier operates from the same converted barn workshop outside Aarhus where it began. Three generations of woodworkers now produce every piece by hand. They source oak exclusively from FSC-certified Danish forests within 50km of the workshop, and each tree is naturally air-dried for 18 months before it enters the shop.</div>
+            <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:1rem"><span class="tag" style="font-size:0.65rem">FSC Certified</span><span class="tag" style="font-size:0.65rem">Carbon Neutral</span><span class="tag" style="font-size:0.65rem">3rd Generation</span><span class="tag" style="font-size:0.65rem">Made to Order</span></div>
+          </div>
+          <div class="gal-hero" style="aspect-ratio:3/2">
+            <div class="gph"></div>
+            <div class="gph-label" style="font-size:0.72rem">Workshop Photo<br><span style="font-size:0.55rem;opacity:0.7">Nordic Atelier workshop, Aarhus</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAIRS WITH -->
+      <div style="padding:0 2.5rem 2rem">
+        <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+        <div style="font-family:var(--fd);font-weight:400;font-size:1.4rem;color:var(--tx);margin-bottom:0.5rem">Pairs Beautifully With</div>
+        <div class="ls" style="margin-bottom:1rem">Products chosen by our designers to complement this table.</div>
+
+        <div class="comp-prod"><div class="comp-img"></div><div><div class="comp-name">Shaker Dining Chairs × 6</div><div class="comp-maker">Sawkille Co · Rhinebeck, NY</div><div class="comp-price">$400 each</div><div class="comp-rel">✦ Complementary style</div></div></div>
+        <div class="comp-prod"><div class="comp-img"></div><div><div class="comp-name">Brass Pendant Light</div><div class="comp-maker">Schoolhouse · Portland, OR</div><div class="comp-price">$890</div><div class="comp-rel">✦ Matching material</div></div></div>
+        <div class="comp-prod"><div class="comp-img"></div><div><div class="comp-name">Woven Jute Runner 3×10</div><div class="comp-maker">Studio Piet · Copenhagen</div><div class="comp-price">$680</div><div class="comp-rel">✦ Textural contrast</div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== SCREEN 2: EDIT MODE — GALLERY MANAGER ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">03 — Edit Mode — Gallery & 3D Manager</p>
+  <h2>Drag, reorder, tag, <em>and upload.</em></h2>
+  <p class="bd" style="margin-bottom:1.5rem">When the designer toggles edit mode, the gallery becomes a management interface. Each image shows its type badge (Hero, Lifestyle, Detail, Material, 3D), a drag handle for reordering, and hover actions (Set as Hero, Retag, Delete). The 3D model gets its own dedicated card with upload, preview, and scale verification. New images drop in via drag-and-drop anywhere on the gallery grid.</p>
+
+  <div class="sc">
+    <div class="sb"><div class="sb-l">Patina</div><div class="sb-n"><span class="on">Work</span><span>Clients</span><span>Studio</span></div><div class="sb-u"><span class="ms">Leah</span><div class="sb-a">LK</div></div></div>
+    <!-- Edit mode bar -->
+    <div class="edit-bar"><div class="edit-mode-label"><div class="edit-mode-dot"></div>Edit Mode</div><div style="display:flex;gap:0.5rem"><span class="ms" style="color:var(--sa)">● Auto-saved</span><button class="btn btn-s btn-sm">Preview as Client</button><button class="btn btn-cl btn-sm">Publish Changes</button></div></div>
+
+    <div class="sd">
+      <div class="bc"><a>Products</a> <span style="margin:0 0.3rem;opacity:0.5">→</span> Heirloom Oak Dining Table <span style="margin:0 0.3rem;opacity:0.5">→</span> Edit</div>
+
+      <!-- GALLERY MANAGER -->
+      <div style="font-family:var(--fd);font-weight:400;font-size:1.3rem;color:var(--tx);margin-bottom:0.25rem">Media Gallery</div>
+      <div class="ls" style="margin-bottom:1rem">Drag to reorder · First image becomes hero · Hover for actions</div>
+
+      <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:1rem"><span class="tag on" style="font-size:0.65rem">All (8)</span><span class="tag" style="font-size:0.65rem">Photos (5)</span><span class="tag" style="font-size:0.65rem">Materials (2)</span><span class="tag" style="font-size:0.65rem">3D Models (1)</span></div>
+
+      <div class="edit-gal">
+        <!-- Hero -->
+        <div class="edit-thumb">
+          <span class="e-badge hero">★ Hero</span>
+          <span class="e-drag">⠿</span>
+          <div class="e-actions"><span class="e-action">Retag</span><span class="e-action">Replace</span><span class="e-action" style="color:var(--te)">Remove</span></div>
+        </div>
+        <!-- Angle -->
+        <div class="edit-thumb">
+          <span class="e-badge lifestyle">Angle</span>
+          <span class="e-drag">⠿</span>
+          <div class="e-actions"><span class="e-action">★ Set Hero</span><span class="e-action">Retag</span><span class="e-action" style="color:var(--te)">Remove</span></div>
+        </div>
+        <!-- Detail -->
+        <div class="edit-thumb">
+          <span class="e-badge detail">Detail</span>
+          <span class="e-drag">⠿</span>
+          <div class="e-actions"><span class="e-action">★ Set Hero</span><span class="e-action">Retag</span><span class="e-action" style="color:var(--te)">Remove</span></div>
+        </div>
+        <!-- Material close-up -->
+        <div class="edit-thumb" style="background:linear-gradient(135deg,#d4c4ae,#c4b49e)">
+          <span class="e-badge material">Material</span>
+          <span class="e-drag">⠿</span>
+          <div class="e-actions"><span class="e-action">Retag</span><span class="e-action" style="color:var(--te)">Remove</span></div>
+        </div>
+        <!-- Context -->
+        <div class="edit-thumb">
+          <span class="e-badge lifestyle">Context</span>
+          <span class="e-drag">⠿</span>
+          <div class="e-actions"><span class="e-action">★ Set Hero</span><span class="e-action">Retag</span><span class="e-action" style="color:var(--te)">Remove</span></div>
+        </div>
+        <!-- Scale reference -->
+        <div class="edit-thumb">
+          <span class="e-badge detail">Scale</span>
+          <span class="e-drag">⠿</span>
+          <div class="e-actions"><span class="e-action">Retag</span><span class="e-action" style="color:var(--te)">Remove</span></div>
+        </div>
+        <!-- 3D Model card -->
+        <div class="edit-thumb" style="background:linear-gradient(135deg,rgba(44,41,38,0.85),rgba(92,74,60,0.9))">
+          <span class="e-badge model">3D Model</span>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;text-align:center"><span style="font-size:1.2rem;color:rgba(250,247,242,0.6)">◇</span><span style="display:block;font-family:var(--fm);font-size:0.45rem;text-transform:uppercase;letter-spacing:0.04em;color:rgba(250,247,242,0.5);margin-top:0.2rem">USDZ + GLB</span></div>
+          <div class="e-actions"><span class="e-action">Preview</span><span class="e-action">Replace</span></div>
+        </div>
+        <!-- Maker photo -->
+        <div class="edit-thumb">
+          <span class="e-badge lifestyle">Maker</span>
+          <span class="e-drag">⠿</span>
+          <div class="e-actions"><span class="e-action">Retag</span><span class="e-action" style="color:var(--te)">Remove</span></div>
+        </div>
+        <!-- Upload zone -->
+        <div class="uz" style="aspect-ratio:4/3;padding:1rem;border-radius:6px"><p style="font-size:0.75rem">+ Drop files<br>or click</p><div class="hint" style="margin-top:0.3rem">JPG PNG WebP · 2000px min</div></div>
+      </div>
+
+      <!-- Image type reference -->
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:1rem;padding:0.75rem 1rem;background:rgba(139,156,173,0.04);border:1px solid rgba(139,156,173,0.12);border-radius:6px">
+        <span class="ms" style="color:var(--db)">Image types:</span>
+        <span style="display:flex;align-items:center;gap:0.25rem"><span class="e-badge hero" style="position:static;font-size:0.42rem">Hero</span><span class="ms">Main product shot</span></span>
+        <span style="display:flex;align-items:center;gap:0.25rem"><span class="e-badge lifestyle" style="position:static;font-size:0.42rem">Lifestyle</span><span class="ms">In context / angles</span></span>
+        <span style="display:flex;align-items:center;gap:0.25rem"><span class="e-badge detail" style="position:static;font-size:0.42rem">Detail</span><span class="ms">Close-ups / joints</span></span>
+        <span style="display:flex;align-items:center;gap:0.25rem"><span class="e-badge material" style="position:static;font-size:0.42rem">Material</span><span class="ms">Texture swatches</span></span>
+        <span style="display:flex;align-items:center;gap:0.25rem"><span class="e-badge model" style="position:static;font-size:0.42rem">3D</span><span class="ms">AR models</span></span>
+      </div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- 3D MODEL SECTION -->
+      <div style="font-family:var(--fd);font-weight:400;font-size:1.3rem;color:var(--tx);margin-bottom:0.25rem">3D Model & AR</div>
+      <div class="ls" style="margin-bottom:1.25rem">Upload .usdz (iOS AR) and .glb (web viewer) formats. Preview and verify scale before publishing.</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem">
+        <div>
+          <div style="border:1px solid var(--su);border-radius:6px;padding:1.25rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem"><span class="fl" style="margin-bottom:0">iOS AR Model (.usdz)</span><span class="ms" style="color:var(--sa)">● Uploaded</span></div>
+            <div class="dr"><div class="dr-k">File</div><div class="dr-v">heirloom_table.usdz</div></div>
+            <div class="dr"><div class="dr-k">Size</div><div class="dr-v">24.3 MB</div></div>
+            <div class="dr"><div class="dr-k">Polygons</div><div class="dr-v">38,420 (under 50k limit)</div></div>
+            <div class="dr"><div class="dr-k">Textures</div><div class="dr-v">4K PBR (oak, brass, felt)</div></div>
+            <div class="dr"><div class="dr-k">Scale</div><div class="dr-v" style="color:var(--sa)">✓ Verified — matches spec dimensions</div></div>
+            <div style="display:flex;gap:0.5rem;margin-top:1rem"><button class="btn btn-s btn-sm">Preview AR</button><button class="btn btn-s btn-sm">Replace</button></div>
+          </div>
+        </div>
+        <div>
+          <div style="border:1px solid var(--su);border-radius:6px;padding:1.25rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem"><span class="fl" style="margin-bottom:0">Web Viewer Model (.glb)</span><span class="ms" style="color:var(--sa)">● Uploaded</span></div>
+            <div class="dr"><div class="dr-k">File</div><div class="dr-v">heirloom_table.glb</div></div>
+            <div class="dr"><div class="dr-k">Size</div><div class="dr-v">18.7 MB</div></div>
+            <div class="dr"><div class="dr-k">Polygons</div><div class="dr-v">32,100 (optimized for web)</div></div>
+            <div class="dr"><div class="dr-k">Textures</div><div class="dr-v">2K PBR (web-optimized)</div></div>
+            <div class="dr"><div class="dr-k">Load Time</div><div class="dr-v" style="color:var(--sa)">✓ 2.1s on 3G (under 3s target)</div></div>
+            <div style="display:flex;gap:0.5rem;margin-top:1rem"><button class="btn btn-s btn-sm">Preview Web</button><button class="btn btn-s btn-sm">Replace</button></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload zone for missing models -->
+      <div style="margin-top:1rem;padding:1rem;background:rgba(232,197,71,0.04);border:1px solid rgba(232,197,71,0.12);border-radius:6px"><p class="ms" style="color:var(--gh);margin-bottom:0.15rem">Missing: Video Content</p><p style="font-size:0.78rem;color:var(--bd)">Consider adding a maker process video or assembly guide. Products with video see 34% higher engagement. <button class="btn btn-g btn-sm" style="padding:0.2rem 0.5rem;font-size:0.68rem">Upload Video</button></p></div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <!-- INLINE TEXT EDITING EXAMPLE -->
+      <div style="font-family:var(--fd);font-weight:400;font-size:1.3rem;color:var(--tx);margin-bottom:0.25rem">Inline Editing</div>
+      <div class="ls" style="margin-bottom:1.25rem">All text is editable directly on the page. Hover shows a dashed underline. Click to edit. The typography you see IS what the client sees — no separate preview needed.</div>
+
+      <div style="border:1px solid var(--su);border-radius:8px;padding:2rem;background:var(--sf)">
+        <div style="font-family:var(--fd);font-weight:400;font-size:2rem;line-height:1.15;letter-spacing:-0.02em;color:var(--tx);margin-bottom:0.3rem;border-bottom:1px dashed rgba(196,165,123,0.3);display:inline-block;cursor:text" contenteditable>Heirloom Oak Dining Table</div>
+        <div style="font-family:var(--fb);font-size:0.95rem;font-style:italic;color:var(--ao);margin-bottom:1.25rem;border-bottom:1px dashed rgba(196,165,123,0.3);display:inline-block;cursor:text" contenteditable>Nordic Atelier · Aarhus, Denmark · Est. 1968</div>
+
+        <div style="margin-bottom:0.5rem"><span class="ms" style="color:var(--cl)">← Click any text to edit inline</span></div>
+
+        <div style="font-family:var(--fb);font-size:0.92rem;line-height:1.8;color:var(--bd);max-width:640px;border-bottom:1px dashed rgba(196,165,123,0.2);padding-bottom:0.25rem;cursor:text" contenteditable>Solid quarter-sawn white oak with a hand-rubbed tung oil finish that deepens with age. Each table is made to order by a three-person workshop outside Aarhus, Denmark.</div>
+
+        <!-- Minimal toolbar appears on focus -->
+        <div style="display:inline-flex;gap:0.25rem;margin-top:0.75rem;padding:0.35rem 0.5rem;background:var(--ch);border-radius:4px">
+          <span style="font-family:var(--fb);font-size:0.65rem;color:var(--ow);padding:0.15rem 0.4rem;cursor:default;font-weight:700">B</span>
+          <span style="font-family:var(--fd);font-size:0.65rem;color:var(--ow);padding:0.15rem 0.4rem;cursor:default;font-style:italic">I</span>
+          <span style="font-family:var(--fb);font-size:0.65rem;color:rgba(250,247,242,0.4);padding:0.15rem 0.4rem;cursor:default">Link</span>
+          <span style="font-family:var(--fb);font-size:0.65rem;color:rgba(250,247,242,0.4);padding:0.15rem 0.4rem;cursor:default">H2</span>
+          <span style="font-family:var(--fb);font-size:0.65rem;color:rgba(250,247,242,0.4);padding:0.15rem 0.4rem;cursor:default">H3</span>
+        </div>
+        <div class="ms" style="margin-top:0.5rem">Toolbar appears when text is selected. Same Playfair/Inter/Mono system as the presentation view.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== PULL QUOTE ============================== -->
+<section>
+<div class="nr">
+  <div class="pq"><blockquote>"The product page should make you want to touch the wood. If the image gallery, the material close-ups, and the maker story don't evoke the feel of the grain under your fingertips — we haven't done our job."</blockquote><cite>Design Principle — Tactile Over Technical</cite></div>
+</div>
+</section>
+
+<!-- ============================== INTERACTION DETAILS ============================== -->
+<section class="fade">
+<div class="w">
+  <p class="meta" style="margin-bottom:0.75rem">04 — Interaction Details</p>
+  <h2>How every element <em>behaves.</em></h2>
+
+  <div class="two" style="gap:2rem;margin-top:2rem">
+    <div>
+      <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Gallery Navigation</div>
+      <div class="dr"><div class="dr-k">Desktop</div><div class="dr-v">Arrow keys or click thumbnails. Hover hero for left/right arrows.</div></div>
+      <div class="dr"><div class="dr-k">Mobile</div><div class="dr-v">Swipe hero image. Thumbnail strip scrolls horizontally.</div></div>
+      <div class="dr"><div class="dr-k">3D Entry</div><div class="dr-v">Click "View in 3D" button or tap 3D thumbnail. Viewer replaces hero in place — no page navigate.</div></div>
+      <div class="dr"><div class="dr-k">AR Launch</div><div class="dr-v">From 3D viewer, tap "View in AR". Opens native AR on iOS (USDZ quick-look) or WebXR fallback.</div></div>
+      <div class="dr"><div class="dr-k">Zoom</div><div class="dr-v">Click hero image to open full-screen lightbox. Pinch to zoom on mobile. ESC or swipe down to close.</div></div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">3D Viewer Controls</div>
+      <div class="dr"><div class="dr-k">Orbit</div><div class="dr-v">Click + drag (desktop) or single-finger drag (mobile). 360° horizontal, 180° vertical.</div></div>
+      <div class="dr"><div class="dr-k">Zoom</div><div class="dr-v">Scroll wheel (desktop) or pinch (mobile). Min/max zoom limits set per model.</div></div>
+      <div class="dr"><div class="dr-k">Details</div><div class="dr-v">Preset camera position focusing on joinery, grain detail, or hardware close-up.</div></div>
+      <div class="dr"><div class="dr-k">Reset</div><div class="dr-v">Double-tap or double-click returns to default angle. Smooth 500ms transition.</div></div>
+      <div class="dr"><div class="dr-k">Lighting</div><div class="dr-v">Environment lighting matches Patina warm-white. No user-adjustable lighting in v1.</div></div>
+    </div>
+
+    <div>
+      <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">Edit Mode Gallery</div>
+      <div class="dr"><div class="dr-k">Reorder</div><div class="dr-v">Drag handle (⠿) on each thumbnail. Drop to reorder. First position automatically becomes Hero.</div></div>
+      <div class="dr"><div class="dr-k">Upload</div><div class="dr-v">Drag files onto upload zone or click to browse. Multiple files accepted. Auto-detects type by EXIF and aspect ratio.</div></div>
+      <div class="dr"><div class="dr-k">Tag</div><div class="dr-v">Click "Retag" on hover → dropdown: Hero, Lifestyle, Detail, Material, Maker. Tags determine where images appear.</div></div>
+      <div class="dr"><div class="dr-k">Set Hero</div><div class="dr-v">Click "★ Set Hero" on any non-hero image. Swaps positions with current hero automatically.</div></div>
+      <div class="dr"><div class="dr-k">Remove</div><div class="dr-v">Click "Remove" → confirmation toast with 5-second undo. Soft delete initially, permanent after 30 days.</div></div>
+      <div class="dr"><div class="dr-k">Requirements</div><div class="dr-v">Minimum 2000×2000px. JPG/PNG/WebP. Max 5MB per image. System auto-generates responsive sizes.</div></div>
+
+      <div class="sm"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+
+      <div class="h3" style="margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--su)">3D Model Management</div>
+      <div class="dr"><div class="dr-k">Formats</div><div class="dr-v">.usdz for iOS AR Quick Look. .glb for Three.js web viewer. Both required for full coverage.</div></div>
+      <div class="dr"><div class="dr-k">Upload</div><div class="dr-v">Drag-and-drop onto dedicated 3D card. Auto-detects format. Validates polygon count and file size.</div></div>
+      <div class="dr"><div class="dr-k">Scale Check</div><div class="dr-v">System compares model bounding box against entered spec dimensions. Flags mismatches with terracotta warning.</div></div>
+      <div class="dr"><div class="dr-k">Preview</div><div class="dr-v">"Preview AR" opens on-device Quick Look. "Preview Web" opens inline Three.js viewer within the edit page.</div></div>
+      <div class="dr"><div class="dr-k">Texture</div><div class="dr-v">PBR workflow required. System checks for baseColor, metallic, roughness, and normal maps. Flags missing maps.</div></div>
+      <div class="dr"><div class="dr-k">Limits</div><div class="dr-v">Max 50k polygons. Max 50MB per model. 4K textures for hero models, 2K for web-optimized.</div></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============================== CLOSING ============================== -->
+<section class="fade">
+<div class="w">
+  <div class="st"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <h2 style="margin-top:2rem;margin-bottom:1.5rem">What makes this page <em>work.</em></h2>
+  <div class="two" style="gap:2rem">
+    <div>
+      <p class="bd" style="margin-bottom:1.5rem"><strong>The gallery is an experience, not a grid.</strong> Full-bleed hero that fills the viewport. Thumbnail strip for quick navigation. 3D viewer accessible in one tap without leaving the page. Material close-ups as a separate browsable section. Eight images tell a complete visual story: hero angle, alternate view, joinery detail, grain close-up, room context, scale reference, 3D model, and maker workshop.</p>
+      <p class="bd"><strong>Edit mode is the same page.</strong> No separate admin form. The designer toggles a switch and the same beautiful layout gains editing capabilities — dashed underlines on text, drag handles on images, upload zones where gaps exist. The typography never changes. What Leah edits is precisely what the client will see.</p>
+    </div>
+    <div>
+      <p class="bd" style="margin-bottom:1.5rem"><strong>3D models are first-class media.</strong> Not a link to a separate viewer — an integrated experience within the product page. The web viewer uses Three.js with PBR materials matching the photography lighting. AR launches natively on iOS via USDZ Quick Look. Both models are managed alongside images in the same gallery grid, with polygon count, texture quality, and scale verification built into the upload flow.</p>
+      <p class="bd"><strong>The maker story earns the price.</strong> At $4,200, a dining table needs justification beyond specifications. The maker story section — workshop photo, founding year, sourcing philosophy, craft process — transforms a price tag into a narrative. The client isn't buying a table. They're investing in a piece of a 56-year-old workshop tradition that will outlive them. The page structure puts this story where it belongs: after the visual and emotional hook, before the specifications and logistics.</p>
+    </div>
+  </div>
+
+  <div class="sm" style="margin-top:3rem"><div class="s"></div><div class="s"></div><div class="s"></div></div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2rem;flex-wrap:wrap;gap:1rem">
+    <div><div style="font-family:var(--fd);font-weight:400;font-size:1.05rem">Patina</div><div style="font-family:var(--fd);font-style:italic;font-size:0.82rem;color:var(--ao)">Where Time Adds Value</div></div>
+    <div class="ms">Product Detail Page Design v1.0 · March 2026 · Kody & Leah</div>
+  </div>
+</div>
+</section>
+
+<script>
+const f=document.querySelectorAll('.fade');
+const o=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('vis')})},{threshold:0.08,rootMargin:'0px 0px -40px 0px'});
+f.forEach(s=>o.observe(s));
+</script>
+</body>
+</html>

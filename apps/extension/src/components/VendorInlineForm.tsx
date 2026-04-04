@@ -55,22 +55,22 @@ function CollapsibleSection({
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div className="border border-patina-clay-beige/30 rounded-lg overflow-hidden">
+    <div className="border border-pearl rounded-md overflow-hidden">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-2 bg-patina-soft-cream/50 hover:bg-patina-soft-cream transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2 bg-off-white hover:bg-pearl/40 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-patina-charcoal">{title}</span>
+          <span className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak">{title}</span>
           {badge && (
-            <span className="px-1.5 py-0.5 text-[10px] bg-patina-sage-green/20 text-patina-sage-green rounded-full">
+            <span className="px-1.5 py-0.5 font-mono text-[0.55rem] bg-sage/20 text-sage rounded-[3px]">
               {badge}
             </span>
           )}
         </div>
         <svg
-          className={`w-4 h-4 text-patina-mocha-brown transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`w-4 h-4 text-aged-oak transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -78,7 +78,7 @@ function CollapsibleSection({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      {isOpen && <div className="p-3 space-y-3 bg-white">{children}</div>}
+      {isOpen && <div className="p-3 space-y-3 bg-surface">{children}</div>}
     </div>
   );
 }
@@ -103,9 +103,9 @@ function StoryTextArea({
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <label className="text-xs text-patina-mocha-brown">{label}</label>
+        <label className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak">{label}</label>
         <span
-          className={`text-[10px] ${isNearLimit ? 'text-amber-600' : 'text-patina-mocha-brown/50'}`}
+          className={`font-mono text-[0.55rem] ${isNearLimit ? 'text-golden-hour' : 'text-aged-oak/50'}`}
         >
           {charCount}/{maxLength}
         </span>
@@ -115,9 +115,9 @@ function StoryTextArea({
         onChange={(e) => onChange(e.target.value.slice(0, maxLength))}
         placeholder={placeholder}
         rows={2}
-        className="w-full px-2 py-1.5 text-sm bg-white border border-patina-clay-beige/50 rounded
-                   focus:border-patina-mocha-brown focus:ring-1 focus:ring-patina-mocha-brown
-                   placeholder-patina-mocha-brown/40 resize-none"
+        className="w-full px-2 py-1.5 text-[0.88rem] bg-surface border border-pearl rounded-[3px]
+                   focus:border-clay focus:ring-1 focus:ring-clay
+                   placeholder-aged-oak resize-none"
       />
     </div>
   );
@@ -202,55 +202,55 @@ export function VendorInlineForm({ initialData, onSubmit, onSkip }: VendorInline
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-3 bg-patina-soft-cream rounded-lg space-y-3 shadow-patina-sm">
+    <form onSubmit={handleSubmit} className="p-3 bg-off-white rounded-md border border-pearl space-y-3 shadow-sm">
       <div className="flex items-center gap-2 mb-2">
-        <svg className="w-4 h-4 text-patina-mocha-brown" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-aged-oak" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
         </svg>
-        <h4 className="text-sm font-medium text-patina-charcoal">New Vendor</h4>
+        <h4 className="font-display font-medium text-[1.1rem] text-charcoal">New Vendor</h4>
       </div>
 
       {/* Name & Website row */}
       <div className="flex flex-col gap-2 sm:grid sm:grid-cols-2">
         <div>
-          <label className="block text-xs text-patina-mocha-brown mb-1">Name *</label>
+          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">Name *</label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Vendor name"
-            className="w-full px-2 py-1.5 text-sm bg-white border border-patina-clay-beige/50 rounded
-                     focus:border-patina-mocha-brown focus:ring-1 focus:ring-patina-mocha-brown
-                     placeholder-patina-mocha-brown/40"
+            className="w-full px-2 py-1.5 text-[0.88rem] bg-surface border border-pearl rounded-[3px]
+                     focus:border-clay focus:ring-1 focus:ring-clay
+                     placeholder-aged-oak"
           />
         </div>
         <div>
-          <label className="block text-xs text-patina-mocha-brown mb-1">Website *</label>
+          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">Website *</label>
           <input
             type="text"
             value={website}
             onChange={(e) => setWebsite(e.target.value)}
             placeholder="www.example.com"
-            className="w-full px-2 py-1.5 text-sm bg-white border border-patina-clay-beige/50 rounded
-                     focus:border-patina-mocha-brown focus:ring-1 focus:ring-patina-mocha-brown
-                     placeholder-patina-mocha-brown/40"
+            className="w-full px-2 py-1.5 text-[0.88rem] bg-surface border border-pearl rounded-[3px]
+                     focus:border-clay focus:ring-1 focus:ring-clay
+                     placeholder-aged-oak"
           />
         </div>
       </div>
 
       {/* Market Position radio buttons */}
       <div>
-        <label className="block text-xs text-patina-mocha-brown mb-1.5">Market Position</label>
+        <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1.5">Market Position</label>
         <div className="grid grid-cols-2 gap-1 sm:flex sm:gap-1">
           {MARKET_POSITIONS.map((pos) => (
             <button
               key={pos.value}
               type="button"
               onClick={() => setMarketPosition(marketPosition === pos.value ? '' : pos.value)}
-              className={`sm:flex-1 px-2 py-1.5 text-xs rounded transition-colors
+              className={`sm:flex-1 px-2 py-1.5 text-[0.78rem] font-medium rounded-[3px] transition-colors
                        ${marketPosition === pos.value
-                         ? 'bg-patina-mocha-brown text-white shadow-patina-sm'
-                         : 'bg-white border border-patina-clay-beige/50 text-patina-charcoal hover:border-patina-mocha-brown'
+                         ? 'bg-charcoal text-off-white shadow-sm'
+                         : 'bg-surface border border-pearl text-charcoal hover:border-clay'
                        }`}
             >
               {pos.label}
@@ -261,13 +261,13 @@ export function VendorInlineForm({ initialData, onSubmit, onSkip }: VendorInline
 
       {/* Category dropdown */}
       <div>
-        <label className="block text-xs text-patina-mocha-brown mb-1">Category</label>
+        <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">Category</label>
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="w-full px-2 py-1.5 text-sm bg-white border border-patina-clay-beige/50 rounded
-                   focus:border-patina-mocha-brown focus:ring-1 focus:ring-patina-mocha-brown
-                   text-patina-charcoal"
+          className="w-full px-2 py-1.5 text-[0.88rem] bg-surface border border-pearl rounded-[3px]
+                   focus:border-clay focus:ring-1 focus:ring-clay
+                   text-charcoal"
         >
           <option value="">Select category...</option>
           {CATEGORIES.map((cat) => (
@@ -318,7 +318,7 @@ export function VendorInlineForm({ initialData, onSubmit, onSkip }: VendorInline
       >
         {/* Certifications */}
         <div>
-          <label className="block text-xs text-patina-mocha-brown mb-1.5">Certifications</label>
+          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1.5">Certifications</label>
           <CertificationChips
             selected={certifications}
             onChange={setCertifications}
@@ -328,17 +328,17 @@ export function VendorInlineForm({ initialData, onSubmit, onSkip }: VendorInline
 
         {/* Ownership */}
         <div>
-          <label className="block text-xs text-patina-mocha-brown mb-1.5">Ownership</label>
+          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1.5">Ownership</label>
           <div className="grid grid-cols-2 gap-1 sm:flex sm:gap-1">
             {OWNERSHIP_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
                 onClick={() => setOwnershipType(ownershipType === opt.value ? '' : opt.value)}
-                className={`sm:flex-1 px-2 py-1.5 text-xs rounded transition-colors
+                className={`sm:flex-1 px-2 py-1.5 text-[0.78rem] font-medium rounded-[3px] transition-colors
                          ${ownershipType === opt.value
-                           ? 'bg-patina-mocha-brown text-white shadow-patina-sm'
-                           : 'bg-white border border-patina-clay-beige/50 text-patina-charcoal hover:border-patina-mocha-brown'
+                           ? 'bg-charcoal text-off-white shadow-sm'
+                           : 'bg-surface border border-pearl text-charcoal hover:border-clay'
                          }`}
               >
                 {opt.label}
@@ -349,15 +349,15 @@ export function VendorInlineForm({ initialData, onSubmit, onSkip }: VendorInline
 
         {/* Made In */}
         <div>
-          <label className="block text-xs text-patina-mocha-brown mb-1">Made In</label>
+          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">Made In</label>
           <input
             type="text"
             value={madeIn}
             onChange={(e) => setMadeIn(e.target.value)}
             placeholder="USA, Italy, North Carolina..."
-            className="w-full px-2 py-1.5 text-sm bg-white border border-patina-clay-beige/50 rounded
-                     focus:border-patina-mocha-brown focus:ring-1 focus:ring-patina-mocha-brown
-                     placeholder-patina-mocha-brown/40"
+            className="w-full px-2 py-1.5 text-[0.88rem] bg-surface border border-pearl rounded-[3px]
+                     focus:border-clay focus:ring-1 focus:ring-clay
+                     placeholder-aged-oak"
           />
         </div>
       </CollapsibleSection>
@@ -367,10 +367,10 @@ export function VendorInlineForm({ initialData, onSubmit, onSkip }: VendorInline
         <button
           type="submit"
           disabled={!isValid || isSubmitting}
-          className={`flex-1 px-3 py-1.5 text-sm font-medium rounded transition-all
+          className={`flex-1 px-3 py-1.5 text-[0.85rem] font-medium rounded-[3px] transition-all
                    ${isValid && !isSubmitting
-                     ? 'bg-patina-mocha-brown text-white hover:bg-patina-charcoal shadow-patina-sm hover:shadow-patina-md'
-                     : 'bg-patina-clay-beige/50 text-patina-mocha-brown/50 cursor-not-allowed'
+                     ? 'bg-charcoal text-off-white hover:bg-mocha shadow-sm'
+                     : 'bg-pearl text-aged-oak cursor-not-allowed'
                    }`}
         >
           {isSubmitting ? 'Creating...' : 'Create & Link'}
@@ -379,8 +379,8 @@ export function VendorInlineForm({ initialData, onSubmit, onSkip }: VendorInline
           type="button"
           onClick={onSkip}
           disabled={isSubmitting}
-          className="px-3 py-1.5 text-sm text-patina-mocha-brown hover:text-patina-charcoal
-                   hover:bg-white rounded transition-colors"
+          className="px-3 py-1.5 text-[0.85rem] text-aged-oak hover:text-charcoal
+                   transition-colors"
         >
           Skip
         </button>
