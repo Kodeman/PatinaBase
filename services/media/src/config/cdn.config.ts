@@ -187,7 +187,20 @@ function handler(event) {
 `;
 
 /**
- * Terraform configuration for CloudFront distribution
+ * Cloudflare R2 storage pricing (per month)
+ */
+export const r2Pricing = {
+  storage: 0.015,           // $/GB/month
+  classAOps: 4.5 / 1e6,    // $/op (write, list) — $4.50 per million
+  classBOps: 0.36 / 1e6,   // $/op (read) — $0.36 per million
+  egress: 0,                // $0 — zero egress fees
+  freeStorage: 10,          // 10 GB/month free
+  freeClassA: 1e6,          // 1M free Class A ops/month
+  freeClassB: 10e6,         // 10M free Class B ops/month
+};
+
+/**
+ * Terraform configuration for CloudFront distribution (legacy — kept for reference)
  */
 export const terraformCloudFrontConfig = `
 # CloudFront Distribution for Patina Media Assets

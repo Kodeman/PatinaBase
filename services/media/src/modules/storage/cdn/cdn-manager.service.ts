@@ -14,6 +14,7 @@ import {
   CachePolicy,
 } from './cdn-provider.interface';
 import { CloudFrontCDNProvider } from './cloudfront-cdn.provider';
+import { CloudflareCDNProvider } from './cloudflare-cdn.provider';
 
 export interface DeliveryOptimization {
   adaptiveBitrate: boolean;
@@ -41,8 +42,12 @@ export class CDNManagerService {
   constructor(
     private configService: ConfigService,
     private cloudFrontProvider: CloudFrontCDNProvider,
+    private cloudflareProvider: CloudflareCDNProvider,
   ) {
-    this.providers = new Map([[CDNProvider.CLOUDFRONT, cloudFrontProvider]]);
+    this.providers = new Map<CDNProvider, ICDNProvider>([
+      [CDNProvider.CLOUDFRONT, cloudFrontProvider],
+      [CDNProvider.CLOUDFLARE, cloudflareProvider],
+    ]);
 
     this.activeProvider =
       (configService.get('CDN_PROVIDER') as CDNProvider) || CDNProvider.CLOUDFRONT;

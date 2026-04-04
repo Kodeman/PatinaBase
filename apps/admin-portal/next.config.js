@@ -61,6 +61,11 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'objectstorage.*.oraclecloud.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'cdn.patina.cloud',
+        pathname: '/**',
+      },
     ],
     formats: ['image/avif', 'image/webp'],
   },

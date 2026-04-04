@@ -91,11 +91,15 @@ ingress:
   # INTERNAL TOOLS (Protect with Cloudflare Access)
   # ---------------------------------------------------------------------------
 
-  # MinIO Console (Object Storage Admin)
+  # MinIO Console (Object Storage Admin) — local dev only
+  # Production uses Cloudflare R2 (managed via Cloudflare dashboard)
   - hostname: storage-admin.patina.cloud
     service: http://localhost:9001
     originRequest:
       noTLSVerify: true
+
+  # CDN (cdn.patina.cloud) is a Cloudflare R2 custom domain —
+  # it routes directly to R2 public buckets, no tunnel needed.
 
   # ---------------------------------------------------------------------------
   # DATABASE (TCP tunnel for CLI migrations/type generation)

@@ -12,6 +12,7 @@ export enum StorageTier {
 
 export enum StorageProvider {
   S3 = 'S3',
+  R2 = 'R2',
   GCS = 'GCS',
   AZURE = 'AZURE',
   OCI = 'OCI',

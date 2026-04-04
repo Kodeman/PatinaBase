@@ -13,6 +13,7 @@ import {
   StorageObject,
 } from './storage-provider.interface';
 import { S3StorageProvider } from './providers/s3-storage.provider';
+import { R2StorageProvider } from './providers/r2-storage.provider';
 import { OCIStorageService } from './oci-storage.service';
 import * as crypto from 'crypto';
 
@@ -58,15 +59,20 @@ export class MultiStorageService {
   constructor(
     private configService: ConfigService,
     private s3Provider: S3StorageProvider,
+    private r2Provider: R2StorageProvider,
     private ociProvider: OCIStorageService,
   ) {
-    this.providers = new Map([
+    this.providers = new Map<StorageProvider, IStorageProvider>([
       [StorageProvider.S3, s3Provider],
+      [StorageProvider.R2, r2Provider],
       // [StorageProvider.OCI, ociProvider], // Wrapped separately
     ]);
 
+    const defaultProvider =
+      (configService.get('STORAGE_PROVIDER') as StorageProvider) || StorageProvider.S3;
+
     this.config = {
-      defaultProvider: StorageProvider.S3,
+      defaultProvider,
       buckets: {
         raw: configService.get('STORAGE_BUCKET_RAW', 'patina-raw'),
         processed: configService.get('STORAGE_BUCKET_PROCESSED', 'patina-processed'),
@@ -450,6 +456,13 @@ export class MultiStorageService {
   }
 
   private calculateStorageCost(tier: StorageTier, sizeBytes: number): number {
+    const sizeGB = sizeBytes / (1024 * 1024 * 1024);
+
+    if (this.config.defaultProvider === StorageProvider.R2) {
+      // Cloudflare R2: $0.015/GB/mo, $0 egress
+      return sizeGB * 0.015;
+    }
+
     // AWS S3 pricing per GB per month (approximate)
     const costPerGB: Record<StorageTier, number> = {
       [StorageTier.HOT]: 0.023,
@@ -458,7 +471,6 @@ export class MultiStorageService {
       [StorageTier.ARCHIVE]: 0.00099,
     };
 
-    const sizeGB = sizeBytes / (1024 * 1024 * 1024);
     return sizeGB * costPerGB[tier];
   }
 
