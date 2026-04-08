@@ -58,6 +58,8 @@ services:
       - huge_pages=try
       - '-c'
       - log_min_duration_statement=1000
+      - '-c'
+      - shared_preload_libraries=pg_net
     environment:
       POSTGRES_HOST: /var/run/postgresql
       PGPORT: '${POSTGRES_PORT:-5432}'

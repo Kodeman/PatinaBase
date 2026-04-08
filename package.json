@@ -34,6 +34,12 @@
     "supabase:stop": "cd supabase && supabase stop",
     "supabase:reset": "cd supabase && supabase db reset",
     "supabase:migration:new": "cd supabase && supabase migration new",
+    "supabase:remote:bootstrap": "./scripts/remote-db.sh bootstrap",
+    "supabase:remote:push": "./scripts/remote-db.sh push",
+    "supabase:remote:pull": "./scripts/remote-db.sh pull",
+    "supabase:remote:diff": "./scripts/remote-db.sh diff",
+    "supabase:remote:types": "./scripts/remote-db.sh types",
+    "supabase:remote:psql": "./scripts/remote-db.sh psql",
     "prisma:generate": "pnpm --filter @patina/orders exec prisma generate && pnpm --filter @patina/media exec prisma generate && pnpm --filter @patina/projects exec prisma generate",
     "prisma:push": "pnpm --filter @patina/orders exec prisma db push && pnpm --filter @patina/media exec prisma db push && pnpm --filter @patina/projects exec prisma db push"
   },
