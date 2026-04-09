@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, RefObject } from 'react'
+import { useEffect, useState, useRef, type RefObject } from 'react'
 
 export interface ScrollProgress {
   scrollY: number
@@ -32,37 +32,9 @@ export function useScrollProgress(options: UseScrollProgressOptions = {}): Scrol
     velocity: 0,
   })
 
-  const [lastScrollY, setLastScrollY] = useState(0)
-  const [lastTimestamp, setLastTimestamp] = useState(Date.now())
-
-  const handleScroll = useCallback(() => {
-    const element = container?.current || document.documentElement
-    const scrollY = container?.current ? element.scrollTop : window.scrollY
-
-    const scrollHeight = element.scrollHeight - element.clientHeight
-    const scrollPercentage = scrollHeight > 0 ? (scrollY / scrollHeight) * 100 : 0
-
-    // Calculate velocity (pixels per ms)
-    const now = Date.now()
-    const timeDelta = now - lastTimestamp
-    const scrollDelta = scrollY - lastScrollY
-    const velocity = timeDelta > 0 ? Math.abs(scrollDelta / timeDelta) : 0
-
-    // Determine direction
-    let direction: 'up' | 'down' | 'idle' = 'idle'
-    if (scrollDelta > 1) direction = 'down'
-    else if (scrollDelta < -1) direction = 'up'
-
-    setProgress({
-      scrollY,
-      scrollPercentage,
-      direction,
-      velocity,
-    })
-
-    setLastScrollY(scrollY)
-    setLastTimestamp(now)
-  }, [container, lastScrollY, lastTimestamp])
+  // Use refs for mutable tracking values to avoid re-creating the callback
+  const lastScrollYRef = useRef(0)
+  const lastTimestampRef = useRef(Date.now())
 
   useEffect(() => {
     const element = container?.current
@@ -70,6 +42,35 @@ export function useScrollProgress(options: UseScrollProgressOptions = {}): Scrol
 
     let rafId: number | null = null
     let lastCall = 0
+
+    const handleScroll = () => {
+      const el = container?.current || document.documentElement
+      const scrollY = container?.current ? el.scrollTop : window.scrollY
+
+      const scrollHeight = el.scrollHeight - el.clientHeight
+      const scrollPercentage = scrollHeight > 0 ? (scrollY / scrollHeight) * 100 : 0
+
+      // Calculate velocity (pixels per ms)
+      const now = Date.now()
+      const timeDelta = now - lastTimestampRef.current
+      const scrollDelta = scrollY - lastScrollYRef.current
+      const velocity = timeDelta > 0 ? Math.abs(scrollDelta / timeDelta) : 0
+
+      // Determine direction
+      let direction: 'up' | 'down' | 'idle' = 'idle'
+      if (scrollDelta > 1) direction = 'down'
+      else if (scrollDelta < -1) direction = 'up'
+
+      setProgress({
+        scrollY,
+        scrollPercentage,
+        direction,
+        velocity,
+      })
+
+      lastScrollYRef.current = scrollY
+      lastTimestampRef.current = now
+    }
 
     const throttledScroll = () => {
       const now = Date.now()
@@ -102,7 +103,7 @@ export function useScrollProgress(options: UseScrollProgressOptions = {}): Scrol
       scrollElement.removeEventListener('scroll', startThrottledScroll)
       stopThrottledScroll()
     }
-  }, [container, handleScroll, throttle])
+  }, [container, throttle])
 
   return progress
 }

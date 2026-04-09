@@ -51,3 +51,5 @@ infra/coolify/.env.coolify
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+infra/seed-credentials.md

@@ -22,8 +22,10 @@ export default function PortalLayout({
       <MessagesPanelProvider>
         <ToastProvider>
           <div className="flex min-h-screen flex-col bg-[var(--bg-primary)]">
-            <TopBar />
-            <SubNav />
+            <Suspense fallback={null}>
+              <TopBar />
+              <SubNav />
+            </Suspense>
 
             <main className="flex-1 pb-24 pt-8 md:pb-8">
               <PageContainer>

@@ -37,7 +37,7 @@ export interface ClientNurtureTouchpoint {
   product?: {
     id: string;
     name: string | null;
-    primary_image_url: string | null;
+    images: string[] | null;
   } | null;
 }
 
@@ -81,7 +81,7 @@ export function useNurtureTouchpoints(filters?: NurtureFilters) {
           product:products!product_id(
             id,
             name,
-            primary_image_url
+            images
           )
         `)
         .order('suggested_date', { ascending: true });

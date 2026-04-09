@@ -174,7 +174,7 @@ export const ImmersiveTimeline = React.forwardRef<HTMLDivElement, ImmersiveTimel
     }, [cardAnimation])
 
     return (
-      <div ref={containerRef} className="relative min-h-screen">
+      <div ref={containerRef} className="relative">
         {/* Background overlay for scroll animations */}
         {scrollAnimations?.background && (
           <div

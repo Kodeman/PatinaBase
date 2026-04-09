@@ -74,7 +74,7 @@ export default function MessagesPage() {
         <SearchInput
           value={search}
           onChange={setSearch}
-          placeholder="Search conversations\u2026"
+          placeholder="Search conversations…"
         />
       </div>
 

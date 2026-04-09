@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.models import CurrentModelsResponse, HealthResponse, ModelInfo
-from app.api.v1 import feedback, recommendations, rules, embeddings, explain, batch
+from app.api.v1 import feedback, recommendations, rules, embeddings, explain, batch, pipelines
 from app.cache.redis_cache import RedisCache
 from app.config import get_settings
 from app.observability.tracing import setup_tracing, instrument_app
@@ -100,6 +100,7 @@ app.include_router(rules.router)
 app.include_router(embeddings.router)
 app.include_router(explain.router)
 app.include_router(batch.router)
+app.include_router(pipelines.router)
 
 
 # Health endpoints

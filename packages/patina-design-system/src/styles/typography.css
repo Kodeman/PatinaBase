@@ -1,0 +1,133 @@
+/* ===== Patina Shared Typography System =====
+ *
+ * Consumed by all portals. Each portal defines the CSS custom properties:
+ *   --font-display  (serif display face, e.g. Playfair Display)
+ *   --font-body     (sans-serif body face, e.g. Inter)
+ *   --font-meta     (monospace meta face, e.g. DM Mono)
+ *   --text-primary, --text-body, --text-muted  (color tokens)
+ *
+ * NOTE: Not wrapped in `@layer components { … }` because this file is
+ * pulled in via `@import` from each portal's globals.css, and postcss-import
+ * processes it as a standalone file — Tailwind then complains that
+ * `@tailwind components;` is missing. Defined at root instead; Tailwind
+ * utilities still override these via higher specificity.
+ */
+
+  /* ——— Display / Heading ——— */
+
+  .type-page-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+
+  .type-section-head {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+
+  .type-item-name {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 1.3rem;
+    line-height: 1.4;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+
+  .type-data-large {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 2.4rem;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+
+  .type-data-unit {
+    font-family: var(--font-body);
+    font-weight: 400;
+    font-size: 0.85rem;
+    line-height: 1;
+    color: var(--text-muted);
+  }
+
+  /* ——— Body ——— */
+
+  .type-body {
+    font-family: var(--font-body);
+    font-weight: 400;
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--text-body);
+  }
+
+  .type-body-small {
+    font-family: var(--font-body);
+    font-weight: 400;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: var(--text-body);
+  }
+
+  /* Prose variant — constrains paragraph width */
+  .prose-body {
+    max-width: 640px;
+  }
+
+  /* ——— Labels ——— */
+
+  .type-label {
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--text-primary);
+  }
+
+  .type-label-secondary {
+    font-family: var(--font-body);
+    font-weight: 400;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+  }
+
+  /* ——— Meta / Mono ——— */
+
+  .type-meta {
+    font-family: var(--font-meta);
+    font-weight: 400;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .type-meta-small {
+    font-family: var(--font-meta);
+    font-weight: 400;
+    font-size: 0.63rem;
+    line-height: 1.5;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  /* ——— Interactive ——— */
+
+  .type-btn-text {
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 0.85rem;
+    line-height: 1;
+    letter-spacing: 0.01em;
+  }

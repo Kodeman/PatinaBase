@@ -1,8 +1,6 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { motion } from 'framer-motion';
-
 import { logEngagementAction } from '@/app/projects/[projectId]/actions';
 import type { MilestoneDetail } from '@/types/project';
 import { MilestoneCard } from './milestone-card';
@@ -42,11 +40,8 @@ export function ProjectTimeline({ projectId, milestones }: ProjectTimelineProps)
   return (
     <div className="relative pb-24">
       {/* Thin hairline timeline spine */}
-      <motion.div
+      <div
         className="absolute left-[7px] top-0 hidden h-full w-[1px] bg-[var(--border-default)] sm:block"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.4, delay: 0.1 }}
       />
       <div className="space-y-0 sm:pl-10">
         {milestones.map((milestone) => (

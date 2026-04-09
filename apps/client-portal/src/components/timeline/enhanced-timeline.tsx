@@ -2,19 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ImmersiveTimeline,
-  type TimelineSegmentData,
-  MediaCarousel,
+  PhaseTimeline,
+  type PhaseTimelineItem,
   ApprovalTheater,
   ProjectCompletionCelebration,
 } from '@patina/design-system';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, CheckCircle, Clock, AlertCircle, XCircle, FileText, MessageSquare, Camera } from 'lucide-react';
+import { CheckCircle, FileText } from 'lucide-react';
+import { getPhaseLabel, getPhaseSlugFromLabel } from '@patina/types';
 
 import { StrataMark } from '@/components/strata-mark';
 import type { MilestoneDetail } from '@/types/project';
 import { useWebSocket, useMilestoneWebSocket } from '@/lib/websocket';
-import { WebSocketMilestoneUpdate, WebSocketMessage, WebSocketActivityUpdate } from '@/lib/websocket';
+import { WebSocketMilestoneUpdate } from '@/lib/websocket';
 import { submitApprovalAction, postMessageAction } from '@/app/projects/[projectId]/actions';
 import { formatRelativeTime, formatCurrency } from '@/lib/utils/format';
 
@@ -24,78 +23,36 @@ interface EnhancedTimelineProps {
   onMilestoneUpdate?: (milestone: MilestoneDetail) => void;
 }
 
-// Map milestone status to timeline segment status
-const mapMilestoneStatus = (status: string): TimelineSegmentData['status'] => {
+// Map milestone status to PhaseTimeline status
+function mapStatus(status: string): PhaseTimelineItem['status'] {
   switch (status) {
-    case 'completed':
-      return 'completed';
-    case 'in_progress':
-    case 'attention':
-      return 'active';
-    case 'blocked':
-      return 'blocked';
-    default:
-      return 'upcoming';
+    case 'completed': return 'completed';
+    case 'in_progress': return 'active';
+    case 'attention': return 'active';
+    case 'blocked': return 'blocked';
+    default: return 'pending';
   }
-};
+}
 
-// Map milestone to timeline segment data
-const mapMilestoneToSegment = (milestone: MilestoneDetail): TimelineSegmentData => {
+// Convert milestones to PhaseTimelineItems
+function milestoneToPhase(milestone: MilestoneDetail): PhaseTimelineItem {
+  // Try to resolve the phase field to a canonical slug
+  const phaseSlug = milestone.phase
+    ? getPhaseSlugFromLabel(milestone.phase) || milestone.phase.toLowerCase().replace(/\s+/g, '_')
+    : '';
+  // Use the canonical client label if we matched a slug, otherwise use the milestone title
+  const label = getPhaseLabel(phaseSlug, 'client') || milestone.title;
   return {
     id: milestone.id,
-    type: milestone.approval ? 'approval' : 'milestone',
-    status: mapMilestoneStatus(milestone.status),
-    title: milestone.title,
-    description: milestone.description,
-    date: milestone.targetDate,
-    media: [],
-    icon: getStatusIcon(milestone.status),
-    metadata: {
-      phase: milestone.phase,
-      progress: milestone.progressPercentage,
-      checklist: milestone.checklist,
-      documents: milestone.documents,
-      approval: milestone.approval,
-      messages: milestone.messages,
-      sequenceNumber: milestone.index + 1,
-      totalMilestones: undefined,
-    }
+    slug: phaseSlug,
+    label,
+    status: mapStatus(milestone.status),
+    startDate: milestone.startDate,
+    endDate: milestone.completionDate || milestone.targetDate,
+    progress: milestone.progressPercentage,
+    gateStatus: milestone.status === 'completed' ? 'passed' : undefined,
   };
-};
-
-// Get status icon based on milestone status
-const getStatusIcon = (status: string) => {
-  switch (status) {
-    case 'completed':
-      return <CheckCircle className="h-5 w-5 text-patina-sage" />;
-    case 'in_progress':
-      return <Clock className="h-5 w-5 text-patina-clay" />;
-    case 'attention':
-      return <AlertCircle className="h-5 w-5 text-patina-terracotta" />;
-    case 'blocked':
-      return <XCircle className="h-5 w-5 text-patina-terracotta" />;
-    default:
-      return <Calendar className="h-5 w-5 text-patina-aged-oak" />;
-  }
-};
-
-const statusLabel = (status: string) => {
-  switch (status) {
-    case 'completed': return 'Completed';
-    case 'active': return 'In Progress';
-    case 'blocked': return 'Blocked';
-    default: return 'Upcoming';
-  }
-};
-
-const statusTextClass = (status: string) => {
-  switch (status) {
-    case 'completed': return 'text-patina-sage';
-    case 'active': return 'text-patina-clay';
-    case 'blocked': return 'text-patina-terracotta';
-    default: return 'text-patina-aged-oak';
-  }
-};
+}
 
 export function EnhancedTimeline({ projectId, milestones: initialMilestones, onMilestoneUpdate }: EnhancedTimelineProps) {
   const [milestones, setMilestones] = useState<MilestoneDetail[]>(initialMilestones);
@@ -105,7 +62,7 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
   const [currentApproval, setCurrentApproval] = useState<any>(null);
 
   // WebSocket hooks
-  const { isConnected, onMilestoneUpdate: subscribeMilestoneUpdate, onMilestoneCompleted, onActivityUpdate } = useWebSocket();
+  const { isConnected, onMilestoneUpdate: subscribeMilestoneUpdate, onMilestoneCompleted } = useWebSocket();
   const activeMilestone = useMemo(() => milestones.find(m => m.id === activeMilestoneId), [milestones, activeMilestoneId]);
   const { messages: realtimeMessages } = useMilestoneWebSocket(activeMilestoneId || '');
 
@@ -127,7 +84,7 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
       }));
     });
 
-    const unsubscribeCompletion = onMilestoneCompleted((milestone: WebSocketMilestoneUpdate) => {
+    const unsubscribeCompletion = onMilestoneCompleted(() => {
       setShowCelebration(true);
       setTimeout(() => setShowCelebration(false), 5000);
     });
@@ -138,34 +95,29 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
     };
   }, [subscribeMilestoneUpdate, onMilestoneCompleted, onMilestoneUpdate]);
 
-  // Merge real-time messages with existing messages
+  // Merge real-time messages
   useEffect(() => {
     if (activeMilestoneId && realtimeMessages.length > 0) {
       setMilestones(prev => prev.map(m => {
         if (m.id === activeMilestoneId) {
           const existingIds = new Set(m.messages.map(msg => msg.id));
           const newMessages = realtimeMessages.filter(msg => !existingIds.has(msg.id));
-          return {
-            ...m,
-            messages: [...m.messages, ...newMessages]
-          };
+          return { ...m, messages: [...m.messages, ...newMessages] };
         }
         return m;
       }));
     }
   }, [realtimeMessages, activeMilestoneId]);
 
-  // Convert milestones to timeline segments
-  const segments = useMemo(() => {
-    return milestones.map(mapMilestoneToSegment);
+  // Convert milestones to phase items
+  const phases = useMemo(() => milestones.map(milestoneToPhase), [milestones]);
+
+  // Find active phase (first in_progress or attention milestone)
+  const defaultActiveId = useMemo(() => {
+    return milestones.find(m => m.status === 'in_progress' || m.status === 'attention')?.id;
   }, [milestones]);
 
-  // Handle segment change (when user scrolls to a new milestone)
-  const handleSegmentChange = useCallback((segment: TimelineSegmentData) => {
-    setActiveMilestoneId(segment.id);
-  }, []);
-
-  // Handle approval action
+  // Handle approval
   const handleApproval = useCallback(async (milestoneId: string, decision: 'approved' | 'rejected', comment?: string) => {
     const milestone = milestones.find(m => m.id === milestoneId);
     if (!milestone?.approval) return;
@@ -180,13 +132,7 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
 
       setMilestones(prev => prev.map(m => {
         if (m.id === milestoneId && m.approval) {
-          return {
-            ...m,
-            approval: {
-              ...m.approval,
-              status: decision === 'approved' ? 'approved' : 'needs_discussion'
-            }
-          };
+          return { ...m, approval: { ...m.approval, status: decision === 'approved' ? 'approved' : 'needs_discussion' } };
         }
         return m;
       }));
@@ -203,264 +149,151 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
     }
   }, [milestones, projectId]);
 
-  // Typography-first render for segments
-  const renderSegment = useCallback((segment: TimelineSegmentData) => {
-    const metadata = segment.metadata as any;
-    const isActive = segment.id === activeMilestoneId;
+  // Render expanded content for a phase
+  const renderExpandedContent = useCallback((phase: PhaseTimelineItem) => {
+    const milestone = milestones.find(m => m.id === phase.id);
+    if (!milestone) return null;
 
     return (
-      <div className={`py-6 transition ${isActive ? 'border-l-2 border-[var(--accent-primary)] pl-6' : 'border-b border-[var(--border-default)]'}`}>
-        {/* Header */}
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-start gap-3">
-            {segment.icon}
-            <div>
-              <h3 className="type-item-name">{segment.title}</h3>
-              <div className="flex flex-wrap items-center gap-3 mt-1">
-                <span className={`type-meta font-medium ${statusTextClass(segment.status)}`}>
-                  {statusLabel(segment.status)}
-                </span>
-                {metadata?.phase && <span className="type-meta">{metadata.phase}</span>}
-                {metadata?.sequenceNumber && (
-                  <span className="type-meta">
-                    Milestone {metadata.sequenceNumber}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          {segment.date && (
-            <span className="type-meta">
-              {formatRelativeTime(segment.date instanceof Date ? segment.date.toISOString() : segment.date)}
-            </span>
-          )}
-        </div>
+      <div className="space-y-0">
+        {/* Description */}
+        {milestone.description && (
+          <>
+            <p className="type-body-small py-4">{milestone.description}</p>
+            <StrataMark variant="micro" />
+          </>
+        )}
 
-        {/* Progress — thin line */}
-        {metadata?.progress !== undefined && (
-          <div className="mb-6">
-            <div className="flex justify-between mb-1">
-              <span className="type-meta">Progress</span>
-              <span className="font-heading text-lg font-bold text-[var(--text-primary)]">{metadata.progress}%</span>
-            </div>
-            <div className="h-[2px] bg-[var(--border-default)] overflow-hidden">
-              <motion.div
-                className="h-full bg-[var(--accent-primary)]"
-                initial={{ width: 0 }}
-                animate={{ width: `${metadata.progress}%` }}
-                transition={{ duration: 1, ease: 'easeOut' }}
-              />
-            </div>
+        {/* Checklist */}
+        {milestone.checklist.length > 0 && (
+          <div className="py-4">
+            <h4 className="type-meta mb-3">Progress checklist</h4>
+            {milestone.checklist.map((item) => (
+              <div key={item.id} className="flex items-center gap-2 border-b border-[var(--border-subtle)] py-2">
+                {item.completed ? (
+                  <CheckCircle className="h-4 w-4 text-patina-sage" />
+                ) : (
+                  <div className="h-4 w-4 rounded-full border border-[var(--border-default)]" />
+                )}
+                <span className={`text-sm ${item.completed ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-primary)]'}`}>
+                  {item.label}
+                </span>
+              </div>
+            ))}
+            <StrataMark variant="micro" />
           </div>
         )}
 
-        {/* All sections visible (no tabs) when active */}
-        {isActive && (
-          <div className="space-y-0">
-            {/* Description */}
-            {segment.description && (
-              <>
-                <p className="type-body-small py-4">{segment.description}</p>
-                <StrataMark variant="micro" />
-              </>
+        {/* Approval */}
+        {milestone.approval && milestone.approval.status === 'pending' && (
+          <div className="py-4 border-l-2 border-patina-terracotta pl-4">
+            <p className="type-meta text-patina-terracotta mb-2">Approval required</p>
+            <p className="type-body-small mb-3">{milestone.approval.summary}</p>
+            {milestone.approval.totalValue && (
+              <p className="type-data-large mb-3">
+                {formatCurrency(milestone.approval.totalValue, milestone.approval.currency || 'USD')}
+              </p>
             )}
+            <button
+              type="button"
+              onClick={() => {
+                setCurrentApproval({ milestoneId: milestone.id, ...milestone.approval });
+                setShowApprovalTheater(true);
+              }}
+              className="rounded-[3px] bg-patina-charcoal px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+            >
+              Review and Approve
+            </button>
+            <StrataMark variant="micro" />
+          </div>
+        )}
 
-            {/* Checklist */}
-            {metadata?.checklist && metadata.checklist.length > 0 && (
-              <div className="py-4">
-                <h4 className="type-meta mb-3">Progress checklist</h4>
-                {metadata.checklist.map((item: any) => (
-                  <div key={item.id} className="flex items-center gap-2 border-b border-[var(--border-subtle)] py-2">
-                    {item.completed ? (
-                      <CheckCircle className="h-4 w-4 text-patina-sage" />
-                    ) : (
-                      <div className="h-4 w-4 rounded-full border border-[var(--border-default)]" />
-                    )}
-                    <span className={`text-sm ${item.completed ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-primary)]'}`}>
-                      {item.title}
-                    </span>
+        {/* Documents */}
+        {milestone.documents.length > 0 && (
+          <div className="py-4">
+            <h4 className="type-meta mb-3">Documents</h4>
+            {milestone.documents.map((doc) => (
+              <a
+                key={doc.id}
+                href={doc.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 border-b border-[var(--border-subtle)] py-3 transition hover:bg-[rgba(196,165,123,0.04)]"
+              >
+                <FileText className="h-4 w-4 text-[var(--text-muted)]" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-[var(--text-primary)]">{doc.title}</p>
+                  {doc.description && <p className="type-meta-small mt-0.5">{doc.description}</p>}
+                </div>
+              </a>
+            ))}
+            <StrataMark variant="micro" />
+          </div>
+        )}
+
+        {/* Messages */}
+        {milestone.messages.length > 0 && (
+          <div className="py-4">
+            <h4 className="type-meta mb-3">Messages</h4>
+            <div className="space-y-0 max-h-96 overflow-y-auto">
+              {milestone.messages.map((message) => (
+                <div key={message.id} className="flex gap-3 border-b border-[var(--border-subtle)] py-3">
+                  <div className="h-8 w-8 rounded-full bg-[var(--border-default)] flex items-center justify-center text-xs font-medium text-[var(--text-muted)]">
+                    {message.authorName?.[0] || 'U'}
                   </div>
-                ))}
-                <StrataMark variant="micro" />
-              </div>
-            )}
-
-            {/* Approval */}
-            {metadata?.approval && metadata.approval.status === 'pending' && (
-              <div className="py-4 border-l-2 border-patina-terracotta pl-4">
-                <p className="type-meta text-patina-terracotta mb-2">Approval required</p>
-                <p className="type-body-small mb-3">{metadata.approval.description}</p>
-                {metadata.approval.value && (
-                  <p className="type-data-large mb-3">
-                    {formatCurrency(metadata.approval.value, metadata.approval.currency || 'USD')}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrentApproval({ milestoneId: segment.id, ...metadata.approval });
-                    setShowApprovalTheater(true);
-                  }}
-                  className="rounded-[3px] bg-patina-charcoal px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
-                >
-                  Review and Approve
-                </button>
-                <StrataMark variant="micro" />
-              </div>
-            )}
-
-            {/* Media */}
-            {segment.media && segment.media.length > 0 && (
-              <div className="py-4">
-                <h4 className="type-meta mb-3">Media</h4>
-                <MediaCarousel
-                  items={segment.media as any[]}
-                  autoPlay={0}
-                  showThumbnails
-                  className="rounded-[3px]"
-                />
-                <StrataMark variant="micro" />
-              </div>
-            )}
-
-            {/* Documents */}
-            {metadata?.documents && metadata.documents.length > 0 && (
-              <div className="py-4">
-                <h4 className="type-meta mb-3">Documents</h4>
-                {metadata.documents.map((doc: any) => (
-                  <a
-                    key={doc.id}
-                    href={doc.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 border-b border-[var(--border-subtle)] py-3 transition hover:bg-[rgba(196,165,123,0.04)]"
-                  >
-                    <FileText className="h-4 w-4 text-[var(--text-muted)]" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-[var(--text-primary)]">{doc.title}</p>
-                      {doc.description && (
-                        <p className="type-meta-small mt-0.5">{doc.description}</p>
-                      )}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-[var(--text-primary)]">{message.authorName}</span>
+                      <span className="type-meta-small">{formatRelativeTime(message.createdAt)}</span>
                     </div>
-                  </a>
-                ))}
-                <StrataMark variant="micro" />
-              </div>
-            )}
-
-            {/* Messages */}
-            {metadata?.messages && metadata.messages.length > 0 && (
-              <div className="py-4">
-                <h4 className="type-meta mb-3">Messages</h4>
-                <div className="space-y-0 max-h-96 overflow-y-auto">
-                  {metadata.messages.map((message: any) => (
-                    <div key={message.id} className="flex gap-3 border-b border-[var(--border-subtle)] py-3">
-                      <div className="h-8 w-8 rounded-full bg-[var(--border-default)] flex items-center justify-center text-xs font-medium text-[var(--text-muted)]">
-                        {message.authorName?.[0] || 'U'}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-[var(--text-primary)]">{message.authorName}</span>
-                          <span className="type-meta-small">
-                            {formatRelativeTime(message.createdAt)}
-                          </span>
-                        </div>
-                        <p className="type-body-small mt-1">{message.body}</p>
-                      </div>
-                    </div>
-                  ))}
+                    <p className="type-body-small mt-1">{message.body}</p>
+                  </div>
                 </div>
+              ))}
+            </div>
 
-                {/* Inline composer */}
-                <div className="border-t border-[var(--border-default)] pt-4 mt-4">
-                  <textarea
-                    className="w-full rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] resize-none focus-visible:focus-ring"
-                    rows={3}
-                    placeholder="Write a message..."
-                    onKeyDown={async (e) => {
-                      if (e.key === 'Enter' && e.ctrlKey) {
-                        const textarea = e.currentTarget;
-                        const message = textarea.value.trim();
-                        if (message) {
-                          await postMessageAction({
-                            projectId,
-                            threadId: segment.id,
-                            body: message
-                          });
-                          textarea.value = '';
-                        }
-                      }
-                    }}
-                  />
-                  <p className="type-meta-small mt-1">Press Ctrl+Enter to send</p>
-                </div>
-              </div>
-            )}
+            {/* Inline composer */}
+            <div className="border-t border-[var(--border-default)] pt-4 mt-4">
+              <textarea
+                className="w-full rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] resize-none focus-visible:focus-ring"
+                rows={3}
+                placeholder="Write a message..."
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter' && e.ctrlKey) {
+                    const textarea = e.currentTarget;
+                    const message = textarea.value.trim();
+                    if (message) {
+                      await postMessageAction({ projectId, threadId: milestone.id, body: message });
+                      textarea.value = '';
+                    }
+                  }
+                }}
+              />
+              <p className="type-meta-small mt-1">Press Ctrl+Enter to send</p>
+            </div>
           </div>
         )}
       </div>
     );
-  }, [activeMilestoneId, projectId]);
+  }, [milestones, projectId]);
 
   return (
     <div className="relative">
       {/* WebSocket Connection Indicator */}
-      <AnimatePresence>
-        {isConnected && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed top-4 right-4 z-50 flex items-center gap-2 type-meta text-patina-sage"
-          >
-            <div className="h-1.5 w-1.5 bg-patina-sage rounded-full animate-pulse" />
-            Live
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {isConnected && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 type-meta text-patina-sage">
+          <div className="h-1.5 w-1.5 bg-patina-sage rounded-full animate-pulse" />
+          Live
+        </div>
+      )}
 
-      {/* Main Timeline */}
-      <ImmersiveTimeline
-        segments={segments}
-        showProgress={true}
-        progressPosition="fixed-right"
-        enableKeyboardNav={true}
-        onSegmentChange={handleSegmentChange}
-        layout="wide"
-        spacing="comfortable"
-        renderSegment={renderSegment}
-        scrollAnimations={{
-          header: {
-            fadeOut: true,
-            fadeRange: [0, 200],
-            darkMode: true,
-            darkModeThreshold: 100,
-            opacity: 0,
-            easing: 'ease-out'
-          },
-          background: {
-            darkOverlay: true,
-            maxOpacity: 0.7,
-            gradient: 'linear-gradient(to bottom, rgba(0,0,0,0.8), rgba(0,0,0,0.4))',
-            transitionDuration: 300
-          },
-          cards: {
-            entrance: 'fade-scale-slide',
-            fadeFrom: 0,
-            scaleFrom: 0.95,
-            slideDistance: 20,
-            duration: 300,
-            easing: 'ease-out',
-            threshold: 0.25,
-            stagger: 50
-          },
-          expansion: {
-            method: 'height',
-            duration: 300,
-            easing: 'ease-in-out',
-            iconRotation: true
-          }
-        }}
+      {/* Phase Timeline */}
+      <PhaseTimeline
+        phases={phases}
+        activePhaseId={defaultActiveId}
+        onPhaseSelect={(phase) => setActiveMilestoneId(phase.id)}
+        renderExpandedContent={renderExpandedContent}
+        showProgressBar={true}
       />
 
       {/* Approval Theater Modal */}
@@ -479,12 +312,12 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
             description: currentApproval.description || '',
             type: 'design' as const,
             status: 'pending' as const,
-            costImpact: currentApproval.value ? {
-              amount: currentApproval.value,
+            costImpact: currentApproval.totalValue ? {
+              amount: currentApproval.totalValue,
               currency: currentApproval.currency || 'USD',
             } : undefined,
           }}
-          onApprove={(approvalId) => handleApproval(currentApproval.milestoneId, 'approved')}
+          onApprove={() => handleApproval(currentApproval.milestoneId, 'approved')}
         />
       )}
 

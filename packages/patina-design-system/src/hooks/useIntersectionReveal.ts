@@ -51,12 +51,14 @@ export function useIntersectionReveal<T extends HTMLElement = HTMLDivElement>(
   const [isVisible, setIsVisible] = useState(false)
   const [entry, setEntry] = useState<IntersectionObserverEntry | null>(null)
 
+  const isVisibleRef = useRef(false)
+
   useEffect(() => {
     const element = ref.current
     if (!element || disabled) return
 
     // If already visible and triggerOnce is true, don't observe
-    if (isVisible && triggerOnce) return
+    if (isVisibleRef.current && triggerOnce) return
 
     const observerThreshold = threshold ?? TRIGGER_THRESHOLDS[triggerPoint]
 
@@ -66,6 +68,7 @@ export function useIntersectionReveal<T extends HTMLElement = HTMLDivElement>(
         setEntry(entry)
 
         if (entry.isIntersecting) {
+          isVisibleRef.current = true
           setIsVisible(true)
 
           // Unobserve if triggerOnce
@@ -73,6 +76,7 @@ export function useIntersectionReveal<T extends HTMLElement = HTMLDivElement>(
             observer.unobserve(element)
           }
         } else if (!triggerOnce) {
+          isVisibleRef.current = false
           setIsVisible(false)
         }
       },
@@ -87,7 +91,7 @@ export function useIntersectionReveal<T extends HTMLElement = HTMLDivElement>(
     return () => {
       observer.disconnect()
     }
-  }, [triggerPoint, threshold, rootMargin, triggerOnce, disabled, isVisible])
+  }, [triggerPoint, threshold, rootMargin, triggerOnce, disabled])
 
   return [ref, isVisible, entry]
 }

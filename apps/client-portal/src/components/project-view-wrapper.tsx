@@ -4,6 +4,8 @@ import { WebSocketProvider } from '@/lib/websocket';
 import { EnhancedTimeline } from '@/components/timeline/enhanced-timeline';
 import { ProjectOverview } from '@/components/project-overview';
 import { ProjectScopeDetails } from '@/components/project-scope-details';
+import { BudgetOverview } from '@/components/budget-overview';
+import { FFEStatus } from '@/components/ffe-status';
 import { StrataMark } from '@/components/strata-mark';
 import type { MilestoneDetail } from '@/types/project';
 
@@ -31,9 +33,13 @@ export function ProjectViewWrapper({
       authToken={authToken}
       debug={process.env.NODE_ENV === 'development'}
     >
-      {showOverview && <ProjectOverview project={project} />}
+      {showOverview && <ProjectOverview project={project} milestones={milestones} />}
 
       {showOverview && <ProjectScopeDetails projectId={projectId} />}
+
+      {showOverview && <BudgetOverview projectId={projectId} />}
+
+      {showOverview && <FFEStatus projectId={projectId} />}
 
       {showOverview && <StrataMark variant="full" />}
 

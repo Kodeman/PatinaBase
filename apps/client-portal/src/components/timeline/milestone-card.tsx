@@ -1,7 +1,6 @@
 'use client';
 
-import { MessageComposer, MessageThread, type ThreadMessage } from '@patina/design-system';
-import { AnimatePresence, motion } from 'framer-motion';
+import { MessageComposer, MessageThread, StatusDot, statusTextColor, type ThreadMessage } from '@patina/design-system';
 import {
   AlertTriangle,
   CalendarDays,
@@ -21,8 +20,6 @@ import {
   formatDate,
   formatRelativeTime,
   formatStatusLabel,
-  statusAccentClass,
-  statusDotClass,
 } from '@/lib/utils/format';
 import type { MilestoneDetail } from '@/types/project';
 
@@ -135,8 +132,7 @@ export function MilestoneCard({ projectId, milestone, isExpanded, onToggle }: Mi
     });
   };
 
-  const statusClass = statusAccentClass(milestone.status);
-  const statusDot = statusDotClass(milestone.status);
+  const statusClass = statusTextColor(milestone.status);
 
   return (
     <article className="relative">
@@ -149,10 +145,7 @@ export function MilestoneCard({ projectId, milestone, isExpanded, onToggle }: Mi
       >
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="flex items-start gap-3">
-            <span
-              aria-hidden
-              className={`mt-2 flex h-2.5 w-2.5 flex-none rounded-full ${statusDot}`}
-            />
+            <StatusDot status={milestone.status} className="mt-2 flex-none" />
             <div className="flex flex-col gap-1.5">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="type-meta">
@@ -202,14 +195,8 @@ export function MilestoneCard({ projectId, milestone, isExpanded, onToggle }: Mi
       </button>
 
       {/* Expanded details — left border accent, no card */}
-      <AnimatePresence initial={false}>
-        {isExpanded ? (
-          <motion.div
-            key="details"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.25, ease: 'easeInOut' }}
+      {isExpanded ? (
+          <div
             className="border-l-2 border-[var(--accent-primary)] ml-1 pl-8 pb-8 pt-4"
           >
             <div className="grid gap-8 md:grid-cols-[2fr_1fr]">
@@ -393,9 +380,8 @@ export function MilestoneCard({ projectId, milestone, isExpanded, onToggle }: Mi
                 ) : null}
               </aside>
             </div>
-          </motion.div>
+          </div>
         ) : null}
-      </AnimatePresence>
     </article>
   );
 }

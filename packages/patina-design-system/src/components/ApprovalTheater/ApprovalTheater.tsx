@@ -209,7 +209,7 @@ export const ApprovalTheater = React.forwardRef<
             <div className="flex items-center justify-between p-6 border-b bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-950 dark:to-violet-950">
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
-                  <h2 className="text-2xl font-bold tracking-tight">{approval.title}</h2>
+                  <DialogPrimitives.Title className="text-2xl font-bold tracking-tight">{approval.title}</DialogPrimitives.Title>
                   {approval.recommendedAction && (
                     <span className={cn('text-sm font-medium', getStatusColor())}>
                       {approval.recommendedAction === 'approve' && '✓ Recommended'}

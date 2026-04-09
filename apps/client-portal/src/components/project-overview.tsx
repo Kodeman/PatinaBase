@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useMemo, useState } from 'react';
+import type { MilestoneDetail } from '@/types/project';
 import {
   Avatar,
   AvatarGroup,
@@ -12,11 +12,21 @@ import {
 import { Calendar, Users, MessageSquare, Clock, CheckCircle, AlertCircle, FileText } from 'lucide-react';
 import Image from 'next/image';
 
+import { getPhaseLabel } from '@patina/types';
 import { StrataMark } from '@/components/strata-mark';
 import { useActivityFeed, useTeamPresence } from '@/lib/websocket';
 import { formatDate, formatPercentage, formatRelativeTime, formatStatusLabel } from '@/lib/utils/format';
 
+interface ActivityItem {
+  id: string;
+  type: 'milestone' | 'message' | 'approval' | 'document';
+  title: string;
+  description?: string;
+  createdAt: string;
+}
+
 interface ProjectOverviewProps {
+  milestones?: MilestoneDetail[];
   project: {
     id: string;
     name: string;
@@ -49,20 +59,74 @@ interface ProjectOverviewProps {
   };
 }
 
-export function ProjectOverview({ project }: ProjectOverviewProps) {
-  const activities = useActivityFeed();
+export function ProjectOverview({ project, milestones = [] }: ProjectOverviewProps) {
+  const liveActivities = useActivityFeed();
   const teamPresence = useTeamPresence();
   const [showAllActivities, setShowAllActivities] = useState(false);
+
+  // Derive activities from milestone data (serves as historical feed)
+  const derivedActivities = useMemo((): ActivityItem[] => {
+    const items: ActivityItem[] = [];
+    for (const m of milestones) {
+      // Milestone completions
+      if (m.status === 'completed' && m.completionDate) {
+        items.push({ id: `act-${m.id}-complete`, type: 'milestone', title: `${m.title} completed`, createdAt: m.completionDate });
+      }
+
+      // In-progress milestones
+      if (m.status === 'in_progress' && m.targetDate) {
+        items.push({ id: `act-${m.id}-started`, type: 'milestone', title: `${m.title} is now in progress`, createdAt: m.targetDate });
+      }
+
+      // Approval events
+      if (m.approval) {
+        const label = m.approval.status === 'pending' ? 'Approval requested' : `Approval ${m.approval.status}`;
+        items.push({ id: `act-${m.id}-approval`, type: 'approval', title: `${label}: ${m.title}`, createdAt: m.approval.requestedAt || m.targetDate || '' });
+      }
+
+      // Document uploads
+      for (const doc of m.documents) {
+        if (doc.uploadedAt) {
+          items.push({
+            id: `act-${doc.id}-doc`,
+            type: 'document',
+            title: `${doc.uploadedBy || 'Team'} shared ${doc.title}`,
+            description: m.title,
+            createdAt: doc.uploadedAt,
+          });
+        }
+      }
+
+      // Recent messages (up to 3 per milestone)
+      for (const msg of m.messages.slice(-3)) {
+        items.push({ id: `act-${msg.id}`, type: 'message', title: `${msg.authorName} sent a message`, description: m.title, createdAt: msg.createdAt });
+      }
+    }
+    return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 20);
+  }, [milestones]);
+
+  // Merge live WebSocket activities with derived historical ones, deduplicating by ID
+  const activities = useMemo(() => {
+    if (liveActivities.length === 0) return derivedActivities;
+    const liveIds = new Set(liveActivities.map((a: any) => a.id));
+    const merged = [
+      ...liveActivities.map((a: any) => ({
+        id: a.id,
+        type: a.type as ActivityItem['type'],
+        title: a.title || a.message || '',
+        description: a.description,
+        createdAt: a.timestamp || a.createdAt || new Date().toISOString(),
+      })),
+      ...derivedActivities.filter((a) => !liveIds.has(a.id)),
+    ];
+    return merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [liveActivities, derivedActivities]);
 
   const onlineTeamMembers = teamPresence.filter(p => p.status === 'online');
   const displayActivities = showAllActivities ? activities : activities.slice(0, 3);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
+    <div>
       {/* Hero Section */}
       <div className="relative">
         {project.heroImage && (
@@ -90,7 +154,7 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
             {/* Metadata as mono text */}
             <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
               {project.currentPhase && (
-                <span className="type-meta">Phase: {project.currentPhase}</span>
+                <span className="type-meta">Phase: {getPhaseLabel(project.currentPhase, 'client') || project.currentPhase}</span>
               )}
               {project.startDate && project.endDate && (
                 <span className="type-meta flex items-center gap-1">
@@ -211,16 +275,12 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
             <span className="type-meta text-patina-sage">Live</span>
           </div>
 
-          <AnimatePresence mode="popLayout">
+          <>
             {displayActivities.length > 0 ? (
               <div>
                 {displayActivities.map((activity) => (
-                  <motion.div
+                  <div
                     key={activity.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    transition={{ duration: 0.2 }}
                     className="flex items-start gap-3 border-b border-[var(--border-subtle)] py-3"
                   >
                     <div className="mt-0.5">
@@ -236,7 +296,7 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
                       )}
                       <p className="type-meta-small mt-1">{formatRelativeTime(activity.createdAt)}</p>
                     </div>
-                  </motion.div>
+                  </div>
                 ))}
 
                 {activities.length > 3 && !showAllActivities && (
@@ -256,10 +316,10 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
                 <p className="type-meta mt-1">Updates will appear here in real-time</p>
               </div>
             )}
-          </AnimatePresence>
+          </>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 

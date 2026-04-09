@@ -6,7 +6,6 @@
  */
 
 import { ReactNode, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { usePullToRefresh, useIsTouchDevice, useSwipeNavigation } from '@/hooks/use-touch-gestures';
 
@@ -47,45 +46,35 @@ export function MobileTimelineWrapper({
       }}
     >
       {/* Pull to refresh indicator */}
-      <AnimatePresence>
-        {(pullDistance > 0 || isRefreshing) && (
-          <motion.div
-            initial={{ opacity: 0, y: -40 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -40 }}
-            className="absolute top-0 left-0 right-0 flex items-center justify-center z-10"
-            style={{
-              height: Math.max(pullDistance, isRefreshing ? 60 : 0),
-              backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            }}
+      {(pullDistance > 0 || isRefreshing) && (
+        <div
+          className="absolute top-0 left-0 right-0 flex items-center justify-center z-10"
+          style={{
+            height: Math.max(pullDistance, isRefreshing ? 60 : 0),
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          }}
+        >
+          <div
+            className={`flex items-center gap-2 ${
+              shouldRefresh || isRefreshing ? 'text-primary-600' : 'text-gray-400'
+            }`}
           >
-            <motion.div
-              animate={isRefreshing ? { rotate: 360 } : { rotate: pullProgress * 360 }}
-              transition={isRefreshing ? { duration: 1, repeat: Infinity, ease: 'linear' } : { duration: 0 }}
-              className={`flex items-center gap-2 ${
-                shouldRefresh || isRefreshing ? 'text-primary-600' : 'text-gray-400'
-              }`}
-            >
-              <RefreshCw className="h-5 w-5" />
-              <span className="text-sm font-medium">
-                {isRefreshing
-                  ? 'Refreshing...'
-                  : shouldRefresh
-                  ? 'Release to refresh'
-                  : 'Pull to refresh'}
-              </span>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span className="text-sm font-medium">
+              {isRefreshing
+                ? 'Refreshing...'
+                : shouldRefresh
+                ? 'Release to refresh'
+                : 'Pull to refresh'}
+            </span>
+          </div>
+        </div>
+      )}
 
-      {/* Content with pull transform */}
-      <motion.div
-        animate={{ y: isRefreshing ? 60 : pullDistance }}
-        transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-      >
+      {/* Content */}
+      <div style={{ transform: `translateY(${isRefreshing ? 60 : pullDistance}px)` }}>
         {children}
-      </motion.div>
+      </div>
     </div>
   );
 }
@@ -166,17 +155,7 @@ export function MobileSegmentNavigator<T extends Segment>({
         ref={ref}
         className={`relative overflow-hidden ${isGesturing ? 'cursor-grabbing' : 'cursor-grab'}`}
       >
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={currentSegment?.id}
-            initial={{ opacity: 0, x: 100 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -100 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          >
-            {currentSegment && renderSegment(currentSegment, currentIndex)}
-          </motion.div>
-        </AnimatePresence>
+        {currentSegment && renderSegment(currentSegment, currentIndex)}
       </div>
 
       {/* Dot indicators */}
@@ -275,50 +254,39 @@ interface MobileBottomSheetProps {
 }
 
 export function MobileBottomSheet({ isOpen, onClose, title, children }: MobileBottomSheetProps) {
+  if (!isOpen) return null;
+
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-black/50 z-40"
-          />
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        className="fixed inset-0 bg-black/50 z-40"
+      />
 
-          {/* Sheet */}
-          <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-xl max-h-[85vh] overflow-hidden"
-          >
-            {/* Handle bar */}
-            <div className="flex justify-center py-3">
-              <div className="w-10 h-1 bg-gray-300 rounded-full" />
-            </div>
+      {/* Sheet */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-xl max-h-[85vh] overflow-hidden">
+        {/* Handle bar */}
+        <div className="flex justify-center py-3">
+          <div className="w-10 h-1 bg-gray-300 rounded-full" />
+        </div>
 
-            {/* Title */}
-            {title && (
-              <div className="px-4 pb-3 border-b border-gray-100">
-                <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-              </div>
-            )}
+        {/* Title */}
+        {title && (
+          <div className="px-4 pb-3 border-b border-gray-100">
+            <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+          </div>
+        )}
 
-            {/* Content */}
-            <div className="overflow-y-auto max-h-[70vh] p-4">
-              {children}
-            </div>
+        {/* Content */}
+        <div className="overflow-y-auto max-h-[70vh] p-4">
+          {children}
+        </div>
 
-            {/* Safe area padding for iOS */}
-            <div className="h-safe-area-bottom" />
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+        {/* Safe area padding for iOS */}
+        <div className="h-safe-area-bottom" />
+      </div>
+    </>
   );
 }
 

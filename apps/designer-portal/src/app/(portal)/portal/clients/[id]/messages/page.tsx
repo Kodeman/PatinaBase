@@ -247,7 +247,7 @@ export default function ClientMessagesPage({
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-          placeholder="Type a message\u2026"
+          placeholder="Type a message…"
           className="flex-1 rounded-full border border-[var(--border-default)] bg-[var(--bg-primary)] px-4 py-2.5 outline-none focus:border-[var(--accent-primary)]"
           style={{
             fontFamily: 'var(--font-body)',

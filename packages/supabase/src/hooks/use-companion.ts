@@ -51,7 +51,6 @@ export interface CompanionConversation {
   id: string;
   user_id: string;
   title?: string;
-  status: string;
   created_at: string;
   updated_at: string;
 }
@@ -87,7 +86,6 @@ export function useCompanionConversation() {
         .from('companion_conversations')
         .select('*')
         .eq('user_id', user.id)
-        .eq('status', 'active')
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();

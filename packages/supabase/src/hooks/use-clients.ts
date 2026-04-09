@@ -361,7 +361,7 @@ export function useClientProjects(clientId: string) {
           products:project_products(
             id,
             quantity,
-            product:products(id, name, primary_image_url)
+            product:products(id, name, images)
           )
         `)
         .eq('designer_id', designerClient.designer_id)

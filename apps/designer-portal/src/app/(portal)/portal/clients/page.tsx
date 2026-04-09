@@ -107,7 +107,7 @@ export default function ClientDirectoryPage() {
         <SearchInput
           value={search}
           onChange={setSearch}
-          placeholder="Search clients\u2026"
+          placeholder="Search clients…"
         />
       </div>
 

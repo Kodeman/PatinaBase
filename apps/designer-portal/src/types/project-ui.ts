@@ -4,77 +4,36 @@
  * display-layer concerns (phase colors, budget line items, etc.)
  */
 
-// ── Phase Configuration ──
+// ── Phase Configuration (re-exported from shared package) ──
 
-export type ProjectPhase =
-  | 'consultation'
-  | 'concept_development'
-  | 'design_refinement'
-  | 'procurement'
-  | 'installation'
-  | 'final_walkthrough';
+import type { PhaseSlug } from '@patina/types';
 
-export interface PhaseConfig {
-  label: string;
-  color: string;       // CSS variable name, e.g. 'var(--phase-consultation)'
-  shortLabel: string;   // For compact displays
-  order: number;
-  typicalWeeks: string; // e.g. '1–2 weeks'
-}
+/** @deprecated Use PhaseSlug from @patina/types directly */
+export type ProjectPhase = PhaseSlug;
 
-export const PHASE_CONFIG: Record<ProjectPhase, PhaseConfig> = {
-  consultation: {
-    label: 'Programming & Consultation',
-    color: 'var(--phase-consultation)',
-    shortLabel: 'Consult',
-    order: 0,
-    typicalWeeks: '1–2 weeks',
-  },
-  concept_development: {
-    label: 'Schematic Design',
-    color: 'var(--phase-concept)',
-    shortLabel: 'Schematic',
-    order: 1,
-    typicalWeeks: '2–4 weeks',
-  },
-  design_refinement: {
-    label: 'Design Development',
-    color: 'var(--phase-refinement)',
-    shortLabel: 'Design Dev',
-    order: 2,
-    typicalWeeks: '4–8 weeks',
-  },
-  procurement: {
-    label: 'Procurement & Order Management',
-    color: 'var(--phase-procurement)',
-    shortLabel: 'Procurement',
-    order: 3,
-    typicalWeeks: '4–12 weeks',
-  },
-  installation: {
-    label: 'Installation & Styling',
-    color: 'var(--phase-installation)',
-    shortLabel: 'Install',
-    order: 4,
-    typicalWeeks: '1–3 weeks',
-  },
-  final_walkthrough: {
-    label: 'Completion & Handover',
-    color: 'var(--phase-walkthrough)',
-    shortLabel: 'Completion',
-    order: 5,
-    typicalWeeks: '1–2 weeks',
-  },
-};
+export {
+  type PhaseSlug,
+  ALL_PHASE_SLUGS as ALL_PHASES,
+  PHASE_DISPLAY_CONFIG,
+  type PhaseDisplayConfig,
+  type PhaseStatus,
+  PHASE_STATUS_DISPLAY,
+  getPhaseLabel,
+  calculateProjectProgress,
+} from '@patina/types';
 
-export const ALL_PHASES: ProjectPhase[] = [
-  'consultation',
-  'concept_development',
-  'design_refinement',
-  'procurement',
-  'installation',
-  'final_walkthrough',
-];
+// Legacy alias — maps PhaseDisplayConfig to the old PhaseConfig shape
+import type { PhaseDisplayConfig } from '@patina/types';
+export type PhaseConfig = PhaseDisplayConfig & { typicalWeeks: string };
+
+// Re-export the config under the old name for backwards compatibility
+import { PHASE_DISPLAY_CONFIG } from '@patina/types';
+export const PHASE_CONFIG = Object.fromEntries(
+  Object.entries(PHASE_DISPLAY_CONFIG).map(([key, config]) => [
+    key,
+    { ...config, typicalWeeks: config.typicalDuration },
+  ])
+) as Record<import('@patina/types').PhaseSlug, PhaseConfig>;
 
 // ── Budget & Financials ──
 
@@ -259,6 +218,20 @@ export interface MockTimeTracking {
   totalSpent: number;
   totalEstimated: number;
   effectiveRate: number;
+}
+
+// ── Phase Approval ──
+
+export type ApprovalStatus = 'pending' | 'needs_discussion' | 'approved' | 'rejected' | 'cancelled';
+
+export interface PhaseApproval {
+  id: string;
+  phaseKey: string;
+  status: ApprovalStatus;
+  type: string;
+  requestedAt: string;
+  decidedAt?: string;
+  comment?: string;
 }
 
 // ── Key Metrics (Zone 2 aggregate) ──

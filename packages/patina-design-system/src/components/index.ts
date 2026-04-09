@@ -54,6 +54,7 @@ export * from './Badge'
 export * from './Spinner'
 export * from './Skeleton'
 export * from './ProgressBar'
+export * from './StatusDot'
 export * from './Banner'
 export * from './EmptyState'
 
@@ -145,6 +146,7 @@ export * from './IssueCard'
 
 // New Timeline Components (Fresh Implementation)
 export * from './ProjectMilestoneCard'
+export * from './PhaseTimeline'
 export * from './StoryTimeline'
 export * from './ImmersiveTimelineCarousel'
 

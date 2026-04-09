@@ -288,19 +288,38 @@ export function useAcceptLead() {
 
       // Create designer_client relationship
       if (lead.homeowner_id) {
-        const { error: clientError } = await supabase
+        // Check if relationship already exists (partial unique index doesn't support onConflict)
+        const { data: existing } = await supabase
           .from('designer_clients')
-          .upsert({
-            designer_id: lead.designer_id,
-            client_id: lead.homeowner_id,
-            source: 'lead',
-            lead_id: leadId,
-            status: 'active',
-          }, {
-            onConflict: 'designer_id,client_id',
-          });
+          .select('id')
+          .eq('designer_id', lead.designer_id)
+          .eq('client_id', lead.homeowner_id)
+          .maybeSingle();
 
-        if (clientError) throw clientError;
+        if (existing) {
+          const { error: clientError } = await supabase
+            .from('designer_clients')
+            .update({
+              source: 'lead',
+              lead_id: leadId,
+              status: 'active',
+            })
+            .eq('id', existing.id);
+
+          if (clientError) throw clientError;
+        } else {
+          const { error: clientError } = await supabase
+            .from('designer_clients')
+            .insert({
+              designer_id: lead.designer_id,
+              client_id: lead.homeowner_id,
+              source: 'lead',
+              lead_id: leadId,
+              status: 'active',
+            });
+
+          if (clientError) throw clientError;
+        }
       }
 
       return lead;

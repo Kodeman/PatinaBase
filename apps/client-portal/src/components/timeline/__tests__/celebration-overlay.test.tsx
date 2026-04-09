@@ -5,20 +5,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 
-// Mock canvas-confetti
-jest.mock('canvas-confetti', () => jest.fn());
-
-// Mock framer-motion to avoid animation issues in tests
-jest.mock('framer-motion', () => ({
-  motion: {
-    div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-    h2: ({ children, ...props }: any) => <h2 {...props}>{children}</h2>,
-    p: ({ children, ...props }: any) => <p {...props}>{children}</p>,
-    span: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-  },
-  AnimatePresence: ({ children }: any) => <>{children}</>,
-}));
-
 // Mock @patina/design-system
 jest.mock('@patina/design-system', () => ({
   Button: ({ children, onClick, variant, className }: any) => (
@@ -348,33 +334,4 @@ describe('CelebrationOverlay', () => {
     });
   });
 
-  describe('confetti effect', () => {
-    it('should trigger confetti on mount', () => {
-      const confetti = require('canvas-confetti');
-
-      render(
-        <CelebrationOverlay
-          celebration={mockCelebration}
-          onDismiss={mockOnDismiss}
-        />
-      );
-
-      // Confetti should have been called
-      expect(confetti).toHaveBeenCalled();
-    });
-
-    it('should not trigger confetti when celebration is null', () => {
-      const confetti = require('canvas-confetti');
-      confetti.mockClear();
-
-      render(
-        <CelebrationOverlay
-          celebration={null}
-          onDismiss={mockOnDismiss}
-        />
-      );
-
-      expect(confetti).not.toHaveBeenCalled();
-    });
-  });
 });

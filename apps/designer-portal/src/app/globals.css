@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+@import '../../../../packages/patina-design-system/src/styles/typography.css';
+
 /* ===== Portal Design Tokens ===== */
 :root {
   /* — Primary Palette — */
@@ -72,117 +74,11 @@
   --space-24: 6rem;
 }
 
-/* ===== Portal Typography Utility Classes ===== */
+/* Typography: now provided by @patina/design-system/styles/typography.css.
+   Font variable mappings set on body below in @layer base. */
+
+/* ===== Portal Utility Classes ===== */
 @layer components {
-  .type-page-title {
-    font-family: var(--font-display);
-    font-weight: 400;
-    font-size: clamp(2rem, 4vw, 3.5rem);
-    line-height: 1.15;
-    letter-spacing: -0.02em;
-    color: var(--text-primary);
-  }
-
-  .type-section-head {
-    font-family: var(--font-display);
-    font-weight: 400;
-    font-size: clamp(1.5rem, 3vw, 2rem);
-    line-height: 1.3;
-    letter-spacing: -0.02em;
-    color: var(--text-primary);
-  }
-
-  .type-item-name {
-    font-family: var(--font-display);
-    font-weight: 500;
-    font-size: 1.3rem;
-    line-height: 1.4;
-    letter-spacing: -0.02em;
-    color: var(--text-primary);
-  }
-
-  .type-data-large {
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 2.4rem;
-    line-height: 1.0;
-    letter-spacing: -0.02em;
-    color: var(--text-primary);
-  }
-
-  .type-data-unit {
-    font-family: var(--font-body);
-    font-weight: 400;
-    font-size: 0.85rem;
-    line-height: 1.0;
-    color: var(--text-muted);
-  }
-
-  .type-body {
-    font-family: var(--font-body);
-    font-weight: 400;
-    font-size: 1rem;
-    line-height: 1.7;
-    color: var(--text-body);
-  }
-
-  .type-body-small {
-    font-family: var(--font-body);
-    font-weight: 400;
-    font-size: 0.9rem;
-    line-height: 1.6;
-    color: var(--text-body);
-  }
-
-  /* Prose variants — body text with spec max-width for paragraphs */
-  .prose-body {
-    max-width: 640px;
-  }
-
-  .type-label {
-    font-family: var(--font-body);
-    font-weight: 500;
-    font-size: 0.95rem;
-    line-height: 1.5;
-    color: var(--text-primary);
-  }
-
-  .type-label-secondary {
-    font-family: var(--font-body);
-    font-weight: 400;
-    font-size: 0.82rem;
-    line-height: 1.5;
-    color: var(--text-muted);
-  }
-
-  .type-meta {
-    font-family: var(--font-meta);
-    font-weight: 400;
-    font-size: 0.72rem;
-    line-height: 1.5;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-  }
-
-  .type-meta-small {
-    font-family: var(--font-meta);
-    font-weight: 400;
-    font-size: 0.62rem;
-    line-height: 1.5;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-  }
-
-  .type-btn-text {
-    font-family: var(--font-body);
-    font-weight: 500;
-    font-size: 0.85rem;
-    line-height: 1.0;
-    letter-spacing: 0.01em;
-  }
-
   /* Divider patterns */
   .divider {
     border-bottom: 1px solid var(--border-default);
