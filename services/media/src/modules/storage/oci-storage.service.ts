@@ -1,7 +1,27 @@
+/**
+ * Object Storage Service
+ *
+ * Note: Class name `OCIStorageService` is retained for historical compatibility
+ * with ~15 call sites across the media service. The implementation now uses the
+ * S3-compatible API to talk to Cloudflare R2 (production) or MinIO (local dev),
+ * selected via `STORAGE_PROVIDER`. OCI (Oracle) is no longer used.
+ *
+ * `createPAR` returns an S3 presigned PUT URL rather than an OCI PAR; the shape
+ * of the result (`{ parUrl, fullUrl, expiresAt }`) is preserved so existing
+ * callers continue to work.
+ */
+
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as os from 'oci-objectstorage';
-import * as common from 'oci-common';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  CopyObjectCommand,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { Readable } from 'stream';
 
 export interface PAROptions {
   bucketName: string;
@@ -19,155 +39,149 @@ export interface PARResult {
 @Injectable()
 export class OCIStorageService {
   private readonly logger = new Logger(OCIStorageService.name);
-  private objectStorageClient: os.ObjectStorageClient | null = null;
-  private namespace: string;
+  private s3Client: S3Client | null = null;
   private isConfigured = false;
   private initializationError: string | null = null;
+  private provider: 'R2' | 'S3' = 'R2';
 
   constructor(private configService: ConfigService) {
-    this.initializeOCI();
+    this.initializeClient();
   }
 
-  /**
-   * Initialize OCI Storage client if configured
-   */
-  private initializeOCI() {
-    const configFile = this.configService.get('OCI_CONFIG_FILE');
-    const namespace = this.configService.get('OCI_OBJECT_STORAGE_NAMESPACE');
-
-    if (!configFile || !namespace) {
-      this.logger.warn(
-        'OCI Object Storage is not configured (OCI_CONFIG_FILE or OCI_OBJECT_STORAGE_NAMESPACE missing). ' +
-        'Running in local development mode. For production, set these environment variables.',
-      );
-      this.isConfigured = false;
-      return;
-    }
+  private initializeClient() {
+    const provider = (
+      this.configService.get<string>('STORAGE_PROVIDER') || 'R2'
+    ).toUpperCase();
 
     try {
-      const provider = new common.ConfigFileAuthenticationDetailsProvider(
-        configFile,
-        this.configService.get('OCI_CONFIG_PROFILE', 'DEFAULT'),
-      );
+      if (provider === 'R2') {
+        const accountId = this.configService.get<string>('R2_ACCOUNT_ID');
+        const accessKeyId = this.configService.get<string>('R2_ACCESS_KEY_ID');
+        const secretAccessKey = this.configService.get<string>('R2_SECRET_ACCESS_KEY');
 
-      this.objectStorageClient = new os.ObjectStorageClient({
-        authenticationDetailsProvider: provider,
-      });
+        if (!accountId || !accessKeyId || !secretAccessKey) {
+          this.logger.warn(
+            'R2 not fully configured (R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY missing). ' +
+              'Object storage operations will fail until set.',
+          );
+          this.isConfigured = false;
+          return;
+        }
 
-      this.namespace = namespace;
+        this.s3Client = new S3Client({
+          region: 'auto',
+          endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+          credentials: { accessKeyId, secretAccessKey },
+        });
+        this.provider = 'R2';
+      } else {
+        // Local dev: MinIO (S3-compatible)
+        const endpoint =
+          this.configService.get<string>('MINIO_ENDPOINT') || 'http://localhost:9000';
+        const accessKeyId = this.configService.get<string>('MINIO_ACCESS_KEY') || '';
+        const secretAccessKey = this.configService.get<string>('MINIO_SECRET_KEY') || '';
+
+        this.s3Client = new S3Client({
+          region: 'us-east-1',
+          endpoint,
+          forcePathStyle: true,
+          credentials: { accessKeyId, secretAccessKey },
+        });
+        this.provider = 'S3';
+      }
+
       this.isConfigured = true;
-      this.logger.log(`OCI Object Storage initialized with namespace: ${namespace}`);
+      this.logger.log(`Object storage initialized (provider=${this.provider})`);
     } catch (error) {
-      this.logger.warn(
-        `Failed to initialize OCI Object Storage: ${error.message}. ` +
-        'Ensure OCI_CONFIG_FILE exists and is properly configured.',
-      );
+      this.logger.warn(`Failed to initialize object storage: ${error.message}`);
       this.initializationError = error.message;
       this.isConfigured = false;
     }
   }
 
-  /**
-   * Check if OCI Storage is configured and ready
-   */
   isReady(): boolean {
-    return this.isConfigured && this.objectStorageClient != null;
+    return this.isConfigured && this.s3Client != null;
   }
 
-  /**
-   * Throw error if not configured
-   */
   private ensureConfigured(): void {
     if (!this.isReady()) {
       throw new Error(
-        'OCI Object Storage is not configured or failed to initialize. ' +
-        `Error: ${this.initializationError || 'Unknown'}. ` +
-        'For local development, configure MinIO or another S3-compatible storage.',
+        `Object storage is not configured. Error: ${this.initializationError || 'Unknown'}. ` +
+          'Set STORAGE_PROVIDER and R2_* (production) or MINIO_* (local dev) env vars.',
       );
     }
   }
 
   /**
-   * Generate a Pre-Authenticated Request (PAR) for direct upload to Object Storage
+   * Generate a presigned PUT URL for direct upload.
+   * Method name retained from OCI PAR API for caller compatibility.
    */
   async createPAR(options: PAROptions): Promise<PARResult> {
     this.ensureConfigured();
 
-    const request: os.requests.CreatePreauthenticatedRequestRequest = {
-      namespaceName: this.namespace,
-      bucketName: options.bucketName,
-      createPreauthenticatedRequestDetails: {
-        name: `upload-${Date.now()}`,
-        objectName: options.objectName,
-        accessType: os.models.CreatePreauthenticatedRequestDetails.AccessType[options.accessType],
-        timeExpires: options.timeExpires,
-      },
-    };
+    const expiresInSeconds = Math.max(
+      1,
+      Math.floor((options.timeExpires.getTime() - Date.now()) / 1000),
+    );
 
     try {
-      const response = await this.objectStorageClient!.createPreauthenticatedRequest(request);
-      const par = response.preauthenticatedRequest;
+      const command =
+        options.accessType === 'ObjectRead'
+          ? new GetObjectCommand({ Bucket: options.bucketName, Key: options.objectName })
+          : new PutObjectCommand({ Bucket: options.bucketName, Key: options.objectName });
 
-      const region = this.configService.get('OCI_REGION');
-      const fullUrl = `https://objectstorage.${region}.oraclecloud.com${par.accessUri}`;
+      const url = await getSignedUrl(this.s3Client!, command as any, {
+        expiresIn: expiresInSeconds,
+      });
 
       this.logger.log(
-        `Created PAR for ${options.objectName} in bucket ${options.bucketName}, expires at ${options.timeExpires}`,
+        `Created presigned URL for ${options.objectName} in ${options.bucketName}, expires ${options.timeExpires.toISOString()}`,
       );
 
       return {
-        parUrl: par.accessUri,
-        fullUrl,
+        parUrl: url,
+        fullUrl: url,
         expiresAt: options.timeExpires,
       };
     } catch (error) {
-      this.logger.error(`Failed to create PAR: ${error.message}`, error.stack);
+      this.logger.error(`Failed to create presigned URL: ${error.message}`, error.stack);
       throw error;
     }
   }
 
-  /**
-   * Upload object to Object Storage (internal use)
-   */
-  async putObject(bucketName: string, objectName: string, data: Buffer | NodeJS.ReadableStream) {
+  async putObject(
+    bucketName: string,
+    objectName: string,
+    data: Buffer | NodeJS.ReadableStream,
+  ) {
     this.ensureConfigured();
-
-    const request: os.requests.PutObjectRequest = {
-      namespaceName: this.namespace,
-      bucketName,
-      objectName,
-      putObjectBody: data as any,
-    };
-
     try {
-      await this.objectStorageClient!.putObject(request);
-      this.logger.log(`Uploaded object ${objectName} to bucket ${bucketName}`);
+      await this.s3Client!.send(
+        new PutObjectCommand({
+          Bucket: bucketName,
+          Key: objectName,
+          Body: data as any,
+        }),
+      );
+      this.logger.log(`Uploaded ${objectName} to ${bucketName}`);
     } catch (error) {
       this.logger.error(`Failed to upload object: ${error.message}`, error.stack);
       throw error;
     }
   }
 
-  /**
-   * Get object from Object Storage
-   */
   async getObject(bucketName: string, objectName: string): Promise<Buffer> {
     this.ensureConfigured();
-
-    const request: os.requests.GetObjectRequest = {
-      namespaceName: this.namespace,
-      bucketName,
-      objectName,
-    };
-
     try {
-      const response = await this.objectStorageClient!.getObject(request);
+      const response = await this.s3Client!.send(
+        new GetObjectCommand({ Bucket: bucketName, Key: objectName }),
+      );
+      const body = response.Body as Readable;
       const chunks: Buffer[] = [];
-
-      return new Promise((resolve, reject) => {
-        (response.value as any).on('data', (chunk: Buffer) => chunks.push(chunk));
-        (response.value as any).on('end', () => resolve(Buffer.concat(chunks)));
-        (response.value as any).on('error', reject);
+      return await new Promise<Buffer>((resolve, reject) => {
+        body.on('data', (chunk: Buffer) => chunks.push(chunk));
+        body.on('end', () => resolve(Buffer.concat(chunks)));
+        body.on('error', reject);
       });
     } catch (error) {
       this.logger.error(`Failed to get object: ${error.message}`, error.stack);
@@ -175,30 +189,19 @@ export class OCIStorageService {
     }
   }
 
-  /**
-   * Delete object from Object Storage
-   */
   async deleteObject(bucketName: string, objectName: string) {
     this.ensureConfigured();
-
-    const request: os.requests.DeleteObjectRequest = {
-      namespaceName: this.namespace,
-      bucketName,
-      objectName,
-    };
-
     try {
-      await this.objectStorageClient!.deleteObject(request);
-      this.logger.log(`Deleted object ${objectName} from bucket ${bucketName}`);
+      await this.s3Client!.send(
+        new DeleteObjectCommand({ Bucket: bucketName, Key: objectName }),
+      );
+      this.logger.log(`Deleted ${objectName} from ${bucketName}`);
     } catch (error) {
       this.logger.error(`Failed to delete object: ${error.message}`, error.stack);
       throw error;
     }
   }
 
-  /**
-   * Copy object within Object Storage
-   */
   async copyObject(
     sourceBucket: string,
     sourceObject: string,
@@ -206,22 +209,17 @@ export class OCIStorageService {
     destObject: string,
   ) {
     this.ensureConfigured();
-
-    const request: os.requests.CopyObjectRequest = {
-      namespaceName: this.namespace,
-      bucketName: destBucket,
-      copyObjectDetails: {
-        sourceObjectName: sourceObject,
-        destinationBucket: destBucket,
-        destinationNamespace: this.namespace,
-        destinationObjectName: destObject,
-        destinationRegion: this.configService.get('OCI_REGION') || 'us-ashburn-1',
-      },
-    };
-
     try {
-      await this.objectStorageClient!.copyObject(request);
-      this.logger.log(`Copied ${sourceObject} from ${sourceBucket} to ${destObject} in ${destBucket}`);
+      await this.s3Client!.send(
+        new CopyObjectCommand({
+          Bucket: destBucket,
+          Key: destObject,
+          CopySource: `${sourceBucket}/${sourceObject}`,
+        }),
+      );
+      this.logger.log(
+        `Copied ${sourceBucket}/${sourceObject} to ${destBucket}/${destObject}`,
+      );
     } catch (error) {
       this.logger.error(`Failed to copy object: ${error.message}`, error.stack);
       throw error;
@@ -229,25 +227,24 @@ export class OCIStorageService {
   }
 
   /**
-   * Generate CDN URL for public objects
+   * Generate public CDN URL for an object.
+   * Reads CDN_DOMAIN (e.g. cdn.patina.cloud) and returns a direct URL.
    */
   getCDNUrl(objectKey: string): string {
-    const cdnDomain = this.configService.get('CDN_DOMAIN');
-    const publicBucket = this.configService.get('OCI_BUCKET_PUBLIC');
-    return `https://${cdnDomain}/${publicBucket}/${objectKey}`;
+    const cdnDomain =
+      this.configService.get<string>('CDN_DOMAIN') ||
+      this.configService.get<string>('R2_PUBLIC_BUCKET_URL') ||
+      '';
+    // Strip protocol if R2_PUBLIC_BUCKET_URL was used
+    const host = cdnDomain.replace(/^https?:\/\//, '');
+    return `https://${host}/${objectKey}`;
   }
 
-  /**
-   * Generate object key based on conventions
-   */
   generateObjectKey(assetId: string, kind: 'image' | '3d', filename: string): string {
     const prefix = kind === 'image' ? 'raw/images' : 'raw/3d';
     return `${prefix}/${assetId}/${filename}`;
   }
 
-  /**
-   * Generate rendition key
-   */
   generateRenditionKey(
     assetId: string,
     width: number,
@@ -257,16 +254,10 @@ export class OCIStorageService {
     return `processed/images/${assetId}/${width}x${height}.${format}`;
   }
 
-  /**
-   * Generate 3D model key
-   */
   generate3DKey(assetId: string, format: 'glb' | 'usdz'): string {
     return `processed/3d/${assetId}/model.${format}`;
   }
 
-  /**
-   * Generate preview/snapshot key
-   */
   generatePreviewKey(assetId: string, kind: 'image' | '3d', variant?: string): string {
     if (kind === 'image') {
       return `previews/images/${assetId}/lqip.jpg`;

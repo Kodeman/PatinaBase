@@ -1436,12 +1436,6 @@ importers:
       obj-file-parser:
         specifier: ^0.6.2
         version: 0.6.2
-      oci-common:
-        specifier: ^2.71.0
-        version: 2.126.0
-      oci-objectstorage:
-        specifier: ^2.71.0
-        version: 2.126.0
       passport:
         specifier: ^0.7.0
         version: 0.7.0

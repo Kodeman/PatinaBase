@@ -6,7 +6,28 @@ import helmet from 'helmet';
 import { createCorsOptions } from '@patina/auth';
 import { AppModule } from './app.module';
 
+/**
+ * Alias R2_BUCKET_* env vars to legacy OCI_BUCKET_* names so callers that still
+ * read OCI_BUCKET_RAW/PROCESSED/PUBLIC work against Cloudflare R2 without
+ * touching ~15 call sites. Object storage itself talks to R2 via OCIStorageService
+ * (which is now backed by the S3 SDK against R2). See oci-storage.service.ts.
+ */
+function aliasStorageEnv() {
+  const map: Array<[string, string]> = [
+    ['R2_BUCKET_RAW', 'OCI_BUCKET_RAW'],
+    ['R2_BUCKET_PROCESSED', 'OCI_BUCKET_PROCESSED'],
+    ['R2_BUCKET_PROCESSED', 'OCI_BUCKET_PUBLIC'],
+    ['R2_BUCKET_PROCESSED', 'OCI_BUCKET_MEDIA'],
+  ];
+  for (const [src, dst] of map) {
+    if (process.env[src] && !process.env[dst]) {
+      process.env[dst] = process.env[src];
+    }
+  }
+}
+
 async function bootstrap() {
+  aliasStorageEnv();
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
 
