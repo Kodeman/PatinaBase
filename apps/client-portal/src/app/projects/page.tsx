@@ -63,8 +63,8 @@ export default async function ProjectsPage() {
                         Next: <span className="font-heading font-medium text-[var(--text-primary)]">{project.nextMilestoneTitle}</span>
                       </p>
                     ) : null}
-                    <span className="type-meta">{project.approvalsPending} approvals</span>
-                    <span className="type-meta">{project.unreadMessages} messages</span>
+                    <span className="type-meta">{project.approvalsPending} {project.approvalsPending === 1 ? 'approval' : 'approvals'}</span>
+                    <span className="type-meta">{project.unreadMessages} {project.unreadMessages === 1 ? 'message' : 'messages'}</span>
                   </div>
                 </div>
 

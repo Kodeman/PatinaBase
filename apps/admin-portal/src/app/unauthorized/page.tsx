@@ -1,6 +1,22 @@
-import Link from 'next/link';
+'use client';
+
+import { createBrowserClient } from '@patina/supabase';
+import { useState } from 'react';
 
 export default function UnauthorizedPage() {
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  async function handleSignInWithDifferentAccount() {
+    setIsSigningOut(true);
+    try {
+      const supabase = createBrowserClient();
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error('Sign out failed:', error);
+    }
+    window.location.href = '/auth/signin';
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50">
       <div className="text-center">
@@ -11,12 +27,13 @@ export default function UnauthorizedPage() {
         <p className="mt-2 text-sm text-gray-500">
           Contact your administrator if you believe this is an error.
         </p>
-        <Link
-          href="/auth/signin"
-          className="mt-8 inline-block rounded-md bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+        <button
+          onClick={handleSignInWithDifferentAccount}
+          disabled={isSigningOut}
+          className="mt-8 inline-block rounded-md bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
         >
-          Sign in with a different account
-        </Link>
+          {isSigningOut ? 'Signing out...' : 'Sign in with a different account'}
+        </button>
       </div>
     </div>
   );

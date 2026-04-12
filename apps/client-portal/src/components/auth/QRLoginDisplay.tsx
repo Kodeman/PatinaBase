@@ -16,7 +16,11 @@ function formatTime(seconds: number): string {
 }
 
 export function QRLoginDisplay({ redirectTo, baseUrl = '' }: QRLoginDisplayProps) {
-  const { state, qrUrl, secondsRemaining, error, regenerate } = useQRAuth(redirectTo, baseUrl);
+  const { state, qrUrl, secondsRemaining, regenerate } = useQRAuth(redirectTo, baseUrl);
+
+  if (!baseUrl) {
+    return null;
+  }
 
   if (state === 'loading' || state === 'idle') {
     return (
@@ -65,25 +69,9 @@ export function QRLoginDisplay({ redirectTo, baseUrl = '' }: QRLoginDisplayProps
   }
 
   if (state === 'error') {
-    return (
-      <div className="flex flex-col items-center py-4">
-        <div className="w-[240px] h-[240px] flex items-center justify-center">
-          <div className="text-center px-4">
-            <QrCode className="w-12 h-12 text-destructive/40 mx-auto mb-3" />
-            <p className="text-sm text-destructive">
-              {error || 'Something went wrong'}
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={regenerate}
-          className="mt-4 flex items-center gap-2 px-4 py-2 text-sm font-medium text-foreground border border-border rounded-lg hover:bg-muted/50 transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Try again
-        </button>
-      </div>
-    );
+    // If the QR auth service is unreachable, hide the section entirely
+    // rather than showing a broken error state
+    return null;
   }
 
   return (

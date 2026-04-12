@@ -147,16 +147,18 @@ export function useQRAuth(redirectTo: string, baseUrl = ''): QRAuthResult {
     };
   }, [state, expiresAt, cleanup]);
 
-  // Auto-generate on mount
+  // Auto-generate on mount (skip if no baseUrl configured)
   useEffect(() => {
     mountedRef.current = true;
-    generateSession();
+    if (baseUrl) {
+      generateSession();
+    }
 
     return () => {
       mountedRef.current = false;
       cleanup();
     };
-  }, [generateSession, cleanup]);
+  }, [generateSession, cleanup, baseUrl]);
 
   return {
     state,
@@ -166,3 +168,4 @@ export function useQRAuth(redirectTo: string, baseUrl = ''): QRAuthResult {
     regenerate: generateSession,
   };
 }
+

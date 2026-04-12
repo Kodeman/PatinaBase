@@ -216,7 +216,8 @@ function mapRowToProduct(row: Record<string, unknown>) {
 
 /**
  * Hook for fetching a single product by ID.
- * Uses browser client directly (consistent with list query) instead of API route.
+ * Uses the admin API route (service role) for reliable access regardless of RLS.
+ * Falls back to browser client if the API route fails (e.g., missing service role key).
  */
 export function useProduct(id: string) {
   const query = useQuery({
