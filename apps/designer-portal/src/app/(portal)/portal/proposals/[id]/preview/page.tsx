@@ -2,6 +2,7 @@
 
 import { use, useEffect, useRef, useCallback } from 'react';
 import { useProposal, useProposalSections } from '@/hooks/use-proposals';
+import { useAuth } from '@/hooks/use-auth';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { ProposalLetterhead } from '@/components/portal/proposal-letterhead';
 import { StrataMark } from '@/components/portal/strata-mark';
@@ -23,6 +24,7 @@ export default function ProposalPreviewPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const { session } = useAuth();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal, isLoading: proposalLoading } = useProposal(id) as { data: any; isLoading: boolean };
   const { data: sections, isLoading: sectionsLoading } = useProposalSections(id);
@@ -56,9 +58,12 @@ export default function ProposalPreviewPage({
     [id]
   );
 
-  // Record "opened" event once
+  // Record "opened" event once (only for non-designer viewers)
   useEffect(() => {
     if (proposal && !hasRecordedOpen.current) {
+      // Skip engagement tracking when the designer previews their own proposal
+      if (session?.user?.id === proposal.designer_id) return;
+
       hasRecordedOpen.current = true;
       recordEvent('opened');
 
@@ -78,7 +83,7 @@ export default function ProposalPreviewPage({
         })();
       }
     }
-  }, [proposal, id, recordEvent]);
+  }, [proposal, id, recordEvent, session]);
 
   // Track section visibility with IntersectionObserver
   useEffect(() => {

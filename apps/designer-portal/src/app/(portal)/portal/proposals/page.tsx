@@ -67,9 +67,9 @@ export default function ProposalsPage() {
       },
       {
         label: 'Avg. Response',
-        value: '3.2',
-        subtitle: '\u2193 faster than avg',
-        trend: 'up' as const,
+        value: '\u2014',
+        subtitle: 'not enough data',
+        trend: 'neutral' as const,
       },
     ];
   }, [stats]);
