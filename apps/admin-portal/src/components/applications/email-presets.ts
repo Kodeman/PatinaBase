@@ -19,6 +19,16 @@ const designerApproved: EmailPreset = {
 ${signOff}`,
 };
 
+const designerWaitlisted: EmailPreset = {
+  slug: 'designer_waitlisted',
+  label: 'Designer — Waitlisted',
+  subject: 'A note on your Patina application, {{first_name}}',
+  html: `<p>Hi {{first_name}},</p>
+<p>Thank you for applying to the Founding 50. Your submission stood out to us, and we'd like to keep you on our shortlist for the next wave.</p>
+<p>The timing isn't quite right for this first cohort, but we expect to circle back as we expand. No action needed — we'll reach out directly when a spot opens up.</p>
+${signOff}`,
+};
+
 const designerRejected: EmailPreset = {
   slug: 'designer_rejected',
   label: 'Designer — Not this cohort',
@@ -49,6 +59,16 @@ const makerApproved: EmailPreset = {
 ${signOff}`,
 };
 
+const makerWaitlisted: EmailPreset = {
+  slug: 'maker_waitlisted',
+  label: 'Maker — Waitlisted',
+  subject: 'A note on {{brand_name}}\'s Patina application',
+  html: `<p>Hi {{contact_name}},</p>
+<p>Thank you for sharing {{brand_name}} with us. We love what you're making, and we'd like to keep you on our shortlist.</p>
+<p>For this first launch cohort the timing isn't quite right, but we're growing — we'll reach out directly when we're ready to bring more makers on. No action needed on your end.</p>
+${signOff}`,
+};
+
 const makerRejected: EmailPreset = {
   slug: 'maker_rejected',
   label: 'Maker — Not this cohort',
@@ -69,6 +89,15 @@ ${signOff}`,
 };
 
 export const EMAIL_PRESETS: Record<ApplicationType, EmailPreset[]> = {
-  designer: [designerReceived, designerApproved, designerRejected],
-  maker: [makerReceived, makerApproved, makerRejected],
+  designer: [designerReceived, designerApproved, designerWaitlisted, designerRejected],
+  maker: [makerReceived, makerApproved, makerWaitlisted, makerRejected],
+};
+
+/** Preset slug that should fire automatically when status transitions to a terminal decision. */
+export const AUTO_PRESET_BY_STATUS: Partial<
+  Record<'approved' | 'waitlisted' | 'rejected', Record<ApplicationType, string>>
+> = {
+  approved: { designer: 'designer_approved', maker: 'maker_approved' },
+  waitlisted: { designer: 'designer_waitlisted', maker: 'maker_waitlisted' },
+  rejected: { designer: 'designer_rejected', maker: 'maker_rejected' },
 };

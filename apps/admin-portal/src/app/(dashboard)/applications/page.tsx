@@ -24,7 +24,10 @@ const STATUS_TABS: Array<{ value: ApplicationStatus | 'all'; label: string }> = 
   { value: 'pending', label: 'New' },
   { value: 'in_review', label: 'In Review' },
   { value: 'approved', label: 'Approved' },
+  { value: 'waitlisted', label: 'Waitlisted' },
   { value: 'rejected', label: 'Rejected' },
+  { value: 'onboarding', label: 'Onboarding' },
+  { value: 'active', label: 'Active' },
   { value: 'archived', label: 'Archived' },
   { value: 'all', label: 'All' },
 ];
@@ -32,11 +35,14 @@ const STATUS_TABS: Array<{ value: ApplicationStatus | 'all'; label: string }> = 
 function statusBadgeVariant(status: ApplicationStatus): 'default' | 'success' | 'destructive' | 'warning' | 'secondary' {
   switch (status) {
     case 'approved':
+    case 'active':
       return 'success';
     case 'rejected':
       return 'destructive';
     case 'in_review':
+    case 'waitlisted':
       return 'warning';
+    case 'onboarding':
     case 'archived':
       return 'secondary';
     default:

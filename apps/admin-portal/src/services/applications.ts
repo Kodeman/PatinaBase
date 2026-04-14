@@ -1,5 +1,13 @@
 export type ApplicationType = 'designer' | 'maker';
-export type ApplicationStatus = 'pending' | 'in_review' | 'approved' | 'rejected' | 'archived';
+export type ApplicationStatus =
+  | 'pending'
+  | 'in_review'
+  | 'approved'
+  | 'waitlisted'
+  | 'rejected'
+  | 'onboarding'
+  | 'active'
+  | 'archived';
 
 export interface DesignerApplication {
   id: string;
@@ -10,6 +18,8 @@ export interface DesignerApplication {
   website: string | null;
   motivation: string | null;
   referral_source: string | null;
+  location: string | null;
+  sourcing_process: string | null;
   status: ApplicationStatus;
   reviewed_by: string | null;
   reviewed_at: string | null;
@@ -28,6 +38,9 @@ export interface MakerApplication {
   website: string | null;
   description: string | null;
   referral_source: string | null;
+  location: string | null;
+  materials: string | null;
+  trade_program: string | null;
   status: ApplicationStatus;
   reviewed_by: string | null;
   reviewed_at: string | null;

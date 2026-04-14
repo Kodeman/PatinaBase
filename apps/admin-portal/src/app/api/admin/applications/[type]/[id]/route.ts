@@ -11,9 +11,12 @@ import {
   APPLICATION_TABLES,
   APPLICATION_STATUSES,
   getApplication,
+  reconcileActiveStatus,
   type ApplicationType,
   type ApplicationStatus,
 } from '@/lib/applications';
+import { sendApplicationEmail } from '@/lib/application-emails';
+import { EMAIL_PRESETS, AUTO_PRESET_BY_STATUS } from '@/components/applications/email-presets';
 
 function parseType(raw: string): ApplicationType | null {
   if (raw === 'designers') return 'designer';
@@ -34,7 +37,8 @@ export async function GET(
   if (!type) return badRequest('Unknown application type');
 
   try {
-    const application = await getApplication(adminClient, type, id);
+    const raw = await getApplication(adminClient, type, id);
+    const application = await reconcileActiveStatus(adminClient, type, raw);
     const { data: comms } = await (adminClient as any)
       .from('application_communications')
       .select('*')
@@ -64,7 +68,7 @@ export async function PATCH(
   const type = parseType(rawType);
   if (!type) return badRequest('Unknown application type');
 
-  let body: { status?: ApplicationStatus; reviewNotes?: string };
+  let body: { status?: ApplicationStatus; reviewNotes?: string; suppressEmail?: boolean };
   try {
     body = await request.json();
   } catch {
@@ -117,6 +121,51 @@ export async function PATCH(
       newValues: updates,
       ipAddress: getClientIp(request),
     });
+
+    // Auto-fire status-change email (approved/waitlisted/rejected) unless suppressed
+    // or the status didn't actually change from its previous value.
+    const newStatus = body.status;
+    const previousStatus = (previous as any)?.status;
+    const autoTriggerable =
+      newStatus === 'approved' || newStatus === 'waitlisted' || newStatus === 'rejected';
+    if (
+      autoTriggerable &&
+      previousStatus !== newStatus &&
+      !body.suppressEmail
+    ) {
+      const presetSlug = AUTO_PRESET_BY_STATUS[newStatus]?.[type];
+      const preset = EMAIL_PRESETS[type].find((p) => p.slug === presetSlug);
+      if (preset) {
+        try {
+          const sendResult = await sendApplicationEmail(adminClient, {
+            type,
+            application: data as any,
+            subject: preset.subject,
+            html: preset.html,
+            presetSlug: preset.slug,
+            source: 'status_change',
+            sentBy: adminUser.id,
+          });
+          await createAuditLog(adminClient, {
+            userId: adminUser.id,
+            action: `application.${type}.auto_email`,
+            resourceType: 'application',
+            resourceId: id,
+            newValues: {
+              presetSlug: preset.slug,
+              transitionedTo: newStatus,
+              providerId: sendResult.providerId,
+              status: sendResult.success ? 'sent' : 'failed',
+              error: sendResult.error,
+            },
+            ipAddress: getClientIp(request),
+            status: sendResult.success ? 'success' : 'failure',
+          });
+        } catch (err: any) {
+          console.error('[PATCH application] auto-email failed', err?.message ?? err);
+        }
+      }
+    }
 
     return NextResponse.json({ data });
   } catch (err: any) {

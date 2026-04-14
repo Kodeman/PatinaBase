@@ -11,7 +11,10 @@ export const APPLICATION_STATUSES = [
   'pending',
   'in_review',
   'approved',
+  'waitlisted',
   'rejected',
+  'onboarding',
+  'active',
   'archived',
 ] as const;
 
@@ -101,4 +104,43 @@ export async function getApplication(
     .single();
   if (error) throw new Error(error.message);
   return normalizeApplication(type, data as any);
+}
+
+/**
+ * Lazily transition an 'onboarding' application to 'active' once the linked
+ * auth user has completed sign-in (last_sign_in_at populated). Safe to call on
+ * every detail GET — no-op if the application isn't onboarding or the user
+ * hasn't signed in yet. Returns the (possibly-updated) application row.
+ */
+export async function reconcileActiveStatus(
+  adminClient: ReturnType<typeof createAdminClient>,
+  type: ApplicationType,
+  application: ApplicationRow,
+): Promise<ApplicationRow> {
+  if (application.status !== 'onboarding' || !application.auth_user_id) {
+    return application;
+  }
+
+  try {
+    const { data: userResult } = await adminClient.auth.admin.getUserById(
+      application.auth_user_id,
+    );
+    const lastSignInAt = userResult?.user?.last_sign_in_at;
+    if (!lastSignInAt) return application;
+
+    const table = APPLICATION_TABLES[type];
+    const { data: updated, error } = await (adminClient as any)
+      .from(table)
+      .update({
+        status: 'active',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', application.id)
+      .select()
+      .single();
+    if (error) return application;
+    return normalizeApplication(type, updated as any);
+  } catch {
+    return application;
+  }
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { ExternalLink, Mail, UserPlus, Check, X, Archive } from 'lucide-react';
+import { ExternalLink, Mail, UserPlus, Check, X, Archive, Clock } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -153,12 +153,14 @@ function DrawerBody({
               <Detail label="First name" value={designer.first_name} />
               <Detail label="Last name" value={designer.last_name} />
               <Detail label="Company" value={designer.company ?? '—'} />
+              <Detail label="Location" value={designer.location ?? '—'} />
               <Detail label="Website" value={designer.website ?? '—'} link={designer.website} />
             </>
           ) : (
             <>
               <Detail label="Brand" value={maker.brand_name} />
               <Detail label="Contact" value={maker.contact_name} />
+              <Detail label="Location" value={maker.location ?? '—'} />
               <Detail label="Website" value={maker.website ?? '—'} link={maker.website} />
               <Detail label="Referral" value={maker.referral_source ?? '—'} />
             </>
@@ -169,10 +171,19 @@ function DrawerBody({
         </section>
 
         {isDesigner && designer.motivation && (
-          <Block label="Motivation">{designer.motivation}</Block>
+          <Block label="Timeless design — what it means to them">{designer.motivation}</Block>
+        )}
+        {isDesigner && designer.sourcing_process && (
+          <Block label="Current sourcing process">{designer.sourcing_process}</Block>
         )}
         {!isDesigner && maker.description && (
           <Block label="About the workshop">{maker.description}</Block>
+        )}
+        {!isDesigner && maker.materials && (
+          <Block label="Materials / categories">{maker.materials}</Block>
+        )}
+        {!isDesigner && maker.trade_program && (
+          <Block label="Trade program">{maker.trade_program}</Block>
         )}
 
         <Separator />
@@ -194,6 +205,14 @@ function DrawerBody({
               onClick={() => handleStatus('approved')}
             >
               <Check className="h-4 w-4 mr-1" /> Approve
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={update.isPending || application.status === 'waitlisted'}
+              onClick={() => handleStatus('waitlisted')}
+            >
+              <Clock className="h-4 w-4 mr-1" /> Waitlist
             </Button>
             <Button
               size="sm"
@@ -274,16 +293,25 @@ function DrawerBody({
         <section>
           <h3 className="text-sm font-medium mb-2">Onboarding</h3>
           {alreadyOnboarded ? (
-            <p className="text-sm text-muted-foreground">
-              Account created {application.converted_at ? formatDate(application.converted_at) : ''} ·
-              user id {application.auth_user_id?.slice(0, 8)}…
-            </p>
+            <div className="text-sm text-muted-foreground space-y-1">
+              <p>
+                {application.status === 'active'
+                  ? 'Active — applicant has signed in.'
+                  : 'Invited — awaiting sign-in.'}
+              </p>
+              <p className="text-xs">
+                Account created {application.converted_at ? formatDate(application.converted_at) : ''} ·
+                user id {application.auth_user_id?.slice(0, 8)}…
+              </p>
+            </div>
           ) : (
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
                 Create a user account and send an invitation email. Designers receive the
                 <code className="mx-1 text-xs">independent_designer</code> role; makers receive
-                <code className="mx-1 text-xs">brand_admin</code>.
+                <code className="mx-1 text-xs">brand_admin</code>. The application moves to
+                <code className="mx-1 text-xs">onboarding</code>, then to <code className="text-xs">active</code>
+                once they sign in.
               </p>
               <Button size="sm" onClick={onOnboard} disabled={application.status !== 'approved'}>
                 <UserPlus className="h-4 w-4 mr-1" /> Create account & invite
@@ -358,11 +386,14 @@ function Block({ label, children }: { label: string; children: React.ReactNode }
 function statusVariant(status: ApplicationStatus): 'default' | 'success' | 'destructive' | 'warning' | 'secondary' {
   switch (status) {
     case 'approved':
+    case 'active':
       return 'success';
     case 'rejected':
       return 'destructive';
     case 'in_review':
+    case 'waitlisted':
       return 'warning';
+    case 'onboarding':
     case 'archived':
       return 'secondary';
     default:

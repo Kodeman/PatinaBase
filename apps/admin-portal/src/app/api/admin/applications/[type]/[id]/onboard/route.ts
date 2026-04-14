@@ -93,14 +93,16 @@ export async function POST(
       await adminClient.from('user_roles').insert(roleInserts);
     }
 
-    // Link back to application
+    // Link back to application. Status moves to 'onboarding' — the lifecycle
+    // will transition to 'active' once the applicant signs in (lazy-synced on
+    // detail GET via reconcileActiveStatus).
     const nowIso = new Date().toISOString();
     await (adminClient as any)
       .from(table)
       .update({
         auth_user_id: newUser.id,
         converted_at: nowIso,
-        status: 'approved',
+        status: 'onboarding',
         reviewed_by: adminUser.id,
         reviewed_at: nowIso,
       })
