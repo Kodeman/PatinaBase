@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sendHtmlEmail } from '@patina/email';
+import { sendHtmlEmail } from '@patina/email/send';
 import {
   getAuthenticatedAdmin,
   badRequest,

@@ -6,6 +6,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./send": "./src/send.ts",
     "./renderer": "./src/block-renderer.ts",
     "./templates/*": "./src/templates/*.tsx",
     "./components/*": "./src/components/*.tsx"
