@@ -64,6 +64,49 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
   }
 }
 
+export interface SendHtmlEmailOptions {
+  to: string | string[];
+  subject: string;
+  html: string;
+  text?: string;
+  from?: string;
+  replyTo?: string;
+  headers?: Record<string, string>;
+  tags?: Array<{ name: string; value: string }>;
+}
+
+/**
+ * Send a raw-HTML email via Resend. Used for admin-composed messages that
+ * don't have a React Email template.
+ */
+export async function sendHtmlEmail(options: SendHtmlEmailOptions): Promise<SendEmailResult> {
+  const resend = getResendClient();
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: options.from ?? SENDERS.transactional,
+      to: Array.isArray(options.to) ? options.to : [options.to],
+      subject: options.subject,
+      html: options.html,
+      text: options.text,
+      replyTo: options.replyTo,
+      headers: options.headers,
+      tags: options.tags,
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, id: data?.id };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Unknown send error',
+    };
+  }
+}
+
 /**
  * Send a batch of emails via Resend Batch API.
  */

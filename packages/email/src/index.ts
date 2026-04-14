@@ -51,5 +51,5 @@ export { renderTemplate, renderBlock, renderBlocks } from './block-renderer';
 export type { RenderContext } from './block-renderer';
 
 // Send utilities
-export { sendEmail, sendBatchEmails, generateUnsubscribeHeaders, SENDERS } from './send';
-export type { SendEmailOptions, SendEmailResult } from './send';
+export { sendEmail, sendHtmlEmail, sendBatchEmails, generateUnsubscribeHeaders, SENDERS } from './send';
+export type { SendEmailOptions, SendHtmlEmailOptions, SendEmailResult } from './send';
