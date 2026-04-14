@@ -1,5 +1,5 @@
 export type ApplicationType = 'designer' | 'maker';
-export type ApplicationStatus = 'new' | 'in_review' | 'approved' | 'rejected' | 'archived';
+export type ApplicationStatus = 'pending' | 'in_review' | 'approved' | 'rejected' | 'archived';
 
 export interface DesignerApplication {
   id: string;

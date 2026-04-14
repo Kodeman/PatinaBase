@@ -21,7 +21,7 @@ import type {
 import { ApplicationDetailDrawer } from '@/components/applications/ApplicationDetailDrawer';
 
 const STATUS_TABS: Array<{ value: ApplicationStatus | 'all'; label: string }> = [
-  { value: 'new', label: 'New' },
+  { value: 'pending', label: 'New' },
   { value: 'in_review', label: 'In Review' },
   { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
@@ -46,7 +46,7 @@ function statusBadgeVariant(status: ApplicationStatus): 'default' | 'success' | 
 
 export default function ApplicationsPage() {
   const [type, setType] = useState<ApplicationType>('designer');
-  const [status, setStatus] = useState<ApplicationStatus | 'all'>('new');
+  const [status, setStatus] = useState<ApplicationStatus | 'all'>('pending');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 

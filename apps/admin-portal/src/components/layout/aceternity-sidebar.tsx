@@ -18,6 +18,7 @@ import {
   Flag,
   FolderKanban,
   Image,
+  Inbox,
   LayoutDashboard,
   LayoutTemplate,
   Mail,
@@ -74,6 +75,11 @@ export function AdminAceternitySidebar({ className, isOpen, setIsOpen }: AdminAc
           label: 'Roles & Permissions',
           href: '/roles',
           icon: <ShieldCheck className="h-5 w-5" />,
+        },
+        {
+          label: 'Applications',
+          href: '/applications',
+          icon: <Inbox className="h-5 w-5" />,
         },
         {
           label: 'Verification Queue',

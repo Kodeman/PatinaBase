@@ -8,7 +8,7 @@ export const APPLICATION_TABLES: Record<ApplicationType, string> = {
 };
 
 export const APPLICATION_STATUSES = [
-  'new',
+  'pending',
   'in_review',
   'approved',
   'rejected',
