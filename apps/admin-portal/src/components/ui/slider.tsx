@@ -36,9 +36,11 @@ export function Slider({
   return (
     <div className={cn('w-full', className)}>
       {label && (
-        <div className="flex justify-between items-center mb-2">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
-          {showValue && <span className="text-sm text-muted-foreground">{currentValue[0]}</span>}
+        <div className="mb-2 flex items-center justify-between">
+          <label className="text-[0.72rem] font-medium text-[var(--text-primary)]">{label}</label>
+          {showValue && (
+            <span className="type-meta-small font-mono">{currentValue[0]}</span>
+          )}
         </div>
       )}
       <input
@@ -48,7 +50,7 @@ export function Slider({
         step={step}
         value={currentValue[0]}
         onChange={handleChange}
-        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-primary"
+        className="h-1 w-full cursor-pointer appearance-none rounded-full bg-[var(--color-pearl)] accent-[var(--accent-primary)]"
       />
     </div>
   );

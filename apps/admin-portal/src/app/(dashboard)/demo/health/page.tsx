@@ -1,8 +1,12 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
+import {
+  PageHeader,
+  MetricBlock,
+  MetricsRow,
+  Section,
+  StatusDot,
+} from '@/components/portal';
 
 const services = [
   { name: 'API Gateway', status: 'healthy', latency: '45ms', uptime: '99.99%' },
@@ -19,87 +23,46 @@ const services = [
 
 export default function HealthPage() {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">System Health</h1>
-        <p className="text-muted-foreground">
-          Monitor service health and performance metrics
-        </p>
-      </div>
+    <div>
+      <PageHeader
+        title="System"
+        accent="Health"
+        description="Monitor service health and performance metrics."
+      />
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Services</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">10/10</div>
-            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-              <CheckCircle2 className="h-3 w-3 text-success" />
-              All healthy
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Avg Latency</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">56ms</div>
-            <p className="text-xs text-muted-foreground">p95: 234ms</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Error Rate</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">0.02%</div>
-            <p className="text-xs text-muted-foreground">Within SLO</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Uptime</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">99.96%</div>
-            <p className="text-xs text-muted-foreground">30 day average</p>
-          </CardContent>
-        </Card>
-      </div>
+      <MetricsRow>
+        <MetricBlock label="Services" value="10/10" change="All healthy" trend="up" />
+        <MetricBlock label="Avg Latency" value="56ms" change="p95: 234ms" trend="neutral" />
+        <MetricBlock label="Error Rate" value="0.02%" change="Within SLO" trend="up" />
+        <MetricBlock label="Uptime" value="99.96%" change="30 day avg" trend="up" />
+      </MetricsRow>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Service Status</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {services.map((service) => (
-              <div
-                key={service.name}
-                className="flex items-center justify-between p-3 rounded-lg border"
-              >
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-success" />
-                  <span className="font-medium">{service.name}</span>
-                </div>
-                <div className="flex items-center gap-6">
-                  <div className="text-right">
-                    <div className="text-sm text-muted-foreground">Latency</div>
-                    <div className="font-mono text-sm">{service.latency}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm text-muted-foreground">Uptime</div>
-                    <div className="font-mono text-sm">{service.uptime}</div>
-                  </div>
-                  <Badge variant="success">Healthy</Badge>
-                </div>
+      <Section title="Service Status" className="mt-10">
+        <div>
+          {services.map((service) => (
+            <div
+              key={service.name}
+              className="flex items-center justify-between border-b border-[var(--border-subtle)] py-4 last:border-b-0"
+            >
+              <div className="flex items-center gap-3">
+                <StatusDot variant="success" />
+                <span className="type-item-name">{service.name}</span>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              <div className="flex items-center gap-8">
+                <div className="text-right">
+                  <div className="type-meta-small">Latency</div>
+                  <div className="type-body-small font-mono">{service.latency}</div>
+                </div>
+                <div className="text-right">
+                  <div className="type-meta-small">Uptime</div>
+                  <div className="type-body-small font-mono">{service.uptime}</div>
+                </div>
+                <StatusDot variant="success" label="Healthy" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
     </div>
   );
 }

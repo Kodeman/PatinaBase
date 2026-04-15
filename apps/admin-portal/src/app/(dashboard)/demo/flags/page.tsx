@@ -1,9 +1,15 @@
 'use client';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Flag } from 'lucide-react';
+import {
+  PageHeader,
+  Section,
+  ListRow,
+  StatusDot,
+  ActionButton,
+} from '@/components/portal';
 
 const flags = [
   { key: 'adminVerification', value: true, env: 'prod', description: 'Enable designer verification queue' },
@@ -14,53 +20,41 @@ const flags = [
 
 export default function FlagsPage() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Feature Flags</h1>
-          <p className="text-muted-foreground">
-            Manage feature flags and experiments
-          </p>
-        </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Flag
-        </Button>
-      </div>
+    <div>
+      <PageHeader
+        title="Feature"
+        accent="Flags"
+        description="Manage feature flags and experiments."
+        actions={
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Flag
+          </Button>
+        }
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Active Feature Flags</CardTitle>
-          <CardDescription>Control feature rollout and experiments</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {flags.map((flag) => (
-              <div
-                key={flag.key}
-                className="flex items-center justify-between p-4 rounded-lg border hover:bg-accent transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <Flag className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <div className="font-medium font-mono text-sm">{flag.key}</div>
-                    <div className="text-sm text-muted-foreground">{flag.description}</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
+      <Section title="Active Feature Flags" className="mt-10">
+        <div>
+          {flags.map((flag) => (
+            <ListRow
+              key={flag.key}
+              leading={<Flag className="h-4 w-4 text-[var(--text-muted)]" />}
+              title={<span className="font-mono text-[0.85rem]">{flag.key}</span>}
+              meta={[flag.description]}
+              right={
+                <>
                   <Badge variant="outline">{flag.env}</Badge>
-                  <Badge variant={flag.value ? 'success' : 'secondary'}>
-                    {flag.value ? 'Enabled' : 'Disabled'}
-                  </Badge>
-                  <Button variant="ghost" size="sm">
-                    Edit
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+                  <StatusDot
+                    variant={flag.value ? 'success' : 'neutral'}
+                    label={flag.value ? 'Enabled' : 'Disabled'}
+                  />
+                  <ActionButton variant="muted">Edit</ActionButton>
+                </>
+              }
+            />
+          ))}
+        </div>
+      </Section>
     </div>
   );
 }

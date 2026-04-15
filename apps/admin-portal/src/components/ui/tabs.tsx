@@ -34,11 +34,17 @@ export function Tabs({
   );
 }
 
-export function TabsList({ children, className }: { children: React.ReactNode; className?: string }) {
+export function TabsList({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
     <div
       className={cn(
-        'inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground',
+        'flex items-stretch gap-0 border-b border-[var(--border-default)]',
         className
       )}
     >
@@ -66,10 +72,15 @@ export function TabsTrigger({
       type="button"
       onClick={() => context.onValueChange(value)}
       className={cn(
-        'inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
-        isActive && 'bg-background text-foreground shadow-sm',
+        'relative inline-flex items-center whitespace-nowrap px-[0.85rem] py-2.5 text-[0.75rem] transition-colors first:pl-0',
+        'focus-visible:outline-none',
+        'disabled:pointer-events-none disabled:opacity-50',
+        isActive
+          ? 'font-medium text-[var(--text-primary)] after:absolute after:bottom-[-1px] after:left-0 after:right-0 after:h-[2px] after:bg-[var(--accent-primary)]'
+          : 'font-normal text-[var(--text-muted)] hover:text-[var(--text-primary)]',
         className
       )}
+      style={{ fontFamily: 'var(--font-body)' }}
     >
       {children}
     </button>
@@ -93,7 +104,7 @@ export function TabsContent({
   return (
     <div
       className={cn(
-        'mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        'mt-6 focus-visible:outline-none',
         className
       )}
     >

@@ -1,12 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { Inbox, Search } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  PageHeader,
+  FilterTabs,
+  ListRow,
+  Section,
+  EmptyState,
+  StatusDot,
+  LoadingStrata,
+  type StatusVariant,
+} from '@/components/portal';
 import { formatDate } from '@/lib/utils';
 import {
   useDesignerApplications,
@@ -32,21 +38,26 @@ const STATUS_TABS: Array<{ value: ApplicationStatus | 'all'; label: string }> = 
   { value: 'all', label: 'All' },
 ];
 
-function statusBadgeVariant(status: ApplicationStatus): 'default' | 'success' | 'destructive' | 'warning' | 'secondary' {
+const TYPE_TABS: Array<{ value: ApplicationType; label: string }> = [
+  { value: 'designer', label: 'Designers' },
+  { value: 'maker', label: 'Makers' },
+];
+
+function statusVariant(status: ApplicationStatus): StatusVariant {
   switch (status) {
     case 'approved':
     case 'active':
       return 'success';
     case 'rejected':
-      return 'destructive';
+      return 'error';
     case 'in_review':
     case 'waitlisted':
       return 'warning';
     case 'onboarding':
     case 'archived':
-      return 'secondary';
+      return 'neutral';
     default:
-      return 'default';
+      return 'info';
   }
 }
 
@@ -57,58 +68,45 @@ export default function ApplicationsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Inbox className="h-7 w-7" />
-            Applications
-          </h1>
-          <p className="text-muted-foreground">
-            Review, respond to, and onboard designer and maker applicants from patina.cloud.
-          </p>
+    <div>
+      <PageHeader
+        title="Applications"
+        description="Review, respond to, and onboard designer and maker applicants from patina.cloud."
+      />
+
+      <div className="mt-8">
+        <FilterTabs items={TYPE_TABS} value={type} onChange={setType} />
+      </div>
+
+      <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
+        <FilterTabs
+          items={STATUS_TABS}
+          value={status}
+          onChange={setStatus}
+          className="border-b-0"
+        />
+        <div className="relative ml-auto w-full sm:w-[280px]">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+          <Input
+            placeholder={
+              type === 'designer'
+                ? 'Search name, email, company'
+                : 'Search brand, contact, email'
+            }
+            className="pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
       </div>
 
-      <Tabs value={type} onValueChange={(v) => setType(v as ApplicationType)}>
-        <TabsList>
-          <TabsTrigger value="designer">Designers</TabsTrigger>
-          <TabsTrigger value="maker">Makers</TabsTrigger>
-        </TabsList>
-
-        <div className="mt-6 flex flex-wrap items-center gap-2">
-          {STATUS_TABS.map((s) => (
-            <Button
-              key={s.value}
-              variant={status === s.value ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setStatus(s.value)}
-            >
-              {s.label}
-            </Button>
-          ))}
-          <div className="ml-auto relative w-full sm:w-[280px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder={type === 'designer' ? 'Search name, email, company' : 'Search brand, contact, email'}
-              className="pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <TabsContent value="designer" className="mt-6">
-          <DesignerList
-            status={status}
-            search={search}
-            onSelect={setSelectedId}
-          />
-        </TabsContent>
-        <TabsContent value="maker" className="mt-6">
+      <Section className="mt-8">
+        {type === 'designer' ? (
+          <DesignerList status={status} search={search} onSelect={setSelectedId} />
+        ) : (
           <MakerList status={status} search={search} onSelect={setSelectedId} />
-        </TabsContent>
-      </Tabs>
+        )}
+      </Section>
 
       <ApplicationDetailDrawer
         type={type}
@@ -135,17 +133,41 @@ function DesignerList({
     pageSize: 50,
   });
 
-  if (isLoading) return <LoadingCard />;
-  if (isError) return <ErrorCard message={error instanceof Error ? error.message : 'Failed to load'} />;
+  if (isLoading) return <LoadingStrata />;
+  if (isError)
+    return (
+      <EmptyState
+        label="Error"
+        message={error instanceof Error ? error.message : 'Failed to load applications.'}
+      />
+    );
 
   const rows = data?.data ?? [];
-  if (rows.length === 0) return <EmptyCard />;
+  if (rows.length === 0) return <EmptyState message="No applications in this status." />;
 
   return (
-    <div className="grid gap-3">
-      {rows.map((app) => (
-        <DesignerRow key={app.id} app={app} onSelect={onSelect} />
-      ))}
+    <div>
+      {rows.map((app) => {
+        const name = [app.first_name, app.last_name].filter(Boolean).join(' ');
+        return (
+          <ListRow
+            key={app.id}
+            onClick={() => onSelect(app.id)}
+            title={name || 'Unnamed applicant'}
+            meta={[
+              app.email,
+              app.company,
+              app.motivation ? app.motivation.slice(0, 80) : undefined,
+            ]}
+            right={
+              <>
+                <span className="type-meta-small whitespace-nowrap">{formatDate(app.created_at)}</span>
+                <StatusDot variant={statusVariant(app.status)} label={app.status.replace('_', ' ')} />
+              </>
+            }
+          />
+        );
+      })}
     </div>
   );
 }
@@ -166,110 +188,38 @@ function MakerList({
     pageSize: 50,
   });
 
-  if (isLoading) return <LoadingCard />;
-  if (isError) return <ErrorCard message={error instanceof Error ? error.message : 'Failed to load'} />;
+  if (isLoading) return <LoadingStrata />;
+  if (isError)
+    return (
+      <EmptyState
+        label="Error"
+        message={error instanceof Error ? error.message : 'Failed to load applications.'}
+      />
+    );
 
   const rows = data?.data ?? [];
-  if (rows.length === 0) return <EmptyCard />;
+  if (rows.length === 0) return <EmptyState message="No applications in this status." />;
 
   return (
-    <div className="grid gap-3">
-      {rows.map((app) => (
-        <MakerRow key={app.id} app={app} onSelect={onSelect} />
+    <div>
+      {rows.map((app: MakerApplication) => (
+        <ListRow
+          key={app.id}
+          onClick={() => onSelect(app.id)}
+          title={app.brand_name || 'Unnamed brand'}
+          meta={[
+            app.contact_name,
+            app.email,
+            app.description ? app.description.slice(0, 80) : undefined,
+          ]}
+          right={
+            <>
+              <span className="type-meta-small whitespace-nowrap">{formatDate(app.created_at)}</span>
+              <StatusDot variant={statusVariant(app.status)} label={app.status.replace('_', ' ')} />
+            </>
+          }
+        />
       ))}
     </div>
-  );
-}
-
-function DesignerRow({
-  app,
-  onSelect,
-}: {
-  app: DesignerApplication;
-  onSelect: (id: string) => void;
-}) {
-  const name = [app.first_name, app.last_name].filter(Boolean).join(' ');
-  return (
-    <Card className="cursor-pointer transition-colors hover:bg-accent/40" onClick={() => onSelect(app.id)}>
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <CardTitle className="text-base truncate">{name || 'Unnamed applicant'}</CardTitle>
-            <CardDescription className="truncate">
-              {app.email}
-              {app.company ? ` · ${app.company}` : ''}
-            </CardDescription>
-          </div>
-          <Badge variant={statusBadgeVariant(app.status)}>{app.status.replace('_', ' ')}</Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="pt-0 text-sm text-muted-foreground flex items-center justify-between gap-4">
-        <span className="truncate">
-          {app.motivation ? app.motivation.slice(0, 120) : 'No motivation provided'}
-        </span>
-        <span className="whitespace-nowrap">{formatDate(app.created_at)}</span>
-      </CardContent>
-    </Card>
-  );
-}
-
-function MakerRow({
-  app,
-  onSelect,
-}: {
-  app: MakerApplication;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <Card className="cursor-pointer transition-colors hover:bg-accent/40" onClick={() => onSelect(app.id)}>
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <CardTitle className="text-base truncate">{app.brand_name || 'Unnamed brand'}</CardTitle>
-            <CardDescription className="truncate">
-              {app.contact_name}
-              {app.contact_name ? ` · ` : ''}
-              {app.email}
-            </CardDescription>
-          </div>
-          <Badge variant={statusBadgeVariant(app.status)}>{app.status.replace('_', ' ')}</Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="pt-0 text-sm text-muted-foreground flex items-center justify-between gap-4">
-        <span className="truncate">
-          {app.description ? app.description.slice(0, 120) : 'No description provided'}
-        </span>
-        <span className="whitespace-nowrap">{formatDate(app.created_at)}</span>
-      </CardContent>
-    </Card>
-  );
-}
-
-function LoadingCard() {
-  return (
-    <Card>
-      <CardContent className="py-8 text-center text-muted-foreground">Loading applications…</CardContent>
-    </Card>
-  );
-}
-
-function EmptyCard() {
-  return (
-    <Card>
-      <CardContent className="py-8 text-center text-muted-foreground">
-        No applications in this status.
-      </CardContent>
-    </Card>
-  );
-}
-
-function ErrorCard({ message }: { message: string }) {
-  return (
-    <Card>
-      <CardContent className="py-8 text-center text-destructive">
-        <p className="font-medium">Failed to load applications</p>
-        <p className="text-sm text-muted-foreground mt-1">{message}</p>
-      </CardContent>
-    </Card>
   );
 }

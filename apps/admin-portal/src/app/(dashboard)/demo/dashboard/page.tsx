@@ -1,156 +1,121 @@
 'use client';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, Package, ShoppingCart, AlertCircle, TrendingUp, CheckCircle } from 'lucide-react';
+import { Info } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { PostHogStatsWidget } from '@/components/dashboards/PostHogStatsWidget';
+import {
+  PageHeader,
+  MetricBlock,
+  MetricsRow,
+  Section,
+  EmptyState,
+  StrataMark,
+  StatusDot,
+} from '@/components/portal';
 
-const stats = [
-  {
-    name: 'Total Users',
-    value: '12,345',
-    change: '+12.3%',
-    icon: Users,
-    trend: 'up',
-  },
-  {
-    name: 'Active Products',
-    value: '2,456',
-    change: '+5.2%',
-    icon: Package,
-    trend: 'up',
-  },
-  {
-    name: 'Orders (30d)',
-    value: '1,234',
-    change: '-3.1%',
-    icon: ShoppingCart,
-    trend: 'down',
-  },
-  {
-    name: 'Verification Queue',
-    value: '23',
-    change: '+8',
-    icon: AlertCircle,
-    trend: 'neutral',
-  },
-];
+interface DashboardStats {
+  totalUsers: number | null;
+  activeProducts: number | null;
+  totalOrders: number | null;
+  verificationQueue: number | null;
+}
 
-const recentActivity = [
-  {
-    id: 1,
-    action: 'Designer verified',
-    user: 'jane@example.com',
-    time: '5 minutes ago',
-  },
-  {
-    id: 2,
-    action: 'Product published',
-    user: 'admin@patina.com',
-    time: '12 minutes ago',
-  },
-  {
-    id: 3,
-    action: 'Order refunded',
-    user: 'support@patina.com',
-    time: '1 hour ago',
-  },
-  {
-    id: 4,
-    action: 'User suspended',
-    user: 'admin@patina.com',
-    time: '2 hours ago',
-  },
-];
+async function fetchDashboardStats(): Promise<DashboardStats> {
+  const [usersRes, productsRes, ordersRes, verificationRes] = await Promise.all([
+    fetch('/api/users?page=1&pageSize=1')
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null),
+    fetch('/api/catalog/products?page=1&pageSize=1')
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null),
+    fetch('/api/orders?page=1&pageSize=1')
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null),
+    fetch('/api/admin/verification-queue?status=pending&pageSize=1')
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null),
+  ]);
+
+  return {
+    totalUsers: usersRes?.data?.meta?.total ?? null,
+    activeProducts: productsRes?.data?.meta?.total ?? null,
+    totalOrders: ordersRes?.data?.meta?.total ?? null,
+    verificationQueue: verificationRes?.data?.meta?.total ?? null,
+  };
+}
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
 
 export default function DashboardPage() {
+  const { data: stats, isLoading } = useQuery<DashboardStats>({
+    queryKey: ['dashboard-stats'],
+    queryFn: fetchDashboardStats,
+    refetchInterval: 5 * 60 * 1000,
+  });
+
+  const val = (n: number | null | undefined) => (n != null ? n : '—');
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Overview of platform activity and key metrics
-        </p>
+    <div>
+      <PageHeader
+        title={getGreeting()}
+        accent="administrator"
+        description="Overview of platform activity and key metrics."
+      />
+
+      <MetricsRow>
+        <MetricBlock
+          label="Total Users"
+          value={isLoading ? 0 : (stats?.totalUsers ?? 0)}
+        />
+        <MetricBlock
+          label="Active Products"
+          value={isLoading ? 0 : (stats?.activeProducts ?? 0)}
+        />
+        <MetricBlock label="Orders" value={isLoading ? 0 : (stats?.totalOrders ?? 0)} />
+        <MetricBlock
+          label="Verification Queue"
+          value={isLoading ? 0 : (stats?.verificationQueue ?? 0)}
+          trend={stats?.verificationQueue && stats.verificationQueue > 0 ? 'neutral' : 'up'}
+        />
+      </MetricsRow>
+
+      <div className="mt-10">
+        <PostHogStatsWidget />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={stat.name}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {stat.name}
-                </CardTitle>
-                <Icon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
-                <p className="text-xs text-muted-foreground">
-                  <span
-                    className={
-                      stat.trend === 'up'
-                        ? 'text-success'
-                        : stat.trend === 'down'
-                        ? 'text-destructive'
-                        : ''
-                    }
-                  >
-                    {stat.change}
-                  </span>{' '}
-                  from last month
-                </p>
-              </CardContent>
-            </Card>
-          );
-        })}
+      <div className="mt-6">
+        <StrataMark variant="mini" />
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Latest admin actions</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-center gap-4">
-                  <CheckCircle className="h-4 w-4 text-success" />
-                  <div className="flex-1 space-y-1">
-                    <p className="text-sm font-medium">{activity.action}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {activity.user}
-                    </p>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {activity.time}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="mt-6 grid gap-10 md:grid-cols-[58%_42%]">
+        <Section title="Recent Activity">
+          <EmptyState
+            label="Coming soon"
+            message="Audit log integration is not yet available."
+          >
+            <Info className="mt-3 h-5 w-5 text-[var(--text-muted)]" />
+          </EmptyState>
+        </Section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>System Health</CardTitle>
-            <CardDescription>Service status overview</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {['API Gateway', 'Database', 'OpenSearch', 'Media Pipeline'].map(
-                (service) => (
-                  <div key={service} className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{service}</span>
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-success" />
-                      <span className="text-xs text-muted-foreground">Healthy</span>
-                    </div>
-                  </div>
-                )
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <Section title="System Health">
+          <div>
+            {['API Gateway', 'Database', 'OpenSearch', 'Media Pipeline'].map((service) => (
+              <div
+                key={service}
+                className="flex items-center justify-between border-b border-[var(--border-subtle)] py-3 last:border-b-0"
+              >
+                <span className="type-label">{service}</span>
+                <StatusDot variant="success" label="Healthy" />
+              </div>
+            ))}
+          </div>
+        </Section>
       </div>
     </div>
   );

@@ -158,7 +158,8 @@ export const usersService = {
     if (params?.status) searchParams.append('status', params.status);
     if (params?.page) searchParams.append('page', params.page.toString());
     if (params?.pageSize) searchParams.append('pageSize', params.pageSize.toString());
-    return apiFetch(`/api/admin/verification-queue?${searchParams.toString()}`);
+    const json = await apiFetch<{ data: PaginatedResponse<DesignerProfile> }>(`/api/admin/verification-queue?${searchParams.toString()}`);
+    return json.data;
   },
 
   async getDesignerProfile(userId: string): Promise<DesignerProfile> {

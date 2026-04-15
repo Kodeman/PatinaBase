@@ -38,6 +38,7 @@ import {
   type AdminCollectionFilters,
 } from '@/hooks/use-admin-collections';
 import Link from 'next/link';
+import { PageHeader, Section, FilterTabs } from '@/components/portal';
 
 type CollectionType = 'manual' | 'rule' | 'smart';
 type CollectionStatus = 'draft' | 'published' | 'scheduled';
@@ -114,63 +115,44 @@ export default function CollectionsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Collections</h2>
-          <p className="text-muted-foreground">
-            Organize products into curated collections
-            {totalCollections > 0 && ` (${totalCollections} total)`}
-          </p>
-        </div>
-        <Button onClick={() => setCreateModalOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Collection
-        </Button>
-      </div>
+    <div>
+      <PageHeader
+        title="Collections"
+        description={`Organize products into curated collections${totalCollections > 0 ? ` · ${totalCollections} total` : ''}.`}
+        actions={
+          <Button onClick={() => setCreateModalOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Collection
+          </Button>
+        }
+      />
 
-      {/* Search and Filters */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search collections..."
-                className="pl-9"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-
-            <div className="flex gap-2">
-              {statusOptions.map((option) => (
-                <Button
-                  key={option.value}
-                  variant={statusFilter === option.value ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setStatusFilter(option.value as typeof statusFilter)}
-                >
-                  {option.label}
-                </Button>
-              ))}
-            </div>
-
-            <div className="flex gap-2">
-              {typeOptions.map((option) => (
-                <Button
-                  key={option.value}
-                  variant={typeFilter === option.value ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setTypeFilter(option.value as typeof typeFilter)}
-                >
-                  {option.label}
-                </Button>
-              ))}
-            </div>
+      <Section className="mt-10">
+        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+            <Input
+              placeholder="Search collections..."
+              className="pl-9"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
-        </CardContent>
-      </Card>
+
+          <FilterTabs
+            items={statusOptions}
+            value={statusFilter}
+            onChange={(v) => setStatusFilter(v as typeof statusFilter)}
+            className="border-b-0"
+          />
+
+          <FilterTabs
+            items={typeOptions}
+            value={typeFilter}
+            onChange={(v) => setTypeFilter(v as typeof typeFilter)}
+            className="border-b-0"
+          />
+        </div>
 
       {/* Loading State */}
       {isLoading && (
@@ -285,24 +267,20 @@ export default function CollectionsPage() {
 
       {/* Empty State */}
       {!isLoading && isEmpty && (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-              <Layers className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2">No collections found</h3>
-            <p className="text-muted-foreground mb-4">
-              {searchQuery || statusFilter !== 'all' || typeFilter !== 'all'
-                ? 'No collections match your filters. Try adjusting your search.'
-                : 'Get started by creating your first collection'}
-            </p>
-            <Button onClick={() => setCreateModalOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Collection
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="py-12 text-center">
+          <Layers className="mx-auto mb-4 h-8 w-8 text-[var(--text-muted)]" />
+          <p className="type-body italic text-[var(--text-muted)] max-w-md mx-auto">
+            {searchQuery || statusFilter !== 'all' || typeFilter !== 'all'
+              ? 'No collections match your filters. Try adjusting your search.'
+              : 'No collections yet. Create your first collection to get started.'}
+          </p>
+          <Button className="mt-4" onClick={() => setCreateModalOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Collection
+          </Button>
+        </div>
       )}
+      </Section>
 
       {/* Create Collection Modal */}
       <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>

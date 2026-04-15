@@ -2,26 +2,32 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Check, X, Eye, Clock } from 'lucide-react';
+import { AlertCircle, Check, X, Eye, Clock } from 'lucide-react';
+import {
+  PageHeader,
+  FilterTabs,
+  ListRow,
+  Section,
+  EmptyState,
+  StatusDot,
+  ActionButton,
+  LoadingStrata,
+} from '@/components/portal';
 import { usersService } from '@/services/users';
 import { formatDate } from '@/lib/utils';
 import type { DesignerProfile } from '@/types';
 
+type VerificationStatus = 'submitted' | 'in_review' | 'approved' | 'rejected';
+
 export default function VerificationPage() {
-  const [selectedStatus, setSelectedStatus] = useState<string>('in_review');
+  const [selectedStatus, setSelectedStatus] = useState<VerificationStatus>('in_review');
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['verification-queue', selectedStatus],
-    queryFn: () =>
-      usersService.getVerificationQueue({
-        status: selectedStatus,
-        pageSize: 50,
-      }),
+    queryFn: () => usersService.getVerificationQueue({ status: selectedStatus, pageSize: 50 }),
   });
 
   const approveMutation = useMutation({
@@ -31,9 +37,7 @@ export default function VerificationPage() {
       queryClient.invalidateQueries({ queryKey: ['verification-queue'] });
       toast.success('Designer approved successfully');
     },
-    onError: () => {
-      toast.error('Failed to approve designer');
-    },
+    onError: () => toast.error('Failed to approve designer'),
   });
 
   const rejectMutation = useMutation({
@@ -43,175 +47,137 @@ export default function VerificationPage() {
       queryClient.invalidateQueries({ queryKey: ['verification-queue'] });
       toast.success('Designer rejected');
     },
-    onError: () => {
-      toast.error('Failed to reject designer');
-    },
+    onError: () => toast.error('Failed to reject designer'),
   });
 
   const profiles = data?.data || [];
 
   const statuses = [
-    { value: 'submitted', label: 'Submitted', count: 5 },
-    { value: 'in_review', label: 'In Review', count: 12 },
-    { value: 'approved', label: 'Approved', count: 234 },
-    { value: 'rejected', label: 'Rejected', count: 8 },
+    { value: 'submitted' as const, label: 'Submitted' },
+    { value: 'in_review' as const, label: 'In Review' },
+    { value: 'approved' as const, label: 'Approved' },
+    { value: 'rejected' as const, label: 'Rejected' },
   ];
 
+  const statusVariant = (s: string) =>
+    s === 'approved' ? 'success' : s === 'rejected' ? 'error' : 'warning';
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          Designer Verification
-        </h1>
-        <p className="text-muted-foreground">
-          Review and approve designer applications
-        </p>
+    <div>
+      <PageHeader
+        title="Designer"
+        accent="Verification"
+        description="Review and approve designer applications."
+      />
+
+      <div className="mt-8">
+        <FilterTabs items={statuses} value={selectedStatus} onChange={setSelectedStatus} />
       </div>
 
-      <div className="flex gap-2">
-        {statuses.map((status) => (
-          <Button
-            key={status.value}
-            variant={selectedStatus === status.value ? 'default' : 'outline'}
-            onClick={() => setSelectedStatus(status.value)}
-          >
-            {status.label}
-            <Badge variant="secondary" className="ml-2">
-              {status.count}
-            </Badge>
-          </Button>
-        ))}
-      </div>
-
-      <div className="grid gap-4">
-        {isLoading ? (
-          <Card>
-            <CardContent className="py-8">
-              <div className="text-center text-muted-foreground">
-                Loading verification queue...
-              </div>
-            </CardContent>
-          </Card>
+      <Section className="mt-8">
+        {isError ? (
+          <EmptyState
+            label="Error"
+            message={
+              error instanceof Error ? error.message : 'Failed to load verification queue.'
+            }
+          />
+        ) : isLoading ? (
+          <LoadingStrata />
         ) : profiles.length === 0 ? (
-          <Card>
-            <CardContent className="py-8">
-              <div className="text-center text-muted-foreground">
-                No designers in this status
-              </div>
-            </CardContent>
-          </Card>
+          <EmptyState message="No designers in this status." />
         ) : (
           profiles.map((profile: DesignerProfile & { email?: string }) => (
-            <Card key={profile.userId}>
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-lg">
-                      {profile.businessName || 'Unnamed Business'}
-                    </CardTitle>
-                    <CardDescription>
-                      {profile.email || profile.userId}
-                    </CardDescription>
+            <div key={profile.userId} className="border-b border-[var(--border-subtle)] py-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="type-item-name">
+                    {profile.businessName || 'Unnamed Business'}
                   </div>
-                  <Badge
-                    variant={
-                      profile.status === 'approved'
-                        ? 'success'
-                        : profile.status === 'rejected'
-                        ? 'destructive'
-                        : 'warning'
+                  <div className="type-label-secondary mt-0.5">
+                    {profile.email || profile.userId}
+                  </div>
+                </div>
+                <StatusDot variant={statusVariant(profile.status)} label={profile.status} />
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-4 md:max-w-2xl">
+                <div>
+                  <div className="type-meta-small mb-1">Website</div>
+                  <div className="type-body-small text-[var(--text-body)]">
+                    {profile.website || 'Not provided'}
+                  </div>
+                </div>
+                <div>
+                  <div className="type-meta-small mb-1">Submitted</div>
+                  <div className="type-body-small flex items-center gap-1.5 text-[var(--text-body)]">
+                    <Clock className="h-3 w-3" />
+                    {formatDate(profile.createdAt)}
+                  </div>
+                </div>
+              </div>
+
+              {profile.documents && profile.documents.length > 0 && (
+                <div className="mt-4">
+                  <div className="type-meta-small mb-2">Documents</div>
+                  <div className="flex flex-wrap gap-3">
+                    {profile.documents.map((doc, idx) => (
+                      <ActionButton
+                        key={idx}
+                        variant="accent"
+                        onClick={() => window.open(doc.url, '_blank')}
+                      >
+                        <Eye className="h-3 w-3" />
+                        {doc.name}
+                      </ActionButton>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {profile.notes && (
+                <div className="mt-4">
+                  <div className="type-meta-small mb-1">Notes</div>
+                  <div className="type-body-small rounded-sm border border-[var(--border-subtle)] bg-[var(--bg-hover)] p-3 text-[var(--text-body)]">
+                    {profile.notes}
+                  </div>
+                </div>
+              )}
+
+              {selectedStatus === 'in_review' && (
+                <div className="mt-5 flex gap-6">
+                  <ActionButton
+                    variant="success"
+                    onClick={() =>
+                      approveMutation.mutate({
+                        userId: profile.userId,
+                        notes: 'Approved from admin portal',
+                      })
                     }
+                    disabled={approveMutation.isPending}
                   >
-                    {profile.status}
-                  </Badge>
+                    <Check className="h-3.5 w-3.5" />
+                    Approve
+                  </ActionButton>
+                  <ActionButton
+                    variant="danger"
+                    onClick={() =>
+                      rejectMutation.mutate({
+                        userId: profile.userId,
+                        notes: 'Rejected from admin portal',
+                      })
+                    }
+                    disabled={rejectMutation.isPending}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Reject
+                  </ActionButton>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm font-medium">Website</div>
-                      <div className="text-sm text-muted-foreground">
-                        {profile.website || 'Not provided'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium">Submitted</div>
-                      <div className="text-sm text-muted-foreground flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {formatDate(profile.createdAt)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-sm font-medium mb-2">Documents</div>
-                    <div className="flex gap-2">
-                      {profile.documents?.map((doc, idx) => (
-                        <Button
-                          key={idx}
-                          variant="outline"
-                          size="sm"
-                          onClick={() => window.open(doc.url, '_blank')}
-                        >
-                          <Eye className="mr-2 h-3 w-3" />
-                          {doc.name}
-                        </Button>
-                      ))}
-                      {(!profile.documents || profile.documents.length === 0) && (
-                        <span className="text-sm text-muted-foreground">
-                          No documents uploaded
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {profile.notes && (
-                    <div>
-                      <div className="text-sm font-medium mb-1">Notes</div>
-                      <div className="text-sm text-muted-foreground p-3 bg-muted rounded-md">
-                        {profile.notes}
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedStatus === 'in_review' && (
-                    <div className="flex gap-2 pt-2">
-                      <Button
-                        className="flex-1"
-                        onClick={() =>
-                          approveMutation.mutate({
-                            userId: profile.userId,
-                            notes: 'Approved from admin portal',
-                          })
-                        }
-                        disabled={approveMutation.isPending}
-                      >
-                        <Check className="mr-2 h-4 w-4" />
-                        Approve
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        className="flex-1"
-                        onClick={() =>
-                          rejectMutation.mutate({
-                            userId: profile.userId,
-                            notes: 'Rejected from admin portal',
-                          })
-                        }
-                        disabled={rejectMutation.isPending}
-                      >
-                        <X className="mr-2 h-4 w-4" />
-                        Reject
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+              )}
+            </div>
           ))
         )}
-      </div>
+      </Section>
     </div>
   );
 }

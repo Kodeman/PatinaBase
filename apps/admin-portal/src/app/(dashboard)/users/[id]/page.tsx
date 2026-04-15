@@ -126,14 +126,22 @@ export default function UserDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/users')}>
-            <ArrowLeft className="h-5 w-5" />
+      <div className="pb-4 pt-12 animate-section-enter">
+        <div className="mb-2 flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push('/users' as any)}
+            className="h-auto p-0 hover:bg-transparent"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span className="type-meta-small">Users</span>
           </Button>
+        </div>
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-bold tracking-tight">{user.email}</h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="type-page-title">{user.email}</h1>
               <Badge variant={getStatusVariant(user.status)}>{user.status}</Badge>
               {user.emailVerified ? (
                 <Badge variant="success" className="gap-1">
@@ -147,42 +155,41 @@ export default function UserDetailPage() {
                 </Badge>
               )}
             </div>
-            <p className="text-muted-foreground">
-              {user.displayName || 'No display name'} • User ID: {user.id}
+            <p className="type-body mt-3 text-[var(--text-muted)]">
+              {user.displayName || 'No display name'} · User ID: {user.id}
             </p>
           </div>
-        </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setEditDialogOpen(true)}>
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit
-          </Button>
-          {user.status === 'active' && (
-            <>
-              <Button variant="outline" onClick={() => setSuspendDialogOpen(true)}>
-                <Pause className="mr-2 h-4 w-4" />
-                Suspend
-              </Button>
-              <Button variant="destructive" onClick={() => setBanDialogOpen(true)}>
-                <Ban className="mr-2 h-4 w-4" />
-                Ban
-              </Button>
-            </>
-          )}
-          {(user.status === 'suspended' || user.status === 'banned') && (
-            <Button onClick={() => setActivateDialogOpen(true)}>
-              <Play className="mr-2 h-4 w-4" />
-              Reactivate
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setEditDialogOpen(true)}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit
             </Button>
-          )}
-          {!user.emailVerified && (
-            <Button variant="outline" onClick={() => setVerifyEmailDialogOpen(true)}>
-              <Mail className="mr-2 h-4 w-4" />
-              Verify Email
-            </Button>
-          )}
+            {user.status === 'active' && (
+              <>
+                <Button variant="outline" onClick={() => setSuspendDialogOpen(true)}>
+                  <Pause className="mr-2 h-4 w-4" />
+                  Suspend
+                </Button>
+                <Button variant="destructive" onClick={() => setBanDialogOpen(true)}>
+                  <Ban className="mr-2 h-4 w-4" />
+                  Ban
+                </Button>
+              </>
+            )}
+            {(user.status === 'suspended' || user.status === 'banned') && (
+              <Button onClick={() => setActivateDialogOpen(true)}>
+                <Play className="mr-2 h-4 w-4" />
+                Reactivate
+              </Button>
+            )}
+            {!user.emailVerified && (
+              <Button variant="outline" onClick={() => setVerifyEmailDialogOpen(true)}>
+                <Mail className="mr-2 h-4 w-4" />
+                Verify Email
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 

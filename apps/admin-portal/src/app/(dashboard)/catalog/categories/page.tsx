@@ -4,8 +4,15 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, FolderTree, ChevronRight, Edit, Trash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import {
+  PageHeader,
+  MetricBlock,
+  MetricsRow,
+  Section,
+  EmptyState,
+  LoadingStrata,
+} from '@/components/portal';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -257,79 +264,53 @@ export default function CategoriesPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Categories</h2>
-          <p className="text-muted-foreground">
-            Manage product categories and taxonomy
-          </p>
-        </div>
-        <Button onClick={handleAddCategory}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Category
-        </Button>
-      </div>
+    <div>
+      <PageHeader
+        title="Categories"
+        description="Manage product categories and taxonomy."
+        actions={
+          <Button onClick={handleAddCategory}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Category
+          </Button>
+        }
+      />
 
-      {/* Category Tree */}
-      <Card>
-        <CardContent className="p-6">
-          {isLoading ? (
-            <div className="text-center py-12 text-muted-foreground">
-              Loading categories...
-            </div>
-          ) : categories.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                <FolderTree className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h3 className="text-lg font-semibold mb-2">No categories found</h3>
-              <p className="text-muted-foreground mb-4">
-                Get started by creating your first category
-              </p>
-              <Button onClick={handleAddCategory}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Category
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {categories.map((category) => (
-                <CategoryItem
-                  key={category.id}
-                  category={category as CategoryView}
-                  onEdit={handleEditCategory}
-                  onDelete={handleDeleteCategory}
-                />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <MetricsRow columns={3}>
+        <MetricBlock label="Total Categories" value={categories.length} />
+        <MetricBlock
+          label="Total Products"
+          value={categories.reduce((acc, cat) => acc + (cat.productCount || 0), 0)}
+        />
+        <MetricBlock
+          label="Nested Categories"
+          value={categories.reduce((acc, cat) => acc + (cat.children?.length || 0), 0)}
+        />
+      </MetricsRow>
 
-      {/* Stats Card */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="grid gap-4 md:grid-cols-3">
-            <div>
-              <p className="text-sm text-muted-foreground">Total Categories</p>
-              <p className="text-2xl font-bold">{categories.length}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Total Products</p>
-              <p className="text-2xl font-bold">
-                {categories.reduce((acc, cat) => acc + (cat.productCount || 0), 0)}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Nested Categories</p>
-              <p className="text-2xl font-bold">
-                {categories.reduce((acc, cat) => acc + (cat.children?.length || 0), 0)}
-              </p>
-            </div>
+      <Section className="mt-10">
+        {isLoading ? (
+          <LoadingStrata />
+        ) : categories.length === 0 ? (
+          <EmptyState message="No categories found. Create your first category to get started.">
+            <Button className="mt-4" onClick={handleAddCategory}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Category
+            </Button>
+          </EmptyState>
+        ) : (
+          <div className="space-y-2">
+            {categories.map((category) => (
+              <CategoryItem
+                key={category.id}
+                category={category as CategoryView}
+                onEdit={handleEditCategory}
+                onDelete={handleDeleteCategory}
+              />
+            ))}
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </Section>
 
       {/* Category Form Modal */}
       <CategoryFormModal

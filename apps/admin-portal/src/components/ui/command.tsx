@@ -12,9 +12,10 @@ const Command = React.forwardRef<
   <CommandPrimitive
     ref={ref}
     className={cn(
-      'flex h-full w-full flex-col overflow-hidden rounded-md bg-popover text-popover-foreground',
+      'flex h-full w-full flex-col overflow-hidden rounded-sm bg-[var(--bg-surface)] text-[var(--text-primary)]',
       className
     )}
+    style={{ fontFamily: 'var(--font-body)' }}
     {...props}
   />
 ));
@@ -24,14 +25,19 @@ const CommandInput = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Input>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
 >(({ className, ...props }, ref) => (
-  <div className="flex items-center border-b px-3" cmdk-input-wrapper="">
-    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+  <div
+    className="flex items-center border-b border-[var(--border-subtle)] px-3"
+    cmdk-input-wrapper=""
+  >
+    <Search
+      className="mr-2 h-4 w-4 shrink-0 text-[var(--text-muted)]"
+      strokeWidth={1.5}
+    />
     <CommandPrimitive.Input
       ref={ref}
       className={cn(
-        'flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none',
-        'placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
-        'transition-all duration-200',
+        'flex h-11 w-full rounded-sm bg-transparent py-3 text-[0.85rem] text-[var(--text-primary)] outline-none',
+        'placeholder:text-[var(--text-muted)] disabled:cursor-not-allowed disabled:opacity-50',
         className
       )}
       {...props}
@@ -46,7 +52,7 @@ const CommandList = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CommandPrimitive.List
     ref={ref}
-    className={cn('max-h-[300px] overflow-y-auto overflow-x-hidden', className)}
+    className={cn('max-h-[320px] overflow-y-auto overflow-x-hidden', className)}
     {...props}
   />
 ));
@@ -56,7 +62,11 @@ const CommandEmpty = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Empty>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty>
 >((props, ref) => (
-  <CommandPrimitive.Empty ref={ref} className="py-6 text-center text-sm" {...props} />
+  <CommandPrimitive.Empty
+    ref={ref}
+    className="py-6 text-center type-body-small italic text-[var(--text-muted)]"
+    {...props}
+  />
 ));
 CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
 
@@ -67,9 +77,11 @@ const CommandGroup = React.forwardRef<
   <CommandPrimitive.Group
     ref={ref}
     className={cn(
-      'overflow-hidden p-1 text-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5',
-      '[&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium',
-      '[&_[cmdk-group-heading]]:text-muted-foreground',
+      'overflow-hidden p-1 text-[var(--text-primary)]',
+      '[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2',
+      '[&_[cmdk-group-heading]]:font-mono [&_[cmdk-group-heading]]:text-[0.58rem]',
+      '[&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.07em]',
+      '[&_[cmdk-group-heading]]:text-[var(--text-muted)]',
       className
     )}
     {...props}
@@ -83,7 +95,7 @@ const CommandSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CommandPrimitive.Separator
     ref={ref}
-    className={cn('-mx-1 h-px bg-border', className)}
+    className={cn('-mx-1 h-px bg-[var(--border-subtle)]', className)}
     {...props}
   />
 ));
@@ -96,9 +108,9 @@ const CommandItem = React.forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      'relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none',
-      'transition-colors duration-200',
-      'aria-selected:bg-accent aria-selected:text-accent-foreground',
+      'relative flex cursor-default select-none items-center gap-2 rounded-sm px-3 py-2',
+      'text-[0.82rem] text-[var(--text-body)] outline-none transition-colors',
+      'aria-selected:bg-[var(--bg-hover)] aria-selected:text-[var(--text-primary)]',
       'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
       className
     )}

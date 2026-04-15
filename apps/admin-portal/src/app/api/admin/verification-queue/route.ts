@@ -9,7 +9,14 @@ export async function GET(request: NextRequest) {
   const { adminClient } = auth;
 
   const url = new URL(request.url);
-  const status = url.searchParams.get('status') ?? 'pending';
+  const displayToDbStatus: Record<string, string> = {
+    submitted: 'pending',
+    in_review: 'under_review',
+    approved: 'approved',
+    rejected: 'rejected',
+  };
+  const rawStatus = url.searchParams.get('status') ?? 'pending';
+  const status = displayToDbStatus[rawStatus] ?? rawStatus;
   const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10));
   const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize') ?? '50', 10)));
   const offset = (page - 1) * pageSize;

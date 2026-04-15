@@ -2,8 +2,91 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Accessibility utilities - WCAG 2.1 Level AA compliance */
+@import '../../../../packages/patina-design-system/src/styles/typography.css';
 @import '../styles/accessibility.css';
+
+/* ===== Portal Design Tokens ===== */
+:root {
+  /* — Primary Palette — */
+  --color-off-white: #FAF7F2;
+  --color-pearl: #E5E2DD;
+  --color-clay: #C4A57B;
+  --color-aged-oak: #8B7355;
+  --color-mocha: #5C4A3C;
+  --color-charcoal: #2C2926;
+
+  /* — Extended Palette — */
+  --color-sage: #A8B5A0;
+  --color-dusty-blue: #8B9CAD;
+  --color-terracotta: #D4A090;
+  --color-golden-hour: #E8C547;
+
+  /* — Semantic Assignments — */
+  --bg-primary: var(--color-off-white);
+  --bg-surface: #FFFFFF;
+  --bg-hover: rgba(196, 165, 123, 0.06);
+
+  --text-primary: var(--color-charcoal);
+  --text-body: var(--color-mocha);
+  --text-muted: var(--color-aged-oak);
+  --text-subtle: var(--color-pearl);
+
+  --accent-primary: var(--color-clay);
+  --accent-hover: var(--color-aged-oak);
+  --accent-active: var(--color-charcoal);
+
+  --border-default: var(--color-pearl);
+  --border-subtle: rgba(229, 226, 221, 0.6);
+
+  /* — Functional Colors — */
+  --color-success: #7A9B76;
+  --color-warning: #D4A574;
+  --color-error: #C77B6E;
+  --color-info: #8B9CAD;
+
+  /* — Phase Colors (Opus) — */
+  --phase-consultation: #8B9CAD;
+  --phase-concept: #C4A57B;
+  --phase-refinement: #8B7355;
+  --phase-procurement: #E8C547;
+  --phase-installation: #D4A090;
+  --phase-walkthrough: #A8B5A0;
+
+  /* — Animation Tokens — */
+  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --ease-editorial: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+  --duration-editorial: 700ms;
+
+  /* — Spacing Scale — */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+}
+
+/* ===== Portal Utility Classes ===== */
+@layer components {
+  .divider {
+    border-bottom: 1px solid var(--border-default);
+  }
+  .divider-subtle {
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .divider-vertical {
+    border-left: 1px solid var(--border-default);
+  }
+}
 
 @layer base {
   :root {
@@ -34,24 +117,6 @@
     --input: 0.8606 0.0321 84.5881;
     --ring: 0.618 0.0778 65.5444;
     --radius: 0.75rem;
-
-    /* Sidebar Tokens */
-    --sidebar: 0.9239 0.019 83.0636;
-    --sidebar-foreground: 0.376 0.0225 64.3434;
-    --sidebar-primary: 0.618 0.0778 65.5444;
-    --sidebar-primary-foreground: 1 0 0;
-    --sidebar-accent: 0.8348 0.0426 88.8064;
-    --sidebar-accent-foreground: 0.376 0.0225 64.3434;
-    --sidebar-border: 0.8606 0.0321 84.5881;
-    --sidebar-ring: 0.618 0.0778 65.5444;
-
-    /* Admin-specific extended colors */
-    --success: 0.6234 0.1543 145.7234;
-    --success-foreground: 1 0 0;
-    --warning: 0.7856 0.1523 85.3421;
-    --warning-foreground: 0.376 0.0225 64.3434;
-    --info: 0.6012 0.1245 231.5678;
-    --info-foreground: 1 0 0;
   }
 
   .dark {
@@ -75,28 +140,14 @@
     --border: 0.3795 0.0181 57.128;
     --input: 0.3795 0.0181 57.128;
     --ring: 0.7264 0.0581 66.6967;
-
-    /* Sidebar Dark */
-    --sidebar: 0.2747 0.0139 57.6523;
-    --sidebar-foreground: 0.9239 0.019 83.0636;
-    --sidebar-primary: 0.7264 0.0581 66.6967;
-    --sidebar-primary-foreground: 0.2747 0.0139 57.6523;
-    --sidebar-accent: 0.4186 0.0281 56.3404;
-    --sidebar-accent-foreground: 0.9239 0.019 83.0636;
-    --sidebar-border: 0.3795 0.0181 57.128;
-    --sidebar-ring: 0.7264 0.0581 66.6967;
-
-    /* Admin-specific extended colors (dark) */
-    --success: 0.5234 0.1343 145.7234;
-    --success-foreground: 0.9239 0.019 83.0636;
-    --warning: 0.6856 0.1323 85.3421;
-    --warning-foreground: 0.2747 0.0139 57.6523;
-    --info: 0.5012 0.1145 231.5678;
-    --info-foreground: 0.9239 0.019 83.0636;
   }
 }
 
 @layer base {
+  html {
+    font-size: 18px;
+  }
+
   * {
     @apply border-border;
   }
@@ -104,24 +155,35 @@
   body {
     @apply bg-background text-foreground font-sans overflow-x-hidden;
     font-feature-settings: "rlig" 1, "calt" 1;
+
+    /* Font stacks — must be on body (not :root) because next/font
+       sets --font-heading, --font-inter, --font-mono here via className */
+    --font-display: var(--font-heading), 'Playfair Display', Georgia, 'Times New Roman', serif;
+    --font-body: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-meta: var(--font-mono), 'DM Mono', 'SF Mono', 'Fira Code', monospace;
   }
 
-  /* Typography defaults */
   h1,
   h2,
   h3,
   h4,
   h5,
   h6 {
-    @apply font-heading;
+    font-family: var(--font-heading), 'Playfair Display', serif;
   }
 
-  /* Focus visible styles */
   *:focus-visible {
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 
-  /* Smooth transitions */
+  /* Radix menu items provide their own highlight via data-highlighted; the
+     global focus ring on them looks like an unrelated error state. */
+  [role='menuitem']:focus-visible,
+  [role='menuitemradio']:focus-visible,
+  [role='menuitemcheckbox']:focus-visible {
+    @apply ring-0 ring-offset-0;
+  }
+
   button,
   a,
   input,
@@ -130,7 +192,6 @@
     @apply transition-all duration-200 ease-in-out;
   }
 
-  /* Custom scrollbar styles */
   ::-webkit-scrollbar {
     @apply w-2 h-2;
   }
@@ -148,7 +209,6 @@
     background-color: oklch(var(--muted-foreground) / 0.7);
   }
 
-  /* Selection styles */
   ::selection {
     background-color: oklch(var(--primary) / 0.2);
     color: oklch(var(--primary-foreground));
@@ -156,113 +216,105 @@
 }
 
 @layer utilities {
-  /* Text utilities */
   .text-balance {
     text-wrap: balance;
   }
 
-  /* Animation utilities */
   @keyframes fade-in {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes page-enter {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-page-enter {
+    animation: page-enter var(--duration-normal) var(--ease-default);
   }
 
   @keyframes fade-out {
-    from {
-      opacity: 1;
-    }
-    to {
-      opacity: 0;
-    }
+    from { opacity: 1; }
+    to { opacity: 0; }
   }
 
   @keyframes slide-in-from-top {
-    from {
-      transform: translateY(-100%);
-    }
-    to {
-      transform: translateY(0);
-    }
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
   }
 
   @keyframes slide-in-from-bottom {
-    from {
-      transform: translateY(100%);
-    }
-    to {
-      transform: translateY(0);
-    }
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
   }
 
   @keyframes slide-in-from-left {
-    from {
-      transform: translateX(-100%);
-    }
-    to {
-      transform: translateX(0);
-    }
+    from { transform: translateX(-100%); }
+    to { transform: translateX(0); }
   }
 
   @keyframes slide-in-from-right {
-    from {
-      transform: translateX(100%);
-    }
-    to {
-      transform: translateX(0);
-    }
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
   }
 
-  .animate-fade-in {
-    animation: fade-in 0.2s ease-in-out;
-  }
-
-  .animate-fade-out {
-    animation: fade-out 0.2s ease-in-out;
-  }
-
-  .animate-slide-in-from-top {
-    animation: slide-in-from-top 0.2s ease-out;
-  }
-
-  .animate-slide-in-from-bottom {
-    animation: slide-in-from-bottom 0.2s ease-out;
-  }
-
-  .animate-slide-in-from-left {
-    animation: slide-in-from-left 0.2s ease-out;
-  }
-
-  .animate-slide-in-from-right {
-    animation: slide-in-from-right 0.2s ease-out;
-  }
+  .animate-fade-in { animation: fade-in 0.2s ease-in-out; }
+  .animate-fade-out { animation: fade-out 0.2s ease-in-out; }
+  .animate-slide-in-from-top { animation: slide-in-from-top 0.2s ease-out; }
+  .animate-slide-in-from-bottom { animation: slide-in-from-bottom 0.2s ease-out; }
+  .animate-slide-in-from-left { animation: slide-in-from-left 0.2s ease-out; }
+  .animate-slide-in-from-right { animation: slide-in-from-right 0.2s ease-out; }
 
   @keyframes collapsible-down {
-    from {
-      height: 0;
-      opacity: 0;
-    }
-    to {
-      height: var(--radix-collapsible-content-height);
-      opacity: 1;
-    }
+    from { height: 0; opacity: 0; }
+    to { height: var(--radix-collapsible-content-height); opacity: 1; }
   }
 
   @keyframes collapsible-up {
-    from {
-      height: var(--radix-collapsible-content-height);
-      opacity: 1;
-    }
-    to {
-      height: 0;
-      opacity: 0;
-    }
+    from { height: var(--radix-collapsible-content-height); opacity: 1; }
+    to { height: 0; opacity: 0; }
   }
 
-  /* Admin Portal specific utilities */
+  @keyframes shimmer {
+    0% { background-position: -1000px 0; }
+    100% { background-position: 1000px 0; }
+  }
+
+  .animate-shimmer {
+    animation: shimmer 2s infinite linear;
+    background: linear-gradient(
+      to right,
+      oklch(var(--muted)) 0%,
+      oklch(var(--muted-foreground) / 0.1) 50%,
+      oklch(var(--muted)) 100%
+    );
+    background-size: 1000px 100%;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(var(--muted-foreground)) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: oklch(var(--muted-foreground));
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: oklch(var(--foreground) / 0.5);
+  }
+
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -270,6 +322,74 @@
 
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
+  }
+
+  /* ===== Editorial Animation Keyframes ===== */
+
+  @keyframes text-reveal {
+    from {
+      clip-path: inset(0 0 100% 0);
+      transform: translateY(12px);
+    }
+    to {
+      clip-path: inset(0 0 0% 0);
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes section-enter {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes strata-draw {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+
+  @keyframes bar-fill {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+
+  .animate-text-reveal {
+    animation: text-reveal 600ms var(--ease-editorial) both;
+  }
+
+  .animate-section-enter {
+    animation: section-enter var(--duration-slow) var(--ease-editorial) both;
+  }
+
+  .animate-strata-draw {
+    transform-origin: left center;
+    animation: strata-draw 800ms var(--ease-editorial) both;
+  }
+
+  .animate-bar-fill {
+    transform-origin: left center;
+    animation: bar-fill 800ms var(--ease-editorial) both;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .stagger-delay {
+    animation-delay: calc(var(--stagger-index, 0) * 60ms);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-text-reveal,
+    .animate-section-enter,
+    .animate-page-enter,
+    .animate-strata-draw,
+    .animate-bar-fill {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+      clip-path: none !important;
+    }
   }
 }
 

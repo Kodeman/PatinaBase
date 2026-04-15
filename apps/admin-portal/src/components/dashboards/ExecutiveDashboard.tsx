@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle, TrendingUp, Users, DollarSign, Clock } from 'lucide-react';
+import { PostHogStatsWidget } from './PostHogStatsWidget';
 
 interface DashboardKPIs {
   pipelineValue: number;
@@ -312,6 +313,9 @@ export const ExecutiveDashboard: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* PostHog analytics */}
+      <PostHogStatsWidget />
 
       {/* At-Risk Clients */}
       <Card>

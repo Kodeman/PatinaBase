@@ -3,16 +3,16 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Search, Plus, RefreshCw } from 'lucide-react';
+import { PageHeader } from '@/components/portal';
 
 export default function SearchPage() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Search Management</h1>
-        <p className="text-muted-foreground">
-          Configure synonyms, boosts, and manage search indexes
-        </p>
-      </div>
+      <PageHeader
+        title="Search"
+        accent="Management"
+        description="Configure synonyms, boosts, and manage search indexes."
+      />
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>

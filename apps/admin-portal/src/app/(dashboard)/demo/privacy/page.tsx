@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { privacyRequests } from '@/data/mock-admin';
 import { Shield, Download, Trash2, AlertTriangle } from 'lucide-react';
+import { PageHeader } from '@/components/portal';
 
 const statusVariant: Record<string, 'secondary' | 'warning' | 'destructive' | 'success'> = {
   new: 'secondary',
@@ -42,12 +43,11 @@ export default function PrivacyPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Privacy Operations</h1>
-        <p className="text-muted-foreground">
-          Manage GDPR/CCPA compliance, data subject requests, and SLAs
-        </p>
-      </div>
+      <PageHeader
+        title="Privacy"
+        accent="Operations"
+        description="Manage GDPR/CCPA compliance, data subject requests, and SLAs."
+      />
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>

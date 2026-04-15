@@ -2,24 +2,29 @@ import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
+/**
+ * Editorial badge — thin rounded-sm tag with Patina palette.
+ * Keeps the shadcn `Badge` + `badgeVariants` API surface for compatibility.
+ */
 const badgeVariants = cva(
-  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+  'inline-flex items-center rounded-sm border px-2 py-[2px] font-mono text-[0.6rem] uppercase tracking-[0.06em] transition-colors',
   {
     variants: {
       variant: {
         default:
-          'border-transparent bg-primary text-primary-foreground hover:bg-primary/80',
+          'border-[var(--accent-primary)] bg-[rgba(196,165,123,0.1)] text-[var(--accent-primary)]',
         secondary:
-          'border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80',
+          'border-[var(--border-default)] bg-transparent text-[var(--text-muted)]',
         destructive:
-          'border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80',
-        outline: 'text-foreground',
+          'border-[var(--color-error)] bg-[rgba(199,123,110,0.1)] text-[var(--color-error)]',
+        outline:
+          'border-[var(--border-default)] bg-transparent text-[var(--text-body)]',
         success:
-          'border-transparent bg-success text-success-foreground hover:bg-success/80',
+          'border-[var(--color-success)] bg-[rgba(122,155,118,0.1)] text-[var(--color-success)]',
         warning:
-          'border-transparent bg-warning text-warning-foreground hover:bg-warning/80',
+          'border-[var(--color-warning)] bg-[rgba(212,165,116,0.12)] text-[var(--color-warning)]',
         info:
-          'border-transparent bg-info text-info-foreground hover:bg-info/80',
+          'border-[var(--color-info)] bg-[rgba(139,156,173,0.1)] text-[var(--color-info)]',
       },
     },
     defaultVariants: {
@@ -33,9 +38,7 @@ export interface BadgeProps
     VariantProps<typeof badgeVariants> {}
 
 function Badge({ className, variant, ...props }: BadgeProps) {
-  return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
-  );
+  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
 }
 
 export { Badge, badgeVariants };

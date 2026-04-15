@@ -1,8 +1,6 @@
 import type { Config } from 'tailwindcss';
-import tailwindcssAnimate from 'tailwindcss-animate';
 
 const config: Config = {
-  darkMode: ['class'],
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
@@ -10,33 +8,29 @@ const config: Config = {
     '../../packages/patina-design-system/src/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {
-    container: {
-      center: true,
-      padding: '2rem',
-      screens: {
-        '2xl': '1400px',
-      },
-    },
     extend: {
       fontFamily: {
         heading: ['var(--font-heading)', 'Playfair Display', 'serif'],
-        display: ['var(--font-heading)', 'Playfair Display', 'Georgia', 'serif'],
         body: ['var(--font-inter)', 'Inter', 'system-ui', 'sans-serif'],
         sans: ['var(--font-inter)', 'Inter', 'system-ui', 'sans-serif'],
-        mono: ['var(--font-mono)', 'monospace'],
+        mono: ['var(--font-mono)', 'DM Mono', 'SF Mono', 'Fira Code', 'monospace'],
+      },
+      maxWidth: {
+        portal: '1800px',
+        'portal-narrow': '900px',
       },
       colors: {
         patina: {
-          'off-white': '#EDE9E4',
-          'clay-beige': '#A3927C',
-          'mocha-brown': '#655B52',
-          charcoal: '#3F3B37',
-          'soft-cream': '#F5F2ED',
-          'warm-white': '#FAF7F2',
-          success: '#7A9C85',
-          warning: '#D4A574',
-          error: '#B87969',
-          info: '#6B8FAD',
+          'off-white': '#FAF7F2',
+          pearl: '#E5E2DD',
+          clay: '#C4A57B',
+          'aged-oak': '#8B7355',
+          mocha: '#5C4A3C',
+          charcoal: '#2C2926',
+          sage: '#A8B5A0',
+          'dusty-blue': '#8B9CAD',
+          terracotta: '#D4A090',
+          'golden-hour': '#E8C547',
         },
         border: 'oklch(var(--border))',
         input: 'oklch(var(--input))',
@@ -71,27 +65,21 @@ const config: Config = {
           DEFAULT: 'oklch(var(--card))',
           foreground: 'oklch(var(--card-foreground))',
         },
+        /* Admin status aliases mapped to Patina functional colors so
+           existing `bg-success` / `text-warning` / etc. utilities keep
+           working without churning every status badge. Values match the
+           designer portal's --color-success / --color-warning / etc. */
         success: {
-          DEFAULT: 'oklch(var(--success))',
-          foreground: 'oklch(var(--success-foreground))',
+          DEFAULT: '#7A9B76',
+          foreground: '#FFFFFF',
         },
         warning: {
-          DEFAULT: 'oklch(var(--warning))',
-          foreground: 'oklch(var(--warning-foreground))',
+          DEFAULT: '#D4A574',
+          foreground: '#2C2926',
         },
         info: {
-          DEFAULT: 'oklch(var(--info))',
-          foreground: 'oklch(var(--info-foreground))',
-        },
-        sidebar: {
-          DEFAULT: 'oklch(var(--sidebar))',
-          foreground: 'oklch(var(--sidebar-foreground))',
-          primary: 'oklch(var(--sidebar-primary))',
-          'primary-foreground': 'oklch(var(--sidebar-primary-foreground))',
-          accent: 'oklch(var(--sidebar-accent))',
-          'accent-foreground': 'oklch(var(--sidebar-accent-foreground))',
-          border: 'oklch(var(--sidebar-border))',
-          ring: 'oklch(var(--sidebar-ring))',
+          DEFAULT: '#8B9CAD',
+          foreground: '#FFFFFF',
         },
       },
       borderRadius: {
@@ -99,38 +87,9 @@ const config: Config = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
-      keyframes: {
-        'accordion-down': {
-          from: { height: '0' },
-          to: { height: 'var(--radix-accordion-content-height)' },
-        },
-        'accordion-up': {
-          from: { height: 'var(--radix-accordion-content-height)' },
-          to: { height: '0' },
-        },
-        'fade-in': {
-          from: { opacity: '0' },
-          to: { opacity: '1' },
-        },
-        'fade-out': {
-          from: { opacity: '1' },
-          to: { opacity: '0' },
-        },
-        'slide-in': {
-          from: { transform: 'translateX(-100%)' },
-          to: { transform: 'translateX(0)' },
-        },
-      },
-      animation: {
-        'accordion-down': 'accordion-down 0.2s ease-out',
-        'accordion-up': 'accordion-up 0.2s ease-out',
-        'fade-in': 'fade-in 0.2s ease-out',
-        'fade-out': 'fade-out 0.2s ease-out',
-        'slide-in': 'slide-in 0.3s ease-out',
-      },
     },
   },
-  plugins: [tailwindcssAnimate],
+  plugins: [],
 };
 
 export default config;

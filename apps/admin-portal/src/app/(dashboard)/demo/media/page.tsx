@@ -1,13 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -20,15 +13,17 @@ import {
   type MediaAssetKind,
   type MediaAssetPreview,
 } from '@/data/mock-admin';
+import { Filter, LayoutGrid, List, Upload, TriangleAlert } from 'lucide-react';
 import {
-  Filter,
-  LayoutGrid,
-  List,
-  Upload,
-  CheckCircle2,
-  Clock3,
-  TriangleAlert,
-} from 'lucide-react';
+  PageHeader,
+  MetricBlock,
+  MetricsRow,
+  Section,
+  FilterTabs,
+  EmptyState,
+  StatusDot,
+  type StatusVariant,
+} from '@/components/portal';
 
 const assetFilters: { label: string; value: 'all' | MediaAssetKind }[] = [
   { label: 'All assets', value: 'all' },
@@ -37,19 +32,19 @@ const assetFilters: { label: string; value: 'all' | MediaAssetKind }[] = [
   { label: 'Video loops', value: 'video' },
 ];
 
-const statusVariant = {
+const statusVariantMap: Record<string, StatusVariant> = {
   ready: 'success',
   processing: 'warning',
-  queued: 'secondary',
-  failed: 'destructive',
-} as const;
+  queued: 'info',
+  failed: 'error',
+};
 
-const statusCopy = {
+const statusCopy: Record<string, string> = {
   ready: 'Ready',
   processing: 'Processing',
   queued: 'Queued',
   failed: 'Failed',
-} as const;
+};
 
 function AssetCard({
   asset,
@@ -67,22 +62,18 @@ function AssetCard({
       <button
         onClick={() => onSelect(asset)}
         className={cn(
-          'w-full rounded-lg border p-4 text-left transition-colors hover:bg-muted/50',
-          isSelected && 'border-primary bg-primary/5'
+          'w-full border border-[var(--border-subtle)] p-4 text-left transition-colors hover:bg-[var(--bg-hover)]',
+          isSelected && 'border-[var(--accent-primary)] bg-[rgba(196,165,123,0.06)]'
         )}
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="font-medium">{asset.title}</p>
-            <p className="text-xs text-muted-foreground">
-              {asset.productSku} • {asset.role}
-            </p>
+            <p className="type-label">{asset.title}</p>
+            <p className="type-meta-small mt-0.5">{asset.productSku} · {asset.role}</p>
           </div>
-          <Badge variant={statusVariant[asset.status]}>
-            {statusCopy[asset.status]}
-          </Badge>
+          <StatusDot variant={statusVariantMap[asset.status]} label={statusCopy[asset.status]} />
         </div>
-        <div className="mt-3 grid gap-3 text-sm text-muted-foreground sm:grid-cols-3">
+        <div className="type-meta-small mt-3 grid gap-3 sm:grid-cols-3">
           <span>{asset.resolution}</span>
           <span>{asset.sizeMb} MB</span>
           <span>Checksum {asset.checksum}</span>
@@ -95,24 +86,20 @@ function AssetCard({
     <button
       onClick={() => onSelect(asset)}
       className={cn(
-        'flex flex-col rounded-2xl border p-4 text-left transition-all hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-        isSelected && 'border-primary/60 shadow-lg shadow-primary/10'
+        'flex flex-col border border-[var(--border-subtle)] p-4 text-left transition-all hover:-translate-y-[1px] hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-2',
+        isSelected && 'border-[var(--accent-primary)] bg-[rgba(196,165,123,0.06)]'
       )}
     >
-      <div className={cn('h-32 w-full rounded-xl bg-gradient-to-br', asset.accentColor)} />
+      <div className={cn('h-32 w-full rounded-sm bg-gradient-to-br', asset.accentColor)} />
       <div className="mt-4 flex flex-1 flex-col gap-2">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="font-medium leading-tight">{asset.title}</p>
-            <p className="text-xs text-muted-foreground">
-              {asset.productSku} • {asset.role}
-            </p>
+            <p className="type-item-name">{asset.title}</p>
+            <p className="type-meta-small mt-0.5">{asset.productSku} · {asset.role}</p>
           </div>
-          <Badge variant={statusVariant[asset.status]}>
-            {statusCopy[asset.status]}
-          </Badge>
+          <StatusDot variant={statusVariantMap[asset.status]} label={statusCopy[asset.status]} />
         </div>
-        <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+        <div className="type-meta-small grid grid-cols-2 gap-2">
           <span>{asset.resolution}</span>
           <span className="text-right">{asset.sizeMb} MB</span>
           <span>{asset.owner}</span>
@@ -147,247 +134,207 @@ export default function MediaPage() {
     }
   }, [filteredAssets, selectedAssetId]);
 
-  const metrics = [
-    {
-      label: 'Total Assets',
-      value: mediaAssets.length.toLocaleString(),
-      detail: '+182 imported this week',
-      icon: <CheckCircle2 className="h-4 w-4 text-success" />,
-    },
-    {
-      label: 'Active Jobs',
-      value: mediaProcessingJobs.length.toString(),
-      detail: `${mediaProcessingJobs.filter((job) => job.progress < 100).length} in progress`,
-      icon: <Clock3 className="h-4 w-4 text-warning" />,
-    },
-    {
-      label: 'QC Issues',
-      value: mediaQualityQueue.length.toString(),
-      detail: 'Auto-assign enabled',
-      icon: <TriangleAlert className="h-4 w-4 text-destructive" />,
-    },
-  ];
-
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Media Management</h1>
-          <p className="text-muted-foreground">
-            Track ingestion, quality control, and 3D asset readiness
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline">
-            <Filter className="mr-2 h-4 w-4" />
-            Saved Views
-          </Button>
-          <Button>
-            <Upload className="mr-2 h-4 w-4" />
-            Upload Batch
-          </Button>
-        </div>
-      </div>
+    <div>
+      <PageHeader
+        title="Media"
+        accent="Management"
+        description="Track ingestion, quality control, and 3D asset readiness."
+        actions={
+          <div className="flex gap-2">
+            <Button variant="outline">
+              <Filter className="mr-2 h-4 w-4" />
+              Saved Views
+            </Button>
+            <Button>
+              <Upload className="mr-2 h-4 w-4" />
+              Upload Batch
+            </Button>
+          </div>
+        }
+      />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        {metrics.map((metric) => (
-          <Card key={metric.label}>
-            <CardHeader className="flex items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{metric.label}</CardTitle>
-              {metric.icon}
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{metric.value}</div>
-              <p className="text-xs text-muted-foreground">{metric.detail}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <MetricsRow columns={3}>
+        <MetricBlock
+          label="Total Assets"
+          value={mediaAssets.length}
+          change="+182 this week"
+          trend="up"
+        />
+        <MetricBlock
+          label="Active Jobs"
+          value={mediaProcessingJobs.length}
+          change={`${mediaProcessingJobs.filter((j) => j.progress < 100).length} in progress`}
+          trend="neutral"
+        />
+        <MetricBlock
+          label="QC Issues"
+          value={mediaQualityQueue.length}
+          change="Auto-assign enabled"
+          trend="down"
+        />
+      </MetricsRow>
 
-      <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
-        <Card className="flex flex-col">
-          <CardHeader className="gap-4">
-            <div>
-              <CardTitle>Asset Browser</CardTitle>
-              <CardDescription>Filter by type, status, and role</CardDescription>
+      <div className="mt-10 grid gap-10 lg:grid-cols-[2fr,1fr]">
+        <Section title="Asset Browser">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <FilterTabs
+              items={assetFilters.map((f) => ({ value: f.value, label: f.label }))}
+              value={activeFilter}
+              onChange={setActiveFilter}
+              className="border-b-0"
+            />
+            <div className="ml-auto flex gap-2">
+              <Button
+                size="icon"
+                variant={viewMode === 'grid' ? 'default' : 'outline'}
+                onClick={() => setViewMode('grid')}
+              >
+                <LayoutGrid className="h-4 w-4" />
+                <span className="sr-only">Grid view</span>
+              </Button>
+              <Button
+                size="icon"
+                variant={viewMode === 'list' ? 'default' : 'outline'}
+                onClick={() => setViewMode('list')}
+              >
+                <List className="h-4 w-4" />
+                <span className="sr-only">List view</span>
+              </Button>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {assetFilters.map((filter) => (
-                <Button
-                  key={filter.value}
-                  size="sm"
-                  variant={activeFilter === filter.value ? 'default' : 'outline'}
-                  onClick={() => setActiveFilter(filter.value)}
-                >
-                  {filter.label}
-                </Button>
-              ))}
-              <div className="ml-auto flex gap-2">
-                <Button
-                  size="icon"
-                  variant={viewMode === 'grid' ? 'default' : 'outline'}
-                  onClick={() => setViewMode('grid')}
-                >
-                  <LayoutGrid className="h-4 w-4" />
-                  <span className="sr-only">Grid view</span>
-                </Button>
-                <Button
-                  size="icon"
-                  variant={viewMode === 'list' ? 'default' : 'outline'}
-                  onClick={() => setViewMode('list')}
-                >
-                  <List className="h-4 w-4" />
-                  <span className="sr-only">List view</span>
-                </Button>
+          </div>
+
+          {filteredAssets.length === 0 ? (
+            <EmptyState message="No assets match this filter." />
+          ) : (
+            <ScrollArea className="h-[520px] pr-4">
+              <div
+                className={cn(
+                  'gap-4',
+                  viewMode === 'grid' ? 'grid sm:grid-cols-2 xl:grid-cols-3' : 'flex flex-col'
+                )}
+              >
+                {filteredAssets.map((asset) => (
+                  <AssetCard
+                    key={asset.id}
+                    asset={asset}
+                    isSelected={asset.id === selectedAsset?.id}
+                    onSelect={setSelectedAsset}
+                    viewMode={viewMode}
+                  />
+                ))}
               </div>
-            </div>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-hidden">
-            {filteredAssets.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-                <TriangleAlert className="mb-2 h-6 w-6" />
-                No assets match this filter
+            </ScrollArea>
+          )}
+        </Section>
+
+        <div className="space-y-10">
+          <Section title="Selected Asset">
+            {selectedAsset ? (
+              <div className="space-y-4">
+                <div
+                  className={cn('h-40 rounded-sm bg-gradient-to-br', selectedAsset.accentColor)}
+                />
+                <div>
+                  <p className="type-item-name">{selectedAsset.title}</p>
+                  <p className="type-label-secondary">
+                    SKU {selectedAsset.productSku} · {selectedAsset.role}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="type-meta-small">Resolution</p>
+                    <p className="type-body-small">{selectedAsset.resolution}</p>
+                  </div>
+                  <div>
+                    <p className="type-meta-small">File size</p>
+                    <p className="type-body-small">{selectedAsset.sizeMb} MB</p>
+                  </div>
+                  <div>
+                    <p className="type-meta-small">Owner</p>
+                    <p className="type-body-small">{selectedAsset.owner}</p>
+                  </div>
+                  <div>
+                    <p className="type-meta-small">Checksum</p>
+                    <p className="font-mono text-[0.7rem]">{selectedAsset.checksum}</p>
+                  </div>
+                </div>
+                {selectedAsset.issues && selectedAsset.issues.length > 0 ? (
+                  <div className="border border-dashed border-[var(--color-warning)] p-3">
+                    <p className="type-meta-small text-[var(--color-warning)]">QA follow-ups</p>
+                    <ul className="mt-2 list-disc space-y-1 pl-4 text-[0.85rem]">
+                      {selectedAsset.issues.map((issue) => (
+                        <li key={issue}>{issue}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <p className="type-body-small italic text-[var(--text-muted)]">
+                    No open issues on this asset.
+                  </p>
+                )}
               </div>
             ) : (
-              <ScrollArea className="h-[520px] pr-4">
-                <div
-                  className={cn(
-                    'gap-4',
-                    viewMode === 'grid'
-                      ? 'grid sm:grid-cols-2 xl:grid-cols-3'
-                      : 'flex flex-col'
-                  )}
-                >
-                  {filteredAssets.map((asset) => (
-                    <AssetCard
-                      key={asset.id}
-                      asset={asset}
-                      isSelected={asset.id === selectedAsset?.id}
-                      onSelect={setSelectedAsset}
-                      viewMode={viewMode}
-                    />
-                  ))}
-                </div>
-              </ScrollArea>
+              <EmptyState message="Select an asset to view details." />
             )}
-          </CardContent>
-        </Card>
+          </Section>
 
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Selected Asset</CardTitle>
-              <CardDescription>Metadata and QC state</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {selectedAsset ? (
-                <>
-                  <div
-                    className={cn(
-                      'h-40 rounded-2xl bg-gradient-to-br shadow-inner',
-                      selectedAsset.accentColor
-                    )}
-                  />
-                  <div>
-                    <p className="text-lg font-semibold">{selectedAsset.title}</p>
-                    <p className="text-sm text-muted-foreground">
-                      SKU {selectedAsset.productSku} • {selectedAsset.role}
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Resolution</p>
-                      <p className="font-medium">{selectedAsset.resolution}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">File size</p>
-                      <p className="font-medium">{selectedAsset.sizeMb} MB</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Owner</p>
-                      <p className="font-medium">{selectedAsset.owner}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Checksum</p>
-                      <p className="font-mono text-xs">{selectedAsset.checksum}</p>
-                    </div>
-                  </div>
-                  {selectedAsset.issues && selectedAsset.issues.length > 0 ? (
-                    <div className="rounded-lg border border-dashed p-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-warning">
-                        QA follow-ups
-                      </p>
-                      <ul className="mt-2 list-disc space-y-1 pl-4 text-sm">
-                        {selectedAsset.issues.map((issue) => (
-                          <li key={issue}>{issue}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-                      No open issues on this asset
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="text-sm text-muted-foreground">
-                  Select an asset to view details.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Processing Queue</CardTitle>
-              <CardDescription>Auto-pauses to protect throughput</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <Section title="Processing Queue">
+            <div className="space-y-4">
               {mediaProcessingJobs.map((job) => (
-                <div key={job.id} className="space-y-2 rounded-lg border p-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <p className="font-medium">{job.asset}</p>
+                <div
+                  key={job.id}
+                  className="space-y-2 border-b border-[var(--border-subtle)] py-3 last:border-b-0"
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="type-label">{job.asset}</p>
                     <Badge variant="outline">{job.stage}</Badge>
                   </div>
                   <Progress value={job.progress} />
-                  <p className="text-xs text-muted-foreground">
-                    Started {new Date(job.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ETA {job.etaMinutes}m
+                  <p className="type-meta-small">
+                    Started{' '}
+                    {new Date(job.startedAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}{' '}
+                    · ETA {job.etaMinutes}m
                   </p>
                 </div>
               ))}
-            </CardContent>
-          </Card>
+            </div>
+          </Section>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>QC Queue</CardTitle>
-              <CardDescription>Highest severity issues first</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {mediaQualityQueue.map((item) => (
-                <div key={item.id} className="rounded-lg border p-3">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium">{item.asset}</p>
-                    <Badge
-                      variant={
-                        item.severity === 'high'
-                          ? 'destructive'
-                          : item.severity === 'medium'
-                          ? 'warning'
-                          : 'secondary'
-                      }
-                    >
-                      {item.severity}
-                    </Badge>
+          <Section title="QC Queue">
+            <div className="space-y-4">
+              {mediaQualityQueue.map((item) => {
+                const variant: StatusVariant =
+                  item.severity === 'high'
+                    ? 'error'
+                    : item.severity === 'medium'
+                      ? 'warning'
+                      : 'neutral';
+                return (
+                  <div
+                    key={item.id}
+                    className="border-b border-[var(--border-subtle)] py-3 last:border-b-0"
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="type-label">{item.asset}</p>
+                      <StatusDot variant={variant} label={item.severity} />
+                    </div>
+                    <p className="type-body-small text-[var(--text-muted)]">{item.issue}</p>
+                    <p className="type-meta-small">
+                      Assigned to {item.assignedTo} ·{' '}
+                      {new Date(item.submittedAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
                   </div>
-                  <p className="text-sm text-muted-foreground">{item.issue}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Assigned to {item.assignedTo} • {new Date(item.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+                );
+              })}
+            </div>
+          </Section>
         </div>
       </div>
     </div>

@@ -49,10 +49,10 @@ export function ConfirmDialog({
             <div
               className={`flex h-10 w-10 items-center justify-center rounded-full ${
                 variant === 'destructive'
-                  ? 'bg-destructive/10 text-destructive'
+                  ? 'bg-[rgba(199,123,110,0.1)] text-[var(--color-error)]'
                   : variant === 'warning'
-                  ? 'bg-yellow-500/10 text-yellow-600'
-                  : 'bg-blue-500/10 text-blue-600'
+                  ? 'bg-[rgba(212,165,116,0.12)] text-[var(--color-warning)]'
+                  : 'bg-[rgba(139,156,173,0.1)] text-[var(--color-info)]'
               }`}
             >
               <Icon className="h-5 w-5" />

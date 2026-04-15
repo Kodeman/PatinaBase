@@ -118,14 +118,14 @@ export function AccessibleModal({
       }}
     >
       <div
-        className="modal-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in"
+        className="modal-overlay fixed inset-0 z-50 flex items-center justify-center bg-[rgba(44,41,38,0.35)] backdrop-blur-[2px] animate-fade-in"
         onClick={handleOverlayClick}
         role="presentation"
         aria-hidden="true"
       >
         <div
           ref={modalRef}
-          className={`modal-content relative bg-white dark:bg-gray-800 rounded-lg shadow-xl ${sizeClasses[size]} w-full mx-4 max-h-[90vh] overflow-y-auto animate-slide-in-from-bottom ${className}`}
+          className={`modal-content relative bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-sm shadow-[0_8px_32px_rgba(44,41,38,0.12)] ${sizeClasses[size]} w-full mx-4 max-h-[90vh] overflow-y-auto animate-slide-in-from-bottom ${className}`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="modal-title"
@@ -133,19 +133,13 @@ export function AccessibleModal({
           onClick={handleContentClick}
         >
           {/* Header */}
-          <div className="sticky top-0 z-10 flex items-start justify-between p-6 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+          <div className="sticky top-0 z-10 flex items-start justify-between p-6 bg-[var(--bg-surface)] border-b border-[var(--border-subtle)]">
             <div className="flex-1 pr-8">
-              <h2
-                id="modal-title"
-                className="text-xl font-semibold text-gray-900 dark:text-white"
-              >
+              <h2 id="modal-title" className="type-item-name leading-tight">
                 {title}
               </h2>
               {description && (
-                <p
-                  id="modal-description"
-                  className="mt-1 text-sm text-gray-600 dark:text-gray-400"
-                >
+                <p id="modal-description" className="type-body-small mt-1 text-[var(--text-muted)]">
                   {description}
                 </p>
               )}
@@ -157,9 +151,9 @@ export function AccessibleModal({
                 size="sm"
                 onClick={onClose}
                 aria-label="Close dialog"
-                className="absolute top-4 right-4 h-8 w-8 p-0 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                className="absolute top-4 right-4 h-8 w-8 p-0 rounded-sm text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
               >
-                <X className="h-4 w-4" aria-hidden="true" />
+                <X className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
               </Button>
             )}
           </div>
@@ -186,7 +180,7 @@ export function AccessibleModalFooter({
 }) {
   return (
     <div
-      className={`flex items-center justify-end gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 ${className}`}
+      className={`flex items-center justify-end gap-2 px-6 py-4 bg-[var(--bg-primary)] border-t border-[var(--border-subtle)] ${className}`}
     >
       {children}
     </div>
