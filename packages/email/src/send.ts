@@ -17,10 +17,14 @@ export interface SendEmailResult {
   error?: string;
 }
 
-/** Default sender addresses by subdomain. */
+/**
+ * Default sender addresses. Currently pointed at the single verified Resend
+ * domain (`patina.cloud`). Split back into `notify.patina.com` /
+ * `mail.patina.com` once those subdomains are DKIM-verified in Resend.
+ */
 const SENDERS = {
-  transactional: 'Patina <hello@notify.patina.com>',
-  marketing: 'Patina <hello@mail.patina.com>',
+  transactional: 'Patina <hello@patina.cloud>',
+  marketing: 'Patina <hello@patina.cloud>',
 };
 
 let resendClient: Resend | null = null;
