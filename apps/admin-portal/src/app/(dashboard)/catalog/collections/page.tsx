@@ -1,17 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, Plus, Layers, Trash2, Edit, Eye, Zap, MoreHorizontal } from 'lucide-react';
+import { Search, Plus, Layers, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -170,97 +164,88 @@ export default function CollectionsPage() {
         </div>
       )}
 
-      {/* Collections Grid */}
+      {/* Collections — editorial list (matches designer portal) */}
       {!isLoading && collections.length > 0 && (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div>
           {collections.map((collection) => (
-            <Card key={collection.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-              <div className="aspect-video bg-muted flex items-center justify-center relative">
-                {collection.coverImage ? (
-                  <img
-                    src={collection.coverImage}
-                    alt={collection.name}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <Layers className="h-12 w-12 text-muted-foreground" />
-                )}
-                {collection.featured && (
-                  <Badge className="absolute top-2 left-2" variant="default">
-                    Featured
-                  </Badge>
-                )}
-              </div>
-              <CardContent className="p-4">
-                <div className="space-y-2">
-                  <div className="flex items-start justify-between">
-                    <h3 className="font-semibold text-lg line-clamp-1">{collection.name}</h3>
-                    <div className="flex items-center gap-1">
-                      <Badge variant={collection.status === 'published' ? 'default' : 'secondary'}>
-                        {collection.status}
-                      </Badge>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem asChild>
-                            <Link href={`/catalog/collections/${collection.id}`}>
-                              <Eye className="mr-2 h-4 w-4" />
-                              View Details
-                            </Link>
-                          </DropdownMenuItem>
-                          {collection.status === 'draft' && (
-                            <DropdownMenuItem onClick={() => publishMutation.mutate(collection.id)}>
-                              <Eye className="mr-2 h-4 w-4" />
-                              Publish
-                            </DropdownMenuItem>
-                          )}
-                          {collection.type === 'rule' && (
-                            <DropdownMenuItem onClick={() => evaluateMutation.mutate(collection.id)}>
-                              <Zap className="mr-2 h-4 w-4" />
-                              Evaluate Rules
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem
-                            className="text-destructive"
-                            onClick={() => setDeleteId(collection.id)}
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+            <div
+              key={collection.id}
+              className="group cursor-pointer border-b border-[var(--border-subtle)] py-5 transition-colors hover:bg-[var(--bg-hover)]"
+            >
+              <Link
+                href={`/catalog/collections/${collection.id}`}
+                className="block no-underline"
+              >
+                <div className="flex items-baseline justify-between">
+                  <div className="flex items-baseline gap-3">
+                    <span className="type-label text-[var(--text-primary)]">{collection.name}</span>
+                    {collection.featured && (
+                      <Badge variant="default" className="text-[10px]">Featured</Badge>
+                    )}
                   </div>
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {collection.description || 'No description'}
-                  </p>
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    <span>{collection.productCount} products</span>
-                    <Badge variant="outline" className="text-xs">
-                      {typeLabel(collection.type)}
+                  <div className="flex items-center gap-4">
+                    <Badge variant={collection.status === 'published' ? 'default' : 'secondary'}>
+                      {collection.status}
                     </Badge>
-                  </div>
-                  {collection.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {collection.tags.slice(0, 3).map((tag) => (
-                        <Badge key={tag} variant="secondary" className="text-xs">
-                          {tag}
-                        </Badge>
-                      ))}
-                      {collection.tags.length > 3 && (
-                        <Badge variant="secondary" className="text-xs">
-                          +{collection.tags.length - 3}
-                        </Badge>
+                    <div
+                      className="hidden items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100 md:flex"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {collection.status === 'draft' && (
+                        <button
+                          className="type-btn-text text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            publishMutation.mutate(collection.id);
+                          }}
+                        >
+                          Publish
+                        </button>
                       )}
+                      {collection.type === 'rule' && (
+                        <button
+                          className="type-btn-text text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            evaluateMutation.mutate(collection.id);
+                          }}
+                        >
+                          <Zap className="mr-1 inline h-3 w-3" />
+                          Evaluate
+                        </button>
+                      )}
+                      <button
+                        className="type-btn-text text-[var(--text-muted)] hover:text-[var(--color-error)]"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setDeleteId(collection.id);
+                        }}
+                      >
+                        Delete
+                      </button>
                     </div>
-                  )}
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="type-label-secondary mt-1 text-[var(--text-muted)]">
+                  {[
+                    `${collection.productCount} products`,
+                    typeLabel(collection.type),
+                    collection.description,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </div>
+                {collection.tags.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {collection.tags.slice(0, 4).map((tag) => (
+                      <Badge key={tag} variant="secondary" className="text-xs">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </Link>
+            </div>
           ))}
         </div>
       )}

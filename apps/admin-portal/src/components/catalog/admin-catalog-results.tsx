@@ -18,7 +18,10 @@ export function AdminCatalogResults({ presenter }: AdminCatalogResultsProps) {
     return (
       <div className="p-6">
         {presenter.viewMode === 'grid' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div
+            className="grid gap-6"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}
+          >
             {Array.from({ length: 8 }).map((_, i) => (
               <Skeleton key={i} className="h-80 w-full" />
             ))}
@@ -93,7 +96,10 @@ export function AdminCatalogResults({ presenter }: AdminCatalogResultsProps) {
       {/* Results */}
       <div className="flex-1 p-6">
         {presenter.viewMode === 'grid' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div
+            className="grid gap-6"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}
+          >
             {presenter.products.map((product) => (
               <AdminProductCard key={product.id} product={product} presenter={presenter} />
             ))}
@@ -101,7 +107,7 @@ export function AdminCatalogResults({ presenter }: AdminCatalogResultsProps) {
         )}
 
         {presenter.viewMode === 'list' && (
-          <div className="space-y-4">
+          <div>
             {presenter.products.map((product) => (
               <AdminProductList key={product.id} product={product} presenter={presenter} />
             ))}

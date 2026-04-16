@@ -1,9 +1,12 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useProduct } from '@/hooks/use-products';
 import { Breadcrumb, LoadingStrata } from '@/components/portal';
+import { useToast } from '@/components/portal/toast-provider';
+import { catalogApi } from '@/lib/api-client';
 import {
   ProductEditProvider,
   useProductEdit,
@@ -14,9 +17,10 @@ import {
   MaterialCloseups,
   Specifications,
   MakerStory,
-  PairsWith,
-  DesignerIntelligence,
+  type ProductDraft,
 } from '@/components/product-detail';
+import { PairsWith } from '@/components/product-detail/pairs-with';
+import { DesignerIntelligence } from '@/components/product-detail/designer-intelligence';
 
 // ── Keyboard Shortcuts ─────────────────────────────────────────────────
 
@@ -41,7 +45,7 @@ function KeyboardShortcuts() {
   return null;
 }
 
-// ── Page Content (inside provider) ─────────────────────────────────────
+// ── Page Content ───────────────────────────────────────────────────────
 
 function ProductDetailContent() {
   const { mode, draft, toggleMode } = useProductEdit();
@@ -52,7 +56,6 @@ function ProductDetailContent() {
       <EditModeBar />
 
       <div className="px-[clamp(1.5rem,5vw,2.5rem)] pt-6">
-        {/* Breadcrumb */}
         <Breadcrumb
           items={[
             { label: 'Products', href: '/portal/catalog' },
@@ -60,7 +63,6 @@ function ProductDetailContent() {
           ]}
         />
 
-        {/* Edit toggle (present mode) */}
         {mode === 'present' && (
           <div className="mb-4 flex justify-end">
             <button
@@ -72,28 +74,13 @@ function ProductDetailContent() {
           </div>
         )}
 
-        {/* Zone 1: Hero Gallery */}
         <HeroGallery />
-
-        {/* Zone 2: Product Identity */}
         <ProductIdentity />
-
-        {/* Zone 3: Product Story */}
         <ProductStory />
-
-        {/* Zone 4: Material Close-Ups */}
         <MaterialCloseups />
-
-        {/* Zone 5: Specifications + Care */}
         <Specifications />
-
-        {/* Zone 6: Maker Story */}
         <MakerStory />
-
-        {/* Zone 7: Pairs With */}
         <PairsWith />
-
-        {/* Zone 8: Designer Intelligence (designer-only) */}
         <DesignerIntelligence />
       </div>
     </>
@@ -105,12 +92,42 @@ function ProductDetailContent() {
 export default function ProductDetailPage() {
   const params = useParams();
   const id = params.id as string;
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: rawProduct, isLoading } = useProduct(id) as { data: any; isLoading: boolean };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const product = rawProduct?.product || rawProduct;
+
+  const handleSave = useCallback(
+    async (draft: ProductDraft) => {
+      await catalogApi.updateProduct(draft.id, {
+        name: draft.name,
+        description: draft.description,
+        price: draft.price || undefined,
+        brand: draft.brand || undefined,
+        status: draft.status,
+        tier: draft.tier || undefined,
+        provenance: draft.provenance || undefined,
+        finish: draft.finish || undefined,
+        assembly: draft.assembly || undefined,
+        tradePrice: draft.tradePrice || undefined,
+        mapPrice: draft.mapPrice || undefined,
+        commissionRate: draft.commissionRate || undefined,
+        careInstructions: draft.careInstructions || undefined,
+        arModelUrl: draft.arModelUrl || undefined,
+        materials: draft.materials.length ? draft.materials : undefined,
+        images: draft.images.map((img) => img.url),
+      });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['product', draft.id] });
+    },
+    [queryClient]
+  );
+
   if (isLoading) return <LoadingStrata />;
 
-  const product = rawProduct?.product || rawProduct;
   if (!product?.id) {
     return (
       <div className="py-16 text-center">
@@ -120,7 +137,7 @@ export default function ProductDetailPage() {
   }
 
   return (
-    <ProductEditProvider product={product}>
+    <ProductEditProvider product={product} onSave={handleSave} onToast={toast}>
       <ProductDetailContent />
     </ProductEditProvider>
   );

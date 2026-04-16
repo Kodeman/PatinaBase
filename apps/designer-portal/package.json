@@ -25,6 +25,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@hookform/resolvers": "^3.9.0",
     "@patina/api-routes": "workspace:*",
+    "@patina/catalog-ui": "workspace:*",
     "@patina/design-system": "workspace:*",
     "@patina/email": "workspace:*",
     "@patina/shared": "workspace:*",

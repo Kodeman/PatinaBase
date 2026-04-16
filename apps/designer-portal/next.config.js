@@ -3,7 +3,7 @@ const path = require('path');
 
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['@patina/design-system', '@patina/types', '@patina/utils', '@patina/api-client'],
+  transpilePackages: ['@patina/design-system', '@patina/types', '@patina/utils', '@patina/api-client', '@patina/catalog-ui'],
   outputFileTracingRoot: path.join(__dirname, '../../'),
 
   // Security and CORS headers
