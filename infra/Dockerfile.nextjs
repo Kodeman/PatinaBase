@@ -45,6 +45,7 @@ COPY packages/auth/package.json ./packages/auth/
 COPY packages/api-client/package.json ./packages/api-client/
 COPY packages/api-routes/package.json ./packages/api-routes/
 COPY packages/patina-design-system/package.json ./packages/patina-design-system/
+COPY packages/catalog-ui/package.json ./packages/catalog-ui/
 COPY packages/supabase/package.json ./packages/supabase/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/email/package.json ./packages/email/
@@ -79,12 +80,14 @@ ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ARG NEXT_PUBLIC_APP_URL
 ARG NEXT_PUBLIC_POSTHOG_KEY
 ARG NEXT_PUBLIC_POSTHOG_HOST
+ARG NEXT_PUBLIC_QR_AUTH_URL
 
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY
 ENV NEXT_PUBLIC_POSTHOG_HOST=$NEXT_PUBLIC_POSTHOG_HOST
+ENV NEXT_PUBLIC_QR_AUTH_URL=$NEXT_PUBLIC_QR_AUTH_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Build shared packages first (order matters: types → utils → cache/auth → api-routes/api-client → design-system)
