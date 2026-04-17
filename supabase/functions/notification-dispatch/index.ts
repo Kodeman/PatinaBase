@@ -4,6 +4,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { renderTemplateFromDb } from "../_shared/render-template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -111,14 +112,26 @@ serve(async (req) => {
         try {
           await updateLog(supabase, logId, "sending");
 
+          const enrichedData = {
+            ...job.data,
+            displayName: profile.display_name,
+            displayNameComma: profile.display_name
+              ? `, ${profile.display_name}`
+              : "",
+          };
+
+          // Try DB-backed rendering first (migration 00078 + admin overrides),
+          // fall back to inline HTML builder for safety.
+          const rendered = await renderTemplateFromDb(
+            supabase,
+            job.template_id,
+            enrichedData
+          );
+
           const result = await sendEmailViaResend(resendApiKey, {
             to: profile.email,
-            subject: buildSubject(job.type, job.data),
-            templateId: job.template_id,
-            data: {
-              ...job.data,
-              displayName: profile.display_name,
-            },
+            subject: rendered?.subject || buildSubject(job.type, job.data),
+            html: rendered?.html || buildEmailHtml(job.template_id, enrichedData),
           });
 
           if (result.success) {
@@ -215,15 +228,9 @@ async function sendEmailViaResend(
   params: {
     to: string;
     subject: string;
-    templateId: string;
-    data: Record<string, unknown>;
+    html: string;
   }
 ): Promise<SendResult> {
-  // Build HTML from template data.
-  // In production this would render React Email components.
-  // For Edge Function context, we use Resend's API with inline HTML.
-  const html = buildEmailHtml(params.templateId, params.data);
-
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -231,10 +238,10 @@ async function sendEmailViaResend(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      from: "Patina <hello@notify.patina.com>",
+      from: Deno.env.get("RESEND_FROM") || "Patina <hello@patina.cloud>",
       to: [params.to],
       subject: params.subject,
-      html,
+      html: params.html,
     }),
   });
 

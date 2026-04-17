@@ -7,6 +7,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SignJWT } from "https://deno.land/x/jose@v5.2.0/index.ts";
+import { renderTemplateFromDb } from "../_shared/render-template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -415,18 +416,36 @@ serve(async (req) => {
             );
           }
 
+          const enrichedData = {
+            ...templateData,
+            displayName: recipient.display_name,
+            displayNameComma: recipient.display_name
+              ? `, ${recipient.display_name}`
+              : "",
+            unsubscribeUrl,
+          };
+
+          // Prefer DB-backed template (populated by admin builder or seed).
+          // Fall back to inline builder to preserve backward compat.
+          const rendered = await renderTemplateFromDb(
+            supabase,
+            campaign.template_id,
+            enrichedData
+          );
+
+          const html = rendered
+            ? appendUnsubscribeFooter(rendered.html, unsubscribeUrl)
+            : buildCampaignEmailHtml(
+                campaign.template_id,
+                enrichedData,
+                unsubscribeUrl
+              );
+
           return {
-            from: "Patina <hello@notify.patina.com>",
+            from: Deno.env.get("RESEND_FROM") || "Patina <hello@patina.cloud>",
             to: [recipient.email],
             subject: group.subject,
-            html: buildCampaignEmailHtml(
-              campaign.template_id,
-              {
-                ...templateData,
-                displayName: recipient.display_name,
-              },
-              unsubscribeUrl
-            ),
+            html,
             headers: {
               "List-Unsubscribe": `<${unsubscribeUrl}>`,
               "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
@@ -538,6 +557,27 @@ serve(async (req) => {
     );
   }
 });
+
+// ─── Unsubscribe Footer Injector ─────────────────────────────────────────
+
+/**
+ * If the rendered HTML doesn't already contain the unsubscribe link,
+ * inject a small footer block before </body>. Admin-edited templates are
+ * responsible for rendering `{{unsubscribeUrl}}` themselves; this is a
+ * safety net for seeded templates that didn't include it.
+ */
+function appendUnsubscribeFooter(html: string, unsubscribeUrl: string): string {
+  if (html.includes(unsubscribeUrl) || html.includes("{{unsubscribeUrl}}")) {
+    return html;
+  }
+  const footer = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:16px;font-family:Inter,Helvetica,Arial,sans-serif;">
+    <p style="color:#7A736C;font-size:11px;margin:0;">You received this because you opted in to Patina updates. <a href="${unsubscribeUrl}" style="color:#7A736C;">Unsubscribe</a>.</p>
+  </td></tr></table>`;
+  if (html.includes("</body>")) {
+    return html.replace("</body>", `${footer}</body>`);
+  }
+  return `${html}${footer}`;
+}
 
 // ─── Inline HTML Builder ─────────────────────────────────────────────────
 
