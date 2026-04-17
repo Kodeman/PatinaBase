@@ -47,6 +47,9 @@ infra/.env
 infra/.env.swp
 infra/coolify/.env.coolify
 
+# iOS app local secrets (Secrets.example.swift is the committed template)
+apps/mobile/Patina/Patina/App/Configuration/Secrets.swift
+
 # Misc
 *.log
 npm-debug.log*

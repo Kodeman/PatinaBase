@@ -1,13 +1,14 @@
 //
-//  Secrets.swift
+//  Secrets.example.swift
 //  Patina
 //
-//  API keys and secrets - THIS FILE SHOULD BE GITIGNORED
+//  Template for Secrets.swift. Copy this file to Secrets.swift and fill in
+//  your actual API keys. Secrets.swift is gitignored.
 //
 //  Instructions:
-//  1. Copy this file to Secrets.swift
-//  2. Fill in your actual API keys
-//  3. Add Secrets.swift to .gitignore
+//  1. cp Secrets.example.swift Secrets.swift
+//  2. Fill in your actual keys (at minimum, supabaseAnonKey).
+//  3. The real Secrets.swift is ignored by git and will not be committed.
 //
 
 import Foundation
@@ -18,7 +19,7 @@ public enum Secrets {
 
     /// Supabase anonymous key - safe to expose, used for client-side auth
     /// Self-hosted Coolify deployment key
-    public static let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzcyODYzMjAwLCJleHAiOjE5MzA2Mjk2MDB9.8kdM7IiArooSgwnilRo60MVECQZUqtQeDimQBMFZkaE"
+    public static let supabaseAnonKey = ""
 
     /// OpenAI API key for conversation features (optional)
     public static let openAIKey: String? = nil
@@ -27,5 +28,6 @@ public enum Secrets {
     public static let claudeAPIKey: String? = nil
 
     /// PostHog API key for analytics (optional)
+    /// Public project key (phc_...) — safe to ship in a client build.
     public static let postHogAPIKey: String? = nil
 }
