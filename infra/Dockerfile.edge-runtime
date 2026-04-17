@@ -11,3 +11,8 @@ FROM supabase/edge-runtime:v1.54.8
 COPY supabase/functions /home/deno/functions
 
 WORKDIR /home/deno
+
+# The base image's entrypoint is `edge-runtime`; without a subcommand it prints
+# --help and exits. We need `start` with a --main-service pointing at our
+# dispatcher at supabase/functions/main/index.ts.
+CMD ["start", "--main-service", "/home/deno/functions/main", "--port", "9000"]
