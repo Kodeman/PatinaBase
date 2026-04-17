@@ -1,0 +1,13 @@
+# =============================================================================
+# PATINA: Supabase Edge Functions runtime image
+# =============================================================================
+# Bakes supabase/functions/ into the supabase/edge-runtime image so it can run
+# as a service in the Coolify-hosted Supabase stack (which doesn't bind-mount
+# repo paths). The default base entrypoint serves all functions on :9000.
+# =============================================================================
+
+FROM supabase/edge-runtime:v1.54.8
+
+COPY supabase/functions /home/deno/functions
+
+WORKDIR /home/deno

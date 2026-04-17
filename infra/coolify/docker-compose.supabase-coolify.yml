@@ -202,15 +202,24 @@ services:
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
       GOTRUE_JWT_EXP: '${JWT_EXPIRY:-3600}'
       GOTRUE_JWT_SECRET: '${JWT_SECRET}'
-      GOTRUE_MAILER_AUTOCONFIRM: 'true'
+      GOTRUE_MAILER_AUTOCONFIRM: '${MAILER_AUTOCONFIRM:-false}'
+      GOTRUE_SMTP_HOST: '${SMTP_HOST:-smtp.resend.com}'
+      GOTRUE_SMTP_PORT: '${SMTP_PORT:-587}'
+      GOTRUE_SMTP_USER: '${SMTP_USER}'
+      GOTRUE_SMTP_PASS: '${SMTP_PASS}'
       GOTRUE_SMTP_ADMIN_EMAIL: '${SMTP_ADMIN_EMAIL:-hello@patina.cloud}'
       GOTRUE_SMTP_SENDER_NAME: '${SMTP_SENDER_NAME:-Patina}'
       GOTRUE_MAILER_URLPATHS_INVITE: '${MAILER_URLPATHS_INVITE:-/auth/v1/verify}'
       GOTRUE_MAILER_URLPATHS_CONFIRMATION: '${MAILER_URLPATHS_CONFIRMATION:-/auth/v1/verify}'
       GOTRUE_MAILER_URLPATHS_RECOVERY: '${MAILER_URLPATHS_RECOVERY:-/auth/v1/verify}'
       GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: '${MAILER_URLPATHS_EMAIL_CHANGE:-/auth/v1/verify}'
-      GOTRUE_EXTERNAL_APPLE_ENABLED: 'false'
-      GOTRUE_EXTERNAL_GOOGLE_ENABLED: 'false'
+      GOTRUE_EXTERNAL_APPLE_ENABLED: '${ENABLE_APPLE_AUTH:-false}'
+      GOTRUE_EXTERNAL_APPLE_CLIENT_ID: '${APPLE_CLIENT_ID}'
+      GOTRUE_EXTERNAL_APPLE_SECRET: '${APPLE_SECRET}'
+      GOTRUE_EXTERNAL_GOOGLE_ENABLED: '${ENABLE_GOOGLE_AUTH:-false}'
+      GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: '${GOOGLE_CLIENT_ID}'
+      GOTRUE_EXTERNAL_GOOGLE_SECRET: '${GOOGLE_SECRET}'
+      GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: '${API_EXTERNAL_URL}/auth/v1/callback'
       JWT_SECRET: '${JWT_SECRET}'
       COOLIFY_RESOURCE_UUID: es8w8g0c00og4gsgg0k8w8o8
       COOLIFY_CONTAINER_NAME: auth-es8w8g0c00og4gsgg0k8w8o8
@@ -658,6 +667,61 @@ services:
       - coolify.service.subId=65
       - coolify.service.subType=application
       - coolify.service.subName=analytics
+    networks:
+      es8w8g0c00og4gsgg0k8w8o8: null
+    env_file:
+      - .env
+  functions:
+    image: 'ghcr.io/kodeman/edge-runtime:latest'
+    restart: unless-stopped
+    dns_search: ''
+    environment:
+      JWT_SECRET: '${JWT_SECRET}'
+      SUPABASE_URL: 'http://kong:8000'
+      SUPABASE_ANON_KEY: '${ANON_KEY}'
+      SUPABASE_SERVICE_ROLE_KEY: '${SERVICE_ROLE_KEY}'
+      SUPABASE_DB_URL: 'postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres'
+      VERIFY_JWT: 'true'
+      RESEND_API_KEY: '${RESEND_API_KEY}'
+      RESEND_FROM: '${RESEND_FROM:-Patina <hello@patina.cloud>}'
+      RESEND_WEBHOOK_SECRET: '${RESEND_WEBHOOK_SECRET}'
+      UNSUBSCRIBE_TOKEN_SECRET: '${UNSUBSCRIBE_TOKEN_SECRET}'
+      CLAUDE_API_KEY: '${CLAUDE_API_KEY:-}'
+      POSTHOG_API_KEY: '${POSTHOG_API_KEY:-}'
+      POSTHOG_HOST: '${POSTHOG_HOST:-https://us.i.posthog.com}'
+      COOLIFY_RESOURCE_UUID: es8w8g0c00og4gsgg0k8w8o8
+      COOLIFY_CONTAINER_NAME: functions-es8w8g0c00og4gsgg0k8w8o8
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_KONG: kong
+      SERVICE_NAME_AUTH: auth
+      SERVICE_NAME_REALTIME: realtime
+      SERVICE_NAME_REST: rest
+      SERVICE_NAME_STORAGE: storage
+      SERVICE_NAME_IMGPROXY: imgproxy
+      SERVICE_NAME_STUDIO: studio
+      SERVICE_NAME_META: meta
+      SERVICE_NAME_ANALYTICS: analytics
+      SERVICE_NAME_FUNCTIONS: functions
+    depends_on:
+      db:
+        condition: service_healthy
+      kong:
+        condition: service_started
+    container_name: functions-es8w8g0c00og4gsgg0k8w8o8
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.463
+      - coolify.serviceId=12
+      - coolify.type=service
+      - coolify.name=functions-es8w8g0c00og4gsgg0k8w8o8
+      - coolify.resourceName=supabase-stack
+      - coolify.projectName=strata
+      - coolify.serviceName=functions
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - coolify.service.subId=66
+      - coolify.service.subType=application
+      - coolify.service.subName=functions
     networks:
       es8w8g0c00og4gsgg0k8w8o8: null
     env_file:

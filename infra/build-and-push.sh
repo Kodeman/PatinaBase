@@ -27,6 +27,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 NEXTJS_APPS=(designer-portal admin-portal client-portal)
 NESTJS_SERVICES=(orders media projects)
+DENO_SERVICES=(edge-runtime)
 
 # App URL mapping (baked into Next.js at build time)
 get_app_url() {
@@ -103,7 +104,7 @@ fi
 # Validate target if specified
 if [[ -n "$TARGET" ]]; then
   VALID=false
-  for app in "${NEXTJS_APPS[@]}" "${NESTJS_SERVICES[@]}"; do
+  for app in "${NEXTJS_APPS[@]}" "${NESTJS_SERVICES[@]}" "${DENO_SERVICES[@]}"; do
     if [[ "$app" == "$TARGET" ]]; then
       VALID=true
       break
@@ -111,7 +112,7 @@ if [[ -n "$TARGET" ]]; then
   done
   if [[ "$VALID" != "true" ]]; then
     echo -e "${RED}Error: unknown service '$TARGET'${NC}" >&2
-    echo "Valid services: ${NEXTJS_APPS[*]} ${NESTJS_SERVICES[*]}"
+    echo "Valid services: ${NEXTJS_APPS[*]} ${NESTJS_SERVICES[*]} ${DENO_SERVICES[*]}"
     exit 1
   fi
 fi
@@ -131,6 +132,11 @@ fi
 # Map ANON_KEY to NEXT_PUBLIC_SUPABASE_ANON_KEY if not already set
 NEXT_PUBLIC_SUPABASE_ANON_KEY="${NEXT_PUBLIC_SUPABASE_ANON_KEY:-${ANON_KEY:-}}"
 NEXT_PUBLIC_SUPABASE_URL="${NEXT_PUBLIC_SUPABASE_URL:-https://api.patina.cloud}"
+
+# QR auth is hosted by designer-portal (app.patina.cloud); admin/client portals
+# fetch from there cross-origin. Without this, the compiled bundle falls back to
+# the portal's own origin, where no QR route exists → "Failed to generate QR session".
+NEXT_PUBLIC_QR_AUTH_URL="${NEXT_PUBLIC_QR_AUTH_URL:-https://app.patina.cloud}"
 
 # Git SHA for tagging
 GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -173,6 +179,7 @@ build_nextjs() {
     --build-arg NEXT_PUBLIC_SUPABASE_URL="${NEXT_PUBLIC_SUPABASE_URL}" \
     --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="${NEXT_PUBLIC_SUPABASE_ANON_KEY}" \
     --build-arg NEXT_PUBLIC_APP_URL="${app_url}" \
+    --build-arg NEXT_PUBLIC_QR_AUTH_URL="${NEXT_PUBLIC_QR_AUTH_URL}" \
     --build-arg NEXT_PUBLIC_POSTHOG_KEY="${POSTHOG_KEY:-}" \
     --build-arg NEXT_PUBLIC_POSTHOG_HOST="${POSTHOG_HOST:-}" \
     -t "${REGISTRY}/${app}:latest" \
@@ -204,6 +211,22 @@ build_nestjs() {
   echo ""
 }
 
+build_edge_runtime() {
+  echo -e "${BLUE}━━━ Building ${BOLD}edge-runtime${NC}${BLUE} (Supabase Deno) ━━━${NC}"
+  echo -e "  Image: ${REGISTRY}/edge-runtime:${GIT_SHA}"
+
+  docker buildx build \
+    --platform "${PLATFORM}" \
+    -t "${REGISTRY}/edge-runtime:latest" \
+    -t "${REGISTRY}/edge-runtime:${GIT_SHA}" \
+    -f infra/Dockerfile.edge-runtime \
+    ${OUTPUT} \
+    .
+
+  echo -e "${GREEN}  ✓ edge-runtime built${PUSH:+ and pushed}${NC}"
+  echo ""
+}
+
 # -----------------------------------------------------------------------------
 # Build
 # -----------------------------------------------------------------------------
@@ -223,6 +246,10 @@ if [[ -n "$TARGET" ]]; then
       BUILT+=("$TARGET")
     fi
   done
+  if [[ "$TARGET" == "edge-runtime" ]]; then
+    build_edge_runtime
+    BUILT+=("edge-runtime")
+  fi
 else
   # Build all
   for app in "${NEXTJS_APPS[@]}"; do
@@ -233,6 +260,8 @@ else
     build_nestjs "$svc"
     BUILT+=("$svc")
   done
+  build_edge_runtime
+  BUILT+=("edge-runtime")
 fi
 
 # -----------------------------------------------------------------------------
