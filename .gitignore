@@ -50,6 +50,10 @@ infra/coolify/.env.coolify
 # iOS app local secrets (Secrets.example.swift is the committed template)
 apps/mobile/Patina/Patina/App/Configuration/Secrets.swift
 
+# iOS xcuserdata — per-user Xcode state, not source of truth
+apps/mobile/Patina/Patina.xcodeproj/project.xcworkspace/xcuserdata/
+apps/mobile/Patina/Patina.xcodeproj/xcuserdata/
+
 # Misc
 *.log
 npm-debug.log*
