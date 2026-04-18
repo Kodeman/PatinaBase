@@ -202,6 +202,57 @@ export type Database = {
         }
         Relationships: []
       }
+      application_communications: {
+        Row: {
+          application_id: string
+          application_type: string
+          body_html: string | null
+          body_text: string | null
+          channel: string
+          created_at: string
+          error: string | null
+          id: string
+          provider_id: string | null
+          sent_by: string | null
+          status: string
+          subject: string
+          template_id: string | null
+          to_email: string
+        }
+        Insert: {
+          application_id: string
+          application_type: string
+          body_html?: string | null
+          body_text?: string | null
+          channel?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          provider_id?: string | null
+          sent_by?: string | null
+          status?: string
+          subject: string
+          template_id?: string | null
+          to_email: string
+        }
+        Update: {
+          application_id?: string
+          application_type?: string
+          body_html?: string | null
+          body_text?: string | null
+          channel?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          provider_id?: string | null
+          sent_by?: string | null
+          status?: string
+          subject?: string
+          template_id?: string | null
+          to_email?: string
+        }
+        Relationships: []
+      }
       audience_segments: {
         Row: {
           created_at: string
@@ -608,6 +659,47 @@ export type Database = {
           },
         ]
       }
+      client_activity_log: {
+        Row: {
+          activity_type: string
+          actor_name: string | null
+          created_at: string
+          description: string | null
+          designer_client_id: string
+          id: string
+          metadata: Json | null
+          title: string
+        }
+        Insert: {
+          activity_type: string
+          actor_name?: string | null
+          created_at?: string
+          description?: string | null
+          designer_client_id: string
+          id?: string
+          metadata?: Json | null
+          title: string
+        }
+        Update: {
+          activity_type?: string
+          actor_name?: string | null
+          created_at?: string
+          description?: string | null
+          designer_client_id?: string
+          id?: string
+          metadata?: Json | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_activity_log_designer_client_id_fkey"
+            columns: ["designer_client_id"]
+            isOneToOne: false
+            referencedRelation: "designer_clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_archetypes: {
         Row: {
           created_at: string | null
@@ -638,6 +730,147 @@ export type Database = {
         }
         Relationships: []
       }
+      client_decision_options: {
+        Row: {
+          client_note: string | null
+          created_at: string
+          decision_id: string
+          designer_note: string | null
+          id: string
+          image_url: string | null
+          is_recommended: boolean | null
+          name: string
+          price: number | null
+          quantity: number | null
+          selected: boolean | null
+          sort_order: number | null
+        }
+        Insert: {
+          client_note?: string | null
+          created_at?: string
+          decision_id: string
+          designer_note?: string | null
+          id?: string
+          image_url?: string | null
+          is_recommended?: boolean | null
+          name: string
+          price?: number | null
+          quantity?: number | null
+          selected?: boolean | null
+          sort_order?: number | null
+        }
+        Update: {
+          client_note?: string | null
+          created_at?: string
+          decision_id?: string
+          designer_note?: string | null
+          id?: string
+          image_url?: string | null
+          is_recommended?: boolean | null
+          name?: string
+          price?: number | null
+          quantity?: number | null
+          selected?: boolean | null
+          sort_order?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_decision_options_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_decisions: {
+        Row: {
+          blocking_status: string
+          context: string | null
+          created_at: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          project_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        Insert: {
+          blocking_status?: string
+          context?: string | null
+          created_at?: string
+          decision_type?: string
+          designer_client_id: string
+          designer_id: string
+          due_date?: string | null
+          id?: string
+          linked_phase?: string | null
+          linked_proposal_id?: string | null
+          project_id?: string | null
+          reminder_sent_at?: string | null
+          responded_at?: string | null
+          selected_by?: string | null
+          sent_at?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          viewed_at?: string | null
+        }
+        Update: {
+          blocking_status?: string
+          context?: string | null
+          created_at?: string
+          decision_type?: string
+          designer_client_id?: string
+          designer_id?: string
+          due_date?: string | null
+          id?: string
+          linked_phase?: string | null
+          linked_proposal_id?: string | null
+          project_id?: string | null
+          reminder_sent_at?: string | null
+          responded_at?: string | null
+          selected_by?: string | null
+          sent_at?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          viewed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_decisions_designer_client_id_fkey"
+            columns: ["designer_client_id"]
+            isOneToOne: false
+            referencedRelation: "designer_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_decisions_linked_proposal_id_fkey"
+            columns: ["linked_proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_decisions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_messages: {
         Row: {
           archived_by_recipient: boolean | null
@@ -645,6 +878,7 @@ export type Database = {
           attachments: Json | null
           body: string
           created_at: string
+          designer_client_id: string | null
           id: string
           project_id: string | null
           proposal_id: string | null
@@ -659,6 +893,7 @@ export type Database = {
           attachments?: Json | null
           body: string
           created_at?: string
+          designer_client_id?: string | null
           id?: string
           project_id?: string | null
           proposal_id?: string | null
@@ -673,6 +908,7 @@ export type Database = {
           attachments?: Json | null
           body?: string
           created_at?: string
+          designer_client_id?: string | null
           id?: string
           project_id?: string | null
           proposal_id?: string | null
@@ -682,6 +918,13 @@ export type Database = {
           subject?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "client_messages_designer_client_id_fkey"
+            columns: ["designer_client_id"]
+            isOneToOne: false
+            referencedRelation: "designer_clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "client_messages_project_id_fkey"
             columns: ["project_id"]
@@ -722,6 +965,54 @@ export type Database = {
             columns: ["sender_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_nurture_touchpoints: {
+        Row: {
+          created_at: string
+          designer_client_id: string
+          id: string
+          product_id: string | null
+          reason: string | null
+          status: string
+          suggested_date: string | null
+          touchpoint_type: string
+        }
+        Insert: {
+          created_at?: string
+          designer_client_id: string
+          id?: string
+          product_id?: string | null
+          reason?: string | null
+          status?: string
+          suggested_date?: string | null
+          touchpoint_type: string
+        }
+        Update: {
+          created_at?: string
+          designer_client_id?: string
+          id?: string
+          product_id?: string | null
+          reason?: string | null
+          status?: string
+          suggested_date?: string | null
+          touchpoint_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_nurture_touchpoints_designer_client_id_fkey"
+            columns: ["designer_client_id"]
+            isOneToOne: false
+            referencedRelation: "designer_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_nurture_touchpoints_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -767,11 +1058,78 @@ export type Database = {
           },
         ]
       }
+      client_reviews: {
+        Row: {
+          created_at: string
+          custom_message: string | null
+          designer_client_id: string
+          id: string
+          project_id: string | null
+          published_to_portfolio: boolean | null
+          rating: number | null
+          referral_count: number | null
+          request_sent_at: string | null
+          request_status: string
+          review_text: string | null
+          scheduled_for: string | null
+          tags: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          custom_message?: string | null
+          designer_client_id: string
+          id?: string
+          project_id?: string | null
+          published_to_portfolio?: boolean | null
+          rating?: number | null
+          referral_count?: number | null
+          request_sent_at?: string | null
+          request_status?: string
+          review_text?: string | null
+          scheduled_for?: string | null
+          tags?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          custom_message?: string | null
+          designer_client_id?: string
+          id?: string
+          project_id?: string | null
+          published_to_portfolio?: boolean | null
+          rating?: number | null
+          referral_count?: number | null
+          request_sent_at?: string | null
+          request_status?: string
+          review_text?: string | null
+          scheduled_for?: string | null
+          tags?: string[] | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_reviews_designer_client_id_fkey"
+            columns: ["designer_client_id"]
+            isOneToOne: false
+            referencedRelation: "designer_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_reviews_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collection_products: {
         Row: {
           added_at: string | null
           collection_id: string
           id: string
+          notes: string | null
           position: number | null
           product_id: string
         }
@@ -779,6 +1137,7 @@ export type Database = {
           added_at?: string | null
           collection_id: string
           id?: string
+          notes?: string | null
           position?: number | null
           product_id: string
         }
@@ -786,6 +1145,7 @@ export type Database = {
           added_at?: string | null
           collection_id?: string
           id?: string
+          notes?: string | null
           position?: number | null
           product_id?: string
         }
@@ -812,9 +1172,20 @@ export type Database = {
           created_at: string | null
           created_by: string
           description: string | null
+          display_order: number | null
+          featured: boolean | null
           id: string
           is_public: boolean | null
           name: string
+          published_at: string | null
+          rule: Json | null
+          scheduled_publish_at: string | null
+          seo_description: string | null
+          seo_title: string | null
+          slug: string | null
+          status: string | null
+          tags: string[] | null
+          type: string | null
           updated_at: string | null
         }
         Insert: {
@@ -822,9 +1193,20 @@ export type Database = {
           created_at?: string | null
           created_by: string
           description?: string | null
+          display_order?: number | null
+          featured?: boolean | null
           id?: string
           is_public?: boolean | null
           name: string
+          published_at?: string | null
+          rule?: Json | null
+          scheduled_publish_at?: string | null
+          seo_description?: string | null
+          seo_title?: string | null
+          slug?: string | null
+          status?: string | null
+          tags?: string[] | null
+          type?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -832,9 +1214,20 @@ export type Database = {
           created_at?: string | null
           created_by?: string
           description?: string | null
+          display_order?: number | null
+          featured?: boolean | null
           id?: string
           is_public?: boolean | null
           name?: string
+          published_at?: string | null
+          rule?: Json | null
+          scheduled_publish_at?: string | null
+          seo_description?: string | null
+          seo_title?: string | null
+          slug?: string | null
+          status?: string | null
+          tags?: string[] | null
+          type?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -1033,6 +1426,125 @@ export type Database = {
         }
         Relationships: []
       }
+      cowork_tasks: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          cron_expression: string | null
+          error_message: string | null
+          id: string
+          input_payload: Json | null
+          is_recurring: boolean | null
+          last_run_at: string | null
+          max_retries: number | null
+          next_run_at: string | null
+          output_files: string[] | null
+          output_payload: Json | null
+          picked_up_at: string | null
+          retry_count: number | null
+          status: string
+          task_type: string
+          vendor_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          cron_expression?: string | null
+          error_message?: string | null
+          id?: string
+          input_payload?: Json | null
+          is_recurring?: boolean | null
+          last_run_at?: string | null
+          max_retries?: number | null
+          next_run_at?: string | null
+          output_files?: string[] | null
+          output_payload?: Json | null
+          picked_up_at?: string | null
+          retry_count?: number | null
+          status?: string
+          task_type: string
+          vendor_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          cron_expression?: string | null
+          error_message?: string | null
+          id?: string
+          input_payload?: Json | null
+          is_recurring?: boolean | null
+          last_run_at?: string | null
+          max_retries?: number | null
+          next_run_at?: string | null
+          output_files?: string[] | null
+          output_payload?: Json | null
+          picked_up_at?: string | null
+          retry_count?: number | null
+          status?: string
+          task_type?: string
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cowork_tasks_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_stories: {
+        Row: {
+          body_content: string | null
+          created_at: string | null
+          embedded_products: string[] | null
+          engagement_summary: Json | null
+          hero_image_url: string
+          id: string
+          maker_id: string | null
+          publish_date: string
+          read_time_minutes: number | null
+          status: string | null
+          story_type: string
+          subtitle: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          body_content?: string | null
+          created_at?: string | null
+          embedded_products?: string[] | null
+          engagement_summary?: Json | null
+          hero_image_url: string
+          id?: string
+          maker_id?: string | null
+          publish_date: string
+          read_time_minutes?: number | null
+          status?: string | null
+          story_type: string
+          subtitle?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          body_content?: string | null
+          created_at?: string | null
+          embedded_products?: string[] | null
+          engagement_summary?: Json | null
+          hero_image_url?: string
+          id?: string
+          maker_id?: string | null
+          publish_date?: string
+          read_time_minutes?: number | null
+          status?: string | null
+          story_type?: string
+          subtitle?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       data_export_requests: {
         Row: {
           completed_at: string | null
@@ -1147,12 +1659,20 @@ export type Database = {
           designer_id: string
           first_project_at: string | null
           id: string
+          inspiration_quote: string | null
+          last_contacted_at: string | null
           last_project_at: string | null
           lead_id: string | null
+          location: string | null
           nickname: string | null
           notes: string | null
+          preferred_contact: string | null
+          referral_source: string | null
+          satisfaction_score: number | null
           source: string | null
           status: string
+          style_preferences: Json | null
+          style_tags: string[] | null
           tags: string[] | null
           total_projects: number | null
           total_revenue: number | null
@@ -1166,12 +1686,20 @@ export type Database = {
           designer_id: string
           first_project_at?: string | null
           id?: string
+          inspiration_quote?: string | null
+          last_contacted_at?: string | null
           last_project_at?: string | null
           lead_id?: string | null
+          location?: string | null
           nickname?: string | null
           notes?: string | null
+          preferred_contact?: string | null
+          referral_source?: string | null
+          satisfaction_score?: number | null
           source?: string | null
           status?: string
+          style_preferences?: Json | null
+          style_tags?: string[] | null
           tags?: string[] | null
           total_projects?: number | null
           total_revenue?: number | null
@@ -1185,12 +1713,20 @@ export type Database = {
           designer_id?: string
           first_project_at?: string | null
           id?: string
+          inspiration_quote?: string | null
+          last_contacted_at?: string | null
           last_project_at?: string | null
           lead_id?: string | null
+          location?: string | null
           nickname?: string | null
           notes?: string | null
+          preferred_contact?: string | null
+          referral_source?: string | null
+          satisfaction_score?: number | null
           source?: string | null
           status?: string
+          style_preferences?: Json | null
+          style_tags?: string[] | null
           tags?: string[] | null
           total_projects?: number | null
           total_revenue?: number | null
@@ -1609,6 +2145,167 @@ export type Database = {
           },
         ]
       }
+      feed_cache_meta: {
+        Row: {
+          expires_at: string
+          generated_at: string
+          new_since_last_view: number | null
+          products_ranked: string[]
+          room_id: string
+          user_id: string
+        }
+        Insert: {
+          expires_at: string
+          generated_at?: string
+          new_since_last_view?: number | null
+          products_ranked?: string[]
+          room_id: string
+          user_id: string
+        }
+        Update: {
+          expires_at?: string
+          generated_at?: string
+          new_since_last_view?: number | null
+          products_ranked?: string[]
+          room_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feed_cache_meta_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feed_cache_meta_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms_with_hero_frames"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      founding_designer_applications: {
+        Row: {
+          auth_user_id: string | null
+          company: string | null
+          converted_at: string | null
+          created_at: string
+          email: string
+          first_name: string
+          id: string
+          last_name: string
+          motivation: string | null
+          referral_source: string | null
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["application_review_status"]
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          auth_user_id?: string | null
+          company?: string | null
+          converted_at?: string | null
+          created_at?: string
+          email: string
+          first_name: string
+          id?: string
+          last_name: string
+          motivation?: string | null
+          referral_source?: string | null
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["application_review_status"]
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          auth_user_id?: string | null
+          company?: string | null
+          converted_at?: string | null
+          created_at?: string
+          email?: string
+          first_name?: string
+          id?: string
+          last_name?: string
+          motivation?: string | null
+          referral_source?: string | null
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["application_review_status"]
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
+      interactions: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json | null
+          product_id: string
+          room_id: string | null
+          session_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          product_id: string
+          room_id?: string | null
+          session_id?: string | null
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          product_id?: string
+          room_id?: string | null
+          session_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interactions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interactions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms_with_hero_frames"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           accepted_at: string | null
@@ -1713,6 +2410,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      maker_applications: {
+        Row: {
+          auth_user_id: string | null
+          brand_name: string
+          contact_name: string
+          converted_at: string | null
+          created_at: string
+          description: string | null
+          email: string
+          id: string
+          referral_source: string | null
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["application_review_status"]
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          auth_user_id?: string | null
+          brand_name: string
+          contact_name: string
+          converted_at?: string | null
+          created_at?: string
+          description?: string | null
+          email: string
+          id?: string
+          referral_source?: string | null
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["application_review_status"]
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          auth_user_id?: string | null
+          brand_name?: string
+          contact_name?: string
+          converted_at?: string | null
+          created_at?: string
+          description?: string | null
+          email?: string
+          id?: string
+          referral_source?: string | null
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["application_review_status"]
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
       }
       material_compatibility: {
         Row: {
@@ -2161,6 +2912,179 @@ export type Database = {
         }
         Relationships: []
       }
+      pipeline_vendor_scores: {
+        Row: {
+          data_sources: string[] | null
+          dimension: number
+          dimension_name: string
+          evidence: string | null
+          id: string
+          raw_score: number | null
+          scored_at: string | null
+          scored_by: string
+          vendor_id: string
+          weight: number
+          weighted_score: number | null
+        }
+        Insert: {
+          data_sources?: string[] | null
+          dimension: number
+          dimension_name: string
+          evidence?: string | null
+          id?: string
+          raw_score?: number | null
+          scored_at?: string | null
+          scored_by: string
+          vendor_id: string
+          weight: number
+          weighted_score?: number | null
+        }
+        Update: {
+          data_sources?: string[] | null
+          dimension?: number
+          dimension_name?: string
+          evidence?: string | null
+          id?: string
+          raw_score?: number | null
+          scored_at?: string | null
+          scored_by?: string
+          vendor_id?: string
+          weight?: number
+          weighted_score?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pipeline_vendor_scores_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pipeline_vendors: {
+        Row: {
+          awaiting_leah_review: boolean | null
+          company_size: string | null
+          created_at: string
+          data_format: string | null
+          drop_ship_capable: boolean | null
+          feed_frequency: string | null
+          feed_url: string | null
+          has_hard_veto: boolean | null
+          id: string
+          last_feed_sync_at: string | null
+          leah_notes: string | null
+          location_city: string | null
+          location_country: string | null
+          location_state: string | null
+          name: string
+          notes: string | null
+          payment_terms: string | null
+          price_range_high: number | null
+          price_range_low: number | null
+          primary_contact_email: string | null
+          primary_contact_name: string | null
+          primary_contact_phone: string | null
+          primary_contact_role: string | null
+          product_categories: string[] | null
+          scored_by_kody: boolean | null
+          scored_by_leah: boolean | null
+          slug: string
+          source: string | null
+          stage: string
+          stage_changed_at: string | null
+          total_score: number | null
+          trade_account_status: string | null
+          trade_discount_pct: number | null
+          triage_level: string | null
+          updated_at: string
+          veto_reason: string | null
+          website_url: string | null
+          year_established: number | null
+        }
+        Insert: {
+          awaiting_leah_review?: boolean | null
+          company_size?: string | null
+          created_at?: string
+          data_format?: string | null
+          drop_ship_capable?: boolean | null
+          feed_frequency?: string | null
+          feed_url?: string | null
+          has_hard_veto?: boolean | null
+          id?: string
+          last_feed_sync_at?: string | null
+          leah_notes?: string | null
+          location_city?: string | null
+          location_country?: string | null
+          location_state?: string | null
+          name: string
+          notes?: string | null
+          payment_terms?: string | null
+          price_range_high?: number | null
+          price_range_low?: number | null
+          primary_contact_email?: string | null
+          primary_contact_name?: string | null
+          primary_contact_phone?: string | null
+          primary_contact_role?: string | null
+          product_categories?: string[] | null
+          scored_by_kody?: boolean | null
+          scored_by_leah?: boolean | null
+          slug: string
+          source?: string | null
+          stage?: string
+          stage_changed_at?: string | null
+          total_score?: number | null
+          trade_account_status?: string | null
+          trade_discount_pct?: number | null
+          triage_level?: string | null
+          updated_at?: string
+          veto_reason?: string | null
+          website_url?: string | null
+          year_established?: number | null
+        }
+        Update: {
+          awaiting_leah_review?: boolean | null
+          company_size?: string | null
+          created_at?: string
+          data_format?: string | null
+          drop_ship_capable?: boolean | null
+          feed_frequency?: string | null
+          feed_url?: string | null
+          has_hard_veto?: boolean | null
+          id?: string
+          last_feed_sync_at?: string | null
+          leah_notes?: string | null
+          location_city?: string | null
+          location_country?: string | null
+          location_state?: string | null
+          name?: string
+          notes?: string | null
+          payment_terms?: string | null
+          price_range_high?: number | null
+          price_range_low?: number | null
+          primary_contact_email?: string | null
+          primary_contact_name?: string | null
+          primary_contact_phone?: string | null
+          primary_contact_role?: string | null
+          product_categories?: string[] | null
+          scored_by_kody?: boolean | null
+          scored_by_leah?: boolean | null
+          slug?: string
+          source?: string | null
+          stage?: string
+          stage_changed_at?: string | null
+          total_score?: number | null
+          trade_account_status?: string | null
+          trade_discount_pct?: number | null
+          triage_level?: string | null
+          updated_at?: string
+          veto_reason?: string | null
+          website_url?: string | null
+          year_established?: number | null
+        }
+        Relationships: []
+      }
       product_appeal_signals: {
         Row: {
           appeal_signal_id: string
@@ -2243,6 +3167,56 @@ export type Database = {
             foreignKeyName: "product_client_matches_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_engagement: {
+        Row: {
+          add_to_room_rate: number | null
+          avg_dwell_ms: number | null
+          avg_match_when_shown: number | null
+          declining_flag: boolean | null
+          detail_open_rate: number | null
+          product_id: string
+          save_rate: number | null
+          share_rate: number | null
+          total_dwell_ms: number | null
+          total_impressions: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          add_to_room_rate?: number | null
+          avg_dwell_ms?: number | null
+          avg_match_when_shown?: number | null
+          declining_flag?: boolean | null
+          detail_open_rate?: number | null
+          product_id: string
+          save_rate?: number | null
+          share_rate?: number | null
+          total_dwell_ms?: number | null
+          total_impressions?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          add_to_room_rate?: number | null
+          avg_dwell_ms?: number | null
+          avg_match_when_shown?: number | null
+          declining_flag?: boolean | null
+          detail_open_rate?: number | null
+          product_id?: string
+          save_rate?: number | null
+          share_rate?: number | null
+          total_dwell_ms?: number | null
+          total_impressions?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_engagement_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -2462,6 +3436,53 @@ export type Database = {
           },
         ]
       }
+      product_user_dwell: {
+        Row: {
+          avg_visibility_pct: number | null
+          computed_interest_score: number | null
+          id: string
+          last_seen: string | null
+          max_single_dwell_ms: number | null
+          product_id: string
+          total_dwell_ms: number | null
+          updated_at: string | null
+          user_id: string
+          view_count: number | null
+        }
+        Insert: {
+          avg_visibility_pct?: number | null
+          computed_interest_score?: number | null
+          id?: string
+          last_seen?: string | null
+          max_single_dwell_ms?: number | null
+          product_id: string
+          total_dwell_ms?: number | null
+          updated_at?: string | null
+          user_id: string
+          view_count?: number | null
+        }
+        Update: {
+          avg_visibility_pct?: number | null
+          computed_interest_score?: number | null
+          id?: string
+          last_seen?: string | null
+          max_single_dwell_ms?: number | null
+          product_id?: string
+          total_dwell_ms?: number | null
+          updated_at?: string | null
+          user_id?: string
+          view_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_user_dwell_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           available_colors: string[] | null
@@ -2588,6 +3609,7 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          behavioral_tracking_opt_out: boolean
           bio: string | null
           business_name: string | null
           city: string | null
@@ -2619,6 +3641,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          behavioral_tracking_opt_out?: boolean
           bio?: string | null
           business_name?: string | null
           city?: string | null
@@ -2650,6 +3673,7 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          behavioral_tracking_opt_out?: boolean
           bio?: string | null
           business_name?: string | null
           city?: string | null
@@ -2680,6 +3704,260 @@ export type Database = {
           zip?: string | null
         }
         Relationships: []
+      }
+      project_ffe_items: {
+        Row: {
+          blocked: boolean | null
+          blocked_reason: string | null
+          budget_max_cents: number | null
+          budget_min_cents: number | null
+          created_at: string
+          eta: string | null
+          ffe_category: string | null
+          id: string
+          item_type: string
+          line_total_cents: number | null
+          name: string
+          notes: string | null
+          po_number: string | null
+          product_id: string | null
+          project_id: string
+          project_room_id: string | null
+          quantity: number
+          sort_order: number
+          source_proposal_item_id: string | null
+          status: string
+          unit_price_cents: number | null
+          updated_at: string
+          vendor_id: string | null
+          vendor_name: string | null
+        }
+        Insert: {
+          blocked?: boolean | null
+          blocked_reason?: string | null
+          budget_max_cents?: number | null
+          budget_min_cents?: number | null
+          created_at?: string
+          eta?: string | null
+          ffe_category?: string | null
+          id?: string
+          item_type?: string
+          line_total_cents?: number | null
+          name: string
+          notes?: string | null
+          po_number?: string | null
+          product_id?: string | null
+          project_id: string
+          project_room_id?: string | null
+          quantity?: number
+          sort_order?: number
+          source_proposal_item_id?: string | null
+          status?: string
+          unit_price_cents?: number | null
+          updated_at?: string
+          vendor_id?: string | null
+          vendor_name?: string | null
+        }
+        Update: {
+          blocked?: boolean | null
+          blocked_reason?: string | null
+          budget_max_cents?: number | null
+          budget_min_cents?: number | null
+          created_at?: string
+          eta?: string | null
+          ffe_category?: string | null
+          id?: string
+          item_type?: string
+          line_total_cents?: number | null
+          name?: string
+          notes?: string | null
+          po_number?: string | null
+          product_id?: string | null
+          project_id?: string
+          project_room_id?: string | null
+          quantity?: number
+          sort_order?: number
+          source_proposal_item_id?: string | null
+          status?: string
+          unit_price_cents?: number | null
+          updated_at?: string
+          vendor_id?: string | null
+          vendor_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ffe_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_items_project_room_id_fkey"
+            columns: ["project_room_id"]
+            isOneToOne: false
+            referencedRelation: "project_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_items_source_proposal_item_id_fkey"
+            columns: ["source_proposal_item_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_payment_milestones: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          due_date: string | null
+          id: string
+          label: string
+          paid_at: string | null
+          percentage: number
+          phase_id: string | null
+          project_id: string
+          sort_order: number
+          status: string
+          trigger_condition: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_cents?: number
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          label: string
+          paid_at?: string | null
+          percentage: number
+          phase_id?: string | null
+          project_id: string
+          sort_order?: number
+          status?: string
+          trigger_condition?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          label?: string
+          paid_at?: string | null
+          percentage?: number
+          phase_id?: string | null
+          project_id?: string
+          sort_order?: number
+          status?: string
+          trigger_condition?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_payment_milestones_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "project_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_payment_milestones_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_phases: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          deliverables: Json | null
+          duration_weeks: number | null
+          fee_cents: number | null
+          gate_condition: string | null
+          id: string
+          name: string
+          phase_key: string | null
+          progress: number | null
+          project_id: string
+          revision_limit: number | null
+          revisions_used: number | null
+          sort_order: number
+          source_proposal_phase_id: string | null
+          start_date: string | null
+          status: string
+          target_end_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          deliverables?: Json | null
+          duration_weeks?: number | null
+          fee_cents?: number | null
+          gate_condition?: string | null
+          id?: string
+          name: string
+          phase_key?: string | null
+          progress?: number | null
+          project_id: string
+          revision_limit?: number | null
+          revisions_used?: number | null
+          sort_order?: number
+          source_proposal_phase_id?: string | null
+          start_date?: string | null
+          status?: string
+          target_end_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          deliverables?: Json | null
+          duration_weeks?: number | null
+          fee_cents?: number | null
+          gate_condition?: string | null
+          id?: string
+          name?: string
+          phase_key?: string | null
+          progress?: number | null
+          project_id?: string
+          revision_limit?: number | null
+          revisions_used?: number | null
+          sort_order?: number
+          source_proposal_phase_id?: string | null
+          start_date?: string | null
+          status?: string
+          target_end_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_phases_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_phases_source_proposal_phase_id_fkey"
+            columns: ["source_proposal_phase_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_phases"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       project_products: {
         Row: {
@@ -2733,6 +4011,92 @@ export type Database = {
           },
         ]
       }
+      project_rooms: {
+        Row: {
+          actual_cents: number | null
+          budget_cents: number
+          committed_cents: number | null
+          created_at: string
+          dimensions: string | null
+          ffe_categories: string[] | null
+          floor_area_sqft: number | null
+          id: string
+          name: string
+          notes: string | null
+          project_id: string
+          room_id: string | null
+          room_type: string | null
+          sort_order: number
+          source_scope_room_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          actual_cents?: number | null
+          budget_cents?: number
+          committed_cents?: number | null
+          created_at?: string
+          dimensions?: string | null
+          ffe_categories?: string[] | null
+          floor_area_sqft?: number | null
+          id?: string
+          name: string
+          notes?: string | null
+          project_id: string
+          room_id?: string | null
+          room_type?: string | null
+          sort_order?: number
+          source_scope_room_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          actual_cents?: number | null
+          budget_cents?: number
+          committed_cents?: number | null
+          created_at?: string
+          dimensions?: string | null
+          ffe_categories?: string[] | null
+          floor_area_sqft?: number | null
+          id?: string
+          name?: string
+          notes?: string | null
+          project_id?: string
+          room_id?: string | null
+          room_type?: string | null
+          sort_order?: number
+          source_scope_room_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_rooms_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_rooms_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_rooms_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms_with_hero_frames"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_rooms_source_scope_room_id_fkey"
+            columns: ["source_scope_room_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_scope_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_sections: {
         Row: {
           created_at: string | null
@@ -2767,46 +4131,85 @@ export type Database = {
       }
       projects: {
         Row: {
+          actual_cents: number | null
+          brief_document_url: string | null
+          budget_cents: number | null
           budget_max: number | null
           budget_min: number | null
+          change_order_terms: Json | null
+          client_id: string | null
           client_profile_id: string | null
+          committed_cents: number | null
           created_at: string | null
           created_by: string
+          current_phase: string | null
+          design_fee_cents: number | null
+          designer_id: string | null
           id: string
           name: string
           notes: string | null
+          proposal_id: string | null
+          scope_boundaries: Json | null
           share_token: string | null
+          start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
+          target_end_date: string | null
           timeline_end: string | null
           timeline_start: string | null
           updated_at: string | null
         }
         Insert: {
+          actual_cents?: number | null
+          brief_document_url?: string | null
+          budget_cents?: number | null
           budget_max?: number | null
           budget_min?: number | null
+          change_order_terms?: Json | null
+          client_id?: string | null
           client_profile_id?: string | null
+          committed_cents?: number | null
           created_at?: string | null
           created_by: string
+          current_phase?: string | null
+          design_fee_cents?: number | null
+          designer_id?: string | null
           id?: string
           name: string
           notes?: string | null
+          proposal_id?: string | null
+          scope_boundaries?: Json | null
           share_token?: string | null
+          start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
+          target_end_date?: string | null
           timeline_end?: string | null
           timeline_start?: string | null
           updated_at?: string | null
         }
         Update: {
+          actual_cents?: number | null
+          brief_document_url?: string | null
+          budget_cents?: number | null
           budget_max?: number | null
           budget_min?: number | null
+          change_order_terms?: Json | null
+          client_id?: string | null
           client_profile_id?: string | null
+          committed_cents?: number | null
           created_at?: string | null
           created_by?: string
+          current_phase?: string | null
+          design_fee_cents?: number | null
+          designer_id?: string | null
           id?: string
           name?: string
           notes?: string | null
+          proposal_id?: string | null
+          scope_boundaries?: Json | null
           share_token?: string | null
+          start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
+          target_end_date?: string | null
           timeline_end?: string | null
           timeline_start?: string | null
           updated_at?: string | null
@@ -2819,16 +4222,186 @@ export type Database = {
             referencedRelation: "client_profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "projects_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_change_order_terms: {
+        Row: {
+          approval_required: boolean | null
+          created_at: string
+          hourly_rate_cents: number | null
+          id: string
+          minimum_fee_cents: number | null
+          process_description: string
+          proposal_id: string
+          updated_at: string
+        }
+        Insert: {
+          approval_required?: boolean | null
+          created_at?: string
+          hourly_rate_cents?: number | null
+          id?: string
+          minimum_fee_cents?: number | null
+          process_description: string
+          proposal_id: string
+          updated_at?: string
+        }
+        Update: {
+          approval_required?: boolean | null
+          created_at?: string
+          hourly_rate_cents?: number | null
+          id?: string
+          minimum_fee_cents?: number | null
+          process_description?: string
+          proposal_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_change_order_terms_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: true
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_engagement: {
+        Row: {
+          created_at: string
+          duration_seconds: number | null
+          event_type: string
+          id: string
+          metadata: Json | null
+          proposal_id: string
+          section_type: string | null
+          viewer_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number | null
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          proposal_id: string
+          section_type?: string | null
+          viewer_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number | null
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          proposal_id?: string
+          section_type?: string | null
+          viewer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_engagement_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_engagement_viewer_id_fkey"
+            columns: ["viewer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_engagement_viewer_id_fkey"
+            columns: ["viewer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_exclusions: {
+        Row: {
+          category: string | null
+          created_at: string
+          description: string
+          id: string
+          proposal_id: string
+          sort_order: number
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          proposal_id: string
+          sort_order?: number
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          proposal_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_exclusions_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
         ]
       }
       proposal_items: {
         Row: {
+          budget_max_cents: number | null
+          budget_min_cents: number | null
           category: string | null
           created_at: string
           description: string | null
+          ffe_category: string | null
           id: string
           image_url: string | null
           internal_notes: string | null
+          item_type: string
           lead_time_weeks: number | null
           line_total: number
           markup_percent: number | null
@@ -2839,6 +4412,7 @@ export type Database = {
           proposal_id: string
           quantity: number
           room: string | null
+          scope_room_id: string | null
           unit_price: number
           unit_sell_price: number
           updated_at: string
@@ -2846,12 +4420,16 @@ export type Database = {
           vendor_name: string | null
         }
         Insert: {
+          budget_max_cents?: number | null
+          budget_min_cents?: number | null
           category?: string | null
           created_at?: string
           description?: string | null
+          ffe_category?: string | null
           id?: string
           image_url?: string | null
           internal_notes?: string | null
+          item_type?: string
           lead_time_weeks?: number | null
           line_total: number
           markup_percent?: number | null
@@ -2862,6 +4440,7 @@ export type Database = {
           proposal_id: string
           quantity?: number
           room?: string | null
+          scope_room_id?: string | null
           unit_price: number
           unit_sell_price: number
           updated_at?: string
@@ -2869,12 +4448,16 @@ export type Database = {
           vendor_name?: string | null
         }
         Update: {
+          budget_max_cents?: number | null
+          budget_min_cents?: number | null
           category?: string | null
           created_at?: string
           description?: string | null
+          ffe_category?: string | null
           id?: string
           image_url?: string | null
           internal_notes?: string | null
+          item_type?: string
           lead_time_weeks?: number | null
           line_total?: number
           markup_percent?: number | null
@@ -2885,6 +4468,7 @@ export type Database = {
           proposal_id?: string
           quantity?: number
           room?: string | null
+          scope_room_id?: string | null
           unit_price?: number
           unit_sell_price?: number
           updated_at?: string
@@ -2907,6 +4491,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "proposal_items_scope_room_id_fkey"
+            columns: ["scope_room_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_scope_rooms"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "proposal_items_vendor_id_fkey"
             columns: ["vendor_id"]
             isOneToOne: false
@@ -2915,9 +4506,277 @@ export type Database = {
           },
         ]
       }
+      proposal_payment_milestones: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          id: string
+          label: string
+          percentage: number
+          phase_id: string | null
+          proposal_id: string
+          sort_order: number
+          trigger_condition: string | null
+        }
+        Insert: {
+          amount_cents?: number
+          created_at?: string
+          id?: string
+          label: string
+          percentage: number
+          phase_id?: string | null
+          proposal_id: string
+          sort_order?: number
+          trigger_condition?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          id?: string
+          label?: string
+          percentage?: number
+          phase_id?: string | null
+          proposal_id?: string
+          sort_order?: number
+          trigger_condition?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_payment_milestones_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_payment_milestones_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_phases: {
+        Row: {
+          created_at: string
+          deliverables: Json | null
+          duration_weeks: number | null
+          fee_cents: number
+          gate_condition: string | null
+          id: string
+          name: string
+          phase_key: string | null
+          proposal_id: string
+          revision_limit: number | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deliverables?: Json | null
+          duration_weeks?: number | null
+          fee_cents?: number
+          gate_condition?: string | null
+          id?: string
+          name: string
+          phase_key?: string | null
+          proposal_id: string
+          revision_limit?: number | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deliverables?: Json | null
+          duration_weeks?: number | null
+          fee_cents?: number
+          gate_condition?: string | null
+          id?: string
+          name?: string
+          phase_key?: string | null
+          proposal_id?: string
+          revision_limit?: number | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_phases_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_scope_rooms: {
+        Row: {
+          budget_cents: number
+          created_at: string
+          dimensions: string | null
+          ffe_categories: string[] | null
+          floor_area_sqft: number | null
+          id: string
+          name: string
+          notes: string | null
+          proposal_id: string
+          room_id: string | null
+          room_type: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          budget_cents?: number
+          created_at?: string
+          dimensions?: string | null
+          ffe_categories?: string[] | null
+          floor_area_sqft?: number | null
+          id?: string
+          name: string
+          notes?: string | null
+          proposal_id: string
+          room_id?: string | null
+          room_type?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          budget_cents?: number
+          created_at?: string
+          dimensions?: string | null
+          ffe_categories?: string[] | null
+          floor_area_sqft?: number | null
+          id?: string
+          name?: string
+          notes?: string | null
+          proposal_id?: string
+          room_id?: string | null
+          room_type?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_scope_rooms_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_scope_rooms_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_scope_rooms_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms_with_hero_frames"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_sections: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          metadata: Json | null
+          proposal_id: string
+          sort_order: number
+          title: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          proposal_id: string
+          sort_order?: number
+          title: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          proposal_id?: string
+          sort_order?: number
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_sections_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_templates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          estimated_pages: number | null
+          id: string
+          is_system: boolean
+          name: string
+          sections_config: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          estimated_pages?: number | null
+          id?: string
+          is_system?: boolean
+          name: string
+          sections_config?: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          estimated_pages?: number | null
+          id?: string
+          is_system?: boolean
+          name?: string
+          sections_config?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       proposals: {
         Row: {
           accepted_at: string | null
+          cc_email: string | null
+          client_feedback: string | null
           client_id: string | null
           cover_image: string | null
           created_at: string
@@ -2932,12 +4791,18 @@ export type Database = {
           parent_proposal_id: string | null
           payment_notes: string | null
           payment_terms: string | null
+          personal_message: string | null
           project_id: string | null
+          revision_summary: string | null
           sent_at: string | null
+          signed_at: string | null
+          signed_by_name: string | null
+          signed_ip: string | null
           status: string
           subtotal: number | null
           tax_amount: number | null
           tax_rate: number | null
+          template_id: string | null
           title: string
           total_amount: number | null
           updated_at: string
@@ -2947,6 +4812,8 @@ export type Database = {
         }
         Insert: {
           accepted_at?: string | null
+          cc_email?: string | null
+          client_feedback?: string | null
           client_id?: string | null
           cover_image?: string | null
           created_at?: string
@@ -2961,12 +4828,18 @@ export type Database = {
           parent_proposal_id?: string | null
           payment_notes?: string | null
           payment_terms?: string | null
+          personal_message?: string | null
           project_id?: string | null
+          revision_summary?: string | null
           sent_at?: string | null
+          signed_at?: string | null
+          signed_by_name?: string | null
+          signed_ip?: string | null
           status?: string
           subtotal?: number | null
           tax_amount?: number | null
           tax_rate?: number | null
+          template_id?: string | null
           title: string
           total_amount?: number | null
           updated_at?: string
@@ -2976,6 +4849,8 @@ export type Database = {
         }
         Update: {
           accepted_at?: string | null
+          cc_email?: string | null
+          client_feedback?: string | null
           client_id?: string | null
           cover_image?: string | null
           created_at?: string
@@ -2990,12 +4865,18 @@ export type Database = {
           parent_proposal_id?: string | null
           payment_notes?: string | null
           payment_terms?: string | null
+          personal_message?: string | null
           project_id?: string | null
+          revision_summary?: string | null
           sent_at?: string | null
+          signed_at?: string | null
+          signed_by_name?: string | null
+          signed_ip?: string | null
           status?: string
           subtotal?: number | null
           tax_amount?: number | null
           tax_rate?: number | null
+          template_id?: string | null
           title?: string
           total_amount?: number | null
           updated_at?: string
@@ -3044,6 +4925,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposals_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -3815,6 +5703,130 @@ export type Database = {
           },
         ]
       }
+      scope_change_requests: {
+        Row: {
+          additional_design_fee_cents: number | null
+          additional_ffe_budget_cents: number | null
+          applied_at: string | null
+          approved_at: string | null
+          approved_by: string | null
+          approved_by_name: string | null
+          approved_ip: string | null
+          created_at: string
+          decline_reason: string | null
+          declined_at: string | null
+          description: string
+          id: string
+          new_ffe_items: Json | null
+          new_rooms: Json | null
+          new_total_budget_cents: number | null
+          project_id: string
+          proposal_id: string | null
+          requested_by: string
+          sent_at: string | null
+          status: string
+          timeline_impact_weeks: number | null
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        Insert: {
+          additional_design_fee_cents?: number | null
+          additional_ffe_budget_cents?: number | null
+          applied_at?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_by_name?: string | null
+          approved_ip?: string | null
+          created_at?: string
+          decline_reason?: string | null
+          declined_at?: string | null
+          description: string
+          id?: string
+          new_ffe_items?: Json | null
+          new_rooms?: Json | null
+          new_total_budget_cents?: number | null
+          project_id: string
+          proposal_id?: string | null
+          requested_by: string
+          sent_at?: string | null
+          status?: string
+          timeline_impact_weeks?: number | null
+          title: string
+          updated_at?: string
+          viewed_at?: string | null
+        }
+        Update: {
+          additional_design_fee_cents?: number | null
+          additional_ffe_budget_cents?: number | null
+          applied_at?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_by_name?: string | null
+          approved_ip?: string | null
+          created_at?: string
+          decline_reason?: string | null
+          declined_at?: string | null
+          description?: string
+          id?: string
+          new_ffe_items?: Json | null
+          new_rooms?: Json | null
+          new_total_budget_cents?: number | null
+          project_id?: string
+          proposal_id?: string | null
+          requested_by?: string
+          sent_at?: string | null
+          status?: string
+          timeline_impact_weeks?: number | null
+          title?: string
+          updated_at?: string
+          viewed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scope_change_requests_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scope_change_requests_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scope_change_requests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scope_change_requests_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scope_change_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scope_change_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sequence_enrollments: {
         Row: {
           completed_at: string | null
@@ -3881,6 +5893,55 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spatial_context: {
+        Row: {
+          context_text: string
+          context_type: string
+          generated_at: string | null
+          id: string
+          product_id: string
+          room_id: string
+        }
+        Insert: {
+          context_text: string
+          context_type: string
+          generated_at?: string | null
+          id?: string
+          product_id: string
+          room_id: string
+        }
+        Update: {
+          context_text?: string
+          context_type?: string
+          generated_at?: string | null
+          id?: string
+          product_id?: string
+          room_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spatial_context_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spatial_context_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spatial_context_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms_with_hero_frames"
             referencedColumns: ["id"]
           },
         ]
@@ -4171,6 +6232,63 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_room_engagement: {
+        Row: {
+          id: string
+          last_active: string | null
+          primary_category: string | null
+          products_added: number | null
+          products_saved: number | null
+          products_viewed: number | null
+          room_id: string
+          session_count: number | null
+          total_dwell_ms: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          last_active?: string | null
+          primary_category?: string | null
+          products_added?: number | null
+          products_saved?: number | null
+          products_viewed?: number | null
+          room_id: string
+          session_count?: number | null
+          total_dwell_ms?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          id?: string
+          last_active?: string | null
+          primary_category?: string | null
+          products_added?: number | null
+          products_saved?: number | null
+          products_viewed?: number | null
+          room_id?: string
+          session_count?: number | null
+          total_dwell_ms?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_room_engagement_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_room_engagement_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms_with_hero_frames"
             referencedColumns: ["id"]
           },
         ]
@@ -4894,6 +7012,10 @@ export type Database = {
       }
     }
     Functions: {
+      activate_proposal_as_project: {
+        Args: { p_proposal_id: string; p_start_date?: string }
+        Returns: string
+      }
       aggregate_user_style_signals: {
         Args: { p_user_id: string }
         Returns: undefined
@@ -4905,6 +7027,10 @@ export type Database = {
       decrement_room_saved_items: {
         Args: { p_count?: number; p_room_id: string }
         Returns: undefined
+      }
+      evaluate_collection_rules: {
+        Args: { p_collection_id: string }
+        Returns: Json
       }
       expire_room_scan_associations: { Args: never; Returns: number }
       find_products_for_style: {
@@ -4952,6 +7078,36 @@ export type Database = {
           role: Database["public"]["Enums"]["companion_message_role"]
         }[]
       }
+      get_decision_analytics_by_client: {
+        Args: { p_designer_id: string }
+        Returns: {
+          avg_response_hours: number
+          client_name: string
+          designer_client_id: string
+          on_time_rate: number
+          responded_count: number
+          total_count: number
+        }[]
+      }
+      get_decision_analytics_by_type: {
+        Args: { p_designer_id: string }
+        Returns: {
+          avg_response_hours: number
+          decision_type: string
+          on_time_count: number
+          responded_count: number
+          total_count: number
+        }[]
+      }
+      get_decision_bottleneck_phases: {
+        Args: { p_designer_id: string }
+        Returns: {
+          avg_response_hours: number
+          linked_phase: string
+          overdue_count: number
+          total_count: number
+        }[]
+      }
       get_embedding_stats: {
         Args: never
         Returns: {
@@ -4966,6 +7122,30 @@ export type Database = {
       get_or_create_conversation: {
         Args: { p_context?: Json; p_screen?: string; p_user_id: string }
         Returns: string
+      }
+      get_recommendations: {
+        Args: {
+          p_category?: string
+          p_limit?: number
+          p_offset?: number
+          p_room_id?: string
+        }
+        Returns: {
+          badges: string[]
+          category: string
+          id: string
+          image_url: string
+          maker_location: string
+          maker_name: string
+          maker_story: string
+          match_score: number
+          material_tags: string[]
+          name: string
+          price_cents: number
+          style_tags: string[]
+          tier: string
+          usdz_url: string
+        }[]
       }
       get_room_scan_hero_image: {
         Args: { p_scan_id: string }
@@ -5011,6 +7191,14 @@ export type Database = {
       increment_sequence_counter: {
         Args: { p_column: string; p_sequence_id: string }
         Returns: undefined
+      }
+      is_org_admin_or_owner: {
+        Args: { _organization_id: string; _user_id?: string }
+        Returns: boolean
+      }
+      process_style_quiz: {
+        Args: { quiz_answers: Json; timings?: Json }
+        Returns: Json
       }
       revoke_role_from_user: {
         Args: { p_role_name: string; p_user_id: string }
@@ -5104,6 +7292,12 @@ export type Database = {
       api_key_environment: "live" | "test"
       api_key_status: "active" | "revoked"
       appeal_category: "visual" | "functional" | "emotional" | "lifestyle"
+      application_review_status:
+        | "new"
+        | "in_review"
+        | "approved"
+        | "rejected"
+        | "archived"
       audience_type: "all" | "segment" | "individual"
       audit_status: "success" | "failure" | "denied"
       campaign_status:
@@ -5311,6 +7505,13 @@ export const Constants = {
       api_key_environment: ["live", "test"],
       api_key_status: ["active", "revoked"],
       appeal_category: ["visual", "functional", "emotional", "lifestyle"],
+      application_review_status: [
+        "new",
+        "in_review",
+        "approved",
+        "rejected",
+        "archived",
+      ],
       audience_type: ["all", "segment", "individual"],
       audit_status: ["success", "failure", "denied"],
       campaign_status: [
