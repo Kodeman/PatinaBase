@@ -80,12 +80,19 @@ struct QuietConversationFlowHost: View {
 
         case .threshold:
             if let vm = scanViewModel {
-                ScanThresholdView(viewModel: vm) { scanned, _ in
+                ScanThresholdView(viewModel: vm) { scanned, reason in
                     session = scanned
                     // Use the capture service's current scan id as the review
-                    // bundle id. Falls back to a fresh UUID if somehow unset
-                    // (the ReviewView will surface an error state).
-                    reviewScanId = vm.captureService.currentScanId
+                    // bundle id. Falls back to any scan id embedded in the
+                    // captured session, or a fresh UUID, so the review step
+                    // always has a bundle URL to search — the ReviewView
+                    // surfaces its own error state if the manifest is absent.
+                    let resolvedScanId = vm.captureService.currentScanId
+                        ?? scanned.sessionId
+                    reviewScanId = resolvedScanId
+                    #if DEBUG
+                    print("[QuietConversationFlowHost] step .threshold → .review scanId=\(resolvedScanId) reason=\(reason)")
+                    #endif
                     withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
                         step = .review
                     }
@@ -101,7 +108,11 @@ struct QuietConversationFlowHost: View {
             }
 
         case .review:
-            if let vm = scanViewModel, let scanId = reviewScanId {
+            if let vm = scanViewModel {
+                let scanId = reviewScanId
+                    ?? vm.captureService.currentScanId
+                    ?? session?.sessionId
+                    ?? UUID()
                 ScanReviewView(
                     captureService: vm.captureService,
                     scanId: scanId,
@@ -125,6 +136,22 @@ struct QuietConversationFlowHost: View {
                         coordinator.navigate(to: .heroFrame)
                     }
                 )
+                .onAppear {
+                    #if DEBUG
+                    print("[QuietConversationFlowHost] .review appeared scanId=\(scanId)")
+                    #endif
+                }
+            } else {
+                // scanViewModel lost — shouldn't happen, but render a fallback
+                // so the destination isn't empty and SwiftUI doesn't pop out.
+                VStack(spacing: 16) {
+                    ProgressView().tint(PatinaColors.charcoal)
+                    Text("Preparing your scan…")
+                        .font(.custom("Inter-Regular", size: 14))
+                        .foregroundColor(PatinaColors.agedOak)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(PatinaColors.offWhite.ignoresSafeArea())
             }
 
         case .softLanding:
