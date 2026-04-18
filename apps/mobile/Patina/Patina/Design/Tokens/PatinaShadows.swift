@@ -38,6 +38,14 @@ public enum PatinaShadows {
         y: 16
     )
 
+    /// Daily Room product cards
+    public static let dailyCard = Shadow(
+        color: PatinaColors.mocha.opacity(0.18),
+        radius: 24,
+        x: 0,
+        y: 4
+    )
+
     /// The Companion's signature shadow
     public static let companion = Shadow(
         color: Color(hex: "5C4A3C").opacity(0.20),

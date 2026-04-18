@@ -61,8 +61,47 @@ public enum PatinaGradients {
         startPoint: .topLeading, endPoint: .bottomTrailing
     )
 
+    /// Daily Room hero — warm clay → aged oak → mocha
+    public static let hero = LinearGradient(
+        colors: [Color(hex: "B8A080"), Color(hex: "8B7355"), Color(hex: "5C4A3C")],
+        startPoint: .topLeading, endPoint: .bottomTrailing
+    )
+
+    /// Daily Room hero alt — sage → dustyBlue → mocha
+    public static let hero2 = LinearGradient(
+        colors: [PatinaColors.sage, PatinaColors.dustyBlue, PatinaColors.mocha],
+        startPoint: .topLeading, endPoint: .bottomTrailing
+    )
+
+    /// Walnut — alias of `wood`
+    public static let walnut = LinearGradient(
+        colors: [Color(hex: "6B5B4E"), Color(hex: "8B7355")],
+        startPoint: .topLeading, endPoint: .bottomTrailing
+    )
+
+    /// Cherry — warm reddish brown
+    public static let cherry = LinearGradient(
+        colors: [Color(hex: "8B5A3C"), Color(hex: "B8775C")],
+        startPoint: .topLeading, endPoint: .bottomTrailing
+    )
+
     public static let sunrise = LinearGradient(
         colors: [PatinaColors.offWhite, PatinaColors.goldenHour, PatinaColors.clay],
         startPoint: .topLeading, endPoint: .bottomTrailing
     )
+
+    /// Companion dock zone — fades content into background near the button
+    public static func companionDock(warmTint: Color = PatinaColors.softCream) -> LinearGradient {
+        LinearGradient(
+            stops: [
+                .init(color: warmTint.opacity(0),    location: 0.0),
+                .init(color: warmTint.opacity(0.15), location: 0.25),
+                .init(color: warmTint.opacity(0.50), location: 0.55),
+                .init(color: warmTint.opacity(0.85), location: 0.80),
+                .init(color: warmTint.opacity(1.0),  location: 1.0),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
 }
