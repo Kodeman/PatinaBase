@@ -50,7 +50,9 @@ public final class SupabaseClientManager {
 
 // MARK: - Global Accessor
 
-/// Global accessor for Supabase client
-public var supabase: SupabaseClient {
+/// Global accessor for Supabase client. `nonisolated` so it can be reached
+/// from TaskGroup / detached-task closures, which matters for the
+/// bounded-concurrency scan uploader in `RoomScanSyncService`.
+public nonisolated var supabase: SupabaseClient {
     SupabaseClientManager.shared.client
 }

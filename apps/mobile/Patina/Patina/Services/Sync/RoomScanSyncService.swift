@@ -168,6 +168,36 @@ private struct RoomScanModelURLPatch: Encodable {
     let model_url: String
 }
 
+/// Parameters for the `merge_scan_artifact_sha256(p_scan_id, p_kind, p_sha)`
+/// Supabase RPC introduced in migration 00082. The three keys map 1:1 to
+/// the function's argument names.
+///
+/// `nonisolated` + `Sendable` so it can be passed through `rpc(_:params:)`
+/// from a TaskGroup closure without tripping the project-wide default
+/// `-default-isolation=MainActor` setting.
+private nonisolated struct ArtifactShaMergeParams: Encodable, Sendable {
+    let p_scan_id: String
+    let p_kind: String
+    let p_sha: String
+}
+
+/// Parameters for the `mark_scan_upload_complete(p_scan_id)` RPC.
+private nonisolated struct MarkUploadCompleteParams: Encodable, Sendable {
+    let p_scan_id: String
+}
+
+/// Reusable single-arg RPC parameter struct.
+private nonisolated struct ScanIdOnlyParams: Encodable, Sendable {
+    let p_scan_id: String
+}
+
+/// Body for the `confirm-scan-bundle` edge function (Wave 5.1). The function
+/// ingests the scan id and runs server-side validation of the uploaded
+/// bundle (hash matching, row presence, etc.).
+private nonisolated struct ConfirmScanBundleRequest: Encodable, Sendable {
+    let scan_id: String
+}
+
 /// Generic single-column patch for v2 advanced scan URLs.
 private struct RoomScanStringPatch: Encodable {
     let column: String
@@ -1221,7 +1251,11 @@ extension RoomScanSyncService {
 
         package.markSyncing()
 
-        // 2. Insert / upsert the scan row with v2 columns.
+        // 2. Insert / upsert the scan row with v2 columns. The additional
+        //    upload_started_at / upload_attempt_count / status="uploading"
+        //    fields land via a follow-up PATCH so we can keep the insert
+        //    struct strongly typed. (Migration 00082 introduces these
+        //    columns; until it lands the PATCH is a runtime no-op.)
         let insert = buildV2Insert(
             roomData: roomData,
             styleSignals: styleSignals,
@@ -1243,58 +1277,38 @@ extension RoomScanSyncService {
             throw err
         }
 
-        // 3. Iterate artifacts. Each upload is independent + resumable.
+        // Stamp upload_started_at + bump upload_attempt_count. Best-effort
+        // — the underlying columns are in migration 00082 which may not be
+        // present in every environment yet.
+        await stampUploadStarted(scanId: package.scanId)
+
+        // 3–4. Seed artifact state + upload artifacts. Small artifacts go
+        //      first (fail fast on network issues), large ones run with
+        //      bounded concurrency (max 2 in-flight).
         var state = package.artifactState
         if state.artifacts.isEmpty {
-            // Seed artifact state from manifest on first run.
             state.artifacts = manifest.artifacts.map { ArtifactUploadState(kind: $0.kind) }
             state.photosTotal = manifest.photos.count
             state.photosUploaded = 0
             package.artifactState = state
         }
 
-        for artifact in manifest.artifacts {
-            var artifactState = state.artifacts.first(where: { $0.kind == artifact.kind })
-                ?? ArtifactUploadState(kind: artifact.kind)
+        let totalBytes = max(1, manifest.artifacts.reduce(0) { $0 + $1.sizeBytes } +
+                                 manifest.photos.reduce(0) { $0 + $1.sizeBytes })
+        let uploadedCounter = UploadedBytesCounter()
 
-            if artifactState.status == .uploaded {
-                continue
-            }
+        try await uploadArtifactsBoundedConcurrency(
+            manifest: manifest,
+            bundleURL: bundleURL,
+            package: package,
+            scanId: package.scanId,
+            userId: userId,
+            roomId: roomId,
+            totalBytes: totalBytes,
+            uploadedCounter: uploadedCounter
+        )
 
-            artifactState.status = .uploading
-            artifactState.attempts += 1
-            package.updateArtifact(artifactState)
-
-            do {
-                let remoteUrl = try await uploadArtifact(
-                    artifact: artifact,
-                    from: bundleURL,
-                    userId: userId,
-                    roomId: roomId
-                )
-                artifactState.status = .uploaded
-                artifactState.remoteUrl = remoteUrl
-                artifactState.lastError = nil
-                package.updateArtifact(artifactState)
-
-                // Patch the matching room_scans column so a resumed upload
-                // doesn't re-PATCH what's already there.
-                if let column = Self.scanColumn(for: artifact.kind) {
-                    try? await patchScanColumn(
-                        scanId: package.scanId,
-                        column: column,
-                        value: remoteUrl
-                    )
-                }
-            } catch {
-                artifactState.status = .failed
-                artifactState.lastError = error.localizedDescription
-                package.updateArtifact(artifactState)
-                print("[RoomScanSync] Artifact \(artifact.kind) upload failed: \(error.localizedDescription)")
-            }
-        }
-
-        // 4. Upload posed photos + insert room_scan_images rows (with pose).
+        // 5. Upload posed photos + insert room_scan_images rows (with pose).
         do {
             try await uploadPosedPhotos(
                 manifest: manifest,
@@ -1308,7 +1322,7 @@ extension RoomScanSyncService {
             print("[RoomScanSync] Posed photos upload partial failure: \(error.localizedDescription)")
         }
 
-        // 5. Derive room_features from CapturedRoom parametric JSON.
+        // Derive room_features from CapturedRoom parametric JSON (ancillary).
         if let capturedRoomArtifact = manifest.artifacts.first(where: { $0.kind == .capturedRoomJson }) {
             let url = bundleURL.appendingPathComponent(capturedRoomArtifact.relativePath)
             try? await insertRoomFeatures(
@@ -1318,7 +1332,36 @@ extension RoomScanSyncService {
             )
         }
 
-        // 6. Stamp status=ready + bundle size.
+        // 6. Final safety PATCH: ensure upload_progress lands at 100.
+        await patchUploadProgress(scanId: package.scanId, progress: 100)
+
+        // 7. Mark scan upload complete via RPC, then invoke the
+        //    confirm-scan-bundle edge function (fire-and-forget — an edge
+        //    function failure is not fatal to the local sync state).
+        do {
+            try await supabase
+                .rpc("mark_scan_upload_complete", params: MarkUploadCompleteParams(
+                    p_scan_id: package.scanId.uuidString
+                ))
+                .execute()
+        } catch {
+            print("[RoomScanSync] mark_scan_upload_complete failed (non-fatal): \(error.localizedDescription)")
+        }
+
+        do {
+            try await supabase.functions.invoke(
+                "confirm-scan-bundle",
+                options: FunctionInvokeOptions(body: ConfirmScanBundleRequest(
+                    scan_id: package.scanId.uuidString
+                ))
+            )
+            print("[RoomScanSync] confirm-scan-bundle: ok")
+        } catch {
+            print("[RoomScanSync] confirm-scan-bundle: err \(error.localizedDescription)")
+        }
+
+        // Also stamp the legacy status=ready / processed_at pair so existing
+        // consumers of the v2 schema keep working.
         do {
             try await supabase
                 .from("room_scans")
@@ -1332,7 +1375,7 @@ extension RoomScanSyncService {
             print("[RoomScanSync] Final status patch failed: \(error.localizedDescription)")
         }
 
-        // 7. Mark synced locally + (optionally) delete the on-disk bundle.
+        // 8. Mark synced locally + (optionally) delete the on-disk bundle.
         if package.artifactState.allArtifactsDone && package.artifactState.allPhotosDone {
             package.markSynced()
             // Leave the bundle on disk for now so we can verify in QA; a
@@ -1342,29 +1385,311 @@ extension RoomScanSyncService {
         return UploadResult(roomId: roomId, scanId: package.scanId)
     }
 
+    // MARK: - Bounded-concurrency artifact loop
+
+    /// Tiny actor counter used to update `upload_progress` after each
+    /// artifact completes. Using an actor avoids `Sendable` mutation
+    /// warnings inside the TaskGroup closures.
+    private actor UploadedBytesCounter {
+        private(set) var uploaded: Int = 0
+        private(set) var lastProgressPercent: Int = -1
+        private var lastProgressWrite: Date = .distantPast
+
+        func add(_ bytes: Int, total: Int) -> (percent: Int, shouldWrite: Bool) {
+            uploaded += bytes
+            let pct = min(100, Int((Double(uploaded) / Double(total)) * 100))
+            let now = Date()
+            let throttled = now.timeIntervalSince(lastProgressWrite) < 1.0
+            if pct == lastProgressPercent || throttled {
+                return (pct, false)
+            }
+            lastProgressPercent = pct
+            lastProgressWrite = now
+            return (pct, true)
+        }
+    }
+
+    /// Orchestrates the artifact upload loop with small-artifacts-first
+    /// ordering and a bounded in-flight window (max 2). A successful upload
+    /// bumps the upload_progress column (throttled to ~1Hz).
+    private func uploadArtifactsBoundedConcurrency(
+        manifest: ScanManifest,
+        bundleURL: URL,
+        package: RoomScanPackage,
+        scanId: UUID,
+        userId: UUID,
+        roomId: UUID,
+        totalBytes: Int,
+        uploadedCounter: UploadedBytesCounter
+    ) async throws {
+        let sorted = manifest.artifacts.sorted { $0.sizeBytes < $1.sizeBytes }
+        let maxInFlight = 2
+
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            var iterator = sorted.makeIterator()
+
+            // Launch the initial window.
+            for _ in 0..<maxInFlight {
+                if let artifact = iterator.next() {
+                    self.launchArtifactUpload(
+                        artifact: artifact,
+                        bundleURL: bundleURL,
+                        package: package,
+                        scanId: scanId,
+                        userId: userId,
+                        roomId: roomId,
+                        totalBytes: totalBytes,
+                        uploadedCounter: uploadedCounter,
+                        into: &group
+                    )
+                }
+            }
+
+            // As each completes, launch the next until we exhaust the queue.
+            while try await group.next() != nil {
+                if let artifact = iterator.next() {
+                    self.launchArtifactUpload(
+                        artifact: artifact,
+                        bundleURL: bundleURL,
+                        package: package,
+                        scanId: scanId,
+                        userId: userId,
+                        roomId: roomId,
+                        totalBytes: totalBytes,
+                        uploadedCounter: uploadedCounter,
+                        into: &group
+                    )
+                }
+            }
+        }
+    }
+
+    private func launchArtifactUpload(
+        artifact: ScanManifest.Artifact,
+        bundleURL: URL,
+        package: RoomScanPackage,
+        scanId: UUID,
+        userId: UUID,
+        roomId: UUID,
+        totalBytes: Int,
+        uploadedCounter: UploadedBytesCounter,
+        into group: inout ThrowingTaskGroup<Void, Error>
+    ) {
+        let priorState = package.artifactState.artifacts.first(where: { $0.kind == artifact.kind })
+        if priorState?.status == .uploaded {
+            // Already done on a prior run — bump counter & skip.
+            group.addTask { [totalBytes, artifact] in
+                let progress = await uploadedCounter.add(artifact.sizeBytes, total: totalBytes)
+                if progress.shouldWrite {
+                    await self.patchUploadProgress(scanId: scanId, progress: progress.percent)
+                }
+            }
+            return
+        }
+
+        var artifactState = priorState ?? ArtifactUploadState(kind: artifact.kind)
+        artifactState.status = .uploading
+        artifactState.attempts += 1
+        package.updateArtifact(artifactState)
+
+        let capturedState = artifactState
+        group.addTask { [artifact, totalBytes, capturedState] in
+            do {
+                let remoteUrl = try await self.uploadArtifact(
+                    artifact: artifact,
+                    from: bundleURL,
+                    userId: userId,
+                    roomId: roomId,
+                    scanId: scanId
+                )
+
+                if let url = remoteUrl {
+                    let done = ArtifactUploadState(
+                        kind: capturedState.kind,
+                        status: .uploaded,
+                        remoteUrl: url,
+                        lastError: nil,
+                        attempts: capturedState.attempts
+                    )
+                    await MainActor.run { package.updateArtifact(done) }
+
+                    if let column = Self.scanColumn(for: artifact.kind) {
+                        try? await self.patchScanColumn(
+                            scanId: scanId,
+                            column: column,
+                            value: url
+                        )
+                    }
+                } else {
+                    // Sidecar — not uploaded, mark skipped so allArtifactsDone holds.
+                    let skipped = ArtifactUploadState(
+                        kind: capturedState.kind,
+                        status: .skipped,
+                        remoteUrl: nil,
+                        lastError: nil,
+                        attempts: capturedState.attempts
+                    )
+                    await MainActor.run { package.updateArtifact(skipped) }
+                }
+
+                let progress = await uploadedCounter.add(artifact.sizeBytes, total: totalBytes)
+                if progress.shouldWrite {
+                    print("[RoomScanSync] progress \(progress.percent)%")
+                    await self.patchUploadProgress(scanId: scanId, progress: progress.percent)
+                }
+            } catch {
+                let failed = ArtifactUploadState(
+                    kind: capturedState.kind,
+                    status: .failed,
+                    remoteUrl: capturedState.remoteUrl,
+                    lastError: error.localizedDescription,
+                    attempts: capturedState.attempts
+                )
+                await MainActor.run { package.updateArtifact(failed) }
+                print("[RoomScanSync] Artifact \(artifact.kind) upload failed: \(error.localizedDescription)")
+
+                // Record the error column + progress advance even on
+                // failure so the progress bar doesn't stall.
+                await self.patchUploadError(scanId: scanId, message: error.localizedDescription)
+                let progress = await uploadedCounter.add(artifact.sizeBytes, total: totalBytes)
+                if progress.shouldWrite {
+                    await self.patchUploadProgress(scanId: scanId, progress: progress.percent)
+                }
+            }
+        }
+    }
+
+    // MARK: - Upload-state column helpers
+
+    private func stampUploadStarted(scanId: UUID) async {
+        do {
+            try await supabase
+                .rpc("increment_scan_upload_attempt", params: ScanIdOnlyParams(
+                    p_scan_id: scanId.uuidString
+                ))
+                .execute()
+        } catch {
+            // The RPC is optional (pending migration); fall back to a
+            // direct PATCH of upload_started_at only.
+            let payload: [String: String] = [
+                "upload_started_at": ISO8601DateFormatter().string(from: Date()),
+                "status": "uploading"
+            ]
+            _ = try? await supabase
+                .from("room_scans")
+                .update(payload)
+                .eq("id", value: scanId.uuidString)
+                .execute()
+        }
+    }
+
+    private func patchUploadProgress(scanId: UUID, progress: Int) async {
+        _ = try? await supabase
+            .from("room_scans")
+            .update(["upload_progress": progress])
+            .eq("id", value: scanId.uuidString)
+            .execute()
+    }
+
+    private func patchUploadError(scanId: UUID, message: String) async {
+        _ = try? await supabase
+            .from("room_scans")
+            .update(["upload_error": message])
+            .eq("id", value: scanId.uuidString)
+            .execute()
+    }
+
     // MARK: - Artifact upload
 
+    /// Artifact upload strategy. A size threshold decides whether we keep
+    /// the inline supabase-swift upload (small files) or route through the
+    /// background URLSession path that Wave 5.3 will wire up.
+    private enum UploadStrategy { case direct, background }
+
+    private static let backgroundUploadThreshold: Int = 5 * 1024 * 1024
+
+    private static func strategy(for sizeBytes: Int) -> UploadStrategy {
+        sizeBytes < backgroundUploadThreshold ? .direct : .background
+    }
+
+    /// Upload a single artifact to Supabase Storage. Returns nil when the
+    /// kind is a sidecar (no storage upload required); returns the public
+    /// URL string otherwise. On success we PATCH the matching column (when
+    /// one exists) and merge the SHA256 into `room_scans.artifacts_sha256`
+    /// via the `merge_scan_artifact_sha256` RPC.
     private func uploadArtifact(
         artifact: ScanManifest.Artifact,
         from bundleURL: URL,
         userId: UUID,
-        roomId: UUID
-    ) async throws -> String {
+        roomId: UUID,
+        scanId: UUID
+    ) async throws -> String? {
+        guard let (folderPrefix, filename) = Self.storagePathComponents(for: artifact) else {
+            // Sidecar artifact — not uploaded on its own.
+            return nil
+        }
+
         let fileURL = bundleURL.appendingPathComponent(artifact.relativePath)
         let data = try Data(contentsOf: fileURL)
-
-        let (folderPrefix, filename) = Self.storagePathComponents(for: artifact)
         let path = "\(folderPrefix)/\(userId.uuidString)/\(roomId.uuidString)/\(filename)"
+
+        // Size-gated strategy. Today both branches use the inline
+        // supabase-swift upload; Wave 5.3 swaps `.background` for a real
+        // URLSession background task.
+        let strategy = Self.strategy(for: artifact.sizeBytes)
+        if strategy == .background {
+            print("[RoomScanSync] background path requested (Wave 5.3 will replace with BackgroundScanUploader) — kind=\(artifact.kind.rawValue) size=\(artifact.sizeBytes)")
+        }
+
+        // Build metadata (sha256 + scan ids) only when we have a hash.
+        // FileOptions in supabase-swift exposes a `metadata: [String: AnyJSON]?`
+        // field; the storage server persists it alongside the object.
+        var metadata: [String: AnyJSON]? = nil
+        if let sha = artifact.sha256, !sha.isEmpty {
+            metadata = [
+                "sha256": .string(sha),
+                "scanId": .string(scanId.uuidString),
+                "artifactKind": .string(artifact.kind.rawValue)
+            ]
+        }
 
         try await supabase.storage
             .from(usdzBucket)
-            .upload(path, data: data, options: FileOptions(contentType: artifact.mimeType))
+            .upload(
+                path,
+                data: data,
+                options: FileOptions(
+                    contentType: artifact.mimeType,
+                    upsert: true,
+                    metadata: metadata
+                )
+            )
 
         let publicUrl = try supabase.storage.from(usdzBucket).getPublicURL(path: path)
+
+        let shaPreview = (artifact.sha256 ?? "").prefix(10)
+        print("[RoomScanSync] uploaded \(artifact.kind.rawValue) sha=\(shaPreview)")
+
+        // Merge the sha into room_scans.artifacts_sha256 (best-effort; the
+        // RPC lives in migration 00082 — runtime only).
+        if let sha = artifact.sha256, !sha.isEmpty {
+            do {
+                try await supabase
+                    .rpc("merge_scan_artifact_sha256", params: ArtifactShaMergeParams(
+                        p_scan_id: scanId.uuidString,
+                        p_kind: artifact.kind.rawValue,
+                        p_sha: sha
+                    ))
+                    .execute()
+            } catch {
+                print("[RoomScanSync] merge_scan_artifact_sha256 failed (non-fatal): \(error.localizedDescription)")
+            }
+        }
+
         return publicUrl.absoluteString
     }
 
-    private static func scanColumn(for kind: ScanManifest.ArtifactKind) -> String? {
+    nonisolated private static func scanColumn(for kind: ScanManifest.ArtifactKind) -> String? {
         switch kind {
         case .usdz: return "model_url"
         case .capturedRoomJson: return "captured_room_json_url"
@@ -1373,22 +1698,27 @@ extension RoomScanSyncService {
         case .depthArchive: return "depth_archive_url"
         case .bundleArchive: return "scan_bundle_url"
         case .heroThumbnail: return "hero_frame_url"
-        // v3 additive kinds — Phase B (migration 00082 + .coverageHeatmap/
-        // .bundleManifest/.photosManifest URL columns) wires these into
-        // real scan columns. Until then, `uploadArtifact` treats a nil
-        // column as "skip this artifact" so the bundle still uploads the
-        // v2 subset cleanly.
-        case .coverageHeatmap,
-             .depthIndex,
+        // v3 kinds that map to dedicated room_scans URL columns. The
+        // matching migration lives at supabase/migrations/00082_*.sql —
+        // Swift compiles fine either way; at runtime the PATCH here fails
+        // until the migration is applied.
+        case .bundleManifest:   return "bundle_manifest_url"
+        case .photosManifest:   return "photos_manifest_url"
+        case .coverageHeatmap:  return "coverage_heatmap_url"
+        // v3 sidecars the server doesn't need a dedicated column for:
+        // - depthIndex: content is already inside the depth_archive zip
+        // - photoThumbnails: sidecar NDJSON lives next to the photos
+        // - annotations: inlined into the bundle manifest
+        // Returning nil here causes uploadArtifact(...) to skip the
+        // per-column PATCH but still upload the file to storage.
+        case .depthIndex,
              .photoThumbnails,
-             .annotations,
-             .bundleManifest,
-             .photosManifest:
+             .annotations:
             return nil
         }
     }
 
-    private static func storagePathComponents(for artifact: ScanManifest.Artifact) -> (folder: String, filename: String) {
+    nonisolated private static func storagePathComponents(for artifact: ScanManifest.Artifact) -> (folder: String, filename: String)? {
         let filename: String
         if let last = artifact.relativePath.split(separator: "/").last {
             filename = String(last)
@@ -1403,17 +1733,17 @@ extension RoomScanSyncService {
         case .depthArchive:      return ("depth", filename)
         case .bundleArchive:     return ("bundle", filename)
         case .heroThumbnail:     return ("thumbnails", filename)
-        // v3 additive kinds — Phase B swaps these for the canonical
-        // bucket layout (`coverage/`, `manifests/`, `photos_manifest/`,
-        // etc). The placeholder folders below are unreachable because
-        // `scanColumn(for:)` returns nil for these kinds and `uploadArtifact`
-        // short-circuits before we read a folder.
-        case .coverageHeatmap:   return ("coverage", filename)
-        case .depthIndex:        return ("depth", filename)
-        case .photoThumbnails:   return ("photos", filename)
-        case .annotations:       return ("annotations", filename)
-        case .bundleManifest:    return ("manifests", filename)
-        case .photosManifest:    return ("photos_manifest", filename)
+        // v3 kinds that upload to storage (paired with a dedicated column).
+        case .bundleManifest:    return ("manifests", filename)       // manifest.json
+        case .photosManifest:    return ("photos_manifest", filename) // photos_metadata.ndjson
+        case .coverageHeatmap:   return ("coverage", filename)        // coverage_heatmap.json
+        // v3 sidecars we intentionally do not upload separately:
+        // depthIndex is inside the depth_archive zip, photoThumbnails is
+        // sidecar-only, annotations are embedded in the bundle manifest.
+        case .depthIndex,
+             .photoThumbnails,
+             .annotations:
+            return nil
         }
     }
 
@@ -1530,6 +1860,17 @@ extension RoomScanSyncService {
 
     // MARK: - Posed photos
 
+    /// Actor-guarded accumulator used by the concurrent posed-photo upload
+    /// loop. We collect successful insert rows here before writing them
+    /// to `room_scan_images` in a single batched insert.
+    private actor PosedPhotoCollector {
+        private(set) var rows: [RoomScanImageInsertV2] = []
+
+        func append(_ row: RoomScanImageInsertV2) {
+            rows.append(row)
+        }
+    }
+
     private func uploadPosedPhotos(
         manifest: ScanManifest,
         bundleURL: URL,
@@ -1538,61 +1879,91 @@ extension RoomScanSyncService {
         userId: UUID,
         roomId: UUID
     ) async throws {
-        var uploaded: [RoomScanImageInsertV2] = []
+        let collector = PosedPhotoCollector()
+        let maxInFlight = 3
 
-        for photo in manifest.photos {
-            let photoURL = bundleURL.appendingPathComponent(photo.relativePath)
-            guard let data = try? Data(contentsOf: photoURL) else { continue }
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            var iterator = manifest.photos.enumerated().makeIterator()
 
-            let filename = (photo.relativePath.split(separator: "/").last).map(String.init) ?? "photo.heic"
-            let storagePath = "photos/\(userId.uuidString)/\(roomId.uuidString)/\(filename)"
+            func launchNext(into group: inout ThrowingTaskGroup<Void, Error>) {
+                guard let next = iterator.next() else { return }
+                let (index, photo) = next
+                group.addTask { [scanId, roomId, userId, bundleURL] in
+                    let photoURL = bundleURL.appendingPathComponent(photo.relativePath)
+                    guard let data = try? Data(contentsOf: photoURL) else { return }
 
-            do {
-                try await supabase.storage
-                    .from(usdzBucket)
-                    .upload(storagePath, data: data, options: FileOptions(contentType: photo.mimeType))
-                let url = try supabase.storage.from(usdzBucket).getPublicURL(path: storagePath)
+                    let filename = (photo.relativePath.split(separator: "/").last)
+                        .map(String.init) ?? "photo.heic"
+                    let storagePath = "photos/\(userId.uuidString)/\(roomId.uuidString)/\(filename)"
 
-                uploaded.append(RoomScanImageInsertV2(
-                    scan_id: scanId,
-                    room_id: roomId,
-                    role: photo.kind.rawValue,
-                    is_primary: photo.kind == .hero,
-                    display_order: photo.kind == .hero ? 0 : uploaded.count + 1,
-                    feature_category: photo.associatedFeatureCategory,
-                    image_url: url.absoluteString,
-                    quality_score: photo.qualityScore,
-                    sharpness_score: photo.sharpnessScore,
-                    brightness_score: photo.brightnessScore,
-                    composition_score: photo.compositionScore,
-                    stability_score: photo.stabilityScore,
-                    light_estimate_lumens: photo.lightEstimateLumens,
-                    captured_at: photo.capturedAt,
-                    camera_transform: photo.cameraTransform,
-                    camera_intrinsics: PhotoIntrinsicsJSON(
-                        fx: photo.cameraIntrinsics.fx,
-                        fy: photo.cameraIntrinsics.fy,
-                        cx: photo.cameraIntrinsics.cx,
-                        cy: photo.cameraIntrinsics.cy,
-                        width: photo.cameraIntrinsics.width,
-                        height: photo.cameraIntrinsics.height
-                    ),
-                    euler_angles: photo.eulerAngles,
-                    photo_kind: photo.kind.rawValue,
-                    is_full_resolution: photo.isFullResolution,
-                    associated_feature_id: photo.associatedFeatureId,
-                    timestamp_seconds: photo.timestampSeconds,
-                    width: photo.width,
-                    height: photo.height,
-                    file_size_bytes: photo.sizeBytes,
-                    mime_type: photo.mimeType
-                ))
-                package.incrementPhotosUploaded()
-            } catch {
-                print("[RoomScanSync] Photo upload failed (\(filename)): \(error.localizedDescription)")
+                    do {
+                        // Idempotent-by-upsert: re-uploading the same bytes
+                        // with `upsert: true` is a no-op from the client's
+                        // point of view. Simpler than a list-then-HEAD probe
+                        // and matches the v2 behaviour we rely on elsewhere.
+                        try await supabase.storage
+                            .from(self.usdzBucket)
+                            .upload(
+                                storagePath,
+                                data: data,
+                                options: FileOptions(
+                                    contentType: photo.mimeType,
+                                    upsert: true
+                                )
+                            )
+                        let url = try supabase.storage
+                            .from(self.usdzBucket)
+                            .getPublicURL(path: storagePath)
+
+                        let row = RoomScanImageInsertV2(
+                            scan_id: scanId,
+                            room_id: roomId,
+                            role: photo.kind.rawValue,
+                            is_primary: photo.kind == .hero,
+                            display_order: photo.kind == .hero ? 0 : index + 1,
+                            feature_category: photo.associatedFeatureCategory,
+                            image_url: url.absoluteString,
+                            quality_score: photo.qualityScore,
+                            sharpness_score: photo.sharpnessScore,
+                            brightness_score: photo.brightnessScore,
+                            composition_score: photo.compositionScore,
+                            stability_score: photo.stabilityScore,
+                            light_estimate_lumens: photo.lightEstimateLumens,
+                            captured_at: photo.capturedAt,
+                            camera_transform: photo.cameraTransform,
+                            camera_intrinsics: PhotoIntrinsicsJSON(
+                                fx: photo.cameraIntrinsics.fx,
+                                fy: photo.cameraIntrinsics.fy,
+                                cx: photo.cameraIntrinsics.cx,
+                                cy: photo.cameraIntrinsics.cy,
+                                width: photo.cameraIntrinsics.width,
+                                height: photo.cameraIntrinsics.height
+                            ),
+                            euler_angles: photo.eulerAngles,
+                            photo_kind: photo.kind.rawValue,
+                            is_full_resolution: photo.isFullResolution,
+                            associated_feature_id: photo.associatedFeatureId,
+                            timestamp_seconds: photo.timestampSeconds,
+                            width: photo.width,
+                            height: photo.height,
+                            file_size_bytes: photo.sizeBytes,
+                            mime_type: photo.mimeType
+                        )
+                        await collector.append(row)
+                        await MainActor.run { package.incrementPhotosUploaded() }
+                    } catch {
+                        print("[RoomScanSync] Photo upload failed (\(filename)): \(error.localizedDescription)")
+                    }
+                }
+            }
+
+            for _ in 0..<maxInFlight { launchNext(into: &group) }
+            while try await group.next() != nil {
+                launchNext(into: &group)
             }
         }
 
+        let uploaded = await collector.rows
         guard !uploaded.isEmpty else { return }
 
         try await supabase
