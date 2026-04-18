@@ -1,0 +1,233 @@
+//
+//  ScanUploadProgressView.swift
+//  Patina
+//
+//  Standalone upload-progress UI for a single RoomScanPackage, plus a
+//  global "N scans uploading" badge observable. Wave 6 ships the
+//  components; wiring them into specific screens (Room Detail card, home
+//  header badge) is a follow-up once the product view surface settles.
+//
+
+import Foundation
+import Combine
+import SwiftUI
+import SwiftData
+
+// MARK: - Per-scan progress pills
+
+/// Renders one status pill per `ArtifactKind` in `package.artifactState`,
+/// plus a photo-progress line underneath. Observes the package directly so
+/// SwiftData change notifications drive re-renders as `RoomScanSyncService`
+/// ticks artifact state forward.
+public struct ScanUploadProgressView: View {
+
+    @Bindable public var package: RoomScanPackage
+
+    public init(package: RoomScanPackage) {
+        self.package = package
+    }
+
+    public var body: some View {
+        let state = package.artifactState
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: headerIcon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(headerColor)
+                Text(headerText)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(headerColor)
+                Spacer()
+                if state.photosTotal > 0 {
+                    Text("\(state.photosUploaded)/\(state.photosTotal) photos")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if !state.artifacts.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(state.artifacts, id: \.kind) { artifact in
+                            pill(for: artifact)
+                        }
+                    }
+                    .padding(.horizontal, 1)
+                }
+            }
+
+            if let err = package.lastError, !err.isEmpty,
+               package.status == .failed || package.status == .pending {
+                Text(err)
+                    .font(.system(size: 11))
+                    .foregroundColor(.orange)
+                    .lineLimit(2)
+            }
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.secondary.opacity(0.08))
+        )
+    }
+
+    private var headerIcon: String {
+        switch package.status {
+        case .pending: return "clock"
+        case .syncing: return "arrow.up.circle"
+        case .synced:  return "checkmark.circle.fill"
+        case .failed:  return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var headerColor: Color {
+        switch package.status {
+        case .pending: return .secondary
+        case .syncing: return .accentColor
+        case .synced:  return .green
+        case .failed:  return .orange
+        }
+    }
+
+    private var headerText: String {
+        switch package.status {
+        case .pending: return package.lastError ?? "Waiting to upload"
+        case .syncing: return "Uploading scan…"
+        case .synced:  return "Uploaded"
+        case .failed:  return "Upload failed — will retry"
+        }
+    }
+
+    @ViewBuilder
+    private func pill(for artifact: ArtifactUploadState) -> some View {
+        let color = pillColor(for: artifact.status)
+        HStack(spacing: 4) {
+            Image(systemName: pillIcon(for: artifact.status))
+                .font(.system(size: 9, weight: .bold))
+            Text(shortLabel(for: artifact.kind))
+                .font(.system(size: 10, weight: .medium))
+        }
+        .foregroundColor(color)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            Capsule().fill(color.opacity(0.12))
+        )
+    }
+
+    private func pillColor(for status: ArtifactUploadState.Status) -> Color {
+        switch status {
+        case .pending:   return .secondary
+        case .uploading: return .accentColor
+        case .uploaded:  return .green
+        case .failed:    return .orange
+        case .skipped:   return .secondary
+        }
+    }
+
+    private func pillIcon(for status: ArtifactUploadState.Status) -> String {
+        switch status {
+        case .pending:   return "circle"
+        case .uploading: return "arrow.up"
+        case .uploaded:  return "checkmark"
+        case .failed:    return "xmark"
+        case .skipped:   return "minus"
+        }
+    }
+
+    private func shortLabel(for kind: ScanManifest.ArtifactKind) -> String {
+        switch kind {
+        case .usdz:             return "USDZ"
+        case .capturedRoomJson: return "Room"
+        case .worldMap:         return "World"
+        case .mesh:             return "Mesh"
+        case .depthArchive:     return "Depth"
+        case .heroThumbnail:    return "Hero"
+        case .bundleArchive:    return "Bundle"
+        case .coverageHeatmap:  return "Cov"
+        case .depthIndex:       return "Depth Idx"
+        case .photoThumbnails:  return "Thumbs"
+        case .annotations:      return "Notes"
+        case .bundleManifest:   return "Manifest"
+        case .photosManifest:   return "Photos"
+        }
+    }
+}
+
+// MARK: - Global "N scans uploading" badge
+
+/// Observable that counts `RoomScanPackage` rows currently in `.syncing`
+/// state. Views bind to this via `@StateObject` (or `@ObservedObject`) and
+/// trigger refresh on SwiftData `.didSave` notifications.
+///
+/// Constructed with a `ModelContainer` rather than a `ModelContext` so
+/// background refreshes always fetch against the main-context thread.
+@MainActor
+public final class ScanUploadBadge: ObservableObject {
+
+    @Published public private(set) var syncingCount: Int = 0
+
+    private let container: ModelContainer
+    private var observer: NSObjectProtocol?
+
+    public init(container: ModelContainer) {
+        self.container = container
+        self.refresh()
+        self.observer = NotificationCenter.default.addObserver(
+            forName: ModelContext.didSave,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // The queue above dispatches on the main thread, but Swift 6
+            // strict concurrency still requires we re-hop through a task
+            // to satisfy `@MainActor`. The capture is effectively a
+            // one-shot read on the main actor's isolation domain.
+            let weakSelf = self
+            Task { @MainActor in weakSelf?.refresh() }
+        }
+    }
+
+    deinit {
+        if let observer {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    public func refresh() {
+        let context = container.mainContext
+        let descriptor = FetchDescriptor<RoomScanPackage>(
+            predicate: #Predicate { pkg in
+                pkg.statusRaw == "syncing"
+            }
+        )
+        syncingCount = (try? context.fetchCount(descriptor)) ?? 0
+    }
+}
+
+/// Small pill to render `ScanUploadBadge.syncingCount` in a tab bar / home
+/// header. Returns `EmptyView` when the count is zero.
+public struct ScanUploadBadgeView: View {
+    @ObservedObject public var badge: ScanUploadBadge
+
+    public init(badge: ScanUploadBadge) {
+        self.badge = badge
+    }
+
+    public var body: some View {
+        if badge.syncingCount > 0 {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.up.circle")
+                    .font(.system(size: 10, weight: .semibold))
+                Text("\(badge.syncingCount) uploading")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule().fill(Color.accentColor)
+            )
+        }
+    }
+}

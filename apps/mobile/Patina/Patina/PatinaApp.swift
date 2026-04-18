@@ -10,6 +10,7 @@ import SwiftData
 
 @main
 struct PatinaApp: App {
+    @UIApplicationDelegateAdaptor(PatinaAppDelegate.self) private var appDelegate
     @State private var coordinator: AppCoordinator
     @Environment(\.scenePhase) private var scenePhase
 
@@ -78,6 +79,13 @@ struct PatinaApp: App {
                     } else {
                         UserDefaults.standard.set(false, forKey: "pendingScanRecovery")
                     }
+
+                    // Resume any advanced scan bundles left in syncing/failed
+                    // state from a prior session. `uploadAdvancedScanBundle`
+                    // is idempotent (uploaded artifacts are skipped), so
+                    // re-entering is safe. Runs after the housekeeping pass
+                    // above so we don't retry bundles we're about to evict.
+                    await RoomScanSyncService.shared.resumePendingUploads(in: context)
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     switch newPhase {

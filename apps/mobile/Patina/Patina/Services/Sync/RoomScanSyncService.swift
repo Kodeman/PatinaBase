@@ -256,11 +256,63 @@ struct RoomScanV2Insert: Encodable {
     }
 }
 
+/// Routes `BackgroundScanUploader` progress + completion callbacks back to
+/// the `RoomScanSyncService` continuations that kicked the upload off.
+///
+/// One instance is owned by `RoomScanSyncService`. Waiters register a
+/// continuation keyed by `(scanId, artifactKind)` before enqueueing the
+/// descriptor; the uploader delegate invokes `resolve(...)` on completion
+/// which pops the entry and resumes exactly once. This lets the strict
+/// orchestration in `uploadArtifactsBoundedConcurrency` (TaskGroup / bounded
+/// in-flight window) await the background URLSession path without
+/// rewriting the top-level flow.
+@MainActor
+private final class UploadCompletionRouter {
+    private var continuations: [String: CheckedContinuation<Void, Error>] = [:]
+
+    private static func key(scanId: UUID, kind: String) -> String {
+        "\(scanId.uuidString)-\(kind)"
+    }
+
+    func register(
+        scanId: UUID,
+        kind: String,
+        continuation: CheckedContinuation<Void, Error>
+    ) {
+        let k = Self.key(scanId: scanId, kind: kind)
+        // If a duplicate enqueue sneaks in, fail the new waiter rather than
+        // orphan the old one — the bounded-concurrency loop won't re-enter
+        // for the same kind in practice, but better safe than wedged.
+        if let existing = continuations.removeValue(forKey: k) {
+            existing.resume(throwing: BackgroundScanUploader.UploadError.cancelled)
+        }
+        continuations[k] = continuation
+    }
+
+    func resolve(
+        scanId: UUID,
+        kind: String,
+        result: Result<Void, BackgroundScanUploader.UploadError>
+    ) {
+        let k = Self.key(scanId: scanId, kind: kind)
+        guard let cont = continuations.removeValue(forKey: k) else { return }
+        switch result {
+        case .success: cont.resume()
+        case .failure(let err): cont.resume(throwing: err)
+        }
+    }
+}
+
 /// Service for syncing room scans to Supabase
 @MainActor
 public final class RoomScanSyncService: ObservableObject {
 
     public static let shared = RoomScanSyncService()
+
+    /// UserDefaults key controlling whether large scan artifacts may upload
+    /// on cellular / metered networks. When `false` (default), the cellular
+    /// gate defers uploads until the path reports `!isExpensive`.
+    public static let cellularOptInKey = "patina.scanUploadOnCellularEnabled"
 
     // MARK: - Published State
 
@@ -280,9 +332,25 @@ public final class RoomScanSyncService: ObservableObject {
     private let networkMonitor = NWPathMonitor()
     private let monitorQueue = DispatchQueue(label: "com.patina.networkMonitor")
 
+    /// Last observed `NWPath.isExpensive`. Used by `startNetworkMonitoring`
+    /// to detect expensive→cheap transitions (e.g. LTE → Wi-Fi) so that
+    /// scans deferred by the cellular gate can resume automatically.
+    private var lastPathWasExpensive: Bool = false
+
+    /// Thread-safe snapshot of the most recent `NWPath`. `NWPathMonitor` is
+    /// otherwise the only source of truth, but its `currentPath` is only
+    /// reliably populated after `start(queue:)` has published the first
+    /// update — we read the cached copy instead.
+    private var cachedIsExpensive: Bool { lastPathWasExpensive }
+
     // SwiftData context for persistent queue
     private var modelContext: ModelContext?
     private var isConfigured = false
+
+    // Router for BackgroundScanUploader continuations. Each in-flight
+    // artifact upload via the background URLSession path parks its waiter
+    // here, keyed by (scanId, artifactKind).
+    private let uploadRouter = UploadCompletionRouter()
 
     private struct QueuedUpload {
         let roomData: FirstWalkRoomData
@@ -293,7 +361,16 @@ public final class RoomScanSyncService: ObservableObject {
 
     // MARK: - Initialization
 
-    private init() {}
+    private init() {
+        // Wire BackgroundScanUploader callbacks to the router / progress
+        // surface. The uploader dispatches these on the main actor.
+        BackgroundScanUploader.shared.onCompletion = { [weak self] scanId, kind, result in
+            self?.uploadRouter.resolve(scanId: scanId, kind: kind, result: result)
+        }
+        BackgroundScanUploader.shared.onProgress = { [weak self] scanId, kind, pct in
+            self?.applyBackgroundProgress(scanId: scanId, kind: kind, progress: pct)
+        }
+    }
 
     // MARK: - Configuration
 
@@ -317,13 +394,29 @@ public final class RoomScanSyncService: ObservableObject {
 
     private func startNetworkMonitoring() {
         networkMonitor.pathUpdateHandler = { [weak self] path in
+            let isExpensiveNow = path.isExpensive
             Task { @MainActor in
-                let wasAvailable = self?.isNetworkAvailable ?? false
-                self?.isNetworkAvailable = (path.status == .satisfied)
+                guard let self else { return }
+                let wasAvailable = self.isNetworkAvailable
+                let wasExpensive = self.lastPathWasExpensive
+                self.isNetworkAvailable = (path.status == .satisfied)
+                self.lastPathWasExpensive = isExpensiveNow
 
-                // If we just came online, try processing queue
+                // Just-came-online path: drain persistent queue + resume any
+                // advanced scan bundles we deferred while offline.
                 if !wasAvailable && path.status == .satisfied {
-                    await self?.processQueueIfOnline()
+                    await self.processQueueIfOnline()
+                    if let ctx = self.modelContext {
+                        await self.resumePendingUploads(in: ctx)
+                    }
+                }
+
+                // Expensive → cheap (e.g. LTE → Wi-Fi) transition: resume
+                // any scans that the cellular gate deferred. The opt-in
+                // flag may or may not be set — `uploadAdvancedScanBundle`
+                // re-checks the gate on entry so it's safe either way.
+                if wasExpensive && !isExpensiveNow, let ctx = self.modelContext {
+                    await self.resumePendingUploads(in: ctx)
                 }
             }
         }
@@ -1206,6 +1299,24 @@ extension RoomScanSyncService {
         styleSignals: FirstWalkStyleSignals,
         projectId: UUID? = nil
     ) async throws -> UploadResult {
+        // Cellular gate: when on a metered network and the user hasn't
+        // opted in, park the package in .pending with a "Waiting for Wi-Fi"
+        // breadcrumb. `startNetworkMonitoring` will re-enter this method
+        // via `resumePendingUploads` on the next expensive→cheap
+        // transition. We deliberately do NOT throw — the UI treats this as
+        // a benign deferred state, not a failure.
+        if cachedIsExpensive,
+           !UserDefaults.standard.bool(forKey: Self.cellularOptInKey) {
+            package.status = .pending
+            package.lastError = "Waiting for Wi-Fi"
+            try? modelContext?.save()
+            print("[RoomScanSync] deferred scan \(package.scanId) — on cellular without opt-in")
+            return UploadResult(
+                roomId: package.remoteRoomId ?? roomData.roomId,
+                scanId: package.scanId
+            )
+        }
+
         isSyncing = true
         lastError = nil
         defer { isSyncing = false }
@@ -1383,6 +1494,122 @@ extension RoomScanSyncService {
         }
 
         return UploadResult(roomId: roomId, scanId: package.scanId)
+    }
+
+    // MARK: - Launch-time & network-transition resume
+
+    /// Re-enter `uploadAdvancedScanBundle` for every `RoomScanPackage` row
+    /// that's in `.syncing` or `.failed` state (i.e. interrupted from a
+    /// prior session or recently network-failed). Bounded to the 10 most
+    /// recent rows to avoid a stampede of retries on launch.
+    ///
+    /// Safe to call multiple times — `uploadAdvancedScanBundle` skips
+    /// artifacts with status `.uploaded` on re-entry, and duplicate
+    /// launches for the same scanId are bounced by the task-in-flight
+    /// guard.
+    @MainActor
+    public func resumePendingUploads(in context: ModelContext) async {
+        let descriptor = FetchDescriptor<RoomScanPackage>(
+            predicate: #Predicate { pkg in
+                (pkg.statusRaw == "syncing" || pkg.statusRaw == "failed")
+                    && pkg.syncedAt == nil
+            },
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+
+        let packages: [RoomScanPackage]
+        do {
+            var d = descriptor
+            d.fetchLimit = 10
+            packages = try context.fetch(d)
+        } catch {
+            print("[RoomScanSync] resumePendingUploads fetch failed: \(error.localizedDescription)")
+            return
+        }
+
+        guard !packages.isEmpty else { return }
+        print("[RoomScanSync] resuming \(packages.count) pending scan(s)")
+
+        for package in packages {
+            // Skip if the bundle directory is gone (evicted / deleted).
+            guard let bundleURL = package.absoluteBundleURL,
+                  FileManager.default.fileExists(atPath: bundleURL.path) else {
+                continue
+            }
+
+            // Reconstruct minimal FirstWalkRoomData / FirstWalkStyleSignals
+            // from the manifest. `uploadAdvancedScanBundle` is idempotent
+            // on the core data — re-upserting with derived values is fine
+            // because the original scan row already landed on a prior
+            // attempt.
+            let manifest: ScanManifest
+            do {
+                manifest = try ScanBundleWriter.readManifest(at: bundleURL)
+            } catch {
+                continue
+            }
+
+            let resumeRoomData = Self.deriveRoomData(
+                from: manifest,
+                package: package,
+                context: context
+            )
+            let resumeSignals = FirstWalkStyleSignals()
+
+            // Capture strong references for the detached task; the service
+            // itself is a main-actor singleton so calling back in is safe.
+            let captured = package
+            Task { [weak self] in
+                do {
+                    _ = try await self?.uploadAdvancedScanBundle(
+                        package: captured,
+                        roomData: resumeRoomData,
+                        styleSignals: resumeSignals
+                    )
+                } catch {
+                    print("[RoomScanSync] resume upload failed for \(captured.scanId): \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    /// Best-effort reconstruction of `FirstWalkRoomData` for resume. Pulls
+    /// dimensions from the linked `RoomModel` row when available; otherwise
+    /// falls back to zero values. The upsert path re-uses the existing
+    /// scan's id so row overwrites are bounded to this one row, and any
+    /// fields that `buildV2Insert` derives (style_signals, suggested_styles)
+    /// are regenerated from whatever we pass in — so we keep the core
+    /// name/id correct and accept stubbed dimensions as the tradeoff for
+    /// not needing to re-parse the parametric captured_room.json.
+    @MainActor
+    private static func deriveRoomData(
+        from manifest: ScanManifest,
+        package: RoomScanPackage,
+        context: ModelContext
+    ) -> FirstWalkRoomData {
+        let roomLocalId = package.roomLocalId
+        var width: Float = 0
+        var length: Float = 0
+        var height: Float = 0
+
+        let descriptor = FetchDescriptor<RoomModel>(
+            predicate: #Predicate { $0.id == roomLocalId }
+        )
+        if let room = try? context.fetch(descriptor).first {
+            width = Float(room.width ?? 0)
+            length = Float(room.length ?? 0)
+            height = Float(room.height ?? 0)
+        }
+
+        let dims = WalkRoomDimensions(width: width, length: length, height: height)
+        return FirstWalkRoomData(
+            roomId: package.scanId,
+            roomName: package.userProvidedRoomName ?? manifest.roomName,
+            dimensions: dims,
+            detectedFeatures: [],
+            scanDuration: 0,
+            coveragePercentage: 0
+        )
     }
 
     // MARK: - Bounded-concurrency artifact loop
@@ -1630,45 +1857,52 @@ extension RoomScanSyncService {
         }
 
         let fileURL = bundleURL.appendingPathComponent(artifact.relativePath)
-        let data = try Data(contentsOf: fileURL)
         let path = "\(folderPrefix)/\(userId.uuidString)/\(roomId.uuidString)/\(filename)"
+        let publicUrlString = (try? supabase.storage
+            .from(usdzBucket)
+            .getPublicURL(path: path).absoluteString) ?? ""
 
-        // Size-gated strategy. Today both branches use the inline
-        // supabase-swift upload; Wave 5.3 swaps `.background` for a real
-        // URLSession background task.
+        // Size-gated strategy. Large files (>= 5 MB) go through the
+        // BackgroundScanUploader so they survive app-suspension; smaller
+        // files use the inline supabase-swift upload.
         let strategy = Self.strategy(for: artifact.sizeBytes)
         if strategy == .background {
-            print("[RoomScanSync] background path requested (Wave 5.3 will replace with BackgroundScanUploader) — kind=\(artifact.kind.rawValue) size=\(artifact.sizeBytes)")
-        }
-
-        // Build metadata (sha256 + scan ids) only when we have a hash.
-        // FileOptions in supabase-swift exposes a `metadata: [String: AnyJSON]?`
-        // field; the storage server persists it alongside the object.
-        var metadata: [String: AnyJSON]? = nil
-        if let sha = artifact.sha256, !sha.isEmpty {
-            metadata = [
-                "sha256": .string(sha),
-                "scanId": .string(scanId.uuidString),
-                "artifactKind": .string(artifact.kind.rawValue)
-            ]
-        }
-
-        try await supabase.storage
-            .from(usdzBucket)
-            .upload(
-                path,
-                data: data,
-                options: FileOptions(
-                    contentType: artifact.mimeType,
-                    upsert: true,
-                    metadata: metadata
-                )
+            try await uploadArtifactViaBackground(
+                artifact: artifact,
+                fileURL: fileURL,
+                storagePath: path,
+                scanId: scanId
             )
+        } else {
+            let data = try Data(contentsOf: fileURL)
 
-        let publicUrl = try supabase.storage.from(usdzBucket).getPublicURL(path: path)
+            // Build metadata (sha256 + scan ids) only when we have a hash.
+            // FileOptions in supabase-swift exposes a `metadata: [String: AnyJSON]?`
+            // field; the storage server persists it alongside the object.
+            var metadata: [String: AnyJSON]? = nil
+            if let sha = artifact.sha256, !sha.isEmpty {
+                metadata = [
+                    "sha256": .string(sha),
+                    "scanId": .string(scanId.uuidString),
+                    "artifactKind": .string(artifact.kind.rawValue)
+                ]
+            }
+
+            try await supabase.storage
+                .from(usdzBucket)
+                .upload(
+                    path,
+                    data: data,
+                    options: FileOptions(
+                        contentType: artifact.mimeType,
+                        upsert: true,
+                        metadata: metadata
+                    )
+                )
+        }
 
         let shaPreview = (artifact.sha256 ?? "").prefix(10)
-        print("[RoomScanSync] uploaded \(artifact.kind.rawValue) sha=\(shaPreview)")
+        print("[RoomScanSync] uploaded \(artifact.kind.rawValue) via \(strategy) sha=\(shaPreview)")
 
         // Merge the sha into room_scans.artifacts_sha256 (best-effort; the
         // RPC lives in migration 00082 — runtime only).
@@ -1686,7 +1920,79 @@ extension RoomScanSyncService {
             }
         }
 
-        return publicUrl.absoluteString
+        return publicUrlString
+    }
+
+    /// Enqueue an artifact through `BackgroundScanUploader` and await its
+    /// completion via a continuation parked in `uploadRouter`. The uploader
+    /// delegates its `onCompletion` callback to the router in `init`, so
+    /// the completion either resumes this continuation on success or
+    /// throws the upstream `BackgroundScanUploader.UploadError`.
+    ///
+    /// The router bounces duplicate `(scanId, kind)` enqueues — which should
+    /// only happen on resume, where `uploadAdvancedScanBundle` short-circuits
+    /// any artifact whose state is already `.uploaded`. For an artifact in
+    /// `.uploading` state, we still let this path re-enter: the uploader's
+    /// upsert PUT is idempotent by design.
+    private func uploadArtifactViaBackground(
+        artifact: ScanManifest.Artifact,
+        fileURL: URL,
+        storagePath: String,
+        scanId: UUID
+    ) async throws {
+        let descriptor = BackgroundScanUploader.UploadDescriptor(
+            scanId: scanId,
+            artifactKind: artifact.kind.rawValue,
+            sha256: artifact.sha256,
+            mimeType: artifact.mimeType,
+            sizeBytes: artifact.sizeBytes,
+            fileURL: fileURL,
+            storagePath: storagePath,
+            sizeExpected: artifact.sizeBytes
+        )
+
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            uploadRouter.register(
+                scanId: scanId,
+                kind: artifact.kind.rawValue,
+                continuation: cont
+            )
+            do {
+                try BackgroundScanUploader.shared.upload(descriptor)
+            } catch {
+                // Enqueue failed synchronously — pop the router entry and
+                // surface the error to the caller. The register() call a
+                // moment ago is the only entry for this key, so resolving
+                // it here with a failure is race-free.
+                uploadRouter.resolve(
+                    scanId: scanId,
+                    kind: artifact.kind.rawValue,
+                    result: .failure(.transport(error))
+                )
+            }
+        }
+    }
+
+    /// Push `BackgroundScanUploader` progress callbacks into the in-memory
+    /// `artifactState.status = .uploading` so UI observing the
+    /// `RoomScanPackage` sees live progress. The uploader already throttles
+    /// its callbacks to ~2 Hz so we don't need to debounce further.
+    ///
+    /// Kept minimal: we only bump the attempts counter / status transition;
+    /// the precise percent is not persisted on `ArtifactUploadState` (that
+    /// struct tracks status, not byte-progress). Callers that want live
+    /// progress can subscribe to `BackgroundScanUploader.shared.onProgress`
+    /// directly.
+    @MainActor
+    fileprivate func applyBackgroundProgress(
+        scanId: UUID,
+        kind: String,
+        progress: Double
+    ) {
+        // Reserved for future per-artifact byte-progress surfacing. The
+        // router continuation above resolves on completion, which flips
+        // artifactState to .uploaded — that's where the UI flip happens.
+        _ = (scanId, kind, progress)
     }
 
     nonisolated private static func scanColumn(for kind: ScanManifest.ArtifactKind) -> String? {

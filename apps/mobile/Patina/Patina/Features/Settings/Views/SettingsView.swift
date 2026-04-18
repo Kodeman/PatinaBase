@@ -11,6 +11,10 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var notificationsOn = true
     @State private var hapticOn = true
+    /// Cellular opt-in for large scan artifact uploads. Backing store is
+    /// read by `RoomScanSyncService` at upload-time — UserDefaults key
+    /// `patina.scanUploadOnCellularEnabled` keeps the two sides in sync.
+    @AppStorage("patina.scanUploadOnCellularEnabled") private var uploadOnCellular = false
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -34,6 +38,7 @@ struct SettingsView: View {
                 settingsGroup(title: "Preferences") {
                     settingsToggleRow(icon: "bell", iconColor: PatinaColors.terracotta, label: "Notifications", isOn: $notificationsOn)
                     settingsToggleRow(icon: "hand.tap", iconColor: PatinaColors.agedOak, label: "Haptic Feedback", isOn: $hapticOn)
+                    settingsToggleRow(icon: "antenna.radiowaves.left.and.right", iconColor: PatinaColors.dustyBlue, label: "Upload scans on cellular", isOn: $uploadOnCellular)
                     settingsRow(icon: "moon", iconColor: PatinaColors.dustyBlue, label: "Appearance")
                 }
 
