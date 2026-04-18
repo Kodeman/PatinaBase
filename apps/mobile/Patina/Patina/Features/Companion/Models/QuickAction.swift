@@ -133,6 +133,22 @@ public enum QuickActionFactory {
             return [] // Room options is a modal
         case .rescan:
             return walkActions(isComplete: false, context: context)
+        case .styleQuiz, .styleResult:
+            return [] // Quiz has its own navigation
+        case .arPlacement:
+            return [] // AR has its own controls
+        case .preScanChecklist, .floorPlanPreview:
+            return [] // Scan flow has its own UI
+        case .profile, .notifications, .designerConsultation:
+            return [] // These screens have their own navigation
+        case .yourSpaces, .roomProject, .roomSettings, .crossRoom,
+             .newRoom, .manualRoomEntry, .moveItem:
+            return []
+        case .scanThreshold, .scanWalk, .scanSoftLanding,
+             .scanConversation, .scanReveal, .scanFloorPlan,
+             .scanFallbackEntry:
+            // Quiet Conversation flow owns its own controls — Companion stays quiet.
+            return []
         }
     }
 

@@ -30,6 +30,11 @@ public enum CompanionState: Equatable {
     /// Pulsing state - button with pulse notification animation
     case pulsing
 
+    /// Journey mode - shown during an active Walk scan. Displays live
+    /// progress (0–1) and an optional step label ("Scanning north wall…")
+    /// so the Companion becomes the scan coach instead of a floating orb.
+    case journey(progress: CGFloat, step: String?)
+
     // MARK: - Morph Progress (0.0 = button, 1.0 = expanded)
 
     /// Get the current morph progress for animations
@@ -37,13 +42,30 @@ public enum CompanionState: Equatable {
         switch self {
         case .hidden:
             return 0
-        case .button, .pulsing:
+        case .button, .pulsing, .journey:
             return 0
         case .morphing(let progress):
             return progress
         case .expanded, .navigating:
             return 1
         }
+    }
+
+    /// True while an active scan is running — views can minimize the
+    /// companion to a corner orb or swap in a progress readout.
+    public var isJourney: Bool {
+        if case .journey = self { return true }
+        return false
+    }
+
+    public var journeyProgress: CGFloat? {
+        if case .journey(let p, _) = self { return p }
+        return nil
+    }
+
+    public var journeyStep: String? {
+        if case .journey(_, let step) = self { return step }
+        return nil
     }
 
     // MARK: - State Queries
@@ -120,7 +142,7 @@ public enum CompanionState: Equatable {
         switch self {
         case .hidden:
             return 0
-        case .button, .pulsing:
+        case .button, .pulsing, .journey:
             return CompanionConstants.buttonSize
         case .morphing(let progress):
             let minHeight = CompanionConstants.buttonSize

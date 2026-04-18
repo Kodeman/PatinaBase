@@ -141,6 +141,54 @@ public struct CompanionContext: Equatable {
             return "Scanning QR code"
         case .qrApproval:
             return "Approving sign-in"
+        case .styleQuiz:
+            return "Discovering your style"
+        case .styleResult:
+            return "Your style profile"
+        case .arPlacement:
+            return "Placing furniture"
+        case .preScanChecklist:
+            return "Preparing to scan"
+        case .floorPlanPreview:
+            return "Your floor plan"
+        case .profile:
+            return "Your profile"
+        case .notifications:
+            return "Notifications"
+        case .designerConsultation:
+            return "Working with a designer"
+        case .yourSpaces:
+            return "Your Spaces: \(roomCount) rooms"
+        case .roomProject:
+            if let room = activeRoom { return "Room: \(room.name)" }
+            return "Room project"
+        case .roomSettings:
+            return "Room settings"
+        case .crossRoom:
+            return "All items across your home"
+        case .newRoom:
+            return "Add a room"
+        case .manualRoomEntry:
+            return "Entering room details"
+        case .moveItem:
+            return "Move item"
+        case .scanThreshold:
+            return "Preparing to scan"
+        case .scanWalk:
+            if let progress = walkProgress {
+                return "Walking: \(Int(progress * 100))% complete"
+            }
+            return "Walking your room"
+        case .scanSoftLanding:
+            return "Making space to talk"
+        case .scanConversation:
+            return "Discovering your style"
+        case .scanReveal:
+            return "Your style, revealed"
+        case .scanFloorPlan:
+            return "Your floor plan"
+        case .scanFallbackEntry:
+            return "Entering room details"
         }
     }
 
@@ -187,6 +235,37 @@ public struct CompanionContext: Equatable {
             return "qrcode.viewfinder"
         case .qrApproval:
             return "checkmark.shield"
+        case .styleQuiz:
+            return "paintpalette"
+        case .styleResult:
+            return "star.circle"
+        case .arPlacement:
+            return "arkit"
+        case .preScanChecklist:
+            return "checklist"
+        case .floorPlanPreview:
+            return "square.split.bottomrightquarter"
+        case .profile:
+            return "person.circle"
+        case .notifications:
+            return "bell"
+        case .designerConsultation:
+            return "bubble.left.and.bubble.right"
+        case .yourSpaces, .roomProject, .roomSettings, .crossRoom,
+             .newRoom, .manualRoomEntry, .moveItem:
+            return "house"
+        case .scanThreshold, .scanWalk:
+            return "figure.walk"
+        case .scanSoftLanding:
+            return "leaf"
+        case .scanConversation:
+            return "bubble.left.and.bubble.right"
+        case .scanReveal:
+            return "sparkles"
+        case .scanFloorPlan:
+            return "square.split.bottomrightquarter"
+        case .scanFallbackEntry:
+            return "pencil.and.ruler"
         }
     }
 }

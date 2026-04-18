@@ -25,6 +25,7 @@ enum CompanionDisplayMode: Equatable {
 public struct CompanionOverlay: View {
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var viewModel = CompanionViewModel()
     @State private var state: CompanionState = .button
     @State private var voiceInputState: VoiceInputState = .idle
@@ -56,18 +57,22 @@ public struct CompanionOverlay: View {
 
         // Minimal in AR / immersive views
         if case .pieceDetail = screen { return .minimal }
+        if case .arPlacement = screen { return .minimal }
 
-        // Nudging based on context
-        switch screen {
-        case .heroFrame:
-            return .nudging(label: "Scan a room \u{2192}")
-        case .emergence, .roomEmergence:
-            return .nudging(label: "Try in your room \u{2192}")
-        case .table:
-            return .nudging(label: "Find more pieces \u{2192}")
-        default:
-            return .resting
+        // Hidden during pre-scan and floor plan (they have own UI)
+        if case .preScanChecklist = screen { return .hidden }
+        if case .floorPlanPreview = screen { return .hidden }
+
+        // Hidden during quiz (quiz manages its own flow)
+        if case .styleQuiz = screen { return .hidden }
+        if case .styleResult = screen { return .resting }
+
+        // Nudging based on context provider
+        if let nudge = CompanionActionProvider.nudge(for: screen, context: coordinator.companionContext) {
+            return .nudging(label: nudge)
         }
+
+        return .resting
     }
 
     public init() {}
@@ -81,6 +86,12 @@ public struct CompanionOverlay: View {
                         .background(.ultraThinMaterial.opacity(0.5))
                         .ignoresSafeArea()
                         .onTapGesture { collapseToButton() }
+                }
+
+                // Dock zone gradient — gives the companion visual breathing room
+                if shouldShowDockGradient {
+                    companionDockGradient(safeAreaBottom: geometry.safeAreaInsets.bottom)
+                        .transition(.opacity)
                 }
 
                 // Render based on display mode
@@ -140,6 +151,30 @@ public struct CompanionOverlay: View {
         }
     }
 
+    // MARK: - Dock Zone Gradient
+
+    /// Whether to show the dock zone gradient behind the companion
+    private var shouldShowDockGradient: Bool {
+        if reduceTransparency { return false }
+
+        switch displayMode {
+        case .resting, .nudging, .journeyMode:
+            return true
+        case .expanded, .minimal, .hidden:
+            return false
+        }
+    }
+
+    /// Subtle gradient fade that gives the companion button visual breathing room
+    private func companionDockGradient(safeAreaBottom: CGFloat) -> some View {
+        PatinaGradients.companionDock()
+            .frame(height: 140)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .padding(.bottom, safeAreaBottom)
+            .allowsHitTesting(false)
+            .ignoresSafeArea(edges: .bottom)
+    }
+
     // MARK: - State 1: Resting
 
     private var restingView: some View {
@@ -194,54 +229,36 @@ public struct CompanionOverlay: View {
                 }
                 .padding(.bottom, 16)
 
-                // Actions
+                // Dynamic actions from context provider
                 VStack(spacing: 6) {
-                    companionAction(
-                        icon: "viewfinder",
-                        label: "Scan a room",
-                        hint: "Suggested next step",
-                        isSuggested: true
-                    ) {
-                        handleNavigate(to: .walk)
-                    }
-
-                    companionAction(
-                        icon: "sparkles",
-                        label: "Your recommendations",
-                        hint: "18 items \u{00B7} Living room",
-                        isSuggested: false
-                    ) {
-                        handleNavigate(to: .emergence(pieceId: nil))
-                    }
-
-                    companionAction(
-                        icon: "heart",
-                        label: "Collections",
-                        hint: "2 boards \u{00B7} 13 items",
-                        isSuggested: false
-                    ) {
-                        handleNavigate(to: .table)
-                    }
-
-                    companionAction(
-                        icon: "qrcode.viewfinder",
-                        label: "Connect to portal",
-                        hint: "Scan QR \u{00B7} patina.cloud",
-                        isSuggested: false
-                    ) {
-                        collapseToButton()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            coordinator.showingQRScanner = true
+                    let actions = CompanionActionProvider.actions(
+                        for: coordinator.currentScreen,
+                        context: coordinator.companionContext,
+                        isAuthenticated: isAuthenticated
+                    )
+                    ForEach(actions) { item in
+                        companionAction(
+                            icon: item.icon,
+                            label: item.label,
+                            hint: item.hint,
+                            isSuggested: item.isSuggested
+                        ) {
+                            if let route = item.route {
+                                handleNavigate(to: route)
+                            } else if let special = item.specialAction {
+                                collapseToButton()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    switch special {
+                                    case .openQRScanner:
+                                        coordinator.showingQRScanner = true
+                                    case .openSettings:
+                                        coordinator.showingSettings = true
+                                    case .openAuth:
+                                        coordinator.showingAuth = true
+                                    }
+                                }
+                            }
                         }
-                    }
-
-                    companionAction(
-                        icon: "person.circle",
-                        label: "Your profile",
-                        hint: "Style \u{00B7} Rooms \u{00B7} Settings",
-                        isSuggested: false
-                    ) {
-                        handleNavigate(to: .settings)
                     }
                 }
             }

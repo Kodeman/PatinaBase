@@ -42,6 +42,15 @@ public struct UserContext {
     /// Email (if authenticated)
     public var email: String?
 
+    /// Display name from profiles table
+    public var displayName: String?
+
+    /// Avatar URL from profiles table
+    public var avatarUrl: String?
+
+    /// Domain-based roles (e.g. ["designer", "consumer"]) — matches portal useAuth().roles
+    public var roles: [String]
+
     /// Number of local-only rooms pending sync
     public var pendingRoomCount: Int
 
@@ -52,22 +61,32 @@ public struct UserContext {
         mode: UserMode = .guest,
         userId: UUID? = nil,
         email: String? = nil,
+        displayName: String? = nil,
+        avatarUrl: String? = nil,
+        roles: [String] = [],
         pendingRoomCount: Int = 0,
         hasCompletedOnboarding: Bool = false
     ) {
         self.mode = mode
         self.userId = userId
         self.email = email
+        self.displayName = displayName
+        self.avatarUrl = avatarUrl
+        self.roles = roles
         self.pendingRoomCount = pendingRoomCount
         self.hasCompletedOnboarding = hasCompletedOnboarding
     }
 
-    /// Create authenticated context
+    /// Create authenticated context from ProfileService
     public static func authenticated(userId: UUID, email: String?) -> UserContext {
-        UserContext(
+        let profile = ProfileService.shared
+        return UserContext(
             mode: .authenticated,
             userId: userId,
             email: email,
+            displayName: profile.displayName,
+            avatarUrl: profile.currentProfile?.avatarUrl,
+            roles: profile.roles,
             pendingRoomCount: 0,
             hasCompletedOnboarding: true
         )
@@ -82,5 +101,10 @@ public struct UserContext {
             pendingRoomCount: pendingRoomCount,
             hasCompletedOnboarding: false
         )
+    }
+
+    /// Whether user has a specific domain role
+    public func hasRole(_ domain: String) -> Bool {
+        roles.contains(domain)
     }
 }
