@@ -6,11 +6,13 @@
 //
 
 import SwiftUI
+import AuthenticationServices
 
 struct AuthScreenView: View {
-    var onSignInWithApple: () -> Void = {}
+    var onSignInWithApple: (Result<ASAuthorization, Error>) -> Void = { _ in }
     var onSignInWithGoogle: () -> Void = {}
     var onSignInWithEmail: () -> Void = {}
+    var onCreateAccount: () -> Void = {}
     var onBrowseAsGuest: () -> Void = {}
 
     var body: some View {
@@ -46,9 +48,21 @@ struct AuthScreenView: View {
 
             // Auth buttons
             VStack(spacing: 12) {
-                AuthButton(title: "Continue with Apple", icon: "", style: .apple, action: onSignInWithApple)
+                SignInWithAppleButton(.signIn) { request in
+                    request.requestedScopes = [.email, .fullName]
+                } onCompletion: { result in
+                    onSignInWithApple(result)
+                }
+                .signInWithAppleButtonStyle(.black)
+                .frame(maxWidth: .infinity, minHeight: 50, maxHeight: 50)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
                 AuthButton(title: "Continue with Google", icon: "G", style: .google, action: onSignInWithGoogle)
-                AuthButton(title: "Continue with Email", icon: "✉", style: .email, action: onSignInWithEmail)
+                    .accessibilityIdentifier("auth.welcome.googleButton")
+                AuthButton(title: "Sign in with Email", icon: "✉", style: .email, action: onSignInWithEmail)
+                    .accessibilityIdentifier("auth.welcome.emailButton")
+                AuthButton(title: "Create Account", icon: "+", style: .email, action: onCreateAccount)
+                    .accessibilityIdentifier("auth.welcome.createAccountButton")
             }
             .padding(.horizontal, 28)
 
@@ -71,6 +85,7 @@ struct AuthScreenView: View {
                     .font(PatinaTypography.bodySmall)
                     .foregroundColor(PatinaColors.clay)
             }
+            .accessibilityIdentifier("auth.welcome.guestButton")
 
             Spacer()
 

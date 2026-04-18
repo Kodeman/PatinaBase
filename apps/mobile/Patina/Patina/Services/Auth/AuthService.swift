@@ -40,6 +40,11 @@ public final class AuthService {
     /// Error message
     public private(set) var errorMessage: String?
 
+    /// Clear any existing error message
+    public func clearError() {
+        errorMessage = nil
+    }
+
     /// Whether initial auth state has been determined
     public private(set) var isAuthStateReady = false
 
@@ -47,8 +52,12 @@ public final class AuthService {
 
     private var authStateTask: Task<Void, Never>?
 
-    /// Continuation for waiting on auth ready
-    private var authReadyContinuation: CheckedContinuation<Void, Never>?
+    /// Continuations for callers awaiting `waitForAuthReady()`. We keep an
+    /// array instead of a single optional because multiple call sites
+    /// (RoomScanSyncService, feeds) can all await auth readiness concurrently
+    /// during cold start — the previous single-slot implementation would drop
+    /// all but the last continuation, leaking the others' tasks forever.
+    private var authReadyContinuations: [CheckedContinuation<Void, Never>] = []
 
     // MARK: - Initialization
 
@@ -63,11 +72,15 @@ public final class AuthService {
             for await (event, session) in supabase.auth.authStateChanges {
                 self.session = session
 
-                // Mark auth state as ready after first event
+                // Mark auth state as ready after first event and fan out
+                // to every awaiting caller.
                 if !self.isAuthStateReady {
                     self.isAuthStateReady = true
-                    self.authReadyContinuation?.resume()
-                    self.authReadyContinuation = nil
+                    let waiting = self.authReadyContinuations
+                    self.authReadyContinuations.removeAll()
+                    for continuation in waiting {
+                        continuation.resume()
+                    }
                 }
 
                 switch event {
@@ -79,10 +92,13 @@ public final class AuthService {
                             "email_domain": emailDomain,
                             "platform": "ios"
                         ])
+                        // Hydrate profile + roles (mirrors portal useAuth pattern)
+                        await ProfileService.shared.fetchProfile(userId: user.id.uuidString)
                     }
                 case .signedOut:
                     print("User signed out")
                     PostHogService.shared.reset()
+                    await ProfileService.shared.clear()
                 case .userUpdated:
                     print("User updated")
                 default:
@@ -92,12 +108,14 @@ public final class AuthService {
         }
     }
 
-    /// Wait for auth state to be determined
+    /// Wait for auth state to be determined. Safe to call from multiple
+    /// tasks concurrently — each caller registers its own continuation and
+    /// all of them resume together once the first auth state event arrives.
     @MainActor
     public func waitForAuthReady() async {
         guard !isAuthStateReady else { return }
         await withCheckedContinuation { continuation in
-            self.authReadyContinuation = continuation
+            self.authReadyContinuations.append(continuation)
         }
     }
 
@@ -108,6 +126,7 @@ public final class AuthService {
     public func signIn(email: String, password: String) async throws {
         isLoading = true
         errorMessage = nil
+        defer { isLoading = false }
 
         do {
             let session = try await supabase.auth.signIn(
@@ -119,8 +138,6 @@ public final class AuthService {
             errorMessage = error.localizedDescription
             throw error
         }
-
-        isLoading = false
     }
 
     /// Sign in with Apple
@@ -128,11 +145,11 @@ public final class AuthService {
     public func signInWithApple(credential: ASAuthorizationAppleIDCredential) async throws {
         isLoading = true
         errorMessage = nil
+        defer { isLoading = false }
 
         guard let identityToken = credential.identityToken,
               let tokenString = String(data: identityToken, encoding: .utf8) else {
             errorMessage = "Failed to get Apple ID token"
-            isLoading = false
             throw NetworkError.unauthorized
         }
 
@@ -148,8 +165,24 @@ public final class AuthService {
             errorMessage = error.localizedDescription
             throw error
         }
+    }
 
-        isLoading = false
+    /// Sign in with Google via OAuth (opens ASWebAuthenticationSession)
+    @MainActor
+    public func signInWithGoogle() async throws {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        do {
+            try await supabase.auth.signInWithOAuth(
+                provider: .google,
+                redirectTo: URL(string: "\(APIConfiguration.appURLScheme)://auth/callback")
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+            throw error
+        }
     }
 
     // MARK: - Sign Up
@@ -159,6 +192,7 @@ public final class AuthService {
     public func signUp(email: String, password: String, displayName: String?) async throws {
         isLoading = true
         errorMessage = nil
+        defer { isLoading = false }
 
         do {
             let session = try await supabase.auth.signUp(
@@ -171,8 +205,6 @@ public final class AuthService {
             errorMessage = error.localizedDescription
             throw error
         }
-
-        isLoading = false
     }
 
     // MARK: - Sign Out
@@ -182,6 +214,7 @@ public final class AuthService {
     public func signOut() async throws {
         isLoading = true
         errorMessage = nil
+        defer { isLoading = false }
 
         do {
             try await supabase.auth.signOut()
@@ -190,8 +223,6 @@ public final class AuthService {
             errorMessage = error.localizedDescription
             throw error
         }
-
-        isLoading = false
     }
 
     // MARK: - Password Reset
@@ -201,6 +232,7 @@ public final class AuthService {
     public func resetPassword(email: String) async throws {
         isLoading = true
         errorMessage = nil
+        defer { isLoading = false }
 
         do {
             try await supabase.auth.resetPasswordForEmail(email)
@@ -208,8 +240,6 @@ public final class AuthService {
             errorMessage = error.localizedDescription
             throw error
         }
-
-        isLoading = false
     }
 
     // MARK: - Magic Link
@@ -219,6 +249,7 @@ public final class AuthService {
     public func sendMagicLink(email: String) async throws {
         isLoading = true
         errorMessage = nil
+        defer { isLoading = false }
 
         do {
             try await supabase.auth.signInWithOTP(
@@ -229,8 +260,6 @@ public final class AuthService {
             errorMessage = error.localizedDescription
             throw error
         }
-
-        isLoading = false
     }
 
     /// Handle magic link URL callback
@@ -238,6 +267,7 @@ public final class AuthService {
     public func handleMagicLinkURL(_ url: URL) async throws {
         isLoading = true
         errorMessage = nil
+        defer { isLoading = false }
 
         do {
             let session = try await supabase.auth.session(from: url)
@@ -246,8 +276,6 @@ public final class AuthService {
             errorMessage = error.localizedDescription
             throw error
         }
-
-        isLoading = false
     }
 
     // MARK: - Session Management

@@ -10,9 +10,11 @@ import SwiftUI
 /// Main authentication view
 public struct AuthenticationView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var viewModel = AuthViewModel()
+    @State private var viewModel: AuthViewModel
 
-    public init() {}
+    public init(initialMode: AuthMode = .signIn) {
+        _viewModel = State(wrappedValue: AuthViewModel(initialMode: initialMode))
+    }
 
     public var body: some View {
         NavigationStack {
@@ -107,6 +109,7 @@ public struct AuthenticationView: View {
                     .padding(PatinaSpacing.md)
                     .background(Color.red.opacity(0.1))
                     .cornerRadius(PatinaRadius.md)
+                    .accessibilityIdentifier("auth.form.errorBanner")
             }
 
             // Magic link sent state
@@ -120,6 +123,7 @@ public struct AuthenticationView: View {
                         text: $viewModel.displayName,
                         icon: "person"
                     )
+                    .accessibilityIdentifier("auth.form.displayNameField")
                 }
 
                 // Email
@@ -130,6 +134,7 @@ public struct AuthenticationView: View {
                     keyboardType: .emailAddress,
                     autocapitalization: .never
                 )
+                .accessibilityIdentifier("auth.form.emailField")
 
                 // Password (not for reset or magic link)
                 if viewModel.mode != .resetPassword && viewModel.mode != .magicLink {
@@ -139,6 +144,7 @@ public struct AuthenticationView: View {
                         icon: "lock",
                         isSecure: true
                     )
+                    .accessibilityIdentifier("auth.form.passwordField")
                 }
 
                 // Submit button
@@ -238,6 +244,7 @@ public struct AuthenticationView: View {
             .cornerRadius(PatinaRadius.lg)
         }
         .disabled(!viewModel.isFormValid || viewModel.isLoading)
+        .accessibilityIdentifier("auth.form.primaryButton")
     }
 
     private var submitButtonTitle: String {
@@ -263,6 +270,11 @@ public struct AuthenticationView: View {
             await viewModel.sendMagicLink()
         case .resetPassword:
             await viewModel.resetPassword()
+        }
+
+        // Auto-dismiss on successful authentication
+        if AuthService.shared.isAuthenticated {
+            dismiss()
         }
     }
 
@@ -341,6 +353,7 @@ public struct AuthenticationView: View {
                 }
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundColor(PatinaColors.mochaBrown)
+                .accessibilityIdentifier("auth.form.modeSwitcherButton")
             }
         }
         .padding(.top, PatinaSpacing.md)

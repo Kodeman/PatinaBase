@@ -90,6 +90,18 @@ public enum APIConfiguration {
         }
     }
 
+    /// Client Portal URL (Next.js — hosts Daily Room telemetry endpoints)
+    public static var clientPortalURL: URL {
+        switch DeploymentTarget.current {
+        case .cloud:
+            return URL(string: "https://client.patina.cloud")!
+        case .selfHosted:
+            return URL(string: "https://client.patina.cloud")!
+        case .local:
+            return URL(string: "http://localhost:3002")!
+        }
+    }
+
     /// Search API URL (Typesense)
     public static var searchURL: URL {
         switch DeploymentTarget.current {
@@ -199,6 +211,13 @@ extension APIConfiguration {
         case products
         case product(id: String)
         case searchProducts
+        case recommendations(roomId: String?)
+
+        // Interactions
+        case trackInteraction
+
+        // Style
+        case styleQuiz
 
         // Companion
         case companionContext
@@ -230,6 +249,17 @@ extension APIConfiguration {
             case .products: return "/rest/v1/products?select=*"
             case .product(let id): return "/rest/v1/products?id=eq.\(id)&select=*"
             case .searchProducts: return "/rest/v1/rpc/search_products"
+            case .recommendations(let roomId):
+                if let roomId {
+                    return "/rest/v1/rpc/get_recommendations?room_id=\(roomId)"
+                }
+                return "/rest/v1/rpc/get_recommendations"
+
+            // Interactions
+            case .trackInteraction: return "/rest/v1/interactions"
+
+            // Style
+            case .styleQuiz: return "/rest/v1/rpc/process_style_quiz"
 
             // Companion (Edge Functions)
             case .companionContext: return "/functions/v1/companion-context"
@@ -243,7 +273,8 @@ extension APIConfiguration {
             switch self {
             case .signIn, .signUp, .signOut, .refreshToken, .resetPassword,
                  .createRoom, .uploadRoomScan, .searchProducts,
-                 .companionContext, .companionMessage:
+                 .companionContext, .companionMessage,
+                 .recommendations, .trackInteraction, .styleQuiz:
                 return "POST"
             case .updateProfile:
                 return "PATCH"

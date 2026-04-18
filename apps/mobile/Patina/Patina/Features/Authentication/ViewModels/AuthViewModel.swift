@@ -71,8 +71,9 @@ public final class AuthViewModel {
 
     // MARK: - Initialization
 
-    public init(coordinator: AppCoordinator? = nil) {
+    public init(coordinator: AppCoordinator? = nil, initialMode: AuthMode = .signIn) {
         self.coordinator = coordinator
+        self.mode = initialMode
     }
 
     // MARK: - Validation
@@ -163,6 +164,17 @@ public final class AuthViewModel {
         }
     }
 
+    /// Handle Sign in with Google (OAuth web flow)
+    @MainActor
+    public func handleGoogleSignIn() async {
+        do {
+            try await authService.signInWithGoogle()
+            coordinator?.setAuthState(.authenticated(userId: authService.currentUser?.id.uuidString ?? ""))
+        } catch {
+            // Error is already set in authService
+        }
+    }
+
     /// Handle Sign in with Apple credential
     @MainActor
     public func handleAppleSignIn(result: Result<ASAuthorization, Error>) async {
@@ -188,6 +200,7 @@ public final class AuthViewModel {
         displayName = ""
         successMessage = nil
         showResetSuccess = false
+        authService.clearError()
         magicLinkSent = false
         magicLinkEmail = ""
         magicLinkCooldown = 0
