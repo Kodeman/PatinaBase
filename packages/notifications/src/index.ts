@@ -4,6 +4,8 @@ export { createEdgeFunctionQueue } from './queue';
 export type { NotificationQueue } from './queue';
 export { generateUnsubscribeToken, verifyUnsubscribeToken, generateUnsubscribeUrl } from './tokens';
 export type { UnsubscribeTokenPayload, UnsubscribeTokenResult } from './tokens';
+export { applyUnsubscribeToken } from './unsubscribe';
+export type { UnsubscribeOutcome } from './unsubscribe';
 export { resolveAudience, estimateAudienceSize, snapshotAudience } from './audience';
 export type { AudienceRecipient, AudienceSnapshot } from './audience';
 

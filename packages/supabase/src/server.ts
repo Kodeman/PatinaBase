@@ -3,11 +3,34 @@
  * Provides authenticated server client creation via cookies.
  */
 import { createServerClient as createSSRServerClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import type { Database } from './database.types';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+/**
+ * Create a Supabase client with the service role key. Bypasses RLS — use
+ * only in trusted server contexts (API routes, server actions, cron jobs).
+ *
+ * Useful for flows that must act on a user's row without an active session,
+ * e.g. public unsubscribe tokens or webhook processors.
+ */
+export function createServiceClient() {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) {
+    throw new Error(
+      'SUPABASE_SERVICE_ROLE_KEY is not set — cannot create service client',
+    );
+  }
+  return createClient<Database>(supabaseUrl, serviceKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
 
 /**
  * Create a Supabase server client for use in Server Components and Route Handlers.

@@ -93,3 +93,7 @@ export * as Notifications from './strata-notifications';
 // User management types (organizations, RBAC, GDPR)
 // Exported as namespace to avoid conflicts with user.ts Role/Permission/UserRole
 export * as UserManagement from './user-management';
+
+// Vendor pipeline types (discovery → live partnership, Claude Cowork integration)
+// Exported as namespace to avoid conflict with catalog.ts Vendor
+export * as VendorPipeline from './vendor-pipeline';
