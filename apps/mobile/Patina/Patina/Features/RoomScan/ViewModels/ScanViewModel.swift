@@ -162,6 +162,16 @@ public final class ScanViewModel {
 
     public func didTapFinishPartial() {
         showPauseMenu = false
+        // If the user pressed Finish before a scan actually started (no
+        // captureService.currentScanId, nothing on disk to review), treat it
+        // as an abandonment instead of a zero-data finish. Otherwise the
+        // review step would try to load a manifest that was never written.
+        if captureService.currentScanId == nil || scanProgress <= 0.001 {
+            analytics.track(.scanAbandoned(progress: scanProgress))
+            captureService.stopCapture()
+            completeScan(reason: .userAbandon)
+            return
+        }
         analytics.track(.scanPartialAccepted(progress: scanProgress))
         completeScan(reason: .userFinish)
     }
@@ -185,6 +195,12 @@ public final class ScanViewModel {
 
     /// Handle the 30s-idle "Finish with this" option.
     public func didChooseFinishIdle() {
+        if captureService.currentScanId == nil || scanProgress <= 0.001 {
+            analytics.track(.scanAbandoned(progress: scanProgress))
+            captureService.stopCapture()
+            completeScan(reason: .userAbandon)
+            return
+        }
         analytics.track(.scanPartialAccepted(progress: scanProgress))
         completeScan(reason: .userFinish)
     }

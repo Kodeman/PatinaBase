@@ -82,11 +82,20 @@ struct QuietConversationFlowHost: View {
             if let vm = scanViewModel {
                 ScanThresholdView(viewModel: vm) { scanned, reason in
                     session = scanned
-                    // Use the capture service's current scan id as the review
-                    // bundle id. Falls back to any scan id embedded in the
-                    // captured session, or a fresh UUID, so the review step
-                    // always has a bundle URL to search — the ReviewView
-                    // surfaces its own error state if the manifest is absent.
+                    // An abandoned scan (user tapped Finish before capture
+                    // started, tapped Start Over, or the flow was cancelled)
+                    // has no bundle on disk — route straight home rather than
+                    // presenting a broken review step.
+                    if reason == .userAbandon
+                        || vm.captureService.currentScanId == nil {
+                        #if DEBUG
+                        print("[QuietConversationFlowHost] .threshold → abandon (reason=\(reason)) — skipping review")
+                        #endif
+                        dismiss()
+                        coordinator.navigate(to: .heroFrame)
+                        return
+                    }
+                    // Real scan — resolve the bundle id and show the review.
                     let resolvedScanId = vm.captureService.currentScanId
                         ?? scanned.sessionId
                     reviewScanId = resolvedScanId
