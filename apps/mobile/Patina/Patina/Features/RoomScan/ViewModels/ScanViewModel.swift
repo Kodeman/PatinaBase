@@ -52,6 +52,10 @@ public final class ScanViewModel {
     public private(set) var isPaused: Bool = false
     public var showPauseMenu: Bool = false
 
+    /// Mirror of `captureService.coachingHint` — exposed so the Walk UI can
+    /// render directional guidance toward under-covered areas of the room.
+    public private(set) var coachingHint: CoverageAnalyzer.CoachingHint?
+
     /// Session in progress. Finalized when the scan completes.
     public private(set) var session: RoomScanSession
 
@@ -80,6 +84,7 @@ public final class ScanViewModel {
     private var reportedMilestones: Set<Int> = []
 
     private var progressObservation: AnyCancellable?
+    private var coachingHintObservation: AnyCancellable?
 
     // MARK: - Init
 
@@ -124,6 +129,8 @@ public final class ScanViewModel {
         stopMotionDetection()
         progressObservation?.cancel()
         progressObservation = nil
+        coachingHintObservation?.cancel()
+        coachingHintObservation = nil
 
         if !isComplete {
             analytics.track(.scanAbandoned(progress: scanProgress))
@@ -198,6 +205,13 @@ public final class ScanViewModel {
             .sink { [weak self] progress in
                 self?.handleProgress(progress)
             }
+
+        // Bridge the coverage coaching hint for the UI layer.
+        coachingHintObservation = captureService.$coachingHint
+            .receive(on: RunLoop.main)
+            .sink { [weak self] hint in
+                self?.coachingHint = hint
+            }
     }
 
     private func handleProgress(_ progress: Float) {
@@ -249,7 +263,13 @@ public final class ScanViewModel {
     }
 
     private func checkAutoComplete() {
-        guard scanProgress >= 0.95, !isComplete else {
+        // Composite gate: pure coverage progress alone is no longer enough.
+        // The capture service's CompletionAnalyzer combines coverage + walls
+        // + confidence + lighting + motion into a single recommendation, and
+        // we only auto-complete once that recommendation says we can.
+        let compositeReady =
+            captureService.completionStatus?.recommendation.canComplete == true
+        guard scanProgress >= 0.95, compositeReady, !isComplete else {
             readyToCompleteSince = nil
             return
         }

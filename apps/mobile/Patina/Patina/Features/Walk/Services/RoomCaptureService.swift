@@ -55,11 +55,24 @@ public final class RoomCaptureService: NSObject, ObservableObject {
     /// existing FrameCaptureService; both read ARFrames from the same session.
     @Published public private(set) var posedPhotoService: PosedPhotoService?
 
+    /// Records sampled sceneDepth frames into the bundle's `depth/` directory
+    /// at ~1 Hz while a scan is live. Nil unless the device supports scene
+    /// depth AND `highFidelityDepthEnabled` is true.
+    public private(set) var depthRecorder: DepthFrameRecorder?
+
     /// The scan id for the current bundle (matches `room_scans.id` once uploaded).
     public private(set) var currentScanId: UUID?
 
     /// Whether the user opted into high-fidelity depth capture for this scan.
-    public var highFidelityDepthEnabled: Bool = false
+    /// Defaults to true — gated at `startCapture` by
+    /// `ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth)` so
+    /// non-LiDAR devices quietly fall back to false without failing the scan.
+    public var highFidelityDepthEnabled: Bool = true
+
+    /// Latest coaching hint from CoverageAnalyzer, refreshed as mesh
+    /// anchors flow in. The view layer observes this to render a directional
+    /// cue toward under-covered areas.
+    @Published public private(set) var coachingHint: CoverageAnalyzer.CoachingHint?
 
     // MARK: - Callbacks
 
@@ -193,6 +206,15 @@ public final class RoomCaptureService: NSObject, ObservableObject {
 
         // Drop any anchors from a previous run.
         meshAnchors.removeAll()
+        coachingHint = nil
+
+        // High-fidelity depth gate: only keep the flag set if the running
+        // device advertises sceneDepth. Non-LiDAR devices silently continue
+        // without depth rather than failing the whole scan.
+        if highFidelityDepthEnabled,
+           !ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
+            highFidelityDepthEnabled = false
+        }
 
         // Build the advanced scan bundle + posed-photo service for this run.
         currentScanId = scanId
@@ -211,11 +233,25 @@ public final class RoomCaptureService: NSObject, ObservableObject {
             posed.autoInterval = 2.0
             posed.start(at: scanStartTime ?? Date())
             self.posedPhotoService = posed
+
+            // Depth recorder — best-effort. If it fails to create we just
+            // skip high-fidelity depth capture for this scan.
+            if highFidelityDepthEnabled {
+                self.depthRecorder = try? DepthFrameRecorder(
+                    bundleURL: writer.bundleURL,
+                    scanStartedAt: scanStartTime ?? Date(),
+                    sampleInterval: 1.0
+                )
+            } else {
+                self.depthRecorder = nil
+            }
+
             print("[RoomCaptureService] v2 scan bundle initialized at \(writer.bundleURL.path)")
         } catch {
             print("[RoomCaptureService] ScanBundleWriter init failed: \(error.localizedDescription) — continuing without v2 bundle")
             self.bundleWriter = nil
             self.posedPhotoService = nil
+            self.depthRecorder = nil
         }
 
         // Start hero frame capture (legacy, still useful for in-memory scoring)
@@ -555,11 +591,19 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
             let quality = await self.qualityMonitor.finalMetrics()
             self.qualityMetrics = quality
 
-            // Analyze completion status
+            // Analyze completion status — extend the pure-geometry gate
+            // with ambient lighting + motion snapshots so low-light or
+            // shaky-pan scans can't auto-complete prematurely.
+            let frame = session.arSession.currentFrame
+            let envSnapshot = CaptureEnvironmentSnapshot(
+                lightEstimateLumens: frame?.lightEstimate.map { Double($0.ambientIntensity) } ?? nil,
+                motionGrade: quality.grade
+            )
             let completion = await self.completionAnalyzer.analyze(
                 room: room,
                 coverage: coverage,
-                quality: quality
+                quality: quality,
+                environment: envSnapshot
             )
 
             // Only update if status changed
@@ -602,8 +646,11 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
                 // Score and select the hero frame (legacy, in-memory path)
                 _ = await self.finalizeHeroFrame()
 
-                // Finalize the v2 advanced scan bundle on disk.
-                await self.finalizeBundle(arSession: session.arSession)
+                // Freeze the v2 advanced scan bundle on disk. This stops at
+                // artifact-emission — the manifest is NOT sealed yet, and
+                // `completedAt` stays nil until the Wave-4 review step calls
+                // `finalizeBundleAfterReview(...)`.
+                await self.freezeBundleArtifacts(arSession: session.arSession)
 
                 // Track scan completion
                 let scanDuration = self.scanStartTime.map { Date().timeIntervalSince($0) } ?? 0
@@ -624,12 +671,14 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
         }
     }
 
-    /// Finalize the on-disk scan bundle: CapturedRoom JSON, USDZ, ARWorldMap,
-    /// scene mesh, environment snapshot, sealed manifest. Swallows per-artifact
-    /// failures so the scan flow continues even if (e.g.) the world map isn't
-    /// available yet.
+    /// Freeze the on-disk scan bundle: CapturedRoom JSON, USDZ, ARWorldMap,
+    /// scene mesh, depth archive + index, coverage heatmap, photo thumbnail
+    /// index, environment snapshot. Does NOT seal the manifest — that's the
+    /// job of `finalizeBundleAfterReview(...)` after the user reviews the
+    /// scan. Swallows per-artifact failures so the scan flow continues even
+    /// if (e.g.) the world map isn't available yet.
     @MainActor
-    private func finalizeBundle(arSession: ARSession) async {
+    private func freezeBundleArtifacts(arSession: ARSession) async {
         guard let writer = bundleWriter else { return }
 
         // 1. CapturedRoom parametric JSON (authoritative geometry)
@@ -648,14 +697,10 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
         let anchors = Array(meshAnchors.values)
         _ = SceneMeshExporter.exportToBundle(anchors: anchors, bundle: writer)
 
-        // 5. Environment snapshot
-        let env = ScanManifest.CaptureEnvironment(
-            lightEstimate: arSession.currentFrame?.lightEstimate.map { Double($0.ambientIntensity) } ?? nil,
-            thermalState: String(describing: ProcessInfo.processInfo.thermalState),
-            batteryLevel: Double(UIDevice.current.batteryLevel),
-            motionQuality: String(describing: qualityMetrics?.grade ?? .poor)
-        )
-        try? writer.updateCaptureEnvironment(env)
+        // 5. Flush the depth recorder so its NDJSON index is fully on disk
+        //    before we zip the depth/ directory or register the index as
+        //    an artifact.
+        depthRecorder?.finishSession()
 
         // 6. Score the posed photos and fold scores into manifest entries.
         if let posed = posedPhotoService, !posed.emittedPhotos.isEmpty {
@@ -670,11 +715,188 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
             try? writer.replacePhotos(scored)
         }
 
-        // 7. Finalize manifest (recompute sizes, stamp completedAt, hash
-        //    every artifact so the server-side verifier can round-trip
-        //    x-amz-meta-sha256 against `artifact.sha256`). Kept best-effort
-        //    via `try?` — a hashing failure must not abort the scan flow.
-        _ = try? writer.finalize(hashArtifacts: true)
+        // 7. Coverage heatmap artifact (JSON grid snapshot).
+        var coverageHeatmapPresent = false
+        do {
+            let heatmap = await coverageAnalyzer.currentHeatmap()
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            let data = try encoder.encode(heatmap)
+            _ = try writer.writeArtifact(
+                kind: .coverageHeatmap,
+                data: data,
+                mimeType: "application/json"
+            )
+            coverageHeatmapPresent = true
+        } catch {
+            print("[RoomCaptureService] coverage heatmap write failed: \(error.localizedDescription)")
+        }
+
+        // 8. Depth index + depth.zip — only if the recorder wrote anything.
+        let framesWritten = depthRecorder?.framesWritten ?? 0
+        if framesWritten > 0 {
+            // Register the existing NDJSON file as a depthIndex artifact.
+            registerExistingDepthIndex(writer: writer)
+
+            // Best-effort zip of depth/ → depth.zip using NSFileCoordinator.
+            if let zipURL = try? zipDepthDirectory(at: writer.bundleURL) {
+                do {
+                    let data = try Data(contentsOf: zipURL)
+                    _ = try writer.writeArtifact(
+                        kind: .depthArchive,
+                        data: data,
+                        mimeType: "application/zip"
+                    )
+                } catch {
+                    print("[RoomCaptureService] depth archive register failed: \(error.localizedDescription)")
+                }
+                try? FileManager.default.removeItem(at: zipURL)
+            }
+        }
+
+        // 9. Photo-thumbnails index — register after all photos are locked in.
+        do {
+            try writer.registerPhotoThumbnailsIndex()
+        } catch {
+            print("[RoomCaptureService] photo thumbnails index failed: \(error.localizedDescription)")
+        }
+
+        // 10. Environment snapshot. optical flow mean is left nil — the
+        //     FrameScoringEngine does not yet expose a running mean, and we
+        //     prefer nil over an inaccurate estimate.
+        let env = ScanManifest.CaptureEnvironment(
+            lightEstimate: arSession.currentFrame?.lightEstimate.map { Double($0.ambientIntensity) } ?? nil,
+            thermalState: String(describing: ProcessInfo.processInfo.thermalState),
+            batteryLevel: Double(UIDevice.current.batteryLevel),
+            motionQuality: String(describing: qualityMetrics?.grade ?? .poor),
+            opticalFlowMean: nil,
+            sceneDepthFrameCount: framesWritten > 0 ? framesWritten : nil,
+            coverageHeatmapPresent: coverageHeatmapPresent
+        )
+        try? writer.updateCaptureEnvironment(env)
+
+        // NOTE: manifest is NOT finalized here. `finalizeBundleAfterReview`
+        // writes annotations, applies user hero/order selection, then seals
+        // the manifest via `writer.finalize(hashArtifacts: true)`.
+    }
+
+    /// Apply user-supplied review data (annotations, hero selection, photo
+    /// ordering) and seal the scan bundle manifest. Called by the review
+    /// step — Wave 4 wires the UI that invokes this. Legacy callers that
+    /// skip review can invoke it with empty inputs to seal the bundle as-is.
+    @MainActor
+    public func finalizeBundleAfterReview(
+        annotations: ScanManifest.Annotations,
+        heroPhotoId: UUID? = nil,
+        reorderedPhotoIds: [UUID] = []
+    ) async throws {
+        guard let writer = bundleWriter else { return }
+
+        // 1. Persist annotations.
+        try writer.setAnnotations(annotations)
+
+        // 2. Apply hero selection + reorder to the photos list.
+        var photos = writer.currentManifest().photos
+        if let heroId = heroPhotoId {
+            for i in photos.indices {
+                photos[i].isUserSelectedHero = (photos[i].id == heroId)
+            }
+        }
+        if !reorderedPhotoIds.isEmpty {
+            // Build an index → orderIndex map from the caller's ordering.
+            var orderLookup: [UUID: Int] = [:]
+            for (idx, id) in reorderedPhotoIds.enumerated() {
+                orderLookup[id] = idx
+            }
+            for i in photos.indices {
+                if let idx = orderLookup[photos[i].id] {
+                    photos[i].orderIndex = idx
+                }
+            }
+        }
+        if heroPhotoId != nil || !reorderedPhotoIds.isEmpty {
+            try writer.replacePhotos(photos)
+        }
+
+        // 3. Seal the manifest (recomputes sizes + hashes artifacts).
+        _ = try writer.finalize(hashArtifacts: true)
+
+        // 4. Fire the legacy onScanComplete callback so downstream
+        //    coordinators (ScanCompletionCoordinator, etc.) can proceed.
+        if let room = capturedRoom {
+            onScanComplete?(room)
+        }
+    }
+
+    /// Best-effort: compute the NDJSON index size on disk and upsert it into
+    /// the manifest as a `.depthIndex` artifact. The recorder writes the
+    /// file directly; ScanBundleWriter's public API surface has no "register
+    /// existing file as artifact" helper, so we read + rewrite via
+    /// `writeArtifact` (which preserves the same path via `fileName`).
+    @MainActor
+    private func registerExistingDepthIndex(writer: ScanBundleWriter) {
+        let indexURL = writer.bundleURL.appendingPathComponent("depth/depth_index.ndjson")
+        guard let data = try? Data(contentsOf: indexURL), !data.isEmpty else { return }
+        do {
+            _ = try writer.writeArtifact(
+                kind: .depthIndex,
+                data: data,
+                mimeType: "application/x-ndjson",
+                fileName: "depth/depth_index.ndjson"
+            )
+        } catch {
+            print("[RoomCaptureService] depth index register failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Zip the `<bundleURL>/depth/` directory into a sibling `depth.zip`
+    /// using `NSFileCoordinator`'s `forUploading` option. Returns the URL
+    /// of the coordinator-provided zip in a temp location (caller is
+    /// responsible for cleanup).
+    @MainActor
+    private func zipDepthDirectory(at bundleURL: URL) throws -> URL {
+        let depthDir = bundleURL.appendingPathComponent("depth", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: depthDir.path) else {
+            throw NSError(
+                domain: "RoomCaptureService",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "depth directory missing"]
+            )
+        }
+        let coordinator = NSFileCoordinator()
+        var coordError: NSError?
+        var producedURL: URL?
+        var innerError: Error?
+        coordinator.coordinate(
+            readingItemAt: depthDir,
+            options: [.forUploading],
+            error: &coordError
+        ) { zippedTempURL in
+            // `zippedTempURL` lives in a system temp dir and is valid only
+            // within this block. Move it to our own temp location so the
+            // caller can read it after the closure returns.
+            let destURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("\(UUID().uuidString)-depth.zip")
+            do {
+                if FileManager.default.fileExists(atPath: destURL.path) {
+                    try FileManager.default.removeItem(at: destURL)
+                }
+                try FileManager.default.moveItem(at: zippedTempURL, to: destURL)
+                producedURL = destURL
+            } catch {
+                innerError = error
+            }
+        }
+        if let coordError { throw coordError }
+        if let innerError { throw innerError }
+        guard let url = producedURL else {
+            throw NSError(
+                domain: "RoomCaptureService",
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "zip coordinator returned no URL"]
+            )
+        }
+        return url
     }
 
     nonisolated public func captureSession(_ session: RoomCaptureSession, didProvide instruction: RoomCaptureSession.Instruction) {
@@ -707,26 +929,57 @@ extension RoomCaptureService: ARSessionDelegate {
             // samples + user shutters are written to disk with full pose
             // metadata. No-op if posedPhotoService is nil (bundle failed).
             self.posedPhotoService?.consume(frame: frame)
+
+            // Sample scene-depth frames into the bundle at ~1 Hz. The
+            // recorder self-throttles on `sampleInterval`, so calling it
+            // every AR frame is fine. Correlate to the most-recent posed
+            // photo if it was emitted within ±0.15s of this frame.
+            if let recorder = self.depthRecorder {
+                let scanStart = self.scanStartTime ?? Date()
+                let nowRel = Date().timeIntervalSince(scanStart)
+                var associatedPhotoId: UUID?
+                if let lastPhoto = self.posedPhotoService?.emittedPhotos.last,
+                   abs(nowRel - lastPhoto.timestampSeconds) <= 0.15 {
+                    associatedPhotoId = lastPhoto.id
+                }
+                recorder.consume(frame: frame, associatedPhotoId: associatedPhotoId)
+            }
         }
     }
 
     nonisolated public func session(_ session: ARSession, didAdd anchors: [ARAnchor]) {
         let newMeshes = anchors.compactMap { $0 as? ARMeshAnchor }
         guard !newMeshes.isEmpty else { return }
+        // Anchor origins in world space — cheap centroid approximation that
+        // avoids iterating anchor.geometry.vertices on the main actor.
+        let centroids: [SIMD3<Float>] = newMeshes.map { anchor in
+            let c = anchor.transform.columns.3
+            return SIMD3<Float>(c.x, c.y, c.z)
+        }
         Task { @MainActor in
             for anchor in newMeshes {
                 self.meshAnchors[anchor.identifier] = anchor
             }
+            await self.coverageAnalyzer.ingestMeshAnchorCentroids(centroids)
+            let hint = await self.coverageAnalyzer.nextCoachingHint()
+            self.coachingHint = hint
         }
     }
 
     nonisolated public func session(_ session: ARSession, didUpdate anchors: [ARAnchor]) {
         let updatedMeshes = anchors.compactMap { $0 as? ARMeshAnchor }
         guard !updatedMeshes.isEmpty else { return }
+        let centroids: [SIMD3<Float>] = updatedMeshes.map { anchor in
+            let c = anchor.transform.columns.3
+            return SIMD3<Float>(c.x, c.y, c.z)
+        }
         Task { @MainActor in
             for anchor in updatedMeshes {
                 self.meshAnchors[anchor.identifier] = anchor
             }
+            await self.coverageAnalyzer.ingestMeshAnchorCentroids(centroids)
+            let hint = await self.coverageAnalyzer.nextCoachingHint()
+            self.coachingHint = hint
         }
     }
 
