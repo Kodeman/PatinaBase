@@ -53,6 +53,7 @@ public final class SyncQueueItem {
 
     /// Optional USDZ model data
     /// Deprecated in v2 — prefer `bundlePath` pointing at a `RoomScanPackage`.
+    @available(*, deprecated, message: "v1 USDZ-blob sync path. New scans use RoomScanPackage.bundlePath — see v2/v3 pipeline.")
     public var usdzData: Data?
 
     /// Optional thumbnail image data
@@ -121,6 +122,11 @@ public final class SyncQueueItem {
         thumbnailData: Data? = nil,
         bundlePath: String? = nil
     ) {
+        // v1 (usdzData blob) and v2 (bundlePath on-disk package) sync items
+        // are never valid at the same time. New scans always go through v2;
+        // the usdzData parameter is retained only so legacy callers still
+        // compile until Wave 6 rewrites their call sites.
+        assert(bundlePath != nil || usdzData == nil, "mixing v1 and v2 sync queue items is unsupported")
         self.id = id
         self.operationTypeRaw = operationType.rawValue
         self.roomScanId = roomScanId

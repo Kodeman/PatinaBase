@@ -248,10 +248,19 @@ public final class RoomCaptureService: NSObject, ObservableObject {
 
             print("[RoomCaptureService] v2 scan bundle initialized at \(writer.bundleURL.path)")
         } catch {
-            print("[RoomCaptureService] ScanBundleWriter init failed: \(error.localizedDescription) — continuing without v2 bundle")
+            // v2-only scan path: if the on-disk bundle cannot be prepared the
+            // scan is aborted outright instead of silently falling back to the
+            // v1 USDZ-only pipeline. The legacy fields remain as stored
+            // properties so historical RoomModel rows still hydrate, but we
+            // never create a new scan without a bundle.
+            print("[RoomCaptureService] ScanBundleWriter init failed: \(error.localizedDescription) — aborting scan")
             self.bundleWriter = nil
             self.posedPhotoService = nil
             self.depthRecorder = nil
+            let message = "Unable to prepare scan workspace — please free up some storage or restart the app."
+            self.errorMessage = message
+            self.onError?(error)
+            return
         }
 
         // Start hero frame capture (legacy, still useful for in-memory scoring)

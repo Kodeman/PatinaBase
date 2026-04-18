@@ -356,6 +356,7 @@ struct WalkView: View {
     ///      the server-side `remoteId` / `remoteScanId`. On failure, mark the
     ///      local row as `.failed` and hand the raw payload to the persistent
     ///      `SyncQueueItem` store so it gets retried later.
+    @available(*, deprecated, message: "Use RoomScan flow via AppCoordinator.scanReview — v1 WalkView is kept only for legacy rows.")
     private func syncRoomScan(roomData: FirstWalkRoomData, styleSignals: FirstWalkStyleSignals) async {
         isSyncing = true
         syncError = nil
