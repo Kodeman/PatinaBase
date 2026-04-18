@@ -44,6 +44,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				App/Configuration/Secrets.example.swift,
 			);
 			target = CBB2D0152F1D20F7007686CD /* Patina */;
 		};
@@ -236,6 +237,7 @@
 			packageReferences = (
 				CBB2D0C12F1D65F8007686CD /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				CBA446952F6C5997005441C3 /* XCRemoteSwiftPackageReference "posthog-ios" */,
+				CBC32DEA2F8687DE006575E7 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = CBB2D0172F1D20F7007686CD /* Products */;
@@ -689,6 +691,14 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 2.5.1;
+			};
+		};
+		CBC32DEA2F8687DE006575E7 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SimplyDanny/SwiftLintPlugins";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.63.2;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
