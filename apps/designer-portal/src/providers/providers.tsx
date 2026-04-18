@@ -10,11 +10,14 @@ import { ReactNode } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { queryClient } from '@/lib/react-query';
+import { PostHogAnalyticsProvider } from '@/lib/analytics/PostHogProvider';
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
+      <PostHogAnalyticsProvider>
+        {children}
+      </PostHogAnalyticsProvider>
       <div className="hidden md:block">
         <ReactQueryDevtools initialIsOpen={false} />
       </div>

@@ -8,6 +8,7 @@ import { getAccountsForPortal } from '@patina/types';
 import Link from 'next/link';
 import { QRLoginDisplay } from '@/components/auth/QRLoginDisplay';
 import { StrataMark } from '@/components/portal/strata-mark';
+import { authEvents } from '@/lib/analytics/events';
 
 const ERROR_MESSAGES: Record<string, { title: string; description: string }> = {
   OAuthSignin: {
@@ -111,6 +112,8 @@ function SignInContent() {
       if (oauthError) {
         setFormError(oauthError.message || `Failed to sign in with ${provider}`);
         setOauthLoading(null);
+      } else {
+        authEvents.login(provider);
       }
     } catch (err) {
       console.error(`[OAuth SignIn] ${provider} exception:`, err);
@@ -133,6 +136,7 @@ function SignInContent() {
         setFormError('Invalid email or password');
         setIsLoading(false);
       } else {
+        authEvents.login('credentials');
         safeRedirect(callbackUrl);
       }
     } catch (err) {
@@ -157,6 +161,7 @@ function SignInContent() {
         setDevAuthError('Login failed. Check that the user-management service is running.');
         setIsLoading(false);
       } else {
+        authEvents.login('dev');
         safeRedirect(callbackUrl);
       }
     } catch (err) {

@@ -330,6 +330,12 @@ importers:
       '@patina/design-system':
         specifier: workspace:*
         version: link:../../packages/patina-design-system
+      '@patina/notifications':
+        specifier: workspace:*
+        version: link:../../packages/notifications
+      '@patina/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@patina/supabase':
         specifier: workspace:*
         version: link:../../packages/supabase
@@ -526,6 +532,9 @@ importers:
       '@patina/email':
         specifier: workspace:*
         version: link:../../packages/email
+      '@patina/notifications':
+        specifier: workspace:*
+        version: link:../../packages/notifications
       '@patina/shared':
         specifier: workspace:*
         version: link:../../packages/shared

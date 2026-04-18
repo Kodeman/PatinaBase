@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@patina/supabase';
 import { AuthForm, type AuthFormField } from '@patina/design-system';
 import Link from 'next/link';
+import { authEvents } from '@/lib/analytics/events';
 
 function SignUpContent() {
   const router = useRouter();
@@ -103,6 +104,8 @@ function SignUpContent() {
       if (authError) {
         throw new Error(authError.message || 'Registration failed');
       }
+
+      authEvents.signup('credentials');
 
       setSuccess('Account created successfully! Please check your email to verify your account.');
 
