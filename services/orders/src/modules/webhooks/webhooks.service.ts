@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { v4 as uuidv4 } from 'uuid';
 import { Decimal } from '../../generated/prisma-client/runtime/library';
+import { NotificationDispatchClient } from '../../infrastructure/notification-dispatch.client';
 
 @Injectable()
 export class WebhooksService {
@@ -14,6 +15,7 @@ export class WebhooksService {
     private configService: ConfigService,
     @Inject('STRIPE_CLIENT') private stripe: Stripe,
     @Inject('EVENTS_SERVICE') private eventsService: any,
+    private notifications: NotificationDispatchClient,
   ) {}
 
   /**
@@ -234,6 +236,54 @@ export class WebhooksService {
         customerEmail: paymentIntent.receipt_email,
       },
     });
+
+    // Fire transactional emails via notification-dispatch (edge function
+    // handles template rendering, Resend send, retry, and logging).
+    if (order.userId) {
+      const totalFormatted = formatCurrency(order.total.toString(), order.currency);
+      const amountFormatted = formatCurrency(
+        new Decimal(paymentIntent.amount).div(100).toString(),
+        paymentIntent.currency,
+      );
+      const shippingAddress = order.shippingAddressId
+        ? await this.prisma.address.findUnique({
+            where: { id: order.shippingAddressId },
+          })
+        : null;
+
+      await this.notifications.enqueue({
+        user_id: order.userId,
+        type: 'order_confirmation',
+        channel: 'email',
+        template_id: 'order-confirmation',
+        data: {
+          orderNumber: order.orderNumber,
+          totalFormatted,
+          shippingAddress: formatShippingAddress(shippingAddress),
+          orderUrl: buildOrderUrl(this.configService, order.id),
+        },
+        priority: 'high',
+      });
+
+      await this.notifications.enqueue({
+        user_id: order.userId,
+        type: 'payment_receipt',
+        channel: 'email',
+        template_id: 'payment-receipt',
+        data: {
+          orderNumber: order.orderNumber,
+          amountFormatted,
+          paidAt: new Date().toLocaleString('en-US', {
+            dateStyle: 'long',
+            timeStyle: 'short',
+          }),
+          cardBrand: charge?.payment_method_details?.card?.brand ?? '',
+          cardLast4: charge?.payment_method_details?.card?.last4 ?? '',
+          paymentIntentId: paymentIntent.id,
+        },
+        priority: 'normal',
+      });
+    }
   }
 
   /**
@@ -561,4 +611,36 @@ export class WebhooksService {
       },
     });
   }
+}
+
+// ─── Helpers for email formatting ──────────────────────────────────────
+
+function formatCurrency(amount: string, currency: string): string {
+  const num = Number(amount);
+  if (!Number.isFinite(num)) return amount;
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency.toUpperCase(),
+    }).format(num);
+  } catch {
+    return `${currency.toUpperCase()} ${num.toFixed(2)}`;
+  }
+}
+
+function formatShippingAddress(addr: any): string {
+  if (!addr || typeof addr !== 'object') return '';
+  const lines = [
+    addr.name,
+    addr.line1,
+    addr.line2,
+    [addr.city, addr.state, addr.postal_code].filter(Boolean).join(', '),
+    addr.country,
+  ].filter(Boolean);
+  return lines.join(' · ');
+}
+
+function buildOrderUrl(config: ConfigService, orderId: string): string {
+  const base = config.get<string>('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud';
+  return `${base.replace(/\/$/, '')}/orders/${orderId}`;
 }

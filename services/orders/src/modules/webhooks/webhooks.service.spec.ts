@@ -4,6 +4,7 @@ import { PrismaClient } from '../../generated/prisma-client';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { Decimal } from '../../generated/prisma-client/runtime/library';
+import { NotificationDispatchClient } from '../../infrastructure/notification-dispatch.client';
 
 describe('WebhooksService', () => {
   let service: WebhooksService;
@@ -32,10 +33,17 @@ describe('WebhooksService', () => {
     auditLog: {
       create: jest.fn(),
     },
+    address: {
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
     idempotencyKey: {
       findUnique: jest.fn(),
       create: jest.fn(),
     },
+  };
+
+  const mockNotificationDispatch = {
+    enqueue: jest.fn().mockResolvedValue({ success: true }),
   };
 
   const mockStripe = {
@@ -74,6 +82,10 @@ describe('WebhooksService', () => {
         {
           provide: 'EVENTS_SERVICE',
           useValue: mockEventsService,
+        },
+        {
+          provide: NotificationDispatchClient,
+          useValue: mockNotificationDispatch,
         },
       ],
     }).compile();
