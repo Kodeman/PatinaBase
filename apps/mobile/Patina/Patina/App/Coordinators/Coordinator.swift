@@ -59,6 +59,7 @@ public enum AppRoute: Hashable {
     // Quiet Conversation — Room Scan & Style Discovery redesign (v2.0)
     case scanThreshold             // Screen 01: camera fade-in
     case scanWalk(sessionId: UUID) // Screens 02-06: the active walk
+    case scanReview(scanId: UUID)  // Screen 08: user review before finalize (Wave 4)
     case scanSoftLanding(sessionId: UUID)  // Screen 09: the transition
     case scanConversation(sessionId: UUID) // Movement 2: 5-question container
     case scanReveal(profileId: String)     // Screen 16: the Reveal
@@ -113,6 +114,7 @@ public enum AppRoute: Hashable {
         case .floorPlanPreview: return "Floor Plan"
         case .scanThreshold: return "Scan"
         case .scanWalk: return "Walking"
+        case .scanReview: return "Review"
         case .scanSoftLanding: return "Transition"
         case .scanConversation: return "Style Discovery"
         case .scanReveal: return "Your Style"

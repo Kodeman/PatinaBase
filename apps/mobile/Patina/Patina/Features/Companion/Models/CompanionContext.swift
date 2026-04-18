@@ -179,6 +179,8 @@ public struct CompanionContext: Equatable {
                 return "Walking: \(Int(progress * 100))% complete"
             }
             return "Walking your room"
+        case .scanReview:
+            return "Reviewing your scan"
         case .scanSoftLanding:
             return "Making space to talk"
         case .scanConversation:
@@ -256,6 +258,8 @@ public struct CompanionContext: Equatable {
             return "house"
         case .scanThreshold, .scanWalk:
             return "figure.walk"
+        case .scanReview:
+            return "checkmark.seal"
         case .scanSoftLanding:
             return "leaf"
         case .scanConversation:

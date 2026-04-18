@@ -207,7 +207,7 @@ public final class AppCoordinator: Coordinator {
             navigationPath.append(route)
             updateContext(for: route)
 
-        case .scanThreshold, .scanWalk, .scanSoftLanding,
+        case .scanThreshold, .scanWalk, .scanReview, .scanSoftLanding,
              .scanConversation, .scanReveal, .scanFloorPlan,
              .scanFallbackEntry:
             navigationPath.append(route)
@@ -261,7 +261,7 @@ public final class AppCoordinator: Coordinator {
         case .authentication, .settings, .designServicesRequest, .qrScanner, .qrApproval:
             break
 
-        case .scanThreshold, .scanWalk, .scanSoftLanding,
+        case .scanThreshold, .scanWalk, .scanReview, .scanSoftLanding,
              .scanConversation, .scanReveal, .scanFloorPlan,
              .scanFallbackEntry:
             companionContext.viewingPiece = nil

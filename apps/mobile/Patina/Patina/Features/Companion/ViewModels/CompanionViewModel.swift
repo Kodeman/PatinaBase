@@ -212,6 +212,7 @@ public final class CompanionViewModel {
         case .moveItem: return "move_item"
         case .scanThreshold: return "scan_threshold"
         case .scanWalk: return "scan_walk"
+        case .scanReview: return "scan_review"
         case .scanSoftLanding: return "scan_soft_landing"
         case .scanConversation: return "scan_conversation"
         case .scanReveal: return "scan_reveal"

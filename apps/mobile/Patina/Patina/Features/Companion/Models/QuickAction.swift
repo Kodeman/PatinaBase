@@ -144,7 +144,7 @@ public enum QuickActionFactory {
         case .yourSpaces, .roomProject, .roomSettings, .crossRoom,
              .newRoom, .manualRoomEntry, .moveItem:
             return []
-        case .scanThreshold, .scanWalk, .scanSoftLanding,
+        case .scanThreshold, .scanWalk, .scanReview, .scanSoftLanding,
              .scanConversation, .scanReveal, .scanFloorPlan,
              .scanFallbackEntry:
             // Quiet Conversation flow owns its own controls — Companion stays quiet.

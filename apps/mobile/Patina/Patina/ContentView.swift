@@ -389,6 +389,9 @@ struct ContentView: View {
         case .scanWalk:
             EmptyView()    // handled inline via quietConversationEntry state
 
+        case .scanReview:
+            EmptyView()    // handled inline via quietConversationEntry state
+
         case .scanSoftLanding:
             EmptyView()    // handled inline via quietConversationEntry state
 
