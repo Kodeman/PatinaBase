@@ -43,8 +43,8 @@
 		CBB2D51B2F26AF69007686CD /* Exceptions for "Patina" folder in "Patina" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Info.plist,
 				App/Configuration/Secrets.example.swift,
+				Info.plist,
 			);
 			target = CBB2D0152F1D20F7007686CD /* Patina */;
 		};

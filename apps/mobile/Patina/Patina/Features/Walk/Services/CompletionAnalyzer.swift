@@ -9,6 +9,36 @@
 import Foundation
 import RoomPlan
 
+/// Snapshot of ambient capture conditions used to extend completion gating
+/// beyond pure geometry — lighting and device-motion stability.
+public struct CaptureEnvironmentSnapshot: Sendable, Equatable {
+    /// Estimated ambient light in lumens. `nil` when no estimate is available.
+    public let lightEstimateLumens: Double?
+    /// Current motion quality grade. `nil` when no quality data has been collected yet.
+    public let motionGrade: QualityMonitor.QualityGrade?
+
+    public nonisolated init(
+        lightEstimateLumens: Double? = nil,
+        motionGrade: QualityMonitor.QualityGrade? = nil
+    ) {
+        self.lightEstimateLumens = lightEstimateLumens
+        self.motionGrade = motionGrade
+    }
+}
+
+/// Same-module ordering helper for `QualityMonitor.QualityGrade`.
+/// Higher rank = better quality. Used by the composite completion gate.
+extension QualityMonitor.QualityGrade {
+    internal nonisolated var rawRank: Int {
+        switch self {
+        case .excellent: return 3
+        case .good: return 2
+        case .acceptable: return 1
+        case .poor: return 0
+        }
+    }
+}
+
 /// Analyzes scan completion status and provides recommendations
 public actor CompletionAnalyzer {
 
@@ -17,7 +47,7 @@ public actor CompletionAnalyzer {
     /// Completion criteria thresholds
     public struct CompletionCriteria: Sendable {
         /// Minimum coverage to consider scan valid
-        public static let minimumCoverage: Float = 0.85
+        public static let minimumCoverage: Float = 0.75
 
         /// Minimum number of walls for valid scan
         public static let minimumWalls: Int = 3
@@ -33,6 +63,24 @@ public actor CompletionAnalyzer {
 
         /// Coverage for "excellent" scan
         public static let excellentCoverage: Float = 0.97
+
+        // Instance-level tunables for the composite completion gate.
+        // Values <= 0 (for lumens) disable the lighting gate.
+
+        /// Minimum estimated ambient light (lumens) required to consider
+        /// a scan complete. Defaults to `40.0`. Set `<= 0` to disable the gate.
+        public var minimumLightingLumens: Double
+
+        /// Minimum acceptable motion-quality grade. Defaults to `.acceptable`.
+        public var motionQualityMinimum: QualityMonitor.QualityGrade
+
+        public init(
+            minimumLightingLumens: Double = 40.0,
+            motionQualityMinimum: QualityMonitor.QualityGrade = .acceptable
+        ) {
+            self.minimumLightingLumens = minimumLightingLumens
+            self.motionQualityMinimum = motionQualityMinimum
+        }
     }
 
     /// Recommendation for what to do next
@@ -78,6 +126,8 @@ public actor CompletionAnalyzer {
         case lowCoverage
         case insufficientWalls(current: Int, required: Int)
         case lowConfidence
+        case insufficientLighting(lumens: Double)
+        case excessiveMotion(grade: QualityMonitor.QualityGrade)
     }
 
     /// Complete status result
@@ -117,12 +167,18 @@ public actor CompletionAnalyzer {
     ///   - room: The CapturedRoom from RoomPlan
     ///   - coverage: Coverage analysis result
     ///   - quality: Quality metrics result
+    ///   - environment: Optional ambient capture snapshot (lighting, motion).
+    ///                  Missing signals pass by default — the gate is additive,
+    ///                  not punitive, when data is unavailable.
     /// - Returns: Completion status with recommendation
     public func analyze(
         room: CapturedRoom,
         coverage: CoverageAnalyzer.CoverageResult,
-        quality: QualityMonitor.QualityMetrics
+        quality: QualityMonitor.QualityMetrics,
+        environment: CaptureEnvironmentSnapshot = .init()
     ) async -> CompletionStatus {
+
+        let criteria = CompletionCriteria()
 
         // Check if minimum requirements are met
         let meetsMinimumCoverage = coverage.overallCoverage >= CompletionCriteria.minimumCoverage
@@ -130,12 +186,33 @@ public actor CompletionAnalyzer {
         let meetsMinimumConfidence = quality.averageConfidence >= CompletionCriteria.minimumConfidence
         let meetsMinimumFloor = coverage.floorCoverage >= CompletionCriteria.minimumFloorCoverage
 
-        let meetsMinimum = meetsMinimumCoverage && meetsMinimumWalls && meetsMinimumConfidence && meetsMinimumFloor
+        // Lighting gate — pass if no estimate is available or the gate is disabled.
+        let meetsLighting: Bool
+        if let lumens = environment.lightEstimateLumens, criteria.minimumLightingLumens > 0 {
+            meetsLighting = lumens >= criteria.minimumLightingLumens
+        } else {
+            meetsLighting = true
+        }
 
-        // Determine recommendation based on coverage and meeting minimum
+        // Motion gate — pass if no motion grade has been sampled yet.
+        let meetsMotion: Bool
+        if let grade = environment.motionGrade {
+            meetsMotion = grade.rawRank >= criteria.motionQualityMinimum.rawRank
+        } else {
+            meetsMotion = true
+        }
+
+        let meetsComposite = meetsMinimumCoverage
+            && meetsMinimumWalls
+            && meetsMinimumConfidence
+            && meetsMinimumFloor
+            && meetsLighting
+            && meetsMotion
+
+        // Determine recommendation based on coverage and composite gate
         let recommendation = determineRecommendation(
             coverage: coverage.overallCoverage,
-            meetsMinimum: meetsMinimum
+            meetsMinimum: meetsComposite
         )
 
         // Identify what's missing
@@ -143,13 +220,16 @@ public actor CompletionAnalyzer {
             room: room,
             coverage: coverage,
             quality: quality,
+            environment: environment,
             meetsMinimumCoverage: meetsMinimumCoverage,
             meetsMinimumWalls: meetsMinimumWalls,
-            meetsMinimumConfidence: meetsMinimumConfidence
+            meetsMinimumConfidence: meetsMinimumConfidence,
+            meetsLighting: meetsLighting,
+            meetsMotion: meetsMotion
         )
 
         let status = CompletionStatus(
-            isComplete: meetsMinimum,
+            isComplete: meetsComposite,
             coveragePercentage: coverage.overallCoverage,
             qualityGrade: quality.grade,
             recommendation: recommendation,
@@ -194,9 +274,12 @@ public actor CompletionAnalyzer {
         room: CapturedRoom,
         coverage: CoverageAnalyzer.CoverageResult,
         quality: QualityMonitor.QualityMetrics,
+        environment: CaptureEnvironmentSnapshot,
         meetsMinimumCoverage: Bool,
         meetsMinimumWalls: Bool,
-        meetsMinimumConfidence: Bool
+        meetsMinimumConfidence: Bool,
+        meetsLighting: Bool,
+        meetsMotion: Bool
     ) -> [MissingArea] {
         var missing: [MissingArea] = []
 
@@ -226,6 +309,16 @@ public actor CompletionAnalyzer {
             missing.append(.lowConfidence)
         }
 
+        // Lighting — only reportable when we actually have an estimate.
+        if !meetsLighting, let lumens = environment.lightEstimateLumens {
+            missing.append(.insufficientLighting(lumens: lumens))
+        }
+
+        // Motion — only reportable when we have a grade sample.
+        if !meetsMotion, let grade = environment.motionGrade {
+            missing.append(.excessiveMotion(grade: grade))
+        }
+
         return missing
     }
 }
@@ -249,6 +342,10 @@ extension CompletionAnalyzer {
                 return "I'm only seeing \(current) wall\(current == 1 ? "" : "s"). Can you show me \(remaining) more?"
             case .lowConfidence:
                 return "Some areas are a bit unclear. Moving more slowly might help."
+            case .insufficientLighting:
+                return "The room's a bit dim — mind turning on a light?"
+            case .excessiveMotion:
+                return "I'm having trouble tracking your motion. Mind slowing your sweeps?"
             }
         }
 

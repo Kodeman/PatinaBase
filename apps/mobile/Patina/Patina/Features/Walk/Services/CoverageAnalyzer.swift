@@ -77,10 +77,50 @@ public actor CoverageAnalyzer {
         }
     }
 
+    /// Serializable snapshot of the coverage heatmap grid.
+    /// Wave 3 serializes this to JSON for persistence / debugging.
+    public struct CoverageHeatmap: Codable, Equatable, Sendable {
+        public let schemaVersion: Int
+        public let gridWidth: Int
+        public let gridHeight: Int
+        public let bounds: Bounds
+        public let cells: [[Float]]   // [gridHeight][gridWidth], values in [0, 1]
+
+        public struct Bounds: Codable, Equatable, Sendable {
+            public let minX: Float
+            public let maxX: Float
+            public let minZ: Float
+            public let maxZ: Float
+        }
+    }
+
+    /// A directional coaching hint suggesting where the user should look next.
+    public struct CoachingHint: Sendable, Equatable {
+        public enum Direction: String, Sendable, CaseIterable {
+            case northeast, north, northwest, east, west, southeast, south, southwest, up, down
+        }
+        public let direction: Direction
+        public let message: String
+    }
+
     // MARK: - Private State
 
     private var lastAnalysis: CoverageResult = .zero
     private var expectedWallCount: Int = 4 // Default for rectangular room
+
+    // MARK: - Heatmap Grid State
+
+    private let gridWidth: Int = 8
+    private let gridHeight: Int = 8
+    private var cells: [[Float]] = Array(
+        repeating: Array(repeating: 0, count: 8),
+        count: 8
+    )
+    private var gridBoundsMinX: Float = .greatestFiniteMagnitude
+    private var gridBoundsMaxX: Float = -.greatestFiniteMagnitude
+    private var gridBoundsMinZ: Float = .greatestFiniteMagnitude
+    private var gridBoundsMaxZ: Float = -.greatestFiniteMagnitude
+    private var hasAnyCentroid: Bool = false
 
     // MARK: - Public Methods
 
@@ -130,6 +170,15 @@ public actor CoverageAnalyzer {
     public func reset() {
         lastAnalysis = .zero
         expectedWallCount = 4
+        cells = Array(
+            repeating: Array(repeating: 0, count: gridWidth),
+            count: gridHeight
+        )
+        gridBoundsMinX = .greatestFiniteMagnitude
+        gridBoundsMaxX = -.greatestFiniteMagnitude
+        gridBoundsMinZ = .greatestFiniteMagnitude
+        gridBoundsMaxZ = -.greatestFiniteMagnitude
+        hasAnyCentroid = false
     }
 
     /// Update expected wall count based on room shape
@@ -137,7 +186,155 @@ public actor CoverageAnalyzer {
         expectedWallCount = max(3, count)
     }
 
+    // MARK: - Heatmap Ingest
+
+    /// Ingest a batch of mesh-anchor centroids in world space. Each centroid
+    /// contributes +0.1 (saturating at 1.0) to the grid cell covering its (X, Z).
+    ///
+    /// Bounds expand on each call to accommodate new centroids. On the very
+    /// first ingest the bounds collapse to a single point; subsequent ingests
+    /// establish a usable range before any mapping happens.
+    public func ingestMeshAnchorCentroids(_ centroids: [SIMD3<Float>]) {
+        guard !centroids.isEmpty else { return }
+
+        // Expand bounds to include every centroid.
+        for c in centroids {
+            if c.x < gridBoundsMinX { gridBoundsMinX = c.x }
+            if c.x > gridBoundsMaxX { gridBoundsMaxX = c.x }
+            if c.z < gridBoundsMinZ { gridBoundsMinZ = c.z }
+            if c.z > gridBoundsMaxZ { gridBoundsMaxZ = c.z }
+        }
+
+        let spanX = gridBoundsMaxX - gridBoundsMinX
+        let spanZ = gridBoundsMaxZ - gridBoundsMinZ
+
+        // Guard against a degenerate (zero-area) span — wait for more data.
+        guard spanX > 0, spanZ > 0 else {
+            hasAnyCentroid = true
+            return
+        }
+
+        let wF = Float(gridWidth)
+        let hF = Float(gridHeight)
+
+        for c in centroids {
+            let colRaw = Int(((c.x - gridBoundsMinX) / spanX) * wF)
+            let rowRaw = Int(((c.z - gridBoundsMinZ) / spanZ) * hF)
+            let col = min(max(colRaw, 0), gridWidth - 1)
+            let row = min(max(rowRaw, 0), gridHeight - 1)
+            let next = cells[row][col] + 0.1
+            cells[row][col] = next > 1.0 ? 1.0 : next
+        }
+        hasAnyCentroid = true
+    }
+
+    /// Snapshot the current heatmap grid. Returns zero-bounds if no centroids
+    /// have been ingested yet.
+    public func currentHeatmap() -> CoverageHeatmap {
+        let bounds: CoverageHeatmap.Bounds
+        if hasAnyCentroid,
+           gridBoundsMinX.isFinite,
+           gridBoundsMaxX.isFinite,
+           gridBoundsMinZ.isFinite,
+           gridBoundsMaxZ.isFinite {
+            bounds = CoverageHeatmap.Bounds(
+                minX: gridBoundsMinX,
+                maxX: gridBoundsMaxX,
+                minZ: gridBoundsMinZ,
+                maxZ: gridBoundsMaxZ
+            )
+        } else {
+            bounds = CoverageHeatmap.Bounds(minX: 0, maxX: 0, minZ: 0, maxZ: 0)
+        }
+
+        return CoverageHeatmap(
+            schemaVersion: 1,
+            gridWidth: gridWidth,
+            gridHeight: gridHeight,
+            bounds: bounds,
+            cells: cells
+        )
+    }
+
+    /// Suggest the next area the user should pan toward, or nil if it's too
+    /// early (mean coverage < 0.3) or the grid is already saturated
+    /// (no cell ≤ 0.1).
+    public func nextCoachingHint() -> CoachingHint? {
+        guard hasAnyCentroid else { return nil }
+
+        // Compute mean and find the minimum-valued cell.
+        var total: Float = 0
+        var count: Float = 0
+        var minValue: Float = .greatestFiniteMagnitude
+        var minRow: Int = 0
+        var minCol: Int = 0
+
+        for row in 0..<gridHeight {
+            for col in 0..<gridWidth {
+                let v = cells[row][col]
+                total += v
+                count += 1
+                if v < minValue {
+                    minValue = v
+                    minRow = row
+                    minCol = col
+                }
+            }
+        }
+
+        guard count > 0 else { return nil }
+        let mean = total / count
+
+        // Only coach once the user has meaningful coverage, and only if there
+        // is still a clearly under-covered cell.
+        guard mean >= 0.3, minValue <= 0.1 else { return nil }
+
+        let direction = directionForCell(row: minRow, col: minCol)
+        return CoachingHint(direction: direction, message: message(for: direction))
+    }
+
     // MARK: - Private Methods
+
+    /// Map a grid cell to a compass direction using a 3×3 region split.
+    /// Row 0 is north (far Z), row gridHeight-1 is south (near Z).
+    /// Col 0 is west (min X), col gridWidth-1 is east (max X).
+    /// Center cell returns `.up` (suggest a ceiling sweep — no strong bearing).
+    private func directionForCell(row: Int, col: Int) -> CoachingHint.Direction {
+        let rowThird = Int((Float(row) / Float(gridHeight)) * 3.0)
+        let colThird = Int((Float(col) / Float(gridWidth)) * 3.0)
+        let r = min(max(rowThird, 0), 2)
+        let c = min(max(colThird, 0), 2)
+
+        switch (r, c) {
+        case (0, 0): return .northwest
+        case (0, 1): return .north
+        case (0, 2): return .northeast
+        case (1, 0): return .west
+        case (1, 1): return .up       // center → ceiling sweep
+        case (1, 2): return .east
+        case (2, 0): return .southwest
+        case (2, 1): return .south
+        case (2, 2): return .southeast
+        default:     return .up
+        }
+    }
+
+    /// Short, calm whisper-style copy for each direction.
+    private func message(for direction: CoachingHint.Direction) -> String {
+        switch direction {
+        case .northeast: return "Drift toward the northeast corner."
+        case .north:     return "Turn gently north."
+        case .northwest: return "Drift toward the northwest corner."
+        case .east:      return "Pan slowly east."
+        case .west:      return "Pan slowly west."
+        case .southeast: return "Drift toward the southeast corner."
+        case .south:     return "Turn gently south."
+        case .southwest: return "Drift toward the southwest corner."
+        case .up:        return "Sweep upward to cover the ceiling."
+        case .down:      return "Glance down to capture the floor."
+        }
+    }
+
 
     private func calculateWallCoverage(_ walls: [CapturedRoom.Surface]) -> Float {
         guard !walls.isEmpty else { return 0 }

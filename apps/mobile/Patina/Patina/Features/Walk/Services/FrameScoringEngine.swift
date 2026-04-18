@@ -10,6 +10,7 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import UIKit
 import Accelerate
+import Vision
 
 /// Analyzes captured frames and computes quality scores for hero frame selection.
 /// Uses Core Image for GPU-accelerated image analysis.
@@ -33,6 +34,10 @@ public actor FrameScoringEngine {
     private let motionIdealThreshold: Float = 0.1
     private let motionRejectThreshold: Float = 0.5
 
+    /// Optical-flow mean magnitude above which a frame is treated as fully motion-blurred.
+    /// Heuristic; tuned empirically against handheld room captures.
+    private static let opticalFlowSaturationThreshold: Double = 6.0
+
     // MARK: - Initialization
 
     public init() {
@@ -47,9 +52,12 @@ public actor FrameScoringEngine {
     // MARK: - Public Scoring Methods
 
     /// Scores a single captured frame on all quality metrics.
-    /// - Parameter frame: The frame to score
+    /// - Parameters:
+    ///   - frame: The frame to score
+    ///   - previousFrame: Immediately preceding frame (same resolution), used for
+    ///     optical-flow motion-blur rejection. Pass nil for the first frame in a sequence.
     /// - Returns: A frame with all scores populated
-    func scoreFrame(_ frame: CapturedFrame) async -> CapturedFrame {
+    func scoreFrame(_ frame: CapturedFrame, previousFrame: CapturedFrame? = nil) async -> CapturedFrame {
         var scoredFrame = frame
 
         guard let imageData = frame.imageData,
@@ -60,41 +68,56 @@ public actor FrameScoringEngine {
             return scoredFrame
         }
 
+        // Decode the previous frame's CIImage (if any) for optical-flow comparison.
+        // Kept local to avoid leaking CIImage into the Codable CapturedFrame struct.
+        let previousCIImage: CIImage? = {
+            guard let prevData = previousFrame?.imageData,
+                  let prevUIImage = UIImage(data: prevData),
+                  let prevCI = CIImage(image: prevUIImage) else {
+                return nil
+            }
+            return prevCI
+        }()
+
         // Compute each score
         let sharpness = await computeSharpnessScore(ciImage)
         let brightness = await computeBrightnessScore(ciImage)
         let composition = await computeCompositionScore(ciImage)
-        let stability = computeStabilityScore(gyroMotion: frame.gyroMotion)
+        let gyroStability = computeStabilityScore(gyroMotion: frame.gyroMotion)
+        let opticalFlow = await computeOpticalFlowMotionScore(
+            current: ciImage,
+            previous: previousCIImage,
+            gyroFallback: gyroStability
+        )
+        // Weight optical-flow higher than gyro: it measures the actual rendered
+        // blur, while gyro only captures angular velocity (misses translation).
+        let blendedStability = 0.6 * opticalFlow + 0.4 * gyroStability
 
         scoredFrame.setScores(
             sharpness: sharpness,
             brightness: brightness,
             composition: composition,
-            stability: stability
+            stability: blendedStability
         )
 
         return scoredFrame
     }
 
-    /// Scores multiple frames in parallel.
+    /// Scores multiple frames sequentially in timestamp order.
+    /// Sequential iteration is required because each frame's optical-flow score depends
+    /// on the immediately preceding frame.
     /// - Parameter frames: Array of frames to score
-    /// - Returns: Array of scored frames
+    /// - Returns: Array of scored frames in timestamp order
     public func scoreFrames(_ frames: [CapturedFrame]) async -> [CapturedFrame] {
-        await withTaskGroup(of: CapturedFrame.self) { group in
-            for frame in frames {
-                group.addTask {
-                    await self.scoreFrame(frame)
-                }
-            }
-
-            var scoredFrames: [CapturedFrame] = []
-            for await scoredFrame in group {
-                scoredFrames.append(scoredFrame)
-            }
-
-            // Maintain original order by sorting by timestamp
-            return scoredFrames.sorted { $0.timestamp < $1.timestamp }
+        let ordered = frames.sorted { $0.timestamp < $1.timestamp }
+        var scoredFrames: [CapturedFrame] = []
+        scoredFrames.reserveCapacity(ordered.count)
+        for i in ordered.indices {
+            let previous: CapturedFrame? = i > 0 ? ordered[i - 1] : nil
+            let scored = await scoreFrame(ordered[i], previousFrame: previous)
+            scoredFrames.append(scored)
         }
+        return scoredFrames
     }
 
     /// Selects the best frame from a collection of scored frames.
@@ -225,6 +248,69 @@ public actor FrameScoringEngine {
             let normalized = (gyroMotion - motionIdealThreshold) / (motionRejectThreshold - motionIdealThreshold)
             return 1.0 - normalized
         }
+    }
+
+    // MARK: - Optical Flow
+
+    /// Computes motion-blur-proxy score via Vision's optical flow. Lower mean flow magnitude = calmer = higher score.
+    /// Returns a value in [0, 1] where 1 = perfectly calm, 0 = severe motion. Falls back to gyro when previousFrame is nil or Vision returns an error.
+    /// - Parameters:
+    ///   - currentImage: the current frame's CIImage
+    ///   - previousImage: the immediately preceding frame's CIImage (same resolution)
+    ///   - gyroFallback: the existing gyro stability score for this frame (used when Vision is unavailable or previousImage is nil)
+    private func computeOpticalFlowMotionScore(
+        current currentImage: CIImage,
+        previous previousImage: CIImage?,
+        gyroFallback: Float
+    ) async -> Float {
+        guard let previousImage = previousImage else {
+            return gyroFallback
+        }
+
+        let request = VNGenerateOpticalFlowRequest(targetedCIImage: currentImage)
+        let handler = VNImageRequestHandler(ciImage: previousImage, options: [:])
+
+        do {
+            try handler.perform([request])
+        } catch {
+            return gyroFallback
+        }
+
+        guard let observations = request.results,
+              let pixelBuffer = observations.first?.pixelBuffer else {
+            return gyroFallback
+        }
+
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let height = CVPixelBufferGetHeight(pixelBuffer)
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+        guard width > 0, height > 0,
+              let base = CVPixelBufferGetBaseAddress(pixelBuffer) else {
+            return gyroFallback
+        }
+
+        var accumulator: Double = 0
+        var sampleCount: Int = 0
+        for row in 0..<height {
+            let rowPtr = base.advanced(by: row * bytesPerRow).assumingMemoryBound(to: Float.self)
+            let rowBuffer = UnsafeBufferPointer<Float>(start: rowPtr, count: width * 2)
+            var col = 0
+            while col < width {
+                let dx = rowBuffer[col * 2]
+                let dy = rowBuffer[col * 2 + 1]
+                accumulator += Double(sqrtf(dx * dx + dy * dy))
+                sampleCount += 1
+                col += 1
+            }
+        }
+
+        guard sampleCount > 0 else { return gyroFallback }
+        let mean = accumulator / Double(sampleCount)
+        let score = Float(max(0.0, min(1.0, 1.0 - mean / Self.opticalFlowSaturationThreshold)))
+        return score
     }
 
     // MARK: - Helper Methods
