@@ -670,8 +670,11 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
             try? writer.replacePhotos(scored)
         }
 
-        // 7. Finalize manifest (recompute sizes, stamp completedAt).
-        _ = try? writer.finalize()
+        // 7. Finalize manifest (recompute sizes, stamp completedAt, hash
+        //    every artifact so the server-side verifier can round-trip
+        //    x-amz-meta-sha256 against `artifact.sha256`). Kept best-effort
+        //    via `try?` — a hashing failure must not abort the scan flow.
+        _ = try? writer.finalize(hashArtifacts: true)
     }
 
     nonisolated public func captureSession(_ session: RoomCaptureSession, didProvide instruction: RoomCaptureSession.Instruction) {

@@ -1373,6 +1373,18 @@ extension RoomScanSyncService {
         case .depthArchive: return "depth_archive_url"
         case .bundleArchive: return "scan_bundle_url"
         case .heroThumbnail: return "hero_frame_url"
+        // v3 additive kinds — Phase B (migration 00082 + .coverageHeatmap/
+        // .bundleManifest/.photosManifest URL columns) wires these into
+        // real scan columns. Until then, `uploadArtifact` treats a nil
+        // column as "skip this artifact" so the bundle still uploads the
+        // v2 subset cleanly.
+        case .coverageHeatmap,
+             .depthIndex,
+             .photoThumbnails,
+             .annotations,
+             .bundleManifest,
+             .photosManifest:
+            return nil
         }
     }
 
@@ -1391,6 +1403,17 @@ extension RoomScanSyncService {
         case .depthArchive:      return ("depth", filename)
         case .bundleArchive:     return ("bundle", filename)
         case .heroThumbnail:     return ("thumbnails", filename)
+        // v3 additive kinds — Phase B swaps these for the canonical
+        // bucket layout (`coverage/`, `manifests/`, `photos_manifest/`,
+        // etc). The placeholder folders below are unreachable because
+        // `scanColumn(for:)` returns nil for these kinds and `uploadArtifact`
+        // short-circuits before we read a folder.
+        case .coverageHeatmap:   return ("coverage", filename)
+        case .depthIndex:        return ("depth", filename)
+        case .photoThumbnails:   return ("photos", filename)
+        case .annotations:       return ("annotations", filename)
+        case .bundleManifest:    return ("manifests", filename)
+        case .photosManifest:    return ("photos_manifest", filename)
         }
     }
 

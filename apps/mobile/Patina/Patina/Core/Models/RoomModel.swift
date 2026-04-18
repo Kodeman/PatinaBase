@@ -47,6 +47,11 @@ public final class RoomModel {
     /// User's notes about this room
     public var notes: String?
 
+    /// Scan-time annotation from the review step. `notes` is the high-level
+    /// field shown on the room card; this one captures what the user typed
+    /// while reviewing a fresh scan and is mirrored into the ScanManifest.
+    public var userRoomNotes: String = ""
+
     /// When the room was created
     public var createdAt: Date
 
@@ -82,6 +87,12 @@ public final class RoomModel {
 
     // MARK: - Hero Frame Properties (Legacy - for single image support)
 
+    // LEGACY v1 — read-only for rows created before v2 cutover.
+    // These four fields back the original single-hero-frame path. New scans
+    // go through ScanManifest / RoomScanPackage with per-photo metadata
+    // instead. Do not write to these fields from v2+ code paths; keep them
+    // decodable so older SwiftData rows still hydrate.
+
     /// HEIC compressed hero frame image data (~200KB)
     public var heroFrameData: Data?
 
@@ -93,6 +104,7 @@ public final class RoomModel {
 
     /// Cloud reference ID for the hero frame
     public var heroFrameId: UUID?
+    // END LEGACY v1
 
     // MARK: - Multi-Image Properties
 
