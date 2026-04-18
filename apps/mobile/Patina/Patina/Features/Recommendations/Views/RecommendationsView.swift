@@ -2,24 +2,16 @@
 //  RecommendationsView.swift
 //  Patina
 //
-//  Product recommendations grid with filter chips and match scores
+//  Product recommendations grid with filter chips, match scores, and swipe gestures
 //
 
 import SwiftUI
+import SwiftData
 
 struct RecommendationsView: View {
-    @State private var activeFilter = "All"
-
-    private let filters = ["All", "Seating", "Tables", "Lighting", "Storage"]
-
-    private let products: [PlaceholderProduct] = [
-        PlaceholderProduct(name: "Walnut Lounge Chair", maker: "Chilton Furniture", price: "$2,850", match: "92% match", gradient: PatinaGradients.leather),
-        PlaceholderProduct(name: "Linen Sectional Sofa", maker: "Shoppe Amber", price: "$3,200", match: "88% match", gradient: PatinaGradients.linen),
-        PlaceholderProduct(name: "Cherry Coffee Table", maker: "Thos. Moser", price: "$1,890", match: "85% match", gradient: PatinaGradients.wood),
-        PlaceholderProduct(name: "Woven Floor Lamp", maker: "Lostine", price: "$475", match: "82% match", gradient: PatinaGradients.rattan),
-        PlaceholderProduct(name: "Marble Side Table", maker: "Blu Dot", price: "$1,200", match: "79% match", gradient: PatinaGradients.stone),
-        PlaceholderProduct(name: "Brass Pendant Light", maker: "Schoolhouse", price: "$550", match: "76% match", gradient: PatinaGradients.metal),
-    ]
+    @Environment(\.appCoordinator) private var coordinator
+    @Environment(\.modelContext) private var modelContext
+    @State private var viewModel = RecommendationsViewModel()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -29,7 +21,7 @@ struct RecommendationsView: View {
                     .font(PatinaTypography.h4)
                     .foregroundColor(PatinaColors.charcoal)
 
-                Text("18 pieces curated for your living room")
+                Text(viewModel.headerSubtitle)
                     .font(PatinaTypography.uiSmall)
                     .foregroundColor(PatinaColors.agedOak)
             }
@@ -40,9 +32,11 @@ struct RecommendationsView: View {
             // Filter bar
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(filters, id: \.self) { filter in
-                        FilterChip(title: filter, isActive: filter == activeFilter) {
-                            activeFilter = filter
+                    ForEach(viewModel.filters, id: \.self) { filter in
+                        FilterChip(title: filter, isActive: filter == viewModel.activeFilter) {
+                            withAnimation(.spring(response: 0.3)) {
+                                viewModel.activeFilter = filter
+                            }
                         }
                     }
                 }
@@ -51,34 +45,53 @@ struct RecommendationsView: View {
             .padding(.bottom, 12)
 
             // Product grid
-            ScrollView(showsIndicators: false) {
-                LazyVGrid(columns: [
-                    GridItem(.flexible(), spacing: 12),
-                    GridItem(.flexible(), spacing: 12)
-                ], spacing: 12) {
-                    ForEach(products) { product in
-                        productCard(product)
+            if viewModel.isLoading {
+                loadingView
+            } else {
+                ScrollView(showsIndicators: false) {
+                    LazyVGrid(columns: [
+                        GridItem(.flexible(), spacing: 12),
+                        GridItem(.flexible(), spacing: 12)
+                    ], spacing: 12) {
+                        ForEach(viewModel.filteredProducts) { product in
+                            productCard(product)
+                                .onAppear { viewModel.trackView(product) }
+                        }
                     }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 120)
                 }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 120) // Companion space
             }
         }
         .background(PatinaColors.offWhite)
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await viewModel.loadRecommendations()
+        }
     }
 
     // MARK: - Product Card
 
-    private func productCard(_ product: PlaceholderProduct) -> some View {
+    private func productCard(_ product: Product) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Image
+            // Image with overlays
             ZStack(alignment: .topLeading) {
-                product.gradient
+                // Product image or gradient placeholder
+                if let imageURL = product.imageURL, let url = URL(string: imageURL) {
+                    AsyncImage(url: url) { image in
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        product.placeholderGradient
+                    }
                     .frame(height: 160)
+                    .clipped()
+                } else {
+                    product.placeholderGradient
+                        .frame(height: 160)
+                }
 
                 // Match badge
-                Text(product.match)
+                Text(product.matchLabel)
                     .font(PatinaTypography.monoSmall)
                     .foregroundColor(PatinaColors.mocha)
                     .tracking(0.3)
@@ -92,22 +105,26 @@ struct RecommendationsView: View {
                 VStack {
                     HStack {
                         Spacer()
-                        Circle()
-                            .fill(.ultraThinMaterial)
-                            .frame(width: 30, height: 30)
-                            .overlay(
-                                Image(systemName: "heart")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(PatinaColors.mocha)
-                            )
-                            .padding(8)
+                        Button {
+                            viewModel.saveProduct(product, context: modelContext)
+                        } label: {
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .frame(width: 30, height: 30)
+                                .overlay(
+                                    Image(systemName: "heart")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(PatinaColors.mocha)
+                                )
+                        }
+                        .padding(8)
                     }
                 }
             }
 
             // Info
             VStack(alignment: .leading, spacing: 2) {
-                MonoLabel(text: product.maker, size: PatinaTypography.monoSmall)
+                MonoLabel(text: product.makerName, size: PatinaTypography.monoSmall)
 
                 Text(product.name)
                     .font(PatinaTypography.uiSmall)
@@ -115,7 +132,7 @@ struct RecommendationsView: View {
                     .lineLimit(2)
                     .padding(.top, 2)
 
-                Text(product.price)
+                Text(product.fullFormattedPrice)
                     .font(PatinaTypography.h5)
                     .foregroundColor(PatinaColors.charcoal)
                     .padding(.top, 4)
@@ -125,20 +142,54 @@ struct RecommendationsView: View {
         }
         .background(PatinaColors.softCream)
         .clipShape(RoundedRectangle(cornerRadius: 14))
+        .onTapGesture {
+            coordinator.navigate(to: .pieceDetail(pieceId: product.id))
+        }
+        // Swipe gestures
+        .gesture(
+            DragGesture(minimumDistance: 50)
+                .onEnded { value in
+                    let horizontal = value.translation.width
+                    let vertical = value.translation.height
+
+                    if abs(horizontal) > abs(vertical) {
+                        if horizontal > 0 {
+                            // Swipe right → save
+                            viewModel.saveProduct(product, context: modelContext)
+                        } else {
+                            // Swipe left → skip
+                            viewModel.skipProduct(product)
+                        }
+                    } else if vertical < -50 {
+                        // Swipe up → share (future)
+                    }
+                }
+        )
     }
-}
 
-// MARK: - Placeholder Data
+    // MARK: - Loading View
 
-struct PlaceholderProduct: Identifiable {
-    let id = UUID()
-    let name: String
-    let maker: String
-    let price: String
-    let match: String
-    let gradient: LinearGradient
+    private var loadingView: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            // Strata Mark loading animation
+            VStack(spacing: 4) {
+                ForEach(0..<3, id: \.self) { i in
+                    Capsule()
+                        .fill(PatinaColors.clay.opacity(Double(3 - i) / 3))
+                        .frame(width: CGFloat(60 - i * 12), height: 2)
+                }
+            }
+            Text("Curating your pieces...")
+                .font(PatinaTypography.bodySmall)
+                .foregroundColor(PatinaColors.agedOak)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
 }
 
 #Preview {
     RecommendationsView()
+        .environment(\.appCoordinator, AppCoordinator())
 }

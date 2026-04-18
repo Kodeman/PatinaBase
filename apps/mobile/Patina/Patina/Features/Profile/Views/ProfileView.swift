@@ -2,12 +2,17 @@
 //  ProfileView.swift
 //  Patina
 //
-//  Profile / Design Journal screen with avatar, stats, style badge, rooms
+//  Profile / Design Journal with avatar, stats, style badge, rooms
 //
 
 import SwiftUI
+import SwiftData
 
 struct ProfileView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.appCoordinator) private var coordinator
+    @State private var viewModel = ProfileViewModel()
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
@@ -18,23 +23,23 @@ struct ProfileView: View {
                         .fill(PatinaGradients.earth)
                         .frame(width: 80, height: 80)
                         .overlay(
-                            Text("K")
+                            Text(viewModel.userInitial)
                                 .font(.custom("PlayfairDisplay-Medium", size: 28))
                                 .foregroundColor(PatinaColors.offWhite)
                         )
                         .padding(.bottom, 16)
 
-                    Text("Kody")
+                    Text(viewModel.userName)
                         .font(PatinaTypography.h3)
                         .foregroundColor(PatinaColors.charcoal)
                         .padding(.bottom, 4)
 
-                    MonoLabel(text: "Member since April 2026")
+                    MonoLabel(text: viewModel.memberSince)
 
                     // Style badge
                     HStack(spacing: 6) {
                         Text("✦")
-                        Text("Warm Minimalist")
+                        Text(viewModel.styleBadge)
                             .font(PatinaTypography.uiSmall)
                             .foregroundColor(PatinaColors.mocha)
                     }
@@ -49,11 +54,11 @@ struct ProfileView: View {
 
                 // Stats row
                 HStack(spacing: 0) {
-                    statItem(value: "3", label: "Rooms")
+                    statItem(value: "\(viewModel.roomCount)", label: "Rooms")
                     statDivider
-                    statItem(value: "24", label: "Saved")
+                    statItem(value: "\(viewModel.savedItemCount)", label: "Saved")
                     statDivider
-                    statItem(value: "87%", label: "Match")
+                    statItem(value: viewModel.matchPercentage, label: "Match")
                 }
                 .padding(.vertical, 20)
                 .padding(.horizontal, 24)
@@ -65,27 +70,50 @@ struct ProfileView: View {
                 }
 
                 // Your Rooms section
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("YOUR ROOMS")
-                        .font(PatinaTypography.monoMedium)
-                        .foregroundColor(PatinaColors.agedOak)
-                        .tracking(1)
+                if !viewModel.rooms.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("YOUR ROOMS")
+                            .font(PatinaTypography.monoMedium)
+                            .foregroundColor(PatinaColors.agedOak)
+                            .tracking(1)
 
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            roomCard(name: "Living Room", date: "Scanned Apr 2", gradient: PatinaGradients.warm)
-                            roomCard(name: "Bedroom", date: "Scanned Mar 28", gradient: PatinaGradients.dusk)
-                            roomCard(name: "Office", date: "Scanned Mar 15", gradient: PatinaGradients.sageGradient)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(viewModel.rooms) { room in
+                                    roomCard(room)
+                                        .onTapGesture {
+                                            coordinator.navigate(to: .roomDetail(roomId: room.id))
+                                        }
+                                }
+                            }
                         }
                     }
+                    .padding(24)
                 }
-                .padding(24)
+
+                // Actions
+                VStack(spacing: 12) {
+                    profileActionRow(icon: "paintpalette", label: "Retake Style Quiz") {
+                        coordinator.navigate(to: .styleQuiz)
+                    }
+                    profileActionRow(icon: "bubble.left", label: "Work with a Designer") {
+                        coordinator.navigate(to: .designServicesRequest(roomId: nil))
+                    }
+                    profileActionRow(icon: "gearshape", label: "Settings") {
+                        coordinator.showingSettings = true
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, viewModel.rooms.isEmpty ? 24 : 0)
 
                 Spacer().frame(height: 120)
             }
         }
         .background(PatinaColors.offWhite)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            viewModel.loadData(context: modelContext)
+        }
     }
 
     // MARK: - Components
@@ -106,16 +134,19 @@ struct ProfileView: View {
             .frame(width: 1, height: 36)
     }
 
-    private func roomCard(name: String, date: String, gradient: LinearGradient) -> some View {
+    private func roomCard(_ room: RoomModel) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            gradient
+            PatinaGradients.warm
                 .frame(height: 100)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(name)
+                Text(room.name)
                     .font(PatinaTypography.uiSmall)
                     .foregroundColor(PatinaColors.charcoal)
-                MonoLabel(text: date, size: PatinaTypography.monoTiny)
+
+                let formatter = DateFormatter()
+                let _ = formatter.dateFormat = "MMM d"
+                MonoLabel(text: "Scanned \(formatter.string(from: room.createdAt))", size: PatinaTypography.monoTiny)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -124,8 +155,36 @@ struct ProfileView: View {
         .background(PatinaColors.softCream)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
+
+    private func profileActionRow(icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                    .foregroundColor(PatinaColors.clay)
+                    .frame(width: 32, height: 32)
+                    .background(PatinaColors.clay.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                Text(label)
+                    .font(PatinaTypography.uiAction)
+                    .foregroundColor(PatinaColors.charcoal)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13))
+                    .foregroundColor(PatinaColors.agedOak)
+            }
+            .padding(14)
+            .background(PatinaColors.softCream)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+    }
 }
 
 #Preview {
     ProfileView()
+        .environment(\.appCoordinator, AppCoordinator())
 }

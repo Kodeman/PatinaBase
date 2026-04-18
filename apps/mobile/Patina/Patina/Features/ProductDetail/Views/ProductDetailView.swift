@@ -6,43 +6,75 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct ProductDetailView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var isSaved = false
+    @Environment(\.appCoordinator) private var coordinator
+    @Environment(\.modelContext) private var modelContext
+    @State private var viewModel = ProductDetailViewModel()
 
-    // Placeholder data
-    let productName: String
-    let maker: String
-    let location: String
-    let price: String
-    let match: String
-    let gradient: LinearGradient
+    /// Product ID to load (from navigation)
+    var productId: String?
 
-    init(
-        productName: String = "Walnut Lounge Chair",
-        maker: String = "Chilton Furniture",
-        location: String = "Freeport, ME",
-        price: String = "$2,850",
-        match: String = "92% match",
-        gradient: LinearGradient = PatinaGradients.leather
-    ) {
-        self.productName = productName
-        self.maker = maker
-        self.location = location
-        self.price = price
-        self.match = match
-        self.gradient = gradient
+    /// Direct product injection (for previews or when already loaded)
+    var product: Product?
+
+    /// Room context preserved from the entry point (Daily Room chip, search, etc.)
+    var roomLocalId: UUID?
+    var roomRemoteId: String?
+    var spatialContext: [String: String] = [:]
+
+    private var displayProduct: Product? {
+        product ?? viewModel.product
     }
 
     var body: some View {
+        Group {
+            if let product = displayProduct {
+                productContent(product)
+            } else if viewModel.isLoading {
+                loadingView
+            } else {
+                // Fallback with placeholder
+                productContent(Product.mockProducts[0])
+            }
+        }
+        .background(PatinaColors.offWhite)
+        .navigationBarHidden(true)
+        .task {
+            viewModel.attachRoomContext(
+                localId: roomLocalId,
+                remoteId: roomRemoteId,
+                spatialContext: spatialContext
+            )
+            if product == nil, let productId {
+                await viewModel.loadProduct(id: productId)
+            }
+            viewModel.trackView()
+        }
+    }
+
+    // MARK: - Product Content
+
+    private func productContent(_ product: Product) -> some View {
         ZStack(alignment: .bottom) {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
                     // Hero image
                     ZStack(alignment: .top) {
-                        gradient
+                        if let imageURL = product.imageURL, let url = URL(string: imageURL) {
+                            AsyncImage(url: url) { image in
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                product.placeholderGradient
+                            }
                             .frame(height: 340)
+                            .clipped()
+                        } else {
+                            product.placeholderGradient
+                                .frame(height: 340)
+                        }
 
                         // Top bar
                         HStack {
@@ -56,8 +88,8 @@ struct ProductDetailView: View {
                                 floatingCircleButton(icon: "square.and.arrow.up")
                             }
 
-                            Button { isSaved.toggle() } label: {
-                                floatingCircleButton(icon: isSaved ? "heart.fill" : "heart")
+                            Button { viewModel.toggleSave(context: modelContext) } label: {
+                                floatingCircleButton(icon: viewModel.isSaved ? "heart.fill" : "heart")
                             }
                         }
                         .padding(.top, 56)
@@ -67,27 +99,33 @@ struct ProductDetailView: View {
                     // Content
                     VStack(alignment: .leading, spacing: 0) {
                         // Maker tag
-                        MonoLabel(text: "\(maker) · \(location)", color: PatinaColors.clay)
-                            .padding(.bottom, 6)
+                        MonoLabel(
+                            text: [product.makerName, product.makerLocation].compactMap { $0 }.joined(separator: " · "),
+                            color: PatinaColors.clay
+                        )
+                        .padding(.bottom, 6)
 
                         // Product name
-                        Text(productName)
+                        Text(product.name)
                             .font(PatinaTypography.h2)
                             .foregroundColor(PatinaColors.charcoal)
                             .padding(.bottom, 4)
 
-                        Text("Hand-turned in Maine since 1904")
-                            .font(PatinaTypography.bodySmall)
-                            .foregroundColor(PatinaColors.agedOak)
-                            .padding(.bottom, 16)
+                        // Subtitle (provenance)
+                        if !product.materialTags.isEmpty {
+                            Text(product.materialTags.map { $0.capitalized }.joined(separator: " · "))
+                                .font(PatinaTypography.bodySmall)
+                                .foregroundColor(PatinaColors.agedOak)
+                                .padding(.bottom, 16)
+                        }
 
                         // Price row
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
-                            Text(price)
+                            Text(product.fullFormattedPrice)
                                 .font(.custom("PlayfairDisplay-Medium", size: 28))
                                 .foregroundColor(PatinaColors.charcoal)
 
-                            Text(match)
+                            Text(product.matchLabel)
                                 .font(PatinaTypography.mono)
                                 .foregroundColor(PatinaColors.success)
                                 .tracking(0.3)
@@ -98,27 +136,64 @@ struct ProductDetailView: View {
                         }
                         .padding(.bottom, 16)
 
-                        // Material badges
-                        FlowLayout(spacing: 8) {
-                            materialBadge(icon: "🌿", text: "FSC Certified")
-                            materialBadge(icon: "✋", text: "Handcrafted")
-                            materialBadge(icon: "📍", text: "Made in USA")
+                        // Room-aware "Place in your room" header + spatial pills
+                        if viewModel.roomContextRemoteId != nil {
+                            Text("Place in your room")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(PatinaColors.mocha)
+                                .padding(.bottom, 6)
                         }
-                        .padding(.bottom, 20)
+                        if !viewModel.spatialContext.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 6) {
+                                    ForEach(
+                                        Array(viewModel.spatialContext.sorted(by: { $0.key < $1.key })),
+                                        id: \.key
+                                    ) { _, value in
+                                        Text(value)
+                                            .font(.system(size: 11))
+                                            .foregroundColor(PatinaColors.charcoal)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 5)
+                                            .background(
+                                                Capsule().fill(PatinaColors.sage.opacity(0.15))
+                                            )
+                                    }
+                                }
+                            }
+                            .padding(.bottom, 16)
+                        }
+
+                        // Material badges
+                        if !product.badges.isEmpty {
+                            FlowLayout(spacing: 8) {
+                                ForEach(product.badges, id: \.self) { badge in
+                                    materialBadge(text: badge.badgeDisplayName)
+                                }
+                            }
+                            .padding(.bottom, 20)
+                        }
 
                         // Maker story
-                        makerStoryCard
-                            .padding(.bottom, 120) // Bottom bar space
+                        if let story = product.makerStory {
+                            makerStoryCard(
+                                name: product.makerName,
+                                location: product.makerLocation,
+                                story: story
+                            )
+                            .padding(.bottom, 120)
+                        } else {
+                            Spacer()
+                                .frame(height: 120)
+                        }
                     }
                     .padding(24)
                 }
             }
 
             // Bottom action bar
-            bottomBar
+            bottomBar(product: product)
         }
-        .background(PatinaColors.offWhite)
-        .navigationBarHidden(true)
     }
 
     // MARK: - Components
@@ -134,10 +209,8 @@ struct ProductDetailView: View {
             )
     }
 
-    private func materialBadge(icon: String, text: String) -> some View {
+    private func materialBadge(text: String) -> some View {
         HStack(spacing: 5) {
-            Text(icon)
-                .font(.system(size: 12))
             Text(text)
                 .font(.system(size: 11))
                 .foregroundColor(PatinaColors.mocha)
@@ -148,7 +221,7 @@ struct ProductDetailView: View {
         .clipShape(Capsule())
     }
 
-    private var makerStoryCard: some View {
+    private func makerStoryCard(name: String, location: String?, story: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 Circle()
@@ -156,15 +229,17 @@ struct ProductDetailView: View {
                     .frame(width: 44, height: 44)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Jonathan Chilton")
+                    Text(name)
                         .font(PatinaTypography.bodySmallMedium)
                         .foregroundColor(PatinaColors.charcoal)
 
-                    MonoLabel(text: "Third-Generation Woodworker", size: PatinaTypography.monoSmall)
+                    if let location {
+                        MonoLabel(text: location, size: PatinaTypography.monoSmall)
+                    }
                 }
             }
 
-            Text("\u{201C}Each chair starts as a conversation with the wood. Walnut tells you where it wants to bend.\u{201D}")
+            Text("\u{201C}\(story)\u{201D}")
                 .font(PatinaTypography.bodySmall)
                 .foregroundColor(PatinaColors.mocha)
                 .italic()
@@ -175,28 +250,43 @@ struct ProductDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
-    private var bottomBar: some View {
+    private func bottomBar(product: Product) -> some View {
         HStack(spacing: 12) {
             // AR button
-            Button {} label: {
-                Circle()
-                    .fill(PatinaColors.softCream)
-                    .frame(width: 50, height: 50)
-                    .overlay(
-                        Image(systemName: "arkit")
-                            .font(.system(size: 18))
-                            .foregroundColor(PatinaColors.charcoal)
+            if product.hasARModel {
+                Button {
+                    coordinator.navigate(
+                        to: .arPlacement(
+                            productId: product.id,
+                            roomRemoteId: viewModel.roomContextRemoteId
+                        )
                     )
+                } label: {
+                    Circle()
+                        .fill(PatinaColors.softCream)
+                        .frame(width: 50, height: 50)
+                        .overlay(
+                            Image(systemName: "arkit")
+                                .font(.system(size: 18))
+                                .foregroundColor(PatinaColors.charcoal)
+                        )
+                }
             }
 
             // Add to room button
-            Button {} label: {
-                Text("Add to Room")
+            Button {
+                if viewModel.roomContextRemoteId != nil {
+                    Task { await viewModel.addToAttachedRoom(context: modelContext) }
+                } else {
+                    viewModel.toggleSave(context: modelContext)
+                }
+            } label: {
+                Text(viewModel.isSaved ? "Saved ✓" : "Add to Room")
                     .font(PatinaTypography.uiAction)
                     .foregroundColor(PatinaColors.offWhite)
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
-                    .background(PatinaColors.charcoal)
+                    .background(viewModel.isSaved ? PatinaColors.clay : PatinaColors.charcoal)
                     .clipShape(Capsule())
             }
         }
@@ -207,6 +297,32 @@ struct ProductDetailView: View {
             PatinaColors.offWhite
                 .shadow(color: PatinaColors.mocha.opacity(0.08), radius: 8, y: -4)
         )
+    }
+
+    // MARK: - Loading
+
+    private var loadingView: some View {
+        VStack {
+            Spacer()
+            ProgressView()
+                .tint(PatinaColors.clay)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Badge Display Names
+
+private extension String {
+    var badgeDisplayName: String {
+        switch self {
+        case "fsc_certified": return "🌿 FSC Certified"
+        case "handcrafted": return "✋ Handcrafted"
+        case "made_in_usa": return "📍 Made in USA"
+        case "sustainable": return "♻️ Sustainable"
+        default: return self.replacingOccurrences(of: "_", with: " ").capitalized
+        }
     }
 }
 
@@ -252,5 +368,5 @@ struct FlowLayout: Layout {
 }
 
 #Preview {
-    ProductDetailView()
+    ProductDetailView(product: Product.mockProducts[0])
 }

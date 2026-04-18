@@ -51,6 +51,31 @@ struct RoomDetailView: View {
                         actionsSection
                             .opacity(contentVisible ? 1 : 0)
                             .offset(y: contentVisible ? 0 : 20)
+
+                        // Room Through Time link — only when we have a
+                        // remote room id to query the timeline API.
+                        if let remoteId = room.remoteId {
+                            NavigationLink {
+                                RoomTimelineView(roomRemoteId: remoteId)
+                            } label: {
+                                HStack {
+                                    Text("Room Through Time")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(PatinaColors.charcoal)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(PatinaColors.agedOak)
+                                }
+                                .padding(16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(PatinaColors.softCream)
+                                )
+                                .padding(.horizontal, 20)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
 
                     Spacer(minLength: 120)

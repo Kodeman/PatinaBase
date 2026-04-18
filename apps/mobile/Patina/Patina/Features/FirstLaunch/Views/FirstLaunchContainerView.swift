@@ -139,27 +139,18 @@ struct FirstLaunchContainerView: View {
     private func handleRoomNamed(_ name: String, _ type: String) {
         firstLaunchCoordinator?.updateRoomName(name, type: type)
 
-        // Save the room to SwiftData
+        // Save the room to SwiftData using RoomStore so it picks up a
+        // `.pending` sync status and gets promoted to `.synced` once
+        // WalkView's own upload finishes. Before this fix the room was
+        // inserted with `.local` and stayed stuck there forever.
         if let roomData = firstLaunchCoordinator?.capturedRoomData {
-            let room = RoomModel(
-                id: roomData.roomId,
+            let store = RoomStore(context: modelContext)
+            let room = store.saveScan(
+                roomData: roomData,
                 name: name,
-                roomType: type,
-                hasBeenScanned: true,
-                width: Double(roomData.dimensions.width),
-                length: Double(roomData.dimensions.length),
-                height: Double(roomData.dimensions.height),
-                heroFrameData: roomData.heroFrameData,
-                heroFrameScore: roomData.heroFrameScore
+                roomType: type
             )
-            modelContext.insert(room)
-
-            do {
-                try modelContext.save()
-                savedRoomId = room.id
-            } catch {
-                print("Error saving room: \(error)")
-            }
+            savedRoomId = room.id
         }
 
         firstLaunchCoordinator?.completeOnboarding()
