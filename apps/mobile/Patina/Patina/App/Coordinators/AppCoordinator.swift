@@ -42,6 +42,15 @@ public final class AppCoordinator: Coordinator {
     /// Whether QR scanner sheet is presented
     public var showingQRScanner = false
 
+    /// Whether the New Room bottom sheet is presented (Room System)
+    public var showingNewRoom = false
+
+    /// Whether the Move/Copy item sheet is presented (Room System)
+    public var showingMoveItem = false
+
+    /// ID of the SavedItem currently being moved/copied
+    public var movingItemId: UUID?
+
     // MARK: - Companion Context
 
     /// Current context for the Companion to understand user's location
@@ -110,10 +119,34 @@ public final class AppCoordinator: Coordinator {
             navigationPath = NavigationPath()
             updateContext(for: route)
 
-        case .roomList:
+        case .roomList, .yourSpaces:
             phase = .main
             navigationPath.append(route)
             updateContext(for: route)
+
+        case .roomProject(let roomId):
+            navigationPath.append(AppRoute.roomProject(roomId: roomId))
+            updateContext(for: route)
+
+        case .roomSettings(let roomId):
+            navigationPath.append(AppRoute.roomSettings(roomId: roomId))
+            updateContext(for: route)
+
+        case .crossRoom:
+            navigationPath.append(route)
+            updateContext(for: route)
+
+        case .newRoom:
+            // Presented as sheet via AppCoordinator.showingNewRoom
+            showingNewRoom = true
+
+        case .manualRoomEntry:
+            navigationPath.append(route)
+            updateContext(for: route)
+
+        case .moveItem(let itemId):
+            movingItemId = itemId
+            showingMoveItem = true
 
         case .roomDetail(let roomId):
             phase = .main
@@ -165,6 +198,21 @@ public final class AppCoordinator: Coordinator {
             // Approval is shown as part of QR scanner flow, not separately
             break
 
+        case .styleQuiz, .styleResult:
+            navigationPath.append(route)
+            updateContext(for: route)
+
+        case .arPlacement, .preScanChecklist, .floorPlanPreview,
+             .profile, .notifications, .designerConsultation:
+            navigationPath.append(route)
+            updateContext(for: route)
+
+        case .scanThreshold, .scanWalk, .scanSoftLanding,
+             .scanConversation, .scanReveal, .scanFloorPlan,
+             .scanFallbackEntry:
+            navigationPath.append(route)
+            updateContext(for: route)
+
         // First Launch routes are handled by FirstLaunchContainerView
         case .walkInvitation, .cameraPermission, .walkComplete, .firstEmergence, .roomNaming:
             updateContext(for: route)
@@ -200,8 +248,30 @@ public final class AppCoordinator: Coordinator {
         case .table:
             companionContext.viewingPiece = nil
             companionContext.walkProgress = nil
+        case .styleQuiz, .styleResult:
+            companionContext.viewingPiece = nil
+            companionContext.walkProgress = nil
+        case .arPlacement:
+            companionContext.walkProgress = nil
+        case .preScanChecklist, .floorPlanPreview:
+            companionContext.viewingPiece = nil
+        case .profile, .notifications, .designerConsultation:
+            companionContext.viewingPiece = nil
+            companionContext.walkProgress = nil
         case .authentication, .settings, .designServicesRequest, .qrScanner, .qrApproval:
             break
+
+        case .scanThreshold, .scanWalk, .scanSoftLanding,
+             .scanConversation, .scanReveal, .scanFloorPlan,
+             .scanFallbackEntry:
+            companionContext.viewingPiece = nil
+            companionContext.walkProgress = nil
+
+        // Room System routes
+        case .yourSpaces, .roomProject, .roomSettings, .crossRoom,
+             .newRoom, .manualRoomEntry, .moveItem:
+            companionContext.viewingPiece = nil
+            companionContext.walkProgress = nil
 
         // First Launch routes
         case .walkInvitation, .cameraPermission:
@@ -355,6 +425,25 @@ public final class AppCoordinator: Coordinator {
         }
 
         return (false, nil)
+    }
+
+    // MARK: - Quiet Conversation Flow
+
+    /// Kick off the new Room Scan & Style Discovery flow ("The Quiet Conversation").
+    /// Picks the LiDAR or manual-entry path, then drives the linear sequence.
+    /// Per `docs/specs/IOS Scann/quiet-conversation-prd.md`.
+    public func startRoomScanFlow() {
+        #if canImport(RoomPlan)
+        let hasLidar = RoomCaptureService.isSupported
+        #else
+        let hasLidar = false
+        #endif
+
+        if hasLidar {
+            navigate(to: .scanThreshold)
+        } else {
+            navigate(to: .scanFallbackEntry)
+        }
     }
 
     // MARK: - Phase Transitions
