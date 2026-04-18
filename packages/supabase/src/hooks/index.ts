@@ -467,7 +467,9 @@ export {
   useArchiveCampaign,
   useDeleteCampaign,
   useCancelCampaign,
+  useAbVariantStats,
 } from './use-campaigns';
+export type { AbVariantStats } from './use-campaigns';
 export {
   // Communications Dashboard
   useCommsDashboard,

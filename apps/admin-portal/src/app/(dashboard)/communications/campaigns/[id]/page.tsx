@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useParams } from 'next/navigation';
-import { useCampaign } from '@patina/supabase/hooks';
+import { useCampaign, useAbVariantStats, type AbVariantStats } from '@patina/supabase/hooks';
 import { ChevronLeft, Mail, MousePointerClick, Eye, AlertTriangle, Users, Clock, Beaker, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -12,6 +12,64 @@ function StatCard({ label, value, suffix, color }: { label: string; value: strin
       <p className={cn('text-2xl font-semibold', color || 'text-patina-charcoal')}>
         {value}{suffix}
       </p>
+    </div>
+  );
+}
+
+function AbVariantCard({
+  variant,
+  subject,
+  splitPct,
+  stats,
+  isWinner,
+}: {
+  variant: 'a' | 'b';
+  subject: string | null | undefined;
+  splitPct: number;
+  stats: AbVariantStats | undefined;
+  isWinner: boolean;
+}) {
+  const sent = stats?.sent ?? 0;
+  const opens = stats?.opened ?? 0;
+  const clicks = stats?.clicked ?? 0;
+  const openRate = sent > 0 ? ((opens / sent) * 100).toFixed(1) : '0.0';
+  const clickRate = sent > 0 ? ((clicks / sent) * 100).toFixed(1) : '0.0';
+  const ctr = opens > 0 ? ((clicks / opens) * 100).toFixed(1) : '0.0';
+
+  return (
+    <div
+      className={cn(
+        'p-4 rounded-lg border',
+        isWinner
+          ? 'border-green-300 bg-green-50'
+          : 'border-patina-clay-beige/20',
+      )}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-medium text-patina-clay-beige">
+          Variant {variant.toUpperCase()}
+        </p>
+        <p className="text-xs text-patina-clay-beige">Split: {splitPct}%</p>
+      </div>
+      <p className="text-sm font-medium text-patina-charcoal mb-3">{subject}</p>
+      <div className="grid grid-cols-4 gap-2 pt-2 border-t border-patina-clay-beige/20">
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-patina-clay-beige">Sent</p>
+          <p className="text-sm font-semibold text-patina-charcoal">{sent.toLocaleString()}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-patina-clay-beige">Open</p>
+          <p className="text-sm font-semibold text-patina-charcoal">{openRate}%</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-patina-clay-beige">Click</p>
+          <p className="text-sm font-semibold text-patina-charcoal">{clickRate}%</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-patina-clay-beige">CTR</p>
+          <p className="text-sm font-semibold text-patina-charcoal">{ctr}%</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -38,6 +96,9 @@ export default function CampaignReportPage() {
   const params = useParams();
   const id = params.id as string;
   const { data: campaign, isLoading } = useCampaign(id);
+  const { data: variantStats } = useAbVariantStats(
+    campaign?.ab_enabled ? id : undefined,
+  );
 
   if (isLoading) {
     return (
@@ -196,26 +257,20 @@ export default function CampaignReportPage() {
               )}
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className={cn(
-                'p-4 rounded-lg border',
-                campaign.ab_winner === 'a' ? 'border-green-300 bg-green-50' : 'border-patina-clay-beige/20'
-              )}>
-                <p className="text-xs font-medium text-patina-clay-beige mb-1">Variant A</p>
-                <p className="text-sm font-medium text-patina-charcoal mb-2">{campaign.subject}</p>
-                <p className="text-xs text-patina-clay-beige">
-                  Split: {campaign.ab_split_pct || 50}%
-                </p>
-              </div>
-              <div className={cn(
-                'p-4 rounded-lg border',
-                campaign.ab_winner === 'b' ? 'border-green-300 bg-green-50' : 'border-patina-clay-beige/20'
-              )}>
-                <p className="text-xs font-medium text-patina-clay-beige mb-1">Variant B</p>
-                <p className="text-sm font-medium text-patina-charcoal mb-2">{campaign.ab_subject_b}</p>
-                <p className="text-xs text-patina-clay-beige">
-                  Split: {100 - (campaign.ab_split_pct || 50)}%
-                </p>
-              </div>
+              <AbVariantCard
+                variant="a"
+                subject={campaign.subject}
+                splitPct={campaign.ab_split_pct || 50}
+                stats={variantStats?.find((v) => v.variant === 'a')}
+                isWinner={campaign.ab_winner === 'a'}
+              />
+              <AbVariantCard
+                variant="b"
+                subject={campaign.ab_subject_b}
+                splitPct={100 - (campaign.ab_split_pct || 50)}
+                stats={variantStats?.find((v) => v.variant === 'b')}
+                isWinner={campaign.ab_winner === 'b'}
+              />
             </div>
           </div>
         )}

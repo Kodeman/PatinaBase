@@ -215,3 +215,33 @@ export function useCancelCampaign() {
     },
   });
 }
+
+// ─── A/B variant stats ────────────────────────────────────────────────────
+
+export interface AbVariantStats {
+  variant: string;
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+}
+
+/**
+ * Per-variant engagement stats for a campaign. Returns one row per variant
+ * found in notification_log.metadata.ab_variant (defaults to "a").
+ */
+export function useAbVariantStats(campaignId: string | undefined) {
+  return useQuery<AbVariantStats[]>({
+    queryKey: ['campaign-ab-stats', campaignId],
+    enabled: !!campaignId,
+    queryFn: async () => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc('get_ab_variant_stats', {
+        p_campaign_id: campaignId!,
+      });
+      if (error) throw error;
+      return (data as AbVariantStats[]) ?? [];
+    },
+  });
+}
