@@ -56,6 +56,30 @@ public final class RoomModel {
     /// AR scan data reference (file path or identifier)
     public var scanDataReference: String?
 
+    /// Remote Supabase `rooms.id` (UUID string) once synced
+    public var remoteId: String?
+
+    // MARK: - Spatial Context (Room Spec)
+
+    /// Compass orientation raw: "north" | "south" | "east" | "west" | ""
+    public var orientationRaw: String = ""
+
+    /// Number of windows in the room
+    public var windowCount: Int = 0
+
+    /// Number of doors in the room
+    public var doorCount: Int = 0
+
+    /// Ceiling height in feet (used by manual entry path)
+    public var ceilingHeightFeet: Double?
+
+    /// Scan confidence raw: "low" | "medium" | "high" | ""
+    public var lastScanConfidenceRaw: String = ""
+
+    /// Saved items placed in this room
+    @Relationship(deleteRule: .cascade, inverse: \SavedItem.room)
+    public var items: [SavedItem] = []
+
     // MARK: - Hero Frame Properties (Legacy - for single image support)
 
     /// HEIC compressed hero frame image data (~200KB)
@@ -179,6 +203,62 @@ public final class RoomModel {
         guard let area = area else { return nil }
         let sqFeet = area * 10.764 // Convert to sq ft
         return String(format: "%.0f sq ft", sqFeet)
+    }
+
+    // MARK: - Room-System Computed Properties
+
+    /// Square footage as a number (nil until dimensions exist).
+    public var squareFeet: Double? {
+        guard let area = area else { return nil }
+        return area * 10.764
+    }
+
+    /// Human-readable orientation ("South-facing", "North-facing", ...).
+    public var orientationLabel: String {
+        switch orientationRaw.lowercased() {
+        case "north": return "North-facing"
+        case "south": return "South-facing"
+        case "east":  return "East-facing"
+        case "west":  return "West-facing"
+        default:      return ""
+        }
+    }
+
+    /// True when the room came from manual entry rather than a LiDAR scan.
+    public var isManualEntry: Bool {
+        hasBeenScanned == false && width != nil && length != nil
+    }
+
+    /// Total investment (sum of saved items) in cents.
+    public var totalInvestmentCents: Int {
+        items.reduce(0) { $0 + $1.priceCents }
+    }
+
+    /// Average match score across saved items, or nil if empty.
+    public var averageMatchScore: Int? {
+        guard !items.isEmpty else { return nil }
+        let total = items.reduce(0) { $0 + $1.matchScore }
+        return total / items.count
+    }
+
+    /// Number of saved items that have an AR model.
+    public var arReadyCount: Int {
+        items.filter { $0.hasAR }.count
+    }
+
+    /// Spec's card meta line: "264 sq ft · South-facing · Scanned Apr 2"
+    public var galleryMetaLine: String {
+        var parts: [String] = []
+        if let sf = squareFeet { parts.append(String(format: "%.0f sq ft", sf)) }
+        if !orientationLabel.isEmpty { parts.append(orientationLabel) }
+        if hasBeenScanned {
+            let fmt = DateFormatter()
+            fmt.dateFormat = "MMM d"
+            parts.append("Scanned \(fmt.string(from: updatedAt))")
+        } else if isManualEntry {
+            parts.append("Manual entry")
+        }
+        return parts.joined(separator: " · ")
     }
 
     // MARK: - Methods

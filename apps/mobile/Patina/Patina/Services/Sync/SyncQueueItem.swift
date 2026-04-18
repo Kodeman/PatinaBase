@@ -52,10 +52,15 @@ public final class SyncQueueItem {
     public var styleSignalsJSON: Data
 
     /// Optional USDZ model data
+    /// Deprecated in v2 — prefer `bundlePath` pointing at a `RoomScanPackage`.
     public var usdzData: Data?
 
     /// Optional thumbnail image data
     public var thumbnailData: Data?
+
+    /// Relative bundle path (e.g. `"Scans/{scanId}"`) for v2 advanced scans.
+    /// When set, the sync service uploads from disk and ignores `usdzData`.
+    public var bundlePath: String?
 
     // MARK: - Status
 
@@ -113,7 +118,8 @@ public final class SyncQueueItem {
         roomDataJSON: Data,
         styleSignalsJSON: Data,
         usdzData: Data? = nil,
-        thumbnailData: Data? = nil
+        thumbnailData: Data? = nil,
+        bundlePath: String? = nil
     ) {
         self.id = id
         self.operationTypeRaw = operationType.rawValue
@@ -123,6 +129,7 @@ public final class SyncQueueItem {
         self.styleSignalsJSON = styleSignalsJSON
         self.usdzData = usdzData
         self.thumbnailData = thumbnailData
+        self.bundlePath = bundlePath
         self.statusRaw = SyncQueueStatus.pending.rawValue
         self.retryCount = 0
         self.lastError = nil
@@ -169,7 +176,8 @@ extension SyncQueueItem {
         roomData: FirstWalkRoomData,
         styleSignals: FirstWalkStyleSignals,
         usdzData: Data? = nil,
-        thumbnailData: Data? = nil
+        thumbnailData: Data? = nil,
+        bundlePath: String? = nil
     ) throws -> SyncQueueItem {
         let encoder = JSONEncoder()
         let roomDataJSON = try encoder.encode(roomData)
@@ -181,7 +189,8 @@ extension SyncQueueItem {
             roomDataJSON: roomDataJSON,
             styleSignalsJSON: styleSignalsJSON,
             usdzData: usdzData,
-            thumbnailData: thumbnailData
+            thumbnailData: thumbnailData,
+            bundlePath: bundlePath
         )
     }
 
@@ -203,34 +212,31 @@ extension SyncQueueItem {
 extension SyncQueueItem {
     /// Fetch descriptor for pending items
     public static var pendingItems: FetchDescriptor<SyncQueueItem> {
-        var descriptor = FetchDescriptor<SyncQueueItem>(
+        FetchDescriptor<SyncQueueItem>(
             predicate: #Predicate { item in
                 item.statusRaw == "pending"
             },
             sortBy: [SortDescriptor(\.createdAt)]
         )
-        return descriptor
     }
 
     /// Fetch descriptor for items that need processing (pending or failed with retries left)
     public static var itemsNeedingProcessing: FetchDescriptor<SyncQueueItem> {
-        var descriptor = FetchDescriptor<SyncQueueItem>(
+        FetchDescriptor<SyncQueueItem>(
             predicate: #Predicate { item in
                 item.statusRaw == "pending" || (item.statusRaw == "failed" && item.retryCount < 3)
             },
             sortBy: [SortDescriptor(\.createdAt)]
         )
-        return descriptor
     }
 
     /// Fetch descriptor for failed items
     public static var failedItems: FetchDescriptor<SyncQueueItem> {
-        var descriptor = FetchDescriptor<SyncQueueItem>(
+        FetchDescriptor<SyncQueueItem>(
             predicate: #Predicate { item in
                 item.statusRaw == "failed"
             },
             sortBy: [SortDescriptor(\.lastAttemptAt, order: .reverse)]
         )
-        return descriptor
     }
 }

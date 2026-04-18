@@ -63,6 +63,11 @@ struct PatinaApp: App {
                     switch newPhase {
                     case .active:
                         PostHogService.shared.capture("app_open")
+                        // Retry any persistent-queue scan uploads that were
+                        // stranded while the app was suspended / offline.
+                        Task { @MainActor in
+                            await RoomScanSyncService.shared.processQueueIfOnline()
+                        }
                     case .background:
                         PostHogService.shared.capture("app_background")
                         PostHogService.shared.flush()

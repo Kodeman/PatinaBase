@@ -102,7 +102,10 @@ public final class WalkViewModel {
         progress = 0
         areasScanned = 0
         narrationIndex = 0
+        // Cancel and clear the task so the reset cannot race an in-flight
+        // narration scheduler still holding a reference to the old self.
         narrationTask?.cancel()
+        narrationTask = nil
     }
 
     // MARK: - Narration

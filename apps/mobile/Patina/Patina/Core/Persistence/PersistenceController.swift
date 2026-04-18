@@ -26,8 +26,10 @@ public final class PersistenceController {
         let schema = Schema([
             TableItemModel.self,
             RoomModel.self,
+            SavedItem.self,
             StylePreferenceModel.self,
-            SyncQueueItem.self
+            SyncQueueItem.self,
+            RoomScanPackage.self
         ])
 
         let configuration = ModelConfiguration(
@@ -49,8 +51,10 @@ public final class PersistenceController {
         let schema = Schema([
             TableItemModel.self,
             RoomModel.self,
+            SavedItem.self,
             StylePreferenceModel.self,
-            SyncQueueItem.self
+            SyncQueueItem.self,
+            RoomScanPackage.self
         ])
 
         let configuration = ModelConfiguration(

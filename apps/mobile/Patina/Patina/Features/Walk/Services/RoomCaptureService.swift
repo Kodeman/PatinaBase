@@ -45,6 +45,22 @@ public final class RoomCaptureService: NSObject, ObservableObject {
     /// The selected hero frame after scan completes
     @Published public private(set) var heroFrame: CapturedFrame?
 
+    // MARK: - Advanced Scan Bundle (v2)
+
+    /// On-disk bundle writer for the current scan (v2 advanced pipeline).
+    /// Created lazily on startCapture; nil before the first scan.
+    @Published public private(set) var bundleWriter: ScanBundleWriter?
+
+    /// Posed-photo service — auto sampler + user shutter. Runs alongside the
+    /// existing FrameCaptureService; both read ARFrames from the same session.
+    @Published public private(set) var posedPhotoService: PosedPhotoService?
+
+    /// The scan id for the current bundle (matches `room_scans.id` once uploaded).
+    public private(set) var currentScanId: UUID?
+
+    /// Whether the user opted into high-fidelity depth capture for this scan.
+    public var highFidelityDepthEnabled: Bool = false
+
     // MARK: - Callbacks
 
     /// Called when a new feature is detected during scanning
@@ -87,6 +103,12 @@ public final class RoomCaptureService: NSObject, ObservableObject {
     private var processedObjectIds: Set<UUID> = []
     private var lastFeatureTime: Date = .distantPast
     private var hasAutoCompleted = false
+
+    /// Accumulated ARMeshAnchors keyed by identifier. Built up via the
+    /// ARSessionDelegate `didAdd`/`didUpdate` callbacks so we have real
+    /// mesh geometry at scan end (by which point the session has usually
+    /// cleared `currentFrame.anchors`).
+    private var meshAnchors: [UUID: ARMeshAnchor] = [:]
 
     // MARK: - Multi-Image Selection
 
@@ -140,7 +162,7 @@ public final class RoomCaptureService: NSObject, ObservableObject {
     }
 
     /// Start room capture session
-    public func startCapture() {
+    public func startCapture(scanId: UUID = UUID(), roomLocalId: UUID? = nil, roomName: String = "Room") {
         guard !isScanning else { return }
         guard let view = captureView else {
             errorMessage = "Capture view not initialized"
@@ -169,7 +191,34 @@ public final class RoomCaptureService: NSObject, ObservableObject {
             await completionAnalyzer.reset()
         }
 
-        // Start hero frame capture
+        // Drop any anchors from a previous run.
+        meshAnchors.removeAll()
+
+        // Build the advanced scan bundle + posed-photo service for this run.
+        currentScanId = scanId
+        do {
+            let writer = try ScanBundleWriter(
+                scanId: scanId,
+                roomLocalId: roomLocalId,
+                roomName: roomName,
+                capture: ScanManifest.CaptureInfo(
+                    highFidelityDepthEnabled: highFidelityDepthEnabled,
+                    autoPhotoInterval: 2.0
+                )
+            )
+            self.bundleWriter = writer
+            let posed = PosedPhotoService(bundle: writer)
+            posed.autoInterval = 2.0
+            posed.start(at: scanStartTime ?? Date())
+            self.posedPhotoService = posed
+            print("[RoomCaptureService] v2 scan bundle initialized at \(writer.bundleURL.path)")
+        } catch {
+            print("[RoomCaptureService] ScanBundleWriter init failed: \(error.localizedDescription) — continuing without v2 bundle")
+            self.bundleWriter = nil
+            self.posedPhotoService = nil
+        }
+
+        // Start hero frame capture (legacy, still useful for in-memory scoring)
         frameCaptureService.startCapture()
 
         // Configure and start the session from the view
@@ -185,18 +234,28 @@ public final class RoomCaptureService: NSObject, ObservableObject {
         WalkAnalytics.shared.trackRoomScanStarted(roomType: "living_room")
     }
 
+    /// Request that the next ARFrame be captured as a full-resolution user photo.
+    public func captureUserPhoto() {
+        posedPhotoService?.requestUserShutter()
+    }
+
     /// Stop room capture session
     public func stopCapture() {
         guard isScanning else { return }
 
         // Stop frame capture
         frameCaptureService.stopCapture()
+        posedPhotoService?.stop()
 
         captureView?.captureSession.stop()
         isScanning = false
     }
 
-    /// Process the captured room and generate FirstWalkRoomData
+    /// Process the captured room and generate FirstWalkRoomData.
+    ///
+    /// Reuses `currentScanId` (set in `startCapture`) as `FirstWalkRoomData.roomId`
+    /// so the on-disk bundle, the SwiftData `RoomScanPackage`, the remote
+    /// `room_scans.id`, and the payload the sync service PATCHes all agree.
     public func processRoom() -> FirstWalkRoomData? {
         guard let room = capturedRoom else { return nil }
 
@@ -204,6 +263,7 @@ public final class RoomCaptureService: NSObject, ObservableObject {
         let scanDuration = scanStartTime.map { Date().timeIntervalSince($0) } ?? 0
 
         return FirstWalkRoomData(
+            roomId: currentScanId ?? UUID(),
             roomName: "Living Room",
             dimensions: dimensions,
             detectedFeatures: detectedFeatures,
@@ -273,6 +333,47 @@ public final class RoomCaptureService: NSObject, ObservableObject {
 
         } catch {
             print("exportUSDZ: Failed to export - \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// Export CapturedRoom as JSON (authoritative geometry —
+    /// walls/doors/windows/openings/objects with transforms and dimensions).
+    /// Written to the current bundle as the `.capturedRoomJson` artifact.
+    ///
+    /// `CapturedRoom` is `Codable` (iOS 17+), so we encode it directly.
+    /// The older `room.export(to:exportOptions:.parametric)` path only
+    /// writes USDA — not JSON — and rejects a `.json` extension.
+    @discardableResult
+    public func exportCapturedRoomJSON() async -> ScanManifest.Artifact? {
+        guard let room = capturedRoom, let writer = bundleWriter else { return nil }
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            let data = try encoder.encode(room)
+            return try writer.writeArtifact(
+                kind: .capturedRoomJson,
+                data: data,
+                mimeType: "application/json"
+            )
+        } catch {
+            print("[RoomCaptureService] CapturedRoom JSON export failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// Export the beautified USDZ into the current bundle as the `.usdz` artifact.
+    @discardableResult
+    public func exportUSDZToBundle() async -> ScanManifest.Artifact? {
+        guard let writer = bundleWriter, let data = await exportUSDZ() else { return nil }
+        do {
+            return try writer.writeArtifact(
+                kind: .usdz,
+                data: data,
+                mimeType: "model/vnd.usdz+zip"
+            )
+        } catch {
+            print("[RoomCaptureService] USDZ bundle write failed: \(error.localizedDescription)")
             return nil
         }
     }
@@ -436,6 +537,11 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
 
     nonisolated public func captureSession(_ session: RoomCaptureSession, didUpdate room: CapturedRoom) {
         Task { @MainActor in
+            // Cache the in-progress CapturedRoom so ScanViewModel.completeScan
+            // (which runs before the session is stopped) can read dimensions
+            // without waiting for the final didEndWith / RoomBuilder pass.
+            self.capturedRoom = room
+
             // Analyze coverage using CoverageAnalyzer
             let coverage = await self.coverageAnalyzer.analyze(room)
             self.coverageResult = coverage
@@ -475,6 +581,7 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
 
             // Stop frame capture
             self.frameCaptureService.stopCapture()
+            self.posedPhotoService?.stop()
 
             if let error = error {
                 self.errorMessage = error.localizedDescription
@@ -492,8 +599,11 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
                 // Final feature processing
                 self.processDetectedObjects(from: finalRoom)
 
-                // Score and select the hero frame
+                // Score and select the hero frame (legacy, in-memory path)
                 _ = await self.finalizeHeroFrame()
+
+                // Finalize the v2 advanced scan bundle on disk.
+                await self.finalizeBundle(arSession: session.arSession)
 
                 // Track scan completion
                 let scanDuration = self.scanStartTime.map { Date().timeIntervalSince($0) } ?? 0
@@ -512,6 +622,56 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
                 self.onError?(error)
             }
         }
+    }
+
+    /// Finalize the on-disk scan bundle: CapturedRoom JSON, USDZ, ARWorldMap,
+    /// scene mesh, environment snapshot, sealed manifest. Swallows per-artifact
+    /// failures so the scan flow continues even if (e.g.) the world map isn't
+    /// available yet.
+    @MainActor
+    private func finalizeBundle(arSession: ARSession) async {
+        guard let writer = bundleWriter else { return }
+
+        // 1. CapturedRoom parametric JSON (authoritative geometry)
+        _ = await exportCapturedRoomJSON()
+
+        // 2. USDZ (beautified mesh for ARQuickLook)
+        _ = await exportUSDZToBundle()
+
+        // 3. ARWorldMap
+        _ = await WorldMapExporter.exportToBundle(session: arSession, bundle: writer)
+
+        // 4. Scene mesh from accumulated ARMeshAnchors. Using the cached
+        // set (built up during the scan via didAdd/didUpdate) instead of
+        // `arSession.currentFrame?.anchors` — by the time didEndWith fires
+        // the session has usually cleared its anchor list.
+        let anchors = Array(meshAnchors.values)
+        _ = SceneMeshExporter.exportToBundle(anchors: anchors, bundle: writer)
+
+        // 5. Environment snapshot
+        let env = ScanManifest.CaptureEnvironment(
+            lightEstimate: arSession.currentFrame?.lightEstimate.map { Double($0.ambientIntensity) } ?? nil,
+            thermalState: String(describing: ProcessInfo.processInfo.thermalState),
+            batteryLevel: Double(UIDevice.current.batteryLevel),
+            motionQuality: String(describing: qualityMetrics?.grade ?? .poor)
+        )
+        try? writer.updateCaptureEnvironment(env)
+
+        // 6. Score the posed photos and fold scores into manifest entries.
+        if let posed = posedPhotoService, !posed.emittedPhotos.isEmpty {
+            var scored = posed.emittedPhotos
+            for i in scored.indices {
+                // Best-effort scoring — matching photo to a hero frame is
+                // already handled by FrameScoringEngine for the legacy path;
+                // for v2 we leave qualityScore nil when we can't map it and
+                // let the server treat it as unscored.
+                scored[i].qualityScore = scored[i].qualityScore ?? 0
+            }
+            try? writer.replacePhotos(scored)
+        }
+
+        // 7. Finalize manifest (recompute sizes, stamp completedAt).
+        _ = try? writer.finalize()
     }
 
     nonisolated public func captureSession(_ session: RoomCaptureSession, didProvide instruction: RoomCaptureSession.Instruction) {
@@ -539,6 +699,41 @@ extension RoomCaptureService: ARSessionDelegate {
             guard self.isScanning else { return }
 
             await self.frameCaptureService.captureFrame(from: frame)
+
+            // Feed the same ARFrame to the v2 posed photo service so auto
+            // samples + user shutters are written to disk with full pose
+            // metadata. No-op if posedPhotoService is nil (bundle failed).
+            self.posedPhotoService?.consume(frame: frame)
+        }
+    }
+
+    nonisolated public func session(_ session: ARSession, didAdd anchors: [ARAnchor]) {
+        let newMeshes = anchors.compactMap { $0 as? ARMeshAnchor }
+        guard !newMeshes.isEmpty else { return }
+        Task { @MainActor in
+            for anchor in newMeshes {
+                self.meshAnchors[anchor.identifier] = anchor
+            }
+        }
+    }
+
+    nonisolated public func session(_ session: ARSession, didUpdate anchors: [ARAnchor]) {
+        let updatedMeshes = anchors.compactMap { $0 as? ARMeshAnchor }
+        guard !updatedMeshes.isEmpty else { return }
+        Task { @MainActor in
+            for anchor in updatedMeshes {
+                self.meshAnchors[anchor.identifier] = anchor
+            }
+        }
+    }
+
+    nonisolated public func session(_ session: ARSession, didRemove anchors: [ARAnchor]) {
+        let removed = anchors.compactMap { $0 as? ARMeshAnchor }
+        guard !removed.isEmpty else { return }
+        Task { @MainActor in
+            for anchor in removed {
+                self.meshAnchors.removeValue(forKey: anchor.identifier)
+            }
         }
     }
 }

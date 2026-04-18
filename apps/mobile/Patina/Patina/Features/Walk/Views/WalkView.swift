@@ -15,6 +15,7 @@ struct WalkView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.firstLaunchCoordinator) private var firstLaunchCoordinator
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appCoordinator) private var coordinator
 
     // RoomPlan integration
     @StateObject private var captureService = RoomCaptureService()
@@ -120,7 +121,7 @@ struct WalkView: View {
                 VStack(spacing: PatinaSpacing.sm) {
                     Image(systemName: "chevron.up")
                         .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(PatinaColors.clayBeige)
+                        .foregroundColor(PatinaColors.clay)
                         .offset(y: swipeHintOffset)
                         .animation(
                             .easeInOut(duration: 1.0).repeatForever(autoreverses: true),
@@ -301,6 +302,10 @@ struct WalkView: View {
         captureService.onProgressUpdate = { progress in
             viewModel.progress = Double(progress)
             firstLaunchCoordinator?.updateWalkProgress(progress)
+            // Drive Companion Journey Mode — CompanionOverlay switches to
+            // the journey branch whenever walkProgress is non-nil during
+            // a .walk / .walkSession route.
+            coordinator.companionContext.walkProgress = Float(progress)
         }
 
         // Handle completion status changes (ready to finish scanning)
@@ -342,32 +347,54 @@ struct WalkView: View {
         }
     }
 
-    // MARK: - Sync to Supabase
+    // MARK: - Local + Remote Sync
 
+    /// Two-phase scan save:
+    ///   1. Insert (or update) a local `RoomModel` via `RoomStore.saveScan`
+    ///      so the UI has the room immediately, even offline.
+    ///   2. Kick off the remote upload; on success, stamp the local row with
+    ///      the server-side `remoteId` / `remoteScanId`. On failure, mark the
+    ///      local row as `.failed` and hand the raw payload to the persistent
+    ///      `SyncQueueItem` store so it gets retried later.
     private func syncRoomScan(roomData: FirstWalkRoomData, styleSignals: FirstWalkStyleSignals) async {
         isSyncing = true
         syncError = nil
 
-        // Export USDZ model if available
+        // Phase 1: save locally. This must run on the main actor because the
+        // SwiftData ModelContext is main-actor isolated.
+        let store = RoomStore(context: modelContext)
+        _ = store.saveScan(roomData: roomData)
+
+        // Export USDZ model if available (may be nil in simulator)
         let usdzData = await captureService.exportUSDZ()
 
+        // Phase 2: remote upload.
         do {
-            // Try immediate upload first
-            let remoteScanId = try await RoomScanSyncService.shared.uploadRoomScan(
+            let result = try await RoomScanSyncService.shared.uploadRoomScan(
                 roomData: roomData,
                 styleSignals: styleSignals,
                 thumbnail: nil,
-                projectId: nil
+                projectId: nil,
+                existingRoomRemoteId: nil,
+                usdzData: usdzData
+            )
+
+            store.markRoomSynced(
+                localId: roomData.roomId,
+                remoteRoomId: result.roomId,
+                remoteScanId: result.scanId
             )
 
             isSyncing = false
-            print("Room scan synced successfully with ID: \(remoteScanId)")
+            print("[WalkView] Room scan synced — room=\(result.roomId) scan=\(result.scanId)")
         } catch {
             isSyncing = false
             syncError = error.localizedDescription
-            print("Failed to sync room scan: \(error)")
+            print("[WalkView] Remote sync failed: \(error)")
 
-            // Queue persistently for later retry (survives app restart)
+            store.markRoomSyncFailed(localId: roomData.roomId)
+
+            // Queue persistently for later retry (survives app restart).
             do {
                 try await RoomScanSyncService.shared.queueUploadPersistent(
                     roomData: roomData,
@@ -375,9 +402,9 @@ struct WalkView: View {
                     usdzData: usdzData,
                     thumbnailData: nil
                 )
-                print("Queued room scan for later sync")
+                print("[WalkView] Queued room scan for later sync")
             } catch {
-                print("Failed to queue room scan: \(error)")
+                print("[WalkView] Failed to enqueue room scan: \(error)")
             }
         }
     }
