@@ -59,6 +59,26 @@ struct PatinaApp: App {
                     // Configure deep link handler with coordinator
                     DeepLinkHandler.shared.configure(coordinator: coordinator)
                 }
+                .task(priority: .utility) {
+                    // Scan bundle housekeeping on launch: evict oldest synced
+                    // bundles if we're over the disk budget, then surface any
+                    // recoverable sessions left over from a prior crash /
+                    // termination. Both run silently on the main actor's
+                    // SwiftData context.
+                    let context = PersistenceController.shared.container.mainContext
+                    await ScanDiskBudget.shared.evictIfNeeded(in: context)
+                    let candidates = await ScanRecoveryService.shared.scanForRecoverableSessions(in: context)
+                    if !candidates.isEmpty {
+                        UserDefaults.standard.set(true, forKey: "pendingScanRecovery")
+                        NotificationCenter.default.post(
+                            name: .patinaScanRecoveryCandidatesDidAppear,
+                            object: nil,
+                            userInfo: ["count": candidates.count]
+                        )
+                    } else {
+                        UserDefaults.standard.set(false, forKey: "pendingScanRecovery")
+                    }
+                }
                 .onChange(of: scenePhase) { _, newPhase in
                     switch newPhase {
                     case .active:
@@ -77,4 +97,15 @@ struct PatinaApp: App {
                 }
         }
     }
+}
+
+// MARK: - Notifications
+
+public extension Notification.Name {
+    /// Posted from the launch task when `ScanRecoveryService` finds one or
+    /// more unfinished scan bundles worth offering recovery for. The
+    /// `userInfo` carries `"count": Int`. Views that own the recovery
+    /// prompt observe this; the `pendingScanRecovery` UserDefaults flag is
+    /// also set so late-subscribers can still pick it up.
+    static let patinaScanRecoveryCandidatesDidAppear = Notification.Name("patinaScanRecoveryCandidatesDidAppear")
 }
