@@ -122,7 +122,14 @@ struct ContentView: View {
             // Navigation stack for main features
             NavigationStack(path: Binding(
                 get: { coordinator.navigationPath },
-                set: { coordinator.navigationPath = $0 }
+                set: { newValue in
+                    #if DEBUG
+                    if newValue.count != coordinator.navigationPath.count {
+                        print("[ContentView] navigationPath.count \(coordinator.navigationPath.count) → \(newValue.count)")
+                    }
+                    #endif
+                    coordinator.navigationPath = newValue
+                }
             )) {
                 mainHomeView
                     .navigationDestination(for: AppRoute.self) { route in
@@ -142,6 +149,16 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: coordinator.isFirstLaunch)
+        .onChange(of: coordinator.isFirstLaunch) { old, new in
+            #if DEBUG
+            print("[ContentView] isFirstLaunch \(old) → \(new)")
+            #endif
+        }
+        .onChange(of: coordinator.phase) { old, new in
+            #if DEBUG
+            print("[ContentView] phase \(old) → \(new)")
+            #endif
+        }
     }
 
     // MARK: - First Launch Overlay

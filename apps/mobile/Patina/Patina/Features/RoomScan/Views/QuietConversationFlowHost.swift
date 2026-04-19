@@ -29,7 +29,17 @@ struct QuietConversationFlowHost: View {
     @State private var conversationViewModel: StyleConversationViewModel?
     /// Scan id the review step operates on; populated when the Walk finishes
     /// so the ScanReviewView can read the on-disk manifest for that bundle.
-    @State private var reviewScanId: UUID?
+    /// Driven as an `Identifiable` item for `.fullScreenCover(item:)` so the
+    /// review sits on top of the host without relying on an internal `step`
+    /// swap inside a NavigationStack destination (which iOS 26 SwiftUI has
+    /// been observed to collapse unpredictably — #bug repro'd via MobAI).
+    @State private var reviewScan: ReviewBundleID?
+
+    /// Identifiable wrapper so `.fullScreenCover(item:)` can present the
+    /// review on any distinct scan completion.
+    private struct ReviewBundleID: Identifiable, Equatable {
+        let id: UUID
+    }
 
     private enum Step: Equatable {
         case initial
@@ -46,7 +56,57 @@ struct QuietConversationFlowHost: View {
         ZStack {
             content
         }
-        .onAppear(perform: bootstrap)
+        .onAppear {
+            #if DEBUG
+            print("[QuietConversationFlowHost] host onAppear step=\(step)")
+            #endif
+            bootstrap()
+        }
+        .onDisappear {
+            #if DEBUG
+            print("[QuietConversationFlowHost] host onDisappear step=\(step)")
+            #endif
+        }
+        .onChange(of: step) { oldValue, newValue in
+            #if DEBUG
+            print("[QuietConversationFlowHost] step changed \(oldValue) → \(newValue)")
+            #endif
+        }
+        .fullScreenCover(item: $reviewScan) { review in
+            if let vm = scanViewModel {
+                ScanReviewView(
+                    captureService: vm.captureService,
+                    scanId: review.id,
+                    onComplete: {
+                        #if DEBUG
+                        print("[QuietConversationFlowHost] review onComplete scanId=\(review.id)")
+                        #endif
+                        kickOffReviewUpload(scanId: review.id)
+                        reviewScan = nil
+                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
+                            step = .softLanding
+                        }
+                    },
+                    onCancel: {
+                        #if DEBUG
+                        print("[QuietConversationFlowHost] review onCancel scanId=\(review.id)")
+                        #endif
+                        let ctx = modelContext
+                        Task { @MainActor in
+                            await ScanRecoveryService.shared.discard(review.id, in: ctx)
+                        }
+                        reviewScan = nil
+                        dismiss()
+                        coordinator.navigate(to: .heroFrame)
+                    }
+                )
+                .onAppear {
+                    #if DEBUG
+                    print("[QuietConversationFlowHost] review cover appeared scanId=\(review.id)")
+                    #endif
+                }
+            }
+        }
     }
 
     // MARK: - Bootstrap
@@ -95,16 +155,18 @@ struct QuietConversationFlowHost: View {
                         coordinator.navigate(to: .heroFrame)
                         return
                     }
-                    // Real scan — resolve the bundle id and show the review.
+                    // Real scan — present the review as a full-screen cover
+                    // layered OVER the threshold host. This sidesteps an iOS
+                    // 26 SwiftUI quirk where swapping internal `step` to
+                    // `.review` inside a NavigationStack destination causes
+                    // the destination view to collapse ~700ms after the
+                    // child view mounts.
                     let resolvedScanId = vm.captureService.currentScanId
                         ?? scanned.sessionId
-                    reviewScanId = resolvedScanId
                     #if DEBUG
-                    print("[QuietConversationFlowHost] step .threshold → .review scanId=\(resolvedScanId) reason=\(reason)")
+                    print("[QuietConversationFlowHost] .threshold → review cover scanId=\(resolvedScanId) reason=\(reason)")
                     #endif
-                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
-                        step = .review
-                    }
+                    reviewScan = ReviewBundleID(id: resolvedScanId)
                 }
             }
 
@@ -117,51 +179,11 @@ struct QuietConversationFlowHost: View {
             }
 
         case .review:
-            if let vm = scanViewModel {
-                let scanId = reviewScanId
-                    ?? vm.captureService.currentScanId
-                    ?? session?.sessionId
-                    ?? UUID()
-                ScanReviewView(
-                    captureService: vm.captureService,
-                    scanId: scanId,
-                    onComplete: {
-                        // User finished review — kick off the advanced bundle
-                        // upload and advance to the Soft Landing transition.
-                        kickOffReviewUpload(scanId: scanId)
-                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
-                            step = .softLanding
-                        }
-                    },
-                    onCancel: {
-                        // User chose "Discard" — drop the bundle and return to
-                        // the home screen. The ScanRecoveryService handles
-                        // both the on-disk bundle and the SwiftData row.
-                        let ctx = modelContext
-                        Task { @MainActor in
-                            await ScanRecoveryService.shared.discard(scanId, in: ctx)
-                        }
-                        dismiss()
-                        coordinator.navigate(to: .heroFrame)
-                    }
-                )
-                .onAppear {
-                    #if DEBUG
-                    print("[QuietConversationFlowHost] .review appeared scanId=\(scanId)")
-                    #endif
-                }
-            } else {
-                // scanViewModel lost — shouldn't happen, but render a fallback
-                // so the destination isn't empty and SwiftUI doesn't pop out.
-                VStack(spacing: 16) {
-                    ProgressView().tint(PatinaColors.charcoal)
-                    Text("Preparing your scan…")
-                        .font(.custom("Inter-Regular", size: 14))
-                        .foregroundColor(PatinaColors.agedOak)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(PatinaColors.offWhite.ignoresSafeArea())
-            }
+            // No longer reached — review is now a .fullScreenCover on the
+            // host (see body). Kept in the enum for back-compat with older
+            // navigation routes; renders the threshold underneath so the
+            // cover has a non-empty base layer.
+            EmptyView()
 
         case .softLanding:
             if let session = session {
@@ -245,7 +267,7 @@ struct QuietConversationFlowHost: View {
         profile = nil
         scanViewModel = nil
         conversationViewModel = nil
-        reviewScanId = nil
+        reviewScan = nil
         step = .initial
     }
 
