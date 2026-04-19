@@ -26,6 +26,12 @@ public final class RoomCaptureService: NSObject, ObservableObject {
     @Published public private(set) var detectedFeatures: [DetectedFeature] = []
     @Published public private(set) var errorMessage: String?
 
+    /// Non-nil when the current RoomPlan or ARKit session has failed in a
+    /// non-recoverable way (e.g. `RSError` drift detection, ARKit world-
+    /// tracking failure). Consumers (ScanViewModel) surface this to the user
+    /// with a retry/cancel affordance; cleared by `retryAfterFailure()`.
+    @Published public private(set) var sessionFailure: (any Error)?
+
     // MARK: - Analysis Results (NEW)
 
     /// Current coverage analysis result
@@ -294,6 +300,33 @@ public final class RoomCaptureService: NSObject, ObservableObject {
 
         captureView?.captureSession.stop()
         isScanning = false
+    }
+
+    /// Recover from a `sessionFailure` by tearing down whatever is left of the
+    /// failed session and starting a brand-new one with a fresh scanId. Called
+    /// from the UI's "Try again" affordance on the session-lost overlay. The
+    /// previous bundle (if any) is left on disk for `ScanRecoveryService` to
+    /// reap on next launch — not deleted synchronously because the user might
+    /// still want to recover it via a different code path.
+    public func retryAfterFailure() {
+        // Force-stop anything still running. `stopCapture` early-returns if
+        // `isScanning == false`, but on a hard failure we want to make sure
+        // both AR/RoomPlan + frame/photo services are released.
+        frameCaptureService.stopCapture()
+        posedPhotoService?.stop()
+        captureView?.captureSession.stop()
+        isScanning = false
+        sessionFailure = nil
+        errorMessage = nil
+        scanProgress = 0
+        capturedRoom = nil
+        detectedFeatures = []
+        currentScanId = nil
+        bundleWriter = nil
+        meshAnchors.removeAll()
+
+        // Start a fresh capture with a new scanId.
+        startCapture()
     }
 
     /// Process the captured room and generate FirstWalkRoomData.
@@ -638,6 +671,10 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
 
             if let error = error {
                 self.errorMessage = error.localizedDescription
+                self.sessionFailure = error
+                #if DEBUG
+                print("[RoomCaptureService] capture session ended with error: \(error.localizedDescription)")
+                #endif
                 self.onError?(error)
                 return
             }
@@ -1000,5 +1037,34 @@ extension RoomCaptureService: ARSessionDelegate {
                 self.meshAnchors.removeValue(forKey: anchor.identifier)
             }
         }
+    }
+
+    /// ARKit world-tracking failure (e.g. sensor unavailable, world map
+    /// invalidated). RoomPlan's `captureSession(_:didEndWith:error:)` will
+    /// usually fire shortly after this with the same root cause; we surface
+    /// `sessionFailure` here so the UI can react before RoomPlan winds down.
+    nonisolated public func session(_ session: ARSession, didFailWithError error: Error) {
+        Task { @MainActor in
+            #if DEBUG
+            print("[RoomCaptureService] AR session failed: \(error.localizedDescription)")
+            #endif
+            self.errorMessage = error.localizedDescription
+            self.sessionFailure = error
+        }
+    }
+
+    /// AR session interrupted (e.g. phone locked, app backgrounded).
+    /// We do NOT mark this as a `sessionFailure` because the system will
+    /// usually call `sessionInterruptionEnded(_:)` and tracking resumes.
+    nonisolated public func sessionWasInterrupted(_ session: ARSession) {
+        #if DEBUG
+        print("[RoomCaptureService] AR session interrupted")
+        #endif
+    }
+
+    nonisolated public func sessionInterruptionEnded(_ session: ARSession) {
+        #if DEBUG
+        print("[RoomCaptureService] AR session interruption ended")
+        #endif
     }
 }

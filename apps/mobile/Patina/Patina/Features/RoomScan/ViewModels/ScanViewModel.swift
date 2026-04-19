@@ -29,6 +29,10 @@ public enum ScanTrackingState: Equatable {
     case featureLoss
     case idle
     case roomTooLarge
+    /// Terminal session failure (RSError drift detection, AR world-tracking
+    /// failure). Recoverable only by tearing down the session and starting
+    /// fresh — surfaced via a blocking modal in ScanWalkView.
+    case sessionLost
 }
 
 /// Final reason the scan ended — used by the coordinator.
@@ -85,6 +89,13 @@ public final class ScanViewModel {
 
     private var progressObservation: AnyCancellable?
     private var coachingHintObservation: AnyCancellable?
+    private var sessionFailureObservation: AnyCancellable?
+
+    /// Non-nil while the user is staring at a session-lost overlay; bound to
+    /// `captureService.sessionFailure`. The underlying error's
+    /// `localizedDescription` is shown for diagnostics in DEBUG builds; the
+    /// user-facing copy stays generic ("Lost tracking — try again?").
+    public private(set) var sessionFailureMessage: String?
 
     // MARK: - Init
 
@@ -211,6 +222,32 @@ public final class ScanViewModel {
         whisperState = .forProgress(scanProgress)
     }
 
+    /// "Try again" on the session-lost overlay — wipe the failed session and
+    /// start a fresh one with a new scanId.
+    public func didTapRetryAfterSessionLost() {
+        analytics.track(.scanStarted)
+        scanProgress = 0
+        scanQuality = 0
+        whisperState = .forProgress(0)
+        isComplete = false
+        isPaused = false
+        hasStartedFromMotion = false
+        readyToCompleteSince = nil
+        reportedMilestones.removeAll()
+        haptics.resetSession()
+        sessionFailureMessage = nil
+        trackingState = .normal
+        captureService.retryAfterFailure()
+    }
+
+    /// "Cancel" on the session-lost overlay — abandon the scan and route home.
+    public func didTapCancelAfterSessionLost() {
+        analytics.track(.scanAbandoned(progress: scanProgress))
+        captureService.stopCapture()
+        sessionFailureMessage = nil
+        completeScan(reason: .userAbandon)
+    }
+
     // MARK: - Observation
 
     private func observeCaptureService() {
@@ -227,6 +264,26 @@ public final class ScanViewModel {
             .receive(on: RunLoop.main)
             .sink { [weak self] hint in
                 self?.coachingHint = hint
+            }
+
+        // Surface terminal session failures (RSError drift detection, ARKit
+        // world-tracking failure, etc.) as a `sessionLost` tracking state so
+        // the Walk UI can offer a Try Again / Cancel affordance instead of
+        // letting the user stare at a frozen camera.
+        sessionFailureObservation = captureService.$sessionFailure
+            .receive(on: RunLoop.main)
+            .sink { [weak self] error in
+                guard let self else { return }
+                if let error {
+                    self.sessionFailureMessage = error.localizedDescription
+                    self.trackingState = .sessionLost
+                    self.analytics.track(
+                        .scanAbandoned(progress: self.scanProgress)
+                    )
+                } else if self.trackingState == .sessionLost {
+                    self.sessionFailureMessage = nil
+                    self.trackingState = .normal
+                }
             }
     }
 

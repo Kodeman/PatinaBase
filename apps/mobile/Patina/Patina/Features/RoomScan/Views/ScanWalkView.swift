@@ -92,6 +92,14 @@ struct ScanWalkView: View {
             if viewModel.trackingState == .idle {
                 idleOptions
             }
+
+            // 7. Session-lost modal — RoomPlan/ARKit failed in a non-recoverable
+            // way (drift detection, world-tracking failure). Blocks the rest
+            // of the UI until the user picks a path forward.
+            if viewModel.trackingState == .sessionLost {
+                sessionLostOverlay
+                    .transition(.opacity)
+            }
         }
         .ignoresSafeArea()
         .overlay {
@@ -106,6 +114,7 @@ struct ScanWalkView: View {
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.showPauseMenu)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.trackingState)
         .onChange(of: viewModel.whisperState.text) { _, newText in
             // Announce whisper text changes to VoiceOver
             guard newText != lastAnnouncedText else { return }
@@ -121,6 +130,64 @@ struct ScanWalkView: View {
         case .featureLoss:  return .featureLoss
         default: return nil
         }
+    }
+
+    private var sessionLostOverlay: some View {
+        ZStack {
+            PatinaColors.charcoal.opacity(0.92)
+                .ignoresSafeArea()
+
+            VStack(spacing: 24) {
+                Spacer()
+
+                Image(systemName: "viewfinder.trianglebadge.exclamationmark")
+                    .font(.system(size: 56, weight: .light))
+                    .foregroundColor(PatinaColors.offWhite.opacity(0.85))
+
+                VStack(spacing: 12) {
+                    Text("Lost the room")
+                        .font(.custom("PlayfairDisplay-Italic", size: 26))
+                        .foregroundColor(PatinaColors.offWhite)
+
+                    Text("Tracking dropped — usually from a sudden move or a featureless wall. Let's try once more from where you stand.")
+                        .font(.custom("Inter-Regular", size: 14))
+                        .foregroundColor(PatinaColors.offWhite.opacity(0.75))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
+
+                Spacer()
+
+                VStack(spacing: 12) {
+                    Button(action: viewModel.didTapRetryAfterSessionLost) {
+                        Text("Try again")
+                            .font(.custom("Inter-Medium", size: 15))
+                            .foregroundColor(PatinaColors.charcoal)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .background(RoundedRectangle(cornerRadius: 26).fill(PatinaColors.offWhite))
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: viewModel.didTapCancelAfterSessionLost) {
+                        Text("Cancel scan")
+                            .font(.custom("Inter-Medium", size: 15))
+                            .foregroundColor(PatinaColors.offWhite)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .background(
+                                RoundedRectangle(cornerRadius: 26)
+                                    .stroke(PatinaColors.offWhite.opacity(0.6), lineWidth: 1.5)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 40)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Lost tracking. Try again or cancel the scan.")
     }
 
     private var idleOptions: some View {
