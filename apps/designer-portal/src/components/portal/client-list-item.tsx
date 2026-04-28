@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { StageBadge } from './stage-badge';
 
 type Stage = 'lead' | 'proposal' | 'active' | 'completed' | 'nurture';
@@ -36,17 +36,17 @@ export function ClientListItem({
   financialValue,
   financialLabel,
 }: ClientListItemProps) {
-  const router = useRouter();
   const colors = avatarColors[stage] || avatarColors.active;
 
   return (
-    <div
-      className="grid cursor-pointer items-center gap-4 border-b border-[var(--border-subtle)] py-4 transition-colors hover:bg-[var(--bg-hover)]"
+    <Link
+      href={`/portal/clients/${id}`}
+      aria-label={`${name}, link`}
+      className="grid cursor-pointer items-center gap-4 border-b border-[var(--border-subtle)] py-4 no-underline transition-colors hover:bg-[var(--bg-hover)]"
       style={{
         gridTemplateColumns: '44px 1fr auto auto',
         transitionDuration: 'var(--duration-fast)',
       }}
-      onClick={() => router.push(`/portal/clients/${id}`)}
     >
       {/* Avatar */}
       <div
@@ -95,6 +95,6 @@ export function ClientListItem({
           )}
         </div>
       )}
-    </div>
+    </Link>
   );
 }

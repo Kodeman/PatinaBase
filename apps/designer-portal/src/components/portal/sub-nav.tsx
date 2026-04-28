@@ -7,6 +7,20 @@ import { ChevronRight } from 'lucide-react';
 import { useActiveZone } from '@/hooks/use-active-zone';
 import { useNavCounts } from '@/hooks/use-nav-counts';
 import { ZONE_ACTIONS } from '@/config/navigation';
+import { useClient } from '@patina/supabase';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Resolves the display name for a client breadcrumb segment.
+ * Only rendered when a UUID-shaped segment appears under /portal/clients/[id]/...
+ */
+function ClientBreadcrumbLabel({ clientId }: { clientId: string }) {
+  const { data } = useClient(clientId);
+  const displayName =
+    data?.client?.full_name || data?.client_name || data?.client_email || clientId;
+  return <>{displayName}</>;
+}
 
 export function SubNav() {
   const { zone, subNavItems, isDeepPage, breadcrumbs, activeSubNavHref } = useActiveZone();
@@ -24,7 +38,13 @@ export function SubNav() {
         {isDeepPage ? (
           // Breadcrumb mode for deep pages
           <div className="flex h-[38px] items-center gap-1.5">
-            {breadcrumbs.map((crumb, i) => (
+            {breadcrumbs.map((crumb, i) => {
+              // Detect a UUID segment under /portal/clients/[id] — resolve to client name
+              const clientUuidInHref = crumb.href?.match(/^\/portal\/clients\/([0-9a-f-]+)$/i)?.[1];
+              const isClientUuidCrumb =
+                typeof clientUuidInHref === 'string' && UUID_RE.test(clientUuidInHref);
+
+              return (
               <span key={i} className="flex items-center gap-1.5">
                 {i > 0 && (
                   <ChevronRight className="h-3 w-3 text-[var(--text-muted)] opacity-40" />
@@ -34,7 +54,11 @@ export function SubNav() {
                     href={crumb.href}
                     className="font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--accent-primary)] no-underline hover:text-[var(--text-primary)]"
                   >
-                    {crumb.label}
+                    {isClientUuidCrumb ? (
+                      <ClientBreadcrumbLabel clientId={clientUuidInHref as string} />
+                    ) : (
+                      crumb.label
+                    )}
                   </Link>
                 ) : (
                   <span className="font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--text-muted)]">
@@ -42,7 +66,8 @@ export function SubNav() {
                   </span>
                 )}
               </span>
-            ))}
+              );
+            })}
           </div>
         ) : (
           // Normal sub-nav mode
