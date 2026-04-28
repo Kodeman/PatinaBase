@@ -3,6 +3,8 @@
 -- Wires designer@patina.dev to client@patina.dev so the project-creation
 -- wizard's client dropdown (useClients() → designer_clients) is non-empty
 -- in local dev.
+-- Also seeds client_activity_log for the designer↔client pair so the
+-- client profile page shows activity feed and relationship timeline.
 -- Idempotent.
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -14,6 +16,7 @@ DECLARE
   uid_designer   UUID := 'a0000000-0000-0000-0000-000000000004';
   uid_client     UUID := 'a0000000-0000-0000-0000-000000000005';
   d UUID;
+  dc_id UUID;
 BEGIN
   -- Wire each dev designer-ish profile to client@patina.dev so any of them
   -- can use the project-creation wizard's client picker in local dev.
@@ -30,4 +33,53 @@ BEGIN
       );
     END IF;
   END LOOP;
+
+  -- Seed activity log for the designer@patina.dev ↔ client@patina.dev pair
+  -- so the client profile page activity feed and timeline show real data.
+  SELECT id INTO dc_id FROM public.designer_clients
+    WHERE designer_id = uid_designer AND client_id = uid_client
+    LIMIT 1;
+
+  IF dc_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.client_activity_log WHERE designer_client_id = dc_id LIMIT 1
+  ) THEN
+    INSERT INTO public.client_activity_log
+      (designer_client_id, activity_type, title, description, metadata, actor_name, created_at)
+    VALUES
+      (dc_id, 'status_change',  'Client relationship started',
+       'Designer connected with client via direct invite.',
+       '{"from_status": null, "to_status": "active"}'::jsonb,
+       'Designer',
+       now() - interval '90 days'),
+      (dc_id, 'milestone',      'Initial consultation completed',
+       'Discussed scope, budget, and style preferences.',
+       '{"milestone_type": "consultation"}'::jsonb,
+       'Designer',
+       now() - interval '85 days'),
+      (dc_id, 'project_update', 'Project brief approved',
+       'Client signed off on the Aspen Loft Refresh brief.',
+       '{"project_id": "b0000000-0000-0000-0000-0000000000d1"}'::jsonb,
+       'Client User',
+       now() - interval '60 days'),
+      (dc_id, 'milestone',      'Phase 1 — Space Planning complete',
+       'Floor plan layouts reviewed and approved.',
+       '{"phase": "space_planning", "milestone_type": "phase_complete"}'::jsonb,
+       'Designer',
+       now() - interval '45 days'),
+      (dc_id, 'decision',       'Sofa fabric decision submitted',
+       'Client selected Option B (Ivory Boucle).',
+       '{"decision_title": "Living Room Sofa Fabric"}'::jsonb,
+       'Client User',
+       now() - interval '30 days'),
+      (dc_id, 'milestone',      'Phase 2 — Furniture Selection complete',
+       'All furniture selections confirmed and ordered.',
+       '{"phase": "furniture", "milestone_type": "phase_complete"}'::jsonb,
+       'Designer',
+       now() - interval '14 days'),
+      (dc_id, 'note',           'Site visit scheduled',
+       'Walk-through booked for final placement check.',
+       '{}'::jsonb,
+       'Designer',
+       now() - interval '3 days');
+  END IF;
 END $$;
