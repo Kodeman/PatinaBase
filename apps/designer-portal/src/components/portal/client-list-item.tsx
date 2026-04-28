@@ -41,7 +41,7 @@ export function ClientListItem({
   return (
     <Link
       href={`/portal/clients/${id}`}
-      aria-label={`${name}, link`}
+      aria-label={name}
       className="grid cursor-pointer items-center gap-4 border-b border-[var(--border-subtle)] py-4 no-underline transition-colors hover:bg-[var(--bg-hover)]"
       style={{
         gridTemplateColumns: '44px 1fr auto auto',

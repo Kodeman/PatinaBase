@@ -129,6 +129,8 @@ export function useClient(clientId: string) {
         .from('designer_clients')
         .select(`
           *,
+          client_name,
+          client_email,
           client:profiles!client_id(
             id,
             email,

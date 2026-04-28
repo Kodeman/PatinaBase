@@ -51,10 +51,8 @@ test.describe('Client Directory — navigation', () => {
     expect(firstClientLink).not.toBeNull();
     expect(UUID_RE.test(clientId)).toBe(true);
 
-    // Get the display name from the aria-label (format: "<name>, link") or text content
-    const ariaLabel = await firstClientLink!.getAttribute('aria-label');
-    // Extract name: "Client User, link" → "Client User"
-    const clientName = ariaLabel?.replace(/,\s*link$/i, '').trim() ?? '';
+    // Get the display name from the primary name element inside the row
+    const clientName = (await firstClientLink!.locator('div.type-label').first().innerText()).trim();
 
     // Click the link
     await firstClientLink!.click();
