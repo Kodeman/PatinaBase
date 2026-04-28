@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — Integrated Workflow · Rooms as Connective Tissue</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500;1,600;1,700&family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ow:#FAF7F2;--sc:#F5F2ED;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;
+  --sg:#A8B5A0;--db:#8B9CAD;--tc:#D4A090;--pl:#E5E2DD;--gh:#E8C547;--ok:#7A9B76;
+  --fd:'Playfair Display',Georgia,serif;--fb:'Inter',-apple-system,sans-serif;--fm:'DM Mono',monospace;
+  --e:cubic-bezier(.4,0,.2,1)
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:17px;scroll-behavior:smooth;background:#E8E4DF;color:var(--ch)}
+body{font-family:var(--fb);font-weight:400;line-height:1.7;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.ct{max-width:1200px;margin:0 auto;padding:0 clamp(1.5rem,4vw,3rem)}
+.nr{max-width:800px;margin:0 auto;padding:0 clamp(1.5rem,4vw,3rem)}
+h1,h2,h3{font-family:var(--fd);font-weight:400;line-height:1.15;letter-spacing:-.02em}
+h1{font-size:clamp(2.6rem,5.5vw,4.5rem)}h2{font-size:clamp(1.8rem,4vw,3rem)}
+h3{font-size:clamp(1.15rem,2vw,1.45rem);font-weight:500}
+h4{font-family:var(--fb);font-size:.78rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ao)}
+p{font-size:1rem;color:var(--mo);max-width:640px}
+em{font-family:var(--fd);font-style:italic;color:var(--ao)}
+.mn{font-family:var(--fm);font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;color:var(--ao)}
+.lb{font-size:1.1rem;line-height:1.8}
+.sm{display:flex;flex-direction:column;gap:3px;width:40px}.sl{height:1.5px;background:var(--mo);border-radius:1px}
+.sl:nth-child(1){width:100%}.sl:nth-child(2){width:80%;opacity:.7}.sl:nth-child(3){width:60%;opacity:.4}
+.st-w{display:flex;flex-direction:column;gap:5px;padding:2rem 0}.st-w .sl{height:2px}
+
+/* LAYOUT */
+.dh{padding:clamp(3.5rem,8vh,6.5rem) 0 2.5rem;background:var(--ow);position:relative}
+.dh::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cl),transparent)}
+.dm{display:flex;gap:2.5rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--pl);flex-wrap:wrap}
+.dm-i .mn{display:block;margin-bottom:.2rem}.dm-i span{font-size:.86rem;color:var(--ch);font-weight:500}
+.s{padding:clamp(2.5rem,6vh,4.5rem) 0;background:var(--ow)}.s.a{background:var(--sc)}.s.d{background:var(--ch);color:var(--ow)}
+.s.d p{color:var(--pl)}.s.d .mn{color:var(--cl)}.s.d h4{color:var(--cl)}
+.sh{margin-bottom:2rem}.sh .mn{display:block;margin-bottom:.5rem}.sh h2{margin-bottom:.6rem}
+.ag{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.2rem;margin-top:1.2rem}
+.ac{padding:1.1rem;border-radius:10px;background:var(--sc)}.ac .mn{display:block;margin-bottom:.3rem}
+.ac h3{font-size:1rem;margin-bottom:.3rem}.ac p{font-size:.82rem}
+.fi{opacity:0;transform:translateY(16px);transition:opacity .6s var(--e),transform .6s var(--e)}.fi.v{opacity:1;transform:translateY(0)}
+.df{padding:3rem 0;background:var(--ch);color:var(--pl)}
+.df-inner{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:2rem}
+.df h3{font-family:var(--fd);font-size:1.3rem;color:var(--ow)}.df em{color:var(--cl);display:block;margin-top:.2rem}
+
+/* ============================================
+   FLOW DIAGRAMS — The heart of this document
+   ============================================ */
+
+/* Flow container */
+.flow-diagram{margin:2rem 0;padding:2rem;border-radius:16px;background:var(--sc);overflow-x:auto}
+.flow-diagram.dark{background:var(--ch)}
+.flow-title{font-family:var(--fd);font-size:1.1rem;color:var(--ch);margin-bottom:1rem}
+.flow-diagram.dark .flow-title{color:var(--ow)}
+
+/* Flow nodes */
+.fw{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;margin-bottom:10px}
+.fn{padding:8px 14px;border-radius:10px;font-size:11px;font-weight:500;text-align:center;white-space:nowrap;position:relative}
+.fn.scr{background:var(--ow);color:var(--ch);border:1.5px solid var(--pl);min-width:100px}
+.fn.room{background:var(--cl);color:#fff;border:1.5px solid var(--cl)}
+.fn.comp{background:var(--ch);color:var(--cl);border:1.5px solid var(--cl);border-radius:20px;font-family:var(--fm);font-size:9px;letter-spacing:.04em;text-transform:uppercase}
+.fn.action{background:var(--ch);color:var(--ow)}
+.fn.data{background:rgba(139,156,173,.15);color:var(--mo);border:1px dashed var(--db);font-family:var(--fm);font-size:9px;letter-spacing:.03em}
+.fn.portal{background:rgba(168,181,160,.15);color:var(--mo);border:1px solid var(--sg)}
+.fn.active{box-shadow:0 0 0 3px rgba(196,165,123,.3)}
+.fa{color:var(--ao);font-size:14px;flex-shrink:0}
+.fd{display:flex;justify-content:center;margin:4px 0;color:var(--ao);font-size:12px}
+.flow-diagram.dark .fn.scr{background:rgba(250,247,242,.08);color:var(--pl);border-color:rgba(250,247,242,.15)}
+.flow-diagram.dark .fn.data{background:rgba(139,156,173,.1);color:var(--cl);border-color:rgba(196,165,123,.3)}
+.flow-diagram.dark .fa{color:var(--cl)}
+.flow-diagram.dark .fd{color:var(--cl)}
+
+/* Flow labels */
+.fl{font-family:var(--fm);font-size:7px;letter-spacing:.04em;text-transform:uppercase;color:var(--ao);text-align:center;margin:2px 0}
+.flow-diagram.dark .fl{color:var(--cl)}
+
+/* Vertical flow */
+.fv{display:flex;flex-direction:column;align-items:center;gap:4px}
+
+/* Branching */
+.fbranch{display:flex;gap:1.5rem;justify-content:center;margin:8px 0;flex-wrap:wrap}
+.fbranch-arm{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:130px}
+
+/* Connection dots */
+.fconnect{display:flex;align-items:center;gap:4px;margin:6px 0}
+.fconnect-line{height:1px;flex:1;background:var(--pl);min-width:20px}
+.flow-diagram.dark .fconnect-line{background:rgba(250,247,242,.15)}
+.fconnect-dot{width:6px;height:6px;border-radius:50%;background:var(--cl)}
+
+/* Room badge on screens */
+.fn .room-badge{position:absolute;top:-6px;right:-6px;width:14px;height:14px;border-radius:50%;background:var(--cl);display:flex;align-items:center;justify-content:center;font-size:7px;color:#fff;font-weight:700}
+
+/* Section connector */
+.section-connector{display:flex;align-items:center;justify-content:center;gap:8px;padding:1.5rem 0}
+.section-connector-line{width:40px;height:2px;background:var(--cl);border-radius:1px}
+.section-connector-dot{width:8px;height:8px;border-radius:50%;background:var(--cl)}
+
+/* Integration card */
+.int-card{padding:1.5rem;border-radius:14px;background:var(--ow);border:1.5px solid var(--pl);margin-bottom:1rem}
+.int-card-head{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.int-card-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.int-card-title{font-family:var(--fd);font-size:1.1rem;color:var(--ch)}
+.int-card-sub{font-family:var(--fm);font-size:.6rem;letter-spacing:.04em;text-transform:uppercase;color:var(--ao)}
+
+/* Companion state table */
+.comp-table{width:100%;border-collapse:collapse;margin-top:1rem;font-size:.82rem}
+.comp-table th{text-align:left;padding:8px 10px;background:var(--ch);color:var(--cl);font-family:var(--fm);font-size:.6rem;letter-spacing:.05em;text-transform:uppercase}
+.comp-table td{padding:8px 10px;border-bottom:1px solid var(--pl);vertical-align:top}
+.comp-table td:first-child{font-weight:500;color:var(--ch);white-space:nowrap}
+.comp-table td:nth-child(2){font-family:var(--fm);font-size:.7rem;color:var(--cl)}
+.comp-table td:nth-child(3){color:var(--mo)}
+.comp-table tr:last-child td{border-bottom:none}
+
+/* Journey timeline */
+.timeline{position:relative;padding:0 0 0 28px;margin:1.5rem 0}
+.timeline::before{content:'';position:absolute;left:8px;top:6px;bottom:6px;width:2px;background:var(--pl)}
+.tl-node{position:relative;margin-bottom:16px}
+.tl-node::before{content:'';position:absolute;left:-24px;top:5px;width:12px;height:12px;border-radius:50%;border:2px solid var(--pl);background:var(--ow)}
+.tl-node.active::before{background:var(--cl);border-color:var(--cl)}
+.tl-node.room::before{background:var(--cl);border-color:var(--cl);box-shadow:0 0 0 4px rgba(196,165,123,.2)}
+.tl-title{font-family:var(--fb);font-size:.9rem;font-weight:500;color:var(--ch)}
+.tl-desc{font-size:.8rem;color:var(--ao);margin-top:2px}
+.tl-room-tag{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:8px;background:var(--cl);color:#fff;font-family:var(--fm);font-size:.55rem;letter-spacing:.03em;text-transform:uppercase;margin-top:4px}
+
+@media(max-width:800px){.fbranch{flex-direction:column;align-items:center}.dm{gap:1.2rem}.ct{padding:0 1rem}}
+</style>
+</head>
+<body>
+
+<!-- ============================================ -->
+<header class="dh">
+  <div class="ct">
+    <div class="sm"><div class="sl"></div><div class="sl"></div><div class="sl"></div></div>
+    <span class="mn" style="margin-top:.8rem;display:block">Integrated Workflow · UI/UX Navigation Architecture</span>
+    <h1>Rooms as <em>Connective Tissue</em></h1>
+    <p class="lb" style="max-width:720px">Rooms aren't a feature inside the Patina app. They're the organizing principle that everything else connects through. The Daily Room feed is driven by rooms. Recommendations are scored per-room. AR placement happens inside a room context. The designer lead IS the room project. This document maps every intersection — showing how the Room System threads through the entire application.</p>
+    <div class="dm">
+      <div class="dm-i"><span class="mn">Scope</span><span>Full App Integration</span></div>
+      <div class="dm-i"><span class="mn">Screens Mapped</span><span>28 (all of them)</span></div>
+      <div class="dm-i"><span class="mn">Room Touchpoints</span><span>17 direct integrations</span></div>
+      <div class="dm-i"><span class="mn">Companion States</span><span>Room-aware throughout</span></div>
+    </div>
+  </div>
+</header>
+
+<!-- ============================================
+     THE BIG PICTURE
+     ============================================ -->
+<section class="s d">
+  <div class="ct">
+    <div class="sh">
+      <span class="mn">The Big Picture</span>
+      <h2 style="color:var(--ow)">Master Navigation <em>Flow</em></h2>
+      <p>Every screen in the app. Room-connected screens highlighted in Clay. The Companion as the central hub. The room is always the context.</p>
+    </div>
+
+    <div class="flow-diagram dark">
+      <div class="flow-title">Complete Application Flow — Room Touchpoints in Clay</div>
+
+      <!-- Row 1: Pre-auth (no rooms) -->
+      <div class="fl">Pre-Auth · No Room Context</div>
+      <div class="fw">
+        <div class="fn action">Splash</div>
+        <span class="fa">→</span>
+        <div class="fn scr">Onboarding ×3</div>
+        <span class="fa">→</span>
+        <div class="fn scr">Auth</div>
+        <span class="fa">→</span>
+        <div class="fn scr">Style Quiz ×5</div>
+        <span class="fa">→</span>
+        <div class="fn scr">Style Result</div>
+      </div>
+
+      <div class="fd">↓ First room created here (or deferred to Daily Room)</div>
+
+      <!-- Row 2: The Hub -->
+      <div class="fl">The Hub · Room-Driven</div>
+      <div class="fw">
+        <div class="fn room active">Daily Room (Home)<div class="room-badge">⌂</div></div>
+        <span class="fa">⇄</span>
+        <div class="fn comp">The Companion</div>
+        <span class="fa">⇄</span>
+        <div class="fn room">Your Spaces<div class="room-badge">◎</div></div>
+      </div>
+
+      <div class="fd">↕</div>
+
+      <!-- Row 3: Room-connected features -->
+      <div class="fl">Every Feature Connects Back to a Room</div>
+      <div class="fbranch">
+        <div class="fbranch-arm">
+          <div class="fn room">Room Scan</div>
+          <span class="fa" style="font-size:10px">↓</span>
+          <div class="fn room">Name Room</div>
+          <span class="fa" style="font-size:10px">↓</span>
+          <div class="fn room">Floor Plan</div>
+        </div>
+        <div class="fbranch-arm">
+          <div class="fn room">Recs Feed<div class="room-badge">✦</div></div>
+          <span class="fa" style="font-size:10px">↓</span>
+          <div class="fn room">Product Detail</div>
+          <span class="fa" style="font-size:10px">↓</span>
+          <div class="fn room">AR Placement</div>
+        </div>
+        <div class="fbranch-arm">
+          <div class="fn room">Room Detail</div>
+          <span class="fa" style="font-size:10px">↓</span>
+          <div class="fn room">Cross-Room</div>
+          <span class="fa" style="font-size:10px">↓</span>
+          <div class="fn room">Designer Consult</div>
+        </div>
+        <div class="fbranch-arm">
+          <div class="fn scr">Profile</div>
+          <span class="fa" style="font-size:10px">↓</span>
+          <div class="fn scr">Notifications</div>
+          <span class="fa" style="font-size:10px">↓</span>
+          <div class="fn scr">QR Auth</div>
+        </div>
+      </div>
+
+      <div class="fd">↓</div>
+      <div class="fl">The Room Project Becomes the Lead</div>
+      <div class="fw">
+        <div class="fn data">Style Profile</div>
+        <span class="fa">+</span>
+        <div class="fn data">Room Scans</div>
+        <span class="fa">+</span>
+        <div class="fn data">Saved Items</div>
+        <span class="fa">+</span>
+        <div class="fn data">Budget Total</div>
+        <span class="fa">=</span>
+        <div class="fn portal">Designer Lead Package</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================
+     INTEGRATION 1: DAILY ROOM ↔ ROOMS
+     ============================================ -->
+<section class="s">
+  <div class="ct">
+    <div class="sh">
+      <span class="mn">Integration 1</span>
+      <h2>Daily Room <em>↔ Room System</em></h2>
+      <p>The Daily Room home screen IS the room system's primary interface. Room chips drive the feed. Products carry spatial context from the selected room. "Add" goes directly to that room. The two systems are inseparable.</p>
+    </div>
+
+    <div class="flow-diagram">
+      <div class="flow-title">Daily Room Feed — Room Integration Points</div>
+      <div class="fv">
+        <div class="fn scr">Daily Room (Home Screen)</div>
+        <div class="fd">↓ contains</div>
+        <div class="fbranch">
+          <div class="fbranch-arm">
+            <div class="fn room">Room Chips</div>
+            <div class="fl">Switching rooms reloads<br>entire feed below</div>
+          </div>
+          <div class="fbranch-arm">
+            <div class="fn room">Context Bar</div>
+            <div class="fl">Shows selected room's<br>dimensions · orientation · windows</div>
+          </div>
+          <div class="fbranch-arm">
+            <div class="fn room">Product Cards</div>
+            <div class="fl">"Why it fits" overlay uses<br>room scan data</div>
+          </div>
+          <div class="fbranch-arm">
+            <div class="fn room">"+ Add" Button</div>
+            <div class="fl">Pre-selects active room<br>in Add-to-Room sheet</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ag">
+      <div class="ac fi"><span class="mn">Room → Feed</span><h3>Room drives the content</h3><p>Tapping a room chip triggers <code>GET /api/feed/{room_id}</code>. The entire product list, match scores, spatial context text, and filter categories are specific to that room. Different room = completely different feed.</p></div>
+      <div class="ac fi"><span class="mn">Feed → Room</span><h3>Feed builds the room</h3><p>Every "+ Add" button opens the Add-to-Room sheet with the current channel's room pre-selected. One tap confirms. The room's item count, budget, and avg match update in real-time. The room chip badge decrements as new picks are consumed.</p></div>
+      <div class="ac fi"><span class="mn">No Rooms Yet</span><h3>First-time empty state</h3><p>When user has zero rooms, Daily Room shows the story zone (content hook) above a warm empty state: "Your rooms are waiting — scan a room and we'll fill this feed." The whole value proposition requires a room.</p></div>
+      <div class="ac fi"><span class="mn">New Room Created</span><h3>Instant feed channel</h3><p>After scan + name completes, new room appears as a chip in the Daily Room with a "Just scanned" badge. Tapping it shows an empty feed with "Generating your picks..." loading state. Nightly pipeline fills it, or fast-path generates top 10 immediately.</p></div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================
+     INTEGRATION 2: SCANNING → ROOM CREATION
+     ============================================ -->
+<section class="s a">
+  <div class="ct">
+    <div class="sh">
+      <span class="mn">Integration 2</span>
+      <h2>Scanning <em>→ Room Birth</em></h2>
+      <p>A room is born through scanning (LiDAR) or manual entry. Both paths converge at the naming screen, then diverge: scanned rooms get spatial context and AR placement; manual rooms get style-matched picks without spatial explanations.</p>
+    </div>
+
+    <div class="flow-diagram">
+      <div class="flow-title">Room Creation — Two Paths</div>
+      <div class="fv">
+        <div class="fw">
+          <div class="fn comp">Companion: "Scan a room →"</div>
+          <span class="fa"> or </span>
+          <div class="fn scr">Your Spaces: "+"</div>
+          <span class="fa"> or </span>
+          <div class="fn scr">Daily Room: Empty State CTA</div>
+        </div>
+        <div class="fd">↓ all converge</div>
+        <div class="fn action">Create Room Sheet</div>
+        <div class="fd">↓ choose path</div>
+        <div class="fbranch">
+          <div class="fbranch-arm">
+            <div class="fn room">LiDAR Scan</div>
+            <span class="fa" style="font-size:10px">↓</span>
+            <div class="fn scr">Pre-Scan Checklist</div>
+            <span class="fa" style="font-size:10px">↓</span>
+            <div class="fn room">Room Scan (Companion: Journey Mode)</div>
+            <span class="fa" style="font-size:10px">↓</span>
+            <div class="fn room">Floor Plan Preview</div>
+            <span class="fa" style="font-size:10px">↓</span>
+            <div class="fn data">Full spatial data captured</div>
+          </div>
+          <div class="fbranch-arm">
+            <div class="fn scr">Manual Entry</div>
+            <span class="fa" style="font-size:10px">↓</span>
+            <div class="fn scr">Dimensions Form</div>
+            <span class="fa" style="font-size:10px">↓</span>
+            <div class="fn data">Basic dimensions only</div>
+          </div>
+        </div>
+        <div class="fd">↓ both paths merge</div>
+        <div class="fn room">Name Your Room</div>
+        <div class="fd">↓</div>
+        <div class="fw">
+          <div class="fn room">Room saved → appears in Gallery</div>
+          <span class="fa">→</span>
+          <div class="fn room">Appears as Daily Room chip</div>
+          <span class="fa">→</span>
+          <div class="fn data">Context generation triggered</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ag">
+      <div class="ac fi"><span class="mn">Three Entry Points</span><h3>Scan starts from anywhere</h3><p>The Companion's "Scan a room" nudge, the "+" button in Your Spaces gallery, and the Daily Room empty state all open the same Create Room sheet. Consistent entry, consistent experience.</p></div>
+      <div class="ac fi"><span class="mn">Companion: Journey Mode</span><h3>Scan transforms The Companion</h3><p>During LiDAR scanning, The Companion morphs from Resting to Journey Mode — showing completion %, current step, and coaching text. This is the only time The Companion changes shape, making scanning feel like a guided journey, not a technical process.</p></div>
+      <div class="ac fi"><span class="mn">Post-Create Routing</span><h3>Where you go after naming</h3><p>After saving the room: navigate to Daily Room with the new room chip selected. If this is the user's first room, this is their first real feed experience. For additional rooms, the chip appears with a "Just scanned" badge.</p></div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================
+     INTEGRATION 3: RECOMMENDATIONS ↔ ROOMS
+     ============================================ -->
+<section class="s">
+  <div class="ct">
+    <div class="sh">
+      <span class="mn">Integration 3</span>
+      <h2>Recommendations <em>↔ Rooms</em></h2>
+      <p>The recommendation engine doesn't score products in a vacuum — it scores them per room. Match percentages, spatial context text, and category filters all change based on which room is selected. The room is the recommendation context.</p>
+    </div>
+
+    <div class="flow-diagram">
+      <div class="flow-title">Recommendation Pipeline — Room as Context</div>
+      <div class="fw">
+        <div class="fn data">Style Profile Vector</div>
+        <span class="fa">+</span>
+        <div class="fn room">Room Dimensions</div>
+        <span class="fa">+</span>
+        <div class="fn room">Room Orientation</div>
+        <span class="fa">+</span>
+        <div class="fn room">Existing Room Items</div>
+      </div>
+      <div class="fd">↓ Aesthete Engine scores per (user, room) pair</div>
+      <div class="fw">
+        <div class="fn action">pgvector similarity</div>
+        <span class="fa">→</span>
+        <div class="fn action">Spatial filter</div>
+        <span class="fa">→</span>
+        <div class="fn action">Behavioral re-rank</div>
+        <span class="fa">→</span>
+        <div class="fn action">Pairing rules</div>
+      </div>
+      <div class="fd">↓ outputs</div>
+      <div class="fbranch">
+        <div class="fbranch-arm">
+          <div class="fn room">Ranked Product List<br>(per room)</div>
+          <div class="fl">Cached in Redis<br>24h TTL</div>
+        </div>
+        <div class="fbranch-arm">
+          <div class="fn room">Spatial Context Text<br>(per product×room)</div>
+          <div class="fl">"Fits your long wall<br>with 18" clearance"</div>
+        </div>
+        <div class="fbranch-arm">
+          <div class="fn room">Pairing Suggestions<br>(vs existing items)</div>
+          <div class="fl">"Pairs with your saved<br>Cherry Coffee Table"</div>
+        </div>
+        <div class="fbranch-arm">
+          <div class="fn data">New Picks Count<br>(per room)</div>
+          <div class="fl">Drives badge<br>numbers on chips</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================
+     INTEGRATION 4: PRODUCT DETAIL → ROOM
+     ============================================ -->
+<section class="s a">
+  <div class="ct">
+    <div class="sh">
+      <span class="mn">Integration 4</span>
+      <h2>Product Detail <em>→ Room</em></h2>
+      <p>When a user taps a product card in the Daily Room feed, the room context travels with them. The product detail page knows which room they were browsing. The Companion nudge says "Place in your room" — not just "Place in AR." The Add-to-Room sheet pre-selects that room.</p>
+    </div>
+
+    <div class="flow-diagram">
+      <div class="flow-title">Product Detail — Room Context Preserved</div>
+      <div class="fw">
+        <div class="fn room">Daily Room Feed<br>(Living Room selected)</div>
+        <span class="fa">→ tap card</span>
+        <div class="fn room">Product Detail<br>(room context: Living Room)</div>
+      </div>
+      <div class="fd">↓ three room-connected actions</div>
+      <div class="fbranch">
+        <div class="fbranch-arm">
+          <div class="fn comp">Companion: "Place in your room →"</div>
+          <span class="fa" style="font-size:10px">↓</span>
+          <div class="fn room">AR Placement<br>(Living Room scan loaded)</div>
+          <span class="fa" style="font-size:10px">↓</span>
+          <div class="fn room">"Save View" → adds to Living Room</div>
+        </div>
+        <div class="fbranch-arm">
+          <div class="fn action">"+ Add" button</div>
+          <span class="fa" style="font-size:10px">↓</span>
+          <div class="fn room">Add-to-Room Sheet<br>(Living Room pre-selected)</div>
+          <span class="fa" style="font-size:10px">↓</span>
+          <div class="fn room">Toast: "Added to Living Room"</div>
+        </div>
+        <div class="fbranch-arm">
+          <div class="fn scr">Spatial context visible</div>
+          <span class="fa" style="font-size:10px">↓</span>
+          <div class="fn data">"Why it fits" text<br>references Living Room data</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================
+     INTEGRATION 5: AR ↔ ROOMS
+     ============================================ -->
+<section class="s">
+  <div class="ct">
+    <div class="sh">
+      <span class="mn">Integration 5</span>
+      <h2>AR Placement <em>↔ Rooms</em></h2>
+      <p>AR doesn't exist without a room. The room's scan data provides the spatial mesh for placement. "Save View" writes the product to that room's composition. The Companion goes Minimal — but it's still room-aware.</p>
+    </div>
+
+    <div class="flow-diagram">
+      <div class="flow-title">AR Session — Room as Spatial Foundation</div>
+      <div class="fv">
+        <div class="fw">
+          <div class="fn room">Product Detail → "Place in AR"</div>
+          <span class="fa"> or </span>
+          <div class="fn room">Room Detail → "View in AR"</div>
+        </div>
+        <div class="fd">↓ loads room scan mesh</div>
+        <div class="fn room">AR Session (Room: Living Room)</div>
+        <div class="fd">↓ Companion: Minimal state (corner orb)</div>
+        <div class="fbranch">
+          <div class="fbranch-arm">
+            <div class="fn action">"Save View"</div>
+            <div class="fl">Product added to room_items<br>source: ar_placement</div>
+          </div>
+          <div class="fbranch-arm">
+            <div class="fn action">Screenshot</div>
+            <div class="fl">Saved to camera roll<br>with room metadata</div>
+          </div>
+          <div class="fbranch-arm">
+            <div class="fn action">Multi-item tray</div>
+            <div class="fl">Shows all items saved<br>to this room for placement</div>
+          </div>
+        </div>
+        <div class="fd">↓ exit AR</div>
+        <div class="fw">
+          <div class="fn scr">Returns to Product Detail</div>
+          <span class="fa"> or </span>
+          <div class="fn room">Returns to Room Detail (updated)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================
+     INTEGRATION 6: ROOMS → DESIGNER LEAD
+     ============================================ -->
+<section class="s a">
+  <div class="ct">
+    <div class="sh">
+      <span class="mn">Integration 6</span>
+      <h2>Room Project <em>→ Designer Lead</em></h2>
+      <p>This is the business conversion. The room project — its scan, dimensions, saved items, budget total, and style coherence — becomes the most qualified lead a designer has ever received. The room IS the lead.</p>
+    </div>
+
+    <div class="flow-diagram">
+      <div class="flow-title">Room Project → Lead Conversion Pipeline</div>
+      <div class="fv">
+        <div class="fn room">Room Detail (6 items · $6,420)</div>
+        <div class="fd">↓ budget exceeds range (150%)</div>
+        <div class="fn comp">Companion: "Talk to a designer →"</div>
+        <div class="fd">↓ user taps</div>
+        <div class="fn scr">Designer Consultation Screen</div>
+        <div class="fl">Rooms auto-attached · Vision text input</div>
+        <div class="fd">↓ submit</div>
+        <div class="fn action">Lead Created</div>
+        <div class="fd">↓ lead package contains</div>
+        <div class="fw">
+          <div class="fn data">Style Profile</div>
+          <div class="fn room">Room Scans</div>
+          <div class="fn data">All Saved Items</div>
+          <div class="fn data">Budget per Room</div>
+          <div class="fn data">Engagement Data</div>
+        </div>
+        <div class="fd">↓</div>
+        <div class="fn portal">Designer Portal: Lead Inbox</div>
+        <div class="fl">Leah sees: room preview, items, budget, style match</div>
+      </div>
+    </div>
+
+    <div class="ag">
+      <div class="ac fi"><span class="mn">Single Room</span><h3>"Work with a designer on this room"</h3><p>CTA at bottom of Room Detail. Attaches just this room's data. The designer sees one room's spatial context, items, and budget.</p></div>
+      <div class="ac fi"><span class="mn">Multi Room</span><h3>"Work with a designer"</h3><p>CTA from Cross-Room View or Profile. Attaches all rooms. Designer sees whole-home scope with cross-room style coherence score.</p></div>
+      <div class="ac fi"><span class="mn">Budget Trigger</span><h3>Organic nudge, not hard gate</h3><p>The Companion starts nudging "Talk to a designer" when any room's budget exceeds 100% of stated range. It doesn't block — just suggests. The room budget IS the qualification signal.</p></div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================
+     THE COMPANION — ROOM AWARENESS MAP
+     ============================================ -->
+<section class="s d">
+  <div class="ct">
+    <div class="sh">
+      <span class="mn">The Companion</span>
+      <h2 style="color:var(--ow)">Room-Aware <em>Throughout</em></h2>
+      <p>The Companion's nudges and expanded actions change based on room state. No rooms? Nudge to scan. Empty room? Nudge to browse. Full room? Nudge to designer. Over budget? Strongly nudge to designer. The room IS the Companion's context.</p>
+    </div>
+
+    <table class="comp-table" style="border-radius:12px;overflow:hidden">
+      <tr><th>Screen</th><th>State</th><th>Nudge / Actions</th><th>Room Context</th></tr>
+      <tr><td>Daily Room (has rooms)</td><td>Nudging</td><td>"Scan a new room →"</td><td>Active room chip drives feed</td></tr>
+      <tr><td>Daily Room (no rooms)</td><td>Nudging</td><td>"Scan your first room →"</td><td>Empty state shown instead of feed</td></tr>
+      <tr><td>Room Scan (active)</td><td>Journey</td><td>42% · "Capturing walls" · Step 2 of 4</td><td>Becomes the scan progress tracker</td></tr>
+      <tr><td>Floor Plan Preview</td><td>Nudging</td><td>"See your matches →"</td><td>Post-scan, pre-feed</td></tr>
+      <tr><td>Your Spaces Gallery</td><td>Nudging</td><td>"Scan a new room →"</td><td>Shows cross-room summary</td></tr>
+      <tr><td>Room Detail (empty)</td><td>Nudging</td><td>"Browse picks →"</td><td>Links to Daily Room with this room selected</td></tr>
+      <tr><td>Room Detail (populated)</td><td>Resting</td><td>Expanded: AR, move items, designer</td><td>Room budget drives designer suggestion</td></tr>
+      <tr><td>Room Detail (over budget)</td><td>Nudging</td><td>"Talk to a designer →"</td><td>Budget threshold triggers the nudge</td></tr>
+      <tr><td>Product Detail</td><td>Nudging</td><td>"Place in your room →"</td><td>Room context from Daily Room chip</td></tr>
+      <tr><td>AR Placement</td><td>Minimal</td><td>Translucent orb, bottom-right</td><td>Room scan mesh loaded</td></tr>
+      <tr><td>Cross-Room View</td><td>Nudging</td><td>"Work with a designer →"</td><td>All rooms visible</td></tr>
+      <tr><td>Profile</td><td>Nudging</td><td>"Talk to a designer →" (if rooms mature)</td><td>Room count shown in stats</td></tr>
+      <tr><td>Designer Consultation</td><td>Resting</td><td>Expanded: attach rooms, edit preferences</td><td>Rooms pre-selected for lead</td></tr>
+      <tr><td>Notifications</td><td>Resting</td><td>Default actions</td><td>"New picks for your Living Room"</td></tr>
+      <tr><td>QR Auth</td><td>Resting</td><td>Default actions</td><td>No room context</td></tr>
+      <tr><td>Settings</td><td>Resting</td><td>Default actions</td><td>No room context</td></tr>
+    </table>
+  </div>
+</section>
+
+
+<!-- ============================================
+     USER JOURNEY TIMELINE
+     ============================================ -->
+<section class="s">
+  <div class="ct">
+    <div class="sh">
+      <span class="mn">User Journey</span>
+      <h2>Room Through <em>Time</em></h2>
+      <p>How a room evolves from first scan to designer lead across days and weeks. Each milestone marker (Clay = room event) shows how the room deepens as the user returns.</p>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:2rem">
+
+      <!-- Day 1 -->
+      <div>
+        <h4 style="margin-bottom:1rem">Day 1 — First Session</h4>
+        <div class="timeline">
+          <div class="tl-node active"><div class="tl-title">Style Quiz completed</div><div class="tl-desc">Warm Minimalist · $2K–$5K range</div></div>
+          <div class="tl-node room"><div class="tl-title">Living Room scanned</div><div class="tl-desc">264 sq ft · South-facing · High confidence</div><div class="tl-room-tag">⌂ Room Created</div></div>
+          <div class="tl-node active"><div class="tl-title">Daily Room feed loads</div><div class="tl-desc">18 products scored for this room</div></div>
+          <div class="tl-node room"><div class="tl-title">2 items added to Living Room</div><div class="tl-desc">Walnut Chair + Coffee Table · $4,740</div><div class="tl-room-tag">+ Added to Room</div></div>
+          <div class="tl-node active"><div class="tl-title">Session ends</div><div class="tl-desc">8 min total · 14 products dwelled · 2 saved</div></div>
+        </div>
+      </div>
+
+      <!-- Days 2-7 -->
+      <div>
+        <h4 style="margin-bottom:1rem">Days 2–7 — Building the Room</h4>
+        <div class="timeline">
+          <div class="tl-node active"><div class="tl-title">Daily story read: "Grain Whisperer"</div><div class="tl-desc">Chilton Furniture spotlight</div></div>
+          <div class="tl-node room"><div class="tl-title">2 more items added</div><div class="tl-desc">Sectional + Floor Lamp · Total: $6,420</div><div class="tl-room-tag">Budget at 128%</div></div>
+          <div class="tl-node room"><div class="tl-title">Bedroom scanned</div><div class="tl-desc">180 sq ft · West-facing</div><div class="tl-room-tag">⌂ Second Room</div></div>
+          <div class="tl-node active"><div class="tl-title">Daily Room: Bedroom channel</div><div class="tl-desc">8 new picks · Different products, different context</div></div>
+          <div class="tl-node room"><div class="tl-title">Bed frame added to Bedroom</div><div class="tl-desc">Floyd Bed Frame · $1,095</div><div class="tl-room-tag">+ Added to Room</div></div>
+        </div>
+      </div>
+
+      <!-- Days 8-14 -->
+      <div>
+        <h4 style="margin-bottom:1rem">Days 8–14 — The Designer Conversation</h4>
+        <div class="timeline">
+          <div class="tl-node room"><div class="tl-title">AR placement session</div><div class="tl-desc">Walnut Chair placed in Living Room scan</div><div class="tl-room-tag">◎ AR Session</div></div>
+          <div class="tl-node active"><div class="tl-title">Companion nudges: "Talk to a designer"</div><div class="tl-desc">Living Room budget at 150% of range</div></div>
+          <div class="tl-node room"><div class="tl-title">Designer consultation requested</div><div class="tl-desc">Living Room + Bedroom attached</div><div class="tl-room-tag">💬 Lead Created</div></div>
+          <div class="tl-node active"><div class="tl-title">Leah receives lead</div><div class="tl-desc">2 rooms · 7 items · $7,515 · 88% avg match</div></div>
+          <div class="tl-node active"><div class="tl-title">QR connect to Designer Portal</div><div class="tl-desc">Views lead on studio.patina.cloud</div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================
+     CROSS-FEATURE INTEGRATION MAP
+     ============================================ -->
+<section class="s a">
+  <div class="ct">
+    <div class="sh">
+      <span class="mn">Cross-Feature Map</span>
+      <h2>Every Room <em>Touchpoint</em></h2>
+      <p>Seventeen points where rooms connect to other features. Each one is a moment where room context enriches the experience or where user action enriches the room.</p>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1rem">
+
+      <div class="int-card fi">
+        <div class="int-card-head"><div class="int-card-icon" style="background:rgba(196,165,123,.15)">1</div><div><div class="int-card-title">Daily Room → Room Chips</div><div class="int-card-sub">Room drives the feed content</div></div></div>
+        <p style="font-size:.85rem">Room chips at top of home screen. Each scanned room = a content channel. Switching reloads the entire product feed scored for that room's dimensions, orientation, and existing items.</p>
+      </div>
+
+      <div class="int-card fi">
+        <div class="int-card-head"><div class="int-card-icon" style="background:rgba(196,165,123,.15)">2</div><div><div class="int-card-title">Daily Room → Spatial Context</div><div class="int-card-sub">Room data creates "why it fits"</div></div></div>
+        <p style="font-size:.85rem">Every product card carries room-specific text: "South-facing light will warm this walnut grain." Generated from <code>rooms.dimensions</code> + <code>rooms.features.orientation</code> + <code>products.material_tags</code>.</p>
+      </div>
+
+      <div class="int-card fi">
+        <div class="int-card-head"><div class="int-card-icon" style="background:rgba(196,165,123,.15)">3</div><div><div class="int-card-title">Daily Room → Add-to-Room</div><div class="int-card-sub">Feed card → Room item</div></div></div>
+        <p style="font-size:.85rem">"+ Add" on any feed card opens the Add-to-Room sheet. The room the card was scored for is pre-selected. One tap adds. Toast confirms. Feed continues — zero interruption.</p>
+      </div>
+
+      <div class="int-card fi">
+        <div class="int-card-head"><div class="int-card-icon" style="background:rgba(196,165,123,.15)">4</div><div><div class="int-card-title">Daily Room → Pairing</div><div class="int-card-sub">Items already in room inform pairings</div></div></div>
+        <p style="font-size:.85rem">"Pairs with your saved Cherry Coffee Table — matched wood tones." Cross-references <code>room_items</code> for the active room against <code>designer_feedback.pairing_product_id</code>.</p>
+      </div>
+
+      <div class="int-card fi">
+        <div class="int-card-head"><div class="int-card-icon" style="background:rgba(196,165,123,.15)">5</div><div><div class="int-card-title">Product Detail → Room Context</div><div class="int-card-sub">Room context travels with the tap</div></div></div>
+        <p style="font-size:.85rem">Tapping a product card passes <code>room_id</code> to the detail screen. Spatial context text and the Companion nudge ("Place in your room") both reference the source room.</p>
+      </div>
+
+      <div class="int-card fi">
+        <div class="int-card-head"><div class="int-card-icon" style="background:rgba(196,165,123,.15)">6</div><div><div class="int-card-title">AR → Room Scan Mesh</div><div class="int-card-sub">Room provides the spatial stage</div></div></div>
+        <p style="font-size:.85rem">AR placement loads the room's USD/USDZ scan data as the spatial mesh. Floor planes, walls, and detected objects from the scan enable furniture snapping and collision detection.</p>
+      </div>
+
+      <div class="int-card fi">
+        <div class="int-card-head"><div class="int-card-icon" style="background:rgba(196,165,123,.15)">7</div><div><div class="int-card-title">AR → Room Item Save</div><div class="int-card-sub">"Save View" adds to room</div></div></div>
+        <p style="font-size:.85rem">"Save View" in AR writes the product to <code>room_items</code> with <code>source: "ar_placement"</code>. The room detail updates. The multi-item tray shows all items already in this room.</p>
+      </div>
+
+      <div class="int-card fi">
+        <div class="int-card-head"><div class="int-card-icon" style="background:rgba(196,165,123,.15)">8</div><div><div class="int-card-title">Room Detail → Budget Tracking</div><div class="int-card-sub">Room economics drive designer nudge</div></div></div>
+        <p style="font-size:.85rem">Room budget computed from <code>SUM(products.price_cents)</code> in <code>room_items</code>. Bar shows progress vs. quiz budget range. At 150%, Companion nudges designer.</p>
+      </div>
+
+      <div class="int-card fi">
+        <div class="int-card-head"><div class="int-card-icon" style="background:rgba(196,165,123,.15)">9</div><div><div class="int-card-title">Room Detail → Suggested Next</div><div class="int-card-sub">Category gaps drive next recommendation</div></div></div>
+        <p style="font-size:.85rem">"Your seating and surfaces are set. A rug would ground the arrangement." Generated from category coverage analysis of existing room items vs. complete room archetype.</p>
+      </div>
+
+      <div class="int-card fi">
+        <div class="int-card-head"><div class="int-card-icon" style="background:rgba(196,165,123,.15)">10</div><div><div class="int-card-title">Cross-Room → Move/Copy</div><div class="int-card-sub">Items flow between rooms</div></div></div>
+        <p style="font-size:.85rem">Long-press any item to move or copy between rooms. Move deletes from source. Copy creates new <code>room_items</code> entry with <code>source: "cross_room"</code>. Spatial context regenerates for destination.</p>
+      </div>
+
+      <div class="int-card fi">
+        <div class="int-card-head"><div class="int-card-icon" style="background:rgba(196,165,123,.15)">11</div><div><div class="int-card-title">Cross-Room → Style Coherence</div><div class="int-card-sub">Aesthete Engine scores harmony</div></div></div>
+        <p style="font-size:.85rem">"Your rooms share natural materials and warm tones." Score computed from tag overlap across room compositions. Visible in Cross-Room View and included in designer lead package.</p>
+      </div>
+
+      <div class="int-card fi">
+        <div class="int-card-head"><div class="int-card-icon" style="background:rgba(196,165,123,.15)">12</div><div><div class="int-card-title">Profile → Room Gallery</div><div class="int-card-sub">Rooms shown as profile section</div></div></div>
+        <p style="font-size:.85rem">Profile's "Your Rooms" section shows horizontal scroll of room cards with scan thumbnails. Tap navigates to Room Detail. Room count shown in stats row.</p>
+      </div>
+
+      <div class="int-card fi">
+        <div class="int-card-head"><div class="int-card-icon" style="background:rgba(196,165,123,.15)">13</div><div><div class="int-card-title">Designer Consult → Room Attach</div><div class="int-card-sub">Rooms auto-attached to lead</div></div></div>
+        <p style="font-size:.85rem">Designer consultation form shows room chips for selection. Rooms with items are pre-selected. Lead package includes scan data, items, budget per room, and engagement data.</p>
+      </div>
+
+      <div class="int-card fi">
+        <div class="int-card-head"><div class="int-card-icon" style="background:rgba(196,165,123,.15)">14</div><div><div class="int-card-title">Notifications → Room Context</div><div class="int-card-sub">Pushes reference specific rooms</div></div></div>
+        <p style="font-size:.85rem">"3 new pieces for your Living Room" — push notifications reference the room with highest recent engagement. Tapping opens Daily Room with that room chip selected.</p>
+      </div>
+
+      <div class="int-card fi">
+        <div class="int-card-head"><div class="int-card-icon" style="background:rgba(196,165,123,.15)">15</div><div><div class="int-card-title">Dwell Time → Room Channel</div><div class="int-card-sub">Per-room behavioral intelligence</div></div></div>
+        <p style="font-size:.85rem">Dwell events tagged with <code>room_context</code> — the active room channel. Time-per-channel tells the Aesthete Engine which room is the active project. Drives push priority and notification targeting.</p>
+      </div>
+
+      <div class="int-card fi">
+        <div class="int-card-head"><div class="int-card-icon" style="background:rgba(196,165,123,.15)">16</div><div><div class="int-card-title">Re-Scan → Item Preservation</div><div class="int-card-sub">Non-destructive spatial update</div></div></div>
+        <p style="font-size:.85rem">Re-scanning a room updates dimensions and features but preserves all saved items. Spatial context text regenerates. Items flagged if they no longer fit updated dimensions.</p>
+      </div>
+
+      <div class="int-card fi">
+        <div class="int-card-head"><div class="int-card-icon" style="background:rgba(196,165,123,.15)">17</div><div><div class="int-card-title">QR Auth → Room Data Flows</div><div class="int-card-sub">Rooms visible in Designer Portal</div></div></div>
+        <p style="font-size:.85rem">QR-authenticated Designer Portal shows client's rooms as 3D previews with items, dimensions, and budget. The phone's room data is the same data Leah sees on studio.patina.cloud.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================
+     CLOSING
+     ============================================ -->
+<section class="s">
+  <div class="nr">
+    <div class="st-w"><div class="sl"></div><div class="sl"></div><div class="sl"></div></div>
+    <h2 style="margin-top:1.5rem;margin-bottom:1rem">The room is the <em>thread.</em></h2>
+    <p class="lb" style="max-width:700px;margin-bottom:1.5rem">Seventeen integration points. Every major feature in the app either reads from room data, writes to room data, or both. The Daily Room feeds products from rooms. Recommendations are scored per room. AR loads room meshes. Budgets aggregate per room. Leads package room data. Notifications reference rooms. Dwell time is tracked per room channel.</p>
+    <p class="lb" style="max-width:700px;margin-bottom:1.5rem">The room isn't a feature you navigate to. It's the context that follows you everywhere. When you're browsing the Daily Room, you're inside a room. When you're evaluating a product, the room context traveled with you. When you're in AR, the room's walls are the stage. When you talk to a designer, the room IS the conversation starter.</p>
+    <p class="lb" style="max-width:700px">Remove the room from Patina and nothing works. That's not a dependency — that's a design principle. Rooms are the connective tissue of the entire application.</p>
+    <div class="sm" style="margin-top:2.5rem"><div class="sl"></div><div class="sl"></div><div class="sl"></div></div>
+  </div>
+</section>
+
+<footer class="df">
+  <div class="ct">
+    <div class="df-inner">
+      <div><h3>Patina</h3><em>Where Time Adds Value</em><p style="margin-top:1rem;font-size:.8rem;color:var(--cl)">Integrated Workflow · Room System · April 2026</p></div>
+      <div style="text-align:right"><span class="mn" style="color:var(--cl)">28 Screens · 17 Room Touchpoints · 1 Thread</span>
+        <div class="sm" style="margin-top:.8rem;margin-left:auto"><div class="sl" style="background:var(--cl)"></div><div class="sl" style="background:var(--cl);opacity:.6"></div><div class="sl" style="background:var(--cl);opacity:.3"></div></div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+const o=new IntersectionObserver(e=>{e.forEach(t=>{t.isIntersecting&&t.target.classList.add('v')})},{threshold:.1,rootMargin:'0px 0px -40px 0px'});
+document.querySelectorAll('.fi').forEach(e=>o.observe(e));
+</script>
+</body>
+</html>

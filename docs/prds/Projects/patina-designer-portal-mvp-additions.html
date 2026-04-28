@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Designer Portal — MVP Project Management Additions</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--sf:#FFFFFF;--fd:'Playfair Display',Georgia,serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace}
+body{font-family:var(--fb);color:var(--ch);line-height:1.6;-webkit-font-smoothing:antialiased;background:var(--ch)}
+.slide{min-height:100vh;display:flex;align-items:center;padding:clamp(2rem,5vw,5rem);position:relative;overflow:hidden}
+.in{width:100%;max-width:1180px;margin:0 auto}
+.num{position:absolute;top:2rem;right:2rem;font-family:var(--fm);font-size:0.55rem;letter-spacing:0.08em;text-transform:uppercase}
+.lg{position:absolute;top:2rem;left:2rem;font-family:var(--fd);font-weight:500;font-size:0.62rem;letter-spacing:0.22em;text-transform:uppercase}
+.lt{background:var(--ow)}.lt .num,.lt .lg{color:var(--ao)}
+.dk{background:var(--ch);color:var(--ow)}.dk .num,.dk .lg{color:rgba(250,247,242,0.25)}
+.wm{background:linear-gradient(155deg,#e8ddd0,#ddd0c0 50%,#ede6dc)}.wm .num,.wm .lg{color:var(--ao)}
+
+.strata{display:flex;flex-direction:column;gap:5px;margin-bottom:2rem}.strata div{height:2px;border-radius:1px}.strata div:nth-child(1){width:100%;background:var(--cl)}.strata div:nth-child(2){width:75%;background:var(--cl);opacity:.5}.strata div:nth-child(3){width:50%;background:var(--cl);opacity:.25}
+
+.eyebrow{font-family:var(--fm);font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--cl);margin-bottom:0.75rem}
+h1{font-family:var(--fd);font-weight:400;font-size:clamp(2rem,4.5vw,3.4rem);line-height:1.1;letter-spacing:-0.02em;margin-bottom:0.5rem}
+h1 em,h2 em{font-style:italic;color:var(--cl)}
+h2{font-family:var(--fd);font-weight:400;font-size:clamp(1.4rem,3vw,2.1rem);line-height:1.2;letter-spacing:-0.02em;margin-bottom:0.5rem}
+.dk h1,.dk h2{color:var(--ow)}
+.body{font-family:var(--fb);font-size:0.92rem;line-height:1.7;color:var(--mo);max-width:620px}
+.dk .body{color:rgba(250,247,242,0.55)}
+.meta{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--ao)}
+.dk .meta{color:rgba(250,247,242,0.3)}
+
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:2rem}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5rem}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+@media(max-width:768px){.g2,.g3,.g4{grid-template-columns:1fr}}
+
+.card{padding:1.1rem;border:1px solid var(--pe);border-radius:6px;background:var(--sf)}
+.card-i{font-family:var(--fd);font-size:1.3rem;color:var(--cl);margin-bottom:0.3rem;line-height:1}
+.card-t{font-family:var(--fb);font-weight:500;font-size:0.85rem;color:var(--ch);margin-bottom:0.2rem}
+.card-d{font-family:var(--fb);font-size:0.72rem;color:var(--ao);line-height:1.5}
+.dk .card{background:rgba(250,247,242,0.03);border-color:rgba(250,247,242,0.08)}
+.dk .card-t{color:var(--ow)}.dk .card-d{color:rgba(250,247,242,0.5)}
+
+.frame{background:var(--sf);border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04),0 8px 28px rgba(0,0,0,0.06);margin:1rem 0}
+.fr-bar{display:flex;align-items:center;padding:0 1.25rem;height:38px;background:var(--sf);border-bottom:1px solid var(--pe);gap:1rem}
+.fr-bar .ll{font-family:var(--fd);font-weight:500;font-size:0.62rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--ch)}
+.fr-bar .nv{display:flex;gap:1rem;flex:1}
+.fr-bar .nv span{font-family:var(--fb);font-size:0.65rem;color:var(--ao)}
+.fr-bar .nv span.on{color:var(--ch);border-bottom:2px solid var(--cl);padding-bottom:1px}
+.fr-bar .ut{display:flex;gap:0.5rem;align-items:center;font-family:var(--fb);font-size:0.6rem;color:var(--ao)}
+.fr-sub{padding:0.4rem 1.25rem;background:var(--ow);border-bottom:1px solid var(--pe);display:flex;align-items:center;gap:0.8rem;font-family:var(--fm);font-size:0.5rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--ao)}
+.fr-sub .on{color:var(--ch);font-weight:500}
+.fr-c{padding:1.25rem;background:var(--ow);min-height:280px}
+
+.status{font-family:var(--fm);font-size:0.45rem;text-transform:uppercase;letter-spacing:0.04em;padding:2px 6px;border-radius:2px;display:inline-block;white-space:nowrap}
+.s-act{color:var(--cl);background:rgba(196,165,123,0.08)}
+.s-dn{color:var(--sa);background:rgba(168,181,160,0.1)}
+.s-pn{color:var(--db);background:rgba(139,156,173,0.08)}
+.s-od{color:var(--te);background:rgba(212,160,144,0.1)}
+.s-wn{color:var(--gh);background:rgba(232,197,71,0.08)}
+
+.prog{height:3px;background:var(--pe);border-radius:2px;overflow:hidden}
+.pf{height:100%;border-radius:2px}
+
+.flow{display:flex;align-items:center;gap:0.3rem;flex-wrap:wrap;padding:1rem 0;margin:1rem 0}
+.fn{padding:0.45rem 0.75rem;border-radius:4px;font-family:var(--fb);font-size:0.65rem;font-weight:500;white-space:nowrap;border:1px solid}
+.fa{width:16px;height:1px;background:var(--pe);position:relative;flex-shrink:0}
+.fa::after{content:'';position:absolute;right:0;top:-2px;width:4px;height:4px;border-right:1px solid var(--pe);border-bottom:1px solid var(--pe);transform:rotate(-45deg)}
+
+.new-bdg{display:inline-block;padding:1px 6px;background:var(--cl);color:white;font-family:var(--fm);font-size:0.42rem;text-transform:uppercase;letter-spacing:0.06em;border-radius:2px;margin-left:0.4rem;vertical-align:middle}
+
+.row{display:grid;gap:0.6rem;padding:0.55rem 0;border-bottom:1px solid rgba(229,226,221,0.5);align-items:center}
+.row.head{padding:0.3rem 0;border-bottom:1px solid var(--pe);margin-bottom:0.2rem}
+.lbl{font-family:var(--fb);font-weight:500;font-size:0.74rem;color:var(--ch)}
+.sub{font-family:var(--fb);font-size:0.6rem;color:var(--ao)}
+.colhead{font-family:var(--fm);font-size:0.48rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--ao)}
+.val{font-family:var(--fd);font-weight:500;font-size:0.78rem}
+
+.fade{opacity:0;transform:translateY(12px);transition:opacity 0.5s ease,transform 0.5s ease}
+.fade.vis{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- 01 TITLE -->
+<div class="slide dk">
+  <div class="lg">Patina</div><div class="num">01 / 14</div>
+  <div class="in">
+    <div class="eyebrow">Designer Portal · MVP Additions</div>
+    <div class="strata"><div></div><div></div><div></div></div>
+    <h1>Project Management <em>arrives.</em></h1>
+    <p class="body" style="margin:1rem 0 3rem">The Designer Portal already handles leads, proposals, products, and the Aesthete Engine. This MVP adds what's been missing — the screens designers need to actually run the projects they win. From signed proposal through final walkthrough, every room, every line item, every dollar tracked through one continuous workflow.</p>
+    <div style="display:flex;gap:3rem;flex-wrap:wrap">
+      <div><div class="meta">Audience</div><div style="font-family:var(--fb);font-size:0.82rem;color:rgba(250,247,242,0.55);margin-top:0.15rem">Dev Team · Pilot Designers</div></div>
+      <div><div class="meta">Scope</div><div style="font-family:var(--fb);font-size:0.82rem;color:rgba(250,247,242,0.55);margin-top:0.15rem">8 new screens · Multi-designer support</div></div>
+      <div><div class="meta">Date</div><div style="font-family:var(--fb);font-size:0.82rem;color:rgba(250,247,242,0.55);margin-top:0.15rem">April 2026</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 02 EXISTING -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">02 / 14</div>
+  <div class="in">
+    <div class="eyebrow">Existing Foundation</div>
+    <h1>What the portal <em>already does.</em></h1>
+    <p class="body" style="margin-bottom:1.5rem">The current Designer Portal is built around lead intake, proposal creation, product curation, and the Aesthete Engine. Designers can win clients and write contracts. They cannot yet run the projects those contracts represent. That gap is what this MVP closes.</p>
+    <div class="g3">
+      <div class="card"><div class="card-i">◉</div><div class="card-t">Today Dashboard</div><div class="card-d">Morning scan — leads to review, decisions overdue, messages, deliveries.</div></div>
+      <div class="card"><div class="card-i">▣</div><div class="card-t">Pipeline (Leads → Proposals)</div><div class="card-d">Lead inbox with quality scoring. Proposal builder with scope, FF&E allowances, payment milestones.</div></div>
+      <div class="card"><div class="card-i">◇</div><div class="card-t">Products</div><div class="card-d">Catalog browsing, capture queue from extension, teaching sessions, Aesthete Engine.</div></div>
+      <div class="card"><div class="card-i">◎</div><div class="card-t">Clients</div><div class="card-d">Client directory, profiles, conversations, decision dashboard, reviews.</div></div>
+      <div class="card"><div class="card-i">⌕</div><div class="card-t">Search & Messaging</div><div class="card-d">Global ⌘K search across all entities. Persistent message panel.</div></div>
+      <div class="card"><div class="card-i">⌂</div><div class="card-t">Profile / Earnings</div><div class="card-d">Hours tracked, design fees, product commissions, time-tracking, settings.</div></div>
+    </div>
+    <p class="body" style="margin-top:1.5rem;font-style:italic">All built. All shipped. The portal earns clients. Now it needs to deliver projects.</p>
+  </div>
+</div>
+
+<!-- 03 SCOPE -->
+<div class="slide dk fade">
+  <div class="lg">Patina</div><div class="num">03 / 14</div>
+  <div class="in">
+    <div class="eyebrow">The MVP Scope</div>
+    <h1>Eight new screens. <em>One unified flow.</em></h1>
+    <p class="body" style="margin-bottom:2rem">When a proposal is signed, the project comes alive. These screens handle every stage from there. The proposal data flows in automatically. Designers add what's needed for execution and run the project from the same portal that won it.</p>
+    <div class="g4">
+      <div class="card"><div class="meta">Screen 01<span class="new-bdg">NEW</span></div><div style="font-family:var(--fd);font-weight:500;font-size:0.92rem;color:var(--ow);margin:0.3rem 0 0.2rem">Project List</div><div class="card-d">All active and completed projects in one filterable view.</div></div>
+      <div class="card"><div class="meta">Screen 02<span class="new-bdg">NEW</span></div><div style="font-family:var(--fd);font-weight:500;font-size:0.92rem;color:var(--ow);margin:0.3rem 0 0.2rem">Project Activation</div><div class="card-d">3-step wizard converting signed proposal to active project.</div></div>
+      <div class="card"><div class="meta">Screen 03<span class="new-bdg">NEW</span></div><div style="font-family:var(--fd);font-weight:500;font-size:0.92rem;color:var(--ow);margin:0.3rem 0 0.2rem">Project Detail</div><div class="card-d">12-zone single-scroll operational hub.</div></div>
+      <div class="card"><div class="meta">Screen 04<span class="new-bdg">NEW</span></div><div style="font-family:var(--fd);font-weight:500;font-size:0.92rem;color:var(--ow);margin:0.3rem 0 0.2rem">FF&E Procurement</div><div class="card-d">8-stage pipeline per item with PO management.</div></div>
+      <div class="card"><div class="meta">Screen 05<span class="new-bdg">NEW</span></div><div style="font-family:var(--fd);font-weight:500;font-size:0.92rem;color:var(--ow);margin:0.3rem 0 0.2rem">Project Financials</div><div class="card-d">Budget vs. Committed vs. Actual vs. Variance.</div></div>
+      <div class="card"><div class="meta">Screen 06<span class="new-bdg">NEW</span></div><div style="font-family:var(--fd);font-weight:500;font-size:0.92rem;color:var(--ow);margin:0.3rem 0 0.2rem">Decisions Workflow</div><div class="card-d">Client decisions with options, deadlines, blocking impact.</div></div>
+      <div class="card"><div class="meta">Screen 07<span class="new-bdg">NEW</span></div><div style="font-family:var(--fd);font-weight:500;font-size:0.92rem;color:var(--ow);margin:0.3rem 0 0.2rem">Change Orders</div><div class="card-d">Scope Change Authorization with cost/timeline impact.</div></div>
+      <div class="card"><div class="meta">Screen 08<span class="new-bdg">NEW</span></div><div style="font-family:var(--fd);font-weight:500;font-size:0.92rem;color:var(--ow);margin:0.3rem 0 0.2rem">Team Collaboration</div><div class="card-d">Multi-designer assignment, vendors, roles per project.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 04 PERSONA -->
+<div class="slide wm fade">
+  <div class="lg">Patina</div><div class="num">04 / 14</div>
+  <div class="in">
+    <div class="eyebrow">Designing for Two People</div>
+    <h1>Leah <em>and her associate.</em></h1>
+    <div class="g2" style="gap:3rem;margin-top:1.5rem">
+      <div>
+        <div style="font-family:var(--fd);font-weight:500;font-size:1rem;margin-bottom:0.4rem">Leah · Solo Practitioner</div>
+        <p class="body" style="font-size:0.85rem;margin-bottom:0.85rem">Middlewest Studio. Solo for now. 4–6 active projects at any time. She wins the work, designs the work, manages procurement, coordinates installation. The portal must wear every hat with her without forcing her into multiple tools.</p>
+        <p style="font-family:var(--fb);font-size:0.78rem;color:var(--ao);line-height:1.6;font-style:italic">"I need one place where the Chen project lives. Their proposal, their invoices, the Sawkille PO, the rug decision waiting on Lin, the dining table delivery on Friday. All of it. Same place."</p>
+      </div>
+      <div>
+        <div style="font-family:var(--fd);font-weight:500;font-size:1rem;margin-bottom:0.4rem">Andrea · Senior Associate</div>
+        <p class="body" style="font-size:0.85rem;margin-bottom:0.85rem">Joins Leah in 8 months. Will manage 3 projects independently while supporting Leah on 2 larger builds. Needs scoped access — her projects fully, Leah's projects in read-only when relevant. Expects mobile parity.</p>
+        <p style="font-family:var(--fb);font-size:0.78rem;color:var(--ao);line-height:1.6;font-style:italic">"I want my own pipeline visible at a glance. But I also want to learn from how Leah handles hers — without interrupting her workflow to ask."</p>
+      </div>
+    </div>
+    <p class="body" style="margin-top:1.5rem;font-size:0.78rem">The MVP supports both single-designer and multi-designer studios from day one. Studio = the organizational unit. Each designer has scoped access. Project-level permissions control who can edit financials, sign change orders, access vendor terms.</p>
+  </div>
+</div>
+
+<!-- 05 PROJECT LIST -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">05 / 14</div>
+  <div class="in">
+    <div class="eyebrow">Screen 01 · Project List</div>
+    <h2>All projects, <em>filterable.</em></h2>
+    <p class="body" style="margin-bottom:1rem">The Pipeline view extended. Where it currently shows leads and proposals, it now extends to active projects, completed projects, and on-hold projects. Same data structure, additional stages.</p>
+    <div class="frame">
+      <div class="fr-bar">
+        <div class="ll">Patina</div>
+        <div class="nv"><span>Today</span><span class="on">Pipeline</span><span>Products</span><span>Clients</span></div>
+        <div class="ut"><span>⌕</span><span>◎</span><span>◆</span><span style="background:var(--pe);width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.5rem;color:var(--mo);font-weight:500">LK</span></div>
+      </div>
+      <div class="fr-sub">
+        <span>All · 14</span><span>Leads · 3</span><span>Proposals · 2</span><span class="on">Active · 5</span><span>Completed · 4</span>
+        <span style="margin-left:auto;color:var(--cl);text-transform:none;letter-spacing:0;font-family:var(--fb);font-size:0.65rem">+ New Project</span>
+      </div>
+      <div class="fr-c">
+        <div class="row head" style="grid-template-columns:2fr 1.5fr 1fr 1.2fr 1fr">
+          <span class="colhead">Project</span><span class="colhead">Client</span><span class="colhead">Phase</span><span class="colhead">Progress</span><span class="colhead">Budget</span>
+        </div>
+        <div class="row" style="grid-template-columns:2fr 1.5fr 1fr 1.2fr 1fr">
+          <div><div class="lbl">Chen Residence — Living & Dining</div><div class="sub">Started Jan 8 · 22 FF&E items</div></div>
+          <div><div class="lbl" style="font-weight:400">James & Lin Chen</div><div class="sub">Designer: Leah</div></div>
+          <div><span class="status s-act">Procurement</span></div>
+          <div><div class="prog" style="margin-bottom:0.15rem"><div class="pf" style="width:58%;background:var(--cl)"></div></div><span class="sub" style="font-size:0.55rem">58% · Week 11</span></div>
+          <div><div class="val">$24,500</div><div class="sub" style="font-size:0.55rem;color:var(--sa)">On budget</div></div>
+        </div>
+        <div class="row" style="grid-template-columns:2fr 1.5fr 1fr 1.2fr 1fr">
+          <div><div class="lbl">Whitfield Project — Whole Home</div><div class="sub">Started Oct 14 · 84 FF&E items</div></div>
+          <div><div class="lbl" style="font-weight:400">Sarah & James Whitfield</div><div class="sub">Designer: Leah</div></div>
+          <div><span class="status s-wn">Installation</span></div>
+          <div><div class="prog" style="margin-bottom:0.15rem"><div class="pf" style="width:89%;background:var(--sa)"></div></div><span class="sub" style="font-size:0.55rem">89% · Punch list</span></div>
+          <div><div class="val">$87k</div><div class="sub" style="font-size:0.55rem;color:var(--sa)">Under by $2.4k</div></div>
+        </div>
+        <div class="row" style="grid-template-columns:2fr 1.5fr 1fr 1.2fr 1fr">
+          <div><div class="lbl">Morrison Master Suite</div><div class="sub">Started Mar 4 · 18 FF&E items</div></div>
+          <div><div class="lbl" style="font-weight:400">Andrea Morrison</div><div class="sub">Designer: Leah</div></div>
+          <div><span class="status s-act">Design Dev</span></div>
+          <div><div class="prog" style="margin-bottom:0.15rem"><div class="pf" style="width:25%;background:var(--cl)"></div></div><span class="sub" style="font-size:0.55rem">25% · Week 4</span></div>
+          <div><div class="val">$32k</div><div class="sub" style="font-size:0.55rem;color:var(--sa)">On budget</div></div>
+        </div>
+        <div class="row" style="grid-template-columns:2fr 1.5fr 1fr 1.2fr 1fr;border-bottom:none">
+          <div><div class="lbl">Lakeside Retreat</div><div class="sub">Started Feb 12 · 45 FF&E items</div></div>
+          <div><div class="lbl" style="font-weight:400">Lars & Greta Olsen</div><div class="sub">Designer: Leah</div></div>
+          <div><span class="status s-od">At Risk</span></div>
+          <div><div class="prog" style="margin-bottom:0.15rem"><div class="pf" style="width:35%;background:var(--te)"></div></div><span class="sub" style="font-size:0.55rem;color:var(--te)">35% · 3 days behind</span></div>
+          <div><div class="val">$58k</div><div class="sub" style="font-size:0.55rem;color:var(--gh)">+2% over</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 06 ACTIVATION -->
+<div class="slide dk fade">
+  <div class="lg">Patina</div><div class="num">06 / 14</div>
+  <div class="in">
+    <div class="eyebrow">Screen 02 · Project Activation</div>
+    <h1>From signed proposal <em>to live project.</em></h1>
+    <p class="body" style="margin-bottom:1.5rem">When a client signs a proposal, the system already knows everything: rooms in scope, FF&E items, phases, fees, payment milestones. Activation isn't data entry — it's three lightweight confirmations. Most designers complete it in under 15 minutes.</p>
+    <div class="flow">
+      <div class="fn" style="border-color:var(--cl);background:rgba(196,165,123,0.08);color:var(--ow)">Proposal Signed</div><div class="fa"></div>
+      <div class="fn" style="border-color:var(--cl);background:rgba(196,165,123,0.16);color:var(--ow);font-weight:600">Step 1 · Confirm Scope</div><div class="fa"></div>
+      <div class="fn" style="border-color:var(--cl);background:rgba(196,165,123,0.08);color:rgba(250,247,242,0.7)">Step 2 · Set Schedule</div><div class="fa"></div>
+      <div class="fn" style="border-color:var(--cl);background:rgba(196,165,123,0.08);color:rgba(250,247,242,0.7)">Step 3 · Add Vendors</div><div class="fa"></div>
+      <div class="fn" style="border-color:var(--sa);background:rgba(168,181,160,0.1);color:var(--ow);font-weight:600">Project Live</div>
+    </div>
+    <div class="g3" style="margin-top:1.5rem">
+      <div class="card">
+        <div class="meta" style="color:var(--cl)">Step 1 · Confirm Scope</div>
+        <div style="font-family:var(--fb);font-weight:500;font-size:0.85rem;color:var(--ow);margin:0.3rem 0">Verify imported data</div>
+        <p class="card-d">Rooms, FF&E items, fees, milestones — all pre-filled from signed proposal. Designer reviews and confirms or edits. Auto-creates room cards, FF&E line items at "Specified" stage.</p>
+      </div>
+      <div class="card">
+        <div class="meta" style="color:var(--cl)">Step 2 · Set Schedule</div>
+        <div style="font-family:var(--fb);font-weight:500;font-size:0.85rem;color:var(--ow);margin:0.3rem 0">Phase dates & milestones</div>
+        <p class="card-d">Set phase start dates from kickoff. System calculates phase end dates from proposal duration. Designer can adjust per phase. Approval gates auto-attach.</p>
+      </div>
+      <div class="card">
+        <div class="meta" style="color:var(--cl)">Step 3 · Add Vendors</div>
+        <div style="font-family:var(--fb);font-weight:500;font-size:0.85rem;color:var(--ow);margin:0.3rem 0">Assign known sources</div>
+        <p class="card-d">Optional. Pre-assign vendors to FF&E items where the designer has standing relationships. Other items can be assigned during procurement. Issues PO numbers automatically.</p>
+      </div>
+    </div>
+    <p style="font-family:var(--fb);font-size:0.78rem;color:rgba(250,247,242,0.4);margin-top:1.5rem;font-style:italic">Click "Activate Project" → kickoff invoice generates → client gets welcome email → project appears in Active list.</p>
+  </div>
+</div>
+
+<!-- 07 PROJECT DETAIL -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">07 / 14</div>
+  <div class="in">
+    <div class="eyebrow">Screen 03 · Project Detail</div>
+    <h2>Twelve zones, <em>one scroll.</em></h2>
+    <p class="body" style="margin-bottom:1rem">No tabs. No modal windows. The project reads top to bottom like the document it is — header, metrics, room scope, phase timeline, FF&E schedule, financials, documents, time tracking, activity. Edit Mode toggle enables inline updates with auto-save.</p>
+    <div class="frame">
+      <div class="fr-bar">
+        <div class="ll">Patina</div>
+        <div class="nv"><span>Today</span><span class="on">Pipeline</span><span>Products</span><span>Clients</span></div>
+        <div class="ut"><span>⌕</span><span>◎</span><span>◆</span><span style="background:var(--pe);width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.5rem;color:var(--mo);font-weight:500">LK</span></div>
+      </div>
+      <div class="fr-sub">
+        <span>Pipeline → Active → <span class="on">Chen Residence</span></span>
+        <span style="margin-left:auto;color:var(--cl)">Edit Mode</span><span style="color:var(--ao)">Client View</span>
+      </div>
+      <div class="fr-c">
+        <div style="display:grid;grid-template-columns:1fr auto;gap:1rem;align-items:start;padding-bottom:0.85rem;border-bottom:1px solid var(--pe);margin-bottom:1rem">
+          <div>
+            <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.3rem"><span style="width:9px;height:9px;border-radius:50%;background:var(--cl)"></span><span class="meta" style="color:var(--cl)">Procurement Phase</span></div>
+            <div style="font-family:var(--fd);font-size:1.15rem;font-weight:400">Chen Residence — Living & Dining</div>
+            <div class="sub" style="margin-top:0.1rem">James & Lin Chen · Started Jan 8</div>
+          </div>
+          <div style="display:flex;gap:0.3rem;align-items:center"><span style="width:9px;height:9px;border-radius:50%;background:var(--sa)"></span><span style="width:14px;height:2px;background:var(--sa)"></span><span style="width:9px;height:9px;border-radius:50%;background:var(--sa)"></span><span style="width:14px;height:2px;background:var(--sa)"></span><span style="width:9px;height:9px;border-radius:50%;background:var(--sa)"></span><span style="width:14px;height:2px;background:var(--sa)"></span><span style="width:9px;height:9px;border-radius:50%;background:var(--cl)"></span><span style="width:14px;height:2px;background:var(--pe)"></span><span style="width:9px;height:9px;border-radius:50%;background:var(--pe)"></span><span style="width:14px;height:2px;background:var(--pe)"></span><span style="width:9px;height:9px;border-radius:50%;background:var(--pe)"></span></div>
+        </div>
+        <div style="display:flex;gap:0;padding-bottom:1rem;border-bottom:1px solid var(--pe);margin-bottom:1rem">
+          <div style="padding:0 1rem 0 0;border-right:1px solid var(--pe)"><div class="meta">Progress</div><div style="font-family:var(--fd);font-weight:700;font-size:1.1rem">58%</div><div class="sub" style="font-size:0.55rem">Week 11/19</div></div>
+          <div style="padding:0 1rem;border-right:1px solid var(--pe)"><div class="meta">Budget</div><div style="font-family:var(--fd);font-weight:700;font-size:1.1rem">$24.5k</div><div class="sub" style="font-size:0.55rem;color:var(--sa)">On target</div></div>
+          <div style="padding:0 1rem;border-right:1px solid var(--pe)"><div class="meta">Committed</div><div style="font-family:var(--fd);font-weight:700;font-size:1.1rem">$18.6k</div><div class="sub" style="font-size:0.55rem">76%</div></div>
+          <div style="padding:0 1rem;border-right:1px solid var(--pe)"><div class="meta">FF&E</div><div style="font-family:var(--fd);font-weight:700;font-size:1.1rem">14/22</div><div class="sub" style="font-size:0.55rem">ordered</div></div>
+          <div style="padding:0 1rem;border-right:1px solid var(--pe)"><div class="meta">Decisions</div><div style="font-family:var(--fd);font-weight:700;font-size:1.1rem;color:var(--te)">2</div><div class="sub" style="font-size:0.55rem;color:var(--te)">1 overdue</div></div>
+          <div style="padding:0 0 0 1rem"><div class="meta">Hours</div><div style="font-family:var(--fd);font-weight:700;font-size:1.1rem">47.5</div><div class="sub" style="font-size:0.55rem">of 60 est</div></div>
+        </div>
+        <div style="font-family:var(--fd);font-weight:500;font-size:0.92rem;margin-bottom:0.5rem">Project Scope by Room</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem">
+          <div style="padding:0.7rem;border:1px solid var(--pe);border-radius:5px;background:var(--sf)">
+            <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem"><div><div class="lbl">Living Room</div><div class="sub">12 items · 7 ordered</div></div><div class="val">$16,730</div></div>
+            <div class="prog"><div class="pf" style="width:58%;background:var(--cl)"></div></div>
+          </div>
+          <div style="padding:0.7rem;border:1px solid var(--pe);border-radius:5px;background:var(--sf)">
+            <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem"><div><div class="lbl">Dining Room</div><div class="sub">10 items · 7 ordered</div></div><div class="val">$7,770</div></div>
+            <div class="prog"><div class="pf" style="width:70%;background:var(--cl)"></div></div>
+          </div>
+        </div>
+        <p class="sub" style="margin-top:0.85rem;font-style:italic">↓ Continued zones: Phase Tasks · FF&E Schedule · Financials · Documents · Time Tracking · Activity</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 08 FFE -->
+<div class="slide wm fade">
+  <div class="lg">Patina</div><div class="num">08 / 14</div>
+  <div class="in">
+    <div class="eyebrow">Screen 04 · FF&E Procurement</div>
+    <h2>Every item, <em>every stage.</em></h2>
+    <p class="body" style="margin-bottom:1.25rem">The FF&E schedule is now a real procurement pipeline. Every item moves through eight stages with vendor and PO tracking. Filter by room, vendor, status, or stage. Click any item to see its full procurement history.</p>
+    <div class="flow" style="margin-bottom:1.25rem">
+      <div class="fn" style="border-color:var(--ao);color:var(--ao)">Specified</div><div class="fa"></div>
+      <div class="fn" style="border-color:var(--db);color:var(--db)">Quoted</div><div class="fa"></div>
+      <div class="fn" style="border-color:var(--cl);color:var(--cl)">Approved</div><div class="fa"></div>
+      <div class="fn" style="border-color:var(--cl);background:rgba(196,165,123,0.08);color:var(--mo)">Ordered</div><div class="fa"></div>
+      <div class="fn" style="border-color:var(--gh);color:var(--gh)">Production</div><div class="fa"></div>
+      <div class="fn" style="border-color:var(--gh);background:rgba(232,197,71,0.08);color:var(--mo)">Shipped</div><div class="fa"></div>
+      <div class="fn" style="border-color:var(--sa);color:var(--sa)">Delivered</div><div class="fa"></div>
+      <div class="fn" style="border-color:var(--sa);background:rgba(168,181,160,0.1);color:var(--mo);font-weight:600">Installed</div>
+    </div>
+    <div class="frame" style="margin:0">
+      <div style="padding:0.85rem 1.25rem;background:var(--sf);border-bottom:1px solid var(--pe);display:flex;justify-content:space-between;align-items:center">
+        <div style="font-family:var(--fd);font-weight:500;font-size:0.92rem">FF&E Schedule · Chen Residence</div>
+        <div style="font-family:var(--fb);font-size:0.65rem;padding:0.3rem 0.7rem;background:var(--ch);color:var(--ow);border-radius:3px">+ Add Item</div>
+      </div>
+      <div style="padding:1rem 1.25rem">
+        <div class="row head" style="grid-template-columns:2.5fr 60px 80px 90px 70px">
+          <span class="colhead">Item / Vendor</span><span class="colhead" style="text-align:right">Qty</span><span class="colhead" style="text-align:right">Cost</span><span class="colhead" style="text-align:center">Status</span><span class="colhead" style="text-align:right">ETA</span>
+        </div>
+        <div class="row" style="grid-template-columns:2.5fr 60px 80px 90px 70px">
+          <div><div class="lbl">Heirloom Oak Dining Table</div><div class="sub" style="font-style:italic">Nordic Atelier · PO #NA-041</div></div>
+          <div style="text-align:right;font-family:var(--fm);font-size:0.6rem;color:var(--ao)">1</div>
+          <div class="val" style="text-align:right">$4,200</div>
+          <div style="text-align:center"><span class="status s-wn">Shipped</span></div>
+          <div style="text-align:right;font-family:var(--fm);font-size:0.55rem;color:var(--ao)">Apr 2</div>
+        </div>
+        <div class="row" style="grid-template-columns:2.5fr 60px 80px 90px 70px">
+          <div><div class="lbl">Meadow Linen Sectional</div><div class="sub" style="font-style:italic">Woodward & Sons · PO #WS-188</div></div>
+          <div style="text-align:right;font-family:var(--fm);font-size:0.6rem;color:var(--ao)">1</div>
+          <div class="val" style="text-align:right">$6,800</div>
+          <div style="text-align:center"><span class="status s-wn">Shipped</span></div>
+          <div style="text-align:right;font-family:var(--fm);font-size:0.55rem;color:var(--ao)">Apr 8</div>
+        </div>
+        <div class="row" style="grid-template-columns:2.5fr 60px 80px 90px 70px">
+          <div><div class="lbl">Shaker Dining Chairs</div><div class="sub" style="font-style:italic">Sawkille Co · PO #SK-087</div></div>
+          <div style="text-align:right;font-family:var(--fm);font-size:0.6rem;color:var(--ao)">6</div>
+          <div class="val" style="text-align:right">$2,400</div>
+          <div style="text-align:center"><span class="status s-act">Production</span></div>
+          <div style="text-align:right;font-family:var(--fm);font-size:0.55rem;color:var(--ao)">Apr 15</div>
+        </div>
+        <div class="row" style="grid-template-columns:2.5fr 60px 80px 90px 70px">
+          <div><div class="lbl">Woven Jute Area Rug 8×10</div><div class="sub" style="font-style:italic;color:var(--te)">Studio Piet · Blocked by color decision</div></div>
+          <div style="text-align:right;font-family:var(--fm);font-size:0.6rem;color:var(--ao)">1</div>
+          <div class="val" style="text-align:right">$1,450</div>
+          <div style="text-align:center"><span class="status s-od">Blocked</span></div>
+          <div style="text-align:right;font-family:var(--fm);font-size:0.55rem;color:var(--te)">Decision</div>
+        </div>
+        <div class="row" style="grid-template-columns:2.5fr 60px 80px 90px 70px;border-bottom:none">
+          <div><div class="lbl">Coffee Table</div><div class="sub" style="font-style:italic">3 options being evaluated</div></div>
+          <div style="text-align:right;font-family:var(--fm);font-size:0.6rem;color:var(--ao)">1</div>
+          <div class="val" style="text-align:right">~$1,200</div>
+          <div style="text-align:center"><span class="status s-pn">Quoted</span></div>
+          <div style="text-align:right;font-family:var(--fm);font-size:0.55rem;color:var(--ao)">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 09 FINANCIALS -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">09 / 14</div>
+  <div class="in">
+    <div class="eyebrow">Screen 05 · Project Financials</div>
+    <h2>Four columns, <em>complete truth.</em></h2>
+    <p class="body" style="margin-bottom:1rem">Budget vs. Committed vs. Actual vs. Variance — by category and by room. "Committed" matters because a purchase order commits money before the item arrives. This level of granularity prevents the "how did we go $8,000 over?" conversation.</p>
+    <div class="frame" style="margin:0">
+      <div style="padding:0.85rem 1.25rem;background:var(--sf);border-bottom:1px solid var(--pe);font-family:var(--fd);font-weight:500;font-size:0.92rem">Financials · Chen Residence</div>
+      <div style="padding:1.1rem 1.25rem">
+        <div class="row head" style="grid-template-columns:1.5fr 80px 100px 100px 110px">
+          <span class="colhead">Category</span><span class="colhead" style="text-align:right">Budget</span><span class="colhead" style="text-align:right">Committed</span><span class="colhead" style="text-align:right">Actual</span><span class="colhead" style="text-align:right">Variance</span>
+        </div>
+        <div class="row" style="grid-template-columns:1.5fr 80px 100px 100px 110px">
+          <span class="lbl">Design Fee</span>
+          <span style="text-align:right;font-family:var(--fd);font-size:0.78rem;color:var(--ao)">$2,500</span>
+          <span style="text-align:right;font-family:var(--fd);font-size:0.78rem">$2,500</span>
+          <span style="text-align:right;font-family:var(--fd);font-weight:600;font-size:0.78rem">$2,500</span>
+          <span style="text-align:right;font-family:var(--fm);font-size:0.55rem;color:var(--sa)">On budget</span>
+        </div>
+        <div class="row" style="grid-template-columns:1.5fr 80px 100px 100px 110px">
+          <span class="lbl">Living Room FF&E</span>
+          <span style="text-align:right;font-family:var(--fd);font-size:0.78rem;color:var(--ao)">$14,230</span>
+          <span style="text-align:right;font-family:var(--fd);font-size:0.78rem">$11,340</span>
+          <span style="text-align:right;font-family:var(--fd);font-weight:600;font-size:0.78rem">$9,470</span>
+          <span style="text-align:right;font-family:var(--fm);font-size:0.55rem;color:var(--sa)">−$4,760 sourcing</span>
+        </div>
+        <div class="row" style="grid-template-columns:1.5fr 80px 100px 100px 110px">
+          <span class="lbl">Dining Room FF&E</span>
+          <span style="text-align:right;font-family:var(--fd);font-size:0.78rem;color:var(--ao)">$5,270</span>
+          <span style="text-align:right;font-family:var(--fd);font-size:0.78rem">$6,600</span>
+          <span style="text-align:right;font-family:var(--fd);font-weight:600;font-size:0.78rem">$6,600</span>
+          <span style="text-align:right;font-family:var(--fm);font-size:0.55rem;color:var(--te)">+$1,330 scope</span>
+        </div>
+        <div class="row" style="grid-template-columns:1.5fr 80px 100px 100px 110px">
+          <span class="lbl">Delivery & Shipping</span>
+          <span style="text-align:right;font-family:var(--fd);font-size:0.78rem;color:var(--ao)">$800</span>
+          <span style="text-align:right;font-family:var(--fd);font-size:0.78rem">$540</span>
+          <span style="text-align:right;font-family:var(--fd);font-weight:600;font-size:0.78rem">$340</span>
+          <span style="text-align:right;font-family:var(--fm);font-size:0.55rem;color:var(--sa)">−$460</span>
+        </div>
+        <div class="row" style="grid-template-columns:1.5fr 80px 100px 100px 110px">
+          <span class="lbl">Contingency (3%)</span>
+          <span style="text-align:right;font-family:var(--fd);font-size:0.78rem;color:var(--ao)">$670</span>
+          <span style="text-align:right;font-family:var(--fd);font-size:0.78rem;color:var(--ao)">—</span>
+          <span style="text-align:right;font-family:var(--fd);font-weight:600;font-size:0.78rem;color:var(--sa)">$0</span>
+          <span style="text-align:right;font-family:var(--fm);font-size:0.55rem;color:var(--sa)">Untouched</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1.5fr 80px 100px 100px 110px;gap:0.6rem;padding:0.6rem 0;border-top:2px solid var(--pe);margin-top:0.2rem">
+          <span style="font-family:var(--fb);font-weight:600;font-size:0.85rem">Total</span>
+          <span style="text-align:right;font-family:var(--fd);font-weight:700;font-size:0.95rem">$24,500</span>
+          <span style="text-align:right;font-family:var(--fd);font-weight:700;font-size:0.95rem">$20,980</span>
+          <span style="text-align:right;font-family:var(--fd);font-weight:700;font-size:0.95rem">$18,910</span>
+          <span style="text-align:right;font-family:var(--fm);font-size:0.6rem;color:var(--sa);font-weight:500">Under by $5,590</span>
+        </div>
+        <div style="margin-top:1.25rem;padding:0.85rem;background:rgba(168,181,160,0.04);border:1px solid rgba(168,181,160,0.15);border-radius:5px;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div class="meta" style="color:var(--sa)">Designer Earnings · Visible to Leah only</div>
+            <div style="font-family:var(--fb);font-size:0.72rem;color:var(--mo);margin-top:0.15rem">Design fee $2,500 + Product commissions $2,687 (est.)</div>
+          </div>
+          <div style="font-family:var(--fd);font-weight:600;font-size:1.5rem;color:var(--sa)">$5,187</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 10 DECISIONS -->
+<div class="slide dk fade">
+  <div class="lg">Patina</div><div class="num">10 / 14</div>
+  <div class="in">
+    <div class="eyebrow">Screen 06 · Decisions Workflow</div>
+    <h1>Decisions <em>that block work.</em></h1>
+    <p class="body" style="margin-bottom:1.5rem">Every project has decisions clients need to make — paint colors, hardware finishes, fabric selections. The decisions module surfaces them with deadlines, options, and which downstream tasks are blocked. Reminder system pings clients before deadlines.</p>
+    <div class="g2" style="gap:2.5rem;margin-top:1rem">
+      <div>
+        <div style="font-family:var(--fd);font-weight:500;font-size:0.95rem;color:var(--ow);margin-bottom:0.5rem">Five Decision Types</div>
+        <div style="padding:0.6rem 0.85rem;border:1px solid rgba(250,247,242,0.08);border-radius:4px;margin-bottom:0.4rem"><span class="status s-act">Material</span> <span style="font-family:var(--fb);font-size:0.74rem;color:rgba(250,247,242,0.7);margin-left:0.4rem">Fabric, finish, stone, hardware selection</span></div>
+        <div style="padding:0.6rem 0.85rem;border:1px solid rgba(250,247,242,0.08);border-radius:4px;margin-bottom:0.4rem"><span class="status s-pn">Color</span> <span style="font-family:var(--fb);font-size:0.74rem;color:rgba(250,247,242,0.7);margin-left:0.4rem">Paint, stain, fabric color confirmation</span></div>
+        <div style="padding:0.6rem 0.85rem;border:1px solid rgba(250,247,242,0.08);border-radius:4px;margin-bottom:0.4rem"><span class="status s-wn">Layout</span> <span style="font-family:var(--fb);font-size:0.74rem;color:rgba(250,247,242,0.7);margin-left:0.4rem">Furniture placement, room configuration</span></div>
+        <div style="padding:0.6rem 0.85rem;border:1px solid rgba(250,247,242,0.08);border-radius:4px;margin-bottom:0.4rem"><span class="status s-od">Substitution</span> <span style="font-family:var(--fb);font-size:0.74rem;color:rgba(250,247,242,0.7);margin-left:0.4rem">Item out-of-stock, alternative needed</span></div>
+        <div style="padding:0.6rem 0.85rem;border:1px solid rgba(250,247,242,0.08);border-radius:4px"><span class="status s-dn">Approval</span> <span style="font-family:var(--fb);font-size:0.74rem;color:rgba(250,247,242,0.7);margin-left:0.4rem">Phase gate sign-off, milestone approval</span></div>
+      </div>
+      <div>
+        <div style="font-family:var(--fd);font-weight:500;font-size:0.95rem;color:var(--ow);margin-bottom:0.5rem">Decision Card · Live Example</div>
+        <div style="padding:1rem;border:1px solid rgba(250,247,242,0.1);border-radius:6px;background:rgba(250,247,242,0.02)">
+          <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span class="status s-od">Overdue · 3 days</span><span class="meta" style="color:var(--te)">Blocks 2 tasks</span></div>
+          <div style="font-family:var(--fd);font-weight:500;font-size:0.95rem;color:var(--ow);margin-bottom:0.3rem">Living Room paint color</div>
+          <p class="card-d" style="margin-bottom:0.85rem">Final selection between two warm whites. Affects walls, ceiling, trim. Blocks paint scheduling and delivery of upholstered pieces.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.85rem">
+            <div style="padding:0.55rem;background:rgba(250,247,242,0.04);border:1px solid rgba(250,247,242,0.08);border-radius:4px"><div style="font-family:var(--fb);font-weight:500;font-size:0.74rem;color:var(--ow)">Simply White</div><div class="sub" style="color:rgba(250,247,242,0.5);font-size:0.6rem">Designer recommended</div></div>
+            <div style="padding:0.55rem;background:rgba(250,247,242,0.04);border:1px solid rgba(250,247,242,0.08);border-radius:4px"><div style="font-family:var(--fb);font-weight:500;font-size:0.74rem;color:var(--ow)">Chantilly Lace</div><div class="sub" style="color:rgba(250,247,242,0.5);font-size:0.6rem">Cooler alternative</div></div>
+          </div>
+          <div style="display:flex;gap:0.4rem"><span style="padding:0.4rem 0.75rem;background:var(--cl);color:white;border-radius:3px;font-family:var(--fb);font-size:0.7rem;font-weight:500">Send Reminder</span><span style="padding:0.4rem 0.75rem;border:1px solid rgba(250,247,242,0.15);color:rgba(250,247,242,0.7);border-radius:3px;font-family:var(--fb);font-size:0.7rem">Edit Options</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 11 CHANGE ORDERS -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">11 / 14</div>
+  <div class="in">
+    <div class="eyebrow">Screen 07 · Change Orders</div>
+    <h2>Scope changes, <em>documented and approved.</em></h2>
+    <p class="body" style="margin-bottom:1.25rem">When a client wants to upgrade the dining table or add a powder room to the scope, the change must be documented before work continues. The Change Order module captures the request, calculates the impact, routes for approval, and updates the project automatically.</p>
+    <div class="frame" style="margin:0">
+      <div style="padding:0.85rem 1.25rem;background:var(--sf);border-bottom:1px solid var(--pe);display:flex;justify-content:space-between;align-items:center">
+        <div><div style="font-family:var(--fd);font-weight:500;font-size:0.92rem">Change Order #SCA-2026-003</div><div class="sub">Submitted by Lin Chen · Apr 6 · Awaiting Designer Review</div></div>
+        <span class="status s-wn">Awaiting Review</span>
+      </div>
+      <div style="padding:1.1rem 1.25rem">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
+          <div>
+            <div class="meta" style="margin-bottom:0.3rem">Original Specification</div>
+            <div style="padding:0.7rem;background:var(--sf);border:1px solid var(--pe);border-radius:5px;margin-bottom:0.85rem">
+              <div style="font-family:var(--fb);font-size:0.75rem;color:var(--mo);line-height:1.55">Standard wool runner · Hand-tufted · 8×10 · <strong>$1,200</strong></div>
+            </div>
+            <div class="meta" style="margin-bottom:0.3rem">Requested Change</div>
+            <div style="padding:0.7rem;background:rgba(196,165,123,0.04);border:1px solid rgba(196,165,123,0.2);border-radius:5px">
+              <div style="font-family:var(--fb);font-size:0.75rem;color:var(--mo);line-height:1.55">Antique Persian Heriz runner · Hand-knotted · 8×10 · <strong style="color:var(--cl)">$3,250</strong></div>
+              <div class="sub" style="font-style:italic;margin-top:0.3rem">Client note: "Found this at the estate sale we visited. Would prefer this over a new piece."</div>
+            </div>
+          </div>
+          <div>
+            <div class="meta" style="margin-bottom:0.3rem">Auto-Generated Impact</div>
+            <div style="background:var(--sf);border:1px solid var(--pe);border-radius:5px">
+              <div class="row" style="grid-template-columns:1fr auto;padding:0.55rem 0.7rem;border-bottom-color:rgba(229,226,221,0.5)"><span class="lbl" style="font-weight:400">Cost difference</span><span style="font-family:var(--fd);font-weight:500;color:var(--te)">+$2,050</span></div>
+              <div class="row" style="grid-template-columns:1fr auto;padding:0.55rem 0.7rem;border-bottom-color:rgba(229,226,221,0.5)"><span class="lbl" style="font-weight:400">Lead time</span><span style="font-family:var(--fd);font-weight:500">In-stock · No delay</span></div>
+              <div class="row" style="grid-template-columns:1fr auto;padding:0.55rem 0.7rem;border-bottom-color:rgba(229,226,221,0.5)"><span class="lbl" style="font-weight:400">Schedule impact</span><span style="font-family:var(--fd);font-weight:500;color:var(--sa)">No change</span></div>
+              <div class="row" style="grid-template-columns:1fr auto;padding:0.55rem 0.7rem;border-bottom-color:rgba(229,226,221,0.5)"><span class="lbl" style="font-weight:400">Affected tasks</span><span style="font-family:var(--fb);font-size:0.7rem">Procurement, install</span></div>
+              <div style="display:grid;grid-template-columns:1fr auto;padding:0.55rem 0.7rem"><span style="font-family:var(--fb);font-weight:600;font-size:0.78rem">New project total</span><span style="font-family:var(--fd);font-weight:600;font-size:0.92rem">$26,550</span></div>
+            </div>
+            <div class="meta" style="margin:1rem 0 0.3rem">Approval Chain</div>
+            <div style="background:var(--sf);border:1px solid var(--pe);border-radius:5px">
+              <div class="row" style="grid-template-columns:1fr auto;padding:0.4rem 0.7rem;border-bottom-color:rgba(229,226,221,0.5)"><div><div class="lbl">Client request</div><div class="sub" style="font-size:0.55rem">Lin Chen · Apr 6</div></div><span class="status s-dn">✓</span></div>
+              <div class="row" style="grid-template-columns:1fr auto;padding:0.4rem 0.7rem;border-bottom-color:rgba(229,226,221,0.5)"><div><div class="lbl">Designer review</div><div class="sub" style="font-size:0.55rem;color:var(--cl)">Leah · Active</div></div><span class="status s-act">Active</span></div>
+              <div class="row" style="grid-template-columns:1fr auto;padding:0.4rem 0.7rem;border-bottom:none"><div><div class="lbl" style="color:var(--ao)">Client signature</div><div class="sub" style="font-size:0.55rem">Final approval</div></div><span class="sub" style="color:var(--ao);font-size:0.55rem">Waiting</span></div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:0.5rem;padding-top:1rem;border-top:1px solid var(--pe);margin-top:1rem">
+          <span style="padding:0.45rem 0.85rem;background:var(--cl);color:white;border-radius:3px;font-family:var(--fb);font-size:0.72rem;font-weight:500">Approve & Send to Client</span>
+          <span style="padding:0.45rem 0.85rem;border:1px solid var(--pe);color:var(--ch);border-radius:3px;font-family:var(--fb);font-size:0.72rem">Suggest Alternative</span>
+          <span style="padding:0.45rem 0.85rem;color:var(--ao);font-family:var(--fb);font-size:0.72rem">Reject</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 12 TEAM -->
+<div class="slide wm fade">
+  <div class="lg">Patina</div><div class="num">12 / 14</div>
+  <div class="in">
+    <div class="eyebrow">Screen 08 · Team Collaboration</div>
+    <h2>Studios, not <em>just designers.</em></h2>
+    <p class="body" style="margin-bottom:1.25rem">From day one, the MVP supports multi-designer studios. Studio is the org unit. Each project has a lead designer, optional support designers, and assigned vendors. Permissions cascade — studio owners see everything, support designers see what they're assigned to.</p>
+    <div class="g3">
+      <div class="card">
+        <div class="card-i">★</div>
+        <div class="card-t">Studio Owner</div>
+        <div class="card-d">Full access to all projects. Manages team roster, vendor relationships, billing, studio settings. Can reassign projects between designers.</div>
+      </div>
+      <div class="card">
+        <div class="card-i">◈</div>
+        <div class="card-t">Lead Designer</div>
+        <div class="card-d">Full access to projects they own. Can edit financials, sign change orders, manage FF&E procurement. Read-only on other team members' projects when shared.</div>
+      </div>
+      <div class="card">
+        <div class="card-i">⟡</div>
+        <div class="card-t">Support Designer</div>
+        <div class="card-d">Scoped access to assigned projects only. Can edit tasks, log hours, capture products. Cannot modify financials or sign change orders.</div>
+      </div>
+      <div class="card">
+        <div class="card-i">⌂</div>
+        <div class="card-t">Vendor / Supplier</div>
+        <div class="card-d">External user with access only to their assigned POs. Can update order status, ETA, ship dates. Cannot see other vendors' pricing or project totals.</div>
+      </div>
+      <div class="card">
+        <div class="card-i">◇</div>
+        <div class="card-t">Client (Read-Only)</div>
+        <div class="card-d">Sees their own project at the visibility tier the designer set. Submits decisions, signs change orders, views progress. Cannot see costs or vendor details unless permitted.</div>
+      </div>
+      <div class="card">
+        <div class="card-i">◯</div>
+        <div class="card-t">Bookkeeper / Accountant</div>
+        <div class="card-d">Read-only access to financials across all projects. Cannot modify project data. Exports for tax filing and reconciliation.</div>
+      </div>
+    </div>
+    <p class="body" style="margin-top:1.5rem;font-size:0.78rem">Roles can be assigned per project, not just at the studio level. Andrea might lead the Olsen project but support Leah on the Whitfield. Permissions follow the assignment, not the person.</p>
+  </div>
+</div>
+
+<!-- 13 TECHNICAL -->
+<div class="slide dk fade">
+  <div class="lg">Patina</div><div class="num">13 / 14</div>
+  <div class="in">
+    <div class="eyebrow">Build Plan</div>
+    <h1>Twelve weeks <em>to ship.</em></h1>
+    <p class="body" style="margin-bottom:1.5rem">The MVP additions ship across three sprints. Existing portal stays untouched and operational throughout — these screens add to the system, they don't replace anything. Pilot with Leah's solo workflow first, then onboard Andrea once she joins the studio.</p>
+    <div class="g3">
+      <div class="card">
+        <div class="meta" style="color:var(--cl)">Sprint 1 · Weeks 1–4</div>
+        <div style="font-family:var(--fd);font-weight:500;font-size:0.92rem;color:var(--ow);margin:0.3rem 0">Foundation</div>
+        <p class="card-d">Project List · Project Activation Wizard · Project Detail (read-only). Database schema for projects, rooms, tasks, FF&E items. Designer Portal API integration for proposal-to-project conversion.</p>
+      </div>
+      <div class="card">
+        <div class="meta" style="color:var(--cl)">Sprint 2 · Weeks 5–8</div>
+        <div style="font-family:var(--fd);font-weight:500;font-size:0.92rem;color:var(--ow);margin:0.3rem 0">Operations</div>
+        <p class="card-d">FF&E Procurement with 8-stage pipeline · Project Financials with 4-column tracker · Decisions Workflow with reminder system. Edit Mode unlock on Project Detail. PO generation and vendor notification.</p>
+      </div>
+      <div class="card">
+        <div class="meta" style="color:var(--cl)">Sprint 3 · Weeks 9–12</div>
+        <div style="font-family:var(--fd);font-weight:500;font-size:0.92rem;color:var(--ow);margin:0.3rem 0">Collaboration</div>
+        <p class="card-d">Change Orders with approval chain · Team Collaboration with multi-designer permissions · Vendor portal access · Client-view filtering · Audit logs · Mobile parity for site updates.</p>
+      </div>
+    </div>
+    <p style="font-family:var(--fb);font-size:0.78rem;color:rgba(250,247,242,0.4);margin-top:1.5rem;font-style:italic;max-width:520px">Pilot scope: Middlewest Studio + 2 additional design studios. 8–12 active projects. 3-month pilot before broader rollout.</p>
+  </div>
+</div>
+
+<!-- 14 CLOSE -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">14 / 14</div>
+  <div class="in">
+    <div class="strata"><div></div><div></div><div></div></div>
+    <div style="padding:1.75rem 0;border-top:1px solid var(--pe);border-bottom:1px solid var(--pe);margin:1.25rem 0">
+      <blockquote style="font-family:var(--fd);font-size:clamp(1.1rem,2.5vw,1.45rem);font-style:italic;line-height:1.45;max-width:600px">"The portal already wins clients. After this MVP, it delivers projects. The same surface where Leah quotes a job is the same surface where she manages it, invoices it, and closes it. One system. One workflow. One source of truth."</blockquote>
+      <cite style="display:block;font-family:var(--fm);font-size:0.6rem;font-style:normal;text-transform:uppercase;letter-spacing:0.06em;color:var(--ao);margin-top:0.75rem">Designer Portal MVP Principle</cite>
+    </div>
+    <h1 style="margin-top:2rem;margin-bottom:0.4rem">Thank you.</h1>
+    <p style="font-family:var(--fd);font-style:italic;font-size:1rem;color:var(--cl)">Where Time Adds Value</p>
+    <div style="display:flex;gap:3rem;margin-top:2.5rem;flex-wrap:wrap">
+      <div><div class="meta">Next Steps</div><div style="font-family:var(--fb);font-size:0.78rem;color:var(--mo);margin-top:0.15rem">Spec review · Sprint 1 kickoff · Pilot designer onboarding</div></div>
+      <div><div class="meta">Companion Doc</div><div style="font-family:var(--fb);font-size:0.78rem;color:var(--mo);margin-top:0.15rem">Designer Portal MVP Additions Spec</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const f=document.querySelectorAll('.fade');
+const o=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('vis')})},{threshold:0.08,rootMargin:'0px 0px -40px 0px'});
+f.forEach(s=>o.observe(s));
+</script>
+</body>
+</html>

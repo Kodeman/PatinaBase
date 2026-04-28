@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — Home Screen · The Daily Room · Final Concept</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500;1,600;1,700&family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ow:#FAF7F2;--sc:#F5F2ED;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;
+  --sg:#A8B5A0;--db:#8B9CAD;--tc:#D4A090;--pl:#E5E2DD;--gh:#E8C547;--ok:#7A9B76;
+  --fd:'Playfair Display',Georgia,serif;--fb:'Inter',-apple-system,sans-serif;--fm:'DM Mono',monospace;
+  --sh:0 4px 24px rgba(92,74,60,.18),0 0 0 1px rgba(196,165,123,.15);
+  --e:cubic-bezier(.4,0,.2,1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:17px;scroll-behavior:smooth;background:#E8E4DF;color:var(--ch)}
+body{font-family:var(--fb);font-weight:400;line-height:1.7;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+
+.ct{max-width:1200px;margin:0 auto;padding:0 clamp(1.5rem,4vw,3rem)}
+.nr{max-width:800px;margin:0 auto;padding:0 clamp(1.5rem,4vw,3rem)}
+h1,h2,h3{font-family:var(--fd);font-weight:400;line-height:1.15;letter-spacing:-.02em}
+h1{font-size:clamp(2.6rem,5.5vw,4.5rem)}h2{font-size:clamp(1.8rem,4vw,3rem)}
+h3{font-size:clamp(1.15rem,2vw,1.45rem);font-weight:500}
+h4{font-family:var(--fb);font-size:.78rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ao)}
+p{font-size:1rem;color:var(--mo);max-width:640px}
+em{font-family:var(--fd);font-style:italic;color:var(--ao)}
+.mn{font-family:var(--fm);font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;color:var(--ao)}
+.lb{font-size:1.1rem;line-height:1.8}
+
+.sm{display:flex;flex-direction:column;gap:3px;width:40px}
+.sl{height:1.5px;background:var(--mo);border-radius:1px}
+.sl:nth-child(1){width:100%}.sl:nth-child(2){width:80%;opacity:.7}.sl:nth-child(3){width:60%;opacity:.4}
+.strata-wide{display:flex;flex-direction:column;gap:5px;padding:2rem 0}
+.strata-wide .sl{height:2px}
+
+.dh{padding:clamp(3.5rem,8vh,6.5rem) 0 2.5rem;background:var(--ow);position:relative}
+.dh::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cl),transparent)}
+.dm{display:flex;gap:2.5rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--pl);flex-wrap:wrap}
+.dm-i .mn{display:block;margin-bottom:.2rem}
+.dm-i span{font-size:.86rem;color:var(--ch);font-weight:500}
+
+.s{padding:clamp(2.5rem,7vh,5rem) 0;background:var(--ow);position:relative}
+.s.a{background:var(--sc)}.s.d{background:var(--ch);color:var(--ow)}
+.s.d p{color:var(--pl)}.s.d .mn{color:var(--cl)}.s.d h4{color:var(--cl)}
+.sh{margin-bottom:2.5rem}
+.sh .mn{display:block;margin-bottom:.6rem}.sh h2{margin-bottom:.8rem}
+
+/* ============================================
+   PHONE FRAMES
+   ============================================ */
+.pr{display:flex;gap:2.5rem;overflow-x:auto;padding:2rem 0;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.pr::-webkit-scrollbar{display:none}
+.pg{flex:0 0 auto;scroll-snap-align:center;display:flex;flex-direction:column;align-items:center}
+.pl-t{margin-bottom:1rem;text-align:center;max-width:375px}
+.pl-t h3{font-size:1.02rem;margin-bottom:.3rem}
+.pl-t p{font-size:.8rem;color:var(--ao);text-align:center;max-width:340px;margin:0 auto}
+.pl-t .mn{font-size:.58rem}
+
+.pf{width:375px;height:812px;border-radius:44px;background:var(--ch);padding:12px;position:relative;box-shadow:0 20px 80px rgba(92,74,60,.22),0 0 0 1px rgba(0,0,0,.08);flex-shrink:0}
+.ps{width:100%;height:100%;border-radius:32px;overflow:hidden;position:relative;background:var(--ow)}
+.ps::before{content:'';position:absolute;top:8px;left:50%;transform:translateX(-50%);width:120px;height:34px;background:var(--ch);border-radius:20px;z-index:100}
+.ps::after{content:'';position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:134px;height:5px;background:var(--ch);border-radius:3px;z-index:100;opacity:.3}
+.ss{padding:14px 24px 0;display:flex;justify-content:space-between;align-items:center;height:50px;font-size:12px;font-weight:600;color:var(--ch);position:relative;z-index:50}
+.ss.l{color:var(--ow)}
+
+/* COMPANION */
+.comp{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);z-index:95}
+.comp-m{width:52px;height:52px;border-radius:50%;background:var(--ch);box-shadow:var(--sh);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;position:relative}
+.comp-m .cl{height:1.5px;border-radius:1px;background:var(--ow)}
+.comp-m .cl:nth-child(1){width:20px}.comp-m .cl:nth-child(2){width:16px;opacity:.7}.comp-m .cl:nth-child(3){width:12px;opacity:.4}
+.comp-m::after{content:'';position:absolute;inset:-3px;border-radius:50%;border:1.5px solid var(--cl);opacity:.3;animation:cb 3s ease-in-out infinite}
+@keyframes cb{0%,100%{opacity:.2;transform:scale(1)}50%{opacity:.45;transform:scale(1.06)}}
+.comp-n{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);white-space:nowrap;padding:6px 14px;border-radius:14px;background:var(--ch);color:var(--ow);font-size:12px;font-weight:500;box-shadow:0 4px 16px rgba(92,74,60,.12);z-index:96}
+.comp-n::after{content:'';position:absolute;bottom:-5px;left:50%;width:10px;height:10px;background:var(--ch);border-radius:2px;transform:translateX(-50%) rotate(45deg)}
+
+/* GRADIENTS */
+.fg-w{background:linear-gradient(135deg,var(--sc),var(--cl))}.fg-d{background:linear-gradient(180deg,var(--db),var(--mo))}
+.fg-e{background:linear-gradient(135deg,var(--ao),var(--cl))}.fg-s{background:linear-gradient(135deg,var(--sg),var(--pl))}
+.fg-l{background:linear-gradient(135deg,#8B6F47,#A3927C)}.fg-ln{background:linear-gradient(135deg,#D4CFC7,#E5E2DD)}
+.fg-wd{background:linear-gradient(135deg,#6B5B4E,#8B7355)}.fg-mt{background:linear-gradient(135deg,#7A7B80,#A8A9AD)}
+.fg-rt{background:linear-gradient(135deg,#B8A080,#D4C4A8)}
+.fg-hero{background:linear-gradient(160deg,#B8A080 0%,#8B7355 40%,#5C4A3C 100%)}
+.fg-hero2{background:linear-gradient(145deg,#A8B5A0 0%,#8B9CAD 60%,#5C4A3C 100%)}
+
+/* ANNOTATIONS */
+.ag{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.5rem;margin-top:1.5rem}
+.ac{padding:1.2rem;border-radius:11px;background:var(--sc)}
+.ac .mn{display:block;margin-bottom:.4rem}.ac h3{font-size:1.05rem;margin-bottom:.4rem}.ac p{font-size:.84rem}
+
+/* FOOTER */
+.df{padding:3rem 0;background:var(--ch);color:var(--pl)}
+.df-inner{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:2rem}
+.df h3{font-family:var(--fd);font-size:1.3rem;color:var(--ow)}.df em{color:var(--cl);display:block;margin-top:.2rem}
+
+.fi{opacity:0;transform:translateY(16px);transition:opacity .6s var(--e),transform .6s var(--e)}.fi.v{opacity:1;transform:translateY(0)}
+@media(max-width:900px){.pr{gap:1.5rem;padding:1rem}.pf{width:340px;height:736px}.ps{border-radius:30px}.dm{gap:1.2rem}}
+@media(max-width:600px){.pf{width:300px;height:650px;border-radius:38px}.ps{border-radius:27px}.ct,.nr{padding:0 1rem}}
+
+/* ============================================
+   THE DAILY ROOM — Screen Components
+   ============================================ */
+
+/* --- Screen shell --- */
+.dr{height:100%;display:flex;flex-direction:column;background:var(--ow);overflow-y:auto;overflow-x:hidden}
+
+/* --- Greeting --- */
+.dr-gr{padding:56px 20px 0;display:flex;justify-content:space-between;align-items:flex-start}
+.dr-gr-t .mn{display:block;margin-bottom:2px}
+.dr-gr-t h2{font-family:var(--fd);font-size:21px;color:var(--ch);line-height:1.2}
+.dr-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--fd);font-size:14px;font-weight:500;color:var(--ow)}
+
+/* --- Daily Story --- */
+.dr-story{margin:14px 20px 0;border-radius:16px;overflow:hidden;position:relative;height:180px;flex-shrink:0}
+.dr-story-grad{position:absolute;bottom:0;left:0;right:0;height:75%;background:linear-gradient(0deg,rgba(44,41,38,.88) 0%,rgba(44,41,38,.2) 60%,transparent 100%)}
+.dr-story-ct{position:absolute;bottom:0;left:0;right:0;padding:14px 16px}
+.dr-story-tag{font-family:var(--fm);font-size:7px;letter-spacing:.08em;text-transform:uppercase;color:var(--cl);margin-bottom:3px}
+.dr-story-title{font-family:var(--fd);font-size:18px;color:var(--ow);line-height:1.2;margin-bottom:2px}
+.dr-story-sub{font-size:11px;color:var(--pl)}
+.dr-story-new{position:absolute;top:11px;right:11px;width:7px;height:7px;border-radius:50%;background:var(--cl)}
+.dr-story-readtime{position:absolute;top:10px;left:12px;padding:3px 8px;border-radius:8px;background:rgba(44,41,38,.5);backdrop-filter:blur(6px);font-family:var(--fm);font-size:7px;letter-spacing:.04em;text-transform:uppercase;color:var(--ow)}
+
+/* --- Room Chips --- */
+.dr-rooms{display:flex;gap:7px;padding:16px 20px 0;overflow-x:auto;flex-shrink:0}
+.dr-rooms::-webkit-scrollbar{display:none}
+.dr-chip{flex-shrink:0;display:flex;align-items:center;gap:7px;padding:5px 12px 5px 5px;border-radius:20px;background:var(--sc);border:1.5px solid var(--pl)}
+.dr-chip.ac{background:var(--ch);border-color:var(--ch)}
+.dr-chip-thumb{width:26px;height:26px;border-radius:50%;flex-shrink:0}
+.dr-chip-name{font-size:11px;font-weight:500;color:var(--ch);white-space:nowrap}
+.dr-chip.ac .dr-chip-name{color:var(--ow)}
+.dr-chip-badge{font-family:var(--fm);font-size:7px;padding:1px 5px;border-radius:6px;background:var(--cl);color:var(--ow);margin-left:2px}
+
+/* --- Room Context Bar --- */
+.dr-ctx{padding:10px 20px 6px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.dr-ctx-text{font-size:10px;color:var(--ao)}
+.dr-ctx-text strong{color:var(--ch);font-weight:500}
+.dr-ctx-filters{display:flex;gap:4px}
+.dr-ctx-f{padding:3px 9px;border-radius:12px;font-size:9px;font-weight:500;background:var(--sc);color:var(--mo)}
+.dr-ctx-f.ac{background:var(--ch);color:var(--ow)}
+
+/* --- Product Cards --- */
+.dr-feed{flex:1;overflow-y:auto;padding:6px 20px 100px}
+
+.dr-card{border-radius:14px;overflow:hidden;margin-bottom:14px;background:var(--sc)}
+.dr-card-img{height:210px;position:relative}
+.dr-card-why{position:absolute;bottom:0;left:0;right:0;padding:10px 14px;background:linear-gradient(0deg,rgba(44,41,38,.75) 0%,transparent 100%)}
+.dr-card-why p{font-size:11px;color:var(--ow);line-height:1.35;font-style:italic;margin:0}
+.dr-card-match{position:absolute;top:9px;right:9px;padding:3px 8px;border-radius:6px;background:rgba(250,247,242,.92);backdrop-filter:blur(6px);font-family:var(--fm);font-size:7px;color:var(--mo);letter-spacing:.03em}
+.dr-card-tier{position:absolute;top:9px;left:9px;padding:3px 8px;border-radius:6px;background:rgba(196,165,123,.85);font-family:var(--fm);font-size:7px;letter-spacing:.04em;text-transform:uppercase;color:var(--ow)}
+
+.dr-card-body{padding:12px 14px}
+.dr-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.dr-card-info{flex:1;min-width:0}
+.dr-card-maker{font-family:var(--fm);font-size:7px;letter-spacing:.04em;text-transform:uppercase;color:var(--ao);margin-bottom:1px}
+.dr-card-name{font-size:13px;font-weight:500;color:var(--ch);line-height:1.3;margin-bottom:2px}
+.dr-card-price{font-family:var(--fd);font-size:16px;font-weight:500;color:var(--ch)}
+
+/* Add button */
+.dr-add{display:flex;align-items:center;gap:5px;padding:8px 14px;border-radius:20px;background:var(--ch);color:var(--ow);font-size:11px;font-weight:500;flex-shrink:0;white-space:nowrap}
+.dr-add-icon{font-size:12px}
+
+/* Context insight */
+.dr-insight{margin-top:8px;padding:8px 12px;border-radius:10px;background:var(--ow);display:flex;align-items:flex-start;gap:8px}
+.dr-insight-icon{font-size:13px;flex-shrink:0;margin-top:1px}
+.dr-insight-text{font-size:10px;color:var(--mo);line-height:1.35}
+.dr-insight-text strong{color:var(--ch);font-weight:500}
+
+/* --- Pairing Suggestion --- */
+.dr-pair{margin-top:8px;padding:8px 12px;border-radius:10px;background:rgba(168,181,160,.1);display:flex;align-items:center;gap:8px}
+.dr-pair-thumb{width:32px;height:32px;border-radius:6px;flex-shrink:0}
+.dr-pair-text{font-size:10px;color:var(--mo);line-height:1.3}
+.dr-pair-text strong{color:var(--ch);font-weight:500}
+
+/* --- Add-to-Room Sheet --- */
+.sheet{position:absolute;bottom:0;left:0;right:0;background:var(--ow);border-radius:20px 20px 0 0;padding:18px 24px 36px;z-index:95;box-shadow:0 -8px 40px rgba(92,74,60,.18)}
+.sheet-handle{width:36px;height:4px;border-radius:2px;background:var(--pl);margin:0 auto 14px}
+.sheet-title{font-family:var(--fd);font-size:17px;color:var(--ch);margin-bottom:3px}
+.sheet-sub{font-family:var(--fm);font-size:8px;letter-spacing:.04em;text-transform:uppercase;color:var(--ao);margin-bottom:14px}
+.sheet-room{display:flex;align-items:center;gap:11px;padding:11px;border-radius:12px;background:var(--sc);margin-bottom:7px}
+.sheet-room-thumb{width:44px;height:44px;border-radius:9px;flex-shrink:0}
+.sheet-room-info{flex:1}
+.sheet-room-name{font-size:13px;font-weight:500;color:var(--ch)}
+.sheet-room-meta{font-family:var(--fm);font-size:7px;color:var(--ao);letter-spacing:.03em;text-transform:uppercase;margin-top:1px}
+.sheet-room-add{font-size:15px;color:var(--cl);flex-shrink:0}
+.sheet-room.selected{background:var(--ch)}
+.sheet-room.selected .sheet-room-name{color:var(--ow)}
+.sheet-room.selected .sheet-room-meta{color:var(--cl)}
+.sheet-room.selected .sheet-room-add{color:var(--ow)}
+.sheet-new{text-align:center;font-size:12px;color:var(--cl);font-weight:500;margin-top:10px}
+
+/* --- Confirmation Toast --- */
+.toast{position:absolute;bottom:90px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:10px 18px;border-radius:16px;background:var(--ch);box-shadow:0 8px 32px rgba(44,41,38,.25);z-index:96;white-space:nowrap}
+.toast-check{width:24px;height:24px;border-radius:50%;background:var(--ok);display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;flex-shrink:0}
+.toast-text{font-size:12px;font-weight:500;color:var(--ow)}
+.toast-link{font-size:11px;color:var(--cl);margin-left:4px}
+
+/* --- Story Expanded --- */
+.story-full{height:100%;background:var(--ch);overflow-y:auto}
+.story-hero{height:340px;position:relative;flex-shrink:0}
+.story-hero-grad{position:absolute;bottom:0;left:0;right:0;height:45%;background:linear-gradient(0deg,var(--ch),transparent)}
+.story-hero-ct{position:absolute;bottom:18px;left:20px;right:20px}
+.story-hero-tag{font-family:var(--fm);font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--cl);margin-bottom:5px}
+.story-hero-title{font-family:var(--fd);font-size:26px;color:var(--ow);line-height:1.15}
+.story-back{position:absolute;top:54px;left:14px;width:34px;height:34px;border-radius:50%;background:rgba(250,247,242,.12);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ow);z-index:20}
+.story-body{padding:22px 20px 100px}
+.story-maker{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.story-maker-av{width:44px;height:44px;border-radius:50%;flex-shrink:0}
+.story-maker-nm{font-size:14px;font-weight:500;color:var(--ow)}
+.story-maker-loc{font-family:var(--fm);font-size:8px;letter-spacing:.05em;text-transform:uppercase;color:var(--cl)}
+.story-p{font-size:14px;color:var(--pl);line-height:1.65;margin-bottom:18px}
+.story-product{border-radius:12px;overflow:hidden;background:rgba(250,247,242,.06);margin-bottom:18px}
+.story-product-img{height:160px}
+.story-product-info{padding:12px;display:flex;justify-content:space-between;align-items:center}
+.story-product-info div{min-width:0}
+.story-product-nm{font-size:13px;font-weight:500;color:var(--ow)}
+.story-product-pr{font-family:var(--fd);font-size:16px;font-weight:500;color:var(--ow);margin-top:2px}
+.story-product-btn{padding:8px 14px;border-radius:16px;background:var(--cl);color:var(--ow);font-size:11px;font-weight:500;flex-shrink:0;white-space:nowrap}
+
+/* --- First-Time / Empty State --- */
+.dr-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 32px;text-align:center}
+.dr-empty-icon{width:80px;height:80px;border-radius:20px;background:var(--sc);display:flex;align-items:center;justify-content:center;font-size:32px;margin-bottom:16px}
+.dr-empty h3{font-family:var(--fd);font-size:20px;color:var(--ch);margin-bottom:6px}
+.dr-empty p{font-size:13px;color:var(--ao);line-height:1.5;margin-bottom:20px;max-width:260px}
+.dr-empty-btn{padding:12px 28px;border-radius:24px;background:var(--ch);color:var(--ow);font-size:14px;font-weight:500}
+
+/* --- Room Project View --- */
+.dr-proj{height:100%;display:flex;flex-direction:column;background:var(--ow);overflow-y:auto}
+.dr-proj-hero{height:180px;position:relative;flex-shrink:0}
+.dr-proj-grad{position:absolute;bottom:0;left:0;right:0;height:50%;background:linear-gradient(0deg,var(--ow),transparent)}
+.dr-proj-label{position:absolute;bottom:12px;left:20px}
+.dr-proj-label h2{font-family:var(--fd);font-size:22px;color:var(--ch)}
+.dr-proj-label span{font-family:var(--fm);font-size:8px;color:var(--ao);letter-spacing:.04em;text-transform:uppercase}
+.dr-proj-stats{display:flex;gap:8px;padding:14px 20px}
+.dr-proj-stat{flex:1;padding:10px;border-radius:10px;background:var(--sc);text-align:center}
+.dr-proj-stat-v{font-family:var(--fd);font-size:18px;font-weight:500;color:var(--ch)}
+.dr-proj-stat-l{font-family:var(--fm);font-size:7px;letter-spacing:.06em;text-transform:uppercase;color:var(--ao);margin-top:1px}
+.dr-proj-items{padding:0 20px 100px}
+.dr-proj-item{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--pl);align-items:center}
+.dr-proj-item-img{width:60px;height:60px;border-radius:8px;flex-shrink:0}
+.dr-proj-item-info{flex:1;min-width:0}
+.dr-proj-item-mk{font-family:var(--fm);font-size:7px;letter-spacing:.04em;text-transform:uppercase;color:var(--ao)}
+.dr-proj-item-nm{font-size:13px;font-weight:500;color:var(--ch);line-height:1.3}
+.dr-proj-item-pr{font-family:var(--fd);font-size:14px;font-weight:500;color:var(--ch);margin-top:1px}
+.dr-proj-item-ar{font-size:11px;color:var(--cl);font-weight:500}
+.dr-proj-total{padding:16px 20px;display:flex;justify-content:space-between;align-items:baseline}
+.dr-proj-total-label{font-size:12px;color:var(--ao)}
+.dr-proj-total-val{font-family:var(--fd);font-size:22px;font-weight:500;color:var(--ch)}
+
+/* --- Returning pull state --- */
+.dr-pull-badge{position:absolute;top:60px;right:20px;padding:4px 10px;border-radius:10px;background:var(--cl);font-family:var(--fm);font-size:8px;letter-spacing:.04em;text-transform:uppercase;color:var(--ow);z-index:60}
+</style>
+</head>
+<body>
+
+<!-- ============================================
+     HEADER
+     ============================================ -->
+<header class="dh">
+  <div class="ct">
+    <div class="sm"><div class="sl"></div><div class="sl"></div><div class="sl"></div></div>
+    <span class="mn" style="margin-top:.8rem;display:block">Home Screen · Final Concept Design</span>
+    <h1>The Daily <em>Room</em></h1>
+    <p class="lb" style="max-width:720px">The A+C hybrid brought to life. A daily editorial story creates the morning ritual — the reason to open the app. Below it, a room-contextual product feed where every item carries spatial intelligence explaining why it fits <em>this</em> room specifically. One tap adds any product to the room it was made for. Every second of browsing trains the Aesthete Engine.</p>
+    <div class="dm">
+      <div class="dm-i"><span class="mn">Concept</span><span>Daily Edit + Living Room</span></div>
+      <div class="dm-i"><span class="mn">Screens</span><span>10 States</span></div>
+      <div class="dm-i"><span class="mn">Core Metric</span><span>Dwell Time per Product</span></div>
+      <div class="dm-i"><span class="mn">Core Action</span><span>Add to Room</span></div>
+    </div>
+  </div>
+</header>
+
+
+<!-- ============================================
+     ANATOMY
+     ============================================ -->
+<section class="s a">
+  <div class="ct">
+    <div class="sh">
+      <span class="mn">Screen Anatomy</span>
+      <h2>Four Zones, <em>One Scroll</em></h2>
+      <p>The Daily Room is a single continuous scroll with four distinct zones. Each zone serves a different purpose, but together they create a feed that's worth returning to every day.</p>
+    </div>
+    <div class="ag">
+      <div class="ac fi"><span class="mn">Zone 1 · Top</span><h3>The Greeting</h3><p>Date in DM Mono. "Your Daily Room" in Playfair. User avatar top-right. Time-aware — "Good morning" before noon, nothing after. Minimal. The date creates the daily freshness signal.</p></div>
+      <div class="ac fi"><span class="mn">Zone 2 · Story</span><h3>The Daily Story</h3><p>Full-width card, 180px. Changes daily. Maker spotlight, seasonal collection, material deep-dive, or room transformation. New-dot indicator (Clay). Read-time badge. Tapping opens full-screen narrative with embedded shoppable products.</p></div>
+      <div class="ac fi"><span class="mn">Zone 3 · Room Selector</span><h3>Room Channels</h3><p>Horizontal chips — each scanned room with its thumbnail, name, and "new picks" count. Switching rooms reloads the entire feed below with products scored and explained for that specific room. Context bar shows room dimensions, orientation, and window count.</p></div>
+      <div class="ac fi"><span class="mn">Zone 4 · Feed</span><h3>Room-Contextual Products</h3><p>Vertical product cards with large hero images. Each card carries: match percentage, tier badge (Designer Selection vs. Style Match), maker provenance, spatial "why it fits" overlay, "Add" button targeting the selected room, and a contextual insight explaining fit. Dwell time tracked per card via viewport intersection.</p></div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================
+     PRIMARY STATE — Living Room Feed
+     ============================================ -->
+<section class="s">
+  <div class="ct">
+    <div class="sh">
+      <span class="mn">Primary State</span>
+      <h2>The Daily Room <em>in Action</em></h2>
+      <p>A returning user opens the app. The story is fresh. The room chips show new pick counts. The feed is alive with products that know about their south-facing windows and their saved coffee table.</p>
+    </div>
+
+    <div class="pr">
+
+      <!-- PRIMARY HOME — Living Room -->
+      <div class="pg">
+        <div class="pl-t">
+          <h3>Living Room Feed</h3>
+          <p>Morning open. Daily story at top, Living Room selected. Feed shows products with spatial intelligence — "South-facing light warms this walnut" — and one-tap add.</p>
+        </div>
+        <div class="pf"><div class="ps">
+          <div class="dr">
+            <div class="ss"><span>7:14</span><span>···</span></div>
+            <div class="dr-gr">
+              <div class="dr-gr-t"><span class="mn">Wednesday · April 7</span><h2>Your Daily Room</h2></div>
+              <div class="dr-av fg-e" style="color:var(--ow)">K</div>
+            </div>
+            <!-- Story -->
+            <div class="dr-story fg-hero">
+              <div class="dr-story-new"></div>
+              <div class="dr-story-readtime">4 min read</div>
+              <div class="dr-story-grad"></div>
+              <div class="dr-story-ct">
+                <div class="dr-story-tag">Maker Spotlight</div>
+                <div class="dr-story-title">The Grain Whisperer of Maine</div>
+                <div class="dr-story-sub">Jonathan Chilton on 40 years of listening to wood</div>
+              </div>
+            </div>
+            <!-- Room chips -->
+            <div class="dr-rooms">
+              <div class="dr-chip ac"><div class="dr-chip-thumb fg-w"></div><span class="dr-chip-name" style="color:var(--ow)">Living Room</span><span class="dr-chip-badge">12</span></div>
+              <div class="dr-chip"><div class="dr-chip-thumb fg-d"></div><span class="dr-chip-name">Bedroom</span><span class="dr-chip-badge">8</span></div>
+              <div class="dr-chip"><div class="dr-chip-thumb fg-s"></div><span class="dr-chip-name">Office</span><span class="dr-chip-badge">5</span></div>
+            </div>
+            <!-- Context -->
+            <div class="dr-ctx">
+              <div class="dr-ctx-text"><strong>264 sq ft</strong> · South-facing · 2 windows</div>
+              <div class="dr-ctx-filters"><div class="dr-ctx-f ac">All</div><div class="dr-ctx-f">Seating</div><div class="dr-ctx-f">Tables</div></div>
+            </div>
+            <!-- Feed -->
+            <div class="dr-feed">
+              <!-- Card 1 -->
+              <div class="dr-card">
+                <div class="dr-card-img fg-l">
+                  <div class="dr-card-tier">Designer Selection</div>
+                  <div class="dr-card-match">92% match</div>
+                  <div class="dr-card-why"><p>"South-facing light will warm this walnut grain beautifully in afternoon"</p></div>
+                </div>
+                <div class="dr-card-body">
+                  <div class="dr-card-top">
+                    <div class="dr-card-info">
+                      <div class="dr-card-maker">Chilton Furniture · Freeport, ME</div>
+                      <div class="dr-card-name">Walnut Lounge Chair</div>
+                      <div class="dr-card-price">$2,850</div>
+                    </div>
+                    <div class="dr-add"><span class="dr-add-icon">+</span> Add</div>
+                  </div>
+                  <div class="dr-insight">
+                    <div class="dr-insight-icon">📐</div>
+                    <div class="dr-insight-text">Fits the <strong>open zone</strong> by your bay window with clearance on both sides</div>
+                  </div>
+                  <div class="dr-pair">
+                    <div class="dr-pair-thumb fg-wd"></div>
+                    <div class="dr-pair-text">Pairs with your saved <strong>Cherry Coffee Table</strong> — matched wood tones</div>
+                  </div>
+                </div>
+              </div>
+              <!-- Card 2 -->
+              <div class="dr-card">
+                <div class="dr-card-img fg-ln">
+                  <div class="dr-card-match">88% match</div>
+                  <div class="dr-card-why"><p>"Linen breathes with your east-west airflow — stays cool summer, warm winter"</p></div>
+                </div>
+                <div class="dr-card-body">
+                  <div class="dr-card-top">
+                    <div class="dr-card-info">
+                      <div class="dr-card-maker">Shoppe Amber · Calabasas, CA</div>
+                      <div class="dr-card-name">Linen Cloud Sectional</div>
+                      <div class="dr-card-price">$3,200</div>
+                    </div>
+                    <div class="dr-add"><span class="dr-add-icon">+</span> Add</div>
+                  </div>
+                  <div class="dr-insight">
+                    <div class="dr-insight-icon">📐</div>
+                    <div class="dr-insight-text"><strong>108" width</strong> fits your long wall with 18" clearance on each side</div>
+                  </div>
+                </div>
+              </div>
+              <!-- Card 3 (partial) -->
+              <div class="dr-card" style="opacity:.55;margin-bottom:80px">
+                <div class="dr-card-img fg-wd" style="height:140px"><div class="dr-card-match">85%</div></div>
+                <div class="dr-card-body"><div class="dr-card-top"><div class="dr-card-info"><div class="dr-card-maker">Thos. Moser</div><div class="dr-card-name">Cherry Coffee Table</div><div class="dr-card-price">$1,890</div></div><div class="dr-add"><span class="dr-add-icon">+</span> Add</div></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+
+      <!-- BEDROOM CHANNEL -->
+      <div class="pg">
+        <div class="pl-t">
+          <h3>Bedroom Channel</h3>
+          <p>Tapping the Bedroom chip swaps the entire feed. Different products, different spatial context, different "why it fits" explanations. The room IS the recommendation engine.</p>
+        </div>
+        <div class="pf"><div class="ps">
+          <div class="dr">
+            <div class="ss"><span>7:16</span><span>···</span></div>
+            <div class="dr-gr"><div class="dr-gr-t"><span class="mn">Wednesday · April 7</span><h2>Your Daily Room</h2></div><div class="dr-av fg-e" style="color:var(--ow)">K</div></div>
+            <div class="dr-story fg-hero" style="height:100px">
+              <div class="dr-story-grad"></div>
+              <div class="dr-story-ct" style="padding:10px 14px"><div class="dr-story-tag">Maker Spotlight</div><div class="dr-story-title" style="font-size:15px">The Grain Whisperer of Maine</div></div>
+            </div>
+            <div class="dr-rooms">
+              <div class="dr-chip"><div class="dr-chip-thumb fg-w"></div><span class="dr-chip-name">Living Room</span></div>
+              <div class="dr-chip ac"><div class="dr-chip-thumb fg-d"></div><span class="dr-chip-name" style="color:var(--ow)">Bedroom</span><span class="dr-chip-badge">8</span></div>
+              <div class="dr-chip"><div class="dr-chip-thumb fg-s"></div><span class="dr-chip-name">Office</span></div>
+            </div>
+            <div class="dr-ctx"><div class="dr-ctx-text"><strong>180 sq ft</strong> · West-facing · 1 window</div><div class="dr-ctx-filters"><div class="dr-ctx-f ac">All</div><div class="dr-ctx-f">Beds</div><div class="dr-ctx-f">Lighting</div></div></div>
+            <div class="dr-feed">
+              <div class="dr-card">
+                <div class="dr-card-img fg-d">
+                  <div class="dr-card-match">91% match</div>
+                  <div class="dr-card-why"><p>"West-facing room gets warm evening light — this oak frame catches it perfectly"</p></div>
+                </div>
+                <div class="dr-card-body">
+                  <div class="dr-card-top"><div class="dr-card-info"><div class="dr-card-maker">Floyd · Detroit, MI</div><div class="dr-card-name">The Bed Frame — White Oak</div><div class="dr-card-price">$1,095</div></div><div class="dr-add"><span class="dr-add-icon">+</span> Add</div></div>
+                  <div class="dr-insight"><div class="dr-insight-icon">📐</div><div class="dr-insight-text"><strong>Queen size</strong> fits your room with nightstand clearance on both sides</div></div>
+                </div>
+              </div>
+              <div class="dr-card">
+                <div class="dr-card-img fg-rt">
+                  <div class="dr-card-match">86% match</div>
+                  <div class="dr-card-why"><p>"Woven shade filters that western glare into a soft golden glow"</p></div>
+                </div>
+                <div class="dr-card-body">
+                  <div class="dr-card-top"><div class="dr-card-info"><div class="dr-card-maker">Lostine · Philadelphia, PA</div><div class="dr-card-name">Woven Pendant Shade</div><div class="dr-card-price">$340</div></div><div class="dr-add"><span class="dr-add-icon">+</span> Add</div></div>
+                </div>
+              </div>
+              <div class="dr-card" style="opacity:.5;margin-bottom:80px">
+                <div class="dr-card-img fg-s" style="height:120px"><div class="dr-card-match">83%</div></div>
+                <div class="dr-card-body"><div class="dr-card-top"><div class="dr-card-info"><div class="dr-card-maker">Coyuchi</div><div class="dr-card-name">Organic Linen Duvet</div><div class="dr-card-price">$298</div></div><div class="dr-add"><span class="dr-add-icon">+</span> Add</div></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+
+      <!-- ADD TO ROOM SHEET -->
+      <div class="pg">
+        <div class="pl-t">
+          <h3>Add to Room</h3>
+          <p>Tapping "+ Add" opens a half-sheet showing all scanned rooms. The room the product was recommended for is pre-selected. One tap confirms. This bridges browsing to building a project.</p>
+        </div>
+        <div class="pf"><div class="ps">
+          <div class="dr" style="filter:brightness(.6)"><div class="ss"><span>7:14</span><span>···</span></div><div class="dr-gr"><div class="dr-gr-t"><span class="mn">Wednesday · April 7</span><h2>Your Daily Room</h2></div></div></div>
+          <div style="position:absolute;inset:0;background:rgba(44,41,38,.35);backdrop-filter:blur(6px);border-radius:32px;z-index:94"></div>
+          <div class="sheet">
+            <div class="sheet-handle"></div>
+            <div class="sheet-title">Add to room</div>
+            <div class="sheet-sub">Walnut Lounge Chair · $2,850</div>
+            <div class="sheet-room selected">
+              <div class="sheet-room-thumb fg-w"></div>
+              <div class="sheet-room-info"><div class="sheet-room-name" style="color:var(--ow)">Living Room</div><div class="sheet-room-meta" style="color:var(--cl)">264 SQ FT · 5 ITEMS · RECOMMENDED</div></div>
+              <div class="sheet-room-add">✓</div>
+            </div>
+            <div class="sheet-room">
+              <div class="sheet-room-thumb fg-d"></div>
+              <div class="sheet-room-info"><div class="sheet-room-name">Bedroom</div><div class="sheet-room-meta">180 SQ FT · 2 ITEMS</div></div>
+              <div class="sheet-room-add">+</div>
+            </div>
+            <div class="sheet-room">
+              <div class="sheet-room-thumb fg-s"></div>
+              <div class="sheet-room-info"><div class="sheet-room-name">Office</div><div class="sheet-room-meta">120 SQ FT · 0 ITEMS</div></div>
+              <div class="sheet-room-add">+</div>
+            </div>
+            <div class="sheet-new">+ Scan a new room</div>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- CONFIRMATION TOAST -->
+      <div class="pg">
+        <div class="pl-t">
+          <h3>Added — Toast</h3>
+          <p>After adding, a toast confirms placement with room name and a "View Room" link. The feed continues — no interruption. Saving to a room is effortless and doesn't break the browsing flow.</p>
+        </div>
+        <div class="pf"><div class="ps">
+          <div class="dr">
+            <div class="ss"><span>7:14</span><span>···</span></div>
+            <div class="dr-gr"><div class="dr-gr-t"><span class="mn">Wednesday · April 7</span><h2>Your Daily Room</h2></div><div class="dr-av fg-e" style="color:var(--ow)">K</div></div>
+            <div class="dr-story fg-hero" style="height:100px"><div class="dr-story-grad"></div><div class="dr-story-ct" style="padding:10px 14px"><div class="dr-story-tag">Maker Spotlight</div><div class="dr-story-title" style="font-size:15px">The Grain Whisperer of Maine</div></div></div>
+            <div class="dr-rooms"><div class="dr-chip ac"><div class="dr-chip-thumb fg-w"></div><span class="dr-chip-name" style="color:var(--ow)">Living Room</span></div><div class="dr-chip"><div class="dr-chip-thumb fg-d"></div><span class="dr-chip-name">Bedroom</span></div></div>
+            <div class="dr-ctx"><div class="dr-ctx-text"><strong>264 sq ft</strong> · South-facing</div></div>
+            <div class="dr-feed">
+              <div class="dr-card"><div class="dr-card-img fg-ln"><div class="dr-card-match">88%</div></div><div class="dr-card-body"><div class="dr-card-top"><div class="dr-card-info"><div class="dr-card-maker">Shoppe Amber</div><div class="dr-card-name">Linen Cloud Sectional</div><div class="dr-card-price">$3,200</div></div><div class="dr-add"><span class="dr-add-icon">+</span> Add</div></div></div></div>
+            </div>
+          </div>
+          <!-- Toast -->
+          <div class="toast">
+            <div class="toast-check">✓</div>
+            <div class="toast-text">Added to Living Room</div>
+            <div class="toast-link">View →</div>
+          </div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================
+     STORY + ROOM PROJECT + EMPTY STATE
+     ============================================ -->
+<section class="s a">
+  <div class="ct">
+    <div class="sh">
+      <span class="mn">Extended States</span>
+      <h2>Story, Project & <em>Empty</em></h2>
+      <p>The story expands into a full narrative with embedded products. The room project view shows what you've built. And the first-time empty state gently drives the first scan — because without rooms, there are no room channels.</p>
+    </div>
+
+    <div class="pr">
+
+      <!-- STORY EXPANDED -->
+      <div class="pg">
+        <div class="pl-t">
+          <h3>Daily Story — Expanded</h3>
+          <p>Tapping the story card opens a full-screen maker narrative. Products from that maker are embedded in the story, each with its own "Add to Room" action. Content changes daily — that's the reason to come back.</p>
+        </div>
+        <div class="pf"><div class="ps">
+          <div class="story-full">
+            <div class="ss l" style="position:absolute;top:0;left:0;right:0;z-index:40"><span>7:15</span><span>···</span></div>
+            <div class="story-hero fg-hero">
+              <div class="story-back">←</div>
+              <div class="story-hero-grad"></div>
+              <div class="story-hero-ct"><div class="story-hero-tag">Maker Spotlight</div><div class="story-hero-title">The Grain Whisperer of Maine</div></div>
+            </div>
+            <div class="story-body">
+              <div class="story-maker"><div class="story-maker-av fg-e"></div><div><div class="story-maker-nm">Jonathan Chilton</div><div class="story-maker-loc">Freeport, Maine · Est. 1984</div></div></div>
+              <p class="story-p">"Each chair starts as a conversation with the wood. Walnut tells you where it wants to bend — you just have to listen. We've been having these conversations for forty years now."</p>
+              <div class="story-product">
+                <div class="story-product-img fg-l"></div>
+                <div class="story-product-info"><div><div class="story-product-nm">Walnut Lounge Chair</div><div class="story-product-pr">$2,850</div></div><div class="story-product-btn">Add to Room</div></div>
+              </div>
+              <p class="story-p">"The mortise-and-tenon joinery means no screws, no glue. Forty years from now, you'll run your hand along the arms and feel the same grain. That's not furniture. That's a promise."</p>
+              <div class="story-product">
+                <div class="story-product-img fg-wd"></div>
+                <div class="story-product-info"><div><div class="story-product-nm">Cherry Writing Desk</div><div class="story-product-pr">$3,400</div></div><div class="story-product-btn">Add to Room</div></div>
+              </div>
+              <p class="story-p" style="margin-bottom:60px">"My grandfather built barns. My father built cabinets. I build the pieces that sit between — small enough to hold, large enough to matter."</p>
+            </div>
+          </div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+
+      <!-- ROOM PROJECT VIEW -->
+      <div class="pg">
+        <div class="pl-t">
+          <h3>Room Project View</h3>
+          <p>Tapping "View →" in the toast (or accessing via Profile) opens the room's project view — all saved products in one place with running total. This is where browsing becomes a plan that leads to a designer conversation.</p>
+        </div>
+        <div class="pf"><div class="ps">
+          <div class="dr-proj">
+            <div class="ss"><span>7:18</span><span>···</span></div>
+            <div class="dr-proj-hero fg-w"><div class="dr-proj-grad"></div><div class="dr-proj-label"><h2>Living Room</h2><span>264 SQ FT · SCANNED APR 2</span></div></div>
+            <div class="dr-proj-stats">
+              <div class="dr-proj-stat"><div class="dr-proj-stat-v">6</div><div class="dr-proj-stat-l">Items</div></div>
+              <div class="dr-proj-stat"><div class="dr-proj-stat-v">89%</div><div class="dr-proj-stat-l">Avg Match</div></div>
+              <div class="dr-proj-stat"><div class="dr-proj-stat-v">3</div><div class="dr-proj-stat-l">AR Ready</div></div>
+            </div>
+            <div class="dr-proj-items">
+              <div class="dr-proj-item"><div class="dr-proj-item-img fg-l"></div><div class="dr-proj-item-info"><div class="dr-proj-item-mk">Chilton Furniture</div><div class="dr-proj-item-nm">Walnut Lounge Chair</div><div class="dr-proj-item-pr">$2,850</div></div><div class="dr-proj-item-ar">View in AR →</div></div>
+              <div class="dr-proj-item"><div class="dr-proj-item-img fg-ln"></div><div class="dr-proj-item-info"><div class="dr-proj-item-mk">Shoppe Amber</div><div class="dr-proj-item-nm">Linen Cloud Sectional</div><div class="dr-proj-item-pr">$3,200</div></div><div class="dr-proj-item-ar">View in AR →</div></div>
+              <div class="dr-proj-item"><div class="dr-proj-item-img fg-wd"></div><div class="dr-proj-item-info"><div class="dr-proj-item-mk">Thos. Moser</div><div class="dr-proj-item-nm">Cherry Coffee Table</div><div class="dr-proj-item-pr">$1,890</div></div><div class="dr-proj-item-ar">View in AR →</div></div>
+              <div class="dr-proj-item"><div class="dr-proj-item-img fg-rt"></div><div class="dr-proj-item-info"><div class="dr-proj-item-mk">Lostine</div><div class="dr-proj-item-nm">Woven Floor Lamp</div><div class="dr-proj-item-pr">$475</div></div></div>
+              <div class="dr-proj-item"><div class="dr-proj-item-img fg-s"></div><div class="dr-proj-item-info"><div class="dr-proj-item-mk">Coyuchi</div><div class="dr-proj-item-nm">Organic Linen Throw</div><div class="dr-proj-item-pr">$168</div></div></div>
+            </div>
+            <div class="dr-proj-total"><div class="dr-proj-total-label">Project total</div><div class="dr-proj-total-val">$8,583</div></div>
+            <div style="padding:0 20px 100px"><div style="height:48px;border-radius:24px;background:var(--ch);color:var(--ow);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:500">Work with a Designer on This Room</div></div>
+          </div>
+          <div class="comp-n">Talk to a designer →</div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+
+      <!-- FIRST-TIME EMPTY STATE -->
+      <div class="pg">
+        <div class="pl-t">
+          <h3>First-Time · No Rooms</h3>
+          <p>Before any rooms are scanned, the room channel section becomes a warm empty state that drives the first scan. The daily story still shows — giving them a taste of the content they'll get once they scan. The Companion nudges "Scan your first room."</p>
+        </div>
+        <div class="pf"><div class="ps">
+          <div class="dr">
+            <div class="ss"><span>9:41</span><span>···</span></div>
+            <div class="dr-gr"><div class="dr-gr-t"><span class="mn">Wednesday · April 7</span><h2>Your Daily Room</h2></div><div class="dr-av fg-e" style="color:var(--ow)">K</div></div>
+            <div class="dr-story fg-hero2"><div class="dr-story-new"></div><div class="dr-story-readtime">3 min read</div><div class="dr-story-grad"></div><div class="dr-story-ct"><div class="dr-story-tag">Material Deep Dive</div><div class="dr-story-title">The Story of Reclaimed Oak</div><div class="dr-story-sub">Why old wood tells better stories</div></div></div>
+            <div class="dr-empty">
+              <div class="dr-empty-icon">◎</div>
+              <h3>Your rooms are waiting</h3>
+              <p>Scan a room and we'll fill this feed with furniture that knows about your space — your light, your walls, your style.</p>
+              <div class="dr-empty-btn">Scan Your First Room</div>
+            </div>
+          </div>
+          <div class="comp-n">Scan your first room →</div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+
+      <!-- RETURNING USER — New Picks -->
+      <div class="pg">
+        <div class="pl-t">
+          <h3>Returning — New Picks</h3>
+          <p>Opening the app after a few days. A badge shows "14 new" picks across rooms. The story is fresh. The room chips glow with new counts. This is the "what did Patina find for me?" moment that drives daily opens.</p>
+        </div>
+        <div class="pf"><div class="ps">
+          <div class="dr-pull-badge">14 new picks</div>
+          <div class="dr">
+            <div class="ss"><span>7:08</span><span>···</span></div>
+            <div class="dr-gr"><div class="dr-gr-t"><span class="mn">Wednesday · April 7</span><h2>Your Daily Room</h2></div><div class="dr-av fg-e" style="color:var(--ow)">K</div></div>
+            <div class="dr-story fg-hero"><div class="dr-story-new"></div><div class="dr-story-readtime">5 min read</div><div class="dr-story-grad"></div><div class="dr-story-ct"><div class="dr-story-tag">Room Transformation</div><div class="dr-story-title">Before & After: A Prairie du Sac Living Room</div><div class="dr-story-sub">How Leah transformed a blank canvas into a warm haven</div></div></div>
+            <div class="dr-rooms">
+              <div class="dr-chip ac"><div class="dr-chip-thumb fg-w"></div><span class="dr-chip-name" style="color:var(--ow)">Living Room</span><span class="dr-chip-badge">6</span></div>
+              <div class="dr-chip"><div class="dr-chip-thumb fg-d"></div><span class="dr-chip-name">Bedroom</span><span class="dr-chip-badge">5</span></div>
+              <div class="dr-chip"><div class="dr-chip-thumb fg-s"></div><span class="dr-chip-name">Office</span><span class="dr-chip-badge">3</span></div>
+            </div>
+            <div class="dr-ctx"><div class="dr-ctx-text"><strong>264 sq ft</strong> · South-facing · 2 windows</div><div class="dr-ctx-filters"><div class="dr-ctx-f ac">New</div><div class="dr-ctx-f">All</div></div></div>
+            <div class="dr-feed">
+              <div class="dr-card"><div class="dr-card-img fg-mt"><div class="dr-card-tier">New Today</div><div class="dr-card-match">94%</div><div class="dr-card-why"><p>"Brushed brass catches your south-facing light without competing with the warm wood tones"</p></div></div>
+              <div class="dr-card-body"><div class="dr-card-top"><div class="dr-card-info"><div class="dr-card-maker">Allied Maker · NYC</div><div class="dr-card-name">Arc Floor Lamp — Brass</div><div class="dr-card-price">$1,680</div></div><div class="dr-add"><span class="dr-add-icon">+</span> Add</div></div></div></div>
+            </div>
+          </div>
+          <div class="comp"><div class="comp-m"><div class="cl"></div><div class="cl"></div><div class="cl"></div></div></div>
+        </div></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================
+     DWELL TIME + CONTENT STRATEGY
+     ============================================ -->
+<section class="s d">
+  <div class="ct">
+    <div class="sh">
+      <span class="mn">Intelligence Layer</span>
+      <h2 style="color:var(--ow)">Dwell Time & <em>Content Strategy</em></h2>
+    </div>
+    <div class="ag">
+      <div class="ac" style="background:rgba(250,247,242,.06)">
+        <span class="mn" style="color:var(--cl)">Dwell Capture</span>
+        <h3 style="color:var(--ow)">How It's Measured</h3>
+        <p style="color:var(--pl)">Each product card fires a <strong style="color:var(--ow)">dwell_start</strong> event when >50% of the card enters the viewport and a <strong style="color:var(--ow)">dwell_end</strong> event when it exits or the user navigates away. Metadata includes: <em>duration_ms</em>, <em>room_context</em> (which room channel was active), <em>feed_position</em>, <em>scroll_velocity</em> at entry (fast scroll past vs. slow browse), <em>expanded_insight</em> (did they read the pairing suggestion?), and <em>session_products_seen</em>. Batched to API every 30 seconds.</p>
+      </div>
+      <div class="ac" style="background:rgba(250,247,242,.06)">
+        <span class="mn" style="color:var(--cl)">Room Dwell</span>
+        <h3 style="color:var(--ow)">Channel Intelligence</h3>
+        <p style="color:var(--pl)">Beyond per-product dwell, we track <strong style="color:var(--ow)">time per room channel</strong>. If a user spends 80% of their session in the Bedroom channel, the Aesthete Engine knows that room is the active project. This informs notification priority ("3 new picks for your Bedroom"), story selection, and push notification timing.</p>
+      </div>
+      <div class="ac" style="background:rgba(250,247,242,.06)">
+        <span class="mn" style="color:var(--cl)">Daily Stories</span>
+        <h3 style="color:var(--ow)">Content Calendar</h3>
+        <p style="color:var(--pl)"><strong style="color:var(--ow)">Monday:</strong> Maker Spotlight — artisan narrative with 2-3 embedded products<br><strong style="color:var(--ow)">Tuesday:</strong> Material Deep Dive — "The Story of Reclaimed Oak"<br><strong style="color:var(--ow)">Wednesday:</strong> Room Transformation — before/after with product list<br><strong style="color:var(--ow)">Thursday:</strong> Design Principle — "Why Floating Furniture Changes Everything"<br><strong style="color:var(--ow)">Friday:</strong> New Arrivals — weekly product drops<br><strong style="color:var(--ow)">Weekend:</strong> Community — featured user rooms, seasonal styling</p>
+      </div>
+      <div class="ac" style="background:rgba(250,247,242,.06)">
+        <span class="mn" style="color:var(--cl)">Re-engagement</span>
+        <h3 style="color:var(--ow)">Pull Mechanics</h3>
+        <p style="color:var(--pl)"><strong style="color:var(--ow)">Badge count:</strong> "14 new picks" on app icon and top-right badge. Resets on scroll-through.<br><strong style="color:var(--ow)">Room chip badges:</strong> Per-room new-pick counts create micro-goals ("I still have 5 new bedroom picks to see").<br><strong style="color:var(--ow)">Story freshness:</strong> New-dot indicator (Clay) on unread stories. Read-time badge sets expectations.<br><strong style="color:var(--ow)">Push:</strong> "3 new pieces for your Living Room — including one from a maker you saved last week."</p>
+      </div>
+      <div class="ac" style="background:rgba(250,247,242,.06)">
+        <span class="mn" style="color:var(--cl)">Spatial Context</span>
+        <h3 style="color:var(--ow)">Why It Fits</h3>
+        <p style="color:var(--pl)">Every product card carries a <strong style="color:var(--ow)">"why it fits" overlay</strong> on the image and an <strong style="color:var(--ow)">insight card</strong> below with spatial reasoning. These are generated from room scan data: dimensions, orientation, window placement, detected objects, and lighting conditions. Example: "108" width fits your long wall with 18" clearance" uses actual wall measurements from the RoomPlan scan.</p>
+      </div>
+      <div class="ac" style="background:rgba(250,247,242,.06)">
+        <span class="mn" style="color:var(--cl)">Pairing Intelligence</span>
+        <h3 style="color:var(--ow)">Cross-Product Signals</h3>
+        <p style="color:var(--pl)">The <strong style="color:var(--ow)">pairing suggestion</strong> below product cards shows items already saved to this room that complement the current product. "Pairs with your saved Cherry Coffee Table — matched wood tones." This drives add-to-room conversion by showing the composition taking shape. Powered by designer-taught pairing data from the <em>designer_feedback.pairing_product_id</em> field.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================
+     INTERACTION SPEC
+     ============================================ -->
+<section class="s">
+  <div class="ct">
+    <div class="sh">
+      <span class="mn">Interaction Specification</span>
+      <h2>Gestures & <em>Micro-interactions</em></h2>
+    </div>
+    <div class="ag">
+      <div class="ac"><span class="mn">Scroll</span><h3>Vertical Feed</h3><p>Natural iOS momentum scroll. Story card has parallax at 0.8x. Room chips stay pinned at top when scrolled past (sticky behavior). Feed cards have no snapping — pure fluid scroll.</p></div>
+      <div class="ac"><span class="mn">Room Switch</span><h3>Channel Animation</h3><p>Tapping a new room chip: feed cards cross-fade (200ms), context bar text updates, filter chips reset to "All". Room chip fills Charcoal with spring animation. Subtle haptic (light impact) on switch.</p></div>
+      <div class="ac"><span class="mn">Add Button</span><h3>Add to Room</h3><p>Tap "+ Add" → half-sheet rises with spring physics. Pre-selected room highlighted in Charcoal with ✓. Tap another room to switch. Sheet dismisses on tap-outside or swipe-down. Medium haptic on successful add.</p></div>
+      <div class="ac"><span class="mn">Toast</span><h3>Confirmation</h3><p>After add: toast slides up from bottom (300ms spring), persists 3 seconds, includes "View →" link to room project. Feed doesn't scroll or change — zero interruption to browsing flow.</p></div>
+      <div class="ac"><span class="mn">Story Card</span><h3>Tap to Expand</h3><p>Story card expands to full-screen with shared element transition — image scales up, gradient extends, title repositions. Back via swipe-right or ← button. Products in story have same "Add to Room" action.</p></div>
+      <div class="ac"><span class="mn">Long Press</span><h3>Quick Look</h3><p>Long-press any product card image for a material close-up — zoomed texture detail with material name overlay. Haptic on entry (medium impact). Release to dismiss. Counts as a strong positive dwell signal.</p></div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================
+     CLOSING
+     ============================================ -->
+<section class="s a">
+  <div class="nr">
+    <div class="strata-wide"><div class="sl"></div><div class="sl"></div><div class="sl"></div></div>
+    <h2 style="margin-top:1.5rem;margin-bottom:1rem">Open it like a <em>magazine.</em><br>Use it like a <em>tool.</em></h2>
+    <p class="lb" style="max-width:700px;margin-bottom:1.5rem">The Daily Room gives people a reason to open Patina every morning — the same way they open a favorite magazine. The daily story creates the ritual. The room channels create the relevance. The spatial intelligence makes every recommendation feel personally observed — not algorithmically guessed. And the one-tap "Add" turns passive browsing into active room building.</p>
+    <p class="lb" style="max-width:700px;margin-bottom:1.5rem">Behind it all, every second of browsing teaches the Aesthete Engine something new. Dwell time per product. Time per room channel. Scroll velocity past rejected items. Long-press on textures. Pairing suggestions accepted or ignored. The feed isn't just the product — it's the intelligence pipeline.</p>
+    <p class="lb" style="max-width:700px">This is a home screen worth coming home to.</p>
+    <div class="sm" style="margin-top:2.5rem"><div class="sl"></div><div class="sl"></div><div class="sl"></div></div>
+  </div>
+</section>
+
+<footer class="df">
+  <div class="ct">
+    <div class="df-inner">
+      <div><h3>Patina</h3><em>Where Time Adds Value</em><p style="margin-top:1rem;font-size:.8rem;color:var(--cl)">The Daily Room · Home Screen Concept · April 2026</p></div>
+      <div style="text-align:right"><span class="mn" style="color:var(--cl)">10 Screens · 4 Zones · 1 Daily Ritual</span>
+        <div class="sm" style="margin-top:.8rem;margin-left:auto"><div class="sl" style="background:var(--cl)"></div><div class="sl" style="background:var(--cl);opacity:.6"></div><div class="sl" style="background:var(--cl);opacity:.3"></div></div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+const o=new IntersectionObserver(e=>{e.forEach(t=>{t.isIntersecting&&t.target.classList.add('v')})},{threshold:.1,rootMargin:'0px 0px -40px 0px'});
+document.querySelectorAll('.fi').forEach(e=>o.observe(e));
+</script>
+</body>
+</html>

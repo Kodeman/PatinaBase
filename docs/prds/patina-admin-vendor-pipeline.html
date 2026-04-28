@@ -1,0 +1,1792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — Admin Portal · Vendor Pipeline</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500;1,600;1,700&family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --off-white: #FAF7F2;
+    --clay: #C4A57B;
+    --aged-oak: #8B7355;
+    --mocha: #5C4A3C;
+    --charcoal: #2C2926;
+    --sage: #A8B5A0;
+    --dusty-blue: #8B9CAD;
+    --terracotta: #D4A090;
+    --pearl: #E5E2DD;
+    --golden-hour: #E8C547;
+    --green-go: #7A9E7E;
+    --amber-wait: #D4A84B;
+    --red-stop: #C47A6E;
+
+    --bg: var(--off-white);
+    --text: var(--charcoal);
+    --accent: var(--clay);
+    --muted: var(--aged-oak);
+    --subtle: var(--pearl);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    font-size: 17px;
+    scroll-behavior: smooth;
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    font-weight: 400;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  .container { max-width: 1200px; margin: 0 auto; padding: 0 clamp(1.5rem, 5vw, 4rem); }
+  .narrow { max-width: 820px; margin: 0 auto; padding: 0 clamp(1.5rem, 5vw, 4rem); }
+  .wide { max-width: 1400px; margin: 0 auto; padding: 0 clamp(1.5rem, 4vw, 3rem); }
+
+  h1, h2, h3 {
+    font-family: 'Playfair Display', serif;
+    font-weight: 400;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+
+  h1 { font-size: clamp(2.8rem, 6.5vw, 5rem); }
+  h2 { font-size: clamp(1.8rem, 4vw, 3rem); margin-bottom: 1rem; }
+  h3 { font-size: clamp(1.3rem, 2.2vw, 1.7rem); font-weight: 500; }
+
+  h4 {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-family: 'Inter', sans-serif;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+
+  p { font-size: 1rem; color: var(--mocha); max-width: 660px; line-height: 1.75; }
+  p + p { margin-top: 1rem; }
+
+  em {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-weight: 400;
+    color: var(--aged-oak);
+  }
+
+  .mono {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 400;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .large-body { font-size: 1.15rem; line-height: 1.8; }
+
+  /* — STRATA MARK — */
+  .strata { display: flex; flex-direction: column; gap: 5px; padding: 2.5rem 0; }
+  .strata-line { height: 1.5px; background: var(--clay); border-radius: 1px; }
+  .strata-line:nth-child(1) { width: 100%; opacity: 1; }
+  .strata-line:nth-child(2) { width: 75%; opacity: 0.7; }
+  .strata-line:nth-child(3) { width: 50%; opacity: 0.4; }
+
+  .strata-mini { display: flex; flex-direction: column; gap: 4px; padding: 2rem 0; }
+  .strata-mini .strata-line { height: 1px; }
+  .strata-mini .strata-line:nth-child(1) { width: 80px; }
+  .strata-mini .strata-line:nth-child(2) { width: 60px; }
+  .strata-mini .strata-line:nth-child(3) { width: 40px; }
+
+  /* — COVER — */
+  .cover {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(2rem, 8vw, 6rem) clamp(1.5rem, 5vw, 4rem);
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .cover .mono { margin-bottom: 2rem; display: block; }
+
+  .cover h1 {
+    margin-bottom: 1.5rem;
+    max-width: 900px;
+  }
+
+  .cover h1 span {
+    display: block;
+    font-family: 'Inter', sans-serif;
+    font-size: clamp(0.9rem, 1.5vw, 1.1rem);
+    font-weight: 300;
+    color: var(--muted);
+    letter-spacing: 0;
+    line-height: 1.6;
+    margin-top: 1rem;
+  }
+
+  .cover-subtitle {
+    font-size: 1.15rem;
+    line-height: 1.8;
+    max-width: 600px;
+    color: var(--mocha);
+  }
+
+  .cover-footer {
+    display: flex;
+    gap: 4rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .cover-footer p { font-size: 0.9rem; }
+  .cover-footer .mono { margin-bottom: 0.3rem; }
+
+  /* — SECTIONS — */
+  section { padding: clamp(3rem, 8vw, 6rem) 0; }
+
+  .section-label { margin-bottom: 1.5rem; }
+  .section-intro { margin-top: 1rem; margin-bottom: 3rem; }
+
+  /* — PULL QUOTE — */
+  .pull-quote {
+    padding: 3rem 0;
+    border-top: 1px solid var(--pearl);
+    border-bottom: 1px solid var(--pearl);
+    margin: 3rem 0;
+  }
+
+  .pull-quote blockquote {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(1.4rem, 2.5vw, 1.9rem);
+    font-style: italic;
+    font-weight: 400;
+    color: var(--mocha);
+    line-height: 1.5;
+    max-width: 700px;
+  }
+
+  .pull-quote cite {
+    display: block;
+    margin-top: 1rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    font-style: normal;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* — ARCHITECTURE DIAGRAM — */
+  .arch-container {
+    background: var(--charcoal);
+    border-radius: 4px;
+    padding: clamp(2rem, 4vw, 3.5rem);
+    margin: 2.5rem 0;
+    overflow-x: auto;
+  }
+
+  .arch-row {
+    display: flex;
+    gap: 1px;
+    margin-bottom: 1px;
+  }
+
+  .arch-block {
+    padding: 1.2rem 1.5rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    line-height: 1.4;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .arch-block span {
+    display: block;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.68rem;
+    text-transform: none;
+    letter-spacing: 0;
+    opacity: 0.6;
+    margin-top: 0.4rem;
+    line-height: 1.5;
+  }
+
+  .arch-label {
+    color: var(--clay);
+    padding: 0.6rem 0;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.5;
+  }
+
+  .arch-human { background: rgba(196,165,123,0.12); color: var(--clay); }
+  .arch-portal { background: rgba(168,181,160,0.15); color: var(--sage); }
+  .arch-cowork { background: rgba(139,156,173,0.15); color: var(--dusty-blue); }
+  .arch-data { background: rgba(250,247,242,0.08); color: rgba(250,247,242,0.7); }
+  .arch-full { flex-basis: 100%; }
+  .arch-half { flex-basis: 50%; }
+  .arch-third { flex-basis: 33.33%; }
+  .arch-quarter { flex-basis: 25%; }
+
+  .arch-arrow {
+    text-align: center;
+    padding: 0.5rem 0;
+    color: rgba(250,247,242,0.2);
+    font-size: 1.2rem;
+    letter-spacing: 0.5em;
+  }
+
+  /* — FLOW DIAGRAM — */
+  .flow-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 2.5rem 0;
+  }
+
+  .flow-step {
+    display: grid;
+    grid-template-columns: 100px 32px 1fr;
+    gap: 0;
+    align-items: stretch;
+    min-height: 80px;
+  }
+
+  .flow-actor {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 1.2rem 0.5rem 1.2rem 0;
+    text-align: right;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding-top: 1.4rem;
+  }
+
+  .flow-actor.human { color: var(--clay); }
+  .flow-actor.cowork { color: var(--dusty-blue); }
+  .flow-actor.portal { color: var(--sage); }
+  .flow-actor.system { color: var(--muted); }
+
+  .flow-line {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+  }
+
+  .flow-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-top: 1.35rem;
+    flex-shrink: 0;
+    z-index: 1;
+  }
+
+  .flow-dot.human { background: var(--clay); }
+  .flow-dot.cowork { background: var(--dusty-blue); }
+  .flow-dot.portal { background: var(--sage); }
+  .flow-dot.system { background: var(--muted); }
+
+  .flow-connector {
+    width: 1px;
+    flex: 1;
+    background: var(--pearl);
+  }
+
+  .flow-content {
+    padding: 1rem 0 1.5rem 1.5rem;
+    border-bottom: 1px solid var(--pearl);
+  }
+
+  .flow-content h3 {
+    font-size: 1.05rem;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin-bottom: 0.3rem;
+  }
+
+  .flow-content p {
+    font-size: 0.88rem;
+    line-height: 1.65;
+    color: var(--muted);
+  }
+
+  /* — MOCKUP FRAMES — */
+  .mockup-frame {
+    background: white;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 2.5rem 0;
+    border: 1px solid var(--pearl);
+  }
+
+  .mockup-chrome {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: rgba(44,41,38,0.03);
+    border-bottom: 1px solid var(--pearl);
+  }
+
+  .mockup-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--pearl);
+  }
+
+  .mockup-url {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-left: 12px;
+    letter-spacing: 0.02em;
+  }
+
+  .mockup-body {
+    padding: 0;
+    min-height: 500px;
+  }
+
+  /* — ADMIN PORTAL MOCKUP STYLES — */
+  .admin-shell {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    min-height: 600px;
+  }
+
+  .admin-sidebar {
+    background: var(--charcoal);
+    padding: 1.8rem 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .admin-sidebar-brand {
+    padding: 0 1.5rem 1.5rem;
+    border-bottom: 1px solid rgba(250,247,242,0.08);
+    margin-bottom: 1rem;
+  }
+
+  .admin-sidebar-brand h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.15rem;
+    color: var(--off-white);
+    font-weight: 400;
+    letter-spacing: 0.05em;
+  }
+
+  .admin-sidebar-brand span {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--aged-oak);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    display: block;
+    margin-top: 0.3rem;
+  }
+
+  .admin-nav-group {
+    padding: 0.8rem 1.5rem;
+  }
+
+  .admin-nav-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.55rem;
+    color: var(--aged-oak);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.6rem;
+  }
+
+  .admin-nav-item {
+    padding: 0.45rem 0;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.78rem;
+    color: rgba(250,247,242,0.45);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: color 0.2s;
+  }
+
+  .admin-nav-item:hover { color: rgba(250,247,242,0.8); }
+  .admin-nav-item.active { color: var(--clay); font-weight: 500; }
+  .admin-nav-item .nav-badge {
+    background: var(--clay);
+    color: var(--charcoal);
+    font-size: 0.55rem;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 8px;
+    margin-left: auto;
+  }
+
+  .admin-nav-item .nav-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-left: auto;
+  }
+
+  .admin-main {
+    background: var(--off-white);
+    padding: 2.2rem 2.5rem;
+    overflow-y: auto;
+  }
+
+  .admin-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 2rem;
+  }
+
+  .admin-topbar h2 {
+    font-size: 1.8rem;
+    margin-bottom: 0;
+  }
+
+  .admin-topbar-actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+
+  .btn-cowork {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.5rem 1.1rem;
+    border-radius: 3px;
+    border: 1px solid var(--dusty-blue);
+    color: var(--dusty-blue);
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .btn-cowork:hover {
+    background: var(--dusty-blue);
+    color: white;
+  }
+
+  .btn-cowork .pulse {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--dusty-blue);
+    animation: pulse 2s infinite;
+  }
+
+  .btn-cowork:hover .pulse { background: white; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .btn-primary {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 500;
+    padding: 0.5rem 1.2rem;
+    border-radius: 3px;
+    border: none;
+    background: var(--charcoal);
+    color: var(--off-white);
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .btn-primary:hover { background: var(--mocha); }
+
+  /* — PIPELINE METRICS — */
+  .pipeline-metrics {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+    margin-bottom: 2.5rem;
+    border-bottom: 1px solid var(--pearl);
+    padding-bottom: 2rem;
+  }
+
+  .pipeline-metric {
+    padding-right: 1.5rem;
+  }
+
+  .pipeline-metric:not(:first-child) {
+    border-left: 1px solid var(--pearl);
+    padding-left: 1.5rem;
+  }
+
+  .pipeline-metric .value {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--charcoal);
+    line-height: 1;
+    margin-bottom: 0.3rem;
+  }
+
+  .pipeline-metric .value.green { color: var(--green-go); }
+  .pipeline-metric .value.amber { color: var(--amber-wait); }
+  .pipeline-metric .value.blue { color: var(--dusty-blue); }
+
+  .pipeline-metric .label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* — VENDOR TABLE — */
+  .vendor-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .vendor-table thead th {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: left;
+    padding: 0 0 0.8rem 0;
+    border-bottom: 1px solid var(--pearl);
+    font-weight: 400;
+  }
+
+  .vendor-table tbody tr {
+    border-bottom: 1px solid rgba(229,226,221,0.6);
+    transition: background 0.15s;
+    cursor: pointer;
+  }
+
+  .vendor-table tbody tr:hover { background: rgba(196,165,123,0.04); }
+
+  .vendor-table td {
+    padding: 1rem 0.5rem 1rem 0;
+    vertical-align: top;
+  }
+
+  .vendor-name {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--charcoal);
+    margin-bottom: 0.15rem;
+  }
+
+  .vendor-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+  }
+
+  .score-badge {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .score-badge.green { color: var(--green-go); }
+  .score-badge.yellow { color: var(--amber-wait); }
+  .score-badge.orange { color: var(--terracotta); }
+  .score-badge.red { color: var(--red-stop); }
+
+  .stage-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 2px;
+    display: inline-block;
+  }
+
+  .stage-tag.discovery { background: rgba(139,156,173,0.12); color: var(--dusty-blue); }
+  .stage-tag.outreach { background: rgba(196,165,123,0.15); color: var(--clay); }
+  .stage-tag.negotiation { background: rgba(168,181,160,0.15); color: var(--sage); }
+  .stage-tag.onboarding { background: rgba(232,197,71,0.12); color: var(--amber-wait); }
+  .stage-tag.live { background: rgba(122,158,126,0.15); color: var(--green-go); }
+
+  .cowork-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.55rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--dusty-blue);
+    opacity: 0.7;
+  }
+
+  .cowork-tag .dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--dusty-blue);
+    animation: pulse 2s infinite;
+  }
+
+  /* — VENDOR DETAIL PANEL — */
+  .detail-panel {
+    margin: 2.5rem 0;
+  }
+
+  .detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--pearl);
+  }
+
+  .detail-header h2 { margin-bottom: 0.3rem; }
+
+  .detail-score-lg {
+    text-align: right;
+  }
+
+  .detail-score-lg .value {
+    font-family: 'Playfair Display', serif;
+    font-size: 3.5rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .detail-score-lg .label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .detail-score-lg .triage {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 500;
+    margin-top: 0.3rem;
+  }
+
+  .rubric-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    margin: 2rem 0;
+  }
+
+  .rubric-item {
+    padding: 1.2rem 1.5rem 1.2rem 0;
+    border-bottom: 1px solid var(--pearl);
+  }
+
+  .rubric-item:nth-child(even) {
+    padding-left: 1.5rem;
+    border-left: 1px solid var(--pearl);
+  }
+
+  .rubric-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 0.3rem;
+  }
+
+  .rubric-item-name {
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    font-size: 0.82rem;
+    color: var(--charcoal);
+  }
+
+  .rubric-item-score {
+    font-family: 'Playfair Display', serif;
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+
+  .rubric-item-weight {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.58rem;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+
+  .rubric-bar {
+    height: 3px;
+    background: var(--pearl);
+    border-radius: 2px;
+    margin-top: 0.6rem;
+    overflow: hidden;
+  }
+
+  .rubric-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.6s ease;
+  }
+
+  /* — COWORK ACTIVITY LOG — */
+  .cowork-log {
+    margin: 2rem 0;
+    border-left: 2px solid var(--dusty-blue);
+    padding-left: 1.5rem;
+  }
+
+  .cowork-log-entry {
+    padding: 0.8rem 0;
+    border-bottom: 1px solid rgba(229,226,221,0.5);
+  }
+
+  .cowork-log-time {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--dusty-blue);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 0.2rem;
+  }
+
+  .cowork-log-action {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.82rem;
+    color: var(--charcoal);
+    line-height: 1.5;
+  }
+
+  .cowork-log-detail {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 0.2rem;
+  }
+
+  /* — ONBOARDING TRACKER — */
+  .onboard-phases {
+    display: flex;
+    gap: 0;
+    margin: 2rem 0;
+  }
+
+  .onboard-phase {
+    flex: 1;
+    padding: 1.2rem;
+    border-right: 1px solid var(--pearl);
+    position: relative;
+  }
+
+  .onboard-phase:last-child { border-right: none; }
+
+  .onboard-phase-number {
+    font-family: 'Playfair Display', serif;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--pearl);
+    line-height: 1;
+    margin-bottom: 0.5rem;
+  }
+
+  .onboard-phase.active .onboard-phase-number { color: var(--clay); }
+  .onboard-phase.complete .onboard-phase-number { color: var(--green-go); }
+
+  .onboard-phase-name {
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    font-size: 0.78rem;
+    color: var(--charcoal);
+    margin-bottom: 0.3rem;
+  }
+
+  .onboard-phase-detail {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.58rem;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+    line-height: 1.6;
+  }
+
+  /* — SECTION-SPECIFIC — */
+  .integration-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 2rem;
+    margin: 2.5rem 0;
+  }
+
+  .integration-card {
+    border-top: 2px solid var(--pearl);
+    padding-top: 1.2rem;
+  }
+
+  .integration-card h3 {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+
+  .integration-card p {
+    font-size: 0.85rem;
+    line-height: 1.65;
+  }
+
+  .integration-card .mono { margin-bottom: 0.5rem; display: block; }
+
+  .principle-row {
+    display: grid;
+    grid-template-columns: 60px 1fr;
+    gap: 1.5rem;
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--pearl);
+  }
+
+  .principle-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--pearl);
+    line-height: 1;
+  }
+
+  .principle-row:hover .principle-num { color: var(--clay); transition: color 0.3s; }
+
+  .nav-map {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    margin: 2rem 0;
+    border: 1px solid var(--pearl);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .nav-map-section {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--pearl);
+  }
+
+  .nav-map-section:nth-child(even) { border-left: 1px solid var(--pearl); }
+
+  .nav-map-section h3 {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+  }
+
+  .nav-map-section .items {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+    line-height: 2;
+  }
+
+  /* — RESPONSIVE — */
+  @media (max-width: 900px) {
+    .admin-shell { grid-template-columns: 1fr; }
+    .admin-sidebar { display: none; }
+    .pipeline-metrics { grid-template-columns: repeat(3, 1fr); }
+    .pipeline-metric:nth-child(n+4) { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--pearl); }
+    .rubric-grid { grid-template-columns: 1fr; }
+    .rubric-item:nth-child(even) { padding-left: 0; border-left: none; }
+    .integration-grid { grid-template-columns: 1fr; }
+    .nav-map { grid-template-columns: 1fr; }
+    .nav-map-section:nth-child(even) { border-left: none; }
+    .flow-step { grid-template-columns: 70px 24px 1fr; }
+    .arch-row { flex-wrap: wrap; }
+    .arch-block { min-width: 140px; }
+    .onboard-phases { flex-direction: column; }
+    .onboard-phase { border-right: none; border-bottom: 1px solid var(--pearl); }
+    .cover-footer { gap: 2rem; }
+  }
+
+  /* — ANIMATION — */
+  .fade-in { opacity: 0; transform: translateY(20px); transition: all 0.6s ease; }
+  .fade-in.visible { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- ================================ COVER ================================ -->
+<div class="cover">
+  <span class="mono">Patina — Admin Portal · Vendor Pipeline</span>
+  <h1>The Vendor<br>Command Center
+    <span>An Admin Portal that drives Cowork from behind the glass — seeing every vendor in the pipeline, every task in flight, every score on the rubric, without leaving the browser.</span>
+  </h1>
+  <p class="cover-subtitle">This document defines the integration architecture between Cowork (the autonomous backend) and the Admin Portal (the visual command layer), then walks through every screen a founder touches to find, qualify, pitch, and onboard a furniture manufacturer.</p>
+
+  <div class="strata">
+    <div class="strata-line"></div>
+    <div class="strata-line"></div>
+    <div class="strata-line"></div>
+  </div>
+
+  <div class="cover-footer">
+    <div>
+      <p class="mono">Prepared for</p>
+      <p>Kody & Leah — Founding Team</p>
+    </div>
+    <div>
+      <p class="mono">Version</p>
+      <p>1.0 — April 2026</p>
+    </div>
+    <div>
+      <p class="mono">Domain</p>
+      <p>admin.patina.cloud</p>
+    </div>
+  </div>
+</div>
+
+
+<!-- ================================ 01 — THE PROBLEM ================================ -->
+<section>
+  <div class="container">
+    <h4 class="section-label">01 — The Problem</h4>
+    <h2>Cowork runs in a folder.<br>You need to run a <em>business.</em></h2>
+    <p class="section-intro large-body">The vendor pipeline you built in Cowork works. Scorecards get generated, research briefs land in folders, scheduled tasks pull new prospects overnight. But the interface is a file explorer and a chat window. You can't glance at it and know where you stand. You can't see the whole pipeline at once. You can't hand Leah a view that shows only the vendors waiting for her aesthetic judgment.</p>
+    <p>The Admin Portal doesn't replace Cowork — it gives it a face. Cowork is the engine room. The portal is the bridge. You steer from here, and the engine does the work below deck.</p>
+  </div>
+</section>
+
+<section>
+  <div class="narrow">
+    <div class="pull-quote">
+      <blockquote>"The portal sees what Cowork does. Cowork does what the portal asks. Neither is useful without the other."</blockquote>
+      <cite>Integration Architecture Principle</cite>
+    </div>
+  </div>
+</section>
+
+
+<!-- ================================ 02 — ARCHITECTURE ================================ -->
+<section>
+  <div class="container">
+    <h4 class="section-label">02 — The Integration Architecture</h4>
+    <h2>How the portal and <em>Cowork</em> talk to each other</h2>
+    <p class="section-intro large-body">The architecture is a three-layer stack. Humans make decisions in the portal. Cowork executes autonomous tasks against the file system and the web. A shared database (Supabase) is the single source of truth that both read from and write to.</p>
+
+    <div class="arch-container">
+      <div class="arch-label">Human Layer — Decisions & Judgment</div>
+      <div class="arch-row">
+        <div class="arch-block arch-human arch-half">
+          Kody — Admin Portal
+          <span>Scores vendors, triggers Cowork tasks, reviews pipeline, manages onboarding phases</span>
+        </div>
+        <div class="arch-block arch-human arch-half">
+          Leah — Admin Portal (Filtered View)
+          <span>Aesthetic scoring, relationship notes, brand gut-checks, outreach conversations</span>
+        </div>
+      </div>
+
+      <div class="arch-arrow">↕</div>
+      <div class="arch-label">Portal Layer — Visibility & Control</div>
+      <div class="arch-row">
+        <div class="arch-block arch-portal arch-third">
+          Pipeline Dashboard
+          <span>Kanban-free overview of all vendors by stage and score</span>
+        </div>
+        <div class="arch-block arch-portal arch-third">
+          Vendor Detail
+          <span>Rubric scorecard, Cowork activity log, onboarding tracker, notes</span>
+        </div>
+        <div class="arch-block arch-portal arch-third">
+          Task Launcher
+          <span>Trigger Cowork tasks from portal with pre-filled context</span>
+        </div>
+      </div>
+
+      <div class="arch-arrow">↕</div>
+      <div class="arch-label">Cowork Layer — Autonomous Execution</div>
+      <div class="arch-row">
+        <div class="arch-block arch-cowork arch-quarter">
+          Discovery Agent
+          <span>Scheduled web research, prospect identification</span>
+        </div>
+        <div class="arch-block arch-cowork arch-quarter">
+          Research Agent
+          <span>Vendor scoring, pre-call briefs, data quality audits</span>
+        </div>
+        <div class="arch-block arch-cowork arch-quarter">
+          Outreach Agent
+          <span>Email drafts, pitch material, follow-up scheduling</span>
+        </div>
+        <div class="arch-block arch-cowork arch-quarter">
+          Onboarding Agent
+          <span>Feed ingestion, data normalization, image processing</span>
+        </div>
+      </div>
+
+      <div class="arch-arrow">↕</div>
+      <div class="arch-label">Data Layer — Single Source of Truth</div>
+      <div class="arch-row">
+        <div class="arch-block arch-data arch-third">
+          Supabase · vendors
+          <span>Pipeline stage, scores, contacts, notes, timestamps</span>
+        </div>
+        <div class="arch-block arch-data arch-third">
+          Supabase · cowork_tasks
+          <span>Task queue, status, outputs, linked vendor_id</span>
+        </div>
+        <div class="arch-block arch-data arch-third">
+          Filesystem · /vendor-pipeline
+          <span>Scorecards, briefs, feeds, images (Cowork read/write)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="strata-mini">
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+    </div>
+
+    <h3 style="margin-top: 1.5rem; margin-bottom: 1rem;">The Data Contract</h3>
+    <p>When the portal triggers a Cowork task, it writes a row to <code style="font-family: 'DM Mono', monospace; font-size: 0.85em; background: rgba(196,165,123,0.1); padding: 2px 6px; border-radius: 3px;">cowork_tasks</code> with a task type, linked vendor ID, and any context payload. Cowork's scheduled polling picks up new tasks, executes them, and writes results back — both to the database (structured outputs like scores) and to the filesystem (documents like briefs and scorecards). The portal reads both sources to render the UI.</p>
+    <p>No webhooks. No real-time sockets at MVP. The portal polls <code style="font-family: 'DM Mono', monospace; font-size: 0.85em; background: rgba(196,165,123,0.1); padding: 2px 6px; border-radius: 3px;">cowork_tasks</code> every 30 seconds for status updates, and shows a Cowork activity indicator when tasks are in flight. Simple. Debuggable. Good enough until you need more.</p>
+  </div>
+</section>
+
+
+<!-- ================================ 03 — TASK FLOW ================================ -->
+<section>
+  <div class="container">
+    <h4 class="section-label">03 — The Task Flow</h4>
+    <h2>A vendor moves through <em>five stages.</em><br>Here's who does what.</h2>
+    <p class="section-intro">Each stage has a human trigger and a Cowork execution. The portal shows the result. The color on the left tells you who's acting at each step.</p>
+
+    <div class="flow-container">
+      <div class="flow-step">
+        <div class="flow-actor cowork">Cowork</div>
+        <div class="flow-line"><div class="flow-dot cowork"></div><div class="flow-connector"></div></div>
+        <div class="flow-content">
+          <h3>Prospect Discovered</h3>
+          <p>Scheduled weekly task scans trade publications, furniture directories, and industry social accounts. New brands matching Patina's category gaps are added to the pipeline with an initial data snapshot. Stage: <strong>Discovery</strong>.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-actor cowork">Cowork</div>
+        <div class="flow-line"><div class="flow-dot cowork"></div><div class="flow-connector"></div></div>
+        <div class="flow-content">
+          <h3>Auto-Score (Dimensions 1–4)</h3>
+          <p>Cowork researches the vendor's website, trade program pages, retail presence, and public pricing. Fills in the operational half of the rubric scorecard. Flags missing data. Saves the scorecard to the filesystem and writes the numeric score to the database.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-actor human">Kody</div>
+        <div class="flow-line"><div class="flow-dot human"></div><div class="flow-connector"></div></div>
+        <div class="flow-content">
+          <h3>Review & Triage</h3>
+          <p>Kody opens the pipeline dashboard, sorts by score, reviews auto-scored vendors. Adjusts scores where Cowork's public research missed nuance. Passes qualifying vendors to Leah's queue.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-actor human">Leah</div>
+        <div class="flow-line"><div class="flow-dot human"></div><div class="flow-connector"></div></div>
+        <div class="flow-content">
+          <h3>Aesthetic & Relationship Scoring (Dimensions 5–8)</h3>
+          <p>Leah sees only vendors that passed the operational gate. She scores brand alignment, category value, sustainability, and relationship warmth. Her interface is stripped down — images, brand story, gut-check sliders. No spreadsheets.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-actor cowork">Cowork</div>
+        <div class="flow-line"><div class="flow-dot cowork"></div><div class="flow-connector"></div></div>
+        <div class="flow-content">
+          <h3>Pre-Call Brief Generated</h3>
+          <p>For vendors scoring GREEN (400+), Cowork generates a one-page research brief: brand story, key contacts, product highlights, current retail channels, suggested talking points. Saved as PDF. Stage advances to <strong>Outreach</strong>.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-actor human">Leah</div>
+        <div class="flow-line"><div class="flow-dot human"></div><div class="flow-connector"></div></div>
+        <div class="flow-content">
+          <h3>Outreach Conversation</h3>
+          <p>Leah makes the call. She logs outcome notes directly in the portal. If the vendor wants to proceed, Kody clicks "Begin Onboarding" — which triggers the next Cowork sequence.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-actor cowork">Cowork</div>
+        <div class="flow-line"><div class="flow-dot cowork"></div><div class="flow-connector"></div></div>
+        <div class="flow-content">
+          <h3>Data Intake & Normalization</h3>
+          <p>Vendor sends their product feed (CSV, PDF line sheet, Dropbox link). Cowork ingests it: maps fields to the Patina product schema, downloads and renames images, flags missing data, generates an import-ready dataset. Stage: <strong>Onboarding</strong>.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-actor human">Kody</div>
+        <div class="flow-line"><div class="flow-dot human"></div><div class="flow-connector"></div></div>
+        <div class="flow-content">
+          <h3>Quality Review & Go-Live</h3>
+          <p>Kody reviews the normalized data in the portal, approves the import, and publishes the vendor's initial SKUs to the platform. Stage: <strong>Live</strong>. Cowork schedules recurring feed sync if the vendor provides an ongoing data source.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ================================ 04 — NAVIGATION ================================ -->
+<section>
+  <div class="container">
+    <h4 class="section-label">04 — Navigation Architecture</h4>
+    <h2>Four zones. <em>One sidebar.</em></h2>
+    <p class="section-intro">The admin portal serves the founding team — two people managing a pipeline, a catalog, an ML system, and a business. The navigation reflects that scope without pretending to be enterprise software.</p>
+
+    <div class="nav-map">
+      <div class="nav-map-section">
+        <span class="mono" style="display: block; margin-bottom: 0.5rem;">Zone 1</span>
+        <h3>Vendor Pipeline</h3>
+        <div class="items">Pipeline Dashboard · Vendor Detail · Scorecard · Outreach Tracker · Onboarding Phases · Feed Monitor</div>
+      </div>
+      <div class="nav-map-section">
+        <span class="mono" style="display: block; margin-bottom: 0.5rem;">Zone 2</span>
+        <h3>Product Catalog</h3>
+        <div class="items">Product Intake Queue · Bulk Import · Data Quality · Style Tags · Category Coverage · Affiliate Feeds</div>
+      </div>
+      <div class="nav-map-section">
+        <span class="mono" style="display: block; margin-bottom: 0.5rem;">Zone 3</span>
+        <h3>Aesthete Engine</h3>
+        <div class="items">Style Taxonomy · ML Model Health · Training Data · A/B Tests · Recommendation Accuracy · Designer Teaching</div>
+      </div>
+      <div class="nav-map-section">
+        <span class="mono" style="display: block; margin-bottom: 0.5rem;">Zone 4</span>
+        <h3>System</h3>
+        <div class="items">Cowork Task Queue · Scheduled Jobs · Infrastructure Health · User Management · Logs · Settings</div>
+      </div>
+    </div>
+
+    <p>The sidebar groups these into collapsible sections. The Vendor Pipeline is expanded by default because it's the primary workflow right now. As the business grows, other zones grow with it. The shell doesn't change — only the content inside each zone deepens.</p>
+  </div>
+</section>
+
+
+<!-- ================================ 05 — DASHBOARD MOCKUP ================================ -->
+<section>
+  <div class="container">
+    <h4 class="section-label">05 — The Pipeline Dashboard</h4>
+    <h2>Every vendor. Every score.<br><em>One scroll.</em></h2>
+    <p class="section-intro">The dashboard is not a Kanban board. It's a scored, sortable table with typographic hierarchy doing the heavy lifting. You scan it the way you'd scan a well-organized notebook — the big numbers catch your eye first, the details are there when you need them.</p>
+  </div>
+
+  <div class="wide">
+    <div class="mockup-frame">
+      <div class="mockup-chrome">
+        <div class="mockup-dot"></div>
+        <div class="mockup-dot"></div>
+        <div class="mockup-dot"></div>
+        <span class="mockup-url">admin.patina.cloud/pipeline</span>
+      </div>
+      <div class="mockup-body">
+        <div class="admin-shell">
+          <!-- SIDEBAR -->
+          <div class="admin-sidebar">
+            <div class="admin-sidebar-brand">
+              <h3>Patina</h3>
+              <span>Admin Portal</span>
+            </div>
+            <div class="admin-nav-group">
+              <div class="admin-nav-label">Vendor Pipeline</div>
+              <div class="admin-nav-item active">Pipeline Dashboard <span class="nav-badge">38</span></div>
+              <div class="admin-nav-item">Outreach Tracker</div>
+              <div class="admin-nav-item">Onboarding</div>
+              <div class="admin-nav-item">Feed Monitor</div>
+            </div>
+            <div class="admin-nav-group">
+              <div class="admin-nav-label">Product Catalog</div>
+              <div class="admin-nav-item">Intake Queue <span class="nav-badge">12</span></div>
+              <div class="admin-nav-item">Data Quality</div>
+              <div class="admin-nav-item">Affiliate Feeds</div>
+            </div>
+            <div class="admin-nav-group">
+              <div class="admin-nav-label">Aesthete Engine</div>
+              <div class="admin-nav-item">Style Taxonomy</div>
+              <div class="admin-nav-item">Model Health</div>
+              <div class="admin-nav-item">Training Data</div>
+            </div>
+            <div class="admin-nav-group">
+              <div class="admin-nav-label">System</div>
+              <div class="admin-nav-item">Cowork Tasks <span class="nav-indicator" style="background: var(--dusty-blue); animation: pulse 2s infinite;"></span></div>
+              <div class="admin-nav-item">Infrastructure</div>
+              <div class="admin-nav-item">Settings</div>
+            </div>
+          </div>
+
+          <!-- MAIN CONTENT -->
+          <div class="admin-main">
+            <div class="admin-topbar">
+              <div>
+                <h2>Vendor Pipeline</h2>
+                <span class="mono">38 vendors tracked · 3 cowork tasks running</span>
+              </div>
+              <div class="admin-topbar-actions">
+                <button class="btn-cowork"><span class="pulse"></span> Cowork Active</button>
+                <button class="btn-primary">+ Add Vendor</button>
+              </div>
+            </div>
+
+            <!-- METRICS -->
+            <div class="pipeline-metrics">
+              <div class="pipeline-metric">
+                <div class="value green">7</div>
+                <div class="label">Green · Priority</div>
+              </div>
+              <div class="pipeline-metric">
+                <div class="value amber">12</div>
+                <div class="label">Yellow · Qualified</div>
+              </div>
+              <div class="pipeline-metric">
+                <div class="value">14</div>
+                <div class="label">Watch List</div>
+              </div>
+              <div class="pipeline-metric">
+                <div class="value blue">3</div>
+                <div class="label">In Onboarding</div>
+              </div>
+              <div class="pipeline-metric">
+                <div class="value green">2</div>
+                <div class="label">Live Partners</div>
+              </div>
+            </div>
+
+            <!-- LEAH'S QUEUE CALLOUT -->
+            <div style="background: rgba(196,165,123,0.06); border-left: 3px solid var(--clay); padding: 1rem 1.2rem; margin-bottom: 2rem; border-radius: 0 3px 3px 0;">
+              <span class="mono" style="color: var(--clay);">Leah's Queue · 4 vendors awaiting aesthetic score</span>
+              <div style="font-family: 'Inter', sans-serif; font-size: 0.82rem; color: var(--mocha); margin-top: 0.3rem;">Thos. Moser · Copeland Furniture · Studio?"Heron · Sawkille Co.</div>
+            </div>
+
+            <!-- VENDOR TABLE -->
+            <table class="vendor-table">
+              <thead>
+                <tr>
+                  <th style="width: 28%;">Vendor</th>
+                  <th style="width: 10%;">Score</th>
+                  <th style="width: 14%;">Stage</th>
+                  <th style="width: 18%;">Last Activity</th>
+                  <th style="width: 15%;">Cowork</th>
+                  <th style="width: 15%;">Next Step</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <div class="vendor-name">Thos. Moser</div>
+                    <div class="vendor-sub">Auburn, ME · Case Goods + Seating · $2K–$12K</div>
+                  </td>
+                  <td><span class="score-badge green">435</span></td>
+                  <td><span class="stage-tag outreach">Outreach</span></td>
+                  <td>
+                    <div style="font-size: 0.82rem; color: var(--charcoal);">Brief generated</div>
+                    <div class="vendor-sub">2 hours ago</div>
+                  </td>
+                  <td><span class="cowork-tag"><span class="dot"></span> Brief ready</span></td>
+                  <td><span style="font-size: 0.82rem; color: var(--clay);">Leah: Schedule call</span></td>
+                </tr>
+                <tr>
+                  <td>
+                    <div class="vendor-name">Copeland Furniture</div>
+                    <div class="vendor-sub">Bradford, VT · Bedroom + Dining · $1.5K–$6K</div>
+                  </td>
+                  <td><span class="score-badge green">418</span></td>
+                  <td><span class="stage-tag negotiation">Negotiation</span></td>
+                  <td>
+                    <div style="font-size: 0.82rem; color: var(--charcoal);">Call completed</div>
+                    <div class="vendor-sub">Yesterday</div>
+                  </td>
+                  <td><span class="cowork-tag">Idle</span></td>
+                  <td><span style="font-size: 0.82rem;">Request data feed</span></td>
+                </tr>
+                <tr>
+                  <td>
+                    <div class="vendor-name">Sawkille Co.</div>
+                    <div class="vendor-sub">Rhinebeck, NY · Tables + Storage · $3K–$18K</div>
+                  </td>
+                  <td><span class="score-badge green">412</span></td>
+                  <td><span class="stage-tag discovery">Discovery</span></td>
+                  <td>
+                    <div style="font-size: 0.82rem; color: var(--charcoal);">Auto-scored</div>
+                    <div class="vendor-sub">4 hours ago</div>
+                  </td>
+                  <td><span class="cowork-tag"><span class="dot"></span> Scoring</span></td>
+                  <td><span style="font-size: 0.82rem; color: var(--clay);">Leah: Aesthetic review</span></td>
+                </tr>
+                <tr>
+                  <td>
+                    <div class="vendor-name">Room &amp; Board</div>
+                    <div class="vendor-sub">Minneapolis, MN · Full Line · $500–$5K</div>
+                  </td>
+                  <td><span class="score-badge yellow">372</span></td>
+                  <td><span class="stage-tag onboarding">Onboarding</span></td>
+                  <td>
+                    <div style="font-size: 0.82rem; color: var(--charcoal);">Feed ingesting</div>
+                    <div class="vendor-sub">Running now</div>
+                  </td>
+                  <td><span class="cowork-tag"><span class="dot"></span> Processing CSV</span></td>
+                  <td><span style="font-size: 0.82rem;">Review mapped data</span></td>
+                </tr>
+                <tr>
+                  <td>
+                    <div class="vendor-name">Studio Heron</div>
+                    <div class="vendor-sub">Madison, WI · Lighting + Accessories · $200–$2K</div>
+                  </td>
+                  <td><span class="score-badge yellow">348</span></td>
+                  <td><span class="stage-tag discovery">Discovery</span></td>
+                  <td>
+                    <div style="font-size: 0.82rem; color: var(--charcoal);">Auto-scored</div>
+                    <div class="vendor-sub">This morning</div>
+                  </td>
+                  <td><span class="cowork-tag">Complete</span></td>
+                  <td><span style="font-size: 0.82rem; color: var(--clay);">Leah: Aesthetic review</span></td>
+                </tr>
+                <tr>
+                  <td>
+                    <div class="vendor-name">Vermont Farm Table</div>
+                    <div class="vendor-sub">Bristol, VT · Dining Tables · $2K–$8K</div>
+                  </td>
+                  <td><span class="score-badge orange">268</span></td>
+                  <td><span class="stage-tag discovery">Discovery</span></td>
+                  <td>
+                    <div style="font-size: 0.82rem; color: var(--charcoal);">Auto-scored</div>
+                    <div class="vendor-sub">3 days ago</div>
+                  </td>
+                  <td><span class="cowork-tag">Complete</span></td>
+                  <td><span style="font-size: 0.82rem; color: var(--muted);">Watch list</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ================================ 06 — VENDOR DETAIL ================================ -->
+<section>
+  <div class="container">
+    <h4 class="section-label">06 — Vendor Detail View</h4>
+    <h2>One vendor. <em>Everything you know.</em></h2>
+    <p class="section-intro">Click any row in the pipeline and this is what you see. The vendor detail is a vertical scroll — score at top, rubric breakdown, Cowork activity log, onboarding progress, and notes. It reads like a case file, not a CRM record.</p>
+  </div>
+
+  <div class="wide">
+    <div class="mockup-frame">
+      <div class="mockup-chrome">
+        <div class="mockup-dot"></div>
+        <div class="mockup-dot"></div>
+        <div class="mockup-dot"></div>
+        <span class="mockup-url">admin.patina.cloud/pipeline/thos-moser</span>
+      </div>
+      <div class="mockup-body" style="min-height: auto;">
+        <div class="admin-shell">
+          <!-- SIDEBAR (abbreviated) -->
+          <div class="admin-sidebar">
+            <div class="admin-sidebar-brand">
+              <h3>Patina</h3>
+              <span>Admin Portal</span>
+            </div>
+            <div class="admin-nav-group">
+              <div class="admin-nav-label">Vendor Pipeline</div>
+              <div class="admin-nav-item">← Back to Pipeline</div>
+            </div>
+            <div class="admin-nav-group" style="margin-top: auto; padding-bottom: 1rem;">
+              <div class="admin-nav-label">Vendor Actions</div>
+              <div class="admin-nav-item" style="color: var(--dusty-blue);">⟳ Re-score with Cowork</div>
+              <div class="admin-nav-item" style="color: var(--dusty-blue);">⎘ Generate Brief</div>
+              <div class="admin-nav-item" style="color: var(--dusty-blue);">✉ Draft Outreach Email</div>
+              <div class="admin-nav-item" style="color: var(--sage);">▶ Begin Onboarding</div>
+            </div>
+          </div>
+
+          <!-- MAIN: VENDOR DETAIL -->
+          <div class="admin-main">
+            <!-- HEADER -->
+            <div class="detail-header">
+              <div>
+                <span class="mono">Vendor Detail</span>
+                <h2 style="font-size: 2.2rem;">Thos. Moser</h2>
+                <p style="font-size: 0.9rem; margin-top: 0.2rem;">Auburn, Maine · Est. 1972 · Case Goods, Seating, Dining · Handcrafted hardwood</p>
+                <div style="margin-top: 0.8rem; display: flex; gap: 0.8rem; align-items: center;">
+                  <span class="stage-tag outreach">Outreach</span>
+                  <span class="mono" style="font-size: 0.62rem;">Added Apr 8, 2026 · Last activity 2h ago</span>
+                </div>
+              </div>
+              <div class="detail-score-lg">
+                <div class="label">Qualification Score</div>
+                <div class="value" style="color: var(--green-go);">435</div>
+                <div class="triage" style="color: var(--green-go);">● Green — Priority Outreach</div>
+              </div>
+            </div>
+
+            <!-- RUBRIC BREAKDOWN -->
+            <h3 style="margin-bottom: 0.5rem;">Rubric Breakdown</h3>
+            <span class="mono">Dimensions 1–4 scored by Cowork · Dimensions 5–8 scored by Leah</span>
+
+            <div class="rubric-grid">
+              <div class="rubric-item">
+                <div class="rubric-item-header">
+                  <span class="rubric-item-name">1. Drop-Ship Readiness</span>
+                  <span class="rubric-item-score" style="color: var(--green-go);">4</span>
+                </div>
+                <div class="rubric-item-weight">Weight ×15 · Weighted: 60/75</div>
+                <div class="rubric-bar"><div class="rubric-bar-fill" style="width: 80%; background: var(--green-go);"></div></div>
+              </div>
+              <div class="rubric-item">
+                <div class="rubric-item-header">
+                  <span class="rubric-item-name">2. Data Quality</span>
+                  <span class="rubric-item-score" style="color: var(--amber-wait);">3</span>
+                </div>
+                <div class="rubric-item-weight">Weight ×15 · Weighted: 45/75</div>
+                <div class="rubric-bar"><div class="rubric-bar-fill" style="width: 60%; background: var(--amber-wait);"></div></div>
+              </div>
+              <div class="rubric-item">
+                <div class="rubric-item-header">
+                  <span class="rubric-item-name">3. Margin Viability</span>
+                  <span class="rubric-item-score" style="color: var(--green-go);">5</span>
+                </div>
+                <div class="rubric-item-weight">Weight ×15 · Weighted: 75/75</div>
+                <div class="rubric-bar"><div class="rubric-bar-fill" style="width: 100%; background: var(--green-go);"></div></div>
+              </div>
+              <div class="rubric-item">
+                <div class="rubric-item-header">
+                  <span class="rubric-item-name">4. Channel Conflict</span>
+                  <span class="rubric-item-score" style="color: var(--green-go);">5</span>
+                </div>
+                <div class="rubric-item-weight">Weight ×10 · Weighted: 50/50</div>
+                <div class="rubric-bar"><div class="rubric-bar-fill" style="width: 100%; background: var(--green-go);"></div></div>
+              </div>
+              <div class="rubric-item">
+                <div class="rubric-item-header">
+                  <span class="rubric-item-name">5. Brand Alignment</span>
+                  <span class="rubric-item-score" style="color: var(--green-go);">5</span>
+                </div>
+                <div class="rubric-item-weight">Weight ×12 · Weighted: 60/60 · <span style="color: var(--clay);">Scored by Leah</span></div>
+                <div class="rubric-bar"><div class="rubric-bar-fill" style="width: 100%; background: var(--clay);"></div></div>
+              </div>
+              <div class="rubric-item">
+                <div class="rubric-item-header">
+                  <span class="rubric-item-name">6. Category Coverage</span>
+                  <span class="rubric-item-score" style="color: var(--green-go);">4</span>
+                </div>
+                <div class="rubric-item-weight">Weight ×10 · Weighted: 40/50 · <span style="color: var(--clay);">Scored by Leah</span></div>
+                <div class="rubric-bar"><div class="rubric-bar-fill" style="width: 80%; background: var(--clay);"></div></div>
+              </div>
+              <div class="rubric-item">
+                <div class="rubric-item-header">
+                  <span class="rubric-item-name">7. Sustainability</span>
+                  <span class="rubric-item-score" style="color: var(--green-go);">5</span>
+                </div>
+                <div class="rubric-item-weight">Weight ×8 · Weighted: 40/40 · <span style="color: var(--clay);">Scored by Leah</span></div>
+                <div class="rubric-bar"><div class="rubric-bar-fill" style="width: 100%; background: var(--clay);"></div></div>
+              </div>
+              <div class="rubric-item">
+                <div class="rubric-item-header">
+                  <span class="rubric-item-name">8. Relationship Warmth</span>
+                  <span class="rubric-item-score" style="color: var(--green-go);">4</span>
+                </div>
+                <div class="rubric-item-weight">Weight ×15 · Weighted: 60/75 · <span style="color: var(--clay);">Scored by Leah</span></div>
+                <div class="rubric-bar"><div class="rubric-bar-fill" style="width: 80%; background: var(--clay);"></div></div>
+              </div>
+            </div>
+
+            <!-- ONBOARDING PHASES -->
+            <div style="margin-top: 2.5rem;">
+              <h3 style="margin-bottom: 0.5rem;">Onboarding Progress</h3>
+              <span class="mono">Current phase: Outreach</span>
+            </div>
+
+            <div class="onboard-phases">
+              <div class="onboard-phase complete">
+                <div class="onboard-phase-number">01</div>
+                <div class="onboard-phase-name">Discovery</div>
+                <div class="onboard-phase-detail">Prospect identified<br>Auto-scored Apr 8</div>
+              </div>
+              <div class="onboard-phase complete">
+                <div class="onboard-phase-number">02</div>
+                <div class="onboard-phase-name">Qualification</div>
+                <div class="onboard-phase-detail">Leah scored Apr 10<br>Total: 435 — Green</div>
+              </div>
+              <div class="onboard-phase active">
+                <div class="onboard-phase-number">03</div>
+                <div class="onboard-phase-name">Outreach</div>
+                <div class="onboard-phase-detail">Brief generated<br>Call pending</div>
+              </div>
+              <div class="onboard-phase">
+                <div class="onboard-phase-number">04</div>
+                <div class="onboard-phase-name">Negotiation</div>
+                <div class="onboard-phase-detail">Terms & data feed<br>agreement</div>
+              </div>
+              <div class="onboard-phase">
+                <div class="onboard-phase-number">05</div>
+                <div class="onboard-phase-name">Data Intake</div>
+                <div class="onboard-phase-detail">Feed ingestion &<br>normalization</div>
+              </div>
+              <div class="onboard-phase">
+                <div class="onboard-phase-number">06</div>
+                <div class="onboard-phase-name">Live</div>
+                <div class="onboard-phase-detail">Products on<br>platform</div>
+              </div>
+            </div>
+
+            <!-- COWORK ACTIVITY LOG -->
+            <div style="margin-top: 2.5rem;">
+              <h3 style="margin-bottom: 0.5rem;">Cowork Activity</h3>
+              <span class="mono">Automated task history for this vendor</span>
+            </div>
+
+            <div class="cowork-log">
+              <div class="cowork-log-entry">
+                <div class="cowork-log-time">Apr 12, 2026 · 10:42 AM</div>
+                <div class="cowork-log-action">Pre-call research brief generated</div>
+                <div class="cowork-log-detail">1-page PDF saved to /vendor-pipeline/outreach/thos-moser-brief.pdf · Includes brand story, product highlights, suggested talking points, contact info for trade program director.</div>
+              </div>
+              <div class="cowork-log-entry">
+                <div class="cowork-log-time">Apr 10, 2026 · 3:18 PM</div>
+                <div class="cowork-log-action">Leah completed aesthetic scoring</div>
+                <div class="cowork-log-detail">Dimensions 5–8 scored. Brand alignment: 5/5 — "This IS Patina. Heritage craft, real wood, timeless forms. Exactly what we're looking for." Total score updated to 435.</div>
+              </div>
+              <div class="cowork-log-entry">
+                <div class="cowork-log-time">Apr 8, 2026 · 6:14 AM</div>
+                <div class="cowork-log-action">Auto-score completed (Dimensions 1–4)</div>
+                <div class="cowork-log-detail">Researched thosmoser.com, Houzz profile, trade program page. Drop-ship: confirmed via partner retailers. Data quality: PDF catalog only, no structured feed. Margin: ~60% MSRP-to-wholesale spread. Channel: No marketplace exclusivity found.</div>
+              </div>
+              <div class="cowork-log-entry">
+                <div class="cowork-log-time">Apr 8, 2026 · 2:03 AM</div>
+                <div class="cowork-log-action">Prospect added to pipeline</div>
+                <div class="cowork-log-detail">Source: scheduled weekly scan of Furniture Today and Business of Home. Matched criteria: heritage brand, domestic manufacturing, case goods category gap.</div>
+              </div>
+            </div>
+
+            <!-- NOTES -->
+            <div style="margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--pearl);">
+              <h3 style="margin-bottom: 0.5rem;">Notes</h3>
+              <div style="font-family: 'Inter', sans-serif; font-size: 0.88rem; color: var(--mocha); line-height: 1.7; max-width: 640px; padding: 1rem; background: rgba(196,165,123,0.04); border-radius: 3px; min-height: 80px;">
+                Leah has met their NH showroom manager at a NKBA event. Warm connection. They're selective about retail partners which is a good sign — means they care about brand placement. Main risk: their data is all PDF-based, so the onboarding will require more manual normalization work. Worth it for the brand quality.
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ================================ 07 — LEAH'S VIEW ================================ -->
+<section>
+  <div class="container">
+    <h4 class="section-label">07 — Leah's Review Interface</h4>
+    <h2>Stripped to the <em>essential question.</em></h2>
+    <p class="section-intro large-body">Leah doesn't need the pipeline table. She doesn't need Cowork task logs. She needs to look at a brand and answer four questions: Does this fit? What categories does it fill? Is it sustainable? Do we have a relationship? Her view shows only vendors waiting for her scores, presented as brand stories — not spreadsheet rows.</p>
+    <p>The interface shows one vendor at a time, full-width. Product imagery from their website. Their brand story. Then four sliders — one per dimension — with Leah's vocabulary as the labels, not rubric numbers. She scores, adds a gut-check note, and hits "Next." The rubric math happens in the background.</p>
+
+    <div class="strata-mini">
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+    </div>
+
+    <h3 style="margin-top: 1.5rem;">The Four Questions (Leah's Dimensions)</h3>
+
+    <div style="margin: 1.5rem 0;">
+      <div class="principle-row">
+        <div class="principle-num">05</div>
+        <div>
+          <h3>Brand Alignment</h3>
+          <p style="font-size: 0.9rem;">"Would I put this in a Middlewest project without hesitation?" — Slider from <em>Not Our World</em> to <em>This Is Patina</em></p>
+        </div>
+      </div>
+      <div class="principle-row">
+        <div class="principle-num">06</div>
+        <div>
+          <h3>Category Value</h3>
+          <p style="font-size: 0.9rem;">"Does this fill a gap or duplicate what we have?" — Slider from <em>Redundant</em> to <em>Critical Gap</em></p>
+        </div>
+      </div>
+      <div class="principle-row">
+        <div class="principle-num">07</div>
+        <div>
+          <h3>Sustainability & Craft</h3>
+          <p style="font-size: 0.9rem;">"Can I tell their story to a client and feel good about it?" — Slider from <em>No Story</em> to <em>Founding Partner Material</em></p>
+        </div>
+      </div>
+      <div class="principle-row">
+        <div class="principle-num">08</div>
+        <div>
+          <h3>Relationship Warmth</h3>
+          <p style="font-size: 0.9rem;">"How close are we to a real conversation?" — Slider from <em>Cold Outreach</em> to <em>Existing Relationship</em></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ================================ 08 — COWORK TASK QUEUE ================================ -->
+<section>
+  <div class="container">
+    <h4 class="section-label">08 — The Cowork Task Queue</h4>
+    <h2>See every task <em>in flight.</em></h2>
+    <p class="section-intro large-body">Under System → Cowork Tasks, you see the full queue: what's running, what's scheduled, what completed, and what failed. This is your engine room viewport. You don't touch the engine from here — you just watch the gauges.</p>
+
+    <div class="integration-grid">
+      <div class="integration-card">
+        <span class="mono">Running Now</span>
+        <h3 style="color: var(--dusty-blue);">3 Active Tasks</h3>
+        <p>Room & Board CSV normalization (62% complete) · Sawkille Co. auto-scoring · Weekly prospect scan (Business of Home)</p>
+      </div>
+      <div class="integration-card">
+        <span class="mono">Scheduled</span>
+        <h3>7 Recurring Tasks</h3>
+        <p>Monday 6 AM: Feed sync for live vendors · Wednesday 2 AM: Prospect scan · Friday 9 AM: Data quality audit on catalog</p>
+      </div>
+      <div class="integration-card">
+        <span class="mono">Last 24 Hours</span>
+        <h3 style="color: var(--green-go);">12 Completed</h3>
+        <p>8 auto-scores · 2 research briefs · 1 feed sync · 1 image batch rename. Zero failures.</p>
+      </div>
+    </div>
+
+    <p>When a task fails — and it will, because vendor websites change and CSV formats drift — the portal shows the error in plain language, not a stack trace. "Room & Board's CSV has a new column header that doesn't map to any field in our schema. Review the mapping." You click "Re-run with mapping review," Cowork asks for guidance, and the pipeline keeps moving.</p>
+  </div>
+</section>
+
+
+<!-- ================================ 09 — IMPLEMENTATION ================================ -->
+<section>
+  <div class="container">
+    <h4 class="section-label">09 — Implementation Plan</h4>
+    <h2>Build the dashboard first.<br><em>Everything else follows.</em></h2>
+    <p class="section-intro">Four sprints. Each one delivers a usable surface. The pipeline dashboard works on day one because the data already exists in your Cowork folder — you're just putting a face on it.</p>
+
+    <div style="margin: 2rem 0;">
+      <div class="principle-row">
+        <div class="principle-num" style="color: var(--clay);">01</div>
+        <div>
+          <h3>Sprint 1 — Pipeline Dashboard + Data Bridge</h3>
+          <p style="font-size: 0.9rem;">Supabase <code style="font-family: 'DM Mono', monospace; font-size: 0.85em; background: rgba(196,165,123,0.1); padding: 2px 6px; border-radius: 3px;">vendors</code> table + <code style="font-family: 'DM Mono', monospace; font-size: 0.85em; background: rgba(196,165,123,0.1); padding: 2px 6px; border-radius: 3px;">cowork_tasks</code> table. Migrate existing scorecard data from Cowork folder into the database. Build the pipeline table view with sorting, filtering, and score display. Next.js 15 at <code style="font-family: 'DM Mono', monospace; font-size: 0.85em; background: rgba(196,165,123,0.1); padding: 2px 6px; border-radius: 3px;">admin.patina.cloud</code>. Ship week 2.</p>
+        </div>
+      </div>
+      <div class="principle-row">
+        <div class="principle-num" style="color: var(--clay);">02</div>
+        <div>
+          <h3>Sprint 2 — Vendor Detail + Leah's Review</h3>
+          <p style="font-size: 0.9rem;">Vendor detail page with rubric visualization, onboarding phase tracker, and notes. Leah's stripped-down review interface with slider scoring. Cowork activity log reading from the task table. Ship week 4.</p>
+        </div>
+      </div>
+      <div class="principle-row">
+        <div class="principle-num" style="color: var(--clay);">03</div>
+        <div>
+          <h3>Sprint 3 — Task Launcher + Cowork Bridge</h3>
+          <p style="font-size: 0.9rem;">Portal can write tasks to the queue that Cowork picks up. "Generate Brief" button creates a task row. "Re-score" triggers auto-scoring. "Begin Onboarding" spins up the data intake workflow. Cowork polls the table every 30 seconds. Ship week 6.</p>
+        </div>
+      </div>
+      <div class="principle-row">
+        <div class="principle-num" style="color: var(--clay);">04</div>
+        <div>
+          <h3>Sprint 4 — Feed Monitor + Catalog Integration</h3>
+          <p style="font-size: 0.9rem;">Live vendor feed sync status. Product catalog intake queue showing normalized products awaiting review. Connection from approved vendor products into the main Patina catalog. The pipeline's output becomes the catalog's input. Ship week 8.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="strata-mini">
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+    </div>
+
+    <h3 style="margin-top: 1.5rem; margin-bottom: 1rem;">Tech Stack</h3>
+    <p>Same stack as the rest of the strata monorepo. Next.js 15, React 18, TypeScript, Tailwind CSS, Supabase. The admin portal lives at <code style="font-family: 'DM Mono', monospace; font-size: 0.85em; background: rgba(196,165,123,0.1); padding: 2px 6px; border-radius: 3px;">apps/admin-portal/</code> in the monorepo. Cowork integration is database-mediated — no direct API calls between the portal and Cowork. Cowork reads and writes to Supabase via its filesystem scripts. The portal reads and writes to Supabase via its Next.js server actions. They never talk to each other directly. That's the entire architecture.</p>
+  </div>
+</section>
+
+
+<!-- ================================ CLOSING ================================ -->
+<section>
+  <div class="container">
+    <div class="strata">
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+    </div>
+
+    <h2 style="margin-top: 2rem; margin-bottom: 1.5rem;">The portal makes the <em>invisible visible.</em></h2>
+    <p class="large-body" style="max-width: 680px; margin-bottom: 2rem;">Every vendor Cowork discovers overnight shows up in your pipeline by morning. Every score Leah enters reshapes the priority order in real time. Every task in flight has a status you can see without opening a terminal. Every brief, every scorecard, every feed sync — surfaced through typography and whitespace instead of buried in a folder tree.</p>
+    <p class="large-body" style="max-width: 680px; margin-bottom: 2rem;">Cowork is still doing the heavy lifting. The portal is just the window that lets you see the work happening — and the steering wheel that lets you point it where it needs to go next.</p>
+    <p class="large-body" style="max-width: 680px;">Build the dashboard. Migrate the data. Put a face on the engine. The rest follows.</p>
+
+    <div class="strata-mini" style="margin-top: 3rem;">
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer style="padding: 3rem 0 4rem; border-top: 1px solid var(--pearl);">
+  <div class="container" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 2rem;">
+    <div>
+      <h3 style="font-family: 'Playfair Display', serif; font-weight: 400; font-size: 1.2rem;">Patina</h3>
+      <p style="font-style: italic; color: var(--aged-oak); margin-top: 0.2rem; font-size: 0.85rem;">Where Time Adds Value</p>
+    </div>
+    <div>
+      <p class="mono">Document</p>
+      <p style="font-size: 0.85rem;">Admin Portal — Vendor Pipeline Design & Cowork Integration</p>
+    </div>
+    <div>
+      <p class="mono">Version</p>
+      <p style="font-size: 0.85rem;">1.0 — April 2026</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Intersection Observer for fade-in animations
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

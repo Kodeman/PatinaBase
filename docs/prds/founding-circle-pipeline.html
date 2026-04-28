@@ -1,0 +1,1686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — Founding Circle Application Pipeline</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600;1,700&family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --off-white: #FAF7F2;
+    --clay: #C4A57B;
+    --aged-oak: #8B7355;
+    --mocha: #5C4A3C;
+    --charcoal: #2C2926;
+    --sage: #A8B5A0;
+    --dusty-blue: #8B9CAD;
+    --terracotta: #D4A090;
+    --pearl: #E5E2DD;
+    --golden-hour: #E8C547;
+
+    --bg: var(--off-white);
+    --text: var(--charcoal);
+    --accent: var(--clay);
+    --muted: var(--aged-oak);
+    --subtle: var(--pearl);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    font-size: 17px;
+    scroll-behavior: smooth;
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    font-weight: 400;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* — UTILITY — */
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 clamp(1.5rem, 5vw, 4rem);
+  }
+
+  .narrow {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 0 clamp(1.5rem, 5vw, 4rem);
+  }
+
+  /* — TYPOGRAPHY — */
+  h1, h2, h3, h5 {
+    font-family: 'Playfair Display', serif;
+    font-weight: 500;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+
+  h1 {
+    font-size: clamp(2.8rem, 6.5vw, 5rem);
+    font-weight: 400;
+  }
+
+  h2 {
+    font-size: clamp(1.9rem, 4vw, 2.8rem);
+    font-weight: 400;
+  }
+
+  h3 {
+    font-size: clamp(1.3rem, 2.2vw, 1.65rem);
+    font-weight: 500;
+  }
+
+  h4 {
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-family: 'Inter', sans-serif;
+    color: var(--muted);
+  }
+
+  h5 {
+    font-size: 1.15rem;
+    font-weight: 500;
+  }
+
+  p {
+    font-size: 1rem;
+    color: var(--mocha);
+    max-width: 640px;
+  }
+
+  em {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-weight: 400;
+    color: var(--aged-oak);
+  }
+
+  .mono {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .large-body {
+    font-size: 1.15rem;
+    line-height: 1.8;
+  }
+
+  /* — STRATA MARK — */
+  .strata {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 3rem 0;
+  }
+
+  .strata-line {
+    height: 2px;
+    background: var(--mocha);
+    border-radius: 1px;
+  }
+
+  .strata-line:nth-child(1) { width: 100%; opacity: 1; }
+  .strata-line:nth-child(2) { width: 80%; opacity: 0.7; }
+  .strata-line:nth-child(3) { width: 60%; opacity: 0.35; }
+
+  .strata-mini {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 2rem 0;
+  }
+
+  .strata-mini .strata-line { height: 1.5px; }
+  .strata-mini .strata-line:nth-child(1) { width: 60px; }
+  .strata-mini .strata-line:nth-child(2) { width: 48px; }
+  .strata-mini .strata-line:nth-child(3) { width: 36px; }
+
+  /* — COVER — */
+  .cover {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: clamp(2rem, 6vw, 6rem) clamp(1.5rem, 5vw, 4rem);
+    position: relative;
+  }
+
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 40%;
+    height: 100%;
+    background: linear-gradient(180deg, transparent 0%, var(--pearl) 50%, transparent 100%);
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  .cover-meta {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    margin-bottom: 3rem;
+  }
+
+  .cover h1 { margin-bottom: 1.5rem; }
+
+  .cover h1 span {
+    display: block;
+    font-style: italic;
+    color: var(--aged-oak);
+    font-weight: 400;
+    font-size: 0.6em;
+    letter-spacing: 0;
+  }
+
+  .cover-subtitle {
+    font-size: 1.1rem;
+    color: var(--mocha);
+    max-width: 560px;
+    margin-bottom: 4rem;
+  }
+
+  .cover-footer {
+    display: flex;
+    gap: 4rem;
+    flex-wrap: wrap;
+  }
+
+  .cover-footer-item .mono { margin-bottom: 0.25rem; }
+  .cover-footer-item p { font-size: 0.88rem; color: var(--charcoal); }
+
+  /* — SECTIONS — */
+  section {
+    padding: clamp(4rem, 8vw, 7rem) 0;
+  }
+
+  .section-label { margin-bottom: 1rem; }
+  .section-title { margin-bottom: 2rem; }
+  .section-intro { margin-bottom: 3rem; }
+
+  /* — DIVIDER — */
+  .section-divider {
+    border: none;
+    border-top: 1px solid var(--pearl);
+    margin: 0;
+  }
+
+  /* — PIPELINE FLOW — */
+  .pipeline {
+    margin-top: 3rem;
+  }
+
+  .pipeline-stage {
+    display: grid;
+    grid-template-columns: 72px 1fr;
+    gap: 2rem;
+    padding: 2.5rem 0;
+    border-bottom: 1px solid var(--pearl);
+    align-items: start;
+  }
+
+  .pipeline-stage:first-child {
+    border-top: 1px solid var(--pearl);
+  }
+
+  .stage-number {
+    font-family: 'Playfair Display', serif;
+    font-size: 3.5rem;
+    font-weight: 300;
+    color: var(--clay);
+    line-height: 1;
+  }
+
+  .stage-content h3 { margin-bottom: 0.5rem; }
+  .stage-content p { font-size: 0.95rem; line-height: 1.65; margin-bottom: 0.75rem; }
+
+  .stage-tag {
+    display: inline-block;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.25rem 0.6rem;
+    border-radius: 3px;
+    margin-right: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .tag-supabase { background: rgba(168, 181, 160, 0.2); color: #5a7050; }
+  .tag-email { background: rgba(139, 156, 173, 0.2); color: #5a6f80; }
+  .tag-ui { background: rgba(196, 165, 123, 0.2); color: #8B7355; }
+  .tag-form { background: rgba(212, 160, 144, 0.2); color: #9a6050; }
+  .tag-admin { background: rgba(92, 74, 60, 0.15); color: var(--mocha); }
+  .tag-comms { background: rgba(232, 197, 71, 0.15); color: #8a7520; }
+
+  /* — DETAIL BLOCKS — */
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    margin-top: 3rem;
+    border-top: 1px solid var(--pearl);
+  }
+
+  .detail-item {
+    padding: 2.5rem 2rem 2.5rem 0;
+    border-bottom: 1px solid var(--pearl);
+  }
+
+  .detail-item:nth-child(even) {
+    padding-left: 2rem;
+    border-left: 1px solid var(--pearl);
+  }
+
+  .detail-item h5 { margin-bottom: 0.6rem; color: var(--charcoal); }
+  .detail-item p { font-size: 0.92rem; line-height: 1.65; }
+
+  .detail-number {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.5rem;
+    font-weight: 300;
+    color: var(--pearl);
+    line-height: 1;
+    margin-bottom: 0.75rem;
+  }
+
+  /* — COMPARISON LAYOUT — */
+  .comparison-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    margin-top: 3rem;
+  }
+
+  .comparison-col h3 {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--clay);
+  }
+
+  .comparison-col h3 span {
+    display: block;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 400;
+    margin-bottom: 0.5rem;
+  }
+
+  /* — FIELD LIST — */
+  .field-list {
+    list-style: none;
+    margin-top: 1rem;
+  }
+
+  .field-list li {
+    font-size: 0.92rem;
+    color: var(--mocha);
+    padding: 0.6rem 0;
+    border-bottom: 1px solid rgba(229, 226, 221, 0.6);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .field-type {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--aged-oak);
+  }
+
+  /* — EMAIL SEQUENCE — */
+  .email-sequence {
+    margin-top: 2rem;
+  }
+
+  .email-item {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 1.5rem;
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--pearl);
+    align-items: start;
+  }
+
+  .email-item:first-child { border-top: 1px solid var(--pearl); }
+
+  .email-timing {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--clay);
+    padding-top: 0.15rem;
+  }
+
+  .email-content h5 { margin-bottom: 0.35rem; font-size: 1.05rem; }
+  .email-content p { font-size: 0.88rem; line-height: 1.6; }
+
+  /* — CALLOUT — */
+  .callout {
+    border-left: 3px solid var(--clay);
+    padding: 1.5rem 2rem;
+    margin: 2.5rem 0;
+    background: rgba(196, 165, 123, 0.06);
+  }
+
+  .callout p {
+    font-size: 1.05rem;
+    line-height: 1.7;
+    max-width: none;
+    color: var(--mocha);
+  }
+
+  .callout strong {
+    color: var(--charcoal);
+  }
+
+  /* — MOCKUP FRAME — */
+  .mockup-frame {
+    border: 1px solid var(--pearl);
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 2.5rem 0;
+    background: white;
+  }
+
+  .mockup-titlebar {
+    background: var(--charcoal);
+    padding: 0.6rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .mockup-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+  }
+
+  .mockup-dot:first-child { background: rgba(212, 160, 144, 0.8); }
+  .mockup-dot:nth-child(2) { background: rgba(232, 197, 71, 0.6); }
+  .mockup-dot:nth-child(3) { background: rgba(168, 181, 160, 0.7); }
+
+  .mockup-url {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    color: rgba(255,255,255,0.5);
+    margin-left: 0.75rem;
+  }
+
+  .mockup-body {
+    padding: clamp(1.5rem, 3vw, 3rem);
+  }
+
+  .mockup-body h5 {
+    font-size: 1.3rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .mockup-body p {
+    font-size: 0.88rem;
+    max-width: none;
+  }
+
+  /* — FORM MOCKUP — */
+  .mock-form {
+    margin-top: 1.5rem;
+  }
+
+  .mock-field {
+    margin-bottom: 1rem;
+  }
+
+  .mock-label {
+    display: block;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.35rem;
+  }
+
+  .mock-input {
+    width: 100%;
+    border: 1px solid var(--pearl);
+    border-radius: 4px;
+    padding: 0.65rem 0.85rem;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.88rem;
+    color: var(--mocha);
+    background: var(--off-white);
+  }
+
+  .mock-input::placeholder { color: var(--pearl); }
+
+  .mock-textarea {
+    width: 100%;
+    border: 1px solid var(--pearl);
+    border-radius: 4px;
+    padding: 0.65rem 0.85rem;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.88rem;
+    color: var(--mocha);
+    background: var(--off-white);
+    min-height: 80px;
+    resize: vertical;
+  }
+
+  .mock-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .mock-btn {
+    display: inline-block;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 0.75rem 2rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 0.5rem;
+  }
+
+  .mock-btn-primary {
+    background: var(--charcoal);
+    color: var(--off-white);
+  }
+
+  .mock-btn-secondary {
+    background: transparent;
+    color: var(--mocha);
+    border: 1px solid var(--pearl);
+  }
+
+  /* — STATUS CARDS — */
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin: 2rem 0;
+  }
+
+  .status-card {
+    padding: 1.25rem;
+    border: 1px solid var(--pearl);
+    border-radius: 6px;
+    text-align: center;
+  }
+
+  .status-card .count {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.2rem;
+    font-weight: 400;
+    color: var(--charcoal);
+    line-height: 1.2;
+  }
+
+  .status-card .label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 0.25rem;
+  }
+
+  /* — APPLICANT ROW — */
+  .applicant-list {
+    margin-top: 1.5rem;
+  }
+
+  .applicant-row {
+    display: grid;
+    grid-template-columns: 2fr 1.5fr 1fr 120px;
+    gap: 1rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid rgba(229, 226, 221, 0.6);
+    align-items: center;
+    font-size: 0.88rem;
+    color: var(--mocha);
+  }
+
+  .applicant-row:first-child {
+    border-top: 1px solid rgba(229, 226, 221, 0.6);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .applicant-name { font-weight: 500; color: var(--charcoal); }
+
+  .status-badge {
+    display: inline-block;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+  }
+
+  .badge-new { background: rgba(168, 181, 160, 0.25); color: #4a6040; }
+  .badge-review { background: rgba(232, 197, 71, 0.2); color: #7a6a10; }
+  .badge-approved { background: rgba(196, 165, 123, 0.25); color: #7a6030; }
+  .badge-onboarding { background: rgba(139, 156, 173, 0.25); color: #506070; }
+
+  /* — DATA TABLE — */
+  .data-table {
+    width: 100%;
+    margin-top: 1.5rem;
+    border-collapse: collapse;
+  }
+
+  .data-table th {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: left;
+    padding: 0.75rem 0;
+    border-bottom: 2px solid var(--pearl);
+  }
+
+  .data-table td {
+    font-size: 0.88rem;
+    color: var(--mocha);
+    padding: 0.85rem 0;
+    border-bottom: 1px solid rgba(229, 226, 221, 0.5);
+  }
+
+  .data-table td:first-child { color: var(--charcoal); font-weight: 500; }
+
+  /* — CHECKLIST — */
+  .checklist {
+    list-style: none;
+    margin-top: 1.5rem;
+  }
+
+  .checklist li {
+    font-size: 0.92rem;
+    color: var(--mocha);
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(229, 226, 221, 0.5);
+    padding-left: 1.75rem;
+    position: relative;
+  }
+
+  .checklist li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.9rem;
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid var(--pearl);
+    border-radius: 3px;
+  }
+
+  .checklist li strong {
+    color: var(--charcoal);
+  }
+
+  /* — TIMELINE — */
+  .timeline {
+    margin-top: 2rem;
+    position: relative;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 28px;
+    top: 0;
+    bottom: 0;
+    width: 1.5px;
+    background: var(--pearl);
+  }
+
+  .timeline-item {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 1.5rem;
+    padding: 1.5rem 0;
+    position: relative;
+  }
+
+  .timeline-marker {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--clay);
+    margin-top: 0.35rem;
+    justify-self: center;
+    z-index: 1;
+  }
+
+  .timeline-marker.hollow {
+    background: var(--off-white);
+    border: 2px solid var(--clay);
+  }
+
+  .timeline-content h5 { margin-bottom: 0.3rem; font-size: 1rem; }
+  .timeline-content p { font-size: 0.88rem; line-height: 1.6; }
+
+  /* — FOOTER — */
+  .doc-footer {
+    padding: clamp(4rem, 8vw, 8rem) 0;
+    text-align: center;
+  }
+
+  .doc-footer h2 { margin-bottom: 1rem; }
+  .doc-footer p { margin: 0 auto 3rem; text-align: center; }
+
+  /* — ANIMATIONS — */
+  .fade-section {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+
+  .fade-section.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* — RESPONSIVE — */
+  @media (max-width: 768px) {
+    .detail-grid { grid-template-columns: 1fr; }
+    .detail-item:nth-child(even) { padding-left: 0; border-left: none; }
+    .comparison-row { grid-template-columns: 1fr; gap: 2rem; }
+    .pipeline-stage { grid-template-columns: 48px 1fr; gap: 1rem; }
+    .stage-number { font-size: 2.5rem; }
+    .status-grid { grid-template-columns: 1fr 1fr; }
+    .applicant-row { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+    .applicant-row:first-child > *:nth-child(n+3) { display: none; }
+    .mock-row { grid-template-columns: 1fr; }
+    .cover-footer { gap: 2rem; }
+    .email-item { grid-template-columns: 80px 1fr; gap: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ==================== COVER ==================== -->
+<div class="cover">
+  <div class="cover-meta">
+    <span class="mono">Patina — Founding Circle</span>
+  </div>
+  <h1>The Founding Circle<span>Application pipelines for designers &amp; makers who shape what Patina becomes</span></h1>
+  <p class="cover-subtitle">A master plan for how applications arrive, how we evaluate them, how we onboard founding partners, and how we capture the feedback that makes the platform real — from form submission through full participation.</p>
+
+  <div class="strata">
+    <div class="strata-line"></div>
+    <div class="strata-line"></div>
+    <div class="strata-line"></div>
+  </div>
+
+  <div class="cover-footer">
+    <div class="cover-footer-item">
+      <p class="mono">Prepared for</p>
+      <p>Kody &amp; Leah — Founding Team</p>
+    </div>
+    <div class="cover-footer-item">
+      <p class="mono">Version</p>
+      <p>1.0 — April 2026</p>
+    </div>
+    <div class="cover-footer-item">
+      <p class="mono">Document Type</p>
+      <p>Pipeline &amp; Experience Design</p>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 01 — THE OPPORTUNITY ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label">01 — The Opportunity</h4>
+    <h2 class="section-title">The founding partners don't just<br><em>use</em> the platform — they <em>define</em> it.</h2>
+    <p class="section-intro large-body">Every product decision at Patina flows from two sources: Leah's professional intuition and the lived experience of founding partners who are building alongside us. The application pipeline isn't a screening funnel — it's the beginning of a relationship. These are the 10–15 designers and 10–15 makers whose feedback shapes the Aesthete Engine, whose pain points write the roadmap, and whose voices anchor the brand.</p>
+
+    <div class="callout">
+      <p><strong>The strategic constraint:</strong> Failed competitors — Modsy, Homepolish, Laurel &amp; Wolf — treated designers and makers as interchangeable labor. Patina treats them as intelligence. The Founding Circle is how we prove that difference from day one.</p>
+    </div>
+
+    <div class="detail-grid">
+      <div class="detail-item">
+        <div class="detail-number">01</div>
+        <h5>Two Parallel Pipelines</h5>
+        <p>Designers and manufacturers have fundamentally different motivations, evaluation criteria, and onboarding needs. One pipeline won't serve both. Each gets its own form, review process, communication cadence, and feedback mechanism.</p>
+      </div>
+      <div class="detail-item">
+        <div class="detail-number">02</div>
+        <h5>Personal, Not Automated</h5>
+        <p>At founding scale (10–15 each), every interaction should feel hand-written. Automated emails can handle logistics, but every applicant gets a personal touchpoint from Kody or Leah within 48 hours of applying.</p>
+      </div>
+      <div class="detail-item">
+        <div class="detail-number">03</div>
+        <h5>Feedback as Product</h5>
+        <p>The founding phase exists to learn, not to scale. Every form field, every email, every onboarding screen should be designed to capture signal — what excites people, what confuses them, what's missing. This feedback is as valuable as the partnership itself.</p>
+      </div>
+      <div class="detail-item">
+        <div class="detail-number">04</div>
+        <h5>Low-Infrastructure, High-Touch</h5>
+        <p>We build this on Supabase tables, Resend emails, and a lightweight Admin Portal view — not a full CRM. The founding pipeline stays lean so Kody can ship it in days, not weeks. Sophistication comes from design, not tooling.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ==================== 02 — DESIGNER PIPELINE ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label">02 — Designer Pipeline</h4>
+    <h2 class="section-title">From curious designer to<br><em>Certified Aesthete</em> founding partner</h2>
+    <p class="section-intro large-body">The designer pipeline evaluates style alignment, professional credibility, and willingness to participate in platform teaching. We're not looking for the biggest firms — we're looking for designers who share Patina's philosophy: that the best interiors are cultivated, not decorated.</p>
+
+    <div class="pipeline">
+
+      <div class="pipeline-stage">
+        <div class="stage-number">1</div>
+        <div class="stage-content">
+          <h3>Application Form on patina.cloud</h3>
+          <p>The public-facing entry point. Lives at <em>patina.cloud/designers/join</em> — linked from the homepage "designer handoff dangle" section. The form itself reflects Patina's design sensibility: warm, unhurried, with the same typography-first hierarchy used throughout the brand. Not a cold lead-gen form. A conversation starter.</p>
+          <p>The form captures enough to evaluate fit without being burdensome. Designers are busy — they won't fill out a 20-field intake. Five to seven fields, one open-ended question that reveals their design philosophy, and a portfolio link that does the rest of the talking.</p>
+          <span class="stage-tag tag-form">Supabase Form</span>
+          <span class="stage-tag tag-ui">patina.cloud Page</span>
+        </div>
+      </div>
+
+      <div class="pipeline-stage">
+        <div class="stage-number">2</div>
+        <div class="stage-content">
+          <h3>Confirmation &amp; Expectation Setting</h3>
+          <p>Instant email via Resend the moment they submit. This is not a generic "we received your application" autoresponder. The email thanks them by name, tells them exactly what happens next (personal review within 48 hours), and includes a short paragraph about the Founding Circle — what it means to be part of this first cohort.</p>
+          <p>The tone mirrors the brand: confident but not corporate, warm without being saccharine. "We read every application personally" — because at this scale, we actually do.</p>
+          <span class="stage-tag tag-email">Resend Email</span>
+          <span class="stage-tag tag-comms">Automated</span>
+        </div>
+      </div>
+
+      <div class="pipeline-stage">
+        <div class="stage-number">3</div>
+        <div class="stage-content">
+          <h3>Admin Review &amp; Portfolio Assessment</h3>
+          <p>Application lands in the Admin Portal's Founding Circle queue. Kody and Leah review together — Leah evaluates portfolio quality, style alignment, and professional credibility; Kody assesses geographic coverage and marketplace balance. Review takes 10–15 minutes per application at founding scale.</p>
+          <p>Each application can be tagged: <strong>Approve</strong> (move to interview), <strong>Waitlist</strong> (good fit, timing not right), or <strong>Decline</strong> (respectful redirect). Every decision gets a note — these notes become the historical record of how the founding cohort was assembled.</p>
+          <span class="stage-tag tag-admin">Admin Portal</span>
+          <span class="stage-tag tag-supabase">Supabase</span>
+        </div>
+      </div>
+
+      <div class="pipeline-stage">
+        <div class="stage-number">4</div>
+        <div class="stage-content">
+          <h3>Personal Outreach &amp; Intro Call</h3>
+          <p>Approved applicants receive a personal email from Leah — not a template. For designers she already knows through trade relationships, this is a natural extension of an existing conversation. For new contacts, the email references something specific from their portfolio. The goal is a 30-minute video call: relationship building first, platform demo second.</p>
+          <p>During the call, Leah walks through the Designer Portal vision, explains the Aesthete Engine teaching model, and gauges their enthusiasm for the iterative nature of a founding partnership. This is where "interested" becomes "committed."</p>
+          <span class="stage-tag tag-comms">Personal Email</span>
+          <span class="stage-tag tag-ui">Video Call</span>
+        </div>
+      </div>
+
+      <div class="pipeline-stage">
+        <div class="stage-number">5</div>
+        <div class="stage-content">
+          <h3>Founding Agreement &amp; Portal Onboarding</h3>
+          <p>A lightweight founding agreement (not a legal contract — a mutual commitment document) that outlines what founding designers give and get. Give: feedback time, teaching sessions, honest criticism. Get: featured placement, early access, input on roadmap, "Certified Aesthete Designer" founding badge, trade pricing from day one.</p>
+          <p>Portal account creation is triggered by agreement acceptance. Welcome email includes login credentials, a guided walkthrough of the Designer Portal's current state (with explicit acknowledgment of what's built vs. what's coming), and a link to schedule their first teaching session.</p>
+          <span class="stage-tag tag-form">Agreement Doc</span>
+          <span class="stage-tag tag-supabase">Account Creation</span>
+          <span class="stage-tag tag-email">Welcome Sequence</span>
+        </div>
+      </div>
+
+      <div class="pipeline-stage">
+        <div class="stage-number">6</div>
+        <div class="stage-content">
+          <h3>Active Founding Participation</h3>
+          <p>The designer is now live. Bi-weekly check-in emails ask one focused question ("What's the most frustrating thing about sourcing furniture right now?"). Monthly feedback surveys are 5 questions max. A shared Slack channel (or equivalent) provides real-time access to Kody and Leah for quick questions and feature requests.</p>
+          <p>Teaching sessions happen on the designer's schedule — the Chrome extension + Designer Portal workflow captures their expertise organically. Every interaction generates data that informs the next sprint.</p>
+          <span class="stage-tag tag-comms">Bi-Weekly Check-ins</span>
+          <span class="stage-tag tag-ui">Designer Portal</span>
+          <span class="stage-tag tag-supabase">Feedback Capture</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ==================== 03 — DESIGNER FORM SPEC ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label">03 — Designer Application Form</h4>
+    <h2 class="section-title">The fields that tell us<br><em>who they are</em></h2>
+    <p class="section-intro">Every field serves a dual purpose: evaluate the applicant and begin building their profile in the system. Nothing here is throwaway data — it all feeds forward into their Designer Portal account if approved.</p>
+
+    <div class="mockup-frame">
+      <div class="mockup-titlebar">
+        <div class="mockup-dot"></div>
+        <div class="mockup-dot"></div>
+        <div class="mockup-dot"></div>
+        <span class="mockup-url">patina.cloud/designers/join</span>
+      </div>
+      <div class="mockup-body">
+        <h5>Join the Founding Circle</h5>
+        <p style="margin-bottom: 0.35rem; color: var(--aged-oak); font-style: italic; font-family: 'Playfair Display', serif;">We're assembling a small group of designers to shape what Patina becomes.</p>
+        <p style="margin-bottom: 1.5rem;">Tell us about your practice.</p>
+
+        <div class="mock-form">
+          <div class="mock-row">
+            <div class="mock-field">
+              <label class="mock-label">Full Name</label>
+              <input class="mock-input" type="text" placeholder="Leah Kirkland">
+            </div>
+            <div class="mock-field">
+              <label class="mock-label">Studio / Firm Name</label>
+              <input class="mock-input" type="text" placeholder="Middlewest Studio">
+            </div>
+          </div>
+          <div class="mock-row">
+            <div class="mock-field">
+              <label class="mock-label">Email</label>
+              <input class="mock-input" type="email" placeholder="leah@middlewest.studio">
+            </div>
+            <div class="mock-field">
+              <label class="mock-label">Location</label>
+              <input class="mock-input" type="text" placeholder="Madison, Wisconsin">
+            </div>
+          </div>
+          <div class="mock-field">
+            <label class="mock-label">Portfolio or Website</label>
+            <input class="mock-input" type="url" placeholder="https://middlewest.studio">
+          </div>
+          <div class="mock-field">
+            <label class="mock-label">What does "timeless design" mean to you?</label>
+            <textarea class="mock-textarea" placeholder="We're genuinely curious — there's no right answer..."></textarea>
+          </div>
+          <div class="mock-field">
+            <label class="mock-label">How do you currently source furniture for clients?</label>
+            <textarea class="mock-textarea" placeholder="Walk us through your process — the tools, the frustrations, the workarounds..."></textarea>
+          </div>
+          <button class="mock-btn mock-btn-primary">Apply to the Founding Circle</button>
+        </div>
+      </div>
+    </div>
+
+    <ul class="field-list">
+      <li><strong>Full Name</strong> <span class="field-type">Text — maps to designer profile</span></li>
+      <li><strong>Studio / Firm Name</strong> <span class="field-type">Text — business entity</span></li>
+      <li><strong>Email</strong> <span class="field-type">Email — primary communication</span></li>
+      <li><strong>Location</strong> <span class="field-type">Text — geographic coverage map</span></li>
+      <li><strong>Portfolio URL</strong> <span class="field-type">URL — style alignment eval</span></li>
+      <li><strong>"Timeless design" open-end</strong> <span class="field-type">Textarea — philosophy signal</span></li>
+      <li><strong>Current sourcing process</strong> <span class="field-type">Textarea — pain point discovery</span></li>
+    </ul>
+
+    <div class="callout">
+      <p><strong>Why these questions matter:</strong> "Timeless design" surfaces philosophical alignment — do they think in trends or in craft? The sourcing question reveals their current workflow pain, which becomes the feature prioritization data we'd otherwise have to guess at. Both open-ended responses get stored as the first entries in their feedback history.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ==================== 04 — MANUFACTURER PIPELINE ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label">04 — Manufacturer Pipeline</h4>
+    <h2 class="section-title">From heritage maker to<br><em>founding catalog</em> partner</h2>
+    <p class="section-intro large-body">The manufacturer pipeline evaluates craft quality, production reliability, and brand story alignment. We're building a curated catalog — not a marketplace with everything. Founding manufacturers are the brands that give Patina's catalog its first credibility. Their products become the training data for the Aesthete Engine.</p>
+
+    <div class="pipeline">
+
+      <div class="pipeline-stage">
+        <div class="stage-number">1</div>
+        <div class="stage-content">
+          <h3>Application Form on patina.cloud</h3>
+          <p>Lives at <em>patina.cloud/makers/join</em>. The language here is warmer than a typical vendor onboarding form. We say "makers" not "manufacturers" in the public-facing copy — the word signals craft, not commodity. The form asks about their story, their materials, their process. This isn't a vendor database entry — it's an introduction.</p>
+          <p>We also ask for a product catalog link and their existing trade program details. For heritage brands with established businesses, this is the information they're used to sharing. For emerging makers, we make it clear that a polished catalog isn't required — a Shopify site or even an Instagram portfolio works.</p>
+          <span class="stage-tag tag-form">Supabase Form</span>
+          <span class="stage-tag tag-ui">patina.cloud Page</span>
+        </div>
+      </div>
+
+      <div class="pipeline-stage">
+        <div class="stage-number">2</div>
+        <div class="stage-content">
+          <h3>Confirmation &amp; Brand Story</h3>
+          <p>Confirmation email acknowledges their craft, not just their application. The email includes a brief "What is Patina?" overview written for makers — emphasizing how the platform elevates the story behind their products, not just the product listing. For heritage brands, this distinction matters: they've been burned by marketplaces that reduce them to SKU lines.</p>
+          <span class="stage-tag tag-email">Resend Email</span>
+          <span class="stage-tag tag-comms">Automated</span>
+        </div>
+      </div>
+
+      <div class="pipeline-stage">
+        <div class="stage-number">3</div>
+        <div class="stage-content">
+          <h3>Admin Review &amp; Product Assessment</h3>
+          <p>Leah evaluates quality, materials, and style fit with the planned catalog direction. Kody assesses price point diversity, category coverage (do we need more lighting? more seating?), and logistical readiness (can they ship reliably? do they have hi-res imagery?). The review considers both the individual brand's quality and how they fill gaps in the founding catalog.</p>
+          <p>Same tagging system as designers: <strong>Approve</strong>, <strong>Waitlist</strong>, <strong>Decline</strong>. Waitlisted brands get a genuine "not yet, but soon" message — they may be perfect for the second cohort.</p>
+          <span class="stage-tag tag-admin">Admin Portal</span>
+          <span class="stage-tag tag-supabase">Supabase</span>
+        </div>
+      </div>
+
+      <div class="pipeline-stage">
+        <div class="stage-number">4</div>
+        <div class="stage-content">
+          <h3>Personal Outreach &amp; Trade Conversation</h3>
+          <p>Leah reaches out — for many of these brands, she already has the relationship through her trade network. The conversation covers trade pricing, imagery availability, product data format, and willingness to provide content for brand story pages. The ask isn't heavy: share your product data, let us photograph (or use existing photos), and give us feedback on how we present your work.</p>
+          <span class="stage-tag tag-comms">Personal Email / Call</span>
+        </div>
+      </div>
+
+      <div class="pipeline-stage">
+        <div class="stage-number">5</div>
+        <div class="stage-content">
+          <h3>Catalog Onboarding &amp; Product Intake</h3>
+          <p>Approved manufacturers provide their initial product data — this feeds into the Aesthete Engine's catalog. At founding scale, Kody manually imports or assists with CSV/spreadsheet intake. A lightweight onboarding email sequence walks them through what Patina does with their products: style classification, designer teaching integration, and eventually AR visualization and consumer discovery.</p>
+          <p>Their Manufacturer Portal account gets created with a founding partner badge. The portal in its founding state is simple — a brand profile page, a view of their products in the catalog, and basic performance metrics (views, saves) once consumers are live.</p>
+          <span class="stage-tag tag-supabase">Product Import</span>
+          <span class="stage-tag tag-email">Onboarding Sequence</span>
+          <span class="stage-tag tag-ui">Mfr Portal Account</span>
+        </div>
+      </div>
+
+      <div class="pipeline-stage">
+        <div class="stage-number">6</div>
+        <div class="stage-content">
+          <h3>Active Founding Participation</h3>
+          <p>Monthly check-in emails focused on catalog feedback: "Are the style classifications for your products accurate?" "Is there a product category you'd like to see represented that isn't?" Quarterly calls to discuss platform direction and share early metrics. Their feedback directly influences how the Manufacturer Portal evolves.</p>
+          <p>The Founding Circle badge carries weight: featured placement in the catalog, early access to new features, and "Founding Partner" designation that stays with them permanently — even after the platform opens to broader enrollment.</p>
+          <span class="stage-tag tag-comms">Monthly Check-ins</span>
+          <span class="stage-tag tag-ui">Mfr Portal</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ==================== 05 — MANUFACTURER FORM SPEC ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label">05 — Manufacturer Application Form</h4>
+    <h2 class="section-title">The fields that tell us<br><em>what they make</em></h2>
+
+    <div class="mockup-frame">
+      <div class="mockup-titlebar">
+        <div class="mockup-dot"></div>
+        <div class="mockup-dot"></div>
+        <div class="mockup-dot"></div>
+        <span class="mockup-url">patina.cloud/makers/join</span>
+      </div>
+      <div class="mockup-body">
+        <h5>Join the Founding Circle</h5>
+        <p style="margin-bottom: 0.35rem; color: var(--aged-oak); font-style: italic; font-family: 'Playfair Display', serif;">We're looking for makers whose work tells a story worth sharing.</p>
+        <p style="margin-bottom: 1.5rem;">Tell us about your craft.</p>
+
+        <div class="mock-form">
+          <div class="mock-row">
+            <div class="mock-field">
+              <label class="mock-label">Brand / Studio Name</label>
+              <input class="mock-input" type="text" placeholder="Nordic Atelier">
+            </div>
+            <div class="mock-field">
+              <label class="mock-label">Contact Name</label>
+              <input class="mock-input" type="text" placeholder="Erik Lindqvist">
+            </div>
+          </div>
+          <div class="mock-row">
+            <div class="mock-field">
+              <label class="mock-label">Email</label>
+              <input class="mock-input" type="email" placeholder="erik@nordicatelier.dk">
+            </div>
+            <div class="mock-field">
+              <label class="mock-label">Location</label>
+              <input class="mock-input" type="text" placeholder="Aarhus, Denmark">
+            </div>
+          </div>
+          <div class="mock-field">
+            <label class="mock-label">Website or Product Catalog</label>
+            <input class="mock-input" type="url" placeholder="https://nordicatelier.dk">
+          </div>
+          <div class="mock-row">
+            <div class="mock-field">
+              <label class="mock-label">Primary Product Categories</label>
+              <input class="mock-input" type="text" placeholder="Seating, tables, storage...">
+            </div>
+            <div class="mock-field">
+              <label class="mock-label">Primary Materials</label>
+              <input class="mock-input" type="text" placeholder="Solid oak, walnut, linen...">
+            </div>
+          </div>
+          <div class="mock-field">
+            <label class="mock-label">Tell us the story behind your brand</label>
+            <textarea class="mock-textarea" placeholder="How did you start? What drives the work? What makes your pieces different?"></textarea>
+          </div>
+          <div class="mock-field">
+            <label class="mock-label">Do you offer a trade / designer program?</label>
+            <textarea class="mock-textarea" placeholder="If so, tell us about it. If not, that's fine — we can build one together."></textarea>
+          </div>
+          <button class="mock-btn mock-btn-primary">Apply to the Founding Circle</button>
+        </div>
+      </div>
+    </div>
+
+    <ul class="field-list">
+      <li><strong>Brand / Studio Name</strong> <span class="field-type">Text — catalog brand entry</span></li>
+      <li><strong>Contact Name</strong> <span class="field-type">Text — relationship lead</span></li>
+      <li><strong>Email</strong> <span class="field-type">Email — primary communication</span></li>
+      <li><strong>Location</strong> <span class="field-type">Text — provenance &amp; shipping</span></li>
+      <li><strong>Website / Catalog URL</strong> <span class="field-type">URL — product evaluation</span></li>
+      <li><strong>Primary Categories</strong> <span class="field-type">Text — catalog gap analysis</span></li>
+      <li><strong>Primary Materials</strong> <span class="field-type">Text — quality signal</span></li>
+      <li><strong>Brand Story</strong> <span class="field-type">Textarea — narrative alignment</span></li>
+      <li><strong>Trade Program</strong> <span class="field-type">Textarea — partnership readiness</span></li>
+    </ul>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ==================== 06 — ADMIN REVIEW ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label">06 — Admin Review Interface</h4>
+    <h2 class="section-title">Where applications become<br><em>decisions</em></h2>
+    <p class="section-intro large-body">The Admin Portal gets a "Founding Circle" section — a focused review queue for both pipelines. At founding scale, this doesn't need to be complex. It needs to be scannable, decisive, and traceable. Every application, every status change, every note gets stored.</p>
+
+    <!-- Mockup: Dashboard -->
+    <div class="mockup-frame">
+      <div class="mockup-titlebar">
+        <div class="mockup-dot"></div>
+        <div class="mockup-dot"></div>
+        <div class="mockup-dot"></div>
+        <span class="mockup-url">admin.patina.cloud/founding-circle</span>
+      </div>
+      <div class="mockup-body">
+        <p class="mono" style="margin-bottom: 1.5rem;">Founding Circle — Application Overview</p>
+
+        <div class="status-grid">
+          <div class="status-card">
+            <div class="count">7</div>
+            <div class="label">New</div>
+          </div>
+          <div class="status-card">
+            <div class="count">4</div>
+            <div class="label">In Review</div>
+          </div>
+          <div class="status-card">
+            <div class="count">11</div>
+            <div class="label">Approved</div>
+          </div>
+          <div class="status-card">
+            <div class="count">3</div>
+            <div class="label">Onboarding</div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 1rem; margin: 1.5rem 0 1rem;">
+          <button class="mock-btn mock-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.75rem;">All Applications</button>
+          <button class="mock-btn mock-btn-primary" style="padding: 0.5rem 1rem; font-size: 0.75rem;">Designers</button>
+          <button class="mock-btn mock-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.75rem;">Makers</button>
+        </div>
+
+        <div class="applicant-list">
+          <div class="applicant-row">
+            <div>Applicant</div>
+            <div>Type / Location</div>
+            <div>Applied</div>
+            <div>Status</div>
+          </div>
+          <div class="applicant-row">
+            <div class="applicant-name">Sarah Chen — Studio Maison</div>
+            <div>Designer · Chicago, IL</div>
+            <div>Apr 11</div>
+            <div><span class="status-badge badge-new">New</span></div>
+          </div>
+          <div class="applicant-row">
+            <div class="applicant-name">Nordic Atelier</div>
+            <div>Maker · Aarhus, Denmark</div>
+            <div>Apr 10</div>
+            <div><span class="status-badge badge-review">In Review</span></div>
+          </div>
+          <div class="applicant-row">
+            <div class="applicant-name">James Whitfield — JW Interiors</div>
+            <div>Designer · Milwaukee, WI</div>
+            <div>Apr 8</div>
+            <div><span class="status-badge badge-approved">Approved</span></div>
+          </div>
+          <div class="applicant-row">
+            <div class="applicant-name">Woodward &amp; Co.</div>
+            <div>Maker · Grand Rapids, MI</div>
+            <div>Apr 5</div>
+            <div><span class="status-badge badge-onboarding">Onboarding</span></div>
+          </div>
+          <div class="applicant-row">
+            <div class="applicant-name">Studio Piet</div>
+            <div>Maker · Rotterdam, NL</div>
+            <div>Apr 3</div>
+            <div><span class="status-badge badge-approved">Approved</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="strata-mini">
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+    </div>
+
+    <h3>Application Detail View</h3>
+    <p style="margin-top: 0.5rem; margin-bottom: 1.5rem;">Clicking any application opens a full detail view — the form responses, portfolio/catalog link, review notes from both Kody and Leah, the complete communication history, and action buttons for status changes. Every status transition sends the appropriate email automatically.</p>
+
+    <div class="mockup-frame">
+      <div class="mockup-titlebar">
+        <div class="mockup-dot"></div>
+        <div class="mockup-dot"></div>
+        <div class="mockup-dot"></div>
+        <span class="mockup-url">admin.patina.cloud/founding-circle/app/sarah-chen</span>
+      </div>
+      <div class="mockup-body">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h5 style="font-size: 1.4rem;">Sarah Chen</h5>
+            <p style="margin: 0.15rem 0; font-size: 0.88rem;">Studio Maison · Chicago, IL</p>
+            <p style="margin: 0; font-size: 0.82rem; color: var(--aged-oak);">Applied April 11, 2026</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="mock-btn mock-btn-primary" style="padding: 0.5rem 1.25rem; font-size: 0.78rem;">Approve</button>
+            <button class="mock-btn mock-btn-secondary" style="padding: 0.5rem 1.25rem; font-size: 0.78rem;">Waitlist</button>
+            <button class="mock-btn mock-btn-secondary" style="padding: 0.5rem 1.25rem; font-size: 0.78rem; color: var(--terracotta); border-color: var(--terracotta);">Decline</button>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 1.5rem;">
+          <div>
+            <p class="mono" style="margin-bottom: 0.5rem;">Portfolio</p>
+            <p style="font-size: 0.88rem;"><a href="#" style="color: var(--aged-oak);">studiomaison.com ↗</a></p>
+          </div>
+          <div>
+            <p class="mono" style="margin-bottom: 0.5rem;">Email</p>
+            <p style="font-size: 0.88rem;">sarah@studiomaison.com</p>
+          </div>
+        </div>
+
+        <div style="border-top: 1px solid var(--pearl); padding-top: 1.25rem; margin-bottom: 1.25rem;">
+          <p class="mono" style="margin-bottom: 0.5rem;">What does "timeless design" mean to you?</p>
+          <p style="font-size: 0.88rem; line-height: 1.65; max-width: none;">"To me, timeless design is the opposite of trend-chasing. It's choosing the walnut credenza that your grandchildren will fight over instead of the acrylic one that ends up on the curb in three years. It's investing in quality, in story, in pieces that get better as they age."</p>
+        </div>
+
+        <div style="border-top: 1px solid var(--pearl); padding-top: 1.25rem; margin-bottom: 1.5rem;">
+          <p class="mono" style="margin-bottom: 0.5rem;">Internal Review Notes</p>
+          <div style="background: rgba(196, 165, 123, 0.06); padding: 1rem; border-radius: 4px;">
+            <textarea class="mock-textarea" placeholder="Add review notes — visible to Kody and Leah only..." style="min-height: 60px; border: none; background: transparent; padding: 0;"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ==================== 07 — COMMUNICATIONS ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label">07 — Communications Plan</h4>
+    <h2 class="section-title">Every email is a<br><em>brand touchpoint</em></h2>
+    <p class="section-intro large-body">Both pipelines share the same communication philosophy: personal tone, Patina design system, clear next steps. The email infrastructure uses Resend with branded HTML templates — same typography, same color palette, same Strata Mark footer as the website.</p>
+
+    <div class="comparison-row">
+
+      <!-- Designer Emails -->
+      <div class="comparison-col">
+        <h3><span>Designer Pipeline</span>Email Sequence</h3>
+
+        <div class="email-sequence">
+          <div class="email-item">
+            <div class="email-timing">Instant</div>
+            <div class="email-content">
+              <h5>Application Received</h5>
+              <p>Thanks by name. "We review every application personally — expect to hear from us within 48 hours." Includes Founding Circle overview paragraph.</p>
+            </div>
+          </div>
+          <div class="email-item">
+            <div class="email-timing">24–48 hrs</div>
+            <div class="email-content">
+              <h5>Personal Follow-up</h5>
+              <p>From Leah's email. References something specific from their portfolio. Proposes intro call times. This is the human moment.</p>
+            </div>
+          </div>
+          <div class="email-item">
+            <div class="email-timing">Post-Call</div>
+            <div class="email-content">
+              <h5>Welcome to the Circle</h5>
+              <p>Founding agreement link. Vision document. "Here's what we're building, and here's how your expertise shapes it."</p>
+            </div>
+          </div>
+          <div class="email-item">
+            <div class="email-timing">Day 1</div>
+            <div class="email-content">
+              <h5>Portal Access &amp; Walkthrough</h5>
+              <p>Login credentials. Guided video walkthrough. Honest "here's what works and what's still coming" context. First teaching session scheduling link.</p>
+            </div>
+          </div>
+          <div class="email-item">
+            <div class="email-timing">Bi-Weekly</div>
+            <div class="email-content">
+              <h5>Founding Pulse</h5>
+              <p>One focused question. What's working, what's not. Feature sneak peeks. Keeps the relationship alive between calls.</p>
+            </div>
+          </div>
+          <div class="email-item">
+            <div class="email-timing">Monthly</div>
+            <div class="email-content">
+              <h5>Feedback Survey</h5>
+              <p>5 questions max. NPS score. Open-ended "what should we build next?" Aggregate results shared back to all founding designers.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Maker Emails -->
+      <div class="comparison-col">
+        <h3><span>Maker Pipeline</span>Email Sequence</h3>
+
+        <div class="email-sequence">
+          <div class="email-item">
+            <div class="email-timing">Instant</div>
+            <div class="email-content">
+              <h5>Application Received</h5>
+              <p>Acknowledges their craft. "We believe furniture should tell a story — yours caught our attention." 48-hour review commitment.</p>
+            </div>
+          </div>
+          <div class="email-item">
+            <div class="email-timing">24–48 hrs</div>
+            <div class="email-content">
+              <h5>Personal Follow-up</h5>
+              <p>From Leah. Trade relationship tone. References specific products or materials. Proposes call to discuss partnership terms.</p>
+            </div>
+          </div>
+          <div class="email-item">
+            <div class="email-timing">Post-Call</div>
+            <div class="email-content">
+              <h5>Welcome to the Circle</h5>
+              <p>Partnership overview. Product data request (gentle). "Here's how your products appear in the platform" preview.</p>
+            </div>
+          </div>
+          <div class="email-item">
+            <div class="email-timing">Day 1</div>
+            <div class="email-content">
+              <h5>Catalog Onboarding</h5>
+              <p>Product intake guide. Image specs. Data format options (CSV, manual, or "just send us what you have and we'll format it"). Portal access.</p>
+            </div>
+          </div>
+          <div class="email-item">
+            <div class="email-timing">Monthly</div>
+            <div class="email-content">
+              <h5>Catalog Check-in</h5>
+              <p>"Are your products represented accurately?" New product additions. Category classification feedback. Early performance metrics.</p>
+            </div>
+          </div>
+          <div class="email-item">
+            <div class="email-timing">Quarterly</div>
+            <div class="email-content">
+              <h5>Founding Partner Review</h5>
+              <p>Platform direction briefing. Partnership health check. Feature requests. "What would make this more valuable for your brand?"</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ==================== 08 — FEEDBACK CAPTURE ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label">08 — Feedback Architecture</h4>
+    <h2 class="section-title">Every touchpoint is a<br><em>listening post</em></h2>
+    <p class="section-intro large-body">Feedback at the founding stage isn't a feature request form buried in a settings menu. It's woven into every interaction — the application form responses, the onboarding friction they encounter, the teaching sessions they complete, the questions they ask. Here's how we capture all of it.</p>
+
+    <div class="detail-grid">
+      <div class="detail-item">
+        <div class="detail-number">01</div>
+        <h5>Application Responses as Data</h5>
+        <p>The open-ended form fields ("What does timeless design mean?" / "Tell us your brand story") aren't just evaluation tools — they're the first entries in a longitudinal feedback database. These responses inform product positioning, marketing copy, and Aesthete Engine training priorities.</p>
+      </div>
+      <div class="detail-item">
+        <div class="detail-number">02</div>
+        <h5>Structured Surveys (Monthly)</h5>
+        <p>Short, consistent, actionable. Five questions per month — three quantitative (1–5 scale), two qualitative (open-ended). Same questions across cohorts enable trend tracking. Responses stored in Supabase with applicant_id foreign key.</p>
+      </div>
+      <div class="detail-item">
+        <div class="detail-number">03</div>
+        <h5>In-Context Portal Feedback</h5>
+        <p>A persistent "Share feedback" affordance in both portals — not a button that opens a modal, but a minimal text input that collapses into the interface margin. Low-friction enough to capture the moment-of-frustration insight that structured surveys miss.</p>
+      </div>
+      <div class="detail-item">
+        <div class="detail-number">04</div>
+        <h5>Teaching Session Signals</h5>
+        <p>For designers: what they classify easily vs. what causes hesitation. Where they disagree with the system's suggestions. What categories they reach for that don't exist yet. The teaching workflow generates implicit feedback that's more valuable than explicit feedback.</p>
+      </div>
+      <div class="detail-item">
+        <div class="detail-number">05</div>
+        <h5>Conversation Capture</h5>
+        <p>Kody and Leah's call notes — the offhand comments, the "you know what would be great?" moments, the complaints that surface in conversation but would never make it into a form. A simple shared notes document per partner, linked to their profile in the Admin Portal.</p>
+      </div>
+      <div class="detail-item">
+        <div class="detail-number">06</div>
+        <h5>Feedback Synthesis Dashboard</h5>
+        <p>A lightweight Admin Portal view that aggregates all feedback channels: survey scores trended over time, common themes from open-ended responses, portal friction reports, teaching session analytics. This is where feedback becomes roadmap.</p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <p><strong>The founding principle:</strong> We never ask founding partners to fill out a form that takes longer than the value they get back from it. Every feedback request is accompanied by a reciprocal gesture — a sneak peek, a metric they care about, a "here's what we built because you told us to."</p>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ==================== 09 — TECHNICAL IMPLEMENTATION ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label">09 — Technical Implementation</h4>
+    <h2 class="section-title">What needs to be<br><em>built</em></h2>
+    <p class="section-intro large-body">The entire founding pipeline runs on existing infrastructure: Supabase for data, Resend for email, Next.js pages on patina.cloud for forms, and a new Admin Portal section for review. No new services, no new vendors, no new hosting.</p>
+
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Component</th>
+          <th>Stack</th>
+          <th>Effort</th>
+          <th>Priority</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Designer Application Form</td>
+          <td>Next.js page + Supabase insert</td>
+          <td>1 day</td>
+          <td>P0 — Ship first</td>
+        </tr>
+        <tr>
+          <td>Maker Application Form</td>
+          <td>Next.js page + Supabase insert</td>
+          <td>1 day</td>
+          <td>P0 — Ship first</td>
+        </tr>
+        <tr>
+          <td>Confirmation Email Templates</td>
+          <td>Resend + React Email</td>
+          <td>0.5 day</td>
+          <td>P0 — Ship with forms</td>
+        </tr>
+        <tr>
+          <td>Supabase Schema (applications table)</td>
+          <td>PostgreSQL migration</td>
+          <td>0.5 day</td>
+          <td>P0 — Before forms</td>
+        </tr>
+        <tr>
+          <td>Admin Review Queue</td>
+          <td>Next.js + Supabase queries</td>
+          <td>2–3 days</td>
+          <td>P1 — Before first review</td>
+        </tr>
+        <tr>
+          <td>Application Detail View</td>
+          <td>Next.js + Supabase</td>
+          <td>1–2 days</td>
+          <td>P1 — With review queue</td>
+        </tr>
+        <tr>
+          <td>Status Change Email Triggers</td>
+          <td>Supabase edge function + Resend</td>
+          <td>1 day</td>
+          <td>P1 — After review queue</td>
+        </tr>
+        <tr>
+          <td>Welcome Onboarding Sequence</td>
+          <td>Resend drip (3–4 emails)</td>
+          <td>1 day</td>
+          <td>P2 — Before first approval</td>
+        </tr>
+        <tr>
+          <td>Portal Account Auto-Creation</td>
+          <td>Supabase auth + edge function</td>
+          <td>1 day</td>
+          <td>P2 — With approvals</td>
+        </tr>
+        <tr>
+          <td>In-Portal Feedback Widget</td>
+          <td>React component + Supabase</td>
+          <td>0.5 day</td>
+          <td>P2 — After portal onboarding</td>
+        </tr>
+        <tr>
+          <td>Monthly Survey Template</td>
+          <td>Resend + Supabase form</td>
+          <td>0.5 day</td>
+          <td>P3 — Month 2</td>
+        </tr>
+        <tr>
+          <td>Feedback Synthesis Dashboard</td>
+          <td>Admin Portal + Recharts</td>
+          <td>2–3 days</td>
+          <td>P3 — Month 2–3</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="strata-mini">
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+    </div>
+
+    <h3 style="margin-bottom: 1rem;">Supabase Schema</h3>
+    <p style="margin-bottom: 1.5rem;">One table handles both pipelines. The <em>applicant_type</em> enum separates designers from makers. Status transitions are tracked in a separate history table for auditability.</p>
+
+    <div class="mockup-frame">
+      <div class="mockup-titlebar">
+        <div class="mockup-dot"></div>
+        <div class="mockup-dot"></div>
+        <div class="mockup-dot"></div>
+        <span class="mockup-url">founding_circle_applications</span>
+      </div>
+      <div class="mockup-body" style="font-family: 'DM Mono', monospace; font-size: 0.78rem; line-height: 1.8; color: var(--mocha);">
+        <pre style="white-space: pre-wrap; font-family: inherit;">
+id              uuid        PRIMARY KEY
+applicant_type  enum        'designer' | 'maker'
+status          enum        'new' | 'in_review' | 'approved'
+                            | 'waitlisted' | 'declined'
+                            | 'onboarding' | 'active'
+name            text        Full name or brand name
+contact_name    text        NULL for designers
+email           text        UNIQUE
+location        text
+website_url     text
+studio_name     text        NULL for makers
+categories      text        NULL for designers
+materials       text        NULL for designers
+open_response_1 text        Philosophy / brand story
+open_response_2 text        Sourcing / trade program
+review_notes    text        Internal only
+reviewed_by     text        'kody' | 'leah' | 'both'
+applied_at      timestamptz DEFAULT now()
+reviewed_at     timestamptz
+status_changed_at timestamptz
+        </pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ==================== 10 — TIMELINE ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label">10 — Implementation Timeline</h4>
+    <h2 class="section-title">From zero to<br><em>first founding partner</em></h2>
+    <p class="section-intro">The goal is live application forms within one week, first review capability within two weeks, and a fully operational pipeline within a month. This timeline assumes Kody is building alongside ongoing homepage and portal work.</p>
+
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="timeline-marker"></div>
+        <div class="timeline-content">
+          <h5>Week 1 — Forms Go Live</h5>
+          <p>Supabase migration. Designer and maker application forms on patina.cloud. Confirmation email templates via Resend. Both forms publicly linked from the homepage. Leah begins sharing the link with her existing network.</p>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-marker"></div>
+        <div class="timeline-content">
+          <h5>Week 2 — Admin Review Queue</h5>
+          <p>Admin Portal Founding Circle section. Application list view with status filters. Detail view with review notes and action buttons. Status-change email triggers (approve, waitlist, decline).</p>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-marker"></div>
+        <div class="timeline-content">
+          <h5>Week 3 — Onboarding Flow</h5>
+          <p>Welcome email sequence (3–4 emails per pipeline). Portal account auto-creation on approval. Founding agreement document (PDF or lightweight web page). First approved partners begin onboarding.</p>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-marker hollow"></div>
+        <div class="timeline-content">
+          <h5>Week 4 — Feedback Infrastructure</h5>
+          <p>In-portal feedback widget. First monthly survey template. Partner conversation notes integration in Admin Portal. The listening infrastructure is now operational.</p>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-marker hollow"></div>
+        <div class="timeline-content">
+          <h5>Month 2–3 — Synthesis &amp; Iteration</h5>
+          <p>Feedback synthesis dashboard. First aggregate insights. Pipeline refinements based on actual applicant behavior. Second wave of outreach with refined messaging based on founding cohort learnings.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ==================== 11 — SUCCESS METRICS ==================== -->
+<section class="fade-section">
+  <div class="container">
+    <h4 class="section-label">11 — Success Metrics</h4>
+    <h2 class="section-title">How we know<br><em>it's working</em></h2>
+
+    <div class="detail-grid">
+      <div class="detail-item">
+        <div class="detail-number">10–15</div>
+        <h5>Founding Designers</h5>
+        <p>Active in the Designer Portal, participating in teaching sessions, providing regular feedback. Quality over quantity — every one should feel like Leah chose them personally.</p>
+      </div>
+      <div class="detail-item">
+        <div class="detail-number">10–15</div>
+        <h5>Founding Makers</h5>
+        <p>Products in the catalog, brand stories on the platform, trade pricing agreements in place. The catalog should feel curated, not sparse.</p>
+      </div>
+      <div class="detail-item">
+        <div class="detail-number">&lt; 48hr</div>
+        <h5>Application Response Time</h5>
+        <p>Every applicant hears back within two business days. At founding scale, this is a personal commitment, not a system requirement.</p>
+      </div>
+      <div class="detail-item">
+        <div class="detail-number">80%+</div>
+        <h5>Survey Response Rate</h5>
+        <p>Founding partners should be engaged enough that most respond to monthly surveys. If this drops below 60%, the surveys are too long or the value exchange is broken.</p>
+      </div>
+      <div class="detail-item">
+        <div class="detail-number">NPS 9+</div>
+        <h5>Founding Partner Satisfaction</h5>
+        <p>Founding partners are evangelists or they're not founding partners. A 9+ NPS means they'd recommend the platform to a peer without being asked.</p>
+      </div>
+      <div class="detail-item">
+        <div class="detail-number">3+</div>
+        <h5>Actionable Insights per Month</h5>
+        <p>The feedback system should generate at least three clear product decisions per month. If it's not informing the roadmap, the feedback questions are wrong.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ==================== FOOTER ==================== -->
+<section class="doc-footer fade-section">
+  <div class="container">
+    <h2>Where Time Adds Value</h2>
+    <p>The Founding Circle isn't a launch strategy — it's the beginning of a permanent relationship between Patina and the people who shape what it becomes.</p>
+
+    <div class="strata">
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+      <div class="strata-line"></div>
+    </div>
+
+    <p class="mono" style="text-align: center;">Patina · Founding Circle Pipeline · April 2026</p>
+  </div>
+</section>
+
+<script>
+  // IntersectionObserver for fade-in sections
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+
+  document.querySelectorAll('.fade-section').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>
