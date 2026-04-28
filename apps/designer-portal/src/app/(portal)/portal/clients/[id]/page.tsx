@@ -9,7 +9,7 @@ import {
   useClientProjects,
   useClientRoomScans,
 } from '@patina/supabase';
-import type { DesignerClient, ClientLifecycleStage, RoomScan } from '@patina/supabase';
+import type { DesignerClient, ClientLifecycleStage } from '@patina/supabase';
 import { StageBadge } from '@/components/portal/stage-badge';
 import { FieldGroup } from '@/components/portal/field-group';
 import { DetailRow } from '@/components/portal/detail-row';
@@ -20,6 +20,8 @@ import { ActivityFeed } from '@/components/portal/activity-feed';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { PortalButton } from '@/components/portal/button';
+import { ProjectCard } from '@/components/portal/project-card';
+import { ScanCard } from '@/components/portal/scan-card';
 
 function getInitials(name: string): string {
   return name
@@ -38,25 +40,11 @@ const avatarColors: Record<string, { bg: string; fg: string }> = {
   nurture: { bg: 'rgba(196, 165, 123, 0.1)', fg: 'var(--accent-primary)' },
 };
 
-const projectStatusColors: Record<string, string> = {
-  active: 'var(--color-sage)',
-  completed: 'var(--text-muted)',
-  on_hold: 'var(--color-golden-hour)',
-  cancelled: 'var(--color-terracotta)',
-};
-
 const TIMELINE_ACTIVITY_TYPES = new Set([
   'milestone',
   'status_change',
   'project_update',
 ]);
-
-function qualityGradeColor(grade: string | null): string {
-  if (grade === 'excellent') return 'var(--color-sage)';
-  if (grade === 'good') return 'var(--color-dusty-blue)';
-  if (grade === 'fair') return 'var(--color-golden-hour)';
-  return 'var(--text-muted)';
-}
 
 export default function ClientProfilePage({
   params,
@@ -72,7 +60,8 @@ export default function ClientProfilePage({
   const { data: decisions } = useClientDecisions(id);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: projects } = useClientProjects(id) as { data: any[] | undefined };
-  const { data: roomScans } = useClientRoomScans(id) as { data: RoomScan[] | undefined };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: roomScans } = useClientRoomScans(id) as { data: any[] | undefined };
 
   if (isLoading) return <LoadingStrata />;
   if (!client) {
@@ -105,20 +94,27 @@ export default function ClientProfilePage({
     }),
   }));
 
-  // Build timeline from activity log — milestone and status-change events only
-  const timelineEntries = (activities ?? [])
+  // Build timeline from activity log — milestone and status-change events only.
+  // Status assignment heuristic (ascending sort by created_at):
+  //   • Last entry       → 'active'  (most recent in-progress milestone)
+  //   • All entries before it → 'done'
+  //   • No 'future' entries are emitted because the seed data does not encode
+  //     scheduled-but-not-yet-completed milestones in the activity log.
+  const sortedTimelineActivities = (activities ?? [])
     .filter((a) => TIMELINE_ACTIVITY_TYPES.has(a.activity_type))
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-    .map((a) => ({
-      id: a.id,
-      label: a.title,
-      date: new Date(a.created_at).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      }),
-      status: 'done' as const,
-    }));
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+  const lastTimelineIdx = sortedTimelineActivities.length - 1;
+  const timelineEntries = sortedTimelineActivities.map((a, i) => ({
+    id: a.id,
+    label: a.title,
+    date: new Date(a.created_at).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }),
+    status: (i === lastTimelineIdx ? 'active' : 'done') as 'done' | 'active' | 'future',
+  }));
 
   // Style preferences from JSONB
   const prefs = (client.style_preferences || {}) as Record<string, string>;
@@ -310,106 +306,9 @@ export default function ClientProfilePage({
               </p>
             ) : (
               <div className="flex flex-col gap-4">
-                {projects.map((project) => {
-                  const statusColor =
-                    projectStatusColors[project.status as string] || 'var(--text-muted)';
-                  const started = project.start_date
-                    ? new Date(project.start_date).toLocaleDateString('en-US', {
-                        month: 'short',
-                        year: 'numeric',
-                      })
-                    : null;
-                  const ended = project.target_end_date
-                    ? new Date(project.target_end_date).toLocaleDateString('en-US', {
-                        month: 'short',
-                        year: 'numeric',
-                      })
-                    : null;
-
-                  return (
-                    <div
-                      key={project.id}
-                      style={{
-                        padding: '0.75rem 1rem',
-                        background: 'var(--bg-surface)',
-                        borderRadius: '6px',
-                        border: '1px solid var(--border-subtle)',
-                      }}
-                    >
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <span
-                          style={{
-                            fontFamily: 'var(--font-body)',
-                            fontSize: '0.88rem',
-                            fontWeight: 500,
-                            color: 'var(--text-primary)',
-                          }}
-                        >
-                          {project.name}
-                        </span>
-                        <span
-                          style={{
-                            fontFamily: 'var(--font-meta)',
-                            fontSize: '0.55rem',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.04em',
-                            color: statusColor,
-                          }}
-                        >
-                          {project.status}
-                        </span>
-                      </div>
-
-                      {(started || ended) && (
-                        <div
-                          style={{
-                            fontFamily: 'var(--font-meta)',
-                            fontSize: '0.55rem',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.04em',
-                            color: 'var(--text-muted)',
-                            marginBottom: '0.5rem',
-                          }}
-                        >
-                          {started && ended
-                            ? `${started} — ${ended}`
-                            : started
-                              ? `Started ${started}`
-                              : `Due ${ended}`}
-                        </div>
-                      )}
-
-                      {project.current_phase && (
-                        <div
-                          style={{
-                            fontFamily: 'var(--font-meta)',
-                            fontSize: '0.55rem',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.04em',
-                            color: 'var(--text-muted)',
-                            marginBottom: '0.5rem',
-                          }}
-                        >
-                          Phase: {project.current_phase}
-                        </div>
-                      )}
-
-                      <Link
-                        href={`/portal/projects/${project.id}`}
-                        style={{
-                          fontFamily: 'var(--font-meta)',
-                          fontSize: '0.6rem',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.06em',
-                          color: 'var(--accent-primary)',
-                          textDecoration: 'none',
-                        }}
-                      >
-                        View Project &rarr;
-                      </Link>
-                    </div>
-                  );
-                })}
+                {projects.map((project) => (
+                  <ProjectCard key={project.id} project={project} />
+                ))}
               </div>
             )}
           </FieldGroup>
@@ -424,97 +323,18 @@ export default function ClientProfilePage({
               </p>
             ) : (
               <div className="grid grid-cols-2 gap-3">
-                {roomScans.map((scan) => {
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  const grade = (scan as any).quality_grade as string | null;
-                  return (
-                    <div
-                      key={scan.id}
-                      style={{
-                        position: 'relative',
-                        borderRadius: '6px',
-                        overflow: 'hidden',
-                        border: '1px solid var(--border-subtle)',
-                        background: 'var(--bg-surface)',
-                        aspectRatio: '4/3',
-                      }}
-                    >
-                      {scan.thumbnail_url ? (
-                        <img
-                          src={scan.thumbnail_url}
-                          alt={scan.name}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                          }}
-                        />
-                      ) : (
-                        <div
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'var(--text-muted)',
-                            fontFamily: 'var(--font-meta)',
-                            fontSize: '0.6rem',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.04em',
-                          }}
-                        >
-                          {scan.room_type || 'Scan'}
-                        </div>
-                      )}
-
-                      {/* Overlay: name + grade */}
-                      <div
-                        style={{
-                          position: 'absolute',
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          padding: '0.35rem 0.5rem',
-                          background: 'rgba(0,0,0,0.45)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontFamily: 'var(--font-meta)',
-                            fontSize: '0.55rem',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.04em',
-                            color: 'rgba(255,255,255,0.85)',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {scan.name}
-                        </span>
-                        {grade && (
-                          <span
-                            style={{
-                              fontFamily: 'var(--font-meta)',
-                              fontSize: '0.5rem',
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.04em',
-                              color: qualityGradeColor(grade),
-                              flexShrink: 0,
-                              marginLeft: '0.5rem',
-                            }}
-                          >
-                            {grade}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                {roomScans.map((scan) => (
+                  <ScanCard
+                    key={scan.id}
+                    scan={{
+                      id: scan.id,
+                      name: scan.name,
+                      thumbnail_url: scan.thumbnail_url ?? null,
+                      room_type: scan.room_type ?? null,
+                      quality_grade: (scan.quality_grade ?? null) as string | null,
+                    }}
+                  />
+                ))}
               </div>
             )}
           </FieldGroup>
