@@ -30,14 +30,6 @@ function isDueThisWeek(dueDate: string | null, status: string): boolean {
   return due >= now && due <= weekEnd;
 }
 
-function formatDueDate(dueDate: string | null): string | undefined {
-  if (!dueDate) return undefined;
-  return new Date(dueDate).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
 function getClientName(decision: {
   designer_client?: {
     client_name: string | null;
@@ -163,8 +155,7 @@ export default function DecisionsDashboardPage() {
               key={decision.id}
               id={decision.id}
               title={decision.title}
-              dueDate={formatDueDate(decision.due_date)}
-              isOverdue={isOverdue(decision.due_date, decision.status)}
+              dueDate={decision.due_date ?? undefined}
               description={decision.context ?? undefined}
               optionCount={decision.options?.length}
               status={decision.status}

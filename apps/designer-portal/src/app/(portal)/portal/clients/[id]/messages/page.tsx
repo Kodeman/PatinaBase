@@ -206,15 +206,7 @@ export default function ClientMessagesPage({
                 title={d.status === 'responded' && selectedOption
                   ? `${d.title} \u2192 ${selectedOption.name}`
                   : d.title}
-                dueDate={
-                  d.due_date
-                    ? new Date(d.due_date).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })
-                    : undefined
-                }
-                isOverdue={d.due_date && d.status === 'pending' ? new Date(d.due_date) < new Date() : false}
+                dueDate={d.due_date ?? undefined}
                 description={d.context || undefined}
                 optionCount={d.options?.length}
                 status={d.status}

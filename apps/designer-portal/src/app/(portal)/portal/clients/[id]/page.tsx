@@ -386,15 +386,7 @@ export default function ClientProfilePage({
                   <DecisionCard
                     key={d.id}
                     title={d.title}
-                    dueDate={
-                      d.due_date
-                        ? new Date(d.due_date).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                          })
-                        : undefined
-                    }
-                    isOverdue={d.due_date ? new Date(d.due_date) < new Date() : false}
+                    dueDate={d.due_date ?? undefined}
                     description={d.context || undefined}
                     optionCount={d.options?.length}
                     status={d.status}
