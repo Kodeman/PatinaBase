@@ -131,7 +131,6 @@ function detectDeepPage(pathname: string, zoneKey: ZoneKey): boolean {
     '/portal/catalog/import',
     '/portal/catalog/collections',
     '/portal/catalog/categories',
-    '/portal/clients/new',
   ];
   if (nonDeepPaths.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
     return false;

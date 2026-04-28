@@ -100,4 +100,23 @@ test.describe('Client Directory — navigation', () => {
 
     expect(pageErrors, `Unhandled page errors: ${pageErrors.map((e) => e.message).join(' | ')}`).toHaveLength(0);
   });
+
+  test('visiting /portal/clients?add=1 auto-opens the Add Client dialog', async ({ authenticatedPage: page }) => {
+    const pageErrors: Error[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err));
+
+    await page.goto('/portal/clients?add=1', {
+      waitUntil: 'networkidle',
+      timeout: 60_000,
+    });
+    await page.waitForLoadState('networkidle', { timeout: 30_000 });
+
+    // The page should still be the Clients directory
+    await expect(page.getByRole('heading', { name: /^Clients$/i, level: 1 })).toBeVisible({ timeout: 15_000 });
+
+    // The Add Client dialog (inline form) should be visible — identified by its <h2>Add Client</h2>
+    await expect(page.getByRole('heading', { name: /^Add Client$/i, level: 2 })).toBeVisible({ timeout: 10_000 });
+
+    expect(pageErrors, `Unhandled page errors: ${pageErrors.map((e) => e.message).join(' | ')}`).toHaveLength(0);
+  });
 });

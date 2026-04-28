@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useClients, useClientStats } from '@patina/supabase';
 import type { DesignerClient, ClientLifecycleStage } from '@patina/supabase';
 import { SearchInput } from '@/components/portal/search-input';
@@ -33,10 +34,18 @@ const stageFilters: { key: string; label: string }[] = [
   { key: 'nurture', label: 'Nurture' },
 ];
 
-export default function ClientDirectoryPage() {
+function ClientDirectoryContent() {
+  const searchParams = useSearchParams();
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+
+  // Auto-open the Add Client dialog when ?add=1 is present (e.g. from sub-nav action)
+  useEffect(() => {
+    if (searchParams.get('add') === '1') {
+      setAddDialogOpen(true);
+    }
+  }, [searchParams]);
 
   const filters = stageFilter !== 'all' ? { status: stageFilter } : undefined;
   const { data: rawClients, isLoading } = useClients(filters);
@@ -180,5 +189,13 @@ export default function ClientDirectoryPage() {
       )}
 
     </div>
+  );
+}
+
+export default function ClientDirectoryPage() {
+  return (
+    <Suspense fallback={<LoadingStrata />}>
+      <ClientDirectoryContent />
+    </Suspense>
   );
 }

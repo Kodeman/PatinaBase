@@ -114,7 +114,7 @@ export interface SubNavAction {
 
 export const ZONE_ACTIONS: Partial<Record<ZoneKey, SubNavAction>> = {
   products: { label: '+ Add Product', href: '/portal/catalog/new' },
-  clients: { label: '+ Add Client', href: '/portal/clients/new' },
+  clients: { label: '+ Add Client', href: '/portal/clients?add=1' },
   pipeline: { label: '', isViewToggle: true },
 };
 
