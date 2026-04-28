@@ -7,9 +7,17 @@ const getSupabase = () => createBrowserClient();
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type DecisionType = 'material' | 'product' | 'layout' | 'budget' | 'approval';
+export type DecisionType =
+  | 'material'
+  | 'color'
+  | 'product'
+  | 'layout'
+  | 'substitution'
+  | 'budget'
+  | 'approval';
 export type BlockingStatus = 'blocks_procurement' | 'blocks_phase' | 'non_blocking';
 export type DecisionStatus = 'draft' | 'pending' | 'responded' | 'expired';
+export type ConsentMethod = 'verbal' | 'written' | 'text_excerpt' | 'email_excerpt';
 
 export interface ClientDecisionOption {
   id: string;
@@ -23,6 +31,8 @@ export interface ClientDecisionOption {
   sort_order: number;
   price: number | null;
   quantity: number;
+  cost_delta_cents: number | null;
+  lead_time_days_delta: number | null;
   created_at: string;
 }
 
@@ -35,9 +45,11 @@ export interface ClientDecision {
   context: string | null;
   due_date: string | null;
   linked_phase: string | null;
+  phase_id: string | null;
   decision_type: DecisionType;
   blocking_status: BlockingStatus;
   linked_proposal_id: string | null;
+  recommended_option_id: string | null;
   status: DecisionStatus;
   sent_at: string | null;
   responded_at: string | null;
@@ -60,12 +72,16 @@ export interface CreateDecisionInput {
   blockingStatus?: BlockingStatus;
   linkedProposalId?: string;
   status?: 'draft' | 'pending';
+  blockedFfeItemIds?: string[];
   options: {
     name: string;
     imageUrl?: string;
     designerNote?: string;
     isRecommended?: boolean;
     price?: number;
+    quantity?: number;
+    costDeltaCents?: number;
+    leadTimeDaysDelta?: number;
   }[];
 }
 
@@ -74,6 +90,7 @@ export interface DecisionFilters {
   decisionType?: DecisionType;
   isOverdue?: boolean;
   projectId?: string;
+  q?: string;
 }
 
 export interface DecisionMetrics {
@@ -82,6 +99,25 @@ export interface DecisionMetrics {
   avgResponseDays: number;
   onTimeRate: number;
   total: number;
+}
+
+export interface DecisionComment {
+  id: string;
+  decision_id: string;
+  author_id: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DecisionOverride {
+  id: string;
+  decision_id: string;
+  option_id: string | null;
+  acted_by: string;
+  consent_method: ConsentMethod;
+  consent_evidence: string;
+  created_at: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -102,7 +138,7 @@ export function useClientDecisions(designerClientId: string) {
         .from('client_decisions')
         .select(`
           *,
-          options:client_decision_options(*)
+          options:client_decision_options!decision_id(*)
         `)
         .eq('designer_client_id', designerClientId)
         .order('created_at', { ascending: false });
@@ -128,7 +164,7 @@ export function useDecision(decisionId: string) {
         .from('client_decisions')
         .select(`
           *,
-          options:client_decision_options(*)
+          options:client_decision_options!decision_id(*)
         `)
         .eq('id', decisionId)
         .single();
@@ -155,7 +191,7 @@ export function useAllDecisions(filters?: DecisionFilters) {
         .from('client_decisions')
         .select(`
           *,
-          options:client_decision_options(*),
+          options:client_decision_options!decision_id(*),
           designer_client:designer_clients(
             id,
             client_name,
@@ -166,7 +202,6 @@ export function useAllDecisions(filters?: DecisionFilters) {
         `)
         .order('created_at', { ascending: false });
 
-      // Apply filters
       if (filters?.status) {
         if (Array.isArray(filters.status)) {
           query = query.in('status', filters.status);
@@ -187,6 +222,11 @@ export function useAllDecisions(filters?: DecisionFilters) {
         query = query
           .eq('status', 'pending')
           .lt('due_date', new Date().toISOString());
+      }
+
+      if (filters?.q && filters.q.trim().length > 0) {
+        const safe = filters.q.trim().replace(/[%_]/g, (m) => `\\${m}`);
+        query = query.ilike('title', `%${safe}%`);
       }
 
       const { data, error } = await query;
@@ -219,7 +259,7 @@ export function useDecisionsByProject(projectId: string) {
         .from('client_decisions')
         .select(`
           *,
-          options:client_decision_options(*)
+          options:client_decision_options!decision_id(*)
         `)
         .eq('project_id', projectId)
         .order('created_at', { ascending: false });
@@ -242,6 +282,12 @@ export function useDecisionMetrics() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
+      // Hydrate the auth session before the SELECT — without this, the browser
+      // client doesn't attach the JWT and RLS sees auth.uid() as null, which
+      // makes the policy's EXISTS subquery evaluate false for every row.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
       const { data, error } = await supabase
         .from('client_decisions')
         .select('id, status, due_date, sent_at, responded_at')
@@ -263,7 +309,6 @@ export function useDecisionMetrics() {
         (d) => d.status === 'pending' && d.due_date && new Date(d.due_date) < now
       ).length;
 
-      // Average response time for responded decisions (in days)
       const responded = decisions.filter(
         (d) => d.status === 'responded' && d.sent_at && d.responded_at
       );
@@ -276,7 +321,6 @@ export function useDecisionMetrics() {
             }, 0) / responded.length
           : 0;
 
-      // On-time rate: responded before or on due_date
       const withDue = responded.filter((d) => d.due_date);
       const onTime = withDue.filter(
         (d) => new Date(d.responded_at!) <= new Date(d.due_date!)
@@ -309,7 +353,6 @@ export function useCreateDecision() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      // Insert the decision
       const { data: decision, error: decisionError } = await supabase
         .from('client_decisions')
         .insert({
@@ -330,7 +373,6 @@ export function useCreateDecision() {
 
       if (decisionError) throw decisionError;
 
-      // Insert options
       if (input.options.length > 0) {
         const { error: optionsError } = await supabase
           .from('client_decision_options')
@@ -342,11 +384,26 @@ export function useCreateDecision() {
               designer_note: opt.designerNote || null,
               is_recommended: opt.isRecommended || false,
               price: opt.price ?? null,
+              quantity: opt.quantity ?? 1,
+              cost_delta_cents: opt.costDeltaCents ?? null,
+              lead_time_days_delta: opt.leadTimeDaysDelta ?? null,
               sort_order: i,
             }))
           );
 
         if (optionsError) throw optionsError;
+      }
+
+      // Tag downstream FF&E items as blocked by this decision (PRD line 118).
+      if (input.blockedFfeItemIds && input.blockedFfeItemIds.length > 0) {
+        const { error: ffeError } = await supabase
+          .from('project_ffe_items')
+          .update({ blocked_by_decision_id: decision.id })
+          .in('id', input.blockedFfeItemIds);
+        if (ffeError) {
+          // Non-fatal — surface in console but don't undo decision creation.
+          console.warn('useCreateDecision: failed to tag blocked FF&E items', ffeError);
+        }
       }
 
       return decision as ClientDecision;
@@ -357,13 +414,14 @@ export function useCreateDecision() {
       queryClient.invalidateQueries({ queryKey: ['decision-metrics'] });
       if (data.project_id) {
         queryClient.invalidateQueries({ queryKey: ['project-decisions', data.project_id] });
+        queryClient.invalidateQueries({ queryKey: ['project-ffe-items', data.project_id] });
       }
     },
   });
 }
 
 /**
- * Update a decision's status (e.g., mark as expired)
+ * Update a decision's status (e.g., reopen a responded decision back to pending)
  */
 export function useUpdateDecisionStatus() {
   const queryClient = useQueryClient();
@@ -399,7 +457,12 @@ export function useUpdateDecisionStatus() {
 }
 
 /**
- * Select a decision option (client responds)
+ * Select a decision option (client responds).
+ *
+ * Calls the `apply_decision` RPC which atomically:
+ *  - deselects all sibling options, selects the chosen one,
+ *  - flips the decision to status='responded' with responded_at + selected_by,
+ *  - clears blocked_by_decision_id on any FF&E items linked to this decision.
  */
 export function useSelectDecisionOption() {
   const queryClient = useQueryClient();
@@ -419,37 +482,32 @@ export function useSelectDecisionOption() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      // Get current user for audit trail
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Deselect all options for this decision
-      await supabase
-        .from('client_decision_options')
-        .update({ selected: false })
-        .eq('decision_id', decisionId);
+      // Persist the client's note + quantity on the chosen option before we
+      // call the RPC (the RPC itself doesn't accept these fields).
+      if (clientNote !== undefined || quantity !== undefined) {
+        const patch: Record<string, unknown> = {};
+        if (clientNote !== undefined) patch.client_note = clientNote || null;
+        if (quantity !== undefined) patch.quantity = quantity ?? 1;
+        const { error: optErr } = await supabase
+          .from('client_decision_options')
+          .update(patch)
+          .eq('id', optionId);
+        if (optErr) throw optErr;
+      }
 
-      // Select the chosen option
-      const { error: selectError } = await supabase
-        .from('client_decision_options')
-        .update({
-          selected: true,
-          client_note: clientNote || null,
-          quantity: quantity ?? 1,
-        })
-        .eq('id', optionId);
+      const { error: rpcError } = await supabase.rpc('apply_decision', {
+        p_decision_id: decisionId,
+        p_selected_option_id: optionId,
+        p_selected_by: user?.id ?? null,
+      });
+      if (rpcError) throw rpcError;
 
-      if (selectError) throw selectError;
-
-      // Mark decision as responded with audit trail
       const { data, error } = await supabase
         .from('client_decisions')
-        .update({
-          status: 'responded',
-          responded_at: new Date().toISOString(),
-          selected_by: user?.id || null,
-        })
+        .select('*')
         .eq('id', decisionId)
-        .select()
         .single();
 
       if (error) throw error;
@@ -462,7 +520,214 @@ export function useSelectDecisionOption() {
       queryClient.invalidateQueries({ queryKey: ['decision-metrics'] });
       if (data.project_id) {
         queryClient.invalidateQueries({ queryKey: ['project-decisions', data.project_id] });
+        queryClient.invalidateQueries({ queryKey: ['project-ffe-items', data.project_id] });
+        queryClient.invalidateQueries({ queryKey: ['project-ffe', data.project_id] });
       }
+    },
+  });
+}
+
+/**
+ * Designer-override flow: designer marks a decision on the client's behalf,
+ * recording explicit consent evidence for the audit trail (PRD line 123).
+ *
+ * Inserts a row into decision_overrides AND applies the decision via the RPC,
+ * so FF&E items unblock identically to a normal client response.
+ */
+export function useApplyDecisionOverride() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      decisionId,
+      optionId,
+      consentMethod,
+      consentEvidence,
+    }: {
+      decisionId: string;
+      optionId: string;
+      consentMethod: ConsentMethod;
+      consentEvidence: string;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Look up the client_id so the override is attributed correctly inside apply_decision.
+      const { data: dec, error: decErr } = await supabase
+        .from('client_decisions')
+        .select('designer_client_id, designer_clients!inner(client_id)')
+        .eq('id', decisionId)
+        .single();
+      if (decErr) throw decErr;
+      const clientUserId =
+        (dec as { designer_clients?: { client_id?: string | null } | null })
+          ?.designer_clients?.client_id ?? null;
+
+      const { error: overrideErr } = await supabase
+        .from('decision_overrides')
+        .insert({
+          decision_id: decisionId,
+          option_id: optionId,
+          acted_by: user.id,
+          consent_method: consentMethod,
+          consent_evidence: consentEvidence,
+        });
+      if (overrideErr) throw overrideErr;
+
+      const { error: rpcError } = await supabase.rpc('apply_decision', {
+        p_decision_id: decisionId,
+        p_selected_option_id: optionId,
+        p_selected_by: clientUserId ?? user.id,
+      });
+      if (rpcError) throw rpcError;
+
+      const { data, error } = await supabase
+        .from('client_decisions')
+        .select('*')
+        .eq('id', decisionId)
+        .single();
+      if (error) throw error;
+      return data as ClientDecision;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['client-decision', data.id] });
+      queryClient.invalidateQueries({ queryKey: ['decision-overrides', data.id] });
+      queryClient.invalidateQueries({ queryKey: ['all-decisions'] });
+      queryClient.invalidateQueries({ queryKey: ['decision-metrics'] });
+      if (data.project_id) {
+        queryClient.invalidateQueries({ queryKey: ['project-decisions', data.project_id] });
+        queryClient.invalidateQueries({ queryKey: ['project-ffe-items', data.project_id] });
+      }
+    },
+  });
+}
+
+/**
+ * Read the override audit trail for a decision.
+ */
+export function useDecisionOverrides(decisionId: string) {
+  return useQuery({
+    queryKey: ['decision-overrides', decisionId],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('decision_overrides')
+        .select('*')
+        .eq('decision_id', decisionId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as DecisionOverride[];
+    },
+    enabled: !!decisionId,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HOOKS — Comments
+// ═══════════════════════════════════════════════════════════════════════════
+
+export function useDecisionComments(decisionId: string) {
+  return useQuery({
+    queryKey: ['decision-comments', decisionId],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('decision_comments')
+        .select('*')
+        .eq('decision_id', decisionId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as DecisionComment[];
+    },
+    enabled: !!decisionId,
+  });
+}
+
+export function useCreateDecisionComment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      decisionId,
+      body,
+    }: {
+      decisionId: string;
+      body: string;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase
+        .from('decision_comments')
+        .insert({
+          decision_id: decisionId,
+          author_id: user.id,
+          body: body.trim(),
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data as DecisionComment;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['decision-comments', data.decision_id] });
+    },
+  });
+}
+
+export function useUpdateDecisionComment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      commentId,
+      body,
+    }: {
+      commentId: string;
+      body: string;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('decision_comments')
+        .update({ body: body.trim() })
+        .eq('id', commentId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as DecisionComment;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['decision-comments', data.decision_id] });
+    },
+  });
+}
+
+export function useDeleteDecisionComment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      commentId,
+      decisionId,
+    }: {
+      commentId: string;
+      decisionId: string;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { error } = await supabase
+        .from('decision_comments')
+        .delete()
+        .eq('id', commentId);
+      if (error) throw error;
+      return { commentId, decisionId };
+    },
+    onSuccess: ({ decisionId }) => {
+      queryClient.invalidateQueries({ queryKey: ['decision-comments', decisionId] });
     },
   });
 }
@@ -593,7 +858,6 @@ export function useMarkDecisionViewed() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      // Only set viewed_at if not already set
       const { data, error } = await supabase
         .from('client_decisions')
         .update({ viewed_at: new Date().toISOString() })
@@ -602,7 +866,6 @@ export function useMarkDecisionViewed() {
         .select()
         .single();
 
-      // If no rows matched (already viewed), that's fine
       if (error && error.code !== 'PGRST116') throw error;
       return data as ClientDecision | null;
     },
