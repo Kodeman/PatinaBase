@@ -2,8 +2,14 @@
 
 import { use } from 'react';
 import Link from 'next/link';
-import { useClient, useClientActivity, useClientDecisions } from '@patina/supabase';
-import type { DesignerClient, ClientLifecycleStage } from '@patina/supabase';
+import {
+  useClient,
+  useClientActivity,
+  useClientDecisions,
+  useClientProjects,
+  useClientRoomScans,
+} from '@patina/supabase';
+import type { DesignerClient, ClientLifecycleStage, RoomScan } from '@patina/supabase';
 import { StageBadge } from '@/components/portal/stage-badge';
 import { FieldGroup } from '@/components/portal/field-group';
 import { DetailRow } from '@/components/portal/detail-row';
@@ -32,6 +38,26 @@ const avatarColors: Record<string, { bg: string; fg: string }> = {
   nurture: { bg: 'rgba(196, 165, 123, 0.1)', fg: 'var(--accent-primary)' },
 };
 
+const projectStatusColors: Record<string, string> = {
+  active: 'var(--color-sage)',
+  completed: 'var(--text-muted)',
+  on_hold: 'var(--color-golden-hour)',
+  cancelled: 'var(--color-terracotta)',
+};
+
+const TIMELINE_ACTIVITY_TYPES = new Set([
+  'milestone',
+  'status_change',
+  'project_update',
+]);
+
+function qualityGradeColor(grade: string | null): string {
+  if (grade === 'excellent') return 'var(--color-sage)';
+  if (grade === 'good') return 'var(--color-dusty-blue)';
+  if (grade === 'fair') return 'var(--color-golden-hour)';
+  return 'var(--text-muted)';
+}
+
 export default function ClientProfilePage({
   params,
 }: {
@@ -44,6 +70,9 @@ export default function ClientProfilePage({
   };
   const { data: activities } = useClientActivity(id, 10);
   const { data: decisions } = useClientDecisions(id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: projects } = useClientProjects(id) as { data: any[] | undefined };
+  const { data: roomScans } = useClientRoomScans(id) as { data: RoomScan[] | undefined };
 
   if (isLoading) return <LoadingStrata />;
   if (!client) {
@@ -76,9 +105,10 @@ export default function ClientProfilePage({
     }),
   }));
 
-  // Build timeline from activity log milestones
+  // Build timeline from activity log — milestone and status-change events only
   const timelineEntries = (activities ?? [])
-    .filter((a) => a.activity_type === 'milestone' || a.activity_type === 'status_change')
+    .filter((a) => TIMELINE_ACTIVITY_TYPES.has(a.activity_type))
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
     .map((a) => ({
       id: a.id,
       label: a.title,
@@ -144,7 +174,7 @@ export default function ClientProfilePage({
                 color: 'var(--text-muted)',
               }}
             >
-              \u00B7 Since{' '}
+              · Since{' '}
               {new Date(client.created_at).toLocaleDateString('en-US', {
                 month: 'short',
                 day: 'numeric',
@@ -167,7 +197,7 @@ export default function ClientProfilePage({
           <div className="type-label-secondary">
             {[client.location, client.referral_source ? `Referred by ${client.referral_source}` : null]
               .filter(Boolean)
-              .join(' \u00B7 ')}
+              .join(' · ')}
           </div>
         </div>
 
@@ -272,6 +302,225 @@ export default function ClientProfilePage({
 
           <StrataMark variant="micro" />
 
+          {/* Active & Past Projects */}
+          <FieldGroup label="Active & Past Projects">
+            {!projects || projects.length === 0 ? (
+              <p className="type-body py-2 italic text-[var(--text-muted)]">
+                No projects yet.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {projects.map((project) => {
+                  const statusColor =
+                    projectStatusColors[project.status as string] || 'var(--text-muted)';
+                  const started = project.start_date
+                    ? new Date(project.start_date).toLocaleDateString('en-US', {
+                        month: 'short',
+                        year: 'numeric',
+                      })
+                    : null;
+                  const ended = project.target_end_date
+                    ? new Date(project.target_end_date).toLocaleDateString('en-US', {
+                        month: 'short',
+                        year: 'numeric',
+                      })
+                    : null;
+
+                  return (
+                    <div
+                      key={project.id}
+                      style={{
+                        padding: '0.75rem 1rem',
+                        background: 'var(--bg-surface)',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border-subtle)',
+                      }}
+                    >
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <span
+                          style={{
+                            fontFamily: 'var(--font-body)',
+                            fontSize: '0.88rem',
+                            fontWeight: 500,
+                            color: 'var(--text-primary)',
+                          }}
+                        >
+                          {project.name}
+                        </span>
+                        <span
+                          style={{
+                            fontFamily: 'var(--font-meta)',
+                            fontSize: '0.55rem',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                            color: statusColor,
+                          }}
+                        >
+                          {project.status}
+                        </span>
+                      </div>
+
+                      {(started || ended) && (
+                        <div
+                          style={{
+                            fontFamily: 'var(--font-meta)',
+                            fontSize: '0.55rem',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                            color: 'var(--text-muted)',
+                            marginBottom: '0.5rem',
+                          }}
+                        >
+                          {started && ended
+                            ? `${started} — ${ended}`
+                            : started
+                              ? `Started ${started}`
+                              : `Due ${ended}`}
+                        </div>
+                      )}
+
+                      {project.current_phase && (
+                        <div
+                          style={{
+                            fontFamily: 'var(--font-meta)',
+                            fontSize: '0.55rem',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                            color: 'var(--text-muted)',
+                            marginBottom: '0.5rem',
+                          }}
+                        >
+                          Phase: {project.current_phase}
+                        </div>
+                      )}
+
+                      <Link
+                        href={`/portal/projects/${project.id}`}
+                        style={{
+                          fontFamily: 'var(--font-meta)',
+                          fontSize: '0.6rem',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.06em',
+                          color: 'var(--accent-primary)',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        View Project &rarr;
+                      </Link>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </FieldGroup>
+
+          <StrataMark variant="micro" />
+
+          {/* Room Scans */}
+          <FieldGroup label="Room Scans">
+            {!roomScans || roomScans.length === 0 ? (
+              <p className="type-body py-2 italic text-[var(--text-muted)]">
+                No scans shared yet.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {roomScans.map((scan) => {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const grade = (scan as any).quality_grade as string | null;
+                  return (
+                    <div
+                      key={scan.id}
+                      style={{
+                        position: 'relative',
+                        borderRadius: '6px',
+                        overflow: 'hidden',
+                        border: '1px solid var(--border-subtle)',
+                        background: 'var(--bg-surface)',
+                        aspectRatio: '4/3',
+                      }}
+                    >
+                      {scan.thumbnail_url ? (
+                        <img
+                          src={scan.thumbnail_url}
+                          alt={scan.name}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                          }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'var(--text-muted)',
+                            fontFamily: 'var(--font-meta)',
+                            fontSize: '0.6rem',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                          }}
+                        >
+                          {scan.room_type || 'Scan'}
+                        </div>
+                      )}
+
+                      {/* Overlay: name + grade */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          padding: '0.35rem 0.5rem',
+                          background: 'rgba(0,0,0,0.45)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontFamily: 'var(--font-meta)',
+                            fontSize: '0.55rem',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                            color: 'rgba(255,255,255,0.85)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {scan.name}
+                        </span>
+                        {grade && (
+                          <span
+                            style={{
+                              fontFamily: 'var(--font-meta)',
+                              fontSize: '0.5rem',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.04em',
+                              color: qualityGradeColor(grade),
+                              flexShrink: 0,
+                              marginLeft: '0.5rem',
+                            }}
+                          >
+                            {grade}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </FieldGroup>
+
+          <StrataMark variant="micro" />
+
           {/* Financial Summary */}
           <FieldGroup label="Financial Summary">
             <DetailRow
@@ -279,17 +528,19 @@ export default function ClientProfilePage({
               value={
                 client.total_revenue > 0
                   ? `$${(client.total_revenue / 100).toLocaleString()}`
-                  : '\u2014'
+                  : '—'
               }
             />
             <DetailRow
               label="Projects"
               value={String(client.total_projects || 0)}
             />
-            {client.first_project_at && (
+            {(client as DesignerClient & { first_project_at?: string }).first_project_at && (
               <DetailRow
                 label="First Project"
-                value={new Date(client.first_project_at).toLocaleDateString('en-US', {
+                value={new Date(
+                  (client as DesignerClient & { first_project_at: string }).first_project_at
+                ).toLocaleDateString('en-US', {
                   month: 'short',
                   year: 'numeric',
                 })}
