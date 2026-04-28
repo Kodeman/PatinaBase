@@ -355,14 +355,15 @@ export function useClientProjects(clientId: string) {
 
       if (dcError) throw dcError;
 
-      // Get projects for this designer that involve this client
+      // Get projects for this designer that involve this client.
+      // Note: project_products has no `quantity` column — the join below
+      // reads only the columns that exist on the table today.
       const { data, error } = await supabase
         .from('projects')
         .select(`
           *,
           products:project_products(
             id,
-            quantity,
             product:products(id, name, images)
           )
         `)
