@@ -175,7 +175,7 @@ export default function ClientMessagesPage({
                   <MessageBubble
                     key={msg.id}
                     direction={isOwn ? 'out' : 'in'}
-                    message={msg.message}
+                    message={msg.body}
                     timestamp={formatMessageDate(msg.created_at)}
                     senderName={!isOwn ? msg.sender?.full_name || name : undefined}
                   />

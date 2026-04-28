@@ -48,7 +48,9 @@ export interface ClientMessage {
   id: string;
   designer_client_id: string;
   sender_id: string;
-  message: string;
+  recipient_id: string;
+  body: string;
+  subject: string | null;
   read_at: string | null;
   created_at: string;
   // Joined data
@@ -317,12 +319,24 @@ export function useSendClientMessage() {
       const { data: user } = await supabase.auth.getUser();
       if (!user.user) throw new Error('Not authenticated');
 
+      // recipient_id: look up the other party in the designer_clients row
+      const { data: dcRow, error: dcErr } = await supabase
+        .from('designer_clients')
+        .select('client_id, designer_id')
+        .eq('id', designerClientId)
+        .single();
+      if (dcErr) throw dcErr;
+      // The designer is the current user — recipient is the client (or vice-versa)
+      const recipientId =
+        dcRow.designer_id === user.user.id ? dcRow.client_id : dcRow.designer_id;
+
       const { data, error } = await supabase
         .from('client_messages')
         .insert({
           designer_client_id: designerClientId,
           sender_id: user.user.id,
-          message,
+          recipient_id: recipientId,
+          body: message,
         })
         .select()
         .single();
