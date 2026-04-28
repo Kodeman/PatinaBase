@@ -90,13 +90,12 @@ test.describe('Client Directory — navigation', () => {
 
     const clientBreadcrumbLink = page.locator(`a[href="/portal/clients/${clientId}"]`).first();
     const breadcrumbLinkCount = await clientBreadcrumbLink.count();
-    if (breadcrumbLinkCount > 0) {
-      await expect(clientBreadcrumbLink).toBeVisible({ timeout: 10_000 });
-      const breadcrumbText = (await clientBreadcrumbLink.innerText()).trim();
-      // Must NOT be a raw UUID
-      expect(UUID_RE.test(breadcrumbText)).toBe(false);
-      expect(breadcrumbText.length).toBeGreaterThan(0);
-    }
+    expect(breadcrumbLinkCount, 'Expected SubNav breadcrumb link for client to be present on deep page').toBeGreaterThan(0);
+    await expect(clientBreadcrumbLink).toBeVisible({ timeout: 10_000 });
+    const breadcrumbText = (await clientBreadcrumbLink.innerText()).trim();
+    // Must NOT be a raw UUID
+    expect(UUID_RE.test(breadcrumbText)).toBe(false);
+    expect(breadcrumbText.length).toBeGreaterThan(0);
 
     expect(pageErrors, `Unhandled page errors: ${pageErrors.map((e) => e.message).join(' | ')}`).toHaveLength(0);
   });
