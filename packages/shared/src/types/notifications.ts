@@ -41,7 +41,17 @@ export type NotificationType =
   | 'reengagement'
   // Sequences
   | 'welcome_series'
-  | 'designer_onboarding';
+  | 'designer_onboarding'
+  // Project Management (00084 / 00085)
+  | 'project_activated'
+  | 'decision_required'
+  | 'decision_overdue'
+  | 'ffe_status_change'
+  | 'change_order_requested'
+  | 'change_order_signed'
+  | 'payment_received'
+  | 'vendor_eta_update'
+  | 'vendor_po_issued';
 
 export type NotificationChannel = 'email' | 'push' | 'in_app' | 'sms';
 

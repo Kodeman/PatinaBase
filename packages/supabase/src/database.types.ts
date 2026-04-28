@@ -1,3 +1,4 @@
+Connecting to db 5432
 export type Json =
   | string
   | number
@@ -160,6 +161,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "api_keys_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
             referencedColumns: ["id"]
           },
           {
@@ -359,6 +367,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
             referencedColumns: ["id"]
           },
           {
@@ -795,7 +810,9 @@ export type Database = {
           id: string
           linked_phase: string | null
           linked_proposal_id: string | null
+          phase_id: string | null
           project_id: string | null
+          recommended_option_id: string | null
           reminder_sent_at: string | null
           responded_at: string | null
           selected_by: string | null
@@ -816,7 +833,9 @@ export type Database = {
           id?: string
           linked_phase?: string | null
           linked_proposal_id?: string | null
+          phase_id?: string | null
           project_id?: string | null
+          recommended_option_id?: string | null
           reminder_sent_at?: string | null
           responded_at?: string | null
           selected_by?: string | null
@@ -837,7 +856,9 @@ export type Database = {
           id?: string
           linked_phase?: string | null
           linked_proposal_id?: string | null
+          phase_id?: string | null
           project_id?: string | null
+          recommended_option_id?: string | null
           reminder_sent_at?: string | null
           responded_at?: string | null
           selected_by?: string | null
@@ -863,10 +884,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "client_decisions_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "project_phases"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "client_decisions_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_decisions_recommended_option_id_fkey"
+            columns: ["recommended_option_id"]
+            isOneToOne: false
+            referencedRelation: "client_decision_options"
             referencedColumns: ["id"]
           },
         ]
@@ -1425,74 +1460,6 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
-      }
-      cowork_tasks: {
-        Row: {
-          completed_at: string | null
-          created_at: string
-          cron_expression: string | null
-          error_message: string | null
-          id: string
-          input_payload: Json | null
-          is_recurring: boolean | null
-          last_run_at: string | null
-          max_retries: number | null
-          next_run_at: string | null
-          output_files: string[] | null
-          output_payload: Json | null
-          picked_up_at: string | null
-          retry_count: number | null
-          status: string
-          task_type: string
-          vendor_id: string | null
-        }
-        Insert: {
-          completed_at?: string | null
-          created_at?: string
-          cron_expression?: string | null
-          error_message?: string | null
-          id?: string
-          input_payload?: Json | null
-          is_recurring?: boolean | null
-          last_run_at?: string | null
-          max_retries?: number | null
-          next_run_at?: string | null
-          output_files?: string[] | null
-          output_payload?: Json | null
-          picked_up_at?: string | null
-          retry_count?: number | null
-          status?: string
-          task_type: string
-          vendor_id?: string | null
-        }
-        Update: {
-          completed_at?: string | null
-          created_at?: string
-          cron_expression?: string | null
-          error_message?: string | null
-          id?: string
-          input_payload?: Json | null
-          is_recurring?: boolean | null
-          last_run_at?: string | null
-          max_retries?: number | null
-          next_run_at?: string | null
-          output_files?: string[] | null
-          output_payload?: Json | null
-          picked_up_at?: string | null
-          retry_count?: number | null
-          status?: string
-          task_type?: string
-          vendor_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cowork_tasks_vendor_id_fkey"
-            columns: ["vendor_id"]
-            isOneToOne: false
-            referencedRelation: "pipeline_vendors"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       daily_stories: {
         Row: {
@@ -2801,6 +2768,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "organization_members_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
@@ -2909,179 +2883,6 @@ export type Database = {
           name?: string
           resource?: string
           scope?: string | null
-        }
-        Relationships: []
-      }
-      pipeline_vendor_scores: {
-        Row: {
-          data_sources: string[] | null
-          dimension: number
-          dimension_name: string
-          evidence: string | null
-          id: string
-          raw_score: number | null
-          scored_at: string | null
-          scored_by: string
-          vendor_id: string
-          weight: number
-          weighted_score: number | null
-        }
-        Insert: {
-          data_sources?: string[] | null
-          dimension: number
-          dimension_name: string
-          evidence?: string | null
-          id?: string
-          raw_score?: number | null
-          scored_at?: string | null
-          scored_by: string
-          vendor_id: string
-          weight: number
-          weighted_score?: number | null
-        }
-        Update: {
-          data_sources?: string[] | null
-          dimension?: number
-          dimension_name?: string
-          evidence?: string | null
-          id?: string
-          raw_score?: number | null
-          scored_at?: string | null
-          scored_by?: string
-          vendor_id?: string
-          weight?: number
-          weighted_score?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pipeline_vendor_scores_vendor_id_fkey"
-            columns: ["vendor_id"]
-            isOneToOne: false
-            referencedRelation: "pipeline_vendors"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pipeline_vendors: {
-        Row: {
-          awaiting_leah_review: boolean | null
-          company_size: string | null
-          created_at: string
-          data_format: string | null
-          drop_ship_capable: boolean | null
-          feed_frequency: string | null
-          feed_url: string | null
-          has_hard_veto: boolean | null
-          id: string
-          last_feed_sync_at: string | null
-          leah_notes: string | null
-          location_city: string | null
-          location_country: string | null
-          location_state: string | null
-          name: string
-          notes: string | null
-          payment_terms: string | null
-          price_range_high: number | null
-          price_range_low: number | null
-          primary_contact_email: string | null
-          primary_contact_name: string | null
-          primary_contact_phone: string | null
-          primary_contact_role: string | null
-          product_categories: string[] | null
-          scored_by_kody: boolean | null
-          scored_by_leah: boolean | null
-          slug: string
-          source: string | null
-          stage: string
-          stage_changed_at: string | null
-          total_score: number | null
-          trade_account_status: string | null
-          trade_discount_pct: number | null
-          triage_level: string | null
-          updated_at: string
-          veto_reason: string | null
-          website_url: string | null
-          year_established: number | null
-        }
-        Insert: {
-          awaiting_leah_review?: boolean | null
-          company_size?: string | null
-          created_at?: string
-          data_format?: string | null
-          drop_ship_capable?: boolean | null
-          feed_frequency?: string | null
-          feed_url?: string | null
-          has_hard_veto?: boolean | null
-          id?: string
-          last_feed_sync_at?: string | null
-          leah_notes?: string | null
-          location_city?: string | null
-          location_country?: string | null
-          location_state?: string | null
-          name: string
-          notes?: string | null
-          payment_terms?: string | null
-          price_range_high?: number | null
-          price_range_low?: number | null
-          primary_contact_email?: string | null
-          primary_contact_name?: string | null
-          primary_contact_phone?: string | null
-          primary_contact_role?: string | null
-          product_categories?: string[] | null
-          scored_by_kody?: boolean | null
-          scored_by_leah?: boolean | null
-          slug: string
-          source?: string | null
-          stage?: string
-          stage_changed_at?: string | null
-          total_score?: number | null
-          trade_account_status?: string | null
-          trade_discount_pct?: number | null
-          triage_level?: string | null
-          updated_at?: string
-          veto_reason?: string | null
-          website_url?: string | null
-          year_established?: number | null
-        }
-        Update: {
-          awaiting_leah_review?: boolean | null
-          company_size?: string | null
-          created_at?: string
-          data_format?: string | null
-          drop_ship_capable?: boolean | null
-          feed_frequency?: string | null
-          feed_url?: string | null
-          has_hard_veto?: boolean | null
-          id?: string
-          last_feed_sync_at?: string | null
-          leah_notes?: string | null
-          location_city?: string | null
-          location_country?: string | null
-          location_state?: string | null
-          name?: string
-          notes?: string | null
-          payment_terms?: string | null
-          price_range_high?: number | null
-          price_range_low?: number | null
-          primary_contact_email?: string | null
-          primary_contact_name?: string | null
-          primary_contact_phone?: string | null
-          primary_contact_role?: string | null
-          product_categories?: string[] | null
-          scored_by_kody?: boolean | null
-          scored_by_leah?: boolean | null
-          slug?: string
-          source?: string | null
-          stage?: string
-          stage_changed_at?: string | null
-          total_score?: number | null
-          trade_account_status?: string | null
-          trade_discount_pct?: number | null
-          triage_level?: string | null
-          updated_at?: string
-          veto_reason?: string | null
-          website_url?: string | null
-          year_established?: number | null
         }
         Relationships: []
       }
@@ -3705,9 +3506,75 @@ export type Database = {
         }
         Relationships: []
       }
+      project_change_order_templates: {
+        Row: {
+          created_at: string
+          default_fields: Json
+          description: string | null
+          designer_id: string | null
+          id: string
+          is_built_in: boolean | null
+          name: string
+          studio_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_fields?: Json
+          description?: string | null
+          designer_id?: string | null
+          id?: string
+          is_built_in?: boolean | null
+          name: string
+          studio_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_fields?: Json
+          description?: string | null
+          designer_id?: string | null
+          id?: string
+          is_built_in?: boolean | null
+          name?: string
+          studio_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_change_order_templates_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_change_order_templates_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_change_order_templates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_change_order_templates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_ffe_items: {
         Row: {
           blocked: boolean | null
+          blocked_by_decision_id: string | null
           blocked_reason: string | null
           budget_max_cents: number | null
           budget_min_cents: number | null
@@ -3716,6 +3583,7 @@ export type Database = {
           ffe_category: string | null
           id: string
           item_type: string
+          last_status_change_at: string | null
           line_total_cents: number | null
           name: string
           notes: string | null
@@ -3734,6 +3602,7 @@ export type Database = {
         }
         Insert: {
           blocked?: boolean | null
+          blocked_by_decision_id?: string | null
           blocked_reason?: string | null
           budget_max_cents?: number | null
           budget_min_cents?: number | null
@@ -3742,6 +3611,7 @@ export type Database = {
           ffe_category?: string | null
           id?: string
           item_type?: string
+          last_status_change_at?: string | null
           line_total_cents?: number | null
           name: string
           notes?: string | null
@@ -3760,6 +3630,7 @@ export type Database = {
         }
         Update: {
           blocked?: boolean | null
+          blocked_by_decision_id?: string | null
           blocked_reason?: string | null
           budget_max_cents?: number | null
           budget_min_cents?: number | null
@@ -3768,6 +3639,7 @@ export type Database = {
           ffe_category?: string | null
           id?: string
           item_type?: string
+          last_status_change_at?: string | null
           line_total_cents?: number | null
           name?: string
           notes?: string | null
@@ -3785,6 +3657,13 @@ export type Database = {
           vendor_name?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "project_ffe_items_blocked_by_decision_id_fkey"
+            columns: ["blocked_by_decision_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_ffe_items_product_id_fkey"
             columns: ["product_id"]
@@ -4129,6 +4008,81 @@ export type Database = {
           },
         ]
       }
+      project_team_members: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          created_at: string
+          id: string
+          permissions: Json | null
+          project_id: string
+          removed_at: string | null
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          created_at?: string
+          id?: string
+          permissions?: Json | null
+          project_id: string
+          removed_at?: string | null
+          role: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          created_at?: string
+          id?: string
+          permissions?: Json | null
+          project_id?: string
+          removed_at?: string | null
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_team_members_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_team_members_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_team_members_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_team_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_team_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           actual_cents: number | null
@@ -4139,13 +4093,17 @@ export type Database = {
           change_order_terms: Json | null
           client_id: string | null
           client_profile_id: string | null
+          client_visibility_tier: string
           committed_cents: number | null
           created_at: string | null
           created_by: string
           current_phase: string | null
           design_fee_cents: number | null
           designer_id: string | null
+          expected_completion_date: string | null
           id: string
+          kickoff_date: string | null
+          lead_designer_id: string | null
           name: string
           notes: string | null
           proposal_id: string | null
@@ -4153,6 +4111,7 @@ export type Database = {
           share_token: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
+          studio_id: string | null
           target_end_date: string | null
           timeline_end: string | null
           timeline_start: string | null
@@ -4167,13 +4126,17 @@ export type Database = {
           change_order_terms?: Json | null
           client_id?: string | null
           client_profile_id?: string | null
+          client_visibility_tier?: string
           committed_cents?: number | null
           created_at?: string | null
           created_by: string
           current_phase?: string | null
           design_fee_cents?: number | null
           designer_id?: string | null
+          expected_completion_date?: string | null
           id?: string
+          kickoff_date?: string | null
+          lead_designer_id?: string | null
           name: string
           notes?: string | null
           proposal_id?: string | null
@@ -4181,6 +4144,7 @@ export type Database = {
           share_token?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
+          studio_id?: string | null
           target_end_date?: string | null
           timeline_end?: string | null
           timeline_start?: string | null
@@ -4195,13 +4159,17 @@ export type Database = {
           change_order_terms?: Json | null
           client_id?: string | null
           client_profile_id?: string | null
+          client_visibility_tier?: string
           committed_cents?: number | null
           created_at?: string | null
           created_by?: string
           current_phase?: string | null
           design_fee_cents?: number | null
           designer_id?: string | null
+          expected_completion_date?: string | null
           id?: string
+          kickoff_date?: string | null
+          lead_designer_id?: string | null
           name?: string
           notes?: string | null
           proposal_id?: string | null
@@ -4209,6 +4177,7 @@ export type Database = {
           share_token?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
+          studio_id?: string | null
           target_end_date?: string | null
           timeline_end?: string | null
           timeline_start?: string | null
@@ -4255,6 +4224,20 @@ export type Database = {
             columns: ["proposal_id"]
             isOneToOne: false
             referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
             referencedColumns: ["id"]
           },
         ]
@@ -5707,11 +5690,13 @@ export type Database = {
         Row: {
           additional_design_fee_cents: number | null
           additional_ffe_budget_cents: number | null
+          affected_tasks: Json | null
           applied_at: string | null
           approved_at: string | null
           approved_by: string | null
           approved_by_name: string | null
           approved_ip: string | null
+          co_number: string | null
           created_at: string
           decline_reason: string | null
           declined_at: string | null
@@ -5720,10 +5705,14 @@ export type Database = {
           new_ffe_items: Json | null
           new_rooms: Json | null
           new_total_budget_cents: number | null
+          original_spec: Json | null
           project_id: string
           proposal_id: string | null
           requested_by: string
+          requested_change: Json | null
           sent_at: string | null
+          signature_metadata: Json | null
+          signed_pdf_url: string | null
           status: string
           timeline_impact_weeks: number | null
           title: string
@@ -5733,11 +5722,13 @@ export type Database = {
         Insert: {
           additional_design_fee_cents?: number | null
           additional_ffe_budget_cents?: number | null
+          affected_tasks?: Json | null
           applied_at?: string | null
           approved_at?: string | null
           approved_by?: string | null
           approved_by_name?: string | null
           approved_ip?: string | null
+          co_number?: string | null
           created_at?: string
           decline_reason?: string | null
           declined_at?: string | null
@@ -5746,10 +5737,14 @@ export type Database = {
           new_ffe_items?: Json | null
           new_rooms?: Json | null
           new_total_budget_cents?: number | null
+          original_spec?: Json | null
           project_id: string
           proposal_id?: string | null
           requested_by: string
+          requested_change?: Json | null
           sent_at?: string | null
+          signature_metadata?: Json | null
+          signed_pdf_url?: string | null
           status?: string
           timeline_impact_weeks?: number | null
           title: string
@@ -5759,11 +5754,13 @@ export type Database = {
         Update: {
           additional_design_fee_cents?: number | null
           additional_ffe_budget_cents?: number | null
+          affected_tasks?: Json | null
           applied_at?: string | null
           approved_at?: string | null
           approved_by?: string | null
           approved_by_name?: string | null
           approved_ip?: string | null
+          co_number?: string | null
           created_at?: string
           decline_reason?: string | null
           declined_at?: string | null
@@ -5772,10 +5769,14 @@ export type Database = {
           new_ffe_items?: Json | null
           new_rooms?: Json | null
           new_total_budget_cents?: number | null
+          original_spec?: Json | null
           project_id?: string
           proposal_id?: string | null
           requested_by?: string
+          requested_change?: Json | null
           sent_at?: string | null
+          signature_metadata?: Json | null
+          signed_pdf_url?: string | null
           status?: string
           timeline_impact_weeks?: number | null
           title?: string
@@ -7010,6 +7011,33 @@ export type Database = {
         }
         Relationships: []
       }
+      v_studios: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          name: string | null
+          slug: string | null
+          status: Database["public"]["Enums"]["organization_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+          slug?: string | null
+          status?: Database["public"]["Enums"]["organization_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+          slug?: string | null
+          status?: Database["public"]["Enums"]["organization_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       activate_proposal_as_project: {
@@ -7020,6 +7048,15 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      apply_decision: {
+        Args: {
+          p_decision_id: string
+          p_selected_by?: string
+          p_selected_option_id: string
+        }
+        Returns: undefined
+      }
+      apply_scope_change: { Args: { p_request_id: string }; Returns: undefined }
       calculate_engagement_score: {
         Args: { p_user_id: string }
         Returns: number
@@ -7196,6 +7233,7 @@ export type Database = {
         Args: { _organization_id: string; _user_id?: string }
         Returns: boolean
       }
+      next_co_number: { Args: { p_project_id: string }; Returns: string }
       process_style_quiz: {
         Args: { quiz_answers: Json; timings?: Json }
         Returns: Json
@@ -7351,7 +7389,7 @@ export type Database = {
         | "admin_team"
       ownership_type: "family" | "private" | "pe-backed" | "public"
       production_model: "stock" | "mto" | "custom" | "mixed"
-      project_status: "active" | "completed" | "archived"
+      project_status: "active" | "completed" | "archived" | "on_hold" | "draft"
       relation_type: "pairs_with" | "alternative" | "never_with"
       role_domain: "consumer" | "designer" | "manufacturer" | "admin"
       sequence_status: "draft" | "active" | "paused" | "archived"
@@ -7572,7 +7610,7 @@ export const Constants = {
       ],
       ownership_type: ["family", "private", "pe-backed", "public"],
       production_model: ["stock", "mto", "custom", "mixed"],
-      project_status: ["active", "completed", "archived"],
+      project_status: ["active", "completed", "archived", "on_hold", "draft"],
       relation_type: ["pairs_with", "alternative", "never_with"],
       role_domain: ["consumer", "designer", "manufacturer", "admin"],
       sequence_status: ["draft", "active", "paused", "archived"],
@@ -7591,3 +7629,5 @@ export const Constants = {
   },
 } as const
 
+A new version of Supabase CLI is available: v2.95.4 (currently installed v2.72.7)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

@@ -571,6 +571,18 @@ export {
   useActivateProposal,
 } from './use-proposal-activation';
 export {
+  // Project Team & Permissions (00084)
+  useProjectTeamMembers,
+  useAddProjectTeamMember,
+  useRemoveProjectTeamMember,
+  useProjectPermissions,
+} from './use-project-team';
+export type {
+  ProjectRole,
+  ProjectTeamMember,
+  ProjectPermissions,
+} from './use-project-team';
+export {
   // Scope Changes
   useScopeChangeRequests,
   useScopeChangeRequest,

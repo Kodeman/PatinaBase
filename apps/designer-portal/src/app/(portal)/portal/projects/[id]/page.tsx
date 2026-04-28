@@ -31,6 +31,8 @@ import {
   TimeTrackingPanel,
   RecentActivityPanel,
 } from '@/components/portal/project-detail';
+import { DecisionsPanel } from '@/components/portal/project-detail/decisions-panel';
+import { TeamPanel } from '@/components/portal/project-detail/team-panel';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyProject = any;
@@ -114,7 +116,7 @@ export default function ProjectDetailPage({
         />
       )}
 
-      <div className="pt-8" style={{ maxWidth: '1120px', margin: '0 auto', padding: '2rem clamp(1.5rem, 5vw, 4rem)' }}>
+      <div className="pt-8">
         {/* Breadcrumb */}
         <Breadcrumb
           items={[
@@ -171,7 +173,18 @@ export default function ProjectDetailPage({
           </>
         )}
 
-        {/* Zone 7: Documents */}
+        {/* Zone 7: Decisions */}
+        {project.client_id && (
+          <>
+            <DecisionsPanel
+              projectId={id}
+              designerClientId={project.designer_client_id ?? project.client_id}
+            />
+            <StrataMark variant="mini" />
+          </>
+        )}
+
+        {/* Zone 8: Documents */}
         <DocumentGrid documents={typedDocuments} />
         <StrataMark variant="mini" />
 
@@ -191,6 +204,13 @@ export default function ProjectDetailPage({
             projectId={id}
           />
         </div>
+
+        {/* Zone 12: Project meta — Team */}
+        <TeamPanel
+          projectId={id}
+          leadDesignerName={project.designer?.full_name ?? project.lead_designer_name ?? undefined}
+        />
+        <StrataMark variant="mini" />
 
         {/* Bottom actions */}
         <div className="mt-8 flex gap-2 border-t pt-6" style={{ borderColor: 'var(--border-default)' }}>
