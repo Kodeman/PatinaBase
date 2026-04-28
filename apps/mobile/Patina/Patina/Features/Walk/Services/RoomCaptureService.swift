@@ -827,21 +827,22 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
     }
 
     /// Apply user-supplied review data (annotations, hero selection, photo
-    /// ordering) and seal the scan bundle manifest. Called by the review
-    /// step — Wave 4 wires the UI that invokes this. Legacy callers that
-    /// skip review can invoke it with empty inputs to seal the bundle as-is.
+    /// ordering, per-photo captions) and seal the scan bundle manifest.
+    /// Called by the review step. Legacy callers that skip review can invoke
+    /// it with empty inputs to seal the bundle as-is.
     @MainActor
     public func finalizeBundleAfterReview(
         annotations: ScanManifest.Annotations,
         heroPhotoId: UUID? = nil,
-        reorderedPhotoIds: [UUID] = []
+        reorderedPhotoIds: [UUID] = [],
+        photoAnnotations: [UUID: String] = [:]
     ) async throws {
         guard let writer = bundleWriter else { return }
 
         // 1. Persist annotations.
         try writer.setAnnotations(annotations)
 
-        // 2. Apply hero selection + reorder to the photos list.
+        // 2. Apply hero selection + reorder + per-photo captions.
         var photos = writer.currentManifest().photos
         if let heroId = heroPhotoId {
             for i in photos.indices {
@@ -860,7 +861,15 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
                 }
             }
         }
-        if heroPhotoId != nil || !reorderedPhotoIds.isEmpty {
+        if !photoAnnotations.isEmpty {
+            for i in photos.indices {
+                if let caption = photoAnnotations[photos[i].id] {
+                    let trimmed = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+                    photos[i].userAnnotation = trimmed.isEmpty ? nil : trimmed
+                }
+            }
+        }
+        if heroPhotoId != nil || !reorderedPhotoIds.isEmpty || !photoAnnotations.isEmpty {
             try writer.replacePhotos(photos)
         }
 

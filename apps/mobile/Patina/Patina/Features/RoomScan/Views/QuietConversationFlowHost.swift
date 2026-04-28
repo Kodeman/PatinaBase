@@ -34,6 +34,9 @@ struct QuietConversationFlowHost: View {
     /// swap inside a NavigationStack destination (which iOS 26 SwiftUI has
     /// been observed to collapse unpredictably — #bug repro'd via MobAI).
     @State private var reviewScan: ReviewBundleID?
+    /// Scan id held after the review finishes so the saved-confirmation step
+    /// can observe the matching RoomScanPackage while the upload runs.
+    @State private var savedScanId: UUID?
 
     /// Identifiable wrapper so `.fullScreenCover(item:)` can present the
     /// review on any distinct scan completion.
@@ -46,6 +49,7 @@ struct QuietConversationFlowHost: View {
         case threshold
         case fallback
         case review
+        case savedConfirmation
         case softLanding
         case conversation
         case reveal
@@ -77,14 +81,16 @@ struct QuietConversationFlowHost: View {
                 ScanReviewView(
                     captureService: vm.captureService,
                     scanId: review.id,
+                    session: session,
                     onComplete: {
                         #if DEBUG
                         print("[QuietConversationFlowHost] review onComplete scanId=\(review.id)")
                         #endif
                         kickOffReviewUpload(scanId: review.id)
+                        savedScanId = review.id
                         reviewScan = nil
                         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
-                            step = .softLanding
+                            step = .savedConfirmation
                         }
                     },
                     onCancel: {
@@ -185,6 +191,22 @@ struct QuietConversationFlowHost: View {
             // cover has a non-empty base layer.
             EmptyView()
 
+        case .savedConfirmation:
+            if let scanId = savedScanId {
+                ScanSavedConfirmationView(
+                    scanId: scanId,
+                    onDone: {
+                        dismiss()
+                        coordinator.navigate(to: .heroFrame)
+                    },
+                    onSetStyle: {
+                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
+                            step = .softLanding
+                        }
+                    }
+                )
+            }
+
         case .softLanding:
             if let session = session {
                 SoftLandingView(session: session) { outcome in
@@ -268,6 +290,7 @@ struct QuietConversationFlowHost: View {
         scanViewModel = nil
         conversationViewModel = nil
         reviewScan = nil
+        savedScanId = nil
         step = .initial
     }
 

@@ -58,7 +58,6 @@ struct SoftLandingView: View {
         .onAppear {
             existingProfile = StyleProfileStore.shared.currentProfile
             runSequence()
-            kickOffBackgroundUpload()
         }
     }
 
@@ -98,15 +97,6 @@ struct SoftLandingView: View {
                 onOutcome(.startConversation)
             }
         }
-    }
-
-    private func kickOffBackgroundUpload() {
-        // Fire-and-forget upload of USDZ + metadata. Must NOT block UI.
-        RoomUploadService.shared.uploadInBackground(
-            session: session,
-            usdzData: nil, // ScanViewModel can supply this when wired up
-            heroImageData: nil
-        )
     }
 
     private func returningUserPrompt(for profile: StyleProfileResponse) -> some View {

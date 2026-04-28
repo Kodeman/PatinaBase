@@ -2221,12 +2221,26 @@ extension RoomScanSyncService {
                             .from(self.usdzBucket)
                             .getPublicURL(path: storagePath)
 
+                        // Honour the user's review-step picks: `isUserSelectedHero`
+                        // wins over the auto-scored hero kind; `orderIndex`
+                        // replaces the natural capture order when present.
+                        let effectiveIsPrimary = photo.isUserSelectedHero || photo.kind == .hero
+                        let effectiveDisplayOrder: Int
+                        if effectiveIsPrimary {
+                            effectiveDisplayOrder = 0
+                        } else if let userOrder = photo.orderIndex {
+                            effectiveDisplayOrder = userOrder + 1
+                        } else {
+                            effectiveDisplayOrder = index + 1
+                        }
+                        let trimmedCaption = photo.userAnnotation?
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
                         let row = RoomScanImageInsertV2(
                             scan_id: scanId,
                             room_id: roomId,
                             role: photo.kind.rawValue,
-                            is_primary: photo.kind == .hero,
-                            display_order: photo.kind == .hero ? 0 : index + 1,
+                            is_primary: effectiveIsPrimary,
+                            display_order: effectiveDisplayOrder,
                             feature_category: photo.associatedFeatureCategory,
                             image_url: url.absoluteString,
                             quality_score: photo.qualityScore,
@@ -2253,7 +2267,8 @@ extension RoomScanSyncService {
                             width: photo.width,
                             height: photo.height,
                             file_size_bytes: photo.sizeBytes,
-                            mime_type: photo.mimeType
+                            mime_type: photo.mimeType,
+                            caption: (trimmedCaption?.isEmpty == false) ? trimmedCaption : nil
                         )
                         await collector.append(row)
                         await MainActor.run { package.incrementPhotosUploaded() }
@@ -2375,6 +2390,7 @@ private struct RoomScanImageInsertV2: Encodable {
     let height: Int
     let file_size_bytes: Int
     let mime_type: String
+    let caption: String?
 }
 
 private struct PhotoIntrinsicsJSON: Encodable {
