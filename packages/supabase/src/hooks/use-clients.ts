@@ -393,7 +393,13 @@ export function useClientProjects(clientId: string) {
 }
 
 /**
- * Add a new client directly (not from lead)
+ * Add a new client directly (not from lead).
+ *
+ * Delegates to the /api/clients/invite server-side route which handles:
+ * - Auth-guarding via service-role key
+ * - Optional Supabase Auth invite (magic-link email)
+ * - Linking to existing profiles
+ * - Writing an audit row to client_activity_log
  */
 export function useAddClient() {
   const queryClient = useQueryClient();
@@ -404,56 +410,38 @@ export function useAddClient() {
       clientName,
       source = 'direct',
       notes,
+      invite = true,
     }: {
       clientEmail: string;
       clientName?: string;
       source?: 'direct' | 'referral';
       notes?: string;
+      /** When true (default), send a Supabase Auth magic-link invite if no profile exists. */
+      invite?: boolean;
     }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = getSupabase() as any;
+      const response = await fetch('/api/clients/invite', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientEmail, clientName, source, notes, invite }),
+      });
 
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user) throw new Error('Not authenticated');
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body?.error ?? `Request failed with status ${response.status}`);
+      }
 
-      // Check if profile exists for this email (existing user)
-      const { data: clientProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', clientEmail)
-        .single();
-
-      // Create the designer-client relationship
-      // If profile exists, link to it; otherwise store contact info directly
-      const insertData = clientProfile
-        ? {
-            designer_id: user.user.id,
-            client_id: clientProfile.id,
-            source,
-            notes,
-            status: 'active',
-          }
-        : {
-            designer_id: user.user.id,
-            client_email: clientEmail,
-            client_name: clientName,
-            source,
-            notes,
-            status: 'active',
-          };
-
-      const { data, error } = await supabase
-        .from('designer_clients')
-        .insert(insertData)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
+      return response.json() as Promise<{
+        designerClientId: string;
+        profileId: string | null;
+        invited: boolean;
+        alreadyExists: boolean;
+      }>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['designer-clients'] });
       queryClient.invalidateQueries({ queryKey: ['client-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['client-activity'] });
     },
   });
 }
