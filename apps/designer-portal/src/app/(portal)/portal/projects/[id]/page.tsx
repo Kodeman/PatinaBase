@@ -1,12 +1,12 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   useProject,
   useProjectTasks,
   useProjectTimeline,
   useProjectDocuments,
-  useProjectActivity,
   useProjectMilestones,
   useProjectRooms,
   useProjectFFEItems,
@@ -15,6 +15,7 @@ import {
   useProjectKeyMetrics,
   useUpdateTask,
 } from '@/hooks/use-projects';
+import { useDecisionsByProject, useProjectActivityFromLog } from '@patina/supabase';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { LoadingStrata } from '@/components/portal/loading-strata';
@@ -33,6 +34,7 @@ import {
 } from '@/components/portal/project-detail';
 import { DecisionsPanel } from '@/components/portal/project-detail/decisions-panel';
 import { TeamPanel } from '@/components/portal/project-detail/team-panel';
+import { adaptProjectRooms } from '@/lib/project-room-adapter';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyProject = any;
@@ -50,7 +52,7 @@ export default function ProjectDetailPage({
   const { data: tasks = [] } = useProjectTasks(id);
   const { data: timeline = [] } = useProjectTimeline(id);
   const { data: documents = [] } = useProjectDocuments(id);
-  const { data: activity = [] } = useProjectActivity(id, 6);
+  const { data: activityLog = [] } = useProjectActivityFromLog(id, 6);
   const { data: milestones = [] } = useProjectMilestones(id);
 
   // V2 data
@@ -59,8 +61,29 @@ export default function ProjectDetailPage({
   const { data: financials = [] } = useProjectFinancials(id);
   const { data: timeTracking } = useProjectTimeTracking(id);
   const { data: keyMetrics } = useProjectKeyMetrics(id);
+  const { data: projectDecisions = [] } = useDecisionsByProject(id);
+
+  const openDecisionsCount = useMemo(
+    () =>
+      (Array.isArray(projectDecisions) ? projectDecisions : []).filter(
+        (d) => d.status === 'pending' || d.status === 'draft',
+      ).length,
+    [projectDecisions],
+  );
 
   const updateTask = useUpdateTask();
+
+  // Adapt raw project_rooms + project_ffe_items into the MockRoom shape
+  // RoomScopeGrid expects (derives itemCount/orderedCount/progress/itemNames).
+  // Must be declared before any early return to satisfy Rules of Hooks.
+  const adaptedRooms = useMemo(
+    () =>
+      adaptProjectRooms(
+        Array.isArray(rooms) ? rooms : [],
+        Array.isArray(ffeItems) ? ffeItems : [],
+      ),
+    [rooms, ffeItems],
+  );
 
   if (isLoading) return <LoadingStrata />;
   if (!project) {
@@ -87,8 +110,13 @@ export default function ProjectDetailPage({
   const typedTimeline = (Array.isArray(timeline) ? timeline : []) as any[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedDocuments = (Array.isArray(documents) ? documents : []) as any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const typedActivity = (Array.isArray(activity) ? activity : []) as any[];
+  // Adapt ClientActivity shape → ActivityItem shape expected by RecentActivityPanel
+  const typedActivity = (Array.isArray(activityLog) ? activityLog : []).map((item) => ({
+    id: item.id as string,
+    title: item.title as string,
+    actorName: (item.actor_name as string | null) ?? undefined,
+    timestamp: item.created_at as string,
+  }));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedMilestones = (Array.isArray(milestones) ? milestones : []) as any[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -137,10 +165,40 @@ export default function ProjectDetailPage({
           <KeyMetricsRow metrics={keyMetrics} />
         )}
 
+        <Link
+          href={`/portal/projects/${id}/decisions`}
+          className="mb-8 inline-flex items-baseline gap-3 rounded-[3px] border px-4 py-3 no-underline transition-colors hover:bg-[var(--surface-subtle)]"
+          style={{ borderColor: 'var(--border-default)' }}
+        >
+          <span
+            style={{
+              fontFamily: 'var(--font-meta)',
+              fontSize: '0.58rem',
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              color: 'var(--text-muted)',
+            }}
+          >
+            Open Decisions
+          </span>
+          <span
+            style={{
+              fontFamily: 'var(--font-heading)',
+              fontSize: '1.4rem',
+              fontWeight: 700,
+              color: 'var(--text-primary)',
+              lineHeight: 1,
+            }}
+          >
+            {openDecisionsCount}
+          </span>
+          <span className="type-meta-small text-[var(--accent-primary)]">View history &rarr;</span>
+        </Link>
+
         {/* Zone 3: Room-by-Room Scope */}
-        {typedRooms.length > 0 && (
+        {adaptedRooms.length > 0 && (
           <>
-            <RoomScopeGrid rooms={typedRooms} />
+            <RoomScopeGrid rooms={adaptedRooms} />
             <StrataMark variant="mini" />
           </>
         )}

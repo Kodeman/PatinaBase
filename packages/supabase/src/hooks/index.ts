@@ -142,11 +142,17 @@ export {
   useCreateDecision,
   useUpdateDecisionStatus,
   useSelectDecisionOption,
+  useApplyDecisionOverride,
+  useDecisionOverrides,
   useSendDecisionReminder,
   useMarkDecisionViewed,
   useDecisionAnalyticsByType,
   useDecisionAnalyticsByClient,
   useDecisionBottleneckPhases,
+  useDecisionComments,
+  useCreateDecisionComment,
+  useUpdateDecisionComment,
+  useDeleteDecisionComment,
 } from './use-decisions';
 export type {
   ClientDecision,
@@ -160,6 +166,9 @@ export type {
   DecisionTypeAnalytics,
   DecisionClientAnalytics,
   DecisionPhaseAnalytics,
+  DecisionComment,
+  DecisionOverride,
+  ConsentMethod,
 } from './use-decisions';
 export {
   // Client Reviews
@@ -180,6 +189,7 @@ export type { ClientNurtureTouchpoint, NurtureFilters, TouchpointType, Touchpoin
 export {
   // Client Activity
   useClientActivity,
+  useProjectActivityFromLog,
   useLogActivity,
 } from './use-activity';
 export type { ClientActivity, ActivityType } from './use-activity';

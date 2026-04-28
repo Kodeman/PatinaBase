@@ -82,4 +82,40 @@ BEGIN
        'Designer',
        now() - interval '3 days');
   END IF;
+
+  -- Seed additional project-tagged activity rows for richer project-detail feed.
+  -- Uses per-title NOT EXISTS guards so this block is safe to re-run.
+  IF dc_id IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.client_activity_log
+      WHERE designer_client_id = dc_id
+        AND title = 'Floor plan revisions approved'
+        AND metadata->>'project_id' = 'b0000000-0000-0000-0000-0000000000d1'
+    ) THEN
+      INSERT INTO public.client_activity_log
+        (designer_client_id, activity_type, title, description, metadata, actor_name, created_at)
+      VALUES
+        (dc_id, 'project_update', 'Floor plan revisions approved',
+         'Client approved the revised open-plan layout for the main living area.',
+         '{"project_id": "b0000000-0000-0000-0000-0000000000d1"}'::jsonb,
+         'Client User',
+         now() - interval '40 days');
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM public.client_activity_log
+      WHERE designer_client_id = dc_id
+        AND title = 'Material samples delivered'
+        AND metadata->>'project_id' = 'b0000000-0000-0000-0000-0000000000d1'
+    ) THEN
+      INSERT INTO public.client_activity_log
+        (designer_client_id, activity_type, title, description, metadata, actor_name, created_at)
+      VALUES
+        (dc_id, 'milestone', 'Material samples delivered',
+         'Fabric swatches and tile samples couriered to client for in-person review.',
+         '{"project_id": "b0000000-0000-0000-0000-0000000000d1", "milestone_type": "samples"}'::jsonb,
+         'Designer',
+         now() - interval '20 days');
+    END IF;
+  END IF;
 END $$;
