@@ -15,7 +15,8 @@ export type ActivityType =
   | 'project_update'
   | 'review'
   | 'note'
-  | 'milestone';
+  | 'milestone'
+  | 'lead_reassigned';
 
 export interface ClientActivity {
   id: string;

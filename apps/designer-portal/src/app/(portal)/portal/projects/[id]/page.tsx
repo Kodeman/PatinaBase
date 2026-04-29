@@ -267,6 +267,7 @@ export default function ProjectDetailPage({
         <TeamPanel
           projectId={id}
           leadDesignerName={project.designer?.full_name ?? project.lead_designer_name ?? undefined}
+          currentDesignerId={project.designer_id ?? undefined}
         />
         <StrataMark variant="mini" />
 

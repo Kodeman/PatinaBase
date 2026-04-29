@@ -586,6 +586,7 @@ export {
   useAddProjectTeamMember,
   useRemoveProjectTeamMember,
   useProjectPermissions,
+  useReassignLead,
 } from './use-project-team';
 export type {
   ProjectRole,

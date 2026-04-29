@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useProjectTeamMembers, type ProjectRole } from '@patina/supabase';
 import { InviteDesignerModal } from './invite-designer-modal';
 import { AddBookkeeperModal } from './add-bookkeeper-modal';
+import { ReassignLeadModal } from './reassign-lead-modal';
 
 const ROLE_LABEL: Record<ProjectRole, string> = {
   lead_designer: 'Lead designer',
@@ -11,15 +12,18 @@ const ROLE_LABEL: Record<ProjectRole, string> = {
   vendor: 'Vendor',
   client: 'Client',
   bookkeeper: 'Bookkeeper',
+  previous_lead: 'Former lead',
 };
 
-export function TeamPanel({ projectId, leadDesignerName }: {
+export function TeamPanel({ projectId, leadDesignerName, currentDesignerId }: {
   projectId: string;
   leadDesignerName?: string;
+  currentDesignerId?: string;
 }) {
   const { data: members, isLoading } = useProjectTeamMembers(projectId);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [bookkeeperOpen, setBookkeeperOpen] = useState(false);
+  const [reassignOpen, setReassignOpen] = useState(false);
 
   return (
     <div className="my-6 grid gap-6 md:grid-cols-2">
@@ -65,7 +69,7 @@ export function TeamPanel({ projectId, leadDesignerName }: {
           </button>
           <button
             type="button"
-            onClick={() => alert('Reassign lead — coming soon')}
+            onClick={() => setReassignOpen(true)}
             className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
             style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)' }}
           >
@@ -83,6 +87,14 @@ export function TeamPanel({ projectId, leadDesignerName }: {
         open={bookkeeperOpen}
         onClose={() => setBookkeeperOpen(false)}
       />
+      {currentDesignerId && (
+        <ReassignLeadModal
+          projectId={projectId}
+          currentDesignerId={currentDesignerId}
+          open={reassignOpen}
+          onClose={() => setReassignOpen(false)}
+        />
+      )}
     </div>
   );
 }

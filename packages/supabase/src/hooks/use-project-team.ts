@@ -6,7 +6,7 @@ import { createBrowserClient } from '../client';
 
 const getSupabase = () => createBrowserClient();
 
-export type ProjectRole = 'lead_designer' | 'support_designer' | 'vendor' | 'client' | 'bookkeeper';
+export type ProjectRole = 'lead_designer' | 'support_designer' | 'vendor' | 'client' | 'bookkeeper' | 'previous_lead';
 
 export interface ProjectTeamMember {
   id: string;
@@ -167,6 +167,8 @@ function permsForRole(role: ProjectRole): ProjectPermissions {
       return { ...NONE_PERMS, isVendor: true };
     case 'client':
       return { ...NONE_PERMS, isClient: true };
+    case 'previous_lead':
+      return { ...NONE_PERMS };
   }
 }
 
@@ -224,4 +226,117 @@ export function useProjectPermissions(projectId: string): ProjectPermissions & {
   }, NONE_PERMS);
 
   return { ...merged, isLoading };
+}
+
+/**
+ * Reassign the lead designer on a project.
+ *
+ * Operation order (RLS-safe):
+ *  1. Fetch client_id + actor name (while caller is still lead)
+ *  2. Verify project still has oldDesignerId as lead (concurrency guard)
+ *  3. INSERT project_team_members previous_lead row (caller still has lead RLS)
+ *  4. INSERT client_activity_log entry (caller still owns the designer_client row)
+ *  5. UPDATE projects.designer_id = newDesignerId (final, intentionally last)
+ */
+export function useReassignLead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      newDesignerId,
+      oldDesignerId,
+    }: {
+      projectId: string;
+      newDesignerId: string;
+      oldDesignerId: string;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      // Verify caller is authenticated
+      const { data: authData } = await supabase.auth.getUser();
+      const callerUid = authData?.user?.id;
+      if (!callerUid) throw new Error('Not authenticated');
+
+      // 1. Fetch project (client_id needed for audit log) + verify current lead
+      const { data: projectRow, error: projectFetchError } = await supabase
+        .from('projects')
+        .select('client_id, designer_id')
+        .eq('id', projectId)
+        .single();
+      if (projectFetchError) throw projectFetchError;
+      if (projectRow.designer_id !== oldDesignerId) {
+        throw new Error('Could not reassign lead — the current lead may have already changed.');
+      }
+
+      // 2. Fetch designer_client id for the audit log (NOT NULL FK requirement)
+      const { data: dcOldRow, error: dcError } = await supabase
+        .from('designer_clients')
+        .select('id')
+        .eq('designer_id', oldDesignerId)
+        .eq('client_id', projectRow.client_id)
+        .maybeSingle();
+      if (dcError) throw dcError;
+      if (!dcOldRow?.id) {
+        throw new Error('No designer-client relationship found for activity log — cannot record reassignment.');
+      }
+      const designerClientId: string = dcOldRow.id;
+
+      // 3. Look up actor name for audit
+      const { data: profileRow } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', callerUid)
+        .maybeSingle();
+      const actorName: string = profileRow?.full_name ?? 'Unknown';
+
+      // 4. Insert old lead as 'previous_lead' team member BEFORE updating designer_id
+      //    (caller still has lead_designer RLS at this point)
+      const { error: teamError } = await supabase
+        .from('project_team_members')
+        .upsert(
+          {
+            project_id: projectId,
+            user_id: oldDesignerId,
+            role: 'previous_lead',
+            assigned_by: callerUid,
+          },
+          { onConflict: 'project_id,user_id,role', ignoreDuplicates: true },
+        );
+      if (teamError) throw teamError;
+
+      // 5. Insert audit log entry BEFORE updating designer_id
+      //    (caller's designer_client row is still the canonical one)
+      const { error: logError } = await supabase
+        .from('client_activity_log')
+        .insert({
+          designer_client_id: designerClientId,
+          activity_type: 'lead_reassigned',
+          title: 'Lead designer reassigned',
+          metadata: {
+            project_id: projectId,
+            old_designer_id: oldDesignerId,
+            new_designer_id: newDesignerId,
+          },
+          actor_name: actorName,
+        });
+      if (logError) throw logError;
+
+      // 6. Finally update projects.designer_id
+      const { error: projectUpdateError } = await supabase
+        .from('projects')
+        .update({ designer_id: newDesignerId })
+        .eq('id', projectId)
+        .eq('designer_id', oldDesignerId);
+      if (projectUpdateError) throw projectUpdateError;
+
+      return { projectId, newDesignerId, oldDesignerId };
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['project', vars.projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project-team', vars.projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity-from-log', vars.projectId] });
+      queryClient.invalidateQueries({ queryKey: ['client-activity'] });
+    },
+  });
 }
