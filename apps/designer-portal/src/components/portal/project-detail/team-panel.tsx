@@ -1,6 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { useProjectTeamMembers, type ProjectRole } from '@patina/supabase';
+import { InviteDesignerModal } from './invite-designer-modal';
+import { AddBookkeeperModal } from './add-bookkeeper-modal';
 
 const ROLE_LABEL: Record<ProjectRole, string> = {
   lead_designer: 'Lead designer',
@@ -15,6 +18,8 @@ export function TeamPanel({ projectId, leadDesignerName }: {
   leadDesignerName?: string;
 }) {
   const { data: members, isLoading } = useProjectTeamMembers(projectId);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [bookkeeperOpen, setBookkeeperOpen] = useState(false);
 
   return (
     <div className="my-6 grid gap-6 md:grid-cols-2">
@@ -44,7 +49,7 @@ export function TeamPanel({ projectId, leadDesignerName }: {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => alert('Invite designer — coming soon')}
+            onClick={() => setInviteOpen(true)}
             className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
             style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)' }}
           >
@@ -52,7 +57,7 @@ export function TeamPanel({ projectId, leadDesignerName }: {
           </button>
           <button
             type="button"
-            onClick={() => alert('Add bookkeeper — coming soon')}
+            onClick={() => setBookkeeperOpen(true)}
             className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
             style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)' }}
           >
@@ -68,6 +73,16 @@ export function TeamPanel({ projectId, leadDesignerName }: {
           </button>
         </div>
       </div>
+      <InviteDesignerModal
+        projectId={projectId}
+        open={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+      />
+      <AddBookkeeperModal
+        projectId={projectId}
+        open={bookkeeperOpen}
+        onClose={() => setBookkeeperOpen(false)}
+      />
     </div>
   );
 }
