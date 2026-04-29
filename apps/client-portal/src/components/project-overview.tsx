@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import type { MilestoneDetail } from '@/types/project';
 import {
   Avatar,
@@ -192,6 +193,16 @@ export function ProjectOverview({ project, milestones = [] }: ProjectOverviewPro
                   {onlineTeamMembers.length} Online
                 </span>
               )}
+            </div>
+
+            {/* Scope change CTA */}
+            <div className="mt-6">
+              <Link
+                href={`/projects/${project.id}/scope-change/new`}
+                className="inline-flex items-center rounded-md border border-gray-300 px-4 py-2 font-body text-sm text-gray-600 transition-colors hover:bg-gray-50 hover:border-gray-400"
+              >
+                Request a change to this project
+              </Link>
             </div>
           </div>
 

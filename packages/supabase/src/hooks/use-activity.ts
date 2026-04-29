@@ -16,7 +16,8 @@ export type ActivityType =
   | 'review'
   | 'note'
   | 'milestone'
-  | 'lead_reassigned';
+  | 'lead_reassigned'
+  | 'scope_change_requested';
 
 export interface ClientActivity {
   id: string;

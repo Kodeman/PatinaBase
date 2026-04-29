@@ -212,6 +212,96 @@ export function useDeclineScopeChange() {
   });
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// CLIENT-INITIATED MUTATIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Client submits a scope change request. Creates the row with status='sent'
+ * so the designer sees it immediately. Budget/timeline impact defaults to 0 —
+ * the designer fills those in when they review.
+ */
+export function useCreateClientScopeChangeRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      title,
+      description,
+    }: {
+      projectId: string;
+      title: string;
+      description: string;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // 1. Insert the scope_change_requests row.
+      const { data: req, error: reqErr } = await supabase
+        .from('scope_change_requests')
+        .insert({
+          project_id: projectId,
+          requested_by: user.id,
+          title,
+          description,
+          additional_ffe_budget_cents: 0,
+          additional_design_fee_cents: 0,
+          timeline_impact_weeks: 0,
+          new_rooms: [],
+          new_ffe_items: [],
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+      if (reqErr) throw reqErr;
+
+      // 2. Look up the designer_clients row that links this client + project designer.
+      const { data: project } = await supabase
+        .from('projects')
+        .select('designer_id, client_id, name')
+        .eq('id', projectId)
+        .maybeSingle();
+
+      if (project?.designer_id && project?.client_id) {
+        const { data: dc } = await supabase
+          .from('designer_clients')
+          .select('id')
+          .eq('designer_id', project.designer_id)
+          .eq('client_id', project.client_id)
+          .maybeSingle();
+
+        if (dc?.id) {
+          // 3. Insert client_activity_log so the designer's project Recent Activity surfaces it.
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          await supabase.from('client_activity_log').insert({
+            designer_client_id: dc.id,
+            activity_type: 'scope_change_requested',
+            title: `Client requested change: ${title}`,
+            description: description.slice(0, 500),
+            metadata: { project_id: projectId, change_id: req.id },
+            actor_name: profile?.full_name ?? null,
+          });
+        }
+      }
+
+      return req;
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['scope-changes', vars.projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity-from-log', vars.projectId] });
+    },
+  });
+}
+
 /**
  * Apply an approved scope change to the project.
  * Materializes new rooms and FFE items, updates budget/timeline.

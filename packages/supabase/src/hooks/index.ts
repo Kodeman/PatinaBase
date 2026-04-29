@@ -602,6 +602,7 @@ export {
   useApproveScopeChange,
   useDeclineScopeChange,
   useApplyScopeChange,
+  useCreateClientScopeChangeRequest,
 } from './use-scope-changes';
 export { useProductBySourceUrl } from './use-product-source-url';
 export {
