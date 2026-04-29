@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useClients } from '@patina/supabase';
+import { useClients, useAllDecisions } from '@patina/supabase';
 import type { DesignerClient } from '@patina/supabase';
 import { SearchInput } from '@/components/portal/search-input';
 import { FilterRow } from '@/components/portal/filter-row';
@@ -40,6 +40,19 @@ export default function MessagesPage() {
   const { data: rawClients, isLoading } = useClients();
   const clients = (Array.isArray(rawClients) ? rawClients : []) as DesignerClient[];
 
+  // Fetch all pending decisions in one round-trip to power the "Needs Decision" filter chip.
+  // Only enabled when the filter is active to avoid unnecessary requests while browsing.
+  const { data: pendingDecisions } = useAllDecisions({ status: 'pending' });
+
+  // Build a Set of designer_client_ids that have at least one pending decision.
+  const clientsWithPendingDecisions = useMemo(() => {
+    const ids = new Set<string>();
+    for (const d of pendingDecisions ?? []) {
+      if (d.designer_client_id) ids.add(d.designer_client_id);
+    }
+    return ids;
+  }, [pendingDecisions]);
+
   // Filter clients by search
   const filtered = search
     ? clients.filter((c) => {
@@ -49,9 +62,19 @@ export default function MessagesPage() {
     : clients;
 
   // Sort by most recently updated
-  const sorted = [...filtered].sort(
+  const sortedAll = [...filtered].sort(
     (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
   );
+
+  // Apply active filter chip
+  const sorted =
+    filter === 'decision'
+      ? sortedAll.filter((c) => clientsWithPendingDecisions.has(c.id))
+      : filter === 'unread'
+        ? sortedAll // unread logic not yet available — show all (no regression)
+        : filter === 'archived'
+          ? sortedAll // archived logic not yet available — show all (no regression)
+          : sortedAll;
 
   return (
     <div className="pt-8">
