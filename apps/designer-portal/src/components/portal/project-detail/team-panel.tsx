@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useProjectTeamMembers, type ProjectRole } from '@patina/supabase';
 import { InviteDesignerModal } from './invite-designer-modal';
 import { AddBookkeeperModal } from './add-bookkeeper-modal';
@@ -75,6 +76,13 @@ export function TeamPanel({ projectId, leadDesignerName, currentDesignerId }: {
           >
             Reassign lead
           </button>
+          <Link
+            href={`/portal/projects/${projectId}/scope-change`}
+            className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem] no-underline"
+            style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)', color: 'inherit' }}
+          >
+            + Initiate scope change
+          </Link>
         </div>
       </div>
       <InviteDesignerModal
