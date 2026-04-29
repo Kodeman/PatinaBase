@@ -3,6 +3,7 @@ import * as React from 'react';
 import { WelcomeVerification } from '../templates/welcome-verification';
 import { PasswordReset } from '../templates/password-reset';
 import { SecurityAlert } from '../templates/security-alert';
+import { ReviewRequest } from '../templates/review-request';
 import { BaseEmailLayout } from '../components/BaseEmailLayout';
 import { Button } from '../components/Button';
 import { ProvenanceBar } from '../components/ProvenanceBar';
@@ -102,6 +103,42 @@ describe('SecurityAlert template', () => {
 
       expect(React.isValidElement(element)).toBe(true);
     }
+  });
+});
+
+describe('ReviewRequest template', () => {
+  it('creates a valid React element with all props', () => {
+    const element = React.createElement(ReviewRequest, {
+      clientName: 'Ada',
+      designerName: 'Sophie',
+      studioName: 'Studio Lumière',
+      projectName: 'Aspen Loft Refresh',
+      reviewUrl: 'https://client.patina.cloud/review/abc123',
+    });
+
+    expect(React.isValidElement(element)).toBe(true);
+  });
+
+  it('passes reviewUrl prop through correctly', () => {
+    const props = {
+      projectName: 'Aspen Loft Refresh',
+      reviewUrl: 'https://client.patina.cloud/review/abc123',
+    };
+    const element = React.createElement(ReviewRequest, props);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((element.props as any).reviewUrl).toBe(props.reviewUrl);
+  });
+
+  it('works without optional props', () => {
+    const element = React.createElement(ReviewRequest, {
+      projectName: 'Mountain Cabin',
+      reviewUrl: 'https://client.patina.cloud/review/xyz',
+    });
+    expect(React.isValidElement(element)).toBe(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((element.props as any).clientName).toBeUndefined();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((element.props as any).designerName).toBeUndefined();
   });
 });
 

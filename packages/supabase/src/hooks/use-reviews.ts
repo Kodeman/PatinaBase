@@ -189,6 +189,84 @@ export function useCreateReviewRequest() {
 }
 
 /**
+ * Fetch completed projects that have no sent/queued/collected review request yet.
+ * Used by the designer's reviews page to surface manual "Request Review" CTAs.
+ */
+export function useCompletedProjectsWithoutReview() {
+  return useQuery({
+    queryKey: ['completed-projects-without-review'],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      // Fetch completed projects with their designer_client relationship
+      const { data: projects, error: projError } = await supabase
+        .from('projects')
+        .select(`
+          id,
+          name,
+          completed_at,
+          updated_at,
+          designer_id,
+          client_id,
+          designer_clients!inner(
+            id,
+            client_email,
+            client_name,
+            client:profiles!client_id(
+              id,
+              full_name,
+              email
+            )
+          )
+        `)
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false });
+
+      if (projError) throw projError;
+
+      if (!projects || projects.length === 0) return [];
+
+      const projectIds = (projects as CompletedProject[]).map((p) => p.id);
+
+      // Fetch any existing review requests for these projects
+      const { data: existingReviews, error: revError } = await supabase
+        .from('client_reviews')
+        .select('project_id')
+        .in('project_id', projectIds)
+        .in('request_status', ['sent', 'queued', 'collected']);
+
+      if (revError) throw revError;
+
+      const reviewedIds = new Set(
+        ((existingReviews ?? []) as { project_id: string }[]).map((r) => r.project_id)
+      );
+
+      return (projects as CompletedProject[]).filter((p) => !reviewedIds.has(p.id));
+    },
+  });
+}
+
+export interface CompletedProject {
+  id: string;
+  name: string;
+  completed_at: string | null;
+  updated_at: string;
+  designer_id: string | null;
+  client_id: string | null;
+  designer_clients?: Array<{
+    id: string;
+    client_email: string | null;
+    client_name: string | null;
+    client?: {
+      id: string;
+      full_name: string | null;
+      email: string | null;
+    } | null;
+  }> | null;
+}
+
+/**
  * Submit a review (client submits rating + text)
  */
 export function useSubmitReview() {

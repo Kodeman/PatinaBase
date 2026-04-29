@@ -177,8 +177,9 @@ export {
   useCreateReviewRequest,
   useSubmitReview,
   useTogglePortfolioPublish,
+  useCompletedProjectsWithoutReview,
 } from './use-reviews';
-export type { ClientReview, ReviewFilters, ReviewStats } from './use-reviews';
+export type { ClientReview, ReviewFilters, ReviewStats, CompletedProject } from './use-reviews';
 export {
   // Client Nurture
   useNurtureTouchpoints,

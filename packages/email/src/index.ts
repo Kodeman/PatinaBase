@@ -15,6 +15,8 @@ export { SecurityAlert } from './templates/security-alert';
 export type { SecurityAlertProps } from './templates/security-alert';
 
 // Designer templates
+export { ReviewRequest } from './templates/review-request';
+export type { ReviewRequestProps } from './templates/review-request';
 export { NewLeadDesigner } from './templates/new-lead-designer';
 export type { NewLeadDesignerProps } from './templates/new-lead-designer';
 export { LeadExpiring } from './templates/lead-expiring';

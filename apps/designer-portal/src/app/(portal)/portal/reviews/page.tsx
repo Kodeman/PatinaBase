@@ -6,8 +6,9 @@ import {
   useReviewStats,
   useCreateReviewRequest,
   useTogglePortfolioPublish,
+  useCompletedProjectsWithoutReview,
 } from '@patina/supabase';
-import type { ClientReview } from '@patina/supabase';
+import type { ClientReview, CompletedProject } from '@patina/supabase';
 import { FilterRow } from '@/components/portal/filter-row';
 import { ReviewCard } from '@/components/portal/review-card';
 import { ReviewRequestCard } from '@/components/portal/review-request-card';
@@ -26,6 +27,8 @@ export default function ReviewsPage() {
         ? { requestStatus: 'sent' }
         : { requestStatus: 'queued' }
   );
+  const { data: unrequestedProjects, isLoading: unrequestedLoading } =
+    useCompletedProjectsWithoutReview();
   const createReviewRequest = useCreateReviewRequest();
   const togglePublish = useTogglePortfolioPublish();
 
@@ -60,6 +63,56 @@ export default function ReviewsPage() {
         onChange={(key) => setTab(key as Tab)}
       />
 
+      {/* Completed projects with no review request — shown in the Pending tab */}
+      {tab === 'pending' && !unrequestedLoading && (unrequestedProjects ?? []).length > 0 && (
+        <div className="mb-6">
+          <p
+            className="mb-3 type-label-secondary"
+            style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}
+          >
+            Completed projects — no request sent yet
+          </p>
+          {(unrequestedProjects ?? []).map((project: CompletedProject) => {
+            const dc = Array.isArray(project.designer_clients)
+              ? project.designer_clients[0]
+              : project.designer_clients;
+            if (!dc) return null;
+
+            const clientName =
+              dc.client?.full_name || dc.client_name || dc.client_email || 'Client';
+            const completedTs = project.completed_at ?? project.updated_at;
+            const completedDate = new Date(completedTs);
+            const daysSince = Math.floor(
+              (Date.now() - completedDate.getTime()) / (1000 * 60 * 60 * 24)
+            );
+
+            return (
+              <ReviewRequestCard
+                key={project.id}
+                clientName={clientName}
+                projectName={project.name}
+                completedDate={completedDate.toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                })}
+                daysSinceCompletion={daysSince}
+                onSend={() => handleSendRequest(dc.id, project.id)}
+              />
+            );
+          })}
+          {(reviews ?? []).length > 0 && (
+            <div
+              className="mb-4"
+              style={{
+                borderBottom: '1px solid var(--border-subtle)',
+                paddingBottom: '8px',
+                marginBottom: '20px',
+              }}
+            />
+          )}
+        </div>
+      )}
+
       {isLoading ? (
         <LoadingStrata />
       ) : (reviews ?? []).length > 0 ? (
@@ -79,7 +132,7 @@ export default function ReviewsPage() {
                   key={review.id}
                   clientName={clientName}
                   rating={review.rating}
-                  projectDescription={`${projectName} \u00B7 $${(revenue / 100).toLocaleString()} \u00B7 Completed ${
+                  projectDescription={`${projectName} · $${(revenue / 100).toLocaleString()} · Completed ${
                     review.updated_at
                       ? new Date(review.updated_at).toLocaleDateString('en-US', {
                           month: 'short',
@@ -133,7 +186,7 @@ export default function ReviewsPage() {
                   {clientName}
                 </div>
                 <div className="type-label-secondary mt-1">
-                  {projectName} \u00B7 Scheduled for{' '}
+                  {projectName} · Scheduled for{' '}
                   {review.scheduled_for
                     ? new Date(review.scheduled_for).toLocaleDateString('en-US', {
                         month: 'short',
@@ -146,14 +199,25 @@ export default function ReviewsPage() {
           })}
         </div>
       ) : (
-        <p className="type-body py-16 text-center italic text-[var(--text-muted)]">
-          {tab === 'collected'
-            ? "No reviews collected yet. They'll appear here after clients submit feedback."
-            : tab === 'pending'
-              ? 'No pending review requests.'
+        tab !== 'pending' && (
+          <p className="type-body py-16 text-center italic text-[var(--text-muted)]">
+            {tab === 'collected'
+              ? "No reviews collected yet. They'll appear here after clients submit feedback."
               : 'No scheduled review requests.'}
-        </p>
+          </p>
+        )
       )}
+
+      {/* Empty state for pending tab when no reviews AND no unrequested projects */}
+      {tab === 'pending' &&
+        !isLoading &&
+        !unrequestedLoading &&
+        (reviews ?? []).length === 0 &&
+        (unrequestedProjects ?? []).length === 0 && (
+          <p className="type-body py-16 text-center italic text-[var(--text-muted)]">
+            No pending review requests. Complete a project to send one.
+          </p>
+        )}
     </div>
   );
 }
