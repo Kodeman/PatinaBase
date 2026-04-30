@@ -11,6 +11,7 @@ on:
       - 'services/orders/**'
       - 'services/projects/**'
       - 'packages/**'
+      - 'supabase/functions/**'
       - 'infra/Dockerfile.*'
       - '.github/workflows/docker-publish.yml'
   workflow_dispatch:
@@ -37,6 +38,7 @@ jobs:
       media: ${{ steps.filter.outputs.media }}
       orders: ${{ steps.filter.outputs.orders }}
       projects: ${{ steps.filter.outputs.projects }}
+      edge-runtime: ${{ steps.filter.outputs.edge-runtime }}
     steps:
       - uses: actions/checkout@v4
 
@@ -71,6 +73,9 @@ jobs:
               - 'packages/utils/**'
               - 'packages/cache/**'
               - 'packages/auth/**'
+            edge-runtime:
+              - 'supabase/functions/**'
+              - 'infra/Dockerfile.edge-runtime'
 
   # ---------------------------------------------------------------------------
   # Build Next.js apps
@@ -96,21 +101,30 @@ jobs:
             app_url: https://app.patina.cloud
             changed: ${{ needs.changes.outputs.designer-portal }}
 
-    # Skip unchanged services on push; build all on workflow_dispatch
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      matrix.changed == 'true'
-
     steps:
+      - name: Skip unchanged on push
+        id: skip
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ matrix.changed }}" == "true" ]]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping ${{ matrix.name }} — no relevant paths changed."
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.skip.outputs.build == 'true'
 
       - name: Set up QEMU
+        if: steps.skip.outputs.build == 'true'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
+        if: steps.skip.outputs.build == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
+        if: steps.skip.outputs.build == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -118,6 +132,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract Docker metadata
+        if: steps.skip.outputs.build == 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -127,6 +142,7 @@ jobs:
             type=sha,prefix=sha-,format=short
 
       - name: Build and push
+        if: steps.skip.outputs.build == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -164,20 +180,30 @@ jobs:
           - name: projects
             changed: ${{ needs.changes.outputs.projects }}
 
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      matrix.changed == 'true'
-
     steps:
+      - name: Skip unchanged on push
+        id: skip
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ matrix.changed }}" == "true" ]]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping ${{ matrix.name }} — no relevant paths changed."
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.skip.outputs.build == 'true'
 
       - name: Set up QEMU
+        if: steps.skip.outputs.build == 'true'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
+        if: steps.skip.outputs.build == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
+        if: steps.skip.outputs.build == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -185,6 +211,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract Docker metadata
+        if: steps.skip.outputs.build == 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -194,6 +221,7 @@ jobs:
             type=sha,prefix=sha-,format=short
 
       - name: Build and push
+        if: steps.skip.outputs.build == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -206,3 +234,61 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
           build-args: |
             SERVICE_NAME=${{ matrix.name }}
+
+  # ---------------------------------------------------------------------------
+  # Build Supabase Edge Runtime image (bakes supabase/functions into the image)
+  # ---------------------------------------------------------------------------
+  build-edge-runtime:
+    needs: changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Skip unchanged on push
+        id: skip
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ needs.changes.outputs.edge-runtime }}" == "true" ]]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping edge-runtime — no relevant paths changed."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.skip.outputs.build == 'true'
+
+      - name: Set up Docker Buildx
+        if: steps.skip.outputs.build == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: steps.skip.outputs.build == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        if: steps.skip.outputs.build == 'true'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/edge-runtime
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=sha-,format=short
+
+      - name: Build and push
+        if: steps.skip.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/Dockerfile.edge-runtime
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=edge-runtime
+          cache-to: type=gha,mode=max,scope=edge-runtime
