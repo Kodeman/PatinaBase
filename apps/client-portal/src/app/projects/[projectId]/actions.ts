@@ -1,8 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { createServerClient } from '@patina/supabase/server';
 
-import { getCommsClient, getProjectsClient } from '../../../lib/api-client';
+import { getProjectsClient } from '../../../lib/api-client';
 
 interface ActionResult {
   success: boolean;
@@ -49,9 +50,23 @@ export async function postMessageAction(params: {
       return { success: false, error: 'Message cannot be empty.' };
     }
 
-    await getCommsClient().createMessage(params.threadId, {
-      bodyText: params.body,
-    });
+    const supabase = await createServerClient();
+    const { data: userResp } = await supabase.auth.getUser();
+    const userId = userResp.user?.id;
+    if (!userId) {
+      return { success: false, error: 'You must be signed in to send messages.' };
+    }
+    const { error: insertError } = await supabase
+      .from('comms_messages')
+      .insert({
+        thread_id: params.threadId,
+        sender_id: userId,
+        body: params.body,
+      });
+    if (insertError) {
+      console.error('[client-portal] failed to insert message', insertError);
+      return { success: false, error: 'Unable to post message right now. Please try again.' };
+    }
 
     await getProjectsClient().logEngagement(params.projectId, {
       event: 'client_portal.message_posted',

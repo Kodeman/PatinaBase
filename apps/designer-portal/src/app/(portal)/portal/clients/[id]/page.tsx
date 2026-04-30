@@ -199,10 +199,18 @@ export default function ClientProfilePage({
 
         {/* Actions */}
         <div className="flex flex-col gap-2">
-          <Link href={`/portal/clients/${id}/messages`}>
-            <PortalButton variant="primary">Message</PortalButton>
-          </Link>
-          <PortalButton variant="secondary">View Project</PortalButton>
+          <PortalButton variant="primary" asChild>
+            <Link href={`/portal/clients/${id}/messages`}>Message</Link>
+          </PortalButton>
+          {projects?.[0]?.id ? (
+            <PortalButton variant="secondary" asChild>
+              <Link href={`/portal/projects/${projects[0].id}`}>View Project</Link>
+            </PortalButton>
+          ) : (
+            <PortalButton variant="secondary" disabled>
+              View Project
+            </PortalButton>
+          )}
         </div>
       </div>
 

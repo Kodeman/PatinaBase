@@ -124,7 +124,8 @@ const jsonRequest = async <T>(
 };
 
 const projectsBaseUrl = resolveBaseUrl('PROJECTS_API_URL', 'projects', 3016);
-const commsBaseUrl = resolveBaseUrl('COMMS_API_URL', 'comms', 3017);
+// commsApi removed: in-app messaging is now Supabase-native (see @patina/supabase
+// hooks: useThreads, useThreadMessages, useSendMessage, etc.).
 
 export const projectsApi = {
   async getProjects(signal?: AbortSignal) {
@@ -174,54 +175,6 @@ export const projectsApi = {
   },
 };
 
-export const commsApi = {
-  async getThreads(params?: { projectId?: string; status?: string }, signal?: AbortSignal) {
-    const searchParams = new URLSearchParams();
-    if (params?.projectId) searchParams.set('projectId', params.projectId);
-    if (params?.status) searchParams.set('status', params.status);
-    const query = searchParams.toString();
-    return jsonRequest(
-      commsBaseUrl,
-      `/v1/threads${query ? `?${query}` : ''}`,
-      { signal },
-      { maxRetries: 2 }
-    );
-  },
-
-  async getThread(id: string, signal?: AbortSignal) {
-    return jsonRequest(commsBaseUrl, `/v1/threads/${id}`, { signal }, { maxRetries: 2 });
-  },
-
-  async createMessage(
-    threadId: string,
-    data: { bodyText?: string; bodyMd?: string },
-    signal?: AbortSignal
-  ) {
-    return jsonRequest(
-      commsBaseUrl,
-      `/v1/threads/${threadId}/messages`,
-      {
-        method: 'POST',
-        body: JSON.stringify(data),
-        signal,
-      },
-      { maxRetries: 1 }
-    );
-  },
-
-  async markRead(threadId: string, lastReadMessageId: string, signal?: AbortSignal) {
-    return jsonRequest(
-      commsBaseUrl,
-      `/v1/threads/${threadId}/read`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ lastReadMessageId }),
-        signal,
-      },
-      { maxRetries: 1 }
-    );
-  },
-};
 
 type ClientFactory<T> = () => T;
 
@@ -236,7 +189,6 @@ const memo = <T>(factory: ClientFactory<T>) => {
 };
 
 export const getProjectsClient = memo(() => projectsApi);
-export const getCommsClient = memo(() => commsApi);
 
 // Export error handling utilities
 export class ApiError extends Error {

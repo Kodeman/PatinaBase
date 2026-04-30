@@ -66,6 +66,16 @@ export function useActiveZone(): ActiveZoneResult {
       if (pathname.startsWith('/portal/leads')) activeSubNavHref = '/portal/pipeline?stage=leads';
       if (pathname.startsWith('/portal/proposals')) activeSubNavHref = '/portal/pipeline?stage=proposals';
       if (pathname.startsWith('/portal/projects')) activeSubNavHref = '/portal/pipeline?stage=active';
+    } else if (zone.key === 'messages') {
+      // Messages uses ?scope=… for sub-nav filtering. The base /portal/messages
+      // path is "Inbox"; deeper /portal/messages/:threadId routes also surface
+      // as Inbox so the back-to-inbox affordance feels consistent.
+      const scope = searchParams.get('scope');
+      if (scope) {
+        activeSubNavHref = `/portal/messages?scope=${scope}`;
+      } else {
+        activeSubNavHref = '/portal/messages';
+      }
     } else {
       // Standard path matching for other zones
       for (const item of [...subNavItems].reverse()) {

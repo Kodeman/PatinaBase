@@ -29,6 +29,8 @@ const TYPE_TO_TEMPLATE: Partial<Record<NotificationType, string>> = {
   seasonal_campaign: 'campaign-seasonal',
   maker_spotlight: 'campaign-maker-spotlight',
   reengagement: 'campaign-reengagement',
+  in_app_message: 'in-app-message',
+  in_app_message_mention: 'in-app-message-mention',
 };
 
 /** Default channels per notification type. */
@@ -65,6 +67,9 @@ const DEFAULT_CHANNELS: Record<string, NotificationChannel[]> = {
   // Sequences
   welcome_series: ['email'],
   designer_onboarding: ['email'],
+  // In-app messaging
+  in_app_message: ['email', 'in_app'],
+  in_app_message_mention: ['email', 'in_app'],
 };
 
 interface NotifyContext {

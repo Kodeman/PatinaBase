@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/hooks/use-auth';
-import { useLeads, useLeadStats } from '@patina/supabase';
+import { useLeads, useLeadStats, useAllDecisions } from '@patina/supabase';
 import { useProjects } from '@/hooks/use-projects';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -14,6 +14,22 @@ import { ProjectListItem } from '@/components/portal/project-list-item';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { AnimatedText } from '@/components/portal/animated-text';
 import { StaggerChildren } from '@/components/portal/stagger-children';
+import { DecisionCard } from '@/components/portal/decision-card';
+
+function getClientName(decision: {
+  designer_client?: {
+    client_name: string | null;
+    client_email: string | null;
+    client?: { full_name: string | null } | null;
+  };
+}): string {
+  return (
+    decision.designer_client?.client?.full_name ||
+    decision.designer_client?.client_name ||
+    decision.designer_client?.client_email ||
+    'Unknown'
+  );
+}
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -46,6 +62,7 @@ export default function DashboardPage() {
   });
   const projects = (Array.isArray(rawProjects) ? rawProjects : []) as AnyProject[];
   const { data: earningsStats } = useEarningsStats();
+  const { data: overdueDecisions = [] } = useAllDecisions({ isOverdue: true });
 
   const firstName = user?.name?.split(' ')[0] || 'Designer';
 
@@ -120,6 +137,44 @@ export default function DashboardPage() {
       >
         <StrataMark variant="mini" />
       </div>
+
+      {/* Overdue Decisions */}
+      <section
+        className="mt-10 animate-section-enter"
+        style={{ animationDelay: '350ms' }}
+      >
+        <h2 className="type-section-head mb-6 border-b border-[var(--border-default)] pb-3">
+          Overdue decisions
+        </h2>
+        {overdueDecisions.length === 0 ? (
+          <p className="type-meta-small text-[var(--text-muted)]">
+            No overdue decisions
+          </p>
+        ) : (
+          <div>
+            {overdueDecisions.map((d) => (
+              <DecisionCard
+                key={d.id}
+                id={d.id}
+                title={d.title}
+                dueDate={d.due_date ?? undefined}
+                description={d.context ?? undefined}
+                status={d.status}
+                decisionType={d.decision_type}
+                blockingStatus={d.blocking_status}
+                projectName={d.project?.name ?? undefined}
+                clientName={getClientName(d)}
+                optionThumbnails={
+                  d.options
+                    ?.filter((o) => o.image_url)
+                    .map((o) => o.image_url!) ?? []
+                }
+                href={`/portal/decisions/${d.id}`}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Two-Column Content */}
       <div className="mt-10 grid gap-12 overflow-hidden md:grid-cols-[58%_42%]">

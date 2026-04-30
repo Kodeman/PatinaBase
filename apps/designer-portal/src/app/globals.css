@@ -474,3 +474,28 @@
     }
   }
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .proposal-print-area,
+  .proposal-print-area * {
+    visibility: visible;
+  }
+  .proposal-print-area {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    max-width: none !important;
+  }
+  .proposal-print-hide {
+    display: none !important;
+  }
+  @page {
+    size: letter;
+    margin: 0.5in;
+  }
+}

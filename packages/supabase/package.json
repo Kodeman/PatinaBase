@@ -15,7 +15,9 @@
     "push": "supabase db push --db-url \"$SUPABASE_DB_URL\"",
     "studio": "supabase studio",
     "type-check": "tsc --noEmit",
-    "lint": "eslint src/"
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@patina/shared": "workspace:*",
@@ -27,7 +29,8 @@
     "@types/react": "^19.2.8",
     "msw": "^2.3.0",
     "supabase": "^2.67.1",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
   },
   "peerDependencies": {
     "next": ">=14.0.0",

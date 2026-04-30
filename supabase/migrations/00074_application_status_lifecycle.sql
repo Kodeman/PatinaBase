@@ -13,7 +13,7 @@ ALTER TABLE founding_designer_applications
 
 ALTER TABLE founding_designer_applications
   ADD CONSTRAINT founding_designer_applications_status_check
-  CHECK (status IN (
+  CHECK (status::text IN (
     'pending', 'in_review', 'approved', 'waitlisted', 'rejected',
     'onboarding', 'active', 'archived'
   ));
@@ -23,7 +23,7 @@ ALTER TABLE maker_applications
 
 ALTER TABLE maker_applications
   ADD CONSTRAINT maker_applications_status_check
-  CHECK (status IN (
+  CHECK (status::text IN (
     'pending', 'in_review', 'approved', 'waitlisted', 'rejected',
     'onboarding', 'active', 'archived'
   ));

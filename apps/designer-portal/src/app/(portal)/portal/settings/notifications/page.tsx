@@ -1,7 +1,15 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import type { NotificationPreferences } from '@patina/shared/types';
+import {
+  useMyThreadOverrides,
+  useUpdateThreadNotificationPref,
+  useMuteThread,
+  type ThreadOverride,
+  type NotificationPref,
+} from '@patina/supabase';
 
 const CATEGORIES: Array<{
   title: string;
@@ -190,6 +198,8 @@ export default function NotificationsSettingsPage() {
         </label>
       </Section>
 
+      <MessagesSection />
+
       <Section
         title="Quiet hours"
         description="Pause non-urgent notifications during set hours."
@@ -215,6 +225,132 @@ export default function NotificationsSettingsPage() {
         )}
       </Section>
     </div>
+  );
+}
+
+function MessagesSection() {
+  const { data: overrides = [], isLoading } = useMyThreadOverrides();
+  const updatePref = useUpdateThreadNotificationPref();
+  const muteThread = useMuteThread();
+
+  const muted = overrides.filter((o) => o.muted_at);
+  const customPref = overrides.filter(
+    (o) => !o.muted_at && o.notification_pref !== 'all'
+  );
+
+  return (
+    <Section
+      title="Messages"
+      description="Per-thread notification overrides. New threads default to all messages."
+    >
+      {isLoading ? (
+        <p className="text-sm text-[#7A736C]">Loading overrides…</p>
+      ) : overrides.length === 0 ? (
+        <p className="text-sm text-[#7A736C]">
+          No threads currently muted or customized. Use the bell or menu icons
+          inside any conversation to set an override.
+        </p>
+      ) : (
+        <>
+          {muted.length > 0 && (
+            <div className="mb-5">
+              <h3 className="text-[13px] font-semibold uppercase tracking-wider text-[#7A736C] mb-2">
+                Muted ({muted.length})
+              </h3>
+              <ul className="divide-y divide-[#EEE6DB] rounded border border-[#EEE6DB]">
+                {muted.map((o) => (
+                  <ThreadOverrideRow
+                    key={o.thread_id}
+                    override={o}
+                    onUnmute={() =>
+                      muteThread.mutate({
+                        threadId: o.thread_id,
+                        muted: false,
+                      })
+                    }
+                  />
+                ))}
+              </ul>
+            </div>
+          )}
+          {customPref.length > 0 && (
+            <div>
+              <h3 className="text-[13px] font-semibold uppercase tracking-wider text-[#7A736C] mb-2">
+                Custom preference ({customPref.length})
+              </h3>
+              <ul className="divide-y divide-[#EEE6DB] rounded border border-[#EEE6DB]">
+                {customPref.map((o) => (
+                  <ThreadOverrideRow
+                    key={o.thread_id}
+                    override={o}
+                    onChangePref={(pref) =>
+                      updatePref.mutate({ threadId: o.thread_id, pref })
+                    }
+                  />
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+    </Section>
+  );
+}
+
+function ThreadOverrideRow({
+  override,
+  onUnmute,
+  onChangePref,
+}: {
+  override: ThreadOverride;
+  onUnmute?: () => void;
+  onChangePref?: (pref: NotificationPref) => void;
+}) {
+  const label =
+    override.thread_title ??
+    override.counterpart_names.join(', ') ??
+    'Conversation';
+  const kindLabel =
+    override.thread_kind === 'project'
+      ? 'Project'
+      : override.thread_kind === 'vendor_brief'
+        ? 'Vendor brief'
+        : 'Direct';
+
+  return (
+    <li className="flex items-center justify-between gap-3 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <Link
+          href={`/portal/messages/${override.thread_id}`}
+          className="block truncate text-[14px] font-medium text-[#2C2926] hover:underline"
+        >
+          {label}
+        </Link>
+        <p className="text-xs text-[#7A736C]">{kindLabel}</p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        {onUnmute && (
+          <button
+            type="button"
+            onClick={onUnmute}
+            className="rounded border border-[#DDD4C8] bg-white px-2 py-1 text-xs text-[#2C2926] hover:bg-[#F5F1E8]"
+          >
+            Unmute
+          </button>
+        )}
+        {onChangePref && (
+          <select
+            value={override.notification_pref}
+            onChange={(e) => onChangePref(e.target.value as NotificationPref)}
+            className="rounded border border-[#DDD4C8] bg-white px-2 py-1 text-xs text-[#2C2926]"
+          >
+            <option value="all">All messages</option>
+            <option value="mentions">Mentions only</option>
+            <option value="none">No notifications</option>
+          </select>
+        )}
+      </div>
+    </li>
   );
 }
 

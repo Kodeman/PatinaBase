@@ -3,6 +3,7 @@ import {
   TrendingUp,
   Package,
   Users,
+  MessageSquare,
   DollarSign,
   Image,
   Clock,
@@ -13,7 +14,7 @@ import {
 
 // ─── Zone Definitions ────────────────────────────────────────────────────────
 
-export type ZoneKey = 'today' | 'pipeline' | 'products' | 'clients';
+export type ZoneKey = 'today' | 'pipeline' | 'products' | 'clients' | 'messages';
 
 export interface ZoneConfig {
   key: ZoneKey;
@@ -67,6 +68,13 @@ export const ZONES: ZoneConfig[] = [
     ],
     icon: Users,
   },
+  {
+    key: 'messages',
+    label: 'Messages',
+    href: '/portal/messages',
+    paths: ['/portal/messages'],
+    icon: MessageSquare,
+  },
 ];
 
 // ─── Sub-Navigation Items ────────────────────────────────────────────────────
@@ -85,7 +93,7 @@ export const ZONE_SUB_ITEMS: Record<ZoneKey, SubNavItem[]> = {
   pipeline: [
     { label: 'All', href: '/portal/pipeline', exact: true },
     { label: 'Leads', href: '/portal/pipeline?stage=leads', dotColor: 'var(--color-dusty-blue, #8B9CAD)' },
-    { label: 'Proposals', href: '/portal/pipeline?stage=proposals', dotColor: 'var(--color-golden-hour, #E8C547)' },
+    { label: 'Proposals', href: '/portal/proposals', dotColor: 'var(--color-golden-hour, #E8C547)' },
     { label: 'Active', href: '/portal/pipeline?stage=active', dotColor: 'var(--color-clay, #C4A57B)' },
     { label: 'Completed', href: '/portal/pipeline?stage=completed', dotColor: 'var(--color-sage, #A8B5A0)' },
   ],
@@ -100,6 +108,13 @@ export const ZONE_SUB_ITEMS: Record<ZoneKey, SubNavItem[]> = {
     { label: 'Reviews', href: '/portal/reviews' },
     { label: 'Nurture Queue', href: '/portal/nurture' },
     { label: 'Decisions', href: '/portal/decisions' },
+  ],
+  messages: [
+    { label: 'Inbox', href: '/portal/messages', exact: true },
+    { label: 'Direct', href: '/portal/messages?scope=direct' },
+    { label: 'Projects', href: '/portal/messages?scope=project' },
+    { label: 'Vendors', href: '/portal/messages?scope=vendor_brief' },
+    { label: 'Archived', href: '/portal/messages?scope=archived' },
   ],
 };
 

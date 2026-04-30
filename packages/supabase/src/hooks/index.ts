@@ -217,6 +217,7 @@ export {
   // Versions & Revisions
   useProposalVersions,
   useCreateProposalRevision,
+  useDuplicateProposal,
   // Signing
   useSignProposal,
 } from './use-proposals';
@@ -634,3 +635,51 @@ export type {
   CompanionContext,
   CompanionConversation,
 } from './use-companion';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// In-app messaging (Phase 2 — see docs/prds/in-app-messaging-prd.md)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  useThreads,
+  useThread,
+  useThreadMessages,
+  useSendMessage,
+  useEditMessage,
+  useDeleteMessage,
+  useMarkThreadRead,
+  useArchiveThread,
+  useMuteThread,
+  useThreadParticipants,
+  useAddParticipant,
+  useRemoveParticipant,
+  useUnreadCount,
+  useThreadRealtime,
+  useInboxRealtime,
+  useTypingIndicator,
+  useQuickReplies,
+  useUpsertQuickReply,
+  useDeleteQuickReply,
+  useStartDirectThread,
+  useStartProjectThread,
+  useStartVendorBrief,
+  useVendorProfiles,
+  useMyThreadOverrides,
+  useUpdateThreadNotificationPref,
+  commsKeys,
+} from './use-comms';
+export type {
+  ThreadKind,
+  ParticipantRole,
+  NotificationPref,
+  CommsThread,
+  CommsParticipant,
+  CommsMessage,
+  CommsMessageAttachment,
+  ThreadSummary,
+  UnreadSummaryRow,
+  QuickReply,
+  TypingUser,
+  UseThreadsParams,
+  SendMessageInput,
+  ThreadOverride,
+} from './use-comms';

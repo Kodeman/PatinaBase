@@ -179,16 +179,14 @@ export function ScopeBuilderShell({
         <ChangeOrderTermsEditor proposalId={proposalId} />
       </section>
 
-      {/* Generate Proposal CTA */}
+      {/* Generate Proposal CTA — scope edits auto-save as you type, so the
+          only explicit action here is materializing the scope into proposal sections. */}
       <div className="flex gap-3 border-t border-[var(--border-default)] pt-6">
         <button
           onClick={onGenerateProposal}
           className="rounded-[3px] bg-[var(--accent-primary)] px-6 py-3 font-body text-sm font-medium text-white transition-colors hover:opacity-90"
         >
           Generate Proposal from Scope →
-        </button>
-        <button className="type-btn-text rounded-[3px] border border-[var(--border-default)] px-5 py-3 text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-hover)]">
-          Save Scope as Draft
         </button>
       </div>
     </div>

@@ -3,7 +3,17 @@ import type { NextRequest } from 'next/server';
 import { createMiddlewareClient } from '@patina/supabase/client';
 
 export async function middleware(req: NextRequest) {
-  const res = NextResponse.next();
+  const requestHeaders = new Headers(req.headers);
+  if (req.nextUrl.pathname.startsWith('/proposals')) {
+    const forwarded = req.headers.get('x-forwarded-for');
+    const realIp = req.headers.get('x-real-ip');
+    const clientIp = forwarded?.split(',')[0]?.trim() || realIp;
+    if (clientIp) {
+      requestHeaders.set('x-client-ip', clientIp);
+    }
+  }
+
+  const res = NextResponse.next({ request: { headers: requestHeaders } });
 
   const supabase = createMiddlewareClient(req, res);
   const { data: { user } } = await supabase.auth.getUser();

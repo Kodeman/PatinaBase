@@ -17,7 +17,6 @@ const getApiUrl = (serviceName: string, defaultPort: number, defaultPath: string
 export const env = {
   // Direct backend API URLs (for server-side calls)
   projectsApiUrl: process.env.PROJECTS_API_URL || getApiUrl('projects', 3016),
-  commsApiUrl: process.env.COMMS_API_URL || getApiUrl('comms', 3017),
 
   // API timeout
   apiTimeout: parseInt(process.env.API_TIMEOUT || '30000', 10),

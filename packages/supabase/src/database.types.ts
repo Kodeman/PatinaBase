@@ -1,4 +1,3 @@
-Connecting to db 5432
 export type Json =
   | string
   | number
@@ -748,12 +747,14 @@ export type Database = {
       client_decision_options: {
         Row: {
           client_note: string | null
+          cost_delta_cents: number | null
           created_at: string
           decision_id: string
           designer_note: string | null
           id: string
           image_url: string | null
           is_recommended: boolean | null
+          lead_time_days_delta: number | null
           name: string
           price: number | null
           quantity: number | null
@@ -762,12 +763,14 @@ export type Database = {
         }
         Insert: {
           client_note?: string | null
+          cost_delta_cents?: number | null
           created_at?: string
           decision_id: string
           designer_note?: string | null
           id?: string
           image_url?: string | null
           is_recommended?: boolean | null
+          lead_time_days_delta?: number | null
           name: string
           price?: number | null
           quantity?: number | null
@@ -776,12 +779,14 @@ export type Database = {
         }
         Update: {
           client_note?: string | null
+          cost_delta_cents?: number | null
           created_at?: string
           decision_id?: string
           designer_note?: string | null
           id?: string
           image_url?: string | null
           is_recommended?: boolean | null
+          lead_time_days_delta?: number | null
           name?: string
           price?: number | null
           quantity?: number | null
@@ -1267,6 +1272,258 @@ export type Database = {
         }
         Relationships: []
       }
+      comms_messages: {
+        Row: {
+          attachments: Json
+          body: string
+          created_at: string
+          decision_id: string | null
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: string[]
+          reply_to_message_id: string | null
+          sender_id: string | null
+          system: boolean
+          thread_id: string
+        }
+        Insert: {
+          attachments?: Json
+          body?: string
+          created_at?: string
+          decision_id?: string | null
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: string[]
+          reply_to_message_id?: string | null
+          sender_id?: string | null
+          system?: boolean
+          thread_id: string
+        }
+        Update: {
+          attachments?: Json
+          body?: string
+          created_at?: string
+          decision_id?: string | null
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: string[]
+          reply_to_message_id?: string | null
+          sender_id?: string | null
+          system?: boolean
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comms_messages_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comms_messages_reply_to_message_id_fkey"
+            columns: ["reply_to_message_id"]
+            isOneToOne: false
+            referencedRelation: "comms_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comms_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comms_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comms_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "comms_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comms_quick_replies: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          label: string
+          position: number
+          profile_id: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          label: string
+          position?: number
+          profile_id: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          label?: string
+          position?: number
+          profile_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comms_quick_replies_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comms_quick_replies_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comms_thread_participants: {
+        Row: {
+          archived_at: string | null
+          joined_at: string
+          last_read_at: string
+          left_at: string | null
+          muted_at: string | null
+          notification_pref: string
+          profile_id: string
+          role: string
+          thread_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          joined_at?: string
+          last_read_at?: string
+          left_at?: string | null
+          muted_at?: string | null
+          notification_pref?: string
+          profile_id: string
+          role: string
+          thread_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          joined_at?: string
+          last_read_at?: string
+          left_at?: string | null
+          muted_at?: string | null
+          notification_pref?: string
+          profile_id?: string
+          role?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comms_thread_participants_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comms_thread_participants_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comms_thread_participants_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "comms_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comms_threads: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          kind: string
+          last_message_at: string
+          metadata: Json
+          project_id: string | null
+          proposal_id: string | null
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          kind: string
+          last_message_at?: string
+          metadata?: Json
+          project_id?: string | null
+          proposal_id?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          kind?: string
+          last_message_at?: string
+          metadata?: Json
+          project_id?: string | null
+          proposal_id?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comms_threads_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comms_threads_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comms_threads_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comms_threads_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companion_conversations: {
         Row: {
           created_at: string
@@ -1461,6 +1718,74 @@ export type Database = {
         }
         Relationships: []
       }
+      cowork_tasks: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          cron_expression: string | null
+          error_message: string | null
+          id: string
+          input_payload: Json | null
+          is_recurring: boolean | null
+          last_run_at: string | null
+          max_retries: number | null
+          next_run_at: string | null
+          output_files: string[] | null
+          output_payload: Json | null
+          picked_up_at: string | null
+          retry_count: number | null
+          status: string
+          task_type: string
+          vendor_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          cron_expression?: string | null
+          error_message?: string | null
+          id?: string
+          input_payload?: Json | null
+          is_recurring?: boolean | null
+          last_run_at?: string | null
+          max_retries?: number | null
+          next_run_at?: string | null
+          output_files?: string[] | null
+          output_payload?: Json | null
+          picked_up_at?: string | null
+          retry_count?: number | null
+          status?: string
+          task_type: string
+          vendor_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          cron_expression?: string | null
+          error_message?: string | null
+          id?: string
+          input_payload?: Json | null
+          is_recurring?: boolean | null
+          last_run_at?: string | null
+          max_retries?: number | null
+          next_run_at?: string | null
+          output_files?: string[] | null
+          output_payload?: Json | null
+          picked_up_at?: string | null
+          retry_count?: number | null
+          status?: string
+          task_type?: string
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cowork_tasks_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_stories: {
         Row: {
           body_content: string | null
@@ -1562,6 +1887,86 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      decision_comments: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          decision_id: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          created_at?: string
+          decision_id: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          decision_id?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "decision_comments_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      decision_overrides: {
+        Row: {
+          acted_by: string
+          consent_evidence: string
+          consent_method: string
+          created_at: string
+          decision_id: string
+          id: string
+          option_id: string | null
+        }
+        Insert: {
+          acted_by: string
+          consent_evidence: string
+          consent_method: string
+          created_at?: string
+          decision_id: string
+          id?: string
+          option_id?: string | null
+        }
+        Update: {
+          acted_by?: string
+          consent_evidence?: string
+          consent_method?: string
+          created_at?: string
+          decision_id?: string
+          id?: string
+          option_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "decision_overrides_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decision_overrides_option_id_fkey"
+            columns: ["option_id"]
+            isOneToOne: false
+            referencedRelation: "client_decision_options"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       designer_applications: {
         Row: {
@@ -2164,11 +2569,13 @@ export type Database = {
           first_name: string
           id: string
           last_name: string
+          location: string | null
           motivation: string | null
           referral_source: string | null
           review_notes: string | null
           reviewed_at: string | null
           reviewed_by: string | null
+          sourcing_process: string | null
           status: Database["public"]["Enums"]["application_review_status"]
           updated_at: string
           website: string | null
@@ -2182,11 +2589,13 @@ export type Database = {
           first_name: string
           id?: string
           last_name: string
+          location?: string | null
           motivation?: string | null
           referral_source?: string | null
           review_notes?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          sourcing_process?: string | null
           status?: Database["public"]["Enums"]["application_review_status"]
           updated_at?: string
           website?: string | null
@@ -2200,11 +2609,13 @@ export type Database = {
           first_name?: string
           id?: string
           last_name?: string
+          location?: string | null
           motivation?: string | null
           referral_source?: string | null
           review_notes?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          sourcing_process?: string | null
           status?: Database["public"]["Enums"]["application_review_status"]
           updated_at?: string
           website?: string | null
@@ -2376,6 +2787,13 @@ export type Database = {
             referencedRelation: "room_scans"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "leads_room_scan_id_fkey"
+            columns: ["room_scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans_v2"
+            referencedColumns: ["id"]
+          },
         ]
       }
       maker_applications: {
@@ -2388,11 +2806,14 @@ export type Database = {
           description: string | null
           email: string
           id: string
+          location: string | null
+          materials: string | null
           referral_source: string | null
           review_notes: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           status: Database["public"]["Enums"]["application_review_status"]
+          trade_program: string | null
           updated_at: string
           website: string | null
         }
@@ -2405,11 +2826,14 @@ export type Database = {
           description?: string | null
           email: string
           id?: string
+          location?: string | null
+          materials?: string | null
           referral_source?: string | null
           review_notes?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: Database["public"]["Enums"]["application_review_status"]
+          trade_program?: string | null
           updated_at?: string
           website?: string | null
         }
@@ -2422,11 +2846,14 @@ export type Database = {
           description?: string | null
           email?: string
           id?: string
+          location?: string | null
+          materials?: string | null
           referral_source?: string | null
           review_notes?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: Database["public"]["Enums"]["application_review_status"]
+          trade_program?: string | null
           updated_at?: string
           website?: string | null
         }
@@ -2883,6 +3310,179 @@ export type Database = {
           name?: string
           resource?: string
           scope?: string | null
+        }
+        Relationships: []
+      }
+      pipeline_vendor_scores: {
+        Row: {
+          data_sources: string[] | null
+          dimension: number
+          dimension_name: string
+          evidence: string | null
+          id: string
+          raw_score: number | null
+          scored_at: string | null
+          scored_by: string
+          vendor_id: string
+          weight: number
+          weighted_score: number | null
+        }
+        Insert: {
+          data_sources?: string[] | null
+          dimension: number
+          dimension_name: string
+          evidence?: string | null
+          id?: string
+          raw_score?: number | null
+          scored_at?: string | null
+          scored_by: string
+          vendor_id: string
+          weight: number
+          weighted_score?: number | null
+        }
+        Update: {
+          data_sources?: string[] | null
+          dimension?: number
+          dimension_name?: string
+          evidence?: string | null
+          id?: string
+          raw_score?: number | null
+          scored_at?: string | null
+          scored_by?: string
+          vendor_id?: string
+          weight?: number
+          weighted_score?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pipeline_vendor_scores_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pipeline_vendors: {
+        Row: {
+          awaiting_leah_review: boolean | null
+          company_size: string | null
+          created_at: string
+          data_format: string | null
+          drop_ship_capable: boolean | null
+          feed_frequency: string | null
+          feed_url: string | null
+          has_hard_veto: boolean | null
+          id: string
+          last_feed_sync_at: string | null
+          leah_notes: string | null
+          location_city: string | null
+          location_country: string | null
+          location_state: string | null
+          name: string
+          notes: string | null
+          payment_terms: string | null
+          price_range_high: number | null
+          price_range_low: number | null
+          primary_contact_email: string | null
+          primary_contact_name: string | null
+          primary_contact_phone: string | null
+          primary_contact_role: string | null
+          product_categories: string[] | null
+          scored_by_kody: boolean | null
+          scored_by_leah: boolean | null
+          slug: string
+          source: string | null
+          stage: string
+          stage_changed_at: string | null
+          total_score: number | null
+          trade_account_status: string | null
+          trade_discount_pct: number | null
+          triage_level: string | null
+          updated_at: string
+          veto_reason: string | null
+          website_url: string | null
+          year_established: number | null
+        }
+        Insert: {
+          awaiting_leah_review?: boolean | null
+          company_size?: string | null
+          created_at?: string
+          data_format?: string | null
+          drop_ship_capable?: boolean | null
+          feed_frequency?: string | null
+          feed_url?: string | null
+          has_hard_veto?: boolean | null
+          id?: string
+          last_feed_sync_at?: string | null
+          leah_notes?: string | null
+          location_city?: string | null
+          location_country?: string | null
+          location_state?: string | null
+          name: string
+          notes?: string | null
+          payment_terms?: string | null
+          price_range_high?: number | null
+          price_range_low?: number | null
+          primary_contact_email?: string | null
+          primary_contact_name?: string | null
+          primary_contact_phone?: string | null
+          primary_contact_role?: string | null
+          product_categories?: string[] | null
+          scored_by_kody?: boolean | null
+          scored_by_leah?: boolean | null
+          slug: string
+          source?: string | null
+          stage?: string
+          stage_changed_at?: string | null
+          total_score?: number | null
+          trade_account_status?: string | null
+          trade_discount_pct?: number | null
+          triage_level?: string | null
+          updated_at?: string
+          veto_reason?: string | null
+          website_url?: string | null
+          year_established?: number | null
+        }
+        Update: {
+          awaiting_leah_review?: boolean | null
+          company_size?: string | null
+          created_at?: string
+          data_format?: string | null
+          drop_ship_capable?: boolean | null
+          feed_frequency?: string | null
+          feed_url?: string | null
+          has_hard_veto?: boolean | null
+          id?: string
+          last_feed_sync_at?: string | null
+          leah_notes?: string | null
+          location_city?: string | null
+          location_country?: string | null
+          location_state?: string | null
+          name?: string
+          notes?: string | null
+          payment_terms?: string | null
+          price_range_high?: number | null
+          price_range_low?: number | null
+          primary_contact_email?: string | null
+          primary_contact_name?: string | null
+          primary_contact_phone?: string | null
+          primary_contact_role?: string | null
+          product_categories?: string[] | null
+          scored_by_kody?: boolean | null
+          scored_by_leah?: boolean | null
+          slug?: string
+          source?: string | null
+          stage?: string
+          stage_changed_at?: string | null
+          total_score?: number | null
+          trade_account_status?: string | null
+          trade_discount_pct?: number | null
+          triage_level?: string | null
+          updated_at?: string
+          veto_reason?: string | null
+          website_url?: string | null
+          year_established?: number | null
         }
         Relationships: []
       }
@@ -3707,6 +4307,7 @@ export type Database = {
           project_id: string
           sort_order: number
           status: string
+          stripe_session_id: string | null
           trigger_condition: string | null
           updated_at: string
         }
@@ -3722,6 +4323,7 @@ export type Database = {
           project_id: string
           sort_order?: number
           status?: string
+          stripe_session_id?: string | null
           trigger_condition?: string | null
           updated_at?: string
         }
@@ -3737,6 +4339,7 @@ export type Database = {
           project_id?: string
           sort_order?: number
           status?: string
+          stripe_session_id?: string | null
           trigger_condition?: string | null
           updated_at?: string
         }
@@ -4095,6 +4698,7 @@ export type Database = {
           client_profile_id: string | null
           client_visibility_tier: string
           committed_cents: number | null
+          completed_at: string | null
           created_at: string | null
           created_by: string
           current_phase: string | null
@@ -4128,6 +4732,7 @@ export type Database = {
           client_profile_id?: string | null
           client_visibility_tier?: string
           committed_cents?: number | null
+          completed_at?: string | null
           created_at?: string | null
           created_by: string
           current_phase?: string | null
@@ -4161,6 +4766,7 @@ export type Database = {
           client_profile_id?: string | null
           client_visibility_tier?: string
           committed_cents?: number | null
+          completed_at?: string | null
           created_at?: string | null
           created_by?: string
           current_phase?: string | null
@@ -5148,6 +5754,13 @@ export type Database = {
             referencedRelation: "room_scans"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "room_features_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans_v2"
+            referencedColumns: ["id"]
+          },
         ]
       }
       room_scan_associations: {
@@ -5258,25 +5871,40 @@ export type Database = {
             referencedRelation: "room_scans"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "room_scan_associations_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans_v2"
+            referencedColumns: ["id"]
+          },
         ]
       }
       room_scan_images: {
         Row: {
+          associated_feature_id: string | null
           brightness_score: number | null
+          camera_intrinsics: Json | null
+          camera_transform: number[] | null
+          caption: string | null
           captured_at: string
           composition_score: number | null
           created_at: string
           device_orientation: string | null
           display_order: number
+          euler_angles: number[] | null
           feature_category: string | null
           feature_confidence: number | null
           file_size_bytes: number | null
           height: number | null
           id: string
           image_url: string
+          is_full_resolution: boolean | null
           is_primary: boolean
           light_estimate: number | null
+          light_estimate_lumens: number | null
           mime_type: string | null
+          photo_kind: string | null
           quality_score: number | null
           role: string
           room_id: string | null
@@ -5284,24 +5912,33 @@ export type Database = {
           sharpness_score: number | null
           stability_score: number | null
           thumbnail_url: string | null
+          timestamp_seconds: number | null
           width: number | null
         }
         Insert: {
+          associated_feature_id?: string | null
           brightness_score?: number | null
+          camera_intrinsics?: Json | null
+          camera_transform?: number[] | null
+          caption?: string | null
           captured_at: string
           composition_score?: number | null
           created_at?: string
           device_orientation?: string | null
           display_order?: number
+          euler_angles?: number[] | null
           feature_category?: string | null
           feature_confidence?: number | null
           file_size_bytes?: number | null
           height?: number | null
           id?: string
           image_url: string
+          is_full_resolution?: boolean | null
           is_primary?: boolean
           light_estimate?: number | null
+          light_estimate_lumens?: number | null
           mime_type?: string | null
+          photo_kind?: string | null
           quality_score?: number | null
           role: string
           room_id?: string | null
@@ -5309,24 +5946,33 @@ export type Database = {
           sharpness_score?: number | null
           stability_score?: number | null
           thumbnail_url?: string | null
+          timestamp_seconds?: number | null
           width?: number | null
         }
         Update: {
+          associated_feature_id?: string | null
           brightness_score?: number | null
+          camera_intrinsics?: Json | null
+          camera_transform?: number[] | null
+          caption?: string | null
           captured_at?: string
           composition_score?: number | null
           created_at?: string
           device_orientation?: string | null
           display_order?: number
+          euler_angles?: number[] | null
           feature_category?: string | null
           feature_confidence?: number | null
           file_size_bytes?: number | null
           height?: number | null
           id?: string
           image_url?: string
+          is_full_resolution?: boolean | null
           is_primary?: boolean
           light_estimate?: number | null
+          light_estimate_lumens?: number | null
           mime_type?: string | null
+          photo_kind?: string | null
           quality_score?: number | null
           role?: string
           room_id?: string | null
@@ -5334,9 +5980,17 @@ export type Database = {
           sharpness_score?: number | null
           stability_score?: number | null
           thumbnail_url?: string | null
+          timestamp_seconds?: number | null
           width?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "room_scan_images_associated_feature_id_fkey"
+            columns: ["associated_feature_id"]
+            isOneToOne: false
+            referencedRelation: "room_features"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "room_scan_images_room_id_fkey"
             columns: ["room_id"]
@@ -5358,18 +6012,33 @@ export type Database = {
             referencedRelation: "room_scans"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "room_scan_images_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans_v2"
+            referencedColumns: ["id"]
+          },
         ]
       }
       room_scans: {
         Row: {
           annotations: Json | null
+          artifacts_sha256: Json
           average_image_quality: number | null
+          bundle_manifest_url: string | null
+          capture_environment: Json | null
+          captured_room_json_url: string | null
+          coverage_heatmap_url: string | null
           coverage_percentage: number | null
           created_at: string
+          depth_archive_url: string | null
+          device_model: string | null
           dimensions: Json | null
           features: Json | null
           floor_area: number | null
           furniture_detected: Json | null
+          has_lidar: boolean | null
           hero_frame_candidate_count: number | null
           hero_frame_captured_at: string | null
           hero_frame_score: number | null
@@ -5377,31 +6046,52 @@ export type Database = {
           id: string
           image_count: number | null
           measurements: Json | null
+          mesh_url: string | null
           model_url: string | null
           model_url_gltf: string | null
+          multi_room_builder_id: string | null
           name: string
+          os_version: string | null
+          photos_manifest_url: string | null
           processed_at: string | null
           project_id: string | null
           quality_grade: string | null
           room_id: string | null
           room_type: string | null
+          scan_bundle_size_bytes: number | null
+          scan_bundle_url: string | null
           scan_data: Json | null
+          scan_schema_version: number
           scanned_at: string
           status: string
           style_signals: Json | null
           suggested_styles: string[] | null
           thumbnail_url: string | null
+          upload_attempt_count: number
+          upload_completed_at: string | null
+          upload_error: string | null
+          upload_progress: number
+          upload_started_at: string | null
           user_id: string
+          world_map_url: string | null
         }
         Insert: {
           annotations?: Json | null
+          artifacts_sha256?: Json
           average_image_quality?: number | null
+          bundle_manifest_url?: string | null
+          capture_environment?: Json | null
+          captured_room_json_url?: string | null
+          coverage_heatmap_url?: string | null
           coverage_percentage?: number | null
           created_at?: string
+          depth_archive_url?: string | null
+          device_model?: string | null
           dimensions?: Json | null
           features?: Json | null
           floor_area?: number | null
           furniture_detected?: Json | null
+          has_lidar?: boolean | null
           hero_frame_candidate_count?: number | null
           hero_frame_captured_at?: string | null
           hero_frame_score?: number | null
@@ -5409,31 +6099,52 @@ export type Database = {
           id?: string
           image_count?: number | null
           measurements?: Json | null
+          mesh_url?: string | null
           model_url?: string | null
           model_url_gltf?: string | null
+          multi_room_builder_id?: string | null
           name: string
+          os_version?: string | null
+          photos_manifest_url?: string | null
           processed_at?: string | null
           project_id?: string | null
           quality_grade?: string | null
           room_id?: string | null
           room_type?: string | null
+          scan_bundle_size_bytes?: number | null
+          scan_bundle_url?: string | null
           scan_data?: Json | null
+          scan_schema_version?: number
           scanned_at?: string
           status?: string
           style_signals?: Json | null
           suggested_styles?: string[] | null
           thumbnail_url?: string | null
+          upload_attempt_count?: number
+          upload_completed_at?: string | null
+          upload_error?: string | null
+          upload_progress?: number
+          upload_started_at?: string | null
           user_id: string
+          world_map_url?: string | null
         }
         Update: {
           annotations?: Json | null
+          artifacts_sha256?: Json
           average_image_quality?: number | null
+          bundle_manifest_url?: string | null
+          capture_environment?: Json | null
+          captured_room_json_url?: string | null
+          coverage_heatmap_url?: string | null
           coverage_percentage?: number | null
           created_at?: string
+          depth_archive_url?: string | null
+          device_model?: string | null
           dimensions?: Json | null
           features?: Json | null
           floor_area?: number | null
           furniture_detected?: Json | null
+          has_lidar?: boolean | null
           hero_frame_candidate_count?: number | null
           hero_frame_captured_at?: string | null
           hero_frame_score?: number | null
@@ -5441,21 +6152,34 @@ export type Database = {
           id?: string
           image_count?: number | null
           measurements?: Json | null
+          mesh_url?: string | null
           model_url?: string | null
           model_url_gltf?: string | null
+          multi_room_builder_id?: string | null
           name?: string
+          os_version?: string | null
+          photos_manifest_url?: string | null
           processed_at?: string | null
           project_id?: string | null
           quality_grade?: string | null
           room_id?: string | null
           room_type?: string | null
+          scan_bundle_size_bytes?: number | null
+          scan_bundle_url?: string | null
           scan_data?: Json | null
+          scan_schema_version?: number
           scanned_at?: string
           status?: string
           style_signals?: Json | null
           suggested_styles?: string[] | null
           thumbnail_url?: string | null
+          upload_attempt_count?: number
+          upload_completed_at?: string | null
+          upload_error?: string | null
+          upload_progress?: number
+          upload_started_at?: string | null
           user_id?: string
+          world_map_url?: string | null
         }
         Relationships: [
           {
@@ -6951,6 +7675,159 @@ export type Database = {
         }
         Relationships: []
       }
+      room_scans_v2: {
+        Row: {
+          average_image_quality: number | null
+          capture_environment: Json | null
+          captured_room_json_url: string | null
+          coverage_percentage: number | null
+          created_at: string | null
+          depth_archive_url: string | null
+          device_model: string | null
+          dimensions: Json | null
+          features: Json | null
+          floor_area: number | null
+          furniture_detected: Json | null
+          has_lidar: boolean | null
+          hero_frame_score: number | null
+          hero_frame_url: string | null
+          id: string | null
+          image_count: number | null
+          mesh_url: string | null
+          model_url: string | null
+          multi_room_builder_id: string | null
+          name: string | null
+          os_version: string | null
+          project_id: string | null
+          quality_grade: string | null
+          room_id: string | null
+          room_type: string | null
+          scan_bundle_size_bytes: number | null
+          scan_bundle_url: string | null
+          scan_data: Json | null
+          scan_schema_version: number | null
+          scanned_at: string | null
+          status: string | null
+          style_signals: Json | null
+          suggested_styles: string[] | null
+          thumbnail_url: string | null
+          user_id: string | null
+          world_map_url: string | null
+        }
+        Insert: {
+          average_image_quality?: number | null
+          capture_environment?: Json | null
+          captured_room_json_url?: string | null
+          coverage_percentage?: number | null
+          created_at?: string | null
+          depth_archive_url?: string | null
+          device_model?: string | null
+          dimensions?: Json | null
+          features?: Json | null
+          floor_area?: number | null
+          furniture_detected?: Json | null
+          has_lidar?: boolean | null
+          hero_frame_score?: number | null
+          hero_frame_url?: string | null
+          id?: string | null
+          image_count?: number | null
+          mesh_url?: string | null
+          model_url?: string | null
+          multi_room_builder_id?: string | null
+          name?: string | null
+          os_version?: string | null
+          project_id?: string | null
+          quality_grade?: string | null
+          room_id?: string | null
+          room_type?: string | null
+          scan_bundle_size_bytes?: number | null
+          scan_bundle_url?: string | null
+          scan_data?: Json | null
+          scan_schema_version?: number | null
+          scanned_at?: string | null
+          status?: string | null
+          style_signals?: Json | null
+          suggested_styles?: string[] | null
+          thumbnail_url?: string | null
+          user_id?: string | null
+          world_map_url?: string | null
+        }
+        Update: {
+          average_image_quality?: number | null
+          capture_environment?: Json | null
+          captured_room_json_url?: string | null
+          coverage_percentage?: number | null
+          created_at?: string | null
+          depth_archive_url?: string | null
+          device_model?: string | null
+          dimensions?: Json | null
+          features?: Json | null
+          floor_area?: number | null
+          furniture_detected?: Json | null
+          has_lidar?: boolean | null
+          hero_frame_score?: number | null
+          hero_frame_url?: string | null
+          id?: string | null
+          image_count?: number | null
+          mesh_url?: string | null
+          model_url?: string | null
+          multi_room_builder_id?: string | null
+          name?: string | null
+          os_version?: string | null
+          project_id?: string | null
+          quality_grade?: string | null
+          room_id?: string | null
+          room_type?: string | null
+          scan_bundle_size_bytes?: number | null
+          scan_bundle_url?: string | null
+          scan_data?: Json | null
+          scan_schema_version?: number | null
+          scanned_at?: string | null
+          status?: string | null
+          style_signals?: Json | null
+          suggested_styles?: string[] | null
+          thumbnail_url?: string | null
+          user_id?: string | null
+          world_map_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_scans_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_scans_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_scans_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms_with_hero_frames"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_scans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_scans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rooms_with_hero_frames: {
         Row: {
           created_at: string | null
@@ -7040,6 +7917,7 @@ export type Database = {
       }
     }
     Functions: {
+      activate_project_v2: { Args: { input: Json }; Returns: string }
       activate_proposal_as_project: {
         Args: { p_proposal_id: string; p_start_date?: string }
         Returns: string
@@ -7061,6 +7939,7 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: number
       }
+      comms_resolve_role: { Args: { p_user_id: string }; Returns: string }
       decrement_room_saved_items: {
         Args: { p_count?: number; p_room_id: string }
         Returns: undefined
@@ -7103,6 +7982,17 @@ export type Database = {
           name: string
           price_retail: number
           similarity: number
+        }[]
+      }
+      get_ab_variant_stats: {
+        Args: { p_campaign_id: string }
+        Returns: {
+          bounced: number
+          clicked: number
+          delivered: number
+          opened: number
+          sent: number
+          variant: string
         }[]
       }
       get_conversation_history: {
@@ -7229,9 +8119,30 @@ export type Database = {
         Args: { p_column: string; p_sequence_id: string }
         Returns: undefined
       }
+      invoke_edge_function: {
+        Args: { body?: Json; fn_name: string }
+        Returns: number
+      }
+      is_comms_admin: { Args: { p_user_id: string }; Returns: boolean }
+      is_comms_thread_participant: {
+        Args: { p_thread_id: string; p_user_id: string }
+        Returns: boolean
+      }
       is_org_admin_or_owner: {
         Args: { _organization_id: string; _user_id?: string }
         Returns: boolean
+      }
+      is_project_team_member: {
+        Args: { _project_id: string; _user_id?: string }
+        Returns: boolean
+      }
+      mark_scan_upload_complete: {
+        Args: { p_scan_id: string }
+        Returns: undefined
+      }
+      merge_scan_artifact_sha256: {
+        Args: { p_kind: string; p_scan_id: string; p_sha: string }
+        Returns: undefined
       }
       next_co_number: { Args: { p_project_id: string }; Returns: string }
       process_style_quiz: {
@@ -7245,6 +8156,33 @@ export type Database = {
       revoke_room_scan_access: {
         Args: { p_association_id: string; p_reason?: string }
         Returns: boolean
+      }
+      rpc_mark_thread_read: { Args: { p_thread_id: string }; Returns: boolean }
+      rpc_soft_delete_message: {
+        Args: { p_message_id: string }
+        Returns: boolean
+      }
+      rpc_start_direct_thread: {
+        Args: { counterpart: string }
+        Returns: string
+      }
+      rpc_start_project_thread: {
+        Args: { p_project_id: string }
+        Returns: string
+      }
+      rpc_start_vendor_brief: {
+        Args: { p_body: string; p_project_id: string; p_vendor_id: string }
+        Returns: string
+      }
+      rpc_unread_summary: {
+        Args: never
+        Returns: {
+          kind: string
+          last_message_at: string
+          project_id: string
+          thread_id: string
+          unread_count: number
+        }[]
       }
       search_products: {
         Args: {
@@ -7629,5 +8567,3 @@ export const Constants = {
   },
 } as const
 
-A new version of Supabase CLI is available: v2.95.4 (currently installed v2.72.7)
-We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

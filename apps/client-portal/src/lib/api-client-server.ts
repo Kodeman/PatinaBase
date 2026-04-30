@@ -108,35 +108,7 @@ export const serverProjectsApi = {
   },
 };
 
-// ==================== Comms API ====================
-
-export const serverCommsApi = {
-  async getThreads(projectId: string, signal?: AbortSignal) {
-    return serverFetch<any>(env.commsApiUrl, `/threads?projectId=${projectId}`, { signal });
-  },
-
-  async getThread(threadId: string, signal?: AbortSignal) {
-    return serverFetch<any>(env.commsApiUrl, `/threads/${threadId}`, { signal });
-  },
-
-  async getMessages(threadId: string, signal?: AbortSignal) {
-    return serverFetch<any>(env.commsApiUrl, `/threads/${threadId}/messages`, { signal });
-  },
-
-  async sendMessage(
-    threadId: string,
-    content: string,
-    attachments?: string[],
-    signal?: AbortSignal
-  ) {
-    return serverFetch<any>(
-      env.commsApiUrl,
-      `/threads/${threadId}/messages`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ content, attachments }),
-        signal,
-      }
-    );
-  },
-};
+// ==================== Comms ====================
+// In-app messaging now lives in @patina/supabase hooks (Supabase-native).
+// Server-side comms access is intentionally not available — all comms are
+// queried via RLS-gated client hooks against Postgres + Realtime.

@@ -51,7 +51,10 @@ export type NotificationType =
   | 'change_order_signed'
   | 'payment_received'
   | 'vendor_eta_update'
-  | 'vendor_po_issued';
+  | 'vendor_po_issued'
+  // In-app messaging (in-app-messaging-prd v1.0)
+  | 'in_app_message'
+  | 'in_app_message_mention';
 
 export type NotificationChannel = 'email' | 'push' | 'in_app' | 'sms';
 

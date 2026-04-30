@@ -6,6 +6,7 @@ import { useProjectTeamMembers, type ProjectRole } from '@patina/supabase';
 import { InviteDesignerModal } from './invite-designer-modal';
 import { AddBookkeeperModal } from './add-bookkeeper-modal';
 import { ReassignLeadModal } from './reassign-lead-modal';
+import { BriefVendorModal } from './brief-vendor-modal';
 
 const ROLE_LABEL: Record<ProjectRole, string> = {
   lead_designer: 'Lead designer',
@@ -25,6 +26,7 @@ export function TeamPanel({ projectId, leadDesignerName, currentDesignerId }: {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [bookkeeperOpen, setBookkeeperOpen] = useState(false);
   const [reassignOpen, setReassignOpen] = useState(false);
+  const [briefVendorOpen, setBriefVendorOpen] = useState(false);
 
   return (
     <div className="my-6 grid gap-6 md:grid-cols-2">
@@ -83,6 +85,14 @@ export function TeamPanel({ projectId, leadDesignerName, currentDesignerId }: {
           >
             + Initiate scope change
           </Link>
+          <button
+            type="button"
+            onClick={() => setBriefVendorOpen(true)}
+            className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
+            style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)' }}
+          >
+            + Brief vendor
+          </button>
         </div>
       </div>
       <InviteDesignerModal
@@ -103,6 +113,11 @@ export function TeamPanel({ projectId, leadDesignerName, currentDesignerId }: {
           onClose={() => setReassignOpen(false)}
         />
       )}
+      <BriefVendorModal
+        projectId={projectId}
+        open={briefVendorOpen}
+        onClose={() => setBriefVendorOpen(false)}
+      />
     </div>
   );
 }

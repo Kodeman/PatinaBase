@@ -48,6 +48,12 @@ export type { CampaignMakerSpotlightProps, SpotlightProduct } from './templates/
 export { CampaignReengagement } from './templates/campaign-reengagement';
 export type { CampaignReengagementProps, PersonalizedProduct } from './templates/campaign-reengagement';
 
+// In-app messaging templates (in-app-messaging-prd v1.0)
+export { InAppMessage } from './templates/in-app-message';
+export type { InAppMessageProps } from './templates/in-app-message';
+export { InAppMessageMention } from './templates/in-app-message-mention';
+export type { InAppMessageMentionProps } from './templates/in-app-message-mention';
+
 // Block renderer (pure string functions — no React dependency)
 export { renderTemplate, renderBlock, renderBlocks } from './block-renderer';
 export type { RenderContext } from './block-renderer';

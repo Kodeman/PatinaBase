@@ -268,6 +268,8 @@ function buildSubject(type: string, data: Record<string, unknown>): string {
     "back-in-stock": `Back in stock: ${data.productName || "An item you wanted"}`,
     "weekly-inspiration": "Your weekly furniture inspiration",
     "founding-circle-update": "Founding Circle: What's new at Patina",
+    "in-app-message": `New message from ${data.senderName || "your team"}`,
+    "in-app-message-mention": `${data.senderName || "Someone"} mentioned you in Patina`,
   };
 
   return subjects[type] || "Notification from Patina";
@@ -299,6 +301,8 @@ function buildEmailHtml(templateId: string, data: Record<string, unknown>): stri
       <p>${data.alertDescription || "Unusual activity was detected on your account."}</p>
       <a href="${data.secureAccountUrl}" style="display:inline-block;background:#C45B4A;color:#fff;padding:14px 32px;border-radius:24px;text-decoration:none;font-weight:600;">Secure My Account</a>
     `,
+    "in-app-message": buildInAppMessageHtml(data, false),
+    "in-app-message-mention": buildInAppMessageHtml(data, true),
   };
 
   const body = templates[templateId] || `<p>${greeting} You have a new notification from Patina.</p>`;
@@ -320,5 +324,90 @@ function buildEmailHtml(templateId: string, data: Record<string, unknown>): stri
       </div>
     </body>
     </html>
+  `;
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
+ * Inline HTML for in-app message emails. Mirrors the React Email template at
+ * packages/email/src/templates/in-app-message.tsx — the React version is the
+ * design source of truth; this string version is what the edge function ships
+ * until DB-backed templates are seeded.
+ */
+function buildInAppMessageHtml(
+  data: Record<string, unknown>,
+  isMention: boolean,
+): string {
+  const senderName = (data.senderName as string) || "Someone";
+  const senderInitial = senderName.slice(0, 1).toUpperCase();
+  const senderAvatarUrl = data.senderAvatarUrl as string | null;
+  const previewBody = (data.previewBody as string) || "";
+  const threadKind = (data.threadKind as string) || "direct";
+  const projectTitle = data.projectTitle as string | null;
+  const threadTitle = data.threadTitle as string | null;
+  const deepLink = (data.deepLink as string) || "#";
+  const muteThreadUrl = (data.muteThreadUrl as string) || "";
+  const recipientName = (data.displayName as string) || "";
+
+  const headline = isMention
+    ? `${escapeHtml(senderName)} mentioned you`
+    : `${escapeHtml(senderName)} sent you a message`;
+  const headlineColor = isMention ? "#A56A3F" : "#2C2926";
+  const bubbleBg = isMention ? "#FBF3EA" : "#FAF7F2";
+  const bubbleBorder = isMention ? "#E5D2BB" : "#EEE6DB";
+
+  const context = (() => {
+    if (threadKind === "project" && projectTitle) {
+      return `In your project: ${escapeHtml(projectTitle)}`;
+    }
+    if (threadKind === "vendor_brief") {
+      return projectTitle
+        ? `Vendor brief — ${escapeHtml(projectTitle)}`
+        : "Vendor brief";
+    }
+    return threadTitle ? escapeHtml(threadTitle) : "Direct message";
+  })();
+
+  const greeting = recipientName
+    ? `${escapeHtml(recipientName)},`
+    : "Hello —";
+
+  const avatarMarkup = senderAvatarUrl
+    ? `<img src="${escapeHtml(senderAvatarUrl)}" alt="${escapeHtml(senderName)}" width="36" height="36" style="border-radius:50%;display:block;" />`
+    : `<div style="width:36px;height:36px;border-radius:50%;background:#C4A57B;color:#fff;font-size:15px;font-weight:600;line-height:36px;text-align:center;">${escapeHtml(senderInitial)}</div>`;
+
+  const muteFooter = muteThreadUrl
+    ? `<p style="color:#7A736C;font-size:12px;line-height:18px;margin:0;text-align:center;">
+         Too much? <a href="${escapeHtml(muteThreadUrl)}" style="color:#A3927C;text-decoration:underline;">Mute this conversation</a> and we'll stop emailing about it.
+       </p>`
+    : "";
+
+  return `
+    <p style="color:#7A736C;font-size:13px;margin:0 0 4px 0;letter-spacing:0.02em;">${greeting}</p>
+    <h1 style="color:${headlineColor};font-size:22px;font-weight:600;line-height:28px;margin:0 0 4px 0;">${headline}</h1>
+    <p style="color:#7A736C;font-size:13px;margin:0 0 20px 0;font-style:italic;">${context}</p>
+    <div style="background:${bubbleBg};border-radius:12px;border:1px solid ${bubbleBorder};padding:16px;margin:0 0 24px 0;">
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td style="width:48px;vertical-align:top;padding-right:12px;">${avatarMarkup}</td>
+          <td style="vertical-align:top;">
+            <p style="color:#2C2926;font-size:13px;font-weight:600;margin:0 0 4px 0;">${escapeHtml(senderName)}</p>
+            <p style="color:#3A3530;font-size:15px;line-height:22px;margin:0;white-space:pre-wrap;">${escapeHtml(previewBody)}</p>
+          </td>
+        </tr>
+      </table>
+    </div>
+    <div style="margin:0 0 24px 0;text-align:center;">
+      <a href="${escapeHtml(deepLink)}" style="display:inline-block;background:#C4A57B;color:#fff;padding:14px 32px;border-radius:24px;text-decoration:none;font-weight:600;">${isMention ? "See the mention" : "Open conversation"}</a>
+    </div>
+    ${muteFooter}
   `;
 }

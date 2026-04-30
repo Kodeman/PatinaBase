@@ -34,6 +34,7 @@ import {
 } from '@/components/portal/project-detail';
 import { DecisionsPanel } from '@/components/portal/project-detail/decisions-panel';
 import { TeamPanel } from '@/components/portal/project-detail/team-panel';
+import { ProjectCommunicationsPanel } from '@/components/portal/project-communications-panel';
 import { adaptProjectRooms } from '@/lib/project-room-adapter';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -262,6 +263,10 @@ export default function ProjectDetailPage({
             projectId={id}
           />
         </div>
+
+        {/* Zone 11: Communications — project group thread */}
+        <ProjectCommunicationsPanel projectId={id} />
+        <StrataMark variant="mini" />
 
         {/* Zone 12: Project meta — Team */}
         <TeamPanel

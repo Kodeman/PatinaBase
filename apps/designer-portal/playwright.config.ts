@@ -1,10 +1,26 @@
 import { defineConfig, devices } from '@playwright/test';
+import fs from 'fs';
+import path from 'path';
 
-/**
- * Read environment variables from file.
- * https://github.com/motdotla/dotenv
- */
-// require('dotenv').config();
+// Load env vars from .env.local / .env (Next.js convention) so the auth
+// fixture and other helpers can see NEXT_PUBLIC_SUPABASE_URL etc.
+function loadEnvFile(file: string): void {
+  const full = path.resolve(__dirname, file);
+  if (!fs.existsSync(full)) return;
+  for (const line of fs.readFileSync(full, 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+    if (!m) continue;
+    const [, key, rawValue] = m;
+    if (process.env[key] !== undefined) continue;
+    let value = rawValue.trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    process.env[key] = value;
+  }
+}
+loadEnvFile('.env.local');
+loadEnvFile('.env');
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -67,10 +83,15 @@ export default defineConfig({
     // },
   ],
 
-  /* Run your local dev server before starting the tests */
-  // webServer: {
-  //   command: 'npm run dev',
-  //   url: 'http://localhost:3000',
-  //   reuseExistingServer: !process.env.CI,
-  // },
+  /* Run your local dev server before starting the tests.
+   * Supabase must be started separately (`pnpm supabase:start && pnpm supabase db reset`)
+   * so the seeded designer/client/decisions exist before the suite runs.
+   */
+  webServer: {
+    command: 'pnpm dev',
+    cwd: '.',
+    url: 'http://localhost:3000',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+  },
 });

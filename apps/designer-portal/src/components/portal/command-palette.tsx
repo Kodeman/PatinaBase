@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   CommandDialog,
@@ -11,12 +11,41 @@ import {
   CommandItem,
   CommandSeparator,
 } from '@patina/design-system';
-import { CalendarDays, TrendingUp, Package, Users, DollarSign, Settings, Search } from 'lucide-react';
+import {
+  CalendarDays,
+  TrendingUp,
+  Package,
+  Users,
+  DollarSign,
+  Settings,
+  Search,
+  GitBranch,
+} from 'lucide-react';
+import { useAllDecisions } from '@patina/supabase';
 import { useCommandPalette } from '@/contexts/command-palette-context';
 
 export function CommandPalette() {
   const { isOpen, close } = useCommandPalette();
   const router = useRouter();
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search.trim()), 150);
+    return () => clearTimeout(id);
+  }, [search]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearch('');
+      setDebouncedSearch('');
+    }
+  }, [isOpen]);
+
+  const { data: decisionResults } = useAllDecisions(
+    debouncedSearch.length >= 2 ? { q: debouncedSearch } : undefined
+  );
+  const decisions = debouncedSearch.length >= 2 ? (decisionResults ?? []).slice(0, 6) : [];
 
   const navigate = useCallback(
     (href: string) => {
@@ -28,9 +57,44 @@ export function CommandPalette() {
 
   return (
     <CommandDialog open={isOpen} onOpenChange={(open) => !open && close()}>
-      <CommandInput placeholder="Search projects, products, clients..." />
+      <CommandInput
+        placeholder="Search projects, products, clients, decisions..."
+        value={search}
+        onValueChange={setSearch}
+      />
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
+
+        {decisions.length > 0 && (
+          <>
+            <CommandGroup heading="Decisions">
+              {decisions.map((decision) => {
+                const clientName =
+                  decision.designer_client?.client?.full_name ??
+                  decision.designer_client?.client_name ??
+                  null;
+                const projectName = decision.project?.name ?? null;
+                const subline = [clientName, projectName].filter(Boolean).join(' · ');
+                return (
+                  <CommandItem
+                    key={decision.id}
+                    value={`decision-${decision.id}-${decision.title}`}
+                    onSelect={() => navigate(`/portal/decisions/${decision.id}`)}
+                  >
+                    <GitBranch className="mr-2 h-4 w-4" />
+                    <div className="flex flex-col">
+                      <span className="text-sm">{decision.title}</span>
+                      {subline && (
+                        <span className="type-meta-small text-[var(--text-muted)]">{subline}</span>
+                      )}
+                    </div>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+            <CommandSeparator />
+          </>
+        )}
 
         <CommandGroup heading="Navigation">
           <CommandItem onSelect={() => navigate('/portal')}>
@@ -48,6 +112,10 @@ export function CommandPalette() {
           <CommandItem onSelect={() => navigate('/portal/clients')}>
             <Users className="mr-2 h-4 w-4" />
             Clients
+          </CommandItem>
+          <CommandItem onSelect={() => navigate('/portal/decisions')}>
+            <GitBranch className="mr-2 h-4 w-4" />
+            Decisions
           </CommandItem>
         </CommandGroup>
 
