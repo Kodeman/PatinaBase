@@ -2,7 +2,7 @@
 
 > **Purpose:** Living scoreboard mapping every PRD/spec requirement and backend capability to its current admin-portal state. Update this file as gaps close — flip rows from 🔴/🔶/🟧/🟡 to ✅ and link the closing PR.
 >
-> **Last audit:** 2026-04-30 · P0 batch closed (audit, dashboard, health)
+> **Last audit:** 2026-04-30 · P0 + partial P1 batch closed (audit, dashboard, health, analytics, settings, flags, payouts, type-debt)
 > **Sources:** `docs/prds/`, `docs/specs/_active/`, `apps/admin-portal/docs/{README,USER_GUIDE,API_REFERENCE}.md`, `supabase/migrations/00021,00022,00024,00044,00046,00048,00052,00071,00072,00076,00084,00101-00103`.
 
 ## Status Legend
@@ -21,21 +21,21 @@
 |---|---|---|---|---|---|
 | Identity & Access | 7 | 2 | 0 | 2 | 4 |
 | Catalog & Media | 5 | 4 | 1 (media) | 1 | 3 |
-| Vendor Pipeline | 6 | 3 | 0 | 2 | 0 |
+| Vendor Pipeline | 7 | 2 | 0 | 2 | 0 |
 | Communications | 9 | 1 | 0 | 0 | 2 |
-| Orders & Finance | 3 | 1 | 0 | 3 | 2 |
+| Orders & Finance | 4 | 1 | 0 | 2 | 2 |
 | Projects & Approvals | 2 | 0 | 0 | 4 | 0 |
-| System Ops | 2 | 0 | 4 | 1 | 3 |
+| System Ops | 5 | 0 | 1 (media) | 1 | 3 |
 | Privacy & Compliance | 0 | 0 | 2 | 1 | 2 |
 | Messaging & Support | 1 | 0 | 0 | 4 | 1 |
 | Search Admin | 0 | 0 | 0 | 0 | 4 |
 
 **Headline findings:**
-1. **Four production routes remain stubs** (down from seven after the P0 batch): `/analytics`, `/flags`, `/media`, `/settings`. `/audit`, `/dashboard`, `/health` were promoted from stub → built in the P0 batch.
+1. **One production route remains a stub** (down from seven): `/media` only. `/audit`, `/dashboard`, `/health` closed in P0; `/analytics`, `/settings`, `/flags` closed in P1; `/finance/payouts` added new.
 2. **Production-quality domains:** users, roles, catalog, communications, vendor pipeline, applications, projects, orders.
 3. **~50% of admin-relevant backend tables have no UI:** payouts, vendor reviews, API keys, organizations, RFIs, outbox events, in-app messaging admin, MFA enforcement, JIT elevation, dual-control approvals.
 4. **Catalog has 40+ TODOs** in its test file (loading skeletons, empty states, pagination, validation badges, view toggles).
-5. **Type-generation debt:** 6 files in `pipeline/`, `cowork/`, `vendors/` carry `LooseClient` casts pending Supabase type regen for tables added in mig 00076.
+5. ~~Type-generation debt~~ — closed in P1; all 7 `LooseClient` casts removed in pipeline + cowork + vendors routes.
 
 ---
 
@@ -91,7 +91,7 @@
 | Trade-account state mgmt | vendor-pipeline PRD | ✅ | `pipeline_vendors` columns wired | — | — |
 | Hard-veto with reason | vendor-pipeline PRD | 🟡 | column exists; UI inconsistent across rubric | P2 | Wire veto setter into rubric grid |
 | Drop-ship / lead-time / data-feed config | vendor-pipeline PRD | 🟡 | columns exist; UI sparse | P2 | Extend vendor detail edit form |
-| Type generation for pipeline tables | code | 🟡 | 6 files use `LooseClient` cast | P1 | `pnpm supabase gen types` + remove casts |
+| Type generation for pipeline tables | code | ✅ | All 7 `LooseClient` casts removed; uses typed `auth.adminClient` directly. Json type re-exported from `@patina/supabase`. | — | — |
 | Vendor reviews & specializations | mig | 🔶 | tables exist; no admin moderation UI | P3 | Moderation panel inside vendor detail |
 | Vendor certifications | mig | 🔶 | table exists; no admin UI | P3 | Cert upload/verify panel |
 
@@ -122,7 +122,7 @@
 | Advanced filters (payment state, fulfillment, date) | spec | 🟡 | basic status only | P2 | Extend `/orders` filter bar |
 | Payment reconciliation dashboard | spec | 🔶 | `reconciliations` table in svc_orders; no UI | P2 | New page reading reconciliation rows |
 | Discount code management | mig svc_orders | 🔶 | `discounts` table; no admin UI | P2 | New `/orders/discounts` page |
-| Designer payouts / earnings | mig | 🔶 | `designer_earnings`, `designer_payouts` tables; no UI | P1 | New `/finance/payouts` page |
+| Designer payouts / earnings | mig | ✅ | `/finance/payouts` real page over `designer_payouts` joined to `profiles`. Filter by status, paginated, with totals (pending / processing / completed-30d / failed). Backed by `/api/admin/payouts`. | — | Follow-up: drill into `designer_earnings` per payout, batch processing actions |
 | Tax / geographic settings | spec | 🔴 | Not built | P3 | Settings panel |
 | Order export (CSV) | — | 🔴 | Not built | P3 | Export button on `/orders` |
 
@@ -143,9 +143,9 @@
 |---|---|---|---|---|---|
 | **Executive dashboard** | README | ✅ | `/dashboard` real KPI tiles: pending applications, vendor pipeline live, comms 24h send rate, total orders. PostHog widget retained. Health rail links to `/health`. | — | Follow-up: orders today/week count + revenue (needs orders-metrics endpoint or RPC) |
 | **Cross-service health (SLO, errors, latency)** | spec | ✅ | `/health` real polling panel (15s) over Orders/Media/Projects + Supabase. `/api/admin/health` aggregator with 3s timeouts and 5s response cache. | — | Follow-up: migrate media inline `/health` to a proper HealthController for DB indicator parity |
-| Feature flags admin | spec | 🟧 | `/flags` re-exports `/demo/flags`; no flag table in schema | P1 | Build `feature_flags` table + UI OR remove from nav |
-| Settings (env / config / sender) | spec | 🟧 | `/settings` re-exports `/demo/settings` | P1 | Real settings backed by config table |
-| Analytics dashboard | spec | 🟧 | `/analytics` re-exports `/demo/analytics` | P1 | Wire to existing analytics RPCs + pipeline-metrics |
+| Feature flags admin | spec | ✅ | `/flags` real env-flag viewer over `NEXT_PUBLIC_ENABLE_*`. No `feature_flags` table yet — toggle via redeploy. Runtime flag table is a follow-up. | — | Follow-up: build `feature_flags` table + edit UI for runtime toggles |
+| Settings (env / config / sender) | spec | ✅ | `/settings` real read-only viewer (env config, Resend sender, suppression count, bounce count, caller roles). Backed by `/api/admin/settings-overview`. | — | Follow-up: editable settings backed by a `system_settings` table |
+| Analytics dashboard | spec | ✅ | `/analytics` real cross-domain panel: comms 30d stats, vendor pipeline, applications queue, catalog/payout counts. Backed by `/api/admin/platform-counts` + reuses comms-dashboard + pipeline-metrics + applications-metrics. | — | Follow-up: time-series charts (currently summary metrics only) |
 | Outbox / process-jobs monitor | mig | 🔶 | `outbox_events`, `process_jobs` tables; no admin UI | P1 | New `/system/jobs` page |
 | Background-job retry / dead-letter | spec | 🔴 | No UI | P2 | Add to jobs page once basic surface lands |
 | Cache health (Redis hit/miss) | spec | 🔴 | No UI | P3 | Health-page section |
@@ -199,18 +199,20 @@
 2. ~~`/dashboard` → real KPI tiles~~ — done (`/api/admin/applications-metrics` + `useDashboardMetrics`; reuses pipeline + comms hooks). Orders today/week + revenue deferred to P1 follow-up.
 3. ~~`/health` → real service-status panel~~ — done (`/api/admin/health` aggregator + `useSystemHealth`, 15s poll).
 
-### P1 — Surface backend that already works (week 3–4)
-4. `/analytics` — wire to existing analytics RPCs + pipeline-metrics + comms analytics.
-5. `/settings` — real config (sender email, suppression rules, flag toggles).
-6. `/media` — real asset browser using `media_assets` + `asset_renditions`.
-7. `/flags` — build `feature_flags` table + UI OR remove from nav.
-8. Designer payouts / earnings page — surfaces existing `designer_earnings` / `designer_payouts`.
-9. DSR export + deletion queues — promote `/demo/privacy` to prod.
-10. In-app messaging admin viewer — read-only.
-11. Outbox / process-jobs monitor.
-12. Bulk CSV product import.
-13. MFA enforcement panel.
-14. Regenerate Supabase types — drop `LooseClient` casts in 6 pipeline/cowork files.
+### P1 — Surface backend that already works (week 3–4) — partially done
+4. ~~`/analytics`~~ — done (`/api/admin/platform-counts` + reuse of comms/pipeline/applications metrics).
+5. ~~`/settings`~~ — done (`/api/admin/settings-overview`, read-only env + email + caller roles).
+6. **`/media`** — *deferred*. Requires a service-side proxy at `/api/admin/media-assets` calling the media service `/v1/media/search`, and the admin user needs `media.asset.read` permission in NestJS auth. Scope > one session.
+7. ~~`/flags`~~ — done (env-flag viewer; `feature_flags` table is a follow-up).
+8. ~~Designer payouts / earnings page~~ — done (`/finance/payouts`).
+9. **DSR export + deletion queues** — *deferred*. Substantial compliance UI; deserves dedicated PR.
+10. **In-app messaging admin viewer** — *deferred*. Schema (mig 00101–00103) ready but UX needs design.
+11. **Outbox / process-jobs monitor** — *deferred*. `outbox_events` lives in `svc_media` + `svc_orders` schemas which aren't exposed via PostgREST; needs schema exposure or per-service admin endpoint.
+12. **Bulk CSV product import** — *deferred*. Substantial UI work (CSV parse, validation, error-row download).
+13. **MFA enforcement panel** — *deferred*. Auth surface; needs careful design + dedicated PR.
+14. ~~Regenerate Supabase types~~ — done (all 7 `LooseClient` casts removed; `Json` re-exported from `@patina/supabase`).
+
+**Designer-application metrics on /analytics** — partially done (counts surfaced via `useApplicationsMetrics`). Decision-bottleneck and conversion-funnel chart wiring still pending.
 
 ### P2 — Fill PRD gaps (week 5–8)
 15. Catalog UX polish (skeletons, empty states, pagination, view toggles, validation dashboard).

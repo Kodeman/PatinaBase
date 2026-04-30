@@ -10,9 +10,6 @@ import { VendorPipeline } from '@patina/types';
 type Vendor = VendorPipeline.Vendor;
 type VendorStage = VendorPipeline.VendorStage;
 
-// TODO: remove LooseClient once generated Supabase types include pipeline tables.
-type LooseClient = { from: (table: string) => any };
-
 const ALLOWED_UPDATE_FIELDS = new Set<keyof Vendor>([
   'name',
   'website_url',
@@ -49,7 +46,7 @@ export async function GET(
 ) {
   const auth = await getAuthenticatedAdmin(request);
   if ('error' in auth) return auth.error;
-  const db = auth.adminClient as unknown as LooseClient;
+  const db = auth.adminClient;
 
   const { slug } = await params;
 
@@ -88,7 +85,7 @@ export async function PATCH(
 ) {
   const auth = await getAuthenticatedAdmin(request);
   if ('error' in auth) return auth.error;
-  const db = auth.adminClient as unknown as LooseClient;
+  const db = auth.adminClient;
 
   const { slug } = await params;
 

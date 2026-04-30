@@ -5,12 +5,10 @@ import {
   serverError,
 } from '@/lib/supabase-admin';
 import { VendorPipeline } from '@patina/types';
+import type { Json } from '@patina/supabase';
 
 type CoworkTask = VendorPipeline.CoworkTask;
 type CoworkTaskType = VendorPipeline.CoworkTaskType;
-
-// TODO: remove LooseClient once generated Supabase types include pipeline tables.
-type LooseClient = { from: (table: string) => any };
 
 const VALID_TASK_TYPES: CoworkTaskType[] = [
   'prospect_scan',
@@ -27,7 +25,7 @@ const VALID_TASK_TYPES: CoworkTaskType[] = [
 export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedAdmin(request);
   if ('error' in auth) return auth.error;
-  const db = auth.adminClient as unknown as LooseClient;
+  const db = auth.adminClient;
 
   const url = new URL(request.url);
   const status = url.searchParams.get('status') ?? undefined;
@@ -55,7 +53,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await getAuthenticatedAdmin(request);
   if ('error' in auth) return auth.error;
-  const db = auth.adminClient as unknown as LooseClient;
+  const db = auth.adminClient;
 
   let body: Record<string, unknown>;
   try {
@@ -75,7 +73,7 @@ export async function POST(request: NextRequest) {
       .insert({
         task_type: taskType,
         vendor_id: (body.vendor_id as string | null | undefined) ?? null,
-        input_payload: body.input_payload ?? {},
+        input_payload: (body.input_payload ?? {}) as Json,
         status: 'pending',
         is_recurring: Boolean(body.is_recurring),
         cron_expression: (body.cron_expression as string | null | undefined) ?? null,

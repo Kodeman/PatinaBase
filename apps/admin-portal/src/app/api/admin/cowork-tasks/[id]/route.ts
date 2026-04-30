@@ -9,16 +9,13 @@ import { VendorPipeline } from '@patina/types';
 
 type CoworkTask = VendorPipeline.CoworkTask;
 
-// TODO: remove LooseClient once generated Supabase types include pipeline tables.
-type LooseClient = { from: (table: string) => any };
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const auth = await getAuthenticatedAdmin(request);
   if ('error' in auth) return auth.error;
-  const db = auth.adminClient as unknown as LooseClient;
+  const db = auth.adminClient;
 
   const { id } = await params;
 
@@ -43,7 +40,7 @@ export async function PATCH(
 ) {
   const auth = await getAuthenticatedAdmin(request);
   if ('error' in auth) return auth.error;
-  const db = auth.adminClient as unknown as LooseClient;
+  const db = auth.adminClient;
 
   const { id } = await params;
 

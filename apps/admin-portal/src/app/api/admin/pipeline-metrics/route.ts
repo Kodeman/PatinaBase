@@ -4,13 +4,10 @@ import { VendorPipeline } from '@patina/types';
 
 type PipelineMetrics = VendorPipeline.PipelineMetrics;
 
-// TODO: remove LooseClient once generated Supabase types include pipeline tables.
-type LooseClient = { from: (table: string) => any };
-
 export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedAdmin(request);
   if ('error' in auth) return auth.error;
-  const db = auth.adminClient as unknown as LooseClient;
+  const db = auth.adminClient;
 
   try {
     const [{ data: vendors, error: vErr }, { count: activeTasks, error: tErr }] =

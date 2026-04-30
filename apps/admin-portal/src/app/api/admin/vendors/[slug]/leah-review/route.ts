@@ -9,9 +9,6 @@ import { VendorPipeline } from '@patina/types';
 
 const { RUBRIC_DIMENSIONS, computeTriageLevel } = VendorPipeline;
 
-// TODO: remove LooseClient once generated Supabase types include pipeline tables.
-type LooseClient = { from: (table: string) => any };
-
 interface LeahScoreInput {
   dimension: number;
   raw_score: number;
@@ -24,7 +21,7 @@ export async function POST(
 ) {
   const auth = await getAuthenticatedAdmin(request);
   if ('error' in auth) return auth.error;
-  const db = auth.adminClient as unknown as LooseClient;
+  const db = auth.adminClient;
 
   const { slug } = await params;
 

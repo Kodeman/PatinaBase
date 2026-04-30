@@ -5,7 +5,7 @@ export {
   createMiddlewareClient,
   createAdminClient,
 } from './client';
-export type { Database } from './database.types';
+export type { Database, Json } from './database.types';
 export * from './hooks';
 
 // Server-side auth utilities are available via '@patina/supabase/server'

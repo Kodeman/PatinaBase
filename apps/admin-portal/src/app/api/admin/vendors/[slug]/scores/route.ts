@@ -6,15 +6,15 @@ import {
   serverError,
 } from '@/lib/supabase-admin';
 import { VendorPipeline } from '@patina/types';
+import { createAdminClient } from '@patina/supabase/client';
 
 const { RUBRIC_DIMENSIONS, computeTriageLevel } = VendorPipeline;
 type ScoreDimension = VendorPipeline.ScoreDimension;
 type ScoredBy = VendorPipeline.ScoredBy;
 
-// TODO: remove LooseClient once generated Supabase types include pipeline tables.
-type LooseClient = { from: (table: string) => any };
+type AdminDb = ReturnType<typeof createAdminClient>;
 
-async function recomputeVendorAggregates(db: LooseClient, vendorId: string) {
+async function recomputeVendorAggregates(db: AdminDb, vendorId: string) {
   const { data: scores } = await db
     .from('pipeline_vendor_scores')
     .select('dimension, weighted_score, scored_by')
@@ -55,7 +55,7 @@ export async function POST(
 ) {
   const auth = await getAuthenticatedAdmin(request);
   if ('error' in auth) return auth.error;
-  const db = auth.adminClient as unknown as LooseClient;
+  const db = auth.adminClient;
 
   const { slug } = await params;
 
