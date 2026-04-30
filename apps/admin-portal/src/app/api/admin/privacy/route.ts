@@ -70,6 +70,9 @@ export async function GET(request: NextRequest) {
   );
 
   try {
+    // Fetch the three queues. user_id on these tables references auth.users
+    // (NOT profiles), so PostgREST can't embed profiles by default — we batch-
+    // resolve profiles in a follow-up query and merge in JS.
     const [exportsRes, deletionsRes, consentsRes] = await Promise.all([
       adminClient
         .from('data_export_requests')
@@ -77,7 +80,6 @@ export async function GET(request: NextRequest) {
           `
           id, user_id, status, included_data, requested_at, completed_at, expires_at,
           approved_at,
-          requester:user_id ( email, display_name ),
           approver:approved_by ( email )
           `,
         )
@@ -89,7 +91,6 @@ export async function GET(request: NextRequest) {
           `
           id, user_id, status, reason, requested_at, scheduled_for, cancelled_at,
           approved_at,
-          requester:user_id ( email, display_name ),
           approver:approved_by ( email )
           `,
         )
@@ -99,8 +100,8 @@ export async function GET(request: NextRequest) {
         .from('consent_records')
         .select(
           `
-          id, user_id, consent_type, granted, granted_at, revoked_at, consent_version, updated_at,
-          requester:user_id ( email )
+          id, user_id, consent_type, granted, granted_at, revoked_at,
+          consent_version, updated_at
           `,
         )
         .order('updated_at', { ascending: false })
@@ -120,7 +121,6 @@ export async function GET(request: NextRequest) {
       completed_at: string | null;
       expires_at: string | null;
       approved_at: string | null;
-      requester: { email: string | null; display_name: string | null } | null;
       approver: { email: string | null } | null;
     };
 
@@ -133,7 +133,6 @@ export async function GET(request: NextRequest) {
       scheduled_for: string;
       cancelled_at: string | null;
       approved_at: string | null;
-      requester: { email: string | null; display_name: string | null } | null;
       approver: { email: string | null } | null;
     };
 
@@ -146,15 +145,43 @@ export async function GET(request: NextRequest) {
       revoked_at: string | null;
       consent_version: string | null;
       updated_at: string;
-      requester: { email: string | null } | null;
     };
 
-    const exports: ExportRequestRow[] = ((exportsRes.data ?? []) as unknown as RawExport[]).map(
-      (r) => ({
+    const rawExports = (exportsRes.data ?? []) as unknown as RawExport[];
+    const rawDeletions = (deletionsRes.data ?? []) as unknown as RawDeletion[];
+    const rawConsents = (consentsRes.data ?? []) as unknown as RawConsent[];
+
+    // Collect all subject user_ids and resolve profile email/display_name
+    // in a single query. profiles.id has a 1:1 FK to auth.users.id, so this
+    // is safe.
+    const subjectUserIds = Array.from(
+      new Set([
+        ...rawExports.map((r) => r.user_id),
+        ...rawDeletions.map((r) => r.user_id),
+        ...rawConsents.map((r) => r.user_id),
+      ]),
+    ).filter(Boolean);
+
+    type ProfileRow = { id: string; email: string | null; display_name: string | null };
+    const profileById = new Map<string, ProfileRow>();
+    if (subjectUserIds.length > 0) {
+      const { data: profiles, error: profilesErr } = await adminClient
+        .from('profiles')
+        .select('id, email, display_name')
+        .in('id', subjectUserIds);
+      if (profilesErr) throw profilesErr;
+      for (const p of (profiles ?? []) as ProfileRow[]) {
+        profileById.set(p.id, p);
+      }
+    }
+
+    const exports: ExportRequestRow[] = rawExports.map((r) => {
+      const profile = profileById.get(r.user_id);
+      return {
         id: r.id,
         userId: r.user_id,
-        userEmail: r.requester?.email ?? null,
-        userName: r.requester?.display_name ?? null,
+        userEmail: profile?.email ?? null,
+        userName: profile?.display_name ?? null,
         status: r.status,
         includedData: r.included_data ?? [],
         requestedAt: r.requested_at,
@@ -162,15 +189,16 @@ export async function GET(request: NextRequest) {
         expiresAt: r.expires_at,
         approvedAt: r.approved_at,
         approvedByEmail: r.approver?.email ?? null,
-      }),
-    );
+      };
+    });
 
-    const deletions: DeletionRequestRow[] = ((deletionsRes.data ?? []) as unknown as RawDeletion[]).map(
-      (r) => ({
+    const deletions: DeletionRequestRow[] = rawDeletions.map((r) => {
+      const profile = profileById.get(r.user_id);
+      return {
         id: r.id,
         userId: r.user_id,
-        userEmail: r.requester?.email ?? null,
-        userName: r.requester?.display_name ?? null,
+        userEmail: profile?.email ?? null,
+        userName: profile?.display_name ?? null,
         status: r.status,
         reason: r.reason,
         requestedAt: r.requested_at,
@@ -178,27 +206,31 @@ export async function GET(request: NextRequest) {
         cancelledAt: r.cancelled_at,
         approvedAt: r.approved_at,
         approvedByEmail: r.approver?.email ?? null,
-      }),
-    );
+      };
+    });
 
-    const consents: ConsentRow[] = ((consentsRes.data ?? []) as unknown as RawConsent[]).map((r) => ({
-      id: r.id,
-      userId: r.user_id,
-      userEmail: r.requester?.email ?? null,
-      consentType: r.consent_type,
-      granted: r.granted,
-      grantedAt: r.granted_at,
-      revokedAt: r.revoked_at,
-      consentVersion: r.consent_version,
-      updatedAt: r.updated_at,
-    }));
+    const consents: ConsentRow[] = rawConsents.map((r) => {
+      const profile = profileById.get(r.user_id);
+      return {
+        id: r.id,
+        userId: r.user_id,
+        userEmail: profile?.email ?? null,
+        consentType: r.consent_type,
+        granted: r.granted,
+        grantedAt: r.granted_at,
+        revokedAt: r.revoked_at,
+        consentVersion: r.consent_version,
+        updatedAt: r.updated_at,
+      };
+    });
 
     const now = Date.now();
     const slaMs = SLA_HOURS * 60 * 60 * 1000;
     const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     const totals: PrivacyOverviewResponse['totals'] = {
-      openExports: exports.filter((e) => e.status === 'pending' || e.status === 'processing').length,
+      openExports: exports.filter((e) => e.status === 'pending' || e.status === 'processing')
+        .length,
       openDeletions: deletions.filter(
         (d) => d.status === 'pending' || d.status === 'processing',
       ).length,

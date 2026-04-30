@@ -59,47 +59,58 @@ export default function HealthPage() {
         description="Live status across orders, media, projects, and Supabase. Polled every 15 seconds."
       />
 
-      {isLoading && services.length === 0 ? (
-        <MetricsRow>
-          <MetricBlock label="Services" value="—" />
-          <MetricBlock label="Avg Latency" value="—" />
-          <MetricBlock label="Down" value="—" />
-          <MetricBlock label="Last Check" value="—" />
-        </MetricsRow>
-      ) : (
-        <MetricsRow>
-          <MetricBlock
-            label="Services"
-            value={`${aggregate.healthy}/${aggregate.total}`}
-            change={
-              overall === 'healthy'
+      <MetricsRow>
+        <MetricBlock
+          label="Services"
+          value={`${aggregate.healthy}/${aggregate.total}`}
+          change={
+            !data
+              ? 'Pinging…'
+              : overall === 'healthy'
                 ? 'All healthy'
                 : overall === 'degraded'
                   ? 'Some degraded'
                   : 'Service down'
-            }
-            trend={overall === 'healthy' ? 'up' : overall === 'down' ? 'down' : 'neutral'}
-          />
-          <MetricBlock
-            label="Avg Latency"
-            value={`${aggregate.avgLatency}ms`}
-            change={aggregate.avgLatency > 1500 ? 'Above 1.5s threshold' : 'Within budget'}
-            trend={aggregate.avgLatency > 1500 ? 'down' : 'up'}
-          />
-          <MetricBlock
-            label="Down"
-            value={String(aggregate.downCount)}
-            change={aggregate.downCount === 0 ? 'No outages' : 'Investigate now'}
-            trend={aggregate.downCount === 0 ? 'up' : 'down'}
-          />
-          <MetricBlock
-            label="Last Check"
-            value={formatChecked(data?.checkedAt ?? new Date(dataUpdatedAt).toISOString())}
-            change="Auto-refresh 15s"
-            trend="neutral"
-          />
-        </MetricsRow>
-      )}
+          }
+          trend={overall === 'healthy' ? 'up' : overall === 'down' ? 'down' : 'neutral'}
+        />
+        <MetricBlock
+          label="Avg Latency"
+          value={`${aggregate.avgLatency}ms`}
+          change={
+            !data
+              ? 'Pinging…'
+              : aggregate.avgLatency > 1500
+                ? 'Above 1.5s threshold'
+                : 'Within budget'
+          }
+          trend={aggregate.avgLatency > 1500 ? 'down' : 'up'}
+        />
+        <MetricBlock
+          label="Down"
+          value={String(aggregate.downCount)}
+          change={
+            !data
+              ? 'Pinging…'
+              : aggregate.downCount === 0
+                ? 'No outages'
+                : 'Investigate now'
+          }
+          trend={aggregate.downCount === 0 ? 'up' : 'down'}
+        />
+        <MetricBlock
+          label="Last Check"
+          value={
+            data?.checkedAt
+              ? formatChecked(data.checkedAt)
+              : dataUpdatedAt
+                ? formatChecked(new Date(dataUpdatedAt).toISOString())
+                : '—'
+          }
+          change="Auto-refresh 15s"
+          trend="neutral"
+        />
+      </MetricsRow>
 
       {isError ? (
         <Section title="Service Status" className="mt-10">
