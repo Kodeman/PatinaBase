@@ -173,6 +173,7 @@ export default function ProposalDetailPage({
               <ProposalSectionEditor
                 section={section}
                 onUpdate={(updates) => handleSectionUpdate(section.id, updates)}
+                proposalId={id}
                 proposalItems={proposal.items}
                 totalAmount={proposal.total_amount || 0}
                 clientName={proposal.client?.full_name}

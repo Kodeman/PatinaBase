@@ -3,11 +3,13 @@
 import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProposal } from '@/hooks/use-proposals';
-import { useActivateProposal } from '@patina/supabase';
+import { useActivateProposal, createBrowserClient } from '@patina/supabase';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { DetailRow } from '@/components/portal/detail-row';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+
+type ConfirmationState = 'idle' | 'sending' | 'sent' | 'failed';
 
 export default function SignedProposalPage({
   params,
@@ -21,6 +23,8 @@ export default function SignedProposalPage({
   const activateProposal = useActivateProposal();
   const [startDate, setStartDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [activating, setActivating] = useState(false);
+  const [activationError, setActivationError] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<ConfirmationState>('idle');
 
   if (isLoading) return <LoadingStrata />;
   if (!proposal) {
@@ -177,6 +181,7 @@ export default function SignedProposalPage({
                 disabled={activating}
                 onClick={async () => {
                   setActivating(true);
+                  setActivationError(null);
                   try {
                     const projectId = await activateProposal.mutateAsync({
                       proposalId: id,
@@ -185,6 +190,9 @@ export default function SignedProposalPage({
                     router.push(`/portal/projects/${projectId}`);
                   } catch (err) {
                     console.error('Activation failed:', err);
+                    setActivationError(
+                      err instanceof Error ? err.message : 'Activation failed. Please try again.'
+                    );
                     setActivating(false);
                   }
                 }}
@@ -192,12 +200,31 @@ export default function SignedProposalPage({
               >
                 {activating ? 'Activating...' : 'Activate Project →'}
               </PortalButton>
+              {activationError && (
+                <p
+                  className="mt-3 rounded-[3px] border px-3 py-2"
+                  style={{
+                    fontFamily: 'var(--font-body)',
+                    fontSize: '0.78rem',
+                    color: 'var(--color-terracotta, #C77B6E)',
+                    background: 'rgba(199,123,110,0.06)',
+                    borderColor: 'rgba(199,123,110,0.25)',
+                  }}
+                >
+                  Activation failed: {activationError}
+                </p>
+              )}
             </div>
           )}
 
           {/* Download / Send cards */}
           <div className="flex gap-4">
-            <div className="min-w-[200px] flex-1 rounded-md border border-[var(--color-pearl)] p-4">
+            <a
+              href={`/portal/proposals/${id}/preview?print=1`}
+              target="_blank"
+              rel="noreferrer"
+              className="min-w-[200px] flex-1 cursor-pointer rounded-md border border-[var(--color-pearl)] p-4 no-underline transition hover:border-[var(--color-sage)]"
+            >
               <div className="type-label mb-0.5" style={{ fontSize: '0.85rem' }}>
                 Download PDF
               </div>
@@ -208,10 +235,28 @@ export default function SignedProposalPage({
                   color: 'var(--text-muted)',
                 }}
               >
-                Signed copy with digital signatures
+                Opens print view (save as PDF)
               </p>
-            </div>
-            <div className="min-w-[200px] flex-1 rounded-md border border-[var(--color-pearl)] p-4">
+            </a>
+            <button
+              type="button"
+              disabled={confirmation === 'sending'}
+              onClick={async () => {
+                setConfirmation('sending');
+                try {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const supabase = createBrowserClient() as any;
+                  const { error } = await supabase.functions.invoke(
+                    'proposal-sign-confirmation',
+                    { body: { proposalId: id } }
+                  );
+                  setConfirmation(error ? 'failed' : 'sent');
+                } catch {
+                  setConfirmation('failed');
+                }
+              }}
+              className="min-w-[200px] flex-1 cursor-pointer rounded-md border border-[var(--color-pearl)] p-4 text-left transition hover:border-[var(--color-sage)] disabled:cursor-wait"
+            >
               <div className="type-label mb-0.5" style={{ fontSize: '0.85rem' }}>
                 Send Confirmation
               </div>
@@ -222,9 +267,12 @@ export default function SignedProposalPage({
                   color: 'var(--text-muted)',
                 }}
               >
-                Email signed copy to client
+                {confirmation === 'idle' && 'Email signed copy to client'}
+                {confirmation === 'sending' && 'Sending…'}
+                {confirmation === 'sent' && 'Sent ✓'}
+                {confirmation === 'failed' && 'Send failed — try again'}
               </p>
-            </div>
+            </button>
           </div>
 
           {/* Signed document details */}

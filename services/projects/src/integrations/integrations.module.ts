@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { ConfigModule } from '@nestjs/config';
-import { ProposalsClientService } from './proposals-client.service';
 import { MediaClientService } from './media-client.service';
 
 @Module({
@@ -12,7 +11,7 @@ import { MediaClientService } from './media-client.service';
     }),
     ConfigModule,
   ],
-  providers: [ProposalsClientService, MediaClientService],
-  exports: [ProposalsClientService, MediaClientService],
+  providers: [MediaClientService],
+  exports: [MediaClientService],
 })
 export class IntegrationsModule {}

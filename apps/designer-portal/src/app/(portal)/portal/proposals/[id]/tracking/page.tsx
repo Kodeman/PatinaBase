@@ -1,12 +1,13 @@
 'use client';
 
-import { use, useMemo } from 'react';
+import { use, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   useProposal,
   useProposalEngagement,
   useProposalEngagementStats,
 } from '@/hooks/use-proposals';
+import { useSendProposal, useDuplicateProposal } from '@patina/supabase';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { ProposalStatusBadge } from '@/components/portal/proposal-status-badge';
 import { MetricsRow } from '@/components/portal/metrics-row';
@@ -67,6 +68,11 @@ export default function ProposalTrackingPage({
   const { data: proposal, isLoading: proposalLoading } = useProposal(id) as { data: any; isLoading: boolean };
   const { data: events } = useProposalEngagement(id);
   const { data: stats } = useProposalEngagementStats(id);
+  const sendProposal = useSendProposal();
+  const duplicateProposal = useDuplicateProposal();
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
 
   const metrics = useMemo(() => {
     if (!stats || !proposal) return [];
@@ -165,8 +171,37 @@ export default function ProposalTrackingPage({
           >
             Edit Proposal
           </PortalButton>
-          <PortalButton variant="secondary">Resend</PortalButton>
-          <PortalButton variant="secondary">Duplicate</PortalButton>
+          <PortalButton
+            variant="secondary"
+            disabled={resending || resent}
+            onClick={async () => {
+              setResending(true);
+              try {
+                await sendProposal.mutateAsync({ proposalId: id });
+                setResent(true);
+                setTimeout(() => setResent(false), 3000);
+              } finally {
+                setResending(false);
+              }
+            }}
+          >
+            {resending ? 'Resending…' : resent ? 'Resent ✓' : 'Resend'}
+          </PortalButton>
+          <PortalButton
+            variant="secondary"
+            disabled={duplicating}
+            onClick={async () => {
+              setDuplicating(true);
+              try {
+                const created = await duplicateProposal.mutateAsync(id);
+                router.push(`/portal/proposals/${(created as { id: string }).id}`);
+              } catch {
+                setDuplicating(false);
+              }
+            }}
+          >
+            {duplicating ? 'Duplicating…' : 'Duplicate'}
+          </PortalButton>
         </div>
       </div>
 

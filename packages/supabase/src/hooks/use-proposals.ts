@@ -493,6 +493,17 @@ export function useSendProposal() {
         .single();
 
       if (error) throw error;
+
+      // Best-effort email dispatch — failure here should not roll back the send
+      // (the proposal is already marked sent in the DB). Surfacing the failure
+      // would require a UI surface for retry; for now we log and move on.
+      try {
+        await supabase.functions.invoke('proposal-send', { body: { proposalId } });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('proposal-send invocation failed', e);
+      }
+
       return data;
     },
     onSuccess: (_, { proposalId }) => {
@@ -937,6 +948,91 @@ export function useCreateProposalRevision() {
           updated_at: undefined,
         }));
         await supabase.from('proposal_items').insert(clonedItems);
+      }
+
+      return newProposal;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
+    },
+  });
+}
+
+/**
+ * Duplicate a proposal as a fresh draft (independent of revision chain).
+ * Used for the "Duplicate" action — produces version=1, no parent_proposal_id,
+ * status='draft', title suffixed with "(Copy)".
+ */
+export function useDuplicateProposal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (sourceProposalId: string) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      const { data: source, error: sourceError } = await supabase
+        .from('proposals')
+        .select('*')
+        .eq('id', sourceProposalId)
+        .single();
+      if (sourceError) throw sourceError;
+
+      const { data: newProposal, error } = await supabase
+        .from('proposals')
+        .insert({
+          ...source,
+          id: undefined,
+          parent_proposal_id: null,
+          version: 1,
+          status: 'draft',
+          title: `${source.title} (Copy)`,
+          revision_summary: null,
+          client_feedback: null,
+          sent_at: null,
+          viewed_at: null,
+          accepted_at: null,
+          declined_at: null,
+          signed_at: null,
+          signed_by_name: null,
+          signed_ip: null,
+          created_at: undefined,
+          updated_at: undefined,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+
+      const { data: sections } = await supabase
+        .from('proposal_sections')
+        .select('*')
+        .eq('proposal_id', sourceProposalId)
+        .order('sort_order');
+      if (sections && sections.length > 0) {
+        const cloned = sections.map((s: ProposalSection) => ({
+          ...s,
+          id: undefined,
+          proposal_id: newProposal.id,
+          created_at: undefined,
+          updated_at: undefined,
+        }));
+        await supabase.from('proposal_sections').insert(cloned);
+      }
+
+      const { data: items } = await supabase
+        .from('proposal_items')
+        .select('*')
+        .eq('proposal_id', sourceProposalId);
+      if (items && items.length > 0) {
+        const cloned = items.map((item: ProposalItem) => ({
+          ...item,
+          id: undefined,
+          proposal_id: newProposal.id,
+          created_at: undefined,
+          updated_at: undefined,
+        }));
+        await supabase.from('proposal_items').insert(cloned);
       }
 
       return newProposal;

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { createBrowserClient } from '@patina/supabase';
 import type { ProposalSection } from '@/hooks/use-proposals';
 import { UploadZone } from './upload-zone';
 import { ProposalProductItem } from './proposal-product-item';
@@ -12,6 +13,7 @@ import { SignatureBlock } from './signature-block';
 interface ProposalSectionEditorProps {
   section: ProposalSection;
   onUpdate: (updates: { title?: string; body?: string; metadata?: Record<string, unknown> }) => void;
+  proposalId: string;
   proposalItems?: Array<{
     id: string;
     name: string;
@@ -27,9 +29,26 @@ interface ProposalSectionEditorProps {
   designerName?: string | null;
 }
 
+async function uploadProposalAsset(proposalId: string, file: File): Promise<string | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createBrowserClient() as any;
+  const ext = file.name.split('.').pop() || 'jpg';
+  const path = `${proposalId}/${crypto.randomUUID()}.${ext}`;
+  const { data, error } = await supabase.storage
+    .from('proposal-assets')
+    .upload(path, file, { cacheControl: '3600', upsert: false });
+  if (error || !data) {
+    console.error('Proposal asset upload failed', error);
+    return null;
+  }
+  const { data: pub } = supabase.storage.from('proposal-assets').getPublicUrl(data.path);
+  return pub?.publicUrl ?? null;
+}
+
 export function ProposalSectionEditor({
   section,
   onUpdate,
+  proposalId,
   proposalItems = [],
   totalAmount = 0,
   clientName,
@@ -100,11 +119,16 @@ export function ProposalSectionEditor({
         <ConceptSection
           metadata={section.metadata}
           onUpdate={onUpdate}
+          proposalId={proposalId}
         />
       )}
 
       {section.type === 'space_plan' && (
-        <SpacePlanSection metadata={section.metadata} />
+        <SpacePlanSection
+          metadata={section.metadata}
+          onUpdate={onUpdate}
+          proposalId={proposalId}
+        />
       )}
 
       {section.type === 'selections' && (
@@ -135,11 +159,42 @@ export function ProposalSectionEditor({
 function ConceptSection({
   metadata,
   onUpdate,
+  proposalId,
 }: {
   metadata: Record<string, unknown>;
   onUpdate: (updates: { metadata?: Record<string, unknown> }) => void;
+  proposalId: string;
 }) {
   const colorPalette = (metadata.color_palette as Array<{ hex: string; name?: string }>) || [];
+  const moodUrls = (metadata.mood_board_urls as string[]) || [];
+  const [uploading, setUploading] = useState(false);
+
+  const handleMoodFiles = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return;
+      setUploading(true);
+      const newUrls: string[] = [];
+      for (const file of files) {
+        const url = await uploadProposalAsset(proposalId, file);
+        if (url) newUrls.push(url);
+      }
+      if (newUrls.length > 0) {
+        onUpdate({
+          metadata: { ...metadata, mood_board_urls: [...moodUrls, ...newUrls] },
+        });
+      }
+      setUploading(false);
+    },
+    [metadata, moodUrls, onUpdate, proposalId]
+  );
+
+  const handleRemoveMood = useCallback(
+    (index: number) => {
+      const next = moodUrls.filter((_, i) => i !== index);
+      onUpdate({ metadata: { ...metadata, mood_board_urls: next } });
+    },
+    [metadata, moodUrls, onUpdate]
+  );
 
   return (
     <div className="mt-6">
@@ -155,13 +210,33 @@ function ConceptSection({
       >
         Mood Board
       </div>
+
+      {moodUrls.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2.5">
+          {moodUrls.map((url, i) => (
+            <div
+              key={url}
+              className="group relative h-[75px] w-[100px] overflow-hidden rounded bg-[var(--color-pearl)]"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt="" className="h-full w-full object-cover" />
+              <button
+                type="button"
+                onClick={() => handleRemoveMood(i)}
+                className="absolute right-1 top-1 hidden rounded-full bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
+                aria-label="Remove image"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <UploadZone
-        onFiles={(files) => {
-          // Upload handling will connect to media service
-          console.log('Mood board files:', files);
-        }}
-        label="Drop mood board images here or click to upload"
-        hint="JPG, PNG, WebP"
+        onFiles={handleMoodFiles}
+        label={uploading ? 'Uploading…' : 'Drop mood board images here or click to upload'}
+        hint="JPG, PNG, WebP · up to 20MB each"
         className="mb-6"
       />
 
@@ -204,8 +279,31 @@ function ConceptSection({
 }
 
 // ── Space Plan Section ──
-function SpacePlanSection({ metadata }: { metadata: Record<string, unknown> }) {
+function SpacePlanSection({
+  metadata,
+  onUpdate,
+  proposalId,
+}: {
+  metadata: Record<string, unknown>;
+  onUpdate: (updates: { metadata?: Record<string, unknown> }) => void;
+  proposalId: string;
+}) {
   const floorPlanUrl = metadata.floor_plan_url as string | undefined;
+  const [uploading, setUploading] = useState(false);
+
+  const handleFloorPlanFiles = useCallback(
+    async (files: File[]) => {
+      const file = files[0];
+      if (!file) return;
+      setUploading(true);
+      const url = await uploadProposalAsset(proposalId, file);
+      if (url) {
+        onUpdate({ metadata: { ...metadata, floor_plan_url: url } });
+      }
+      setUploading(false);
+    },
+    [metadata, onUpdate, proposalId]
+  );
 
   return (
     <div className="mt-4">
@@ -214,6 +312,7 @@ function SpacePlanSection({ metadata }: { metadata: Record<string, unknown> }) {
         style={{ background: 'var(--color-pearl)' }}
       >
         {floorPlanUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img src={floorPlanUrl} alt="Space plan" className="h-full w-full object-contain" />
         ) : (
           <span
@@ -226,7 +325,7 @@ function SpacePlanSection({ metadata }: { metadata: Record<string, unknown> }) {
               color: 'var(--text-muted)',
             }}
           >
-            3D Room View &mdash; Imported from Room Scan
+            Upload a floor plan or 3D room render
           </span>
         )}
         <div
@@ -237,6 +336,11 @@ function SpacePlanSection({ metadata }: { metadata: Record<string, unknown> }) {
           }}
         />
       </div>
+      <UploadZone
+        onFiles={handleFloorPlanFiles}
+        label={uploading ? 'Uploading…' : floorPlanUrl ? 'Replace floor plan' : 'Upload floor plan'}
+        hint="JPG, PNG, WebP"
+      />
     </div>
   );
 }

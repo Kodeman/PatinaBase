@@ -2,7 +2,6 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CacheService, buildProjectCacheKey } from '@patina/cache';
 import { PrismaService } from '../prisma/prisma.service';
-import { ProposalsClientService } from '../integrations/proposals-client.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { QueryProjectsDto } from './dto/query-projects.dto';
@@ -24,75 +23,17 @@ export class ProjectsService {
     private prisma: PrismaService,
     private eventEmitter: EventEmitter2,
     private readonly cacheService: CacheService,
-    private proposalsClient: ProposalsClientService,
   ) {}
 
   async create(createDto: CreateProjectDto, userId: string) {
     const { proposalId, budget, ...data } = createDto;
 
-    let proposalData: any = null;
-    let milestonesToCreate: any[] = [];
-
-    // If creating from proposal, fetch proposal data
-    if (proposalId) {
-      try {
-        proposalData = await this.proposalsClient.getProposal(proposalId);
-
-        if (!proposalData) {
-          this.logger.warn(`Proposal ${proposalId} not found, continuing without proposal data`);
-        } else {
-          this.logger.log(`Creating project from proposal: ${proposalId}`);
-
-          // Pre-populate project fields from proposal if not provided
-          if (!data.title && proposalData.title) {
-            data.title = proposalData.title;
-          }
-          if (!data.description && proposalData.notes) {
-            data.description = proposalData.notes;
-          }
-          if (!budget && proposalData.totalCost) {
-            createDto.budget = proposalData.totalCost;
-          }
-
-          // Create milestones from proposal phases
-          if (proposalData.phases && proposalData.phases.length > 0) {
-            milestonesToCreate = proposalData.phases.map((phase: any, index: number) => ({
-              title: phase.name,
-              description: phase.description,
-              dueDate: phase.endDate ? new Date(phase.endDate) : null,
-              status: 'pending',
-              order: index,
-              metadata: {
-                proposalPhaseId: phase.id,
-                cost: phase.cost,
-                deliverables: phase.deliverables || [],
-              },
-            }));
-          }
-        }
-      } catch (error) {
-        this.logger.error(`Failed to fetch proposal ${proposalId}:`, error);
-        // Don't fail project creation, just log the error
-      }
-    }
-
-    // Create project with milestones
     const project = await this.prisma.project.create({
       data: {
         ...data,
         proposalId,
-        budget: createDto.budget ? new Decimal(createDto.budget) : null,
+        budget: budget ? new Decimal(budget) : null,
         status: 'draft',
-        metadata: {
-          proposalData: proposalData ? {
-            rooms: proposalData.rooms?.length || 0,
-            items: proposalData.items?.length || 0,
-            totalCost: proposalData.totalCost,
-          } : null,
-        },
-        milestones: milestonesToCreate.length > 0 ? {
-          create: milestonesToCreate,
-        } : undefined,
       },
       include: {
         tasks: true,
@@ -103,7 +44,6 @@ export class ProjectsService {
       },
     });
 
-    // Emit event
     this.eventEmitter.emit('project.created', {
       projectId: project.id,
       clientId: project.clientId,
@@ -112,7 +52,6 @@ export class ProjectsService {
       timestamp: new Date(),
     });
 
-    // Log audit
     await this.prisma.auditLog.create({
       data: {
         entityType: 'project',
@@ -122,13 +61,6 @@ export class ProjectsService {
         metadata: { proposalId },
       },
     });
-
-    // Mark proposal as converted (fire and forget)
-    if (proposalId && proposalData) {
-      this.proposalsClient.markProposalConverted(proposalId, project.id).catch((error) => {
-        this.logger.error(`Failed to mark proposal ${proposalId} as converted:`, error);
-      });
-    }
 
     await this.cacheService.invalidateProject(project.id);
 

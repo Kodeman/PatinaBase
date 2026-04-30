@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useProposal, useProposalSections } from '@/hooks/use-proposals';
 import { useAuth } from '@/hooks/use-auth';
 import { LoadingStrata } from '@/components/portal/loading-strata';
@@ -25,9 +26,18 @@ export default function ProposalPreviewPage({
 }) {
   const { id } = use(params);
   const { session } = useAuth();
+  const searchParams = useSearchParams();
+  const shouldAutoPrint = searchParams.get('print') === '1';
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal, isLoading: proposalLoading } = useProposal(id) as { data: any; isLoading: boolean };
   const { data: sections, isLoading: sectionsLoading } = useProposalSections(id);
+
+  useEffect(() => {
+    if (!shouldAutoPrint) return;
+    if (!proposal || !sections) return;
+    const t = setTimeout(() => window.print(), 400);
+    return () => clearTimeout(t);
+  }, [shouldAutoPrint, proposal, sections]);
 
   // ── Engagement Tracking ──
   const hasRecordedOpen = useRef(false);
@@ -46,6 +56,7 @@ export default function ProposalPreviewPage({
         const supabase = createBrowserClient() as any;
         await supabase.from('proposal_engagement').insert({
           proposal_id: id,
+          viewer_id: session?.user?.id ?? null,
           event_type: eventType,
           section_type: sectionType || null,
           duration_seconds: durationSeconds || null,
@@ -55,7 +66,7 @@ export default function ProposalPreviewPage({
         // Silent fail — engagement tracking should never block the UI
       }
     },
-    [id]
+    [id, session?.user?.id]
   );
 
   // Record "opened" event once (only for non-designer viewers)
@@ -146,7 +157,7 @@ export default function ProposalPreviewPage({
     <div className="pt-8">
       {/* Document container */}
       <div
-        className="mx-auto rounded-lg bg-white shadow-sm"
+        className="proposal-print-area mx-auto rounded-lg bg-white shadow-sm"
         style={{
           maxWidth: 760,
           padding: 'clamp(1.5rem, 3vw, 2.5rem)',
