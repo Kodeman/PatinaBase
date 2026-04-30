@@ -49,6 +49,7 @@ COPY packages/catalog-ui/package.json ./packages/catalog-ui/
 COPY packages/supabase/package.json ./packages/supabase/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/email/package.json ./packages/email/
+COPY packages/notifications/package.json ./packages/notifications/
 
 ARG APP_NAME
 COPY apps/${APP_NAME}/package.json ./apps/${APP_NAME}/
