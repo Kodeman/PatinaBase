@@ -60,3 +60,13 @@ npm-debug.log*
 pnpm-debug.log*
 
 infra/seed-credentials.md
+
+# Cloudflare Workers local dev secrets
+*.dev.vars
+
+# Local agent / scheduler state
+.claude/scheduled_tasks.lock
+
+# Repo-root scratch
+_tmp_*
+_test_reports/
