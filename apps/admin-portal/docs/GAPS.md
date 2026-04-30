@@ -2,7 +2,7 @@
 
 > **Purpose:** Living scoreboard mapping every PRD/spec requirement and backend capability to its current admin-portal state. Update this file as gaps close — flip rows from 🔴/🔶/🟧/🟡 to ✅ and link the closing PR.
 >
-> **Last audit:** 2026-04-30 · P0 + partial P1 batch closed (audit, dashboard, health, analytics, settings, flags, payouts, type-debt)
+> **Last audit:** 2026-04-30 · P0 + P1 features 1–5 closed (audit, dashboard, health, analytics, settings, flags, payouts, type-debt, **outbox monitor, decision/funnel charts, real /media, in-app messaging viewer, MFA enforcement**)
 > **Sources:** `docs/prds/`, `docs/specs/_active/`, `apps/admin-portal/docs/{README,USER_GUIDE,API_REFERENCE}.md`, `supabase/migrations/00021,00022,00024,00044,00046,00048,00052,00071,00072,00076,00084,00101-00103`.
 
 ## Status Legend
@@ -19,21 +19,21 @@
 
 | Domain | Built | Partial | Stub | Backend-only | Missing |
 |---|---|---|---|---|---|
-| Identity & Access | 7 | 2 | 0 | 2 | 4 |
-| Catalog & Media | 5 | 4 | 1 (media) | 1 | 3 |
+| Identity & Access | 8 | 2 | 0 | 2 | 3 |
+| Catalog & Media | 6 | 4 | 0 | 1 | 3 |
 | Vendor Pipeline | 7 | 2 | 0 | 2 | 0 |
-| Communications | 9 | 1 | 0 | 0 | 2 |
+| Communications | 10 | 1 | 0 | 0 | 2 |
 | Orders & Finance | 4 | 1 | 0 | 2 | 2 |
 | Projects & Approvals | 2 | 0 | 0 | 4 | 0 |
-| System Ops | 5 | 0 | 1 (media) | 1 | 3 |
+| System Ops | 7 | 0 | 0 | 0 | 3 |
 | Privacy & Compliance | 0 | 0 | 2 | 1 | 2 |
-| Messaging & Support | 1 | 0 | 0 | 4 | 1 |
+| Messaging & Support | 2 | 0 | 0 | 3 | 1 |
 | Search Admin | 0 | 0 | 0 | 0 | 4 |
 
 **Headline findings:**
-1. **One production route remains a stub** (down from seven): `/media` only. `/audit`, `/dashboard`, `/health` closed in P0; `/analytics`, `/settings`, `/flags` closed in P1; `/finance/payouts` added new.
-2. **Production-quality domains:** users, roles, catalog, communications, vendor pipeline, applications, projects, orders.
-3. **~50% of admin-relevant backend tables have no UI:** payouts, vendor reviews, API keys, organizations, RFIs, outbox events, in-app messaging admin, MFA enforcement, JIT elevation, dual-control approvals.
+1. **Zero production routes are stubs.** All seven original `/demo/`-re-export pages now have real implementations. `/audit`, `/dashboard`, `/health` closed in P0; `/analytics`, `/settings`, `/flags`, `/media` closed in P1; `/finance/payouts`, `/system/jobs`, `/communications/threads` added new.
+2. **Production-quality domains:** users, roles, catalog, communications, vendor pipeline, applications, projects, orders, payouts, system ops.
+3. **Backend-only items remaining:** vendor reviews, API keys, organizations, RFIs, JIT elevation, dual-control approvals, DSR queues (have schema but only mock UI), search admin (no UI at all).
 4. **Catalog has 40+ TODOs** in its test file (loading skeletons, empty states, pagination, validation badges, view toggles).
 5. ~~Type-generation debt~~ — closed in P1; all 7 `LooseClient` casts removed in pipeline + cowork + vendors routes.
 
@@ -53,7 +53,7 @@
 | Verification queue (designer profiles) | user-mgmt spec | 🟡 | `/verification` exists; PAR doc-verification fields not surfaced | P2 | Surface PAR fields in verification detail panel |
 | Waitlist conversion | — | ✅ | `/waitlist` | — | — |
 | **Audit log viewer** | user-mgmt spec | ✅ | `/audit` real DataTable over `audit_logs` (mig 00021) — paginated, filterable by status + free-text. `/api/admin/audit-logs` route uses service-role admin client. | — | — |
-| MFA enforcement for admin roles | user-mgmt spec | 🔴 | Supabase Auth supports it; no admin enforcement panel | P1 | Add `/users/[id]` panel to view & require MFA |
+| MFA enforcement for admin roles | user-mgmt spec | ✅ | New "Security" tab on `/users/[id]` shows verified factors + "Enforce MFA" toggle. New `profiles.mfa_enforced` column (mig 00112). Middleware redirects enforced users to `/auth/mfa-enroll` when their AAL is below `aal2`. Audit logged. | — | Follow-up: role-level enforcement (`roles.requires_mfa`); SMS factor support |
 | JIT privilege elevation (time-boxed) | user-mgmt spec | 🔴 | Not in schema or UI | P2 | Schema design + RPC + admin grant flow |
 | Dual-control approvals (high-risk ops) | user-mgmt spec | 🔴 | Not in schema or UI | P2 | Schema design + approver-pair workflow |
 | Organizations / multi-tenant admin | mig 00021 | 🔶 | `organizations`, `organization_members` exist; no `/organizations` route | P2 | New page mirroring `/users` patterns |
@@ -75,7 +75,7 @@
 | Validation issue dashboard | USER_GUIDE | 🟡 | per-product status; no rolled-up dashboard | P2 | Aggregate panel on `/catalog` header |
 | Reprocessing / orphan cleanup | USER_GUIDE | 🔶 | `services/media` exists; no admin trigger UI | P2 | Add ops panel under `/media` |
 | Bulk CSV import + error report | USER_GUIDE | 🔴 | UI not built | P1 | Build importer + error-row download |
-| Media browser (asset library) | USER_GUIDE | 🟧 | `/media` re-exports `/demo/media` | P1 | Real browser over `media_assets` + `asset_renditions` |
+| Media browser (asset library) | USER_GUIDE | ✅ | `/media` real grid browser. Proxies `/api/admin/media-assets` to media-service `/v1/media/search`. Filters: kind + product ID. Mig 00111 seeded `media.asset.read` permission for super_admin/quality_control/catalog_manager/brand_admin roles. | — | Follow-up: asset detail panel + reprocessing actions |
 | 3D / AR asset inspection (tris, materials) | USER_GUIDE | 🔴 | Not built | P3 | Asset detail panel w/ glTF preview |
 | Inventory thresholds | USER_GUIDE | 🔴 | Not in schema | P3 | Schema + alert config UI |
 
@@ -146,7 +146,7 @@
 | Feature flags admin | spec | ✅ | `/flags` real env-flag viewer over `NEXT_PUBLIC_ENABLE_*`. No `feature_flags` table yet — toggle via redeploy. Runtime flag table is a follow-up. | — | Follow-up: build `feature_flags` table + edit UI for runtime toggles |
 | Settings (env / config / sender) | spec | ✅ | `/settings` real read-only viewer (env config, Resend sender, suppression count, bounce count, caller roles). Backed by `/api/admin/settings-overview`. | — | Follow-up: editable settings backed by a `system_settings` table |
 | Analytics dashboard | spec | ✅ | `/analytics` real cross-domain panel: comms 30d stats, vendor pipeline, applications queue, catalog/payout counts. Backed by `/api/admin/platform-counts` + reuses comms-dashboard + pipeline-metrics + applications-metrics. | — | Follow-up: time-series charts (currently summary metrics only) |
-| Outbox / process-jobs monitor | mig | 🔶 | `outbox_events`, `process_jobs` tables; no admin UI | P1 | New `/system/jobs` page |
+| Outbox monitor | mig | ✅ | `/system/jobs` page polls `/api/admin/outbox-events` every 30s. New SECURITY DEFINER RPCs `public.get_outbox_events` + `get_outbox_counts` (mig 00109) union svc_media + svc_orders. KPI tiles for unpublished count + oldest pending. | — | Follow-up: cancel + retry actions; rich payload viewer |
 | Background-job retry / dead-letter | spec | 🔴 | No UI | P2 | Add to jobs page once basic surface lands |
 | Cache health (Redis hit/miss) | spec | 🔴 | No UI | P3 | Health-page section |
 | Rate-limit per-user dashboard | spec | 🔴 | No UI | P3 | New panel under settings |
@@ -166,7 +166,7 @@
 | Capability | Source | Status | Path / Notes | Priority | Next Action |
 |---|---|---|---|---|---|
 | Cowork task queue (Claude automation) | vendor-pipeline PRD | ✅ | `/cowork` | — | — |
-| In-app messaging admin auditing | in-app-messaging PRD | 🔶 | mig 00101–00103 schema + RPCs; no admin viewer | P1 | Read-only thread browser |
+| In-app messaging admin auditing | in-app-messaging PRD | ✅ | `/communications/threads` (list) + `/communications/threads/[id]` (detail) read-only viewer. Backed by `/api/admin/comms/threads` + `[id]`. Soft-deleted messages render as "[deleted]"; system messages muted. v1 read-only per the PRD. | — | Follow-up: search across messages, flag-for-review, attachment viewer |
 | Vendor brief threads | in-app-messaging PRD | 🔶 | `rpc_start_vendor_brief` exists; no admin trigger UI | P2 | Button on vendor detail |
 | RFI / support tickets | mig | 🔶 | `rfis`, `tasks` tables; no admin queue | P2 | New `/support` page |
 | Notification rules governance | mig | 🔶 | `notifications`, `notification_log` tables; no UI | P2 | Admin rules editor |
@@ -186,9 +186,9 @@
 | Capability | Source | Status | Path / Notes | Priority | Next Action |
 |---|---|---|---|---|---|
 | Daily-room engagement charts | code | ✅ | `/analytics/daily-room` | — | — |
-| Designer-application metrics | code | 🟡 | `/api/admin/pipeline-metrics` exists; analytics page is stub | P1 | Surface via real `/analytics` |
-| Decision-bottleneck analytics RPC | mig | 🔶 | `get_decision_bottleneck_phases()` etc.; no chart | P2 | Add chart to analytics page |
-| Conversion-funnel view | mig 00107 | 🔶 | view exists; no admin surface | P2 | Add panel to analytics page |
+| Designer-application metrics | code | ✅ | Surfaced on `/analytics` via `useApplicationsMetrics` (designer + maker pending/in-review counts). Decision-bottleneck + funnel charts also live on the page. | — | — |
+| Decision-bottleneck analytics RPC | mig | ✅ | New `get_decision_bottleneck_phases_admin()` RPC (mig 00110) aggregates across all designers. Stacked BarChart on `/analytics` shows overdue/pending/responded per phase. Backed by `/api/admin/decision-analytics`. | — | — |
+| Conversion-funnel view | mig 00107 | ✅ | BarChart with conversion-rate labels on `/analytics`. Reads `conversion_funnel` view directly. | — | — |
 
 ---
 
@@ -199,20 +199,19 @@
 2. ~~`/dashboard` → real KPI tiles~~ — done (`/api/admin/applications-metrics` + `useDashboardMetrics`; reuses pipeline + comms hooks). Orders today/week + revenue deferred to P1 follow-up.
 3. ~~`/health` → real service-status panel~~ — done (`/api/admin/health` aggregator + `useSystemHealth`, 15s poll).
 
-### P1 — Surface backend that already works (week 3–4) — partially done
-4. ~~`/analytics`~~ — done (`/api/admin/platform-counts` + reuse of comms/pipeline/applications metrics).
-5. ~~`/settings`~~ — done (`/api/admin/settings-overview`, read-only env + email + caller roles).
-6. **`/media`** — *deferred*. Requires a service-side proxy at `/api/admin/media-assets` calling the media service `/v1/media/search`, and the admin user needs `media.asset.read` permission in NestJS auth. Scope > one session.
-7. ~~`/flags`~~ — done (env-flag viewer; `feature_flags` table is a follow-up).
-8. ~~Designer payouts / earnings page~~ — done (`/finance/payouts`).
-9. **DSR export + deletion queues** — *deferred*. Substantial compliance UI; deserves dedicated PR.
-10. **In-app messaging admin viewer** — *deferred*. Schema (mig 00101–00103) ready but UX needs design.
-11. **Outbox / process-jobs monitor** — *deferred*. `outbox_events` lives in `svc_media` + `svc_orders` schemas which aren't exposed via PostgREST; needs schema exposure or per-service admin endpoint.
-12. **Bulk CSV product import** — *deferred*. Substantial UI work (CSV parse, validation, error-row download).
-13. **MFA enforcement panel** — *deferred*. Auth surface; needs careful design + dedicated PR.
-14. ~~Regenerate Supabase types~~ — done (all 7 `LooseClient` casts removed; `Json` re-exported from `@patina/supabase`).
-
-**Designer-application metrics on /analytics** — partially done (counts surfaced via `useApplicationsMetrics`). Decision-bottleneck and conversion-funnel chart wiring still pending.
+### P1 — Surface backend that already works (week 3–4) — DONE
+4. ~~`/analytics`~~ — done.
+5. ~~`/settings`~~ — done.
+6. ~~`/media`~~ — done (mig 00111 seeded `media.asset.read`; proxy + grid browser).
+7. ~~`/flags`~~ — done.
+8. ~~Designer payouts / earnings page~~ — done.
+9. ~~In-app messaging admin viewer~~ — done (read-only thread audit per PRD §13).
+10. ~~Outbox / process-jobs monitor~~ — done (mig 00109 `get_outbox_events` RPC unioning svc_media + svc_orders).
+11. ~~MFA enforcement panel~~ — done (mig 00112 `profiles.mfa_enforced` + middleware AAL2 redirect + enrollment page).
+12. ~~Decision-bottleneck + conversion-funnel charts on /analytics~~ — done (mig 00110 admin RPC).
+13. ~~Regenerate Supabase types~~ — done.
+14. **DSR export + deletion queues** — *deferred*. Substantial compliance UI; deserves dedicated PR. Schema (mig 00025) is in place.
+15. **Bulk CSV product import** — *deferred*. Substantial UI work (CSV parse, validation, error-row download).
 
 ### P2 — Fill PRD gaps (week 5–8)
 15. Catalog UX polish (skeletons, empty states, pagination, view toggles, validation dashboard).

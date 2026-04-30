@@ -58,6 +58,8 @@ export async function middleware(req: NextRequest) {
     return redirectWithCookies(loginUrl);
   }
 
+  const isMfaEnrollPage = req.nextUrl.pathname === '/auth/mfa-enroll';
+
   // For authenticated users on protected pages (not auth, not public, not unauthorized),
   // verify they have an admin-domain role
   if (isAuthenticated && !isAuthPage && !isPublicPage && !isUnauthorizedPage) {
@@ -78,6 +80,33 @@ export async function middleware(req: NextRequest) {
 
         if (!adminRoles || adminRoles.length === 0) {
           return redirectWithCookies(new URL('/unauthorized', baseUrl));
+        }
+
+        // MFA enforcement: if profiles.mfa_enforced=true and the user is not at AAL2,
+        // bounce to enrollment. Already-on-the-enroll-page passes through.
+        if (!isMfaEnrollPage) {
+          try {
+            const { data: profile } = await adminClient
+              .from('profiles')
+              .select('mfa_enforced')
+              .eq('id', user!.id)
+              .maybeSingle();
+
+            const mfaEnforced =
+              !!(profile as { mfa_enforced?: boolean } | null)?.mfa_enforced;
+
+            if (mfaEnforced) {
+              const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+              const currentLevel = aal?.currentLevel ?? null;
+              if (currentLevel !== 'aal2') {
+                const enrollUrl = new URL('/auth/mfa-enroll', baseUrl);
+                enrollUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
+                return redirectWithCookies(enrollUrl);
+              }
+            }
+          } catch {
+            // MFA enforcement failure is fail-open: allow request through, API routes still enforce admin role.
+          }
         }
       }
     } catch {

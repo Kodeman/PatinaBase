@@ -4,6 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useCommsDashboard } from '@patina/supabase/hooks';
 import { usePipelineMetrics } from '@/hooks/use-pipeline';
 import { useApplicationsMetrics } from '@/hooks/use-dashboard-metrics';
+import { useDecisionAnalytics } from '@/hooks/use-decision-analytics';
+import { BottleneckChart } from '@/components/analytics/bottleneck-chart';
+import { FunnelChart } from '@/components/analytics/funnel-chart';
 import {
   PageHeader,
   MetricBlock,
@@ -50,6 +53,7 @@ export default function AnalyticsPage() {
   const comms = useCommsDashboard('30d');
   const pipeline = usePipelineMetrics();
   const applications = useApplicationsMetrics();
+  const decisionAnalytics = useDecisionAnalytics();
 
   const stats = platform.data;
   const commsStats = comms.data?.stats;
@@ -260,6 +264,32 @@ export default function AnalyticsPage() {
           ) : (
             <p className="type-body-small italic text-[var(--text-muted)]">
               No catalog data available.
+            </p>
+          )}
+        </Section>
+      </div>
+
+      <div className="mt-10 grid gap-10 lg:grid-cols-2">
+        <Section title="Decision bottlenecks (by phase)">
+          {decisionAnalytics.isLoading && !decisionAnalytics.data ? (
+            <p className="type-body-small text-[var(--text-muted)]">Loading…</p>
+          ) : decisionAnalytics.data ? (
+            <BottleneckChart rows={decisionAnalytics.data.bottleneckPhases} />
+          ) : (
+            <p className="type-body-small italic text-[var(--text-muted)]">
+              No decision analytics available.
+            </p>
+          )}
+        </Section>
+
+        <Section title="Conversion funnel">
+          {decisionAnalytics.isLoading && !decisionAnalytics.data ? (
+            <p className="type-body-small text-[var(--text-muted)]">Loading…</p>
+          ) : decisionAnalytics.data ? (
+            <FunnelChart rows={decisionAnalytics.data.funnel} />
+          ) : (
+            <p className="type-body-small italic text-[var(--text-muted)]">
+              No funnel data available.
             </p>
           )}
         </Section>

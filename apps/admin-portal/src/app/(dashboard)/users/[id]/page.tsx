@@ -28,6 +28,7 @@ import { ActivateUserDialog } from '@/components/users/ActivateUserDialog';
 import { VerifyEmailDialog } from '@/components/users/VerifyEmailDialog';
 import { EditUserDialog } from '@/components/users/EditUserDialog';
 import { UserRoleManager } from '@/components/users/UserRoleManager';
+import { UserSecurityPanel } from '@/components/users/UserSecurityPanel';
 import { useUserActivity } from '@/hooks/use-users';
 import type { User } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
@@ -199,6 +200,7 @@ export default function UserDetailPage() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="roles">Roles & Permissions</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
+          <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
         </TabsList>
 
@@ -267,6 +269,11 @@ export default function UserDetailPage() {
         {/* Sessions Tab */}
         <TabsContent value="sessions">
           <SessionList userId={userId} />
+        </TabsContent>
+
+        {/* Security Tab */}
+        <TabsContent value="security">
+          <UserSecurityPanel userId={userId} />
         </TabsContent>
 
         {/* Activity Tab */}
