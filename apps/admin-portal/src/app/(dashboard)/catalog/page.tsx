@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Plus } from 'lucide-react';
+import { Plus, Upload } from 'lucide-react';
 import { useAdminCatalogPresenter } from '@/features/catalog/hooks/useAdminCatalogPresenter';
 import {
   AdminCatalogSearchBar,
@@ -29,10 +29,19 @@ const BulkActionDialogs = dynamic(
   { ssr: false, loading: () => null }
 );
 
+const BulkImportDialog = dynamic(
+  () =>
+    import('@/components/catalog/bulk-import-dialog').then((mod) => ({
+      default: mod.BulkImportDialog,
+    })),
+  { ssr: false, loading: () => null }
+);
+
 export default function CatalogPage() {
   const presenter = useAdminCatalogPresenter();
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
 
   return (
     <div>
@@ -40,10 +49,16 @@ export default function CatalogPage() {
         title="Catalog"
         description="Manage products, variants, and categories."
         actions={
-          <Button onClick={() => setIsCreateDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Product
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
+              <Upload className="mr-2 h-4 w-4" />
+              Import CSV
+            </Button>
+            <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Product
+            </Button>
+          </div>
         }
       />
 
@@ -73,6 +88,14 @@ export default function CatalogPage() {
         onSuccess={(productId) => {
           presenter.refreshData();
           console.log('Product created:', productId);
+        }}
+      />
+
+      <BulkImportDialog
+        open={isImportDialogOpen}
+        onOpenChange={setIsImportDialogOpen}
+        onSuccess={() => {
+          presenter.refreshData();
         }}
       />
     </div>

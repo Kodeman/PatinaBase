@@ -2,7 +2,7 @@
 
 > **Purpose:** Living scoreboard mapping every PRD/spec requirement and backend capability to its current admin-portal state. Update this file as gaps close — flip rows from 🔴/🔶/🟧/🟡 to ✅ and link the closing PR.
 >
-> **Last audit:** 2026-04-30 · P0 + P1 features 1–5 closed (audit, dashboard, health, analytics, settings, flags, payouts, type-debt, **outbox monitor, decision/funnel charts, real /media, in-app messaging viewer, MFA enforcement**)
+> **Last audit:** 2026-04-30 · P0 + ALL P1 closed (audit, dashboard, health, analytics, settings, flags, payouts, type-debt, outbox monitor, decision/funnel charts, real /media, in-app messaging viewer, MFA enforcement, **bulk CSV import, DSR queues**)
 > **Sources:** `docs/prds/`, `docs/specs/_active/`, `apps/admin-portal/docs/{README,USER_GUIDE,API_REFERENCE}.md`, `supabase/migrations/00021,00022,00024,00044,00046,00048,00052,00071,00072,00076,00084,00101-00103`.
 
 ## Status Legend
@@ -20,20 +20,21 @@
 | Domain | Built | Partial | Stub | Backend-only | Missing |
 |---|---|---|---|---|---|
 | Identity & Access | 8 | 2 | 0 | 2 | 3 |
-| Catalog & Media | 6 | 4 | 0 | 1 | 3 |
+| Catalog & Media | 7 | 3 | 0 | 1 | 3 |
 | Vendor Pipeline | 7 | 2 | 0 | 2 | 0 |
 | Communications | 10 | 1 | 0 | 0 | 2 |
 | Orders & Finance | 4 | 1 | 0 | 2 | 2 |
 | Projects & Approvals | 2 | 0 | 0 | 4 | 0 |
 | System Ops | 7 | 0 | 0 | 0 | 3 |
-| Privacy & Compliance | 0 | 0 | 2 | 1 | 2 |
+| Privacy & Compliance | 2 | 0 | 0 | 1 | 2 |
 | Messaging & Support | 2 | 0 | 0 | 3 | 1 |
 | Search Admin | 0 | 0 | 0 | 0 | 4 |
 
 **Headline findings:**
-1. **Zero production routes are stubs.** All seven original `/demo/`-re-export pages now have real implementations. `/audit`, `/dashboard`, `/health` closed in P0; `/analytics`, `/settings`, `/flags`, `/media` closed in P1; `/finance/payouts`, `/system/jobs`, `/communications/threads` added new.
-2. **Production-quality domains:** users, roles, catalog, communications, vendor pipeline, applications, projects, orders, payouts, system ops.
-3. **Backend-only items remaining:** vendor reviews, API keys, organizations, RFIs, JIT elevation, dual-control approvals, DSR queues (have schema but only mock UI), search admin (no UI at all).
+1. **Zero production routes are stubs.** All seven original `/demo/`-re-export pages now have real implementations.
+2. **All P1 items closed.** /audit, /dashboard, /health, /analytics, /settings, /flags, /media, /finance/payouts, /system/jobs, /communications/threads, /privacy, MFA enforcement, bulk CSV import.
+3. **Production-quality domains:** users (incl. MFA), roles, catalog (incl. bulk import), communications (incl. thread audit), vendor pipeline, applications, projects, orders, payouts, system ops, privacy.
+4. **Backend-only / missing items remaining (P2/P3):** vendor reviews moderation, API keys mgmt UI, organizations admin, RFI/support queue, JIT elevation, dual-control approvals, search admin, role-level MFA enforcement, DSR fulfillment worker.
 4. **Catalog has 40+ TODOs** in its test file (loading skeletons, empty states, pagination, validation badges, view toggles).
 5. ~~Type-generation debt~~ — closed in P1; all 7 `LooseClient` casts removed in pipeline + cowork + vendors routes.
 
@@ -74,7 +75,7 @@
 | Grid/list/table view toggles | USER_GUIDE | 🟡 | TODO in test file | P3 | Add layout toggle + persistence |
 | Validation issue dashboard | USER_GUIDE | 🟡 | per-product status; no rolled-up dashboard | P2 | Aggregate panel on `/catalog` header |
 | Reprocessing / orphan cleanup | USER_GUIDE | 🔶 | `services/media` exists; no admin trigger UI | P2 | Add ops panel under `/media` |
-| Bulk CSV import + error report | USER_GUIDE | 🔴 | UI not built | P1 | Build importer + error-row download |
+| Bulk CSV import + error report | USER_GUIDE | ✅ | "Import CSV" button on `/catalog` opens multi-step dialog (upload → header mapping with auto-detect → row-level validation preview → batch submit). Backed by `/api/admin/catalog/bulk-import`. Failed rows can be downloaded as CSV with reasons. Required cols: name, brand, price. Audit logged. | — | Follow-up: import existing categories validation, dry-run mode |
 | Media browser (asset library) | USER_GUIDE | ✅ | `/media` real grid browser. Proxies `/api/admin/media-assets` to media-service `/v1/media/search`. Filters: kind + product ID. Mig 00111 seeded `media.asset.read` permission for super_admin/quality_control/catalog_manager/brand_admin roles. | — | Follow-up: asset detail panel + reprocessing actions |
 | 3D / AR asset inspection (tris, materials) | USER_GUIDE | 🔴 | Not built | P3 | Asset detail panel w/ glTF preview |
 | Inventory thresholds | USER_GUIDE | 🔴 | Not in schema | P3 | Schema + alert config UI |
@@ -155,8 +156,8 @@
 
 | Capability | Source | Status | Path / Notes | Priority | Next Action |
 |---|---|---|---|---|---|
-| DSR export queue (GDPR/CCPA) | spec | 🟧 | `/demo/privacy` only — not in prod nav | P1 | Promote real `/privacy` route |
-| DSR deletion queue | spec | 🟧 | demo only | P1 | Same — promote real route |
+| DSR export queue (GDPR/CCPA) | spec | ✅ | `/privacy` exports tab — real DSR queue over `data_export_requests`. Approve / Unapprove sets `approved_at` + `approved_by` (mig 00113). Audit logged. Out-of-band worker still required for actual export generation. | — | Follow-up: edge function or worker that fulfills approved exports |
+| DSR deletion queue | spec | ✅ | `/privacy` deletions tab — same pattern over `account_deletion_requests`. Shows scheduled-for date and grace period. v1 does NOT check legal holds (schema doesn't track them). | — | Follow-up: legal_holds table + check before approval; deletion worker |
 | Consent / preference tracking | spec | 🔶 | `notification_preferences` exists; no consent surface | P2 | Surface in user detail |
 | Legal hold mgmt | spec | 🔴 | Not built | P2 | Schema + admin UI |
 | Privacy-incident log | spec | 🔴 | Not built | P3 | Schema + log viewer |
@@ -199,19 +200,21 @@
 2. ~~`/dashboard` → real KPI tiles~~ — done (`/api/admin/applications-metrics` + `useDashboardMetrics`; reuses pipeline + comms hooks). Orders today/week + revenue deferred to P1 follow-up.
 3. ~~`/health` → real service-status panel~~ — done (`/api/admin/health` aggregator + `useSystemHealth`, 15s poll).
 
-### P1 — Surface backend that already works (week 3–4) — DONE
+### P1 — ALL DONE
 4. ~~`/analytics`~~ — done.
 5. ~~`/settings`~~ — done.
-6. ~~`/media`~~ — done (mig 00111 seeded `media.asset.read`; proxy + grid browser).
+6. ~~`/media`~~ — done (mig 00111).
 7. ~~`/flags`~~ — done.
 8. ~~Designer payouts / earnings page~~ — done.
-9. ~~In-app messaging admin viewer~~ — done (read-only thread audit per PRD §13).
-10. ~~Outbox / process-jobs monitor~~ — done (mig 00109 `get_outbox_events` RPC unioning svc_media + svc_orders).
-11. ~~MFA enforcement panel~~ — done (mig 00112 `profiles.mfa_enforced` + middleware AAL2 redirect + enrollment page).
-12. ~~Decision-bottleneck + conversion-funnel charts on /analytics~~ — done (mig 00110 admin RPC).
+9. ~~In-app messaging admin viewer~~ — done.
+10. ~~Outbox / process-jobs monitor~~ — done (mig 00109).
+11. ~~MFA enforcement panel~~ — done (mig 00112).
+12. ~~Decision-bottleneck + conversion-funnel charts on /analytics~~ — done (mig 00110).
 13. ~~Regenerate Supabase types~~ — done.
-14. **DSR export + deletion queues** — *deferred*. Substantial compliance UI; deserves dedicated PR. Schema (mig 00025) is in place.
-15. **Bulk CSV product import** — *deferred*. Substantial UI work (CSV parse, validation, error-row download).
+14. ~~DSR export + deletion queues~~ — done (mig 00113 approval columns; manual approval workflow; out-of-band worker still required for fulfillment).
+15. ~~Bulk CSV product import~~ — done (multi-step dialog with header auto-mapping + per-row validation + error report download).
+
+**No P1 items remain.** All P2/P3 items are catalogued in the per-domain tables above. See "Stop & re-evaluate after Feature 5" comment below for the recommended next decisions.
 
 ### P2 — Fill PRD gaps (week 5–8)
 15. Catalog UX polish (skeletons, empty states, pagination, view toggles, validation dashboard).
