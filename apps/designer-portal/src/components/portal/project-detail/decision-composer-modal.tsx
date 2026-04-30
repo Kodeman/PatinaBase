@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useCreateDecision } from '@patina/supabase';
+import { useCreateDecision, useProjectFFEItems } from '@patina/supabase';
 import {
   CurrencyInput,
   FieldRow,
@@ -21,6 +21,9 @@ interface DraftOption {
   name: string;
   designerNote: string;
   priceCents: number;
+  quantity: number;
+  costDeltaCents: number | '';
+  leadTimeDaysDelta: number | '';
   isRecommended: boolean;
 }
 
@@ -45,14 +48,37 @@ export function DecisionComposerModal({
   onClose,
 }: DecisionComposerModalProps) {
   const create = useCreateDecision();
+  const { data: ffeItemsRaw } = useProjectFFEItems(projectId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ffeItems = (Array.isArray(ffeItemsRaw) ? ffeItemsRaw : []) as any[];
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [decisionType, setDecisionType] = useState('material');
   const [blockingStatus, setBlockingStatus] = useState('non_blocking');
   const [dueDate, setDueDate] = useState('');
+  const [blockedFfeIds, setBlockedFfeIds] = useState<Set<string>>(new Set());
   const [options, setOptions] = useState<DraftOption[]>([
-    { id: '1', name: '', designerNote: '', priceCents: 0, isRecommended: false },
-    { id: '2', name: '', designerNote: '', priceCents: 0, isRecommended: false },
+    {
+      id: '1',
+      name: '',
+      designerNote: '',
+      priceCents: 0,
+      quantity: 1,
+      costDeltaCents: '',
+      leadTimeDaysDelta: '',
+      isRecommended: false,
+    },
+    {
+      id: '2',
+      name: '',
+      designerNote: '',
+      priceCents: 0,
+      quantity: 1,
+      costDeltaCents: '',
+      leadTimeDaysDelta: '',
+      isRecommended: false,
+    },
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +87,8 @@ export function DecisionComposerModal({
     title.trim().length > 0 &&
     options.length >= 2 &&
     options.every((o) => o.name.trim().length > 0);
+
+  const isBlocking = blockingStatus === 'blocks_phase' || blockingStatus === 'blocks_procurement';
 
   const updateOption = (id: string, patch: Partial<DraftOption>) =>
     setOptions(options.map((o) => (o.id === id ? { ...o, ...patch } : o)));
@@ -74,6 +102,9 @@ export function DecisionComposerModal({
         name: '',
         designerNote: '',
         priceCents: 0,
+        quantity: 1,
+        costDeltaCents: '',
+        leadTimeDaysDelta: '',
         isRecommended: false,
       },
     ]);
@@ -87,6 +118,15 @@ export function DecisionComposerModal({
   const setRecommended = (id: string) =>
     setOptions(options.map((o) => ({ ...o, isRecommended: o.id === id })));
 
+  const toggleFfe = (id: string) => {
+    setBlockedFfeIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const submit = async (status: 'draft' | 'pending') => {
     if (!canSubmit) return;
     setSubmitting(true);
@@ -97,15 +137,26 @@ export function DecisionComposerModal({
         projectId,
         title,
         context: description || undefined,
-        decisionType: decisionType as 'material' | 'color' | 'product' | 'layout' | 'substitution' | 'budget' | 'approval',
+        decisionType: decisionType as
+          | 'material'
+          | 'color'
+          | 'product'
+          | 'layout'
+          | 'substitution'
+          | 'budget'
+          | 'approval',
         blockingStatus: blockingStatus as 'blocks_procurement' | 'blocks_phase' | 'non_blocking',
         dueDate: dueDate || undefined,
         status,
+        blockedFfeItemIds: isBlocking && blockedFfeIds.size > 0 ? Array.from(blockedFfeIds) : undefined,
         options: options.map((o) => ({
           name: o.name,
           designerNote: o.designerNote || undefined,
           isRecommended: o.isRecommended,
           price: o.priceCents > 0 ? o.priceCents : undefined,
+          quantity: o.quantity > 0 ? o.quantity : 1,
+          costDeltaCents: o.costDeltaCents === '' ? undefined : Number(o.costDeltaCents),
+          leadTimeDaysDelta: o.leadTimeDaysDelta === '' ? undefined : Number(o.leadTimeDaysDelta),
         })),
       });
       onClose();
@@ -163,6 +214,50 @@ export function DecisionComposerModal({
             <TextInput type="date" value={dueDate} onChange={setDueDate} />
           </FieldRow>
         </div>
+
+        {/* A9: blocked FF&E items picker — only when blocking */}
+        {isBlocking && (
+          <div className="mb-3 rounded-md border p-3" style={{ borderColor: 'var(--border-default)' }}>
+            <div className="mb-2 flex items-baseline justify-between">
+              <span className="type-meta-small uppercase tracking-wider">
+                Blocked items{blockedFfeIds.size > 0 ? ` · ${blockedFfeIds.size} selected` : ''}
+              </span>
+              <span className="type-meta-small text-[var(--text-muted)]">
+                Tag FF&amp;E lines that wait on this decision
+              </span>
+            </div>
+            {ffeItems.length === 0 ? (
+              <p className="type-body text-[0.78rem] text-[var(--text-muted)]">
+                No FF&amp;E items yet on this project.
+              </p>
+            ) : (
+              <div className="max-h-[160px] overflow-y-auto">
+                {ffeItems.map((item) => {
+                  const id = item.id as string;
+                  const checked = blockedFfeIds.has(id);
+                  return (
+                    <label
+                      key={id}
+                      className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-[var(--bg-hover,rgba(0,0,0,0.02))]"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleFfe(id)}
+                      />
+                      <span className="type-body flex-1 truncate text-[0.82rem]">
+                        {item.product?.name ?? item.item_name ?? 'FF&E item'}
+                      </span>
+                      {item.room?.name && (
+                        <span className="type-meta-small text-[var(--text-muted)]">{item.room.name}</span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mb-2 mt-4 flex items-baseline justify-between">
           <span className="type-meta-small uppercase tracking-wider">
@@ -228,13 +323,50 @@ export function DecisionComposerModal({
                   placeholder="Price (optional)"
                 />
                 <input
-                  type="text"
-                  value={opt.designerNote}
-                  onChange={(e) => updateOption(opt.id, { designerNote: e.target.value })}
-                  placeholder="Designer note (optional)"
+                  type="number"
+                  min={1}
+                  inputMode="numeric"
+                  value={opt.quantity}
+                  onChange={(e) =>
+                    updateOption(opt.id, { quantity: Math.max(1, Number(e.target.value) || 1) })
+                  }
+                  placeholder="Quantity"
                   className="rounded-[3px] border border-[var(--border-default)] bg-white px-2 py-1.5 font-body text-[0.82rem] outline-none"
                 />
               </div>
+              <div className="mt-2 grid gap-2 md:grid-cols-2">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={opt.costDeltaCents}
+                  onChange={(e) =>
+                    updateOption(opt.id, {
+                      costDeltaCents: e.target.value === '' ? '' : Number(e.target.value),
+                    })
+                  }
+                  placeholder="Cost delta (cents, e.g. +20000 / -5000)"
+                  className="rounded-[3px] border border-[var(--border-default)] bg-white px-2 py-1.5 font-body text-[0.82rem] outline-none"
+                />
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={opt.leadTimeDaysDelta}
+                  onChange={(e) =>
+                    updateOption(opt.id, {
+                      leadTimeDaysDelta: e.target.value === '' ? '' : Number(e.target.value),
+                    })
+                  }
+                  placeholder="Lead-time delta (days, +7 / -3)"
+                  className="rounded-[3px] border border-[var(--border-default)] bg-white px-2 py-1.5 font-body text-[0.82rem] outline-none"
+                />
+              </div>
+              <input
+                type="text"
+                value={opt.designerNote}
+                onChange={(e) => updateOption(opt.id, { designerNote: e.target.value })}
+                placeholder="Designer note (optional)"
+                className="mt-2 w-full rounded-[3px] border border-[var(--border-default)] bg-white px-2 py-1.5 font-body text-[0.82rem] outline-none"
+              />
             </div>
           ))}
         </div>

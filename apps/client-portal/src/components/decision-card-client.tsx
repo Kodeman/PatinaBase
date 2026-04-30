@@ -45,6 +45,31 @@ function formatPrice(cents: number): string {
   return `$${(cents / 100).toFixed(0)}`;
 }
 
+function formatDeltaCurrency(cents: number): string {
+  const sign = cents >= 0 ? '+' : '−';
+  return `${sign}$${Math.abs(Math.round(cents / 100))}`;
+}
+
+function formatDeltaDays(days: number): string {
+  const sign = days >= 0 ? '+' : '−';
+  return `${sign}${Math.abs(days)}d`;
+}
+
+function DeltaPill({ tone, children }: { tone: 'terracotta' | 'sage'; children: React.ReactNode }) {
+  const styles =
+    tone === 'terracotta'
+      ? { color: 'var(--color-terracotta, #C77B6E)', background: 'rgba(199, 123, 110, 0.08)' }
+      : { color: 'var(--color-sage, #7A9B76)', background: 'rgba(122, 155, 118, 0.08)' };
+  return (
+    <span
+      className="inline-flex items-center rounded-[3px] px-1.5 py-0.5 type-meta-small"
+      style={styles}
+    >
+      {children}
+    </span>
+  );
+}
+
 function formatPriceWithQuantity(price: number, quantity: number): string {
   const unit = formatPrice(price);
   if (quantity > 1) {
@@ -357,7 +382,19 @@ function OptionCard({
         <div className="mb-3 h-16 w-full rounded-[3px] bg-[var(--border-default)]" />
       )}
 
-      <p className="text-sm font-medium text-[var(--text-primary)]">{option.name}</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <p className="text-sm font-medium text-[var(--text-primary)]">{option.name}</p>
+        {option.cost_delta_cents != null && option.cost_delta_cents !== 0 && (
+          <DeltaPill tone={option.cost_delta_cents > 0 ? 'terracotta' : 'sage'}>
+            {formatDeltaCurrency(option.cost_delta_cents)}
+          </DeltaPill>
+        )}
+        {option.lead_time_days_delta != null && option.lead_time_days_delta !== 0 && (
+          <DeltaPill tone={option.lead_time_days_delta > 0 ? 'terracotta' : 'sage'}>
+            {formatDeltaDays(option.lead_time_days_delta)}
+          </DeltaPill>
+        )}
+      </div>
 
       {option.price != null && (
         <p className="mt-0.5 font-heading text-base font-semibold text-[var(--text-primary)]">

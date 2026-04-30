@@ -1,11 +1,18 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import Link from 'next/link';
-import { useDecision, useUpdateDecisionStatus } from '@patina/supabase';
-import type { DecisionType, BlockingStatus } from '@patina/supabase';
+import {
+  useDecision,
+  useUpdateDecisionStatus,
+  useDecisionOverrides,
+  useProjectFFEItems,
+} from '@patina/supabase';
+import type { DecisionType, BlockingStatus, DecisionOverride } from '@patina/supabase';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { PortalButton } from '@/components/portal/button';
+import { OverrideDecisionModal } from '@/components/portal/override-decision-modal';
+import { DecisionCommentThread } from '@/components/portal/decision-comment-thread';
 
 const typeLabels: Record<DecisionType, string> = {
   material: 'Material / Color',
@@ -76,6 +83,9 @@ export default function DecisionDetailPage({
   const { decisionId } = use(params);
   const { data: decision, isLoading } = useDecision(decisionId);
   const updateStatus = useUpdateDecisionStatus();
+  const { data: overrides } = useDecisionOverrides(decisionId);
+  const { data: ffeItemsRaw } = useProjectFFEItems(decision?.project_id ?? '');
+  const [overrideOpen, setOverrideOpen] = useState(false);
 
   if (isLoading) return <LoadingStrata />;
   if (!decision) {
@@ -87,6 +97,12 @@ export default function DecisionDetailPage({
   }
 
   const selectedOption = decision.options?.find((o) => o.selected);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ffeItems = (Array.isArray(ffeItemsRaw) ? ffeItemsRaw : []) as any[];
+  const blockedItems = decision.project_id
+    ? ffeItems.filter((it) => it?.blocked_by_decision_id === decision.id)
+    : [];
 
   const handleReopen = () => {
     updateStatus.mutate({ decisionId: decision.id, status: 'pending' });
@@ -308,6 +324,58 @@ export default function DecisionDetailPage({
               </div>
             </>
           )}
+
+          {/* Override audit */}
+          {overrides && overrides.length > 0 && (
+            <>
+              <SectionHeader>Override audit</SectionHeader>
+              <div className="mb-6 flex flex-col gap-2">
+                {overrides.map((ov: DecisionOverride) => (
+                  <div
+                    key={ov.id}
+                    className="rounded-md border px-3 py-2"
+                    style={{ borderColor: 'var(--border-default)' }}
+                  >
+                    <div
+                      className="flex items-baseline justify-between gap-2"
+                      style={{ fontSize: '0.78rem' }}
+                    >
+                      <span
+                        className="type-meta-small font-mono"
+                        style={{ color: 'var(--text-primary)' }}
+                      >
+                        {ov.acted_by.slice(0, 8)}
+                      </span>
+                      <span
+                        className="type-meta-small"
+                        style={{ color: 'var(--text-muted)' }}
+                      >
+                        {ov.consent_method.replace('_', ' ')} {'·'}{' '}
+                        {formatDate(ov.created_at)}
+                      </span>
+                    </div>
+                    <p
+                      className="mt-1 type-body"
+                      style={{
+                        fontSize: '0.82rem',
+                        color: 'var(--text-body)',
+                        lineHeight: 1.5,
+                        whiteSpace: 'pre-wrap',
+                      }}
+                    >
+                      {ov.consent_evidence}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Discussion */}
+          <SectionHeader>Discussion</SectionHeader>
+          <div className="mb-6">
+            <DecisionCommentThread decisionId={decision.id} />
+          </div>
         </div>
 
         {/* Right column: Connections + Actions */}
@@ -335,6 +403,46 @@ export default function DecisionDetailPage({
             )}
           </div>
 
+          {blockedItems.length > 0 && (
+            <>
+              <div className="mt-6">
+                <SectionHeader>Blocking</SectionHeader>
+                <div className="flex flex-col gap-2">
+                  {blockedItems.map((it) => {
+                    const name =
+                      it?.product?.name ?? it?.item_name ?? 'FF&E item';
+                    const roomName = it?.room?.name as string | undefined;
+                    return (
+                      <div
+                        key={it.id}
+                        className="flex items-center justify-between gap-2 rounded px-3 py-2"
+                        style={{
+                          background: 'rgba(199, 123, 110, 0.05)',
+                          border: '1px solid rgba(199, 123, 110, 0.18)',
+                          fontFamily: 'var(--font-body)',
+                          fontSize: '0.78rem',
+                          color: 'var(--text-body)',
+                        }}
+                      >
+                        <span className="truncate" style={{ color: 'var(--text-primary)' }}>
+                          {name}
+                        </span>
+                        {roomName && (
+                          <span
+                            className="type-meta-small"
+                            style={{ color: 'var(--text-muted)' }}
+                          >
+                            {roomName}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+
           <div className="my-6 flex flex-col gap-1 py-2">
             <div className="h-[1.5px] w-[60px] rounded-sm bg-[var(--color-mocha)]" />
             <div className="h-[1.5px] w-[48px] rounded-sm bg-[var(--accent-primary)] opacity-70" />
@@ -354,6 +462,14 @@ export default function DecisionDetailPage({
                 <PortalButton variant="secondary">View Conversation</PortalButton>
               </Link>
             )}
+            {decision.status === 'pending' && (decision.options?.length ?? 0) > 0 && (
+              <PortalButton
+                variant="secondary"
+                onClick={() => setOverrideOpen(true)}
+              >
+                Override on client&apos;s behalf
+              </PortalButton>
+            )}
             {decision.status === 'responded' && (
               <PortalButton
                 variant="ghost"
@@ -366,6 +482,14 @@ export default function DecisionDetailPage({
           </div>
         </div>
       </div>
+
+      {overrideOpen && (
+        <OverrideDecisionModal
+          decision={decision}
+          options={decision.options ?? []}
+          onClose={() => setOverrideOpen(false)}
+        />
+      )}
     </div>
   );
 }

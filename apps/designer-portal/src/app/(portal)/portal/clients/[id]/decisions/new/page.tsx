@@ -6,31 +6,29 @@ import Link from 'next/link';
 import { useClient, useCreateDecision } from '@patina/supabase';
 import type { DesignerClient, DecisionType, BlockingStatus } from '@patina/supabase';
 import { DecisionOptionBuilder } from '@/components/portal/decision-option-builder';
+import type { DecisionOptionValue } from '@/components/portal/decision-option-builder';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { PortalButton } from '@/components/portal/button';
 
-interface OptionState {
-  name: string;
-  imageUrl: string;
-  designerNote: string;
-  isRecommended: boolean;
-  price: string;
-}
-
-const emptyOption = (): OptionState => ({
+const emptyOption = (): DecisionOptionValue => ({
   name: '',
   imageUrl: '',
   designerNote: '',
   isRecommended: false,
   price: '',
+  quantity: '1',
+  costDelta: '',
+  leadTimeDelta: '',
 });
 
 const decisionTypes: { key: DecisionType; label: string; icon: string }[] = [
-  { key: 'material', label: 'Material / Color', icon: '\uD83C\uDFA8' },
-  { key: 'product', label: 'Product', icon: '\uD83E\uDE91' },
-  { key: 'layout', label: 'Layout', icon: '\uD83D\uDCD0' },
-  { key: 'budget', label: 'Budget', icon: '\uD83D\uDCB0' },
-  { key: 'approval', label: 'Approval', icon: '\u2713' },
+  { key: 'material', label: 'Material', icon: '🎨' },
+  { key: 'color', label: 'Color', icon: '🎨' },
+  { key: 'product', label: 'Product', icon: '🪑' },
+  { key: 'layout', label: 'Layout', icon: '📐' },
+  { key: 'substitution', label: 'Substitution', icon: '⇄' },
+  { key: 'budget', label: 'Budget', icon: '💰' },
+  { key: 'approval', label: 'Approval', icon: '✓' },
 ];
 
 const blockingOptions: { key: BlockingStatus; label: string }[] = [
@@ -40,10 +38,27 @@ const blockingOptions: { key: BlockingStatus; label: string }[] = [
 ];
 
 function parsePriceToCents(price: string): number | undefined {
+  if (!price) return undefined;
   const cleaned = price.replace(/[$,\s]/g, '');
   const num = parseFloat(cleaned);
   if (isNaN(num)) return undefined;
   return Math.round(num * 100);
+}
+
+function parseDeltaToCents(value: string): number | undefined {
+  if (!value) return undefined;
+  const cleaned = value.replace(/[$,\s]/g, '').replace(/^\+/, '');
+  const num = parseFloat(cleaned);
+  if (isNaN(num)) return undefined;
+  return Math.round(num * 100);
+}
+
+function parseInteger(value: string): number | undefined {
+  if (!value) return undefined;
+  const cleaned = value.replace(/^\+/, '');
+  const num = parseInt(cleaned, 10);
+  if (isNaN(num)) return undefined;
+  return num;
 }
 
 export default function NewDecisionPage({
@@ -66,7 +81,7 @@ export default function NewDecisionPage({
   const [linkedPhase, setLinkedPhase] = useState('');
   const [decisionType, setDecisionType] = useState<DecisionType>('product');
   const [blockingStatus, setBlockingStatus] = useState<BlockingStatus>('non_blocking');
-  const [options, setOptions] = useState<OptionState[]>([emptyOption(), emptyOption()]);
+  const [options, setOptions] = useState<DecisionOptionValue[]>([emptyOption(), emptyOption()]);
 
   if (isLoading) return <LoadingStrata />;
   if (!client) {
@@ -104,6 +119,9 @@ export default function NewDecisionPage({
             designerNote: o.designerNote.trim() || undefined,
             isRecommended: o.isRecommended,
             price: parsePriceToCents(o.price),
+            quantity: parseInteger(o.quantity) ?? 1,
+            costDeltaCents: parseDeltaToCents(o.costDelta),
+            leadTimeDaysDelta: parseInteger(o.leadTimeDelta),
           })),
       },
       {
@@ -112,7 +130,7 @@ export default function NewDecisionPage({
     );
   };
 
-  const updateOption = (index: number, value: OptionState) => {
+  const updateOption = (index: number, value: DecisionOptionValue) => {
     const next = [...options];
     next[index] = value;
     setOptions(next);
@@ -125,7 +143,6 @@ export default function NewDecisionPage({
 
   return (
     <div className="pt-8">
-      {/* Breadcrumb */}
       <div className="type-meta mb-6">
         <Link
           href="/portal/clients"
@@ -160,7 +177,6 @@ export default function NewDecisionPage({
         they can respond to directly.
       </p>
 
-      {/* Section: The Choice */}
       <SectionHeader>The Choice</SectionHeader>
 
       <div className="grid max-w-[580px] grid-cols-2 gap-x-8 gap-y-4">
@@ -220,7 +236,6 @@ export default function NewDecisionPage({
 
       <StrataMark />
 
-      {/* Section: Options */}
       <SectionHeader>The Options</SectionHeader>
 
       <div className="mb-4 grid max-w-[580px] grid-cols-2 gap-6">
@@ -243,7 +258,6 @@ export default function NewDecisionPage({
 
       <StrataMark />
 
-      {/* Section: Connections & Timing */}
       <SectionHeader>Connections &amp; Timing</SectionHeader>
 
       <div className="grid max-w-[580px] grid-cols-2 gap-x-8 gap-y-4">
@@ -305,7 +319,6 @@ export default function NewDecisionPage({
         </div>
       </div>
 
-      {/* Impact preview */}
       <div
         className="mt-6 max-w-[580px] rounded-md p-4"
         style={{
@@ -334,21 +347,20 @@ export default function NewDecisionPage({
           }}
         >
           <div className="mt-1 flex items-center gap-2 rounded px-2 py-1" style={{ background: 'rgba(139, 156, 173, 0.04)', border: '1px solid rgba(139, 156, 173, 0.12)' }}>
-            <span style={{ fontSize: '0.7rem' }}>{'\uD83D\uDCCB'}</span> Client: Will appear under &ldquo;Pending Decisions&rdquo; on {name}&apos;s profile
+            <span style={{ fontSize: '0.7rem' }}>📋</span> Client: Will appear under &ldquo;Pending Decisions&rdquo; on {name}&apos;s profile
           </div>
           <div className="mt-1 flex items-center gap-2 rounded px-2 py-1" style={{ background: 'rgba(139, 156, 173, 0.04)', border: '1px solid rgba(139, 156, 173, 0.12)' }}>
-            <span style={{ fontSize: '0.7rem' }}>{'\uD83D\uDCAC'}</span> Message: Will appear as interactive card in conversation thread
+            <span style={{ fontSize: '0.7rem' }}>💬</span> Message: Will appear as interactive card in conversation thread
           </div>
           {linkedPhase && (
             <div className="mt-1 flex items-center gap-2 rounded px-2 py-1" style={{ background: 'rgba(139, 156, 173, 0.04)', border: '1px solid rgba(139, 156, 173, 0.12)' }}>
-              <span style={{ fontSize: '0.7rem' }}>{'\uD83D\uDCC5'}</span> Phase: Linked to {linkedPhase}
-              {blockingStatus !== 'non_blocking' && ' \u2014 ' + (blockingStatus === 'blocks_procurement' ? 'blocks ordering' : 'blocks phase advance')}
+              <span style={{ fontSize: '0.7rem' }}>📅</span> Phase: Linked to {linkedPhase}
+              {blockingStatus !== 'non_blocking' && ' — ' + (blockingStatus === 'blocks_procurement' ? 'blocks ordering' : 'blocks phase advance')}
             </div>
           )}
         </div>
       </div>
 
-      {/* Actions */}
       <div
         className="mt-8 flex gap-2 pt-6"
         style={{ borderTop: '1px solid var(--border-subtle)' }}

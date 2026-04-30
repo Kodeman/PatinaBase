@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useDecisionsByProject, useSendDecisionReminder } from '@patina/supabase';
 import { DecisionComposerModal } from './decision-composer-modal';
+import { deadlineVariant } from '@/lib/decision-deadline';
 
 interface DecisionsPanelProps {
   projectId: string;
@@ -11,21 +12,6 @@ interface DecisionsPanelProps {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDecision = any;
-
-const DAY = 86400000;
-
-function deadlineVariant(dueDate: string | null | undefined, status: string): {
-  color: string;
-  label: string;
-} {
-  if (status === 'responded' || status === 'decided') return { color: 'var(--color-sage, #A8B5A0)', label: 'Decided' };
-  if (!dueDate) return { color: 'var(--text-muted)', label: 'No deadline' };
-  const days = Math.ceil((new Date(dueDate).getTime() - Date.now()) / DAY);
-  if (days < 0) return { color: 'var(--color-terracotta, #D4A090)', label: `${Math.abs(days)}d overdue` };
-  if (days <= 2) return { color: 'var(--color-terracotta, #D4A090)', label: `${days}d left` };
-  if (days <= 7) return { color: 'var(--color-golden-hour, #E8C547)', label: `${days}d left` };
-  return { color: 'var(--color-sage, #A8B5A0)', label: `${days}d left` };
-}
 
 export function DecisionsPanel({ projectId, designerClientId }: DecisionsPanelProps) {
   const { data: rawDecisions, isLoading } = useDecisionsByProject(projectId);
