@@ -1,11 +1,20 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ArrowLeft, Send } from 'lucide-react';
-import { useClients, useClientMessages, useSendClientMessage, useUser } from '@patina/supabase';
-import type { DesignerClient } from '@patina/supabase';
+import {
+  useThreads,
+  useThread,
+  useThreadMessages,
+  useSendMessage,
+  useMarkThreadRead,
+  useInboxRealtime,
+  useThreadRealtime,
+  useUser,
+  type ThreadSummary,
+  type CommsMessage,
+} from '@patina/supabase';
 import { useMessagesPanel } from '@/contexts/messages-panel-context';
 import { MessageBubble } from './message-bubble';
 
@@ -18,15 +27,29 @@ function getInitials(name: string): string {
     .join('');
 }
 
+function counterpartName(thread: ThreadSummary, myId: string): string {
+  const others = thread.participants.filter(
+    (p) => p.profile_id !== myId && !p.left_at
+  );
+  if (others.length === 0) return thread.title ?? 'Conversation';
+  return others
+    .map((p) => p.profile?.full_name ?? 'Unknown')
+    .filter(Boolean)
+    .join(', ');
+}
+
 export function MessagesPanel() {
   const { isOpen, close } = useMessagesPanel();
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+
+  // Inbox-level realtime keeps the thread list and unread badges fresh while
+  // the panel is mounted, even when collapsed.
+  useInboxRealtime();
 
   return (
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -35,8 +58,6 @@ export function MessagesPanel() {
             className="fixed inset-0 z-40 bg-black/20"
             onClick={close}
           />
-
-          {/* Panel */}
           <motion.div
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
@@ -44,15 +65,15 @@ export function MessagesPanel() {
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             className="fixed bottom-0 right-0 top-0 z-50 flex w-[400px] max-w-[90vw] flex-col border-l border-[var(--border-default)] bg-[var(--bg-surface)] shadow-xl"
           >
-            {selectedClientId ? (
+            {activeThreadId ? (
               <ConversationView
-                clientId={selectedClientId}
-                onBack={() => setSelectedClientId(null)}
+                threadId={activeThreadId}
+                onBack={() => setActiveThreadId(null)}
                 onClose={close}
               />
             ) : (
-              <ClientListView
-                onSelectClient={setSelectedClientId}
+              <ThreadListView
+                onSelectThread={setActiveThreadId}
                 onClose={close}
               />
             )}
@@ -63,23 +84,31 @@ export function MessagesPanel() {
   );
 }
 
-function ClientListView({
-  onSelectClient,
+function ThreadListView({
+  onSelectThread,
   onClose,
 }: {
-  onSelectClient: (id: string) => void;
+  onSelectThread: (id: string) => void;
   onClose: () => void;
 }) {
-  const { data: rawClients, isLoading } = useClients();
-  const clients = (Array.isArray(rawClients) ? rawClients : []) as DesignerClient[];
+  const { user } = useUser();
+  const myId = user?.id ?? '';
+  const { data: threads = [], isLoading } = useThreads();
 
-  const sorted = [...clients].sort(
-    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-  );
+  const sorted = useMemo(() => {
+    return [...threads].sort((a, b) => {
+      // Unread first, then by activity desc.
+      if (a.unread_count > 0 && b.unread_count === 0) return -1;
+      if (a.unread_count === 0 && b.unread_count > 0) return 1;
+      return (
+        new Date(b.last_message_at).getTime() -
+        new Date(a.last_message_at).getTime()
+      );
+    });
+  }, [threads]);
 
   return (
     <>
-      {/* Header */}
       <div className="flex h-[52px] items-center justify-between border-b border-[var(--border-default)] px-4">
         <h2 className="font-heading text-sm font-medium text-[var(--text-primary)]">
           Messages
@@ -92,7 +121,6 @@ function ClientListView({
         </button>
       </div>
 
-      {/* Client list */}
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
           <div className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">
@@ -103,12 +131,13 @@ function ClientListView({
             No conversations yet
           </div>
         ) : (
-          sorted.map((client) => {
-            const name = client.client?.full_name || client.client_name || 'Unknown';
+          sorted.map((thread) => {
+            const name = counterpartName(thread, myId);
+            const unread = thread.unread_count;
             return (
               <button
-                key={client.id}
-                onClick={() => onSelectClient(client.id)}
+                key={thread.id}
+                onClick={() => onSelectThread(thread.id)}
                 className="flex w-full items-center gap-3 border-b border-[rgba(229,226,221,0.4)] px-4 py-3 text-left transition-colors hover:bg-[var(--hover-bg,rgba(196,165,123,0.06))]"
               >
                 <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[var(--border-default)]">
@@ -117,13 +146,29 @@ function ClientListView({
                   </span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[0.82rem] font-medium text-[var(--text-primary)]">
+                  <div
+                    className={`truncate text-[0.82rem] text-[var(--text-primary)] ${
+                      unread > 0 ? 'font-semibold' : 'font-medium'
+                    }`}
+                  >
                     {name}
                   </div>
                   <div className="truncate font-mono text-[0.6rem] capitalize text-[var(--text-muted)]">
-                    {client.status || 'client'}
+                    {thread.kind === 'project'
+                      ? 'Project conversation'
+                      : thread.kind === 'vendor_brief'
+                        ? 'Vendor brief'
+                        : 'Direct message'}
                   </div>
                 </div>
+                {unread > 0 && (
+                  <span
+                    className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold text-white"
+                    style={{ background: 'var(--color-clay, #C4A57B)' }}
+                  >
+                    {unread}
+                  </span>
+                )}
               </button>
             );
           })
@@ -134,28 +179,52 @@ function ClientListView({
 }
 
 function ConversationView({
-  clientId,
+  threadId,
   onBack,
   onClose,
 }: {
-  clientId: string;
+  threadId: string;
   onBack: () => void;
   onClose: () => void;
 }) {
-  const { data: messages, isLoading } = useClientMessages(clientId);
-  const { mutate: sendMessage } = useSendClientMessage();
-  const { user: currentUser } = useUser();
+  const { user } = useUser();
+  const myId = user?.id ?? '';
+
+  const { data: thread } = useThread(threadId);
+  const { data: pages, isLoading } = useThreadMessages(threadId);
+  useThreadRealtime(threadId);
+
+  const sendMessage = useSendMessage();
+  const markRead = useMarkThreadRead();
   const [draft, setDraft] = useState('');
 
+  // Mark read on mount + on new message arrival.
+  useEffect(() => {
+    markRead.mutate(threadId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId, pages?.pages[0]?.[0]?.id]);
+
+  const flat = useMemo<CommsMessage[]>(() => {
+    const all = (pages?.pages ?? []).flat();
+    return all
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+  }, [pages]);
+
+  const title = thread ? counterpartName(thread, myId) : 'Conversation';
+
   const handleSend = () => {
-    if (!draft.trim()) return;
-    sendMessage({ designerClientId: clientId, message: draft.trim() });
+    const body = draft.trim();
+    if (!body) return;
+    sendMessage.mutate({ threadId, body });
     setDraft('');
   };
 
   return (
     <>
-      {/* Header */}
       <div className="flex h-[52px] items-center gap-2 border-b border-[var(--border-default)] px-4">
         <button
           onClick={onBack}
@@ -164,7 +233,7 @@ function ConversationView({
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="flex-1 truncate font-heading text-sm font-medium text-[var(--text-primary)]">
-          Conversation
+          {title}
         </h2>
         <button
           onClick={onClose}
@@ -174,29 +243,31 @@ function ConversationView({
         </button>
       </div>
 
-      {/* Messages */}
       <div className="flex flex-1 flex-col-reverse gap-2 overflow-y-auto p-4">
         {isLoading ? (
-          <div className="text-center text-sm text-[var(--text-muted)]">Loading...</div>
-        ) : !messages || messages.length === 0 ? (
-          <div className="text-center text-sm text-[var(--text-muted)]">No messages yet</div>
+          <div className="text-center text-sm text-[var(--text-muted)]">
+            Loading...
+          </div>
+        ) : flat.length === 0 ? (
+          <div className="text-center text-sm text-[var(--text-muted)]">
+            No messages yet
+          </div>
         ) : (
-          [...messages].reverse().map((msg) => {
-            const isFromMe = currentUser?.id === msg.sender_id;
+          [...flat].reverse().map((msg) => {
+            const isFromMe = msg.sender_id === myId;
             return (
               <MessageBubble
                 key={msg.id}
                 direction={isFromMe ? 'out' : 'in'}
-                message={msg.message}
+                message={msg.deleted_at ? '(message deleted)' : msg.body}
                 timestamp={msg.created_at}
-                senderName={msg.sender?.full_name || undefined}
+                senderName={msg.sender?.full_name ?? undefined}
               />
             );
           })
         )}
       </div>
 
-      {/* Compose */}
       <div className="border-t border-[var(--border-default)] p-3">
         <div className="flex items-center gap-2">
           <input
@@ -209,7 +280,7 @@ function ConversationView({
           />
           <button
             onClick={handleSend}
-            disabled={!draft.trim()}
+            disabled={!draft.trim() || sendMessage.isPending}
             className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--accent-primary)] text-white transition-opacity disabled:opacity-40"
           >
             <Send className="h-4 w-4" />

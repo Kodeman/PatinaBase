@@ -1,9 +1,15 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import { useClients, useAllDecisions } from '@patina/supabase';
-import type { DesignerClient } from '@patina/supabase';
+import { useState, useMemo, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  useThreads,
+  useUnreadCount,
+  useInboxRealtime,
+  type ThreadSummary,
+  type UseThreadsParams,
+} from '@patina/supabase';
+import { useAuth } from '@/hooks/use-auth';
 import { SearchInput } from '@/components/portal/search-input';
 import { FilterRow } from '@/components/portal/filter-row';
 import { LoadingStrata } from '@/components/portal/loading-strata';
@@ -17,187 +23,199 @@ function getInitials(name: string): string {
     .join('');
 }
 
-const avatarColors: Record<string, { bg: string; fg: string }> = {
-  lead: { bg: 'rgba(139, 156, 173, 0.12)', fg: 'var(--color-dusty-blue)' },
-  proposal: { bg: 'rgba(196, 165, 123, 0.15)', fg: 'var(--color-mocha)' },
-  active: { bg: 'rgba(122, 155, 118, 0.12)', fg: 'var(--color-sage)' },
-  completed: { bg: 'rgba(196, 165, 123, 0.15)', fg: 'var(--color-mocha)' },
-  nurture: { bg: 'rgba(196, 165, 123, 0.1)', fg: 'var(--accent-primary)' },
-};
+function formatRelative(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const ts = new Date(iso).getTime();
+  const diff = Date.now() - ts;
+  const min = Math.round(diff / 60_000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min}m`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h`;
+  const day = Math.round(hr / 24);
+  if (day < 7) return `${day}d`;
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
+}
 
-const filterOptions = [
-  { key: 'all', label: 'All' },
-  { key: 'unread', label: 'Unread' },
-  { key: 'decision', label: 'Needs Decision' },
+function counterpartName(thread: ThreadSummary, myId: string): string {
+  const others = thread.participants.filter(
+    (p) => p.profile_id !== myId && !p.left_at
+  );
+  if (others.length === 0) return thread.title ?? 'Conversation';
+  return others
+    .map((p) => p.profile?.full_name ?? 'Unknown')
+    .join(', ');
+}
+
+const FILTER_OPTIONS: Array<{ key: UseThreadsParams['scope']; label: string }> = [
+  { key: undefined, label: 'Inbox' },
+  { key: 'direct', label: 'Direct' },
+  { key: 'project', label: 'Projects' },
+  { key: 'vendor_brief', label: 'Vendors' },
   { key: 'archived', label: 'Archived' },
 ];
 
-export default function MessagesPage() {
+function MessagesPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user } = useAuth();
+  const myId = user?.id ?? '';
+
+  const scopeParam = searchParams.get('scope') as UseThreadsParams['scope'] | null;
+  const scope: UseThreadsParams['scope'] = scopeParam ?? undefined;
+
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all');
 
-  const { data: rawClients, isLoading } = useClients();
-  const clients = (Array.isArray(rawClients) ? rawClients : []) as DesignerClient[];
+  // Realtime keeps the inbox + unread badges fresh.
+  useInboxRealtime();
 
-  // Fetch all pending decisions in one round-trip to power the "Needs Decision" filter chip.
-  // Only enabled when the filter is active to avoid unnecessary requests while browsing.
-  const { data: pendingDecisions } = useAllDecisions({ status: 'pending' });
+  const { data: threads = [], isLoading } = useThreads({ scope, search });
+  const { data: unread } = useUnreadCount();
 
-  // Build a Set of designer_client_ids that have at least one pending decision.
-  const clientsWithPendingDecisions = useMemo(() => {
-    const ids = new Set<string>();
-    for (const d of pendingDecisions ?? []) {
-      if (d.designer_client_id) ids.add(d.designer_client_id);
+  const sortedThreads = useMemo(() => {
+    return [...threads].sort((a, b) => {
+      // Unread first, then last_message_at desc.
+      if (a.unread_count > 0 && b.unread_count === 0) return -1;
+      if (a.unread_count === 0 && b.unread_count > 0) return 1;
+      return (
+        new Date(b.last_message_at).getTime() -
+        new Date(a.last_message_at).getTime()
+      );
+    });
+  }, [threads]);
+
+  const setScope = (next: UseThreadsParams['scope']) => {
+    if (!next) {
+      router.replace('/portal/messages');
+    } else {
+      router.replace(`/portal/messages?scope=${next}`);
     }
-    return ids;
-  }, [pendingDecisions]);
-
-  // Filter clients by search
-  const filtered = search
-    ? clients.filter((c) => {
-        const name = c.client?.full_name || c.client_name || '';
-        return name.toLowerCase().includes(search.toLowerCase());
-      })
-    : clients;
-
-  // Sort by most recently updated
-  const sortedAll = [...filtered].sort(
-    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-  );
-
-  // Apply active filter chip
-  const sorted =
-    filter === 'decision'
-      ? sortedAll.filter((c) => clientsWithPendingDecisions.has(c.id))
-      : filter === 'unread'
-        ? sortedAll // unread logic not yet available — show all (no regression)
-        : filter === 'archived'
-          ? sortedAll // archived logic not yet available — show all (no regression)
-          : sortedAll;
+  };
 
   return (
-    <div className="pt-8">
-      <div className="mb-6">
-        <h1
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: '1.5rem',
-            fontWeight: 400,
-            color: 'var(--text-primary)',
-          }}
-        >
-          Messages
-        </h1>
-      </div>
+    <div className="min-h-screen">
+      <div className="mx-auto max-w-5xl px-6 py-8">
+        <div className="mb-6 flex items-baseline justify-between">
+          <div>
+            <h1 className="type-page-title">Messages</h1>
+            <p className="type-body-small mt-1">
+              {unread?.total
+                ? `${unread.total} unread across ${
+                    Object.keys(unread.byThread).filter(
+                      (id) => (unread.byThread[id] ?? 0) > 0
+                    ).length
+                  } conversation(s)`
+                : 'All caught up.'}
+            </p>
+          </div>
+        </div>
 
-      <FilterRow options={filterOptions} active={filter} onChange={setFilter} />
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Search by name or project"
+            className="w-full sm:max-w-sm"
+          />
+          <FilterRow
+            value={scope ?? 'all'}
+            options={FILTER_OPTIONS.map((o) => ({
+              key: o.key ?? 'all',
+              label: o.label,
+            }))}
+            onChange={(key) =>
+              setScope(key === 'all' ? undefined : (key as UseThreadsParams['scope']))
+            }
+          />
+        </div>
 
-      <div className="mb-4" style={{ maxWidth: '280px' }}>
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Search conversations…"
-        />
-      </div>
-
-      {isLoading ? (
-        <LoadingStrata />
-      ) : sorted.length > 0 ? (
-        <div>
-          {sorted.map((client) => {
-            const name =
-              client.client?.full_name ||
-              client.client_name ||
-              client.client_email ||
-              'Unknown Client';
-            const stage = client.status || 'active';
-            const colors = avatarColors[stage] || avatarColors.active;
-            const lastUpdate = new Date(client.updated_at);
-            const isToday = lastUpdate.toDateString() === new Date().toDateString();
-
-            return (
-              <div
-                key={client.id}
-                className="relative grid cursor-pointer items-center gap-4 border-b border-[var(--border-subtle)] py-4 transition-colors hover:bg-[var(--bg-hover)]"
-                style={{
-                  gridTemplateColumns: '44px 1fr auto',
-                  transitionDuration: 'var(--duration-fast)',
-                }}
-                onClick={() => router.push(`/portal/clients/${client.id}/messages`)}
-              >
-                {/* Avatar */}
-                <div
-                  className="flex h-[44px] w-[44px] items-center justify-center rounded-full"
-                  style={{
-                    background: colors.bg,
-                    color: colors.fg,
-                    fontFamily: 'var(--font-body)',
-                    fontWeight: 500,
-                    fontSize: '0.82rem',
-                  }}
-                >
-                  {getInitials(name)}
-                </div>
-
-                {/* Content */}
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="type-label" style={{ fontSize: '0.88rem' }}>
-                      {name}
-                    </span>
-                  </div>
-                  {client.notes && (
+        {isLoading ? (
+          <LoadingStrata />
+        ) : sortedThreads.length === 0 ? (
+          <div className="rounded-lg border border-[var(--border-subtle)] p-12 text-center">
+            <p className="type-body">No conversations in this view.</p>
+            <p className="type-body-small mt-2">
+              Open a project to start one with a client.
+            </p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-[var(--border-subtle)] rounded-lg border border-[var(--border-subtle)]">
+            {sortedThreads.map((thread) => {
+              const name = counterpartName(thread, myId);
+              const unreadHere = thread.unread_count;
+              return (
+                <li key={thread.id}>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/portal/messages/${thread.id}`)}
+                    className="flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-[rgba(196,165,123,0.06)]"
+                  >
                     <div
-                      className="mt-0.5 max-w-[420px] truncate"
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-medium"
                       style={{
-                        fontFamily: 'var(--font-body)',
-                        fontSize: '0.82rem',
-                        color: 'var(--text-muted)',
+                        background: 'rgba(196, 165, 123, 0.15)',
+                        color: 'var(--color-mocha, #6F4E37)',
                       }}
                     >
-                      {client.notes.split('\n')[0]?.slice(0, 80)}
+                      {getInitials(name)}
                     </div>
-                  )}
-                  <div
-                    className="mt-1"
-                    style={{
-                      fontFamily: 'var(--font-meta)',
-                      fontSize: '0.52rem',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    {client.location || ''} \u00B7 {stage}
-                  </div>
-                </div>
-
-                {/* Timestamp */}
-                <div className="text-right">
-                  <div
-                    style={{
-                      fontFamily: 'var(--font-meta)',
-                      fontSize: '0.52rem',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    {isToday
-                      ? lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      : lastUpdate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="type-body py-16 text-center italic text-[var(--text-muted)]">
-          No conversations yet.
-        </p>
-      )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span
+                          className={`truncate ${
+                            unreadHere > 0
+                              ? 'type-item-name font-semibold'
+                              : 'type-item-name'
+                          }`}
+                        >
+                          {name}
+                        </span>
+                        <span className="type-meta-small shrink-0">
+                          {formatRelative(thread.last_message_at)}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="type-meta-small text-[var(--text-muted)]">
+                          {thread.kind === 'project'
+                            ? 'Project conversation'
+                            : thread.kind === 'vendor_brief'
+                              ? 'Vendor brief'
+                              : 'Direct message'}
+                        </span>
+                        {thread.my_participant?.muted_at && (
+                          <span className="type-meta-small">muted</span>
+                        )}
+                        {thread.my_participant?.archived_at && (
+                          <span className="type-meta-small">archived</span>
+                        )}
+                      </div>
+                    </div>
+                    {unreadHere > 0 && (
+                      <span
+                        className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold text-white"
+                        style={{ background: 'var(--color-clay, #C4A57B)' }}
+                      >
+                        {unreadHere}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </div>
+  );
+}
+
+export default function MessagesPage() {
+  return (
+    <Suspense fallback={<LoadingStrata />}>
+      <MessagesPageInner />
+    </Suspense>
   );
 }

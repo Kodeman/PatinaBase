@@ -11,248 +11,137 @@ import {
   type MessageAuthor,
   type ThreadMessage,
 } from '@patina/design-system';
-
 import {
   useThreads,
   useThread,
+  useThreadMessages,
   useSendMessage,
-  useMarkRead,
+  useMarkThreadRead,
   useTypingIndicator,
-} from '@/hooks/use-comms';
+  useThreadRealtime,
+  useInboxRealtime,
+  type CommsMessage,
+  type ThreadSummary,
+} from '@patina/supabase';
 import { formatRelativeTime, getInitials } from '@/lib/utils/format';
-
-type AttachmentLike = {
-  id?: string;
-  filename?: string;
-  name?: string;
-  url?: string;
-  size?: number;
-  mimeType?: string;
-  type?: string;
-};
-
-type ThreadMessageLike = {
-  id?: string;
-  authorId?: string;
-  authorName?: string;
-  authorRole?: string;
-  authorAvatar?: string;
-  body?: string;
-  bodyText?: string;
-  text?: string;
-  createdAt?: string;
-  status?: string;
-  attachments?: AttachmentLike[];
-  richAttachments?: AttachmentLike[];
-  isSystem?: boolean;
-  metadata?: Record<string, unknown>;
-};
-
-type ThreadLike = {
-  id?: string;
-  title?: string;
-  status?: string;
-  lastMessageAt?: string;
-  updatedAt?: string;
-  projectId?: string;
-  participants?: unknown;
-  metadata?: Record<string, unknown>;
-  messages?: ThreadMessageLike[];
-};
-
-interface ParticipantSummary {
-  id: string;
-  name: string;
-  avatar?: string;
-  role?: string;
-}
-
-const normalizeThreads = (raw: unknown): ThreadLike[] => {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw as ThreadLike[];
-  if (Array.isArray((raw as Record<string, unknown>)?.threads)) {
-    return (raw as { threads: ThreadLike[] }).threads;
-  }
-  if (Array.isArray((raw as Record<string, unknown>)?.data)) {
-    return (raw as { data: ThreadLike[] }).data;
-  }
-  return [];
-};
-
-const extractParticipants = (source: ThreadLike | undefined): ParticipantSummary[] => {
-  if (!source) return [];
-  let participants = source.participants ?? source.metadata?.participants ?? [];
-
-  if (typeof participants === 'string') {
-    try {
-      participants = JSON.parse(participants);
-    } catch {
-      participants = [];
-    }
-  }
-
-  if (!Array.isArray(participants)) return [];
-
-  return participants.map((participant) => {
-    if (typeof participant === 'string') {
-      return { id: participant, name: participant };
-    }
-
-    const typedParticipant = participant as Record<string, unknown>;
-    const id =
-      (typedParticipant.id as string) ||
-      (typedParticipant.userId as string) ||
-      (typedParticipant.email as string) ||
-      (typedParticipant.name as string) ||
-      'participant';
-
-    return {
-      id,
-      name:
-        (typedParticipant.name as string) ||
-        (typedParticipant.displayName as string) ||
-        (typedParticipant.email as string) ||
-        id,
-      avatar: (typedParticipant.avatar as string) || (typedParticipant.avatarUrl as string),
-      role: (typedParticipant.role as string) || (typedParticipant.title as string),
-    };
-  });
-};
-
-const mapAttachment = (attachment: AttachmentLike, fallbackId: string) => ({
-  id: attachment.id || fallbackId,
-  name: attachment.name || attachment.filename || 'Attachment',
-  url: attachment.url,
-  size: attachment.size ? `${Math.round(attachment.size / 1024)} KB` : undefined,
-  type: (attachment.mimeType || attachment.type) as any,
-});
-
-const mapThreadMessages = (messages: ThreadMessageLike[], currentUserId: string): ThreadMessage[] => {
-  return messages
-    .slice()
-    .sort((a, b) => new Date(a.createdAt!).getTime() - new Date(b.createdAt!).getTime())
-    .map((message, index) => {
-      const attachments: ThreadMessage['attachments'] = [];
-
-      if (Array.isArray(message.richAttachments)) {
-        message.richAttachments.forEach((attachment) => {
-          attachments.push(mapAttachment(attachment, `${message.id ?? 'message'}-rich-${attachment.id ?? index}`));
-        });
-      } else if (Array.isArray(message.attachments)) {
-        message.attachments.forEach((attachment, attachmentIndex: number) => {
-          attachments.push(mapAttachment(attachment, `${message.id ?? 'message'}-legacy-${attachmentIndex}`));
-        });
-      }
-
-      return {
-        id: message.id || `message-${index}`,
-        author: {
-          id: message.authorId || 'unknown',
-          name: message.authorName || (message.metadata?.authorName as string) || message.authorId || 'Unknown',
-          avatarUrl: message.authorAvatar || (message.metadata?.authorAvatar as string),
-          role: (message.authorRole || (message.metadata?.authorRole as string)) as MessageAuthor['role'],
-        } satisfies MessageAuthor,
-        timestamp: new Date(message.createdAt!),
-        body: message.bodyText || message.text || message.body || '',
-        attachments,
-        status: message.status as ThreadMessage['status'],
-        variant: message.isSystem
-          ? 'system'
-          : message.authorId && currentUserId && message.authorId === currentUserId
-            ? 'outgoing'
-            : 'incoming',
-      };
-    });
-};
-
-const buildThreadTitle = (participants: ParticipantSummary[], currentUserId: string) => {
-  const names = participants
-    .filter((participant) => participant.id !== currentUserId)
-    .map((participant) => participant.name);
-
-  return names.length > 0 ? names.join(', ') : 'Conversation';
-};
 
 function cn(...classes: (string | boolean | undefined)[]) {
   return classes.filter(Boolean).join(' ');
 }
+
+const counterpartName = (thread: ThreadSummary, currentUserId: string): string => {
+  const others = thread.participants.filter(
+    (p) => p.profile_id !== currentUserId && !p.left_at
+  );
+  if (others.length === 0) return thread.title ?? 'Conversation';
+  return others
+    .map((p) => p.profile?.full_name ?? 'Unknown')
+    .filter(Boolean)
+    .join(', ');
+};
+
+const messageToThreadMessage = (
+  msg: CommsMessage,
+  currentUserId: string
+): ThreadMessage => ({
+  id: msg.id,
+  author: {
+    id: msg.sender_id ?? 'system',
+    name: msg.sender?.full_name ?? (msg.system ? 'System' : 'Unknown'),
+    avatarUrl: msg.sender?.avatar_url ?? undefined,
+  } satisfies MessageAuthor,
+  timestamp: new Date(msg.created_at),
+  body: msg.deleted_at ? '_(message deleted)_' : msg.body,
+  variant: msg.system
+    ? 'system'
+    : msg.sender_id === currentUserId
+      ? 'outgoing'
+      : 'incoming',
+  attachments: msg.attachments.map((a, i) => ({
+    id: `${msg.id}-att-${i}`,
+    name: a.filename ?? a.storage_path.split('/').pop() ?? 'Attachment',
+    url: a.storage_path,
+    size: a.size ? `${Math.round(a.size / 1024)} KB` : undefined,
+    type: a.mime?.startsWith('image/') ? 'image' : 'file',
+  })),
+});
 
 export default function MessagesPage() {
   const { user } = useAuth();
   const currentUserId = user?.id ?? '';
   const [search, setSearch] = useState('');
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
-  const [sendError, setSendError] = useState<string | null>(null);
   const [showMobileList, setShowMobileList] = useState(true);
+  const [sendError, setSendError] = useState<string | null>(null);
 
-  const { data: threadsResponse, isLoading: threadsLoading } = useThreads();
-  const threads = normalizeThreads(threadsResponse);
-  const { data: threadDetailRaw, isLoading: threadLoading } = useThread(activeThreadId);
-  const threadDetail = threadDetailRaw as ThreadLike | undefined;
-  const { typingUsers } = useTypingIndicator(activeThreadId);
+  // Inbox-level realtime: keeps thread list and unread badges fresh.
+  useInboxRealtime();
+
+  const { data: threads = [], isLoading: threadsLoading } = useThreads({ search });
+  const { data: activeThread, isLoading: threadLoading } = useThread(
+    activeThreadId ?? undefined
+  );
+  const { data: messagesPages } = useThreadMessages(activeThreadId ?? undefined);
+  useThreadRealtime(activeThreadId ?? undefined);
+  const { typingUsers } = useTypingIndicator(activeThreadId ?? undefined);
   const sendMessage = useSendMessage();
-  const markRead = useMarkRead();
+  const markRead = useMarkThreadRead();
 
+  // Auto-select first thread on load.
   useEffect(() => {
     if (!activeThreadId && threads.length > 0) {
-      setActiveThreadId(threads[0].id!);
+      setActiveThreadId(threads[0].id);
     }
   }, [activeThreadId, threads]);
 
+  // Mark active thread read when it changes or new messages arrive.
   useEffect(() => {
-    if (!activeThreadId || !threadDetail?.messages?.length) return;
-    const latestMessage = threadDetail.messages[0];
-    if (!latestMessage.id) return;
-    markRead.mutate({
-      threadId: activeThreadId,
-      lastReadMessageId: latestMessage.id,
-    });
-  }, [activeThreadId, threadDetail?.messages, markRead]);
+    if (activeThreadId) {
+      markRead.mutate(activeThreadId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeThreadId, messagesPages?.pages[0]?.[0]?.id]);
+
+  // Flatten paginated messages, oldest first for the thread renderer.
+  const flatMessages = useMemo(() => {
+    const all = (messagesPages?.pages ?? []).flat();
+    return all
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+  }, [messagesPages]);
+
+  const conversationMessages = useMemo(
+    () => flatMessages.map((m) => messageToThreadMessage(m, currentUserId)),
+    [flatMessages, currentUserId]
+  );
+
+  const typingIndicators: MessageAuthor[] = typingUsers.map((u) => ({
+    id: u.profile_id,
+    name: u.full_name ?? 'Someone',
+  }));
 
   const filteredThreads = useMemo(() => {
     if (!search.trim()) return threads;
-    const query = search.toLowerCase();
-    return threads.filter((thread) => {
-      const participants = extractParticipants(thread);
-      const names = participants.map((participant) => participant.name?.toLowerCase());
-      return (
-        thread.title?.toLowerCase().includes(query) ||
-        names.some((name) => name?.includes(query)) ||
-        (thread.projectId?.toLowerCase().includes(query) ?? false)
-      );
+    const q = search.toLowerCase();
+    return threads.filter((t) => {
+      if (counterpartName(t, currentUserId).toLowerCase().includes(q)) return true;
+      return t.title?.toLowerCase().includes(q) ?? false;
     });
-  }, [threads, search]);
-
-  const selectedParticipants = extractParticipants(threadDetail);
-  const participantLookup = useMemo(() => {
-    return selectedParticipants.reduce<Record<string, ParticipantSummary>>((acc, participant) => {
-      acc[participant.id] = participant;
-      return acc;
-    }, {});
-  }, [selectedParticipants]);
-
-  const typingIndicators = typingUsers
-    .map((userId) => participantLookup[userId])
-    .filter(Boolean)
-    .map((participant) => ({ id: participant!.id, name: participant!.name }));
-
-  const conversationMessages = useMemo(
-    () => mapThreadMessages(threadDetail?.messages ?? [], currentUserId),
-    [threadDetail?.messages, currentUserId]
-  );
+  }, [threads, search, currentUserId]);
 
   const handleSendMessage = async ({ body }: { body: string }) => {
-    if (!activeThreadId) return;
+    if (!activeThreadId || !body.trim()) return;
     try {
-      await sendMessage.mutateAsync({
-        threadId: activeThreadId,
-        data: { bodyText: body },
-      });
+      await sendMessage.mutateAsync({ threadId: activeThreadId, body });
       setSendError(null);
-    } catch (error) {
-      const message = 'Unable to send message. Please try again.';
-      setSendError(message);
-      throw error;
+    } catch (err) {
+      setSendError(
+        err instanceof Error ? err.message : 'Unable to send message.'
+      );
+      throw err;
     }
   };
 
@@ -261,8 +150,10 @@ export default function MessagesPage() {
     setShowMobileList(false);
   };
 
-  const threadTitle = threadDetail?.title || buildThreadTitle(selectedParticipants, currentUserId);
-  const lastUpdated = threadDetail?.lastMessageAt || threadDetail?.updatedAt;
+  const threadTitle = activeThread
+    ? counterpartName(activeThread, currentUserId)
+    : 'Conversation';
+  const lastUpdated = activeThread?.last_message_at ?? activeThread?.updated_at;
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] p-4 md:p-6">
@@ -274,17 +165,19 @@ export default function MessagesPage() {
 
         <div className="grid gap-0 lg:grid-cols-[320px,1fr]">
           {/* Thread List */}
-          <div className={cn(
-            'h-[70vh] overflow-hidden border-r border-[var(--border-default)]',
-            !showMobileList && 'hidden lg:block'
-          )}>
+          <div
+            className={cn(
+              'h-[70vh] overflow-hidden border-r border-[var(--border-default)]',
+              !showMobileList && 'hidden lg:block'
+            )}
+          >
             <div className="p-4 space-y-4">
               <h2 className="type-meta">Conversations</h2>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
                 <Input
                   value={search}
-                  onChange={(event) => setSearch(event.target.value)}
+                  onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search conversations"
                   className="pl-10"
                 />
@@ -300,16 +193,14 @@ export default function MessagesPage() {
               ) : filteredThreads.length > 0 ? (
                 <div className="divide-y divide-[var(--border-subtle)]">
                   {filteredThreads.map((thread) => {
-                    const participants = extractParticipants(thread);
-                    const name = buildThreadTitle(participants, currentUserId);
-                    const preview = thread.messages?.[0]?.text || thread.messages?.[0]?.bodyText || 'No messages yet';
+                    const name = counterpartName(thread, currentUserId);
                     const isActive = thread.id === activeThreadId;
-
+                    const unread = thread.unread_count > 0;
                     return (
                       <button
                         key={thread.id}
                         type="button"
-                        onClick={() => handleSelectThread(thread.id!)}
+                        onClick={() => handleSelectThread(thread.id)}
                         className={cn(
                           'w-full p-4 text-left transition-colors hover:bg-[rgba(196,165,123,0.04)]',
                           isActive && 'bg-[rgba(196,165,123,0.08)]'
@@ -321,16 +212,29 @@ export default function MessagesPage() {
                               {getInitials(name)}
                             </div>
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-[var(--text-primary)]">{name}</p>
-                              <p className="truncate type-meta-small mt-0.5">{preview}</p>
+                              <p
+                                className={cn(
+                                  'truncate text-sm text-[var(--text-primary)]',
+                                  unread ? 'font-semibold' : 'font-medium'
+                                )}
+                              >
+                                {name}
+                              </p>
+                              <p className="truncate type-meta-small mt-0.5">
+                                {thread.kind === 'project'
+                                  ? 'Project conversation'
+                                  : 'Direct message'}
+                              </p>
                             </div>
                           </div>
                           <div className="flex flex-col items-end gap-1 shrink-0">
-                            {thread.status && (
-                              <span className="type-meta-small">{thread.status}</span>
+                            {unread && (
+                              <span className="rounded-full bg-patina-clay px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                {thread.unread_count}
+                              </span>
                             )}
                             <span className="type-meta-small">
-                              {formatRelativeTime(thread.lastMessageAt || thread.updatedAt)}
+                              {formatRelativeTime(thread.last_message_at)}
                             </span>
                           </div>
                         </div>
@@ -347,14 +251,10 @@ export default function MessagesPage() {
             </div>
           </div>
 
-          {/* Message Thread */}
-          <div className={cn(
-            'flex flex-col',
-            showMobileList && 'hidden lg:flex'
-          )}>
-            {activeThreadId && threadDetail ? (
+          {/* Active Thread */}
+          <div className={cn('flex flex-col', showMobileList && 'hidden lg:flex')}>
+            {activeThreadId && activeThread ? (
               <>
-                {/* Thread header */}
                 <div className="flex items-center gap-4 border-b border-[var(--border-default)] px-6 py-4">
                   <button
                     type="button"
@@ -364,19 +264,13 @@ export default function MessagesPage() {
                     <ArrowLeft className="h-5 w-5" />
                   </button>
                   <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h2 className="type-item-name">{threadTitle}</h2>
-                      {threadDetail.status && (
-                        <span className="type-meta-small">{threadDetail.status}</span>
-                      )}
-                    </div>
+                    <h2 className="type-item-name">{threadTitle}</h2>
                     <p className="type-meta-small mt-0.5">
-                      Updated {formatRelativeTime(lastUpdated || new Date().toISOString())}
+                      Updated {formatRelativeTime(lastUpdated ?? new Date().toISOString())}
                     </p>
                   </div>
                 </div>
 
-                {/* Messages */}
                 <div className="h-[400px]">
                   {threadLoading ? (
                     <div className="space-y-4 p-6">
@@ -399,16 +293,21 @@ export default function MessagesPage() {
                   )}
                 </div>
 
-                {/* Reply */}
                 <div className="border-t border-[var(--border-default)] px-6 py-4">
                   <p className="type-meta mb-3">Reply</p>
                   <MessageComposer
                     disabled={!activeThreadId}
                     busy={sendMessage.isPending}
-                    placeholder={activeThreadId ? 'Type your message...' : 'Select a conversation first'}
+                    placeholder={
+                      activeThreadId
+                        ? 'Type your message...'
+                        : 'Select a conversation first'
+                    }
                     onSend={handleSendMessage}
                   />
-                  {sendError && <p className="mt-2 type-meta text-patina-terracotta">{sendError}</p>}
+                  {sendError && (
+                    <p className="mt-2 type-meta text-patina-terracotta">{sendError}</p>
+                  )}
                 </div>
               </>
             ) : (
