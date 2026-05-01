@@ -303,6 +303,38 @@ export function useCreateClientScopeChangeRequest() {
 }
 
 /**
+ * Client cancels their own scope-change request while still in draft/sent/viewed state.
+ * Backed by RLS policy at migration 00114.
+ */
+export function useCancelClientScopeChangeRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      requestId,
+      projectId,
+    }: {
+      requestId: string;
+      projectId: string;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('scope_change_requests')
+        .update({ status: 'cancelled' })
+        .eq('id', requestId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, { projectId, requestId }) => {
+      queryClient.invalidateQueries({ queryKey: ['scope-changes', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['scope-change', requestId] });
+    },
+  });
+}
+
+/**
  * Apply an approved scope change to the project.
  * Materializes new rooms and FFE items, updates budget/timeline.
  */

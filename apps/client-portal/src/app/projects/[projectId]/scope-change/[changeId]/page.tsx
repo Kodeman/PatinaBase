@@ -6,7 +6,9 @@ import {
   useScopeChangeRequest,
   useApproveScopeChange,
   useDeclineScopeChange,
+  useCancelClientScopeChangeRequest,
 } from '@patina/supabase';
+import { useAuth } from '@/hooks/use-auth';
 
 function formatDollars(cents: number): string {
   return `$${(cents / 100).toLocaleString()}`;
@@ -19,14 +21,17 @@ export default function ClientScopeChangeApprovalPage({
 }) {
   const { projectId, changeId } = use(params);
   const router = useRouter();
+  const { user } = useAuth();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: request, isLoading } = useScopeChangeRequest(changeId) as { data: any; isLoading: boolean };
   const approveChange = useApproveScopeChange();
   const declineChange = useDeclineScopeChange();
+  const cancelChange = useCancelClientScopeChangeRequest();
 
   const [signName, setSignName] = useState('');
   const [declineReason, setDeclineReason] = useState('');
   const [showDecline, setShowDecline] = useState(false);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
 
   if (isLoading) {
     return (
@@ -44,8 +49,19 @@ export default function ClientScopeChangeApprovalPage({
     );
   }
 
-  const isActionable = request.status === 'sent' || request.status === 'viewed';
-  const isResolved = request.status === 'approved' || request.status === 'declined';
+  const isClientRequester = !!user?.id && request.requested_by === user.id;
+  const isPending =
+    request.status === 'draft' ||
+    request.status === 'sent' ||
+    request.status === 'viewed';
+  // Approve/decline flow only when this is a designer-to-client change.
+  const showApprovalFlow = !isClientRequester && (request.status === 'sent' || request.status === 'viewed');
+  // Cancel flow only when the current user is the requester and it hasn't been applied/cancelled.
+  const showCancelFlow = isClientRequester && isPending;
+  const isResolved =
+    request.status === 'approved' ||
+    request.status === 'declined' ||
+    request.status === 'cancelled';
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-12">
@@ -57,16 +73,11 @@ export default function ClientScopeChangeApprovalPage({
         <h1 className="mb-2 font-serif text-3xl font-normal tracking-tight text-gray-900">
           {request.title}
         </h1>
-        {isResolved && (
-          <span
-            className={`inline-block rounded-sm px-2 py-0.5 font-mono text-[0.6rem] uppercase tracking-wider ${
-              request.status === 'approved'
-                ? 'bg-green-50 text-green-700'
-                : 'bg-red-50 text-red-700'
-            }`}
-          >
-            {request.status}
-          </span>
+        <StatusBadge status={request.status} isClientRequester={isClientRequester} />
+        {isClientRequester && isPending && (
+          <p className="mt-2 font-body text-xs text-gray-500">
+            Awaiting your designer&rsquo;s review.
+          </p>
         )}
       </div>
 
@@ -138,8 +149,50 @@ export default function ClientScopeChangeApprovalPage({
         </div>
       )}
 
-      {/* Approval section */}
-      {isActionable && !showDecline && (
+      {/* Cancel section (client-requested) */}
+      {showCancelFlow && (
+        <div className="border-t border-gray-200 pt-8" data-testid="scope-change-cancel-section">
+          <h3 className="mb-2 font-serif text-lg text-gray-900">Withdraw this request</h3>
+          <p className="mb-4 font-body text-sm text-gray-600">
+            You can cancel this request as long as your designer hasn&rsquo;t responded yet.
+          </p>
+          {!confirmingCancel ? (
+            <button
+              type="button"
+              onClick={() => setConfirmingCancel(true)}
+              className="rounded-md border border-gray-300 px-5 py-2.5 font-body text-sm text-gray-700 transition-colors hover:bg-gray-50"
+              data-testid="scope-change-cancel-trigger"
+            >
+              Cancel my request
+            </button>
+          ) : (
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  await cancelChange.mutateAsync({ requestId: changeId, projectId });
+                  router.refresh();
+                }}
+                disabled={cancelChange.isPending}
+                className="rounded-md bg-red-600 px-5 py-2.5 font-body text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                data-testid="scope-change-cancel-confirm"
+              >
+                {cancelChange.isPending ? 'Cancelling…' : 'Yes, cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmingCancel(false)}
+                className="rounded-md border border-gray-300 px-5 py-2.5 font-body text-sm text-gray-600 transition-colors hover:bg-gray-50"
+              >
+                Keep request
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Approval section (designer-sent change) */}
+      {showApprovalFlow && !showDecline && (
         <div className="border-t border-gray-200 pt-8">
           <h3 className="mb-4 font-serif text-lg text-gray-900">Approve This Change</h3>
           <div className="mb-4">
@@ -180,7 +233,7 @@ export default function ClientScopeChangeApprovalPage({
       )}
 
       {/* Decline section */}
-      {isActionable && showDecline && (
+      {showApprovalFlow && showDecline && (
         <div className="border-t border-gray-200 pt-8">
           <h3 className="mb-4 font-serif text-lg text-gray-900">Decline This Change</h3>
           <div className="mb-4">
@@ -236,6 +289,53 @@ export default function ClientScopeChangeApprovalPage({
           </p>
         </div>
       )}
+      {request.status === 'cancelled' && (
+        <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-5">
+          <p className="font-body text-sm text-gray-700">This request was cancelled.</p>
+        </div>
+      )}
+      {request.applied_at && (
+        <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-5">
+          <p className="font-body text-sm text-blue-800">
+            Applied to your project on {new Date(request.applied_at).toLocaleDateString()}.
+          </p>
+        </div>
+      )}
     </div>
+  );
+}
+
+function StatusBadge({
+  status,
+  isClientRequester,
+}: {
+  status: string;
+  isClientRequester: boolean;
+}) {
+  let label = status;
+  let cls = 'bg-gray-50 text-gray-700';
+  if (status === 'approved') {
+    label = 'Approved';
+    cls = 'bg-green-50 text-green-700';
+  } else if (status === 'declined') {
+    label = 'Declined';
+    cls = 'bg-red-50 text-red-700';
+  } else if (status === 'cancelled') {
+    label = 'Cancelled';
+    cls = 'bg-gray-100 text-gray-600';
+  } else if (status === 'sent' || status === 'viewed') {
+    label = isClientRequester ? 'Awaiting Designer' : 'Awaiting Your Review';
+    cls = 'bg-amber-50 text-amber-800';
+  } else if (status === 'draft') {
+    label = 'Draft';
+    cls = 'bg-gray-50 text-gray-500';
+  }
+  return (
+    <span
+      className={`inline-block rounded-sm px-2 py-0.5 font-mono text-[0.6rem] uppercase tracking-wider ${cls}`}
+      data-testid="scope-change-status-badge"
+    >
+      {label}
+    </span>
   );
 }
