@@ -11,6 +11,7 @@ import { StrataMark } from '@/components/strata-mark';
 import { ProjectActivityFeed } from '@/components/project/ProjectActivityFeed';
 import { ProjectTeamPanel } from '@/components/project/ProjectTeamPanel';
 import { ProjectDocumentsPanel } from '@/components/project/ProjectDocumentsPanel';
+import { FFEPipelinePanel } from '@/components/project/FFEPipelinePanel';
 import type { MilestoneDetail } from '@/types/project';
 
 interface ProjectViewWrapperProps {
@@ -50,6 +51,12 @@ export function ProjectViewWrapper({
       {showOverview && <BudgetOverview projectId={projectId} />}
 
       {showOverview && <FFEStatus projectId={projectId} />}
+
+      {showOverview && (
+        <div className="mt-8">
+          <FFEPipelinePanel projectId={projectId} />
+        </div>
+      )}
 
       {showOverview && (
         <div className="mt-8 grid gap-6 lg:grid-cols-3" data-testid="project-detail-zones-8-10">
