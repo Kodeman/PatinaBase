@@ -10,12 +10,27 @@ import { ScrollArea } from '../ScrollArea/ScrollArea'
 import { MessageBubble } from './MessageBubble'
 import { MessageThreadProps, ThreadMessage } from './types'
 
-const formatDaySeparator = (date: Date) =>
-  date.toLocaleDateString(undefined, {
-    weekday: 'short',
+const startOfDay = (date: Date) => {
+  const copy = new Date(date)
+  copy.setHours(0, 0, 0, 0)
+  return copy
+}
+
+const formatDaySeparator = (date: Date) => {
+  const today = startOfDay(new Date())
+  const target = startOfDay(date)
+  const diffDays = Math.round((today.getTime() - target.getTime()) / 86_400_000)
+  if (diffDays === 0) return 'Today'
+  if (diffDays === 1) return 'Yesterday'
+  if (diffDays > 1 && diffDays < 7) {
+    return date.toLocaleDateString(undefined, { weekday: 'long' })
+  }
+  return date.toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
+    year: target.getFullYear() === today.getFullYear() ? undefined : 'numeric',
   })
+}
 
 const groupByDay = (messages: ThreadMessage[]) => {
   return messages.reduce<Record<string, ThreadMessage[]>>((acc, message) => {
