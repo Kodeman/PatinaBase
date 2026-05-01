@@ -33,5 +33,9 @@ SELECT cron.schedule(
   $$
 );
 
-COMMENT ON EXTENSION pg_cron IS
-  'pg_cron schedules: decision-reminders-daily (09:00 UTC), expire-decisions-daily (02:00 UTC).';
+-- Comment is best-effort: on self-hosted Supabase pg_cron is owned by
+-- supabase_admin, so a `postgres`-run migration can't COMMENT on it.
+DO $$ BEGIN
+  EXECUTE $C$COMMENT ON EXTENSION pg_cron IS 'pg_cron schedules: decision-reminders-daily (09:00 UTC), expire-decisions-daily (02:00 UTC).'$C$;
+EXCEPTION WHEN insufficient_privilege THEN NULL;
+END $$;

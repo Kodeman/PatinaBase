@@ -15,5 +15,7 @@ SELECT cron.schedule(
   $$
 );
 
-COMMENT ON EXTENSION pg_cron IS
-  'pg_cron schedules: decision-reminders-daily (09:00 UTC), expire-decisions-daily (02:00 UTC), review-requests-daily (09:30 UTC).';
+DO $$ BEGIN
+  EXECUTE $C$COMMENT ON EXTENSION pg_cron IS 'pg_cron schedules: decision-reminders-daily (09:00 UTC), expire-decisions-daily (02:00 UTC), review-requests-daily (09:30 UTC).'$C$;
+EXCEPTION WHEN insufficient_privilege THEN NULL;
+END $$;
