@@ -157,8 +157,11 @@ export class WebSocketService {
       }
 
       try {
-        // Create socket connection with authentication
-        this.socket = io(this.config.url, {
+        // The projects service gateway is at the `/projects` namespace.
+        // Append it once here so callers can supply the host-level WS URL.
+        const url = this.config.url.replace(/\/projects\/?$/, '');
+        const namespacedUrl = `${url}/projects`;
+        this.socket = io(namespacedUrl, {
           auth: {
             token: this.config.authToken,
             userId: this.config.userId,

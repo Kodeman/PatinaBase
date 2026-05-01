@@ -1,6 +1,7 @@
 'use client';
 
 import { WebSocketProvider } from '@/lib/websocket';
+import { useAuth } from '@/hooks/use-auth';
 import { EnhancedTimeline } from '@/components/timeline/enhanced-timeline';
 import { ProjectOverview } from '@/components/project-overview';
 import { ProjectScopeDetails } from '@/components/project-scope-details';
@@ -29,11 +30,17 @@ export function ProjectViewWrapper({
   authToken,
   showOverview = false
 }: ProjectViewWrapperProps) {
+  // Pull live session for WS auth — props may not be threaded from parent.
+  const { session, user } = useAuth();
+  const realtimeEnabled = process.env.NEXT_PUBLIC_ENABLE_REAL_TIME_UPDATES !== 'false';
+  const effectiveUserId = userId ?? user?.id;
+  const effectiveAuthToken = authToken ?? session?.accessToken;
+
   return (
     <WebSocketProvider
-      projectId={projectId}
-      userId={userId}
-      authToken={authToken}
+      projectId={realtimeEnabled ? projectId : undefined}
+      userId={effectiveUserId}
+      authToken={effectiveAuthToken}
       debug={process.env.NODE_ENV === 'development'}
     >
       {showOverview && <ProjectOverview project={project} milestones={milestones} />}
