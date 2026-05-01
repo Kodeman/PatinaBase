@@ -181,6 +181,11 @@ export {
 } from './use-reviews';
 export type { ClientReview, ReviewFilters, ReviewStats, CompletedProject } from './use-reviews';
 export {
+  useMyPendingReviewRequests,
+  useMySubmittedReviews,
+} from './use-client-side-reviews';
+export type { ClientPendingReview } from './use-client-side-reviews';
+export {
   // Client Nurture
   useNurtureTouchpoints,
   useUpdateTouchpoint,

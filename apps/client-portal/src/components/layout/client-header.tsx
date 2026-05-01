@@ -3,7 +3,12 @@
 import Link from 'next/link';
 import { Bell, Box, MessageSquare } from 'lucide-react';
 
-import { useProfile, useRoomScans } from '@patina/supabase';
+import {
+  useProfile,
+  useRoomScans,
+  useMyPendingReviewRequests,
+  useMySubmittedReviews,
+} from '@patina/supabase';
 import {
   Avatar,
   DropdownMenu,
@@ -65,6 +70,7 @@ export function ClientHeader({
             <span className="type-meta hidden sm:inline">messages</span>
           </Link>
           <RoomsLink />
+          <ReviewsLink />
           {lastUpdated ? (
             <span className="type-meta hidden md:inline">
               Updated {formatRelativeTime(lastUpdated) ?? 'recently'}
@@ -89,6 +95,27 @@ function RoomsLink() {
     >
       <Box className="h-3.5 w-3.5 text-[var(--accent-primary)]" aria-hidden />
       <span className="type-meta hidden sm:inline">rooms</span>
+    </Link>
+  );
+}
+
+function ReviewsLink() {
+  const { user } = useAuth();
+  const { data: pending = [] } = useMyPendingReviewRequests(user?.id);
+  const { data: past = [] } = useMySubmittedReviews(user?.id);
+  if (!user || (pending.length === 0 && past.length === 0)) return null;
+  return (
+    <Link
+      href="/reviews"
+      className="flex items-center gap-2 transition-opacity hover:opacity-70"
+      data-testid="header-reviews-link"
+    >
+      <span className="type-meta hidden sm:inline">reviews</span>
+      {pending.length > 0 ? (
+        <span className="rounded-sm bg-[var(--accent-primary)] px-1.5 py-0.5 font-mono text-[0.6rem] uppercase tracking-wider text-white">
+          {pending.length}
+        </span>
+      ) : null}
     </Link>
   );
 }
