@@ -19,7 +19,10 @@ export async function middleware(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   const isAuthPage = req.nextUrl.pathname.startsWith('/auth') || req.nextUrl.pathname.startsWith('/login');
-  const isPublicPage = req.nextUrl.pathname === '/' || req.nextUrl.pathname.startsWith('/demo');
+  // The invite landing page is auth-adjacent but valid for both signed-in and
+  // signed-out users — RLS-protected token lookup happens server-side.
+  const isInviteLanding = req.nextUrl.pathname.startsWith('/auth/invite/');
+  const isPublicPage = req.nextUrl.pathname === '/' || req.nextUrl.pathname.startsWith('/demo') || isInviteLanding;
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');
   const isAuthenticated = !!user;
 
@@ -39,7 +42,7 @@ export async function middleware(req: NextRequest) {
     return redirect;
   };
 
-  if (isAuthenticated && isAuthPage) {
+  if (isAuthenticated && isAuthPage && !isInviteLanding) {
     const callbackUrl = req.nextUrl.searchParams.get('callbackUrl');
     if (callbackUrl) {
       return redirectWithCookies(new URL(callbackUrl, baseUrl));

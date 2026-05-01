@@ -9,6 +9,7 @@ import {
   useMyPendingReviewRequests,
   useMySubmittedReviews,
 } from '@patina/supabase';
+import { NotificationBell } from '../notifications/notification-bell';
 import {
   Avatar,
   DropdownMenu,
@@ -78,6 +79,7 @@ export function ClientHeader({
           </Link>
           <RoomsLink />
           <ReviewsLink />
+          <NotificationBell />
           {lastUpdated ? (
             <span className="type-meta hidden md:inline">
               Updated {formatRelativeTime(lastUpdated) ?? 'recently'}
