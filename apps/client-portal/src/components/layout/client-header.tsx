@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { Bell, MessageSquare } from 'lucide-react';
+import { Bell, Box, MessageSquare } from 'lucide-react';
 
-import { useProfile } from '@patina/supabase';
+import { useProfile, useRoomScans } from '@patina/supabase';
 import {
   Avatar,
   DropdownMenu,
@@ -64,6 +64,7 @@ export function ClientHeader({
             </span>
             <span className="type-meta hidden sm:inline">messages</span>
           </Link>
+          <RoomsLink />
           {lastUpdated ? (
             <span className="type-meta hidden md:inline">
               Updated {formatRelativeTime(lastUpdated) ?? 'recently'}
@@ -73,6 +74,22 @@ export function ClientHeader({
         </div>
       </div>
     </header>
+  );
+}
+
+function RoomsLink() {
+  const { user } = useAuth();
+  const { data: scans = [] } = useRoomScans(user ? { userId: user.id } : undefined);
+  if (!user || scans.length === 0) return null;
+  return (
+    <Link
+      href="/scans"
+      className="flex items-center gap-2 transition-opacity hover:opacity-70"
+      data-testid="header-rooms-link"
+    >
+      <Box className="h-3.5 w-3.5 text-[var(--accent-primary)]" aria-hidden />
+      <span className="type-meta hidden sm:inline">rooms</span>
+    </Link>
   );
 }
 
