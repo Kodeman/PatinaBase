@@ -220,6 +220,7 @@ export {
   useDuplicateProposal,
   // Signing
   useSignProposal,
+  useDeclineProposal,
 } from './use-proposals';
 export type {
   Proposal,

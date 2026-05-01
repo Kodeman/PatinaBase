@@ -1091,6 +1091,46 @@ export function useSignProposal() {
   });
 }
 
+/**
+ * Client declines a proposal with optional reason.
+ * Backed by RLS policy at migration 00100 — clients can update sent/viewed → declined.
+ */
+export function useDeclineProposal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      proposalId,
+      reason,
+    }: {
+      proposalId: string;
+      reason?: string;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      const { data, error } = await supabase
+        .from('proposals')
+        .update({
+          status: 'declined',
+          declined_at: new Date().toISOString(),
+          decline_reason: reason?.trim() || null,
+        })
+        .eq('id', proposalId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, { proposalId }) => {
+      queryClient.invalidateQueries({ queryKey: ['proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+      queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
+    },
+  });
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════
