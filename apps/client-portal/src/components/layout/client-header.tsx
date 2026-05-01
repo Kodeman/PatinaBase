@@ -50,6 +50,13 @@ export function ClientHeader({
             Patina
           </Link>
           <ProjectSwitcher projects={projects} activeProjectId={activeProjectId} />
+          <Link
+            href="/today"
+            className="hidden type-meta transition-opacity hover:opacity-70 sm:inline"
+            data-testid="header-today-link"
+          >
+            Today
+          </Link>
         </div>
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
