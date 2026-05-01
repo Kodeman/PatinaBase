@@ -26,6 +26,8 @@ import {
 import { formatRelativeTime, getInitials } from '@/lib/utils/format';
 import { ReadReceipt } from '@/components/messages/ReadReceipt';
 import { ThreadSettingsMenu } from '@/components/messages/ThreadSettingsMenu';
+import { MessageAttachmentUploader } from '@/components/messages/MessageAttachmentUploader';
+import type { CommsMessageAttachment } from '@patina/supabase';
 
 function cn(...classes: (string | boolean | undefined)[]) {
   return classes.filter(Boolean).join(' ');
@@ -76,6 +78,7 @@ export default function MessagesPage() {
   const [showMobileList, setShowMobileList] = useState(true);
   const [sendError, setSendError] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [pendingAttachments, setPendingAttachments] = useState<CommsMessageAttachment[]>([]);
 
   // Inbox-level realtime: keeps thread list and unread badges fresh.
   useInboxRealtime();
@@ -170,9 +173,15 @@ export default function MessagesPage() {
   }, [threads, search, currentUserId, showArchived]);
 
   const handleSendMessage = async ({ body }: { body: string }) => {
-    if (!activeThreadId || !body.trim()) return;
+    if (!activeThreadId) return;
+    if (!body.trim() && pendingAttachments.length === 0) return;
     try {
-      await sendMessage.mutateAsync({ threadId: activeThreadId, body });
+      await sendMessage.mutateAsync({
+        threadId: activeThreadId,
+        body,
+        attachments: pendingAttachments.length > 0 ? pendingAttachments : undefined,
+      });
+      setPendingAttachments([]);
       setSendError(null);
     } catch (err) {
       setSendError(
@@ -359,8 +368,16 @@ export default function MessagesPage() {
                   )}
                 </div>
 
-                <div className="border-t border-[var(--border-default)] px-6 py-4">
-                  <p className="type-meta mb-3">Reply</p>
+                <div className="border-t border-[var(--border-default)] px-6 py-4 space-y-3">
+                  <p className="type-meta">Reply</p>
+                  {activeThreadId && (
+                    <MessageAttachmentUploader
+                      threadId={activeThreadId}
+                      attachments={pendingAttachments}
+                      onChange={setPendingAttachments}
+                      disabled={sendMessage.isPending}
+                    />
+                  )}
                   <MessageComposer
                     disabled={!activeThreadId}
                     busy={sendMessage.isPending}

@@ -619,6 +619,10 @@ export type {
   ClientNotification,
   ClientNotificationKind,
 } from './use-client-notifications';
+export {
+  useUploadCommsAttachment,
+  useSignedCommsAttachmentUrl,
+} from './use-comms-attachments';
 export { useProductBySourceUrl } from './use-product-source-url';
 export {
   // Duplicate Detection

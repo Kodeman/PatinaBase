@@ -59,6 +59,13 @@ export interface CommsMessageAttachment {
   width?: number;
   height?: number;
   filename?: string;
+  /**
+   * Optional discriminator for special attachment types. Defaults to a regular
+   * file/image when absent. `room_scan` lets the message renderer surface a
+   * scan card; viewer routes off `metadata.scan_id`.
+   */
+  kind?: 'file' | 'image' | 'room_scan';
+  metadata?: Record<string, unknown>;
 }
 
 export interface CommsMessage {
