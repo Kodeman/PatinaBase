@@ -4,6 +4,13 @@ import { useState } from 'react';
 import { useSelectDecisionOption } from '@patina/supabase';
 import type { ClientDecision, ClientDecisionOption, DecisionType, BlockingStatus } from '@patina/supabase';
 import { CheckCircle2 } from 'lucide-react';
+import { DecisionConsentBlock } from '@/components/decisions/DecisionConsentBlock';
+
+const CONSENT_REQUIRED_TYPES: DecisionType[] = ['budget', 'approval', 'substitution'];
+
+function decisionRequiresConsent(decision: ClientDecision): boolean {
+  return CONSENT_REQUIRED_TYPES.includes(decision.decision_type);
+}
 
 const typeLabels: Record<DecisionType, string> = {
   material: 'Material',
@@ -200,11 +207,36 @@ export function DecisionCardClient({ decision, compact }: DecisionCardClientProp
     setShowConfirm(true);
   };
 
+  const requiresConsent = decisionRequiresConsent(decision);
+  const [showConsent, setShowConsent] = useState(false);
+
   const handleConfirm = () => {
     if (!selectedOptionId) return;
+    if (requiresConsent) {
+      setShowConsent(true);
+      return;
+    }
     selectOption.mutate(
       { optionId: selectedOptionId, decisionId: decision.id, clientNote: clientNote.trim() || undefined },
       { onSuccess: () => setShowConfirm(false) }
+    );
+  };
+
+  const handleConsentConfirm = (consent: { method: 'electronic_signature'; signature: string }) => {
+    if (!selectedOptionId) return;
+    selectOption.mutate(
+      {
+        optionId: selectedOptionId,
+        decisionId: decision.id,
+        clientNote: clientNote.trim() || undefined,
+        consent,
+      },
+      {
+        onSuccess: () => {
+          setShowConsent(false);
+          setShowConfirm(false);
+        },
+      }
     );
   };
 
@@ -301,8 +333,21 @@ export function DecisionCardClient({ decision, compact }: DecisionCardClientProp
       {/* Connection / blocking line (pending) */}
       {!isResolved && <ConnectionLine decision={decision} />}
 
+      {/* Consent block (for budget/approval/substitution) */}
+      {showConsent && !isResolved && selectedOptionId && (
+        <div className="border-t border-[var(--border-default)] pt-4 mt-3">
+          <DecisionConsentBlock
+            decisionTitle={decision.title}
+            optionName={options.find((o) => o.id === selectedOptionId)?.name ?? ''}
+            busy={selectOption.isPending}
+            onConfirm={handleConsentConfirm}
+            onCancel={() => setShowConsent(false)}
+          />
+        </div>
+      )}
+
       {/* Confirm selection */}
-      {showConfirm && !isResolved && selectedOptionId && (
+      {showConfirm && !showConsent && !isResolved && selectedOptionId && (
         <div className="border-t border-[var(--border-default)] pt-4 mt-3">
           <p className="text-sm font-medium text-[var(--text-primary)] mb-2">
             Confirm your selection: {options.find((o) => o.id === selectedOptionId)?.name}

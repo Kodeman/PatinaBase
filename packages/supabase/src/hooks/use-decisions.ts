@@ -473,11 +473,16 @@ export function useSelectDecisionOption() {
       decisionId,
       clientNote,
       quantity,
+      consent,
     }: {
       optionId: string;
       decisionId: string;
       clientNote?: string;
       quantity?: number;
+      consent?: {
+        method: 'electronic_signature' | 'click_through';
+        signature: string;
+      };
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -495,6 +500,19 @@ export function useSelectDecisionOption() {
           .update(patch)
           .eq('id', optionId);
         if (optErr) throw optErr;
+      }
+
+      // Persist client consent on the decision row before applying.
+      if (consent) {
+        const { error: consentErr } = await supabase
+          .from('client_decisions')
+          .update({
+            client_consent_method: consent.method,
+            client_signature: consent.signature,
+            client_consented_at: new Date().toISOString(),
+          })
+          .eq('id', decisionId);
+        if (consentErr) throw consentErr;
       }
 
       const { error: rpcError } = await supabase.rpc('apply_decision', {
