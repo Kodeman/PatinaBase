@@ -7,16 +7,20 @@ import { CheckCircle2 } from 'lucide-react';
 
 const typeLabels: Record<DecisionType, string> = {
   material: 'Material',
+  color: 'Color',
   product: 'Product',
   layout: 'Layout',
+  substitution: 'Substitution',
   budget: 'Budget',
   approval: 'Approval',
 };
 
 const typeIcons: Record<DecisionType, string> = {
   material: '\uD83C\uDFA8',
+  color: '\uD83C\uDFA8',
   product: '\uD83E\uDE91',
   layout: '\uD83D\uDCD0',
+  substitution: '\uD83D\uDD04',
   budget: '\uD83D\uDCB0',
   approval: '\u2713',
 };
@@ -229,8 +233,31 @@ export function DecisionCardClient({ decision, compact }: DecisionCardClientProp
     );
   }
 
+  const overdueWrapStyles: React.CSSProperties = overdue
+    ? {
+        borderLeftWidth: 3,
+        borderLeftStyle: 'solid',
+        borderLeftColor: 'var(--color-terracotta, #C77B6E)',
+        background: 'rgba(199, 123, 110, 0.03)',
+        paddingLeft: 16,
+      }
+    : {};
+
   return (
-    <div className="border-b border-[var(--border-default)] py-6">
+    <div
+      className="border-b border-[var(--border-default)] py-6"
+      style={overdueWrapStyles}
+      data-testid="decision-card"
+      data-overdue={overdue ? 'true' : 'false'}
+    >
+      {overdue && !isResolved && (
+        <p
+          className="mb-3 type-meta"
+          style={{ color: 'var(--color-terracotta, #C77B6E)' }}
+        >
+          Overdue {days} {days === 1 ? 'day' : 'days'} &middot; Please respond soon
+        </p>
+      )}
       {/* Header */}
       <div>
         <div className="mb-1 flex items-center justify-between">
@@ -359,9 +386,23 @@ function OptionCard({
       disabled={isResolved}
       className={`relative rounded-[3px] border p-4 text-left transition ${
         isResolved ? 'cursor-default' : 'cursor-pointer hover:border-[var(--accent-primary)]'
-      } ${isSelected ? 'border-patina-sage bg-[rgba(168,181,160,0.06)]' : 'border-[var(--border-default)] bg-[var(--bg-surface)]'}`}
+      } ${
+        isSelected
+          ? 'border-patina-sage bg-[rgba(168,181,160,0.06)]'
+          : option.is_recommended
+            ? 'border-2 border-[var(--accent-primary)] bg-[rgba(196,165,123,0.04)]'
+            : 'border-[var(--border-default)] bg-[var(--bg-surface)]'
+      }`}
       style={{ opacity: isResolved && !isSelected ? 0.5 : 1 }}
     >
+      {option.is_recommended && !isSelected && (
+        <span
+          className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-[var(--accent-primary)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white"
+          data-testid="recommended-badge"
+        >
+          &#9733; Recommended
+        </span>
+      )}
       {isSelected && (
         <span className="absolute right-2 top-2 type-meta-small text-patina-sage">
           {'\u2713'} Selected
@@ -409,10 +450,10 @@ function OptionCard({
         </p>
       )}
 
-      {option.is_recommended && (
-        <span className="mt-2 inline-flex items-center gap-1 type-meta-small text-[var(--accent-primary)]">
-          &#9733; Your Designer&apos;s Recommendation
-        </span>
+      {option.is_recommended && !isSelected && (
+        <p className="mt-2 type-meta-small text-[var(--accent-primary)]">
+          Your designer suggests this option
+        </p>
       )}
     </button>
   );
