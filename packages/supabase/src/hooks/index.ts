@@ -608,6 +608,8 @@ export {
   useCreateClientScopeChangeRequest,
   useCancelClientScopeChangeRequest,
 } from './use-scope-changes';
+export { useProjectDocuments } from './use-project-documents';
+export type { ProjectDocument, ProjectDocumentKind } from './use-project-documents';
 export { useProductBySourceUrl } from './use-product-source-url';
 export {
   // Duplicate Detection

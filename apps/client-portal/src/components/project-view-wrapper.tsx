@@ -7,6 +7,9 @@ import { ProjectScopeDetails } from '@/components/project-scope-details';
 import { BudgetOverview } from '@/components/budget-overview';
 import { FFEStatus } from '@/components/ffe-status';
 import { StrataMark } from '@/components/strata-mark';
+import { ProjectActivityFeed } from '@/components/project/ProjectActivityFeed';
+import { ProjectTeamPanel } from '@/components/project/ProjectTeamPanel';
+import { ProjectDocumentsPanel } from '@/components/project/ProjectDocumentsPanel';
 import type { MilestoneDetail } from '@/types/project';
 
 interface ProjectViewWrapperProps {
@@ -40,6 +43,18 @@ export function ProjectViewWrapper({
       {showOverview && <BudgetOverview projectId={projectId} />}
 
       {showOverview && <FFEStatus projectId={projectId} />}
+
+      {showOverview && (
+        <div className="mt-8 grid gap-6 lg:grid-cols-3" data-testid="project-detail-zones-8-10">
+          <div className="lg:col-span-2">
+            <ProjectActivityFeed projectId={projectId} />
+          </div>
+          <div className="space-y-6">
+            <ProjectTeamPanel projectId={projectId} />
+            <ProjectDocumentsPanel projectId={projectId} />
+          </div>
+        </div>
+      )}
 
       {showOverview && <StrataMark variant="full" />}
 
