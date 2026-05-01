@@ -369,6 +369,12 @@ importers:
       '@react-pdf/renderer':
         specifier: ^4.3.1
         version: 4.3.2(react@19.2.4)
+      '@stripe/react-stripe-js':
+        specifier: ^6.3.0
+        version: 6.3.0(@stripe/stripe-js@9.4.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@stripe/stripe-js':
+        specifier: ^9.4.0
+        version: 9.4.0
       '@tanstack/react-query':
         specifier: ^5.17.19
         version: 5.90.21(react@19.2.4)
@@ -8245,6 +8251,17 @@ packages:
     resolution: {integrity: sha512-n6OEjEtHupa2PdTwWzRepr7cO8NkDd4rgF6BKLitRbujOspLxzMBEqdphs+QLcuiCIgf33SqmEA64QWnbSMhPw==}
     peerDependencies:
       storybook: ^8.2.0 || ^8.3.0-0 || ^8.4.0-0 || ^8.5.0-0 || ^8.6.0-0
+
+  '@stripe/react-stripe-js@6.3.0':
+    resolution: {integrity: sha512-N1FTRNCMKySElDz1lAsf/m6Oy5vcl6LRVXcW29t0Y3U3HYOAqCBlk6nuDsR2x7SAuaXkVCjnpCqrNbA/7l74jg==}
+    peerDependencies:
+      '@stripe/stripe-js': '>=9.3.1 <10.0.0'
+      react: '>=16.8.0 <20.0.0'
+      react-dom: '>=16.8.0 <20.0.0'
+
+  '@stripe/stripe-js@9.4.0':
+    resolution: {integrity: sha512-zXG86DnoLU5nH2U18tX5ApTE3IAm+txoiPm4YFyEtRS0K5y7ZDH9M8e1Le/cZyI6wvW3BkJn2daZe2FqZOrSSg==}
+    engines: {node: '>=12.16'}
 
   '@supabase/auth-js@2.98.0':
     resolution: {integrity: sha512-GBH361T0peHU91AQNzOlIrjUZw9TZbB9YDRiyFgk/3Kvr3/Z1NWUZ2athWTfHhwNNi8IrW00foyFxQD9IO/Trg==}
@@ -24785,6 +24802,15 @@ snapshots:
   '@storybook/theming@8.6.18(storybook@8.6.18(prettier@3.8.1))':
     dependencies:
       storybook: 8.6.18(prettier@3.8.1)
+
+  '@stripe/react-stripe-js@6.3.0(@stripe/stripe-js@9.4.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+    dependencies:
+      '@stripe/stripe-js': 9.4.0
+      prop-types: 15.8.1
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+
+  '@stripe/stripe-js@9.4.0': {}
 
   '@supabase/auth-js@2.98.0':
     dependencies:
