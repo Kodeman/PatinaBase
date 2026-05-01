@@ -513,6 +513,31 @@ export async function proxyToBackend(
             authToken = jwtToken.accessToken as string;
           }
         }
+
+        // Supabase fallback: cookies named `sb-<host>-auth-token` (or chunked
+        // `.0`, `.1`, ...) carry a base64-encoded JSON session payload with
+        // `access_token`. Used by `@supabase/ssr` and the `createBrowserClient`
+        // path in this monorepo.
+        if (!authToken) {
+          const all = cookieStore.getAll();
+          const supabaseCookies = all
+            .filter((c) => /^sb-.*-auth-token(\.\d+)?$/.test(c.name))
+            .sort((a, b) => a.name.localeCompare(b.name));
+          if (supabaseCookies.length > 0) {
+            const raw = supabaseCookies.map((c) => c.value).join('');
+            const value = raw.startsWith('base64-')
+              ? Buffer.from(raw.slice(7), 'base64').toString('utf-8')
+              : raw;
+            try {
+              const parsed = JSON.parse(value);
+              if (parsed && typeof parsed.access_token === 'string') {
+                authToken = parsed.access_token;
+              }
+            } catch {
+              // Ignore — malformed Supabase cookie should not crash auth.
+            }
+          }
+        }
       } catch (err) {
         // Token extraction failed - will check requirement below
         console.error('[ProxyToBackend] Token extraction error:', err);
