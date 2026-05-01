@@ -610,6 +610,15 @@ export {
 } from './use-scope-changes';
 export { useProjectDocuments } from './use-project-documents';
 export type { ProjectDocument, ProjectDocumentKind } from './use-project-documents';
+export {
+  useClientNotifications,
+  useMarkClientNotificationRead,
+  useMarkAllClientNotificationsRead,
+} from './use-client-notifications';
+export type {
+  ClientNotification,
+  ClientNotificationKind,
+} from './use-client-notifications';
 export { useProductBySourceUrl } from './use-product-source-url';
 export {
   // Duplicate Detection
