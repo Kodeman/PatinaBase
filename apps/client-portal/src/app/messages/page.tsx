@@ -24,6 +24,8 @@ import {
   type ThreadSummary,
 } from '@patina/supabase';
 import { formatRelativeTime, getInitials } from '@/lib/utils/format';
+import { ReadReceipt } from '@/components/messages/ReadReceipt';
+import { ThreadSettingsMenu } from '@/components/messages/ThreadSettingsMenu';
 
 function cn(...classes: (string | boolean | undefined)[]) {
   return classes.filter(Boolean).join(' ');
@@ -73,6 +75,7 @@ export default function MessagesPage() {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [showMobileList, setShowMobileList] = useState(true);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   // Inbox-level realtime: keeps thread list and unread badges fresh.
   useInboxRealtime();
@@ -118,19 +121,53 @@ export default function MessagesPage() {
     [flatMessages, currentUserId]
   );
 
+  const lastOutboundMessageId = useMemo(() => {
+    for (let i = flatMessages.length - 1; i >= 0; i--) {
+      if (flatMessages[i].sender_id === currentUserId && !flatMessages[i].deleted_at) {
+        return flatMessages[i].id;
+      }
+    }
+    return null;
+  }, [flatMessages, currentUserId]);
+
+  const otherLastReadAt = useMemo(() => {
+    if (!activeThread || !currentUserId) return null;
+    const others = activeThread.participants.filter(
+      (p) => p.profile_id !== currentUserId && !p.left_at
+    );
+    if (others.length === 0) return null;
+    const latest = others
+      .map((p) => p.last_read_at)
+      .filter((t): t is string => !!t)
+      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+    return latest ?? null;
+  }, [activeThread, currentUserId]);
+
   const typingIndicators: MessageAuthor[] = typingUsers.map((u) => ({
     id: u.profile_id,
     name: u.full_name ?? 'Someone',
   }));
 
+  const myParticipantInActiveThread = useMemo(() => {
+    if (!activeThread || !currentUserId) return null;
+    return (
+      activeThread.participants.find((p) => p.profile_id === currentUserId) ?? null
+    );
+  }, [activeThread, currentUserId]);
+
   const filteredThreads = useMemo(() => {
-    if (!search.trim()) return threads;
+    const archiveFiltered = threads.filter((t) => {
+      const my = t.participants.find((p) => p.profile_id === currentUserId);
+      const archived = !!my?.archived_at;
+      return showArchived ? archived : !archived;
+    });
+    if (!search.trim()) return archiveFiltered;
     const q = search.toLowerCase();
-    return threads.filter((t) => {
+    return archiveFiltered.filter((t) => {
       if (counterpartName(t, currentUserId).toLowerCase().includes(q)) return true;
       return t.title?.toLowerCase().includes(q) ?? false;
     });
-  }, [threads, search, currentUserId]);
+  }, [threads, search, currentUserId, showArchived]);
 
   const handleSendMessage = async ({ body }: { body: string }) => {
     if (!activeThreadId || !body.trim()) return;
@@ -172,7 +209,19 @@ export default function MessagesPage() {
             )}
           >
             <div className="p-4 space-y-4">
-              <h2 className="type-meta">Conversations</h2>
+              <div className="flex items-center justify-between">
+                <h2 className="type-meta">
+                  {showArchived ? 'Archived' : 'Conversations'}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowArchived((prev) => !prev)}
+                  className="type-meta-small underline-offset-2 hover:underline"
+                  data-testid="toggle-archived"
+                >
+                  {showArchived ? 'Active' : 'Show archived'}
+                </button>
+              </div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
                 <Input
@@ -269,6 +318,14 @@ export default function MessagesPage() {
                       Updated {formatRelativeTime(lastUpdated ?? new Date().toISOString())}
                     </p>
                   </div>
+                  <ThreadSettingsMenu
+                    threadId={activeThreadId}
+                    myParticipant={myParticipantInActiveThread}
+                    onArchived={() => {
+                      setActiveThreadId(null);
+                      setShowMobileList(true);
+                    }}
+                  />
                 </div>
 
                 <div className="h-[400px]">
@@ -284,6 +341,15 @@ export default function MessagesPage() {
                       messages={conversationMessages}
                       currentUserId={currentUserId}
                       typingIndicators={typingIndicators}
+                      renderMessageActions={(message) => {
+                        if (message.id !== lastOutboundMessageId) return null;
+                        return (
+                          <ReadReceipt
+                            messageCreatedAt={message.timestamp.toISOString()}
+                            otherLastReadAt={otherLastReadAt}
+                          />
+                        );
+                      }}
                       emptyState={
                         <div className="text-center type-body-small py-8">
                           No messages in this thread yet.
