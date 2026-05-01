@@ -8,6 +8,7 @@ export interface ClientProfile {
   email: string;
   full_name: string | null;
   phone: string | null;
+  avatar_url: string | null;
 }
 
 export const fetchClientProfile = cache(async (): Promise<ClientProfile | null> => {
@@ -20,7 +21,7 @@ export const fetchClientProfile = cache(async (): Promise<ClientProfile | null> 
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, full_name, phone')
+    .select('id, email, full_name, phone, avatar_url')
     .eq('id', user.id)
     .single();
 
@@ -30,6 +31,7 @@ export const fetchClientProfile = cache(async (): Promise<ClientProfile | null> 
       email: user.email ?? '',
       full_name: (user.user_metadata?.full_name as string) ?? null,
       phone: (user.user_metadata?.phone as string) ?? null,
+      avatar_url: (user.user_metadata?.avatar_url as string) ?? null,
     };
   }
 

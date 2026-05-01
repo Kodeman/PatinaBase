@@ -15,6 +15,7 @@ import {
 } from '@patina/design-system';
 
 import type { ClientProfile } from '@/lib/data/profile';
+import { AvatarUploadField } from '@/components/account/AvatarUploadField';
 
 type Props = {
   initialProfile: ClientProfile;
@@ -67,6 +68,11 @@ export function ProfileForm({ initialProfile }: Props) {
         onSubmit={onSubmit}
         className="bg-white rounded-lg shadow-sm p-6 border border-[#EEE6DB] space-y-5"
       >
+        <AvatarUploadField
+          userId={initialProfile.id}
+          currentUrl={initialProfile.avatar_url}
+          displayName={initialProfile.full_name ?? initialProfile.email}
+        />
         <Field label="Full name" htmlFor="full_name">
           <input
             id="full_name"
