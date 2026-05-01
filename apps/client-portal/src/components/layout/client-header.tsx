@@ -41,25 +41,25 @@ export function ClientHeader({
 }: ClientHeaderProps) {
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--border-default)] bg-[var(--bg-primary)]/95 backdrop-blur supports-[backdrop-filter]:bg-[var(--bg-primary)]/80">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-6">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-6">
           <Link
             href="/projects"
-            className="font-heading text-lg tracking-wide text-[var(--text-primary)] transition-opacity hover:opacity-70"
+            className="inline-flex min-h-[44px] items-center font-heading text-lg tracking-wide text-[var(--text-primary)] transition-opacity hover:opacity-70"
           >
             Patina
           </Link>
           <ProjectSwitcher projects={projects} activeProjectId={activeProjectId} />
           <Link
             href="/today"
-            className="hidden type-meta transition-opacity hover:opacity-70 sm:inline"
+            className="hidden min-h-[44px] items-center type-meta transition-opacity hover:opacity-70 sm:inline-flex"
             data-testid="header-today-link"
           >
             Today
           </Link>
         </div>
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-shrink-0 items-center gap-3 sm:gap-5">
+          <div className="flex min-h-[44px] items-center gap-2">
             <Bell className="h-3.5 w-3.5 text-[var(--accent-primary)]" aria-hidden />
             <span className="font-heading text-lg font-bold text-[var(--text-primary)]">
               {approvalsPending}
@@ -68,7 +68,7 @@ export function ClientHeader({
           </div>
           <Link
             href="/messages"
-            className="flex items-center gap-2 transition-opacity hover:opacity-70"
+            className="inline-flex min-h-[44px] items-center gap-2 transition-opacity hover:opacity-70"
           >
             <MessageSquare className="h-3.5 w-3.5 text-[var(--accent-primary)]" aria-hidden />
             <span className="font-heading text-lg font-bold text-[var(--text-primary)]">
@@ -97,7 +97,7 @@ function RoomsLink() {
   return (
     <Link
       href="/scans"
-      className="flex items-center gap-2 transition-opacity hover:opacity-70"
+      className="inline-flex min-h-[44px] items-center gap-2 transition-opacity hover:opacity-70"
       data-testid="header-rooms-link"
     >
       <Box className="h-3.5 w-3.5 text-[var(--accent-primary)]" aria-hidden />
@@ -114,7 +114,7 @@ function ReviewsLink() {
   return (
     <Link
       href="/reviews"
-      className="flex items-center gap-2 transition-opacity hover:opacity-70"
+      className="inline-flex min-h-[44px] items-center gap-2 transition-opacity hover:opacity-70"
       data-testid="header-reviews-link"
     >
       <span className="type-meta hidden sm:inline">reviews</span>
