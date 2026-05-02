@@ -142,10 +142,10 @@ export function useClient(clientId: string) {
           )
         `)
         .eq('id', clientId)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
-      return data as DesignerClient;
+      return data as DesignerClient | null;
     },
     enabled: !!clientId,
   });
@@ -365,9 +365,10 @@ export function useClientProjects(clientId: string) {
         .from('designer_clients')
         .select('client_id, designer_id')
         .eq('id', clientId)
-        .single();
+        .maybeSingle();
 
       if (dcError) throw dcError;
+      if (!designerClient) return [];
 
       // Get projects for this designer that involve this client.
       // Note: project_products has no `quantity` column — the join below

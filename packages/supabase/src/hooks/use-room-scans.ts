@@ -193,9 +193,10 @@ export function useClientRoomScans(clientId: string) {
         .from('designer_clients')
         .select('client_id')
         .eq('id', clientId)
-        .single();
+        .maybeSingle();
 
       if (dcError) throw dcError;
+      if (!designerClient) return [];
 
       // Get room scans for this client
       const { data, error } = await supabase

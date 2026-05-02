@@ -99,7 +99,7 @@ export function useProject(id: string | null) {
           proposal:proposals!projects_proposal_id_fkey(id, title, signed_at)
         `)
         .eq('id', id)
-        .single();
+        .maybeSingle();
       if (error) throw error;
       return data;
     },

@@ -316,7 +316,7 @@ export function useVendorReviews(vendorId: string, pagination?: Pagination) {
         .select(
           `
           *,
-          designer:designers(id, display_name, avatar_url)
+          designer:profiles!vendor_reviews_designer_id_fkey(id, full_name, avatar_url)
         `,
           { count: 'exact' }
         )

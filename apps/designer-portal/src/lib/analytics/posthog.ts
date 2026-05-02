@@ -8,6 +8,15 @@ export function initPostHog(): void {
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
   if (!key) return;
 
+  // Skip in dev unless explicitly opted in — PostHog network failures pollute
+  // the Next.js dev error overlay and mask real application errors.
+  if (
+    process.env.NODE_ENV === 'development' &&
+    process.env.NEXT_PUBLIC_POSTHOG_ENABLE_IN_DEV !== 'true'
+  ) {
+    return;
+  }
+
   posthog.init(key, {
     api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com',
     capture_pageview: false, // We handle manually for SPA

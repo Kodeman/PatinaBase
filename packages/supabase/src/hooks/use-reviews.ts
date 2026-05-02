@@ -199,50 +199,73 @@ export function useCompletedProjectsWithoutReview() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      // Fetch completed projects with their designer_client relationship
+      // No FK between projects and designer_clients — match by (designer_id, client_id).
       const { data: projects, error: projError } = await supabase
         .from('projects')
-        .select(`
-          id,
-          name,
-          completed_at,
-          updated_at,
-          designer_id,
-          client_id,
-          designer_clients!inner(
-            id,
-            client_email,
-            client_name,
-            client:profiles!client_id(
-              id,
-              full_name,
-              email
-            )
-          )
-        `)
+        .select('id, name, completed_at, updated_at, designer_id, client_id')
         .eq('status', 'completed')
         .order('completed_at', { ascending: false });
 
       if (projError) throw projError;
+      if (!projects || projects.length === 0) return [] as CompletedProject[];
 
-      if (!projects || projects.length === 0) return [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const projectRows = projects as any[];
+      const projectIds = projectRows.map((p) => p.id);
+      const designerIds = Array.from(
+        new Set(projectRows.map((p) => p.designer_id).filter(Boolean))
+      );
+      const clientIds = Array.from(
+        new Set(projectRows.map((p) => p.client_id).filter(Boolean))
+      );
 
-      const projectIds = (projects as CompletedProject[]).map((p) => p.id);
-
-      // Fetch any existing review requests for these projects
-      const { data: existingReviews, error: revError } = await supabase
+      const reviewsPromise = supabase
         .from('client_reviews')
         .select('project_id')
         .in('project_id', projectIds)
         .in('request_status', ['sent', 'queued', 'collected']);
 
-      if (revError) throw revError;
+      const dcPromise =
+        designerIds.length > 0 && clientIds.length > 0
+          ? supabase
+              .from('designer_clients')
+              .select(
+                `id, designer_id, client_id, client_email, client_name,
+                 client:profiles!client_id(id, full_name, email)`
+              )
+              .in('designer_id', designerIds)
+              .in('client_id', clientIds)
+          : Promise.resolve({ data: [], error: null });
+
+      const [reviewsRes, dcRes] = await Promise.all([reviewsPromise, dcPromise]);
+      if (reviewsRes.error) throw reviewsRes.error;
+      if (dcRes.error) throw dcRes.error;
 
       const reviewedIds = new Set(
-        ((existingReviews ?? []) as { project_id: string }[]).map((r) => r.project_id)
+        ((reviewsRes.data ?? []) as { project_id: string }[]).map((r) => r.project_id)
       );
 
-      return (projects as CompletedProject[]).filter((p) => !reviewedIds.has(p.id));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dcByPair = new Map<string, any>();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const dc of (dcRes.data ?? []) as any[]) {
+        if (dc.designer_id && dc.client_id) {
+          dcByPair.set(`${dc.designer_id}|${dc.client_id}`, dc);
+        }
+      }
+
+      // Preserve the original `!inner` semantics: only keep projects that have
+      // a matching designer_clients row.
+      return projectRows
+        .filter((p) => !reviewedIds.has(p.id))
+        .map((p) => {
+          const dc =
+            p.designer_id && p.client_id
+              ? dcByPair.get(`${p.designer_id}|${p.client_id}`)
+              : null;
+          return dc ? { ...p, designer_clients: [dc] } : null;
+        })
+        .filter((p): p is CompletedProject => p !== null);
     },
   });
 }

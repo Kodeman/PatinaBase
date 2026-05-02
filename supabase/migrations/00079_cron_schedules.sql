@@ -12,7 +12,8 @@
 -- These are also required by migration 00042_lead_notification_triggers.sql.
 -- ═══════════════════════════════════════════════════════════════════════════
 
-CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA extensions;
+-- pg_cron must live in pg_catalog on supabase/postgres 15.1.1.78 (not extensions)
+CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
 
 -- ─── Helper: invoke an Edge Function with a POST ──────────────────────────

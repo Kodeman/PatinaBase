@@ -212,9 +212,16 @@ export function useCompanionQuickActions(context: CompanionContext) {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Quick actions are optional context — the page falls back to a default set.
+        // Use console.warn (not error) so the local-dev edge-function runtime being
+        // unavailable doesn't trip the Next.js dev error overlay.
+        console.warn('[companion-context] edge function unavailable:', (error as Error).message ?? error);
+        return null;
+      }
       return (data as CompanionContextResponse) ?? { quick_actions: [] };
     },
     enabled: !!context.screen,
+    retry: false,
   });
 }
