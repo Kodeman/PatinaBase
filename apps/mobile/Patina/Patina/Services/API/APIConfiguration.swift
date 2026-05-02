@@ -131,12 +131,13 @@ public enum APIConfiguration {
     // MARK: - API Keys
 
     /// Supabase anon key
+    /// Self-hosted: prefers SUPABASE_ANON_KEY env override; falls back to the
+    /// gitignored Secrets.swift value resolved through AppConfiguration.
     public static var anonKey: String {
         switch DeploymentTarget.current {
         case .cloud:
             return AppConfiguration.supabaseAnonKey
         case .selfHosted:
-            // TODO: Replace with self-hosted anon key from environment
             return ProcessInfo.processInfo.environment["SUPABASE_ANON_KEY"] ?? AppConfiguration.supabaseAnonKey
         case .local:
             // Local dev anon key (standard Supabase local key)

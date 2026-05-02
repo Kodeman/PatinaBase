@@ -355,7 +355,11 @@ struct RoomProjectView: View {
     private func handle(_ action: ItemActionMenu.Action, item: SavedItem) {
         let store = RoomStore(context: modelContext)
         switch action {
-        case .viewAR: break // TODO: deep-link into AR placement
+        case .viewAR:
+            coordinator.navigate(to: .arPlacement(
+                productId: item.productId,
+                roomRemoteId: room?.remoteId?.uuidString
+            ))
         case .viewDetail:
             coordinator.navigate(to: .pieceDetail(pieceId: item.productId))
         case .move, .copy:

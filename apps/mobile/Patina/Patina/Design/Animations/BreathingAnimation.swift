@@ -15,6 +15,7 @@ public struct BreathingModifier: ViewModifier {
     let isActive: Bool
 
     @State private var scale: CGFloat = 1.0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(
         minScale: CGFloat = 1.0,
@@ -32,14 +33,21 @@ public struct BreathingModifier: ViewModifier {
         content
             .scaleEffect(scale)
             .onAppear {
-                guard isActive else { return }
+                guard isActive, !reduceMotion else { return }
                 startBreathing()
             }
             .onChange(of: isActive) { _, active in
-                if active {
+                if active && !reduceMotion {
                     startBreathing()
                 } else {
                     stopBreathing()
+                }
+            }
+            .onChange(of: reduceMotion) { _, isReduced in
+                if isReduced {
+                    stopBreathing()
+                } else if isActive {
+                    startBreathing()
                 }
             }
     }

@@ -85,7 +85,16 @@ extension FeatureCategory {
 
 // MARK: - Observation Queue
 
-/// Manages the queue of observations to display
+/// Manages the queue of observations to display.
+///
+/// Pacing per `mobile-first-launch §4.2`:
+/// - Minimum **8 seconds** between consecutive observation reveals
+/// - Maximum **3 observations per rolling 60-second window**
+///
+/// Both rules are enforced at `enqueue` time so a noisy detector cannot
+/// flood the queue (rejected observations are silently dropped — they're
+/// triggered by feature detection and will surface again if the feature
+/// is re-detected later).
 public class ObservationQueue: ObservableObject {
     @Published public private(set) var currentObservation: WalkObservation?
     @Published public private(set) var history: [WalkObservation] = []
@@ -93,14 +102,23 @@ public class ObservationQueue: ObservableObject {
     private var pendingObservations: [WalkObservation] = []
     private var displayTask: Task<Void, Never>?
 
-    /// Add an observation to the queue
-    public func enqueue(_ observation: WalkObservation) {
-        pendingObservations.append(observation)
+    /// Timestamps of recent observation *display starts* used to enforce
+    /// the rolling-window cap. Trimmed on each enqueue.
+    private var recentDisplays: [Date] = []
+    private static let minimumGap: TimeInterval = 8
+    private static let windowDuration: TimeInterval = 60
+    private static let windowMax: Int = 3
 
-        // Start display loop if not running
+    /// Add an observation to the queue if pacing rules permit.
+    /// Returns `true` if the observation was accepted, `false` if dropped.
+    @discardableResult
+    public func enqueue(_ observation: WalkObservation) -> Bool {
+        guard shouldAccept(at: Date()) else { return false }
+        pendingObservations.append(observation)
         if displayTask == nil {
             startDisplayLoop()
         }
+        return true
     }
 
     /// Clear all pending observations
@@ -109,12 +127,31 @@ public class ObservationQueue: ObservableObject {
         displayTask = nil
         pendingObservations = []
         currentObservation = nil
+        recentDisplays.removeAll()
+    }
+
+    private func shouldAccept(at now: Date) -> Bool {
+        // Trim entries outside the 60s window.
+        recentDisplays.removeAll { now.timeIntervalSince($0) > Self.windowDuration }
+
+        // Rule 1: rolling-window cap.
+        if recentDisplays.count >= Self.windowMax { return false }
+
+        // Rule 2: minimum gap from the last display.
+        if let last = recentDisplays.last,
+           now.timeIntervalSince(last) < Self.minimumGap {
+            return false
+        }
+        return true
     }
 
     private func startDisplayLoop() {
         displayTask = Task { @MainActor in
             while !pendingObservations.isEmpty {
                 let observation = pendingObservations.removeFirst()
+
+                // Record the display-start timestamp for pacing.
+                recentDisplays.append(Date())
 
                 // Display the observation
                 withAnimation(.easeInOut(duration: 0.3)) {
@@ -132,8 +169,9 @@ public class ObservationQueue: ObservableObject {
                     currentObservation = nil
                 }
 
-                // Brief pause before next
-                try? await Task.sleep(nanoseconds: 500_000_000)
+                // Hold the post-fade gap so the next reveal cannot happen
+                // sooner than the 8s spec minimum (display 4s + this 4s).
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
             }
 
             displayTask = nil

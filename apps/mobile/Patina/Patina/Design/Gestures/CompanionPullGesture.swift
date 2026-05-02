@@ -80,16 +80,69 @@ extension View {
 // MARK: - Long Press Gesture Extension
 
 extension View {
-    /// Add long press to activate voice input (spec section 9.3: 0.5s hold)
+    /// Add long press to activate voice input (spec section 9.3: 0.5s hold).
+    /// Supports drag-away to cancel: while the gesture is active, drag the
+    /// finger more than `cancelDistance` (default 100pt) to abort the input
+    /// without sending. A warning haptic fires on cancel; a light haptic fires
+    /// on a clean release after activation.
     public func companionLongPressGesture(
-        onActivate: @escaping () -> Void
+        cancelDistance: CGFloat = 100,
+        onActivate: @escaping () -> Void,
+        onCancel: @escaping () -> Void = {},
+        onRelease: @escaping () -> Void = {}
     ) -> some View {
-        self.onLongPressGesture(
-            minimumDuration: CompanionConstants.longPressDuration,  // 0.5s per spec
-            maximumDistance: 20
-        ) {
-            HapticManager.shared.impact(.medium)
-            onActivate()
-        }
+        modifier(
+            CompanionLongPressDragModifier(
+                cancelDistance: cancelDistance,
+                onActivate: onActivate,
+                onCancel: onCancel,
+                onRelease: onRelease
+            )
+        )
+    }
+}
+
+private struct CompanionLongPressDragModifier: ViewModifier {
+    let cancelDistance: CGFloat
+    let onActivate: () -> Void
+    let onCancel: () -> Void
+    let onRelease: () -> Void
+
+    @State private var didActivate = false
+    @State private var didCancel = false
+
+    func body(content: Content) -> some View {
+        content.gesture(
+            LongPressGesture(minimumDuration: CompanionConstants.longPressDuration, maximumDistance: 20)
+                .sequenced(before: DragGesture(minimumDistance: 0))
+                .onChanged { value in
+                    switch value {
+                    case .first:
+                        // Long press still in progress — wait for activation.
+                        break
+                    case .second(let activated, let drag):
+                        if activated && !didActivate {
+                            didActivate = true
+                            HapticManager.shared.impact(.medium)
+                            onActivate()
+                        }
+                        if didActivate, !didCancel,
+                           let drag = drag,
+                           hypot(drag.translation.width, drag.translation.height) > cancelDistance {
+                            didCancel = true
+                            HapticManager.shared.notification(.warning)
+                            onCancel()
+                        }
+                    }
+                }
+                .onEnded { _ in
+                    if didActivate && !didCancel {
+                        HapticManager.shared.impact(.light)
+                        onRelease()
+                    }
+                    didActivate = false
+                    didCancel = false
+                }
+        )
     }
 }

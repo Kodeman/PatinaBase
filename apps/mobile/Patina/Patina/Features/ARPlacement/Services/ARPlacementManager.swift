@@ -31,13 +31,17 @@ final class ARPlacementManager: ObservableObject {
     func configure(arView: ARView) {
         self.arView = arView
 
-        // Configure AR session for floor detection
+        // Configure AR session for floor + wall detection.
+        // Vertical planes enable magnetic snap-to-wall placement; light
+        // estimation drives RealityKit's image-based lighting so placed
+        // furniture blends into the room's actual lighting conditions.
         let config = ARWorldTrackingConfiguration()
-        config.planeDetection = [.horizontal]
+        config.planeDetection = [.horizontal, .vertical]
         if ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) {
             config.sceneReconstruction = .mesh
         }
         config.environmentTexturing = .automatic
+        config.isLightEstimationEnabled = true
         arView.session.run(config)
     }
 
@@ -133,6 +137,43 @@ final class ARPlacementManager: ObservableObject {
         guard let entity = placedEntity else { return }
         let rotation = simd_quatf(angle: angle, axis: [0, 1, 0])
         entity.orientation = entity.orientation * rotation
+    }
+
+    // MARK: - Magnetic snap-to-wall
+
+    /// Snap distance threshold in meters. If the placed entity's nearest
+    /// vertical plane is within this range, pull it to the wall.
+    private static let wallSnapThreshold: Float = 0.30
+
+    /// Find the nearest vertical-plane anchor to the currently placed entity
+    /// and align the entity's back face to that wall. Best-effort — silently
+    /// no-ops if no wall is detected within `wallSnapThreshold`.
+    func snapToNearestWall() {
+        guard let arView, let entity = placedEntity, let anchor else { return }
+        let entityWorld = anchor.transform.translation + entity.position(relativeTo: anchor)
+
+        var bestDistance: Float = .greatestFiniteMagnitude
+        var bestPlane: ARPlaneAnchor?
+
+        for arAnchor in arView.session.currentFrame?.anchors ?? [] {
+            guard let plane = arAnchor as? ARPlaneAnchor,
+                  plane.alignment == .vertical else { continue }
+            let planeWorld = simd_make_float3(plane.transform.columns.3)
+            let normal = simd_normalize(simd_make_float3(plane.transform.columns.1))
+            let perpDistance = abs(simd_dot(entityWorld - planeWorld, normal))
+            if perpDistance < bestDistance {
+                bestDistance = perpDistance
+                bestPlane = plane
+            }
+        }
+
+        guard let plane = bestPlane, bestDistance < Self.wallSnapThreshold else { return }
+        let planeWorld = simd_make_float3(plane.transform.columns.3)
+        let normal = simd_normalize(simd_make_float3(plane.transform.columns.1))
+        let snapped = entityWorld - normal * (simd_dot(entityWorld - planeWorld, normal))
+        let local = snapped - anchor.transform.translation
+        entity.position = local
+        HapticManager.shared.impact(.light)
     }
 
     // MARK: - Cleanup

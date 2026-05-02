@@ -18,6 +18,7 @@ public struct StrataMarkView: View {
     var useSpecColors: Bool = true  // Use spec-accurate colors
 
     @State private var breatheScale: CGFloat = 1.0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(color: Color, scale: CGFloat = 1.0, breathing: Bool = false, useSpecColors: Bool = true) {
         self.color = color
@@ -44,29 +45,41 @@ public struct StrataMarkView: View {
                 .frame(width: 12 * scale, height: 3 * scale)
         }
         .scaleEffect(breathing ? breatheScale : 1.0)
+        .accessibilityLabel("Patina Companion")
+        .accessibilityHint("Double tap to open, or drag up for quick actions")
         .onAppear {
-            if breathing {
-                withAnimation(
-                    .easeInOut(duration: CompanionConstants.breathingDuration)  // 3s per spec
-                    .repeatForever(autoreverses: true)
-                ) {
-                    breatheScale = 1.08
-                }
+            if breathing && !reduceMotion {
+                startBreathing()
             }
         }
         .onChange(of: breathing) { _, newValue in
-            if newValue {
-                withAnimation(
-                    .easeInOut(duration: CompanionConstants.breathingDuration)  // 3s per spec
-                    .repeatForever(autoreverses: true)
-                ) {
-                    breatheScale = 1.08
-                }
+            if newValue && !reduceMotion {
+                startBreathing()
             } else {
-                withAnimation(.easeOut(duration: 0.3)) {
-                    breatheScale = 1.0
-                }
+                stopBreathing()
             }
+        }
+        .onChange(of: reduceMotion) { _, isReduced in
+            if isReduced {
+                stopBreathing()
+            } else if breathing {
+                startBreathing()
+            }
+        }
+    }
+
+    private func startBreathing() {
+        withAnimation(
+            .easeInOut(duration: CompanionConstants.breathingDuration)  // 3s per spec
+            .repeatForever(autoreverses: true)
+        ) {
+            breatheScale = 1.08
+        }
+    }
+
+    private func stopBreathing() {
+        withAnimation(.easeOut(duration: 0.3)) {
+            breatheScale = 1.0
         }
     }
 }

@@ -227,7 +227,10 @@ extension BackgroundScanUploader: URLSessionDelegate, URLSessionTaskDelegate, UR
             let code = http.statusCode
             guard (200..<300).contains(code) else {
                 logger.error("http \(code, privacy: .public) artifact=\(descriptor.artifactKind, privacy: .public)")
-                if [408, 429].contains(code) || (500..<600).contains(code) {
+                if code == 401 {
+                    // Token expired mid-flight. Refresh once and retry.
+                    await refreshSessionAndRetry(tracker: tracker)
+                } else if [408, 429].contains(code) || (500..<600).contains(code) {
                     await retryOrFail(tracker: tracker, with: .httpStatus(code))
                 } else {
                     onCompletion?(descriptor.scanId, descriptor.artifactKind, .failure(.httpStatus(code)))
@@ -272,6 +275,43 @@ extension BackgroundScanUploader: URLSessionDelegate, URLSessionTaskDelegate, UR
     }
 
     // MARK: - Retry
+
+    /// Refresh the Supabase session and re-enqueue the upload once.
+    /// Avoids ping-pong by counting against the same attempt budget as
+    /// transport/HTTP retries.
+    private func refreshSessionAndRetry(tracker: Tracker) async {
+        let maxAttempts = 3
+        if tracker.attempts >= maxAttempts {
+            logger.error(
+                "401 refresh exhausted artifact=\(tracker.descriptor.artifactKind, privacy: .public) attempts=\(tracker.attempts, privacy: .public)"
+            )
+            onCompletion?(tracker.descriptor.scanId, tracker.descriptor.artifactKind, .failure(.httpStatus(401)))
+            return
+        }
+        do {
+            _ = try await SupabaseClientManager.shared.client.auth.refreshSession()
+        } catch {
+            logger.error("auth refresh failed: \(error.localizedDescription, privacy: .public)")
+            onCompletion?(tracker.descriptor.scanId, tracker.descriptor.artifactKind, .failure(.missingSession))
+            return
+        }
+        tracker.attempts += 1
+        do {
+            let request = try buildRequest(for: tracker.descriptor)
+            let task = session.uploadTask(with: request, fromFile: tracker.descriptor.fileURL)
+            inflight[task] = tracker
+            task.resume()
+            logger.info(
+                "401 retry after refresh attempt=\(tracker.attempts, privacy: .public) artifact=\(tracker.descriptor.artifactKind, privacy: .public)"
+            )
+        } catch {
+            onCompletion?(
+                tracker.descriptor.scanId,
+                tracker.descriptor.artifactKind,
+                .failure(.transport(error))
+            )
+        }
+    }
 
     private func retryOrFail(tracker: Tracker, with error: UploadError) async {
         let maxAttempts = 3

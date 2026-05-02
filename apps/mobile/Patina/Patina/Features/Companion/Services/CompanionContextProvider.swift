@@ -157,6 +157,34 @@ enum CompanionActionProvider {
                 ),
             ]
 
+        case .arPlacement:
+            items = [
+                CompanionActionItem(
+                    icon: "camera", label: "Save photo",
+                    hint: "Capture this view", isSuggested: true,
+                    route: .heroFrame
+                ),
+                CompanionActionItem(
+                    icon: "arrow.triangle.2.circlepath", label: "Try another piece",
+                    hint: "Swap in something else",
+                    route: .emergence(pieceId: nil)
+                ),
+            ]
+
+        case .settings:
+            items = [
+                CompanionActionItem(
+                    icon: "person.circle", label: "Your profile",
+                    hint: "Style · Rooms",
+                    route: .profile
+                ),
+                CompanionActionItem(
+                    icon: "viewfinder", label: "Scan a room",
+                    hint: "Add a new space",
+                    route: .walk
+                ),
+            ]
+
         default:
             items = [
                 CompanionActionItem(
