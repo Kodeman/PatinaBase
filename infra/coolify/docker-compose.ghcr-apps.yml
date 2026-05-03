@@ -1,0 +1,400 @@
+# =============================================================================
+# Patina ghcr-apps stack — snapshot of the live Coolify-managed compose
+# =============================================================================
+#
+# This file mirrors `/data/coolify/services/oc8kggksw4s8sg08o4w0wsw4/docker-compose.yml`
+# on the production server (192.168.1.14). Coolify is the source of truth — it
+# generates the live file from its UI/database, and this snapshot exists only so
+# that two latent fixes survive a Coolify regenerate:
+#
+#   1. The `es8w8g0c00og4gsgg0k8w8o8` (Supabase stack) external network is
+#      attached to orders/media/projects so they can reach
+#      `db-es8w8g0c00og4gsgg0k8w8o8:5432` and `patina-redis`. Without this,
+#      services boot, log "Mapped routes...", and crash on the first DB query
+#      with `Can't reach database server` and `getaddrinfo EAI_AGAIN
+#      patina-redis`. Coolify's UI does not expose this network attachment.
+#
+#   2. NestJS service healthchecks probe `/v1/health` (matching the global
+#      `/v1` API prefix), not the bare `/health` Coolify generates by default.
+#      Without this, containers run forever marked `(unhealthy)` even when
+#      working.
+#
+# If Coolify regenerates the on-server file (e.g. after a stack rename or
+# UI re-import), copy this file back into place:
+#
+#   scp infra/coolify/docker-compose.ghcr-apps.yml \
+#       kody@192.168.1.14:/tmp/ghcr-apps-compose.yml
+#   ssh kody@192.168.1.14 'sudo cp /tmp/ghcr-apps-compose.yml \
+#       /data/coolify/services/oc8kggksw4s8sg08o4w0wsw4/docker-compose.yml \
+#     && cd /data/coolify/services/oc8kggksw4s8sg08o4w0wsw4 \
+#     && sudo docker compose up -d --force-recreate'
+#
+# Stack identity:
+#   Coolify project: Strata (l4g8cswgosw8s80ck84so880)
+#   Stack UUID:      oc8kggksw4s8sg08o4w0wsw4 (patina-ghcr-apps)
+#   Snapshot taken:  2026-05-03 (post-rebuild deploy)
+#
+# All credentials reference ${VAR} substitution from
+# `/data/coolify/services/oc8kggksw4s8sg08o4w0wsw4/.env` — never paste secrets
+# into this file.
+# =============================================================================
+services:
+  orders:
+    container_name: orders-oc8kggksw4s8sg08o4w0wsw4
+    image: 'ghcr.io/kodeman/orders:latest'
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - '--no-verbose'
+        - '--tries=1'
+        - '--spider'
+        - 'http://localhost:3015/v1/health'
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    environment:
+      NODE_ENV: production
+      PORT: 3015
+      DATABASE_URL: 'postgresql://postgres:${POSTGRES_PASSWORD}@db-es8w8g0c00og4gsgg0k8w8o8:5432/postgres?schema=svc_orders'
+      REDIS_HOST: patina-redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: '${REDIS_PASSWORD}'
+      SUPABASE_JWT_SECRET: '${JWT_SECRET}'
+      STRIPE_SECRET_KEY: '${STRIPE_SECRET_KEY}'
+      STRIPE_WEBHOOK_SECRET: '${STRIPE_WEBHOOK_SECRET}'
+      EASYPOST_API_KEY: '${EASYPOST_API_KEY}'
+      JWT_SECRET: '${JWT_SECRET}'
+      COOLIFY_RESOURCE_UUID: oc8kggksw4s8sg08o4w0wsw4
+      COOLIFY_CONTAINER_NAME: orders-oc8kggksw4s8sg08o4w0wsw4
+      SERVICE_NAME_ORDERS: orders
+      SERVICE_NAME_MEDIA: media
+      SERVICE_NAME_PROJECTS: projects
+      SERVICE_NAME_DESIGNER_PORTAL: designer-portal
+      SERVICE_NAME_ADMIN_PORTAL: admin-portal
+      SERVICE_NAME_CLIENT_PORTAL: client-portal
+    ports:
+      - '3015:3015'
+    networks:
+      patina_network: null
+      oc8kggksw4s8sg08o4w0wsw4: null
+      es8w8g0c00og4gsgg0k8w8o8: null
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.463
+      - coolify.serviceId=14
+      - coolify.type=service
+      - coolify.name=orders-oc8kggksw4s8sg08o4w0wsw4
+      - coolify.resourceName=patina-ghcr-apps
+      - coolify.projectName=strata
+      - coolify.serviceName=orders
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - coolify.service.subId=67
+      - coolify.service.subType=application
+      - coolify.service.subName=orders
+    env_file:
+      - .env
+  media:
+    container_name: media-oc8kggksw4s8sg08o4w0wsw4
+    image: 'ghcr.io/kodeman/media:latest'
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - '--no-verbose'
+        - '--tries=1'
+        - '--spider'
+        - 'http://localhost:3014/v1/health'
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    environment:
+      NODE_ENV: production
+      PORT: 3014
+      DATABASE_URL: 'postgresql://postgres:${POSTGRES_PASSWORD}@db-es8w8g0c00og4gsgg0k8w8o8:5432/postgres?schema=svc_media'
+      REDIS_HOST: patina-redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: '${REDIS_PASSWORD}'
+      SUPABASE_JWT_SECRET: '${JWT_SECRET}'
+      STORAGE_PROVIDER: '${STORAGE_PROVIDER:-R2}'
+      R2_ACCOUNT_ID: '${R2_ACCOUNT_ID}'
+      R2_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}'
+      R2_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}'
+      R2_BUCKET_RAW: '${R2_BUCKET_RAW:-patina-raw}'
+      R2_BUCKET_PROCESSED: '${R2_BUCKET_PROCESSED:-patina-processed}'
+      R2_BUCKET_THUMBNAILS: '${R2_BUCKET_THUMBNAILS:-patina-thumbnails}'
+      R2_BUCKET_ARCHIVE: '${R2_BUCKET_ARCHIVE:-patina-archive}'
+      R2_PUBLIC_BUCKET_URL: '${R2_PUBLIC_BUCKET_URL:-https://cdn.patina.cloud}'
+      CDN_PROVIDER: '${CDN_PROVIDER:-cloudflare}'
+      CDN_DOMAIN: '${CDN_DOMAIN:-cdn.patina.cloud}'
+      CF_API_TOKEN: '${CF_API_TOKEN}'
+      JWT_SECRET: '${JWT_SECRET}'
+      COOLIFY_RESOURCE_UUID: oc8kggksw4s8sg08o4w0wsw4
+      COOLIFY_CONTAINER_NAME: media-oc8kggksw4s8sg08o4w0wsw4
+      SERVICE_NAME_ORDERS: orders
+      SERVICE_NAME_MEDIA: media
+      SERVICE_NAME_PROJECTS: projects
+      SERVICE_NAME_DESIGNER_PORTAL: designer-portal
+      SERVICE_NAME_ADMIN_PORTAL: admin-portal
+      SERVICE_NAME_CLIENT_PORTAL: client-portal
+    ports:
+      - '3014:3014'
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.http-0-media.entryPoints=http
+      - 'traefik.http.routers.http-0-media.rule=Host(`media.patina.cloud`) && PathPrefix(`/`)'
+      - traefik.http.routers.http-0-media.middlewares=gzip
+      - traefik.http.middlewares.gzip.compress=true
+      - traefik.http.services.http-0-media.loadbalancer.server.port=3014
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.463
+      - coolify.serviceId=14
+      - coolify.type=service
+      - coolify.name=media-oc8kggksw4s8sg08o4w0wsw4
+      - coolify.resourceName=patina-ghcr-apps
+      - coolify.projectName=strata
+      - coolify.serviceName=media
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - coolify.service.subId=68
+      - coolify.service.subType=application
+      - coolify.service.subName=media
+    networks:
+      patina_network: null
+      oc8kggksw4s8sg08o4w0wsw4: null
+      es8w8g0c00og4gsgg0k8w8o8: null
+    env_file:
+      - .env
+  projects:
+    container_name: projects-oc8kggksw4s8sg08o4w0wsw4
+    image: 'ghcr.io/kodeman/projects:latest'
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - '--no-verbose'
+        - '--tries=1'
+        - '--spider'
+        - 'http://localhost:3016/v1/health'
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    environment:
+      NODE_ENV: production
+      PORT: 3016
+      DATABASE_URL: 'postgresql://postgres:${POSTGRES_PASSWORD}@db-es8w8g0c00og4gsgg0k8w8o8:5432/postgres?schema=svc_projects'
+      REDIS_HOST: patina-redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: '${REDIS_PASSWORD}'
+      SUPABASE_JWT_SECRET: '${JWT_SECRET}'
+      JWT_SECRET: '${JWT_SECRET}'
+      COOLIFY_RESOURCE_UUID: oc8kggksw4s8sg08o4w0wsw4
+      COOLIFY_CONTAINER_NAME: projects-oc8kggksw4s8sg08o4w0wsw4
+      SERVICE_NAME_ORDERS: orders
+      SERVICE_NAME_MEDIA: media
+      SERVICE_NAME_PROJECTS: projects
+      SERVICE_NAME_DESIGNER_PORTAL: designer-portal
+      SERVICE_NAME_ADMIN_PORTAL: admin-portal
+      SERVICE_NAME_CLIENT_PORTAL: client-portal
+    ports:
+      - '3016:3016'
+    networks:
+      patina_network: null
+      oc8kggksw4s8sg08o4w0wsw4: null
+      es8w8g0c00og4gsgg0k8w8o8: null
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.463
+      - coolify.serviceId=14
+      - coolify.type=service
+      - coolify.name=projects-oc8kggksw4s8sg08o4w0wsw4
+      - coolify.resourceName=patina-ghcr-apps
+      - coolify.projectName=strata
+      - coolify.serviceName=projects
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - coolify.service.subId=69
+      - coolify.service.subType=application
+      - coolify.service.subName=projects
+    env_file:
+      - .env
+  designer-portal:
+    container_name: designer-portal-oc8kggksw4s8sg08o4w0wsw4
+    image: 'ghcr.io/kodeman/designer-portal:latest'
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      NEXT_PUBLIC_SUPABASE_URL: '${NEXT_PUBLIC_SUPABASE_URL:-https://api.patina.cloud}'
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: '${ANON_KEY}'
+      SUPABASE_SERVICE_ROLE_KEY: '${SERVICE_ROLE_KEY}'
+      ORDERS_SERVICE_URL: 'http://patina-orders-ghcr:3015'
+      MEDIA_SERVICE_URL: 'http://patina-media-ghcr:3014'
+      PROJECTS_SERVICE_URL: 'http://patina-projects-ghcr:3016'
+      ANON_KEY: '${ANON_KEY}'
+      COOLIFY_RESOURCE_UUID: oc8kggksw4s8sg08o4w0wsw4
+      COOLIFY_CONTAINER_NAME: designer-portal-oc8kggksw4s8sg08o4w0wsw4
+      COOLIFY_FQDN: app.patina.cloud
+      COOLIFY_URL: 'http://app.patina.cloud'
+      SERVICE_NAME_ORDERS: orders
+      SERVICE_NAME_MEDIA: media
+      SERVICE_NAME_PROJECTS: projects
+      SERVICE_NAME_DESIGNER_PORTAL: designer-portal
+      SERVICE_NAME_ADMIN_PORTAL: admin-portal
+      SERVICE_NAME_CLIENT_PORTAL: client-portal
+    ports:
+      - '3000:3000'
+    networks:
+      patina_network: null
+      oc8kggksw4s8sg08o4w0wsw4: null
+      es8w8g0c00og4gsgg0k8w8o8: null
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.463
+      - coolify.serviceId=14
+      - coolify.type=service
+      - coolify.name=designer-portal-oc8kggksw4s8sg08o4w0wsw4
+      - coolify.resourceName=patina-ghcr-apps
+      - coolify.projectName=strata
+      - coolify.serviceName=designer-portal
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - coolify.service.subId=70
+      - coolify.service.subType=application
+      - coolify.service.subName=designer-portal
+      - traefik.enable=true
+      - traefik.http.middlewares.gzip.compress=true
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+      - traefik.http.routers.http-0-oc8kggksw4s8sg08o4w0wsw4-designer-portal.entryPoints=http
+      - traefik.http.routers.http-0-oc8kggksw4s8sg08o4w0wsw4-designer-portal.middlewares=gzip
+      - 'traefik.http.routers.http-0-oc8kggksw4s8sg08o4w0wsw4-designer-portal.rule=Host(`app.patina.cloud`) && PathPrefix(`/`)'
+      - 'caddy_0.encode=zstd gzip'
+      - 'caddy_0.handle_path.0_reverse_proxy={{upstreams}}'
+      - 'caddy_0.handle_path=/*'
+      - caddy_0.header=-Server
+      - 'caddy_0.try_files={path} /index.html /index.php'
+      - 'caddy_0=http://app.patina.cloud'
+      - caddy_ingress_network=oc8kggksw4s8sg08o4w0wsw4
+    env_file:
+      - .env
+  admin-portal:
+    container_name: admin-portal-oc8kggksw4s8sg08o4w0wsw4
+    image: 'ghcr.io/kodeman/admin-portal:latest'
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      NEXT_PUBLIC_SUPABASE_URL: '${NEXT_PUBLIC_SUPABASE_URL:-https://api.patina.cloud}'
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: '${ANON_KEY}'
+      SUPABASE_SERVICE_ROLE_KEY: '${SERVICE_ROLE_KEY}'
+      ORDERS_SERVICE_URL: 'http://patina-orders-ghcr:3015'
+      MEDIA_SERVICE_URL: 'http://patina-media-ghcr:3014'
+      ANON_KEY: '${ANON_KEY}'
+      COOLIFY_RESOURCE_UUID: oc8kggksw4s8sg08o4w0wsw4
+      COOLIFY_CONTAINER_NAME: admin-portal-oc8kggksw4s8sg08o4w0wsw4
+      COOLIFY_FQDN: admin.patina.cloud
+      COOLIFY_URL: 'http://admin.patina.cloud'
+      SERVICE_NAME_ORDERS: orders
+      SERVICE_NAME_MEDIA: media
+      SERVICE_NAME_PROJECTS: projects
+      SERVICE_NAME_DESIGNER_PORTAL: designer-portal
+      SERVICE_NAME_ADMIN_PORTAL: admin-portal
+      SERVICE_NAME_CLIENT_PORTAL: client-portal
+    ports:
+      - '3001:3000'
+    networks:
+      patina_network: null
+      oc8kggksw4s8sg08o4w0wsw4: null
+      es8w8g0c00og4gsgg0k8w8o8: null
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.463
+      - coolify.serviceId=14
+      - coolify.type=service
+      - coolify.name=admin-portal-oc8kggksw4s8sg08o4w0wsw4
+      - coolify.resourceName=patina-ghcr-apps
+      - coolify.projectName=strata
+      - coolify.serviceName=admin-portal
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - coolify.service.subId=71
+      - coolify.service.subType=application
+      - coolify.service.subName=admin-portal
+      - traefik.enable=true
+      - traefik.http.middlewares.gzip.compress=true
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+      - traefik.http.routers.http-0-oc8kggksw4s8sg08o4w0wsw4-admin-portal.entryPoints=http
+      - traefik.http.routers.http-0-oc8kggksw4s8sg08o4w0wsw4-admin-portal.middlewares=gzip
+      - 'traefik.http.routers.http-0-oc8kggksw4s8sg08o4w0wsw4-admin-portal.rule=Host(`admin.patina.cloud`) && PathPrefix(`/`)'
+      - 'caddy_0.encode=zstd gzip'
+      - 'caddy_0.handle_path.0_reverse_proxy={{upstreams}}'
+      - 'caddy_0.handle_path=/*'
+      - caddy_0.header=-Server
+      - 'caddy_0.try_files={path} /index.html /index.php'
+      - 'caddy_0=http://admin.patina.cloud'
+      - caddy_ingress_network=oc8kggksw4s8sg08o4w0wsw4
+    env_file:
+      - .env
+  client-portal:
+    container_name: client-portal-oc8kggksw4s8sg08o4w0wsw4
+    image: 'ghcr.io/kodeman/client-portal:latest'
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.http-0-client-portal.entryPoints=http
+      - 'traefik.http.routers.http-0-client-portal.rule=Host(`client.patina.cloud`) && PathPrefix(`/`)'
+      - traefik.http.routers.http-0-client-portal.middlewares=gzip
+      - traefik.http.middlewares.gzip.compress=true
+      - traefik.http.services.http-0-client-portal.loadbalancer.server.port=3000
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.463
+      - coolify.serviceId=14
+      - coolify.type=service
+      - coolify.name=client-portal-oc8kggksw4s8sg08o4w0wsw4
+      - coolify.resourceName=patina-ghcr-apps
+      - coolify.projectName=strata
+      - coolify.serviceName=client-portal
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - coolify.service.subId=72
+      - coolify.service.subType=application
+      - coolify.service.subName=client-portal
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      NEXT_PUBLIC_SUPABASE_URL: '${NEXT_PUBLIC_SUPABASE_URL:-https://api.patina.cloud}'
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: '${ANON_KEY}'
+      SUPABASE_SERVICE_ROLE_KEY: '${SERVICE_ROLE_KEY}'
+      ORDERS_SERVICE_URL: 'http://patina-orders-ghcr:3015'
+      MEDIA_SERVICE_URL: 'http://patina-media-ghcr:3014'
+      PROJECTS_SERVICE_URL: 'http://patina-projects-ghcr:3016'
+      ANON_KEY: '${ANON_KEY}'
+      COOLIFY_RESOURCE_UUID: oc8kggksw4s8sg08o4w0wsw4
+      COOLIFY_CONTAINER_NAME: client-portal-oc8kggksw4s8sg08o4w0wsw4
+      SERVICE_NAME_ORDERS: orders
+      SERVICE_NAME_MEDIA: media
+      SERVICE_NAME_PROJECTS: projects
+      SERVICE_NAME_DESIGNER_PORTAL: designer-portal
+      SERVICE_NAME_ADMIN_PORTAL: admin-portal
+      SERVICE_NAME_CLIENT_PORTAL: client-portal
+    ports:
+      - '3002:3000'
+    networks:
+      patina_network: null
+      oc8kggksw4s8sg08o4w0wsw4: null
+      es8w8g0c00og4gsgg0k8w8o8: null
+    env_file:
+      - .env
+networks:
+  patina_network:
+    external: true
+  oc8kggksw4s8sg08o4w0wsw4:
+    name: oc8kggksw4s8sg08o4w0wsw4
+    external: true
+  es8w8g0c00og4gsgg0k8w8o8:
+    name: es8w8g0c00og4gsgg0k8w8o8
+    external: true
