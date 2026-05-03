@@ -29,6 +29,7 @@ import { BulkOperationsProcessor } from './modules/jobs/bulk-operations.processo
 import { VirusScannerService } from './modules/security/virus-scanner.service';
 import { CDNManagerService } from './modules/storage/cdn/cdn-manager.service';
 import { CloudFrontCDNProvider } from './modules/storage/cdn/cloudfront-cdn.provider';
+import { CloudflareCDNProvider } from './modules/storage/cdn/cloudflare-cdn.provider';
 
 @Module({
   imports: [
@@ -91,6 +92,7 @@ import { CloudFrontCDNProvider } from './modules/storage/cdn/cloudfront-cdn.prov
     VirusScannerService,
     CDNManagerService,
     CloudFrontCDNProvider,
+    CloudflareCDNProvider,
 
     // Global Authentication Guard — Supabase JWT validation
     {
