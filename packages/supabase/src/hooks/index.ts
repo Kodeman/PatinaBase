@@ -650,6 +650,21 @@ export {
   useSendCompanionMessage,
   useCompanionQuickActions,
 } from './use-companion';
+export {
+  useInboxNotifications,
+  useInboxMessages,
+  useUnreadInboxCount,
+  useInboxNotificationsRealtime,
+  inboxKeys,
+} from './use-inbox';
+export type {
+  InboxNotification,
+  InboxNotificationFilters,
+  InboxNotificationMetadata,
+  InboxNotificationStatus,
+  InboxNotificationChannel,
+  InboxMessage,
+} from './use-inbox';
 export type {
   CompanionMessage,
   CompanionResponse,

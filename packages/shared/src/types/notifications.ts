@@ -237,6 +237,20 @@ export interface CampaignAnalytics {
 
 export type EmailTemplateCategory = 'transactional' | 'engagement' | 'campaign' | 'sequence';
 
+/**
+ * Template variable definition. Persisted in `email_templates.variables` as
+ * `TemplateVariable[]`. Legacy rows may still hold `string[]` (just names);
+ * see `normalizeTemplateVariables` in `@patina/shared` for coercion.
+ */
+export interface TemplateVariable {
+  name: string;
+  label: string;
+  sample: string;
+  required: boolean;
+}
+
+export type TemplateVariableInput = TemplateVariable | string;
+
 export interface EmailTemplate {
   id: UUID;
   slug: string;
@@ -246,9 +260,11 @@ export interface EmailTemplate {
   subject_default: string | null;
   content_blocks: ContentBlock[];
   html_content: string;
-  variables: string[];
+  variables: TemplateVariableInput[];
   thumbnail_url: string | null;
   is_active: boolean;
+  frequency_cap_count: number | null;
+  frequency_cap_window_days: number | null;
   created_by: UUID | null;
   created_at: string;
   updated_at: string;

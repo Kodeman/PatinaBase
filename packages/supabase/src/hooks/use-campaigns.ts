@@ -67,6 +67,7 @@ export function useCreateCampaign() {
       audience_type: string;
       preview_text?: string;
       template_data?: Record<string, unknown>;
+      content_json?: Record<string, unknown>;
       audience_segment?: Record<string, unknown>;
       scheduled_for?: string;
     }) => {
