@@ -71,14 +71,38 @@ const SORT_COLUMN_MAP: Record<ProductSort['field'], string> = {
   vendor: 'vendor_id',
 };
 
-export function useProducts(filters?: ProductFilter, pagination?: Pagination, sort?: ProductSort) {
+export interface UseProductsOptions {
+  /**
+   * Include products with status='draft' or 'archived'. Defaults to false,
+   * which matches the desired catalog semantics (only published rows are
+   * visible to other designers). The Proposal Builder's quick-create flow
+   * passes `includeDrafts: true` to surface its own freshly-created drafts.
+   */
+  includeDrafts?: boolean;
+}
+
+export function useProducts(
+  filters?: ProductFilter,
+  pagination?: Pagination,
+  sort?: ProductSort,
+  options?: UseProductsOptions
+) {
   return useQuery({
-    queryKey: ['products', filters, pagination, sort],
+    queryKey: ['products', filters, pagination, sort, options?.includeDrafts ?? false],
     queryFn: async () => {
       const supabase = getSupabase();
       let query = supabase
         .from('products')
         .select('*, vendor:vendors!products_vendor_id_fkey(*), product_styles(style:styles(*))', { count: 'exact' });
+
+      // Default to published-only — drafts are an opt-in concept used by
+      // the Proposal Builder's quick-create flow. Archived rows are
+      // always hidden from this hook.
+      if (!options?.includeDrafts) {
+        query = query.eq('status', 'published');
+      } else {
+        query = query.in('status', ['draft', 'published']);
+      }
 
       // Apply filters
       if (filters?.search) {
@@ -609,6 +633,73 @@ export function useUpdateProduct() {
       queryClient.invalidateQueries({ queryKey: ['products-with-vendor-pricing'] });
       queryClient.invalidateQueries({ queryKey: ['product', data.id] });
       queryClient.invalidateQueries({ queryKey: ['product-with-vendor-pricing', data.id] });
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// QUICK-CREATE DRAFT PRODUCT (Proposal Builder)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface CreateDraftProductInput {
+  name: string;
+  brand?: string;
+  /** Source URL — usually the page where the designer found the product. */
+  sourceUrl?: string;
+  /** Retail price in DOLLARS. Stored as cents. */
+  priceRetailDollars?: number;
+}
+
+/**
+ * Quick-create a draft product from the Proposal Builder's
+ * ProductPickerModal. The designer can use the returned id to attach the
+ * draft to a proposal_item before fully curating the product.
+ *
+ * Sets status='draft' so the catalog hook (useProducts) excludes it
+ * from the public catalog list by default.
+ */
+export function useCreateDraftProduct() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: CreateDraftProductInput): Promise<{ id: string }> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getAuthSupabase() as any;
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const trimmedName = input.name.trim();
+      if (!trimmedName) throw new Error('Product name is required');
+
+      const priceCents =
+        typeof input.priceRetailDollars === 'number' && input.priceRetailDollars >= 0
+          ? Math.round(input.priceRetailDollars * 100)
+          : null;
+
+      const { data, error } = await supabase
+        .from('products')
+        .insert({
+          name: trimmedName,
+          brand: input.brand?.trim() || null,
+          source_url: input.sourceUrl?.trim() || null,
+          price_retail: priceCents,
+          status: 'draft',
+          captured_by: user.id,
+          captured_at: new Date().toISOString(),
+          images: [],
+          materials: [],
+        })
+        .select('id')
+        .single();
+
+      if (error) throw error;
+      return data as { id: string };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
     },
   });
 }

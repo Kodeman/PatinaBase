@@ -5,8 +5,26 @@ export {
   useProductWithVendorPricing,
   useCreateProduct,
   useUpdateProduct,
+  useCreateDraftProduct,
 } from './use-products';
-export type { ProductWithVendorPricing, VendorPricingInfo, ProductSort } from './use-products';
+export type {
+  ProductWithVendorPricing,
+  VendorPricingInfo,
+  ProductSort,
+  UseProductsOptions,
+  CreateDraftProductInput,
+} from './use-products';
+export {
+  useFFECategories,
+  useCreateFFECategory,
+  useDeleteFFECategory,
+  slugifyFFECategoryLabel,
+} from './use-ffe-categories';
+export type {
+  FFECategory,
+  UseFFECategoriesOptions,
+  CreateFFECategoryInput,
+} from './use-ffe-categories';
 export { useStyles, useCreateStyle } from './use-styles';
 export {
   useProjects,
@@ -486,8 +504,14 @@ export {
   useDeleteCampaign,
   useCancelCampaign,
   useAbVariantStats,
+  useCampaignRecipients,
 } from './use-campaigns';
-export type { AbVariantStats } from './use-campaigns';
+export type {
+  AbVariantStats,
+  CampaignRecipientRow,
+  CampaignRecipientsResult,
+  CampaignRecipientFilters,
+} from './use-campaigns';
 export {
   // Communications Dashboard
   useCommsDashboard,
@@ -645,11 +669,41 @@ export type {
   DuplicateReport,
 } from './use-duplicate-detection';
 export {
+  // Notification DLQ (admin)
+  useDlqEntries,
+  useFailedNotificationCount,
+  useRetryDlqEntry,
+  useBulkRetryDlq,
+  dlqKeys,
+} from './use-dlq';
+export type {
+  DlqEntry,
+  DlqFilters,
+  DlqListResult,
+  RetryDlqResult,
+  BulkRetryDlqResult,
+} from './use-dlq';
+export {
   useCompanionConversation,
   useCompanionHistory,
   useSendCompanionMessage,
   useCompanionQuickActions,
 } from './use-companion';
+export {
+  useInboxNotifications,
+  useInboxMessages,
+  useUnreadInboxCount,
+  useInboxNotificationsRealtime,
+  inboxKeys,
+} from './use-inbox';
+export type {
+  InboxNotification,
+  InboxNotificationFilters,
+  InboxNotificationMetadata,
+  InboxNotificationStatus,
+  InboxNotificationChannel,
+  InboxMessage,
+} from './use-inbox';
 export type {
   CompanionMessage,
   CompanionResponse,
