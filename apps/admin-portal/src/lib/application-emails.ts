@@ -1,4 +1,4 @@
-import { sendHtmlEmail } from '@patina/email/send';
+import { sendCompliantEmail } from '@patina/email/send';
 import { createAdminClient } from '@patina/supabase/client';
 import type { ApplicationType } from './applications';
 
@@ -58,11 +58,17 @@ export async function sendApplicationEmail(
   const html = substitute(input.html, vars);
   const text = input.text ? substitute(input.text, vars) : undefined;
 
-  const result = await sendHtmlEmail({
+  // Application emails go to people who haven't signed up yet — they don't
+  // have a profile id, so suppression check + signed unsubscribe token can't
+  // be applied here. Treat as transactional (no List-Unsubscribe). Once
+  // approved and onboarded, subsequent comms run through notify() and pick
+  // up the user's preferences automatically.
+  const result = await sendCompliantEmail({
     to: input.application.email,
     subject,
     html,
     text,
+    category: 'transactional',
     tags: [
       { name: 'source', value: input.source },
       { name: 'application_type', value: input.type },

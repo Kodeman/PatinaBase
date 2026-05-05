@@ -30,6 +30,7 @@ export interface CampaignWizardState {
   ctaUrl: string;
   heroImageUrl: string;
   contentJson: Record<string, unknown>;
+  contentMode: 'quick' | 'custom';
   abEnabled: boolean;
 
   audienceType: 'all' | 'segment' | 'individual';
@@ -50,6 +51,8 @@ export interface CampaignWizardState {
   markDirty: () => void;
   reset: () => void;
   loadCampaign: (campaign: Record<string, unknown>) => void;
+  setContentJson: (value: Record<string, unknown>) => void;
+  setContentVariable: (name: string, value: string) => void;
 }
 
 type CampaignWizardFields = Omit<
@@ -78,6 +81,7 @@ const initialState: Omit<
   ctaUrl: '',
   heroImageUrl: '',
   contentJson: {},
+  contentMode: 'quick',
   abEnabled: false,
   audienceType: 'all',
   audienceSegmentId: null,
@@ -100,6 +104,18 @@ export const useCampaignWizardStore = create<CampaignWizardState>()(
       markSaved: () => set({ isDirty: false, lastSavedAt: new Date().toISOString() }),
       markDirty: () => set({ isDirty: true }),
       reset: () => set(initialState),
+      setContentJson: (value) => set({ contentJson: value, isDirty: true }),
+      setContentVariable: (name, value) =>
+        set((s) => {
+          const variables = {
+            ...((s.contentJson?.variables as Record<string, unknown>) || {}),
+            [name]: value,
+          };
+          return {
+            contentJson: { ...s.contentJson, variables },
+            isDirty: true,
+          };
+        }),
       loadCampaign: (campaign: Record<string, unknown>) => {
         const templateData = (campaign.template_data || {}) as Record<string, unknown>;
         const audienceSegment = (campaign.audience_segment || {}) as Record<string, unknown>;
@@ -117,6 +133,12 @@ export const useCampaignWizardStore = create<CampaignWizardState>()(
           ctaUrl: (templateData.ctaUrl as string) || '',
           heroImageUrl: (templateData.heroImageUrl as string) || '',
           contentJson: (campaign.content_json as Record<string, unknown>) || {},
+          contentMode:
+            campaign.content_json &&
+            typeof campaign.content_json === 'object' &&
+            (campaign.content_json as Record<string, unknown>).variables
+              ? 'custom'
+              : 'quick',
           abEnabled: (campaign.ab_enabled as boolean) || false,
           subjectB: (campaign.ab_subject_b as string) || '',
           audienceType: (campaign.audience_type as 'all' | 'segment' | 'individual') || 'all',
@@ -148,6 +170,7 @@ export const useCampaignWizardStore = create<CampaignWizardState>()(
         ctaUrl: state.ctaUrl,
         heroImageUrl: state.heroImageUrl,
         contentJson: state.contentJson,
+        contentMode: state.contentMode,
         abEnabled: state.abEnabled,
         audienceType: state.audienceType,
         audienceSegmentId: state.audienceSegmentId,

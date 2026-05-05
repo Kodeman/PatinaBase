@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useTemplateBuilderStore } from '@/stores/template-builder-store';
 import { renderTemplate } from '@patina/email/renderer';
+import { buildSampleData } from '@patina/shared';
 import type { ContentBlock } from '@patina/shared/types';
 
 export function PreviewPane() {
@@ -11,13 +12,17 @@ export function PreviewPane() {
   const footerBlock = useTemplateBuilderStore((s) => s.footerBlock);
   const contentBlocks = useTemplateBuilderStore((s) => s.contentBlocks);
   const previewDevice = useTemplateBuilderStore((s) => s.previewDevice);
+  const variables = useTemplateBuilderStore((s) => s.variables);
 
-  // Re-render when blocks change
+  // Re-render when blocks or variable samples change
   const previewHtml = useMemo(() => {
     const allBlocks = [headerBlock, ...contentBlocks, footerBlock] as unknown as ContentBlock[];
-    return renderTemplate(allBlocks, { previewMode: true });
+    return renderTemplate(allBlocks, {
+      previewMode: true,
+      variables: buildSampleData(variables),
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [headerBlock, footerBlock, contentBlocks]);
+  }, [headerBlock, footerBlock, contentBlocks, variables]);
 
   return (
     <div className="bg-[#F0EDE9] overflow-y-auto flex justify-center p-6 min-w-[400px]">

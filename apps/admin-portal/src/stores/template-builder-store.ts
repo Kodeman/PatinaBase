@@ -3,10 +3,11 @@ import type {
   TypedContentBlock,
   ContentBlockType,
   EmailTemplate,
+  TemplateVariable,
 } from '@patina/shared/types';
-import { getDefaultProps } from '@patina/shared';
+import { getDefaultProps, normalizeTemplateVariables } from '@patina/shared';
 
-export type EditorMode = 'builder' | 'html';
+export type EditorMode = 'builder' | 'html' | 'variables';
 export type PreviewDevice = 'desktop' | 'mobile';
 
 export interface TemplateBuilderState {
@@ -18,6 +19,7 @@ export interface TemplateBuilderState {
   previewDevice: PreviewDevice;
   isDirty: boolean;
   rawHtml: string;
+  variables: TemplateVariable[];
 
   addBlock: (type: ContentBlockType, index?: number) => void;
   removeBlock: (id: string) => void;
@@ -31,6 +33,11 @@ export interface TemplateBuilderState {
   getAllBlocks: () => TypedContentBlock[];
   loadFromTemplate: (template: EmailTemplate) => void;
   reset: () => void;
+
+  addVariable: () => void;
+  updateVariable: (index: number, partial: Partial<TemplateVariable>) => void;
+  removeVariable: (index: number) => void;
+  insertTokenIntoSelected: (name: string) => boolean;
 }
 
 function makeId(): string {
@@ -49,6 +56,17 @@ function defaultFooter(): TypedContentBlock {
   return { id: 'footer', type: 'footer', props: getDefaultProps('footer') } as TypedContentBlock;
 }
 
+const PRIMARY_TEXT_FIELD: Partial<Record<string, string>> = {
+  header: 'tagline',
+  hero: 'headline',
+  text_block: 'text',
+  cta_button: 'text',
+  notification: 'headline',
+  maker_spotlight: 'story',
+  footer: 'compliance_text',
+  product_card: 'description',
+};
+
 export const useTemplateBuilderStore = create<TemplateBuilderState>()((set, get) => ({
   headerBlock: defaultHeader(),
   footerBlock: defaultFooter(),
@@ -58,6 +76,7 @@ export const useTemplateBuilderStore = create<TemplateBuilderState>()((set, get)
   previewDevice: 'desktop',
   isDirty: false,
   rawHtml: '',
+  variables: [],
 
   addBlock: (type, index) => {
     if (type === 'header' || type === 'footer') return;
@@ -134,6 +153,7 @@ export const useTemplateBuilderStore = create<TemplateBuilderState>()((set, get)
 
   loadFromTemplate: (template) => {
     const blocks = (template.content_blocks || []) as unknown as TypedContentBlock[];
+    const variables = normalizeTemplateVariables(template.variables);
     if (blocks.length > 0) {
       const header = blocks.find((b) => b.type === 'header');
       const footer = blocks.find((b) => b.type === 'footer');
@@ -146,6 +166,7 @@ export const useTemplateBuilderStore = create<TemplateBuilderState>()((set, get)
         rawHtml: template.html_content || '',
         selectedBlockId: null,
         isDirty: false,
+        variables,
       });
     } else {
       set({
@@ -156,6 +177,7 @@ export const useTemplateBuilderStore = create<TemplateBuilderState>()((set, get)
         rawHtml: template.html_content || '',
         selectedBlockId: null,
         isDirty: false,
+        variables,
       });
     }
   },
@@ -170,7 +192,68 @@ export const useTemplateBuilderStore = create<TemplateBuilderState>()((set, get)
       previewDevice: 'desktop',
       isDirty: false,
       rawHtml: '',
+      variables: [],
     }),
+
+  addVariable: () =>
+    set((s) => ({
+      variables: [
+        ...s.variables,
+        { name: '', label: '', sample: '', required: false },
+      ],
+      isDirty: true,
+    })),
+
+  updateVariable: (index, partial) =>
+    set((s) => {
+      const next = [...s.variables];
+      if (index < 0 || index >= next.length) return s;
+      next[index] = { ...next[index], ...partial };
+      return { variables: next, isDirty: true };
+    }),
+
+  removeVariable: (index) =>
+    set((s) => ({
+      variables: s.variables.filter((_, i) => i !== index),
+      isDirty: true,
+    })),
+
+  insertTokenIntoSelected: (name) => {
+    const s = get();
+    const id = s.selectedBlockId;
+    if (!id) return false;
+    const token = `{{${name}}}`;
+
+    const tryAppendOnBlock = (block: TypedContentBlock): TypedContentBlock | null => {
+      const field = PRIMARY_TEXT_FIELD[block.type];
+      if (!field) return null;
+      const current = (block.props as Record<string, unknown>)[field];
+      if (typeof current !== 'string') return null;
+      const nextProps = { ...block.props, [field]: current ? `${current} ${token}` : token };
+      return { ...block, props: nextProps } as TypedContentBlock;
+    };
+
+    if (s.headerBlock.id === id) {
+      const updated = tryAppendOnBlock(s.headerBlock);
+      if (!updated) return false;
+      set({ headerBlock: updated, isDirty: true });
+      return true;
+    }
+    if (s.footerBlock.id === id) {
+      const updated = tryAppendOnBlock(s.footerBlock);
+      if (!updated) return false;
+      set({ footerBlock: updated, isDirty: true });
+      return true;
+    }
+    const idx = s.contentBlocks.findIndex((b) => b.id === id);
+    if (idx === -1) return false;
+    const updated = tryAppendOnBlock(s.contentBlocks[idx]);
+    if (!updated) return false;
+    const nextBlocks = [...s.contentBlocks];
+    nextBlocks[idx] = updated;
+    set({ contentBlocks: nextBlocks, isDirty: true });
+    return true;
+  },
 }));
 
 export const useSelectedBlock = () =>

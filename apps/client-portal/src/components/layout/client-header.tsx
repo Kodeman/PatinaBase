@@ -10,6 +10,7 @@ import {
   useMySubmittedReviews,
 } from '@patina/supabase';
 import { NotificationBell } from '../notifications/notification-bell';
+import { InboxBell } from '../notifications/inbox-bell';
 import {
   Avatar,
   DropdownMenu,
@@ -79,6 +80,7 @@ export function ClientHeader({
           </Link>
           <RoomsLink />
           <ReviewsLink />
+          <InboxBell />
           <NotificationBell />
           {lastUpdated ? (
             <span className="type-meta hidden md:inline">
