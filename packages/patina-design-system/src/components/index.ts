@@ -110,6 +110,7 @@ export * from './BoardCanvas'
 export * from './StyleQuizCard'
 export * from './PriceDisplay'
 export * from './ColorSwatch'
+export * from './FFECategoryPicker'
 
 // Performance Components
 export * from './VirtualList'
