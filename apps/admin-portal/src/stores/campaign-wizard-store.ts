@@ -57,14 +57,14 @@ export interface CampaignWizardState {
 
 type CampaignWizardFields = Omit<
   CampaignWizardState,
-  'setStep' | 'nextStep' | 'prevStep' | 'setField' | 'setDraftId' | 'markSaved' | 'markDirty' | 'reset' | 'loadCampaign'
+  'setStep' | 'nextStep' | 'prevStep' | 'setField' | 'setDraftId' | 'markSaved' | 'markDirty' | 'reset' | 'loadCampaign' | 'setContentJson' | 'setContentVariable'
 >;
 
 const TOTAL_STEPS = 5;
 
 const initialState: Omit<
   CampaignWizardState,
-  'setStep' | 'nextStep' | 'prevStep' | 'setField' | 'setDraftId' | 'markSaved' | 'markDirty' | 'reset' | 'loadCampaign'
+  'setStep' | 'nextStep' | 'prevStep' | 'setField' | 'setDraftId' | 'markSaved' | 'markDirty' | 'reset' | 'loadCampaign' | 'setContentJson' | 'setContentVariable'
 > = {
   step: 0,
   draftId: null,

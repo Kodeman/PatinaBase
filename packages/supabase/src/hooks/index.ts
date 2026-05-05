@@ -657,6 +657,20 @@ export {
   useInboxNotificationsRealtime,
   inboxKeys,
 } from './use-inbox';
+export {
+  useDlqEntries,
+  useFailedNotificationCount,
+  useRetryDlqEntry,
+  useBulkRetryDlq,
+  dlqKeys,
+} from './use-dlq';
+export type {
+  DlqEntry,
+  DlqFilters,
+  DlqListResult,
+  RetryDlqResult,
+  BulkRetryDlqResult,
+} from './use-dlq';
 export type {
   InboxNotification,
   InboxNotificationFilters,

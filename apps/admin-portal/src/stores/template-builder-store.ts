@@ -227,7 +227,7 @@ export const useTemplateBuilderStore = create<TemplateBuilderState>()((set, get)
     const tryAppendOnBlock = (block: TypedContentBlock): TypedContentBlock | null => {
       const field = PRIMARY_TEXT_FIELD[block.type];
       if (!field) return null;
-      const current = (block.props as Record<string, unknown>)[field];
+      const current = (block.props as unknown as Record<string, unknown>)[field];
       if (typeof current !== 'string') return null;
       const nextProps = { ...block.props, [field]: current ? `${current} ${token}` : token };
       return { ...block, props: nextProps } as TypedContentBlock;

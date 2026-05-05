@@ -372,7 +372,7 @@ export default function TemplatesPage() {
             id,
             frequency_cap_count: count,
             frequency_cap_window_days: days,
-          } as Partial<import('@patina/shared/types').EmailTemplate>);
+          });
           setCapTarget(null);
         }}
         onCancel={() => setCapTarget(null)}
