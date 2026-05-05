@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import type { ReactElement } from 'react';
+import { SignJWT } from 'jose';
 
 export interface SendEmailOptions {
   to: string | string[];
@@ -18,13 +19,25 @@ export interface SendEmailResult {
 }
 
 /**
- * Default sender addresses. Currently pointed at the single verified Resend
- * domain (`patina.cloud`). Split back into `notify.patina.com` /
- * `mail.patina.com` once those subdomains are DKIM-verified in Resend.
+ * Default sender addresses. Reads from env so transactional and marketing
+ * can use separate verified subdomains (better deliverability) once DNS is
+ * set up. Falls back to the single verified domain on patina.cloud.
+ *
+ * Recommended production config:
+ *   RESEND_FROM_TRANSACTIONAL = "Patina <hello@patina.cloud>"
+ *   RESEND_FROM_MARKETING     = "Patina <mail@mail.patina.cloud>"
+ *
+ * See infra/runbooks/email-domains.md for the DNS verification steps.
  */
 const SENDERS = {
-  transactional: 'Patina <hello@patina.cloud>',
-  marketing: 'Patina <hello@patina.cloud>',
+  transactional:
+    process.env.RESEND_FROM_TRANSACTIONAL ??
+    process.env.RESEND_FROM ??
+    'Patina <hello@patina.cloud>',
+  marketing:
+    process.env.RESEND_FROM_MARKETING ??
+    process.env.RESEND_FROM ??
+    'Patina <hello@patina.cloud>',
 };
 
 let resendClient: Resend | null = null;
@@ -157,3 +170,125 @@ export function generateUnsubscribeHeaders(unsubscribeUrl: string): Record<strin
 }
 
 export { SENDERS };
+
+// ─── Compliance wrapper ────────────────────────────────────────────────────
+
+export type SendCategory =
+  | 'transactional'
+  | 'operational'
+  | 'engagement'
+  | 'marketing';
+
+export interface CompliantSendOptions {
+  to: string | string[];
+  subject: string;
+  /** React Email element (preferred) — mutually exclusive with html. */
+  react?: ReactElement;
+  html?: string;
+  text?: string;
+  cc?: string | string[];
+  replyTo?: string;
+  from?: string;
+
+  /** Recipient user id — enables unsubscribe token. */
+  userId?: string;
+  /** e.g. 'price_drop', 'product_launch'. Defaults to 'all_marketing'. */
+  notificationType?: string;
+  /** Category controls whether unsubscribe headers are injected. */
+  category: SendCategory;
+
+  /** Base URL for the unsubscribe link target. */
+  unsubscribeBaseUrl?: string;
+  /** Resend tags. */
+  tags?: Array<{ name: string; value: string }>;
+  /** Extra header overrides (merged with auto-generated headers). */
+  headers?: Record<string, string>;
+}
+
+function getUnsubscribeSecretKey(): Uint8Array {
+  const secret =
+    process.env.UNSUBSCRIBE_TOKEN_SECRET ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!secret) {
+    throw new Error(
+      'UNSUBSCRIBE_TOKEN_SECRET or SUPABASE_SERVICE_ROLE_KEY required for compliant send',
+    );
+  }
+  return new TextEncoder().encode(secret);
+}
+
+async function generateUnsubscribeUrl(
+  userId: string,
+  notificationType: string,
+  baseUrl: string,
+): Promise<string> {
+  const secretKey = getUnsubscribeSecretKey();
+  const token = await new SignJWT({
+    type: notificationType,
+    purpose: 'unsubscribe',
+  })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(userId)
+    .setIssuedAt()
+    .setExpirationTime('72h')
+    .setIssuer('patina:notifications')
+    .sign(secretKey);
+  return `${baseUrl}/api/unsubscribe?token=${encodeURIComponent(token)}`;
+}
+
+/**
+ * Send an email through Resend with auto-injected List-Unsubscribe headers
+ * (for non-transactional categories). Suppression check is the caller's
+ * responsibility — for full suppression-aware sends from edge functions, use
+ * supabase/functions/_shared/send-email.ts instead.
+ */
+export async function sendCompliantEmail(
+  options: CompliantSendOptions,
+): Promise<SendEmailResult> {
+  const headers: Record<string, string> = { ...(options.headers ?? {}) };
+
+  if (options.category !== 'transactional' && options.userId) {
+    try {
+      const baseUrl = options.unsubscribeBaseUrl || 'https://admin.patina.cloud';
+      const url = await generateUnsubscribeUrl(
+        options.userId,
+        options.notificationType ?? 'all_marketing',
+        baseUrl,
+      );
+      Object.assign(headers, generateUnsubscribeHeaders(url));
+    } catch (err) {
+      console.warn('sendCompliantEmail: failed to inject unsubscribe headers', err);
+    }
+  }
+
+  const from =
+    options.from ??
+    (options.category === 'marketing' ? SENDERS.marketing : SENDERS.transactional);
+
+  if (options.react) {
+    return sendEmail({
+      to: options.to,
+      subject: options.subject,
+      react: options.react,
+      from,
+      replyTo: options.replyTo,
+      headers,
+      tags: options.tags,
+    });
+  }
+
+  if (!options.html) {
+    return { success: false, error: 'sendCompliantEmail: react or html is required' };
+  }
+
+  return sendHtmlEmail({
+    to: options.to,
+    subject: options.subject,
+    html: options.html,
+    text: options.text,
+    from,
+    replyTo: options.replyTo,
+    headers,
+    tags: options.tags,
+  });
+}

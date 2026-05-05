@@ -15,12 +15,14 @@ import { arrayMove } from '@dnd-kit/sortable';
 import type { EmailTemplate, ContentBlockType, ContentBlock } from '@patina/shared/types';
 import { useUpdateTemplate } from '@patina/supabase/hooks';
 import { renderTemplate } from '@patina/email/renderer';
+import { buildSampleData } from '@patina/shared';
 import { useTemplateBuilderStore } from '@/stores/template-builder-store';
 import { BuilderHeader } from './builder-header';
 import { BlockPalette } from './block-palette';
 import { BuilderCanvas } from './builder-canvas';
 import { PropsPanel } from './props-panel';
 import { HtmlEditor } from './html-editor';
+import { VariablesPanel } from './variables-panel';
 import { PALETTE_BLOCKS } from './constants';
 
 interface EmailTemplateBuilderProps {
@@ -50,14 +52,27 @@ export function EmailTemplateBuilder({ template }: EmailTemplateBuilderProps) {
   const handleSave = useCallback(async () => {
     setIsSaving(true);
     try {
-      if (store.editorMode === 'builder') {
+      const variablesPayload = store.variables
+        .filter((v) => v.name.trim().length > 0)
+        .map((v) => ({
+          name: v.name.trim(),
+          label: v.label?.trim() || v.name.trim(),
+          sample: v.sample ?? '',
+          required: !!v.required,
+        }));
+
+      if (store.editorMode === 'builder' || store.editorMode === 'variables') {
         const allBlocks = store.getAllBlocks();
         const blocksForSave = allBlocks as unknown as ContentBlock[];
-        const html = renderTemplate(blocksForSave, { previewMode: false });
+        const html = renderTemplate(blocksForSave, {
+          previewMode: false,
+          variables: buildSampleData(store.variables),
+        });
         await updateTemplate.mutateAsync({
           id: template.id,
           content_blocks: blocksForSave,
           html_content: html,
+          variables: variablesPayload,
         });
       } else {
         // HTML mode
@@ -65,6 +80,7 @@ export function EmailTemplateBuilder({ template }: EmailTemplateBuilderProps) {
           id: template.id,
           html_content: store.rawHtml,
           content_blocks: [],
+          variables: variablesPayload,
         });
       }
       useTemplateBuilderStore.setState({ isDirty: false });
@@ -122,6 +138,10 @@ export function EmailTemplateBuilder({ template }: EmailTemplateBuilderProps) {
 
       {store.editorMode === 'html' ? (
         <HtmlEditor />
+      ) : store.editorMode === 'variables' ? (
+        <div className="flex flex-1 h-[calc(100vh-57px)]">
+          <VariablesPanel />
+        </div>
       ) : (
         <DndContext
           sensors={sensors}

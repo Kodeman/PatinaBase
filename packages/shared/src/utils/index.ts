@@ -124,3 +124,12 @@ export { AttributionManager, ConsentManager } from './attribution';
 // ─── Block Defaults ────────────────────────────────────────────────────
 
 export { getDefaultProps } from './block-defaults';
+
+// ─── Template Variables ────────────────────────────────────────────────
+
+export {
+  isValidVariableName,
+  normalizeTemplateVariable,
+  normalizeTemplateVariables,
+  buildSampleData,
+} from './template-variables';

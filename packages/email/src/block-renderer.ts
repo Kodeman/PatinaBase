@@ -21,6 +21,42 @@ import { renderFooter } from './block-html/footer';
 export interface RenderContext {
   previewMode?: boolean;
   baseUrl?: string;
+  /**
+   * Optional flat variable map. When set, the renderer post-processes block
+   * HTML to replace `{{name}}` and `{{ name.path }}` tokens with these values.
+   * Mirrors the mustache-style interpolation in
+   * `supabase/functions/_shared/render-template.ts`.
+   */
+  variables?: Record<string, unknown>;
+}
+
+/**
+ * Replace {{key}} and {{ key }} tokens in a string with values from data.
+ * Missing keys render as empty strings to avoid leaking placeholders.
+ */
+export function interpolate(
+  template: string,
+  data: Record<string, unknown>
+): string {
+  return template.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key) => {
+    const value = resolveKey(data, key);
+    if (value === null || value === undefined) return '';
+    return String(value);
+  });
+}
+
+function resolveKey(data: Record<string, unknown>, key: string): unknown {
+  if (!key.includes('.')) return data[key];
+  const parts = key.split('.');
+  let current: unknown = data;
+  for (const part of parts) {
+    if (current && typeof current === 'object') {
+      current = (current as Record<string, unknown>)[part];
+    } else {
+      return undefined;
+    }
+  }
+  return current;
 }
 
 // ─── Block dispatch ─────────────────────────────────────────────────────
@@ -40,6 +76,11 @@ const blockRenderers: Record<ContentBlockType, BlockRenderer> = {
   footer: (props, ctx) => renderFooter(props as never, ctx),
 };
 
+function applyInterpolation(html: string, ctx: RenderContext): string {
+  if (!ctx.variables) return html;
+  return interpolate(html, ctx.variables);
+}
+
 /**
  * Render a single block to an HTML `<tr>` fragment.
  */
@@ -48,7 +89,7 @@ export function renderBlock(block: ContentBlock, ctx: RenderContext = {}): strin
   if (!renderer) {
     return `<!-- Unknown block type: ${block.type} -->`;
   }
-  return renderer(block.props, ctx);
+  return applyInterpolation(renderer(block.props, ctx), ctx);
 }
 
 /**

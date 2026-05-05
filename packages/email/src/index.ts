@@ -55,7 +55,7 @@ export { InAppMessageMention } from './templates/in-app-message-mention';
 export type { InAppMessageMentionProps } from './templates/in-app-message-mention';
 
 // Block renderer (pure string functions — no React dependency)
-export { renderTemplate, renderBlock, renderBlocks } from './block-renderer';
+export { renderTemplate, renderBlock, renderBlocks, interpolate } from './block-renderer';
 export type { RenderContext } from './block-renderer';
 
 // Send utilities

@@ -37,7 +37,16 @@ import {
   useUpdateCampaign,
   useSendCampaign,
 } from '@patina/supabase/hooks';
-import type { EmailTemplateCategory, SegmentRules, AudienceSegment } from '@patina/shared/types';
+import type {
+  EmailTemplateCategory,
+  SegmentRules,
+  AudienceSegment,
+  EmailTemplate,
+  TemplateVariable,
+  ContentBlock,
+} from '@patina/shared/types';
+import { normalizeTemplateVariables, buildSampleData } from '@patina/shared';
+import { renderTemplate } from '@patina/email/renderer';
 import { cn } from '@/lib/utils';
 import { useCampaignWizardStore } from '@/stores/campaign-wizard-store';
 import type { AudienceCondition } from '@/stores/campaign-wizard-store';
@@ -152,6 +161,10 @@ export default function NewCampaignPage() {
         subjectB: store.subjectB,
         ...store.contentJson,
       },
+      content_json:
+        store.contentMode === 'custom' && store.contentJson
+          ? store.contentJson
+          : undefined,
       audience_segment: store.audienceSegmentId
         ? { segment_id: store.audienceSegmentId, rules: store.audienceRules }
         : store.audienceRules.conditions.length > 0
@@ -188,6 +201,7 @@ export default function NewCampaignPage() {
     store.abEnabled,
     store.subjectB,
     store.contentJson,
+    store.contentMode,
     store.audienceSegmentId,
     store.audienceRules,
     store.scheduledFor,
@@ -256,6 +270,10 @@ export default function NewCampaignPage() {
           subjectB: store.subjectB,
           ...store.contentJson,
         },
+        content_json:
+          store.contentMode === 'custom' && store.contentJson
+            ? store.contentJson
+            : undefined,
         audience_segment: store.audienceSegmentId
           ? { segment_id: store.audienceSegmentId, rules: store.audienceRules }
           : store.audienceRules.conditions.length > 0
@@ -649,6 +667,13 @@ function StepTemplate() {
 function StepContent() {
   const store = useCampaignWizardStore();
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
+  const [testEmail, setTestEmail] = useState('');
+  const [testSendStatus, setTestSendStatus] = useState<
+    | { kind: 'idle' }
+    | { kind: 'sending' }
+    | { kind: 'success'; recipient: string }
+    | { kind: 'error'; message: string }
+  >({ kind: 'idle' });
 
   const templateData = useMemo(
     () => ({
@@ -664,18 +689,94 @@ function StepContent() {
   const { data: previewHtml } = useTemplatePreview(store.templateId, templateData);
   const { data: templateInfo } = useTemplate(store.templateId);
 
+  const handleSendTest = useCallback(async () => {
+    if (!store.templateId) {
+      setTestSendStatus({ kind: 'error', message: 'Pick a template first.' });
+      return;
+    }
+    if (!store.subject) {
+      setTestSendStatus({ kind: 'error', message: 'Add a subject first.' });
+      return;
+    }
+    setTestSendStatus({ kind: 'sending' });
+    try {
+      const { createBrowserClient } = await import('@patina/supabase');
+      const supabase = createBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        setTestSendStatus({ kind: 'error', message: 'Not signed in.' });
+        return;
+      }
+      const res = await fetch('/api/campaigns/test-send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          templateId: store.templateId,
+          testEmail: testEmail.trim() || undefined,
+          subject: store.subject,
+          subjectB: store.subjectB,
+          abEnabled: store.abEnabled,
+          previewText: store.previewText,
+          templateData: {
+            ...templateData,
+            ...store.contentJson,
+          },
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setTestSendStatus({
+          kind: 'error',
+          message: json.error || `HTTP ${res.status}`,
+        });
+        return;
+      }
+      setTestSendStatus({ kind: 'success', recipient: json.recipient });
+    } catch (err) {
+      setTestSendStatus({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Send failed',
+      });
+    }
+  }, [
+    store.templateId,
+    store.subject,
+    store.subjectB,
+    store.abEnabled,
+    store.previewText,
+    store.contentJson,
+    templateData,
+    testEmail,
+  ]);
+
   return (
     <div className="max-w-7xl mx-auto">
-      <div className="mb-6">
-        <h2 className="text-lg font-display font-semibold text-patina-charcoal">
-          Compose Content
-        </h2>
-        <p className="text-sm text-patina-clay-beige mt-1">
-          Write your email subject, preview text, and body content.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-lg font-display font-semibold text-patina-charcoal">
+            Compose Content
+          </h2>
+          <p className="text-sm text-patina-clay-beige mt-1">
+            Write your email subject, preview text, and body content.
+          </p>
+        </div>
+        <ContentModeToggle />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {store.contentMode === 'custom' ? (
+        <CustomLayoutEditor templateId={store.templateId} />
+      ) : null}
+
+      <div
+        className={cn(
+          'grid grid-cols-1 lg:grid-cols-2 gap-6',
+          store.contentMode === 'custom' ? 'mt-6' : ''
+        )}
+      >
         {/* Left: Form */}
         <div className="space-y-5">
           {/* Subject line */}
@@ -836,20 +937,39 @@ function StepContent() {
 
           {/* Send test email */}
           <div className="bg-white rounded-xl border border-patina-clay-beige/20 p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-patina-charcoal">
-                  Send Test Email
-                </h3>
-                <p className="text-xs text-patina-clay-beige mt-0.5">
-                  Preview how your email looks in an inbox.
-                </p>
-              </div>
-              <button className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border border-patina-clay-beige/30 text-patina-charcoal hover:bg-patina-off-white transition-colors">
+            <div>
+              <h3 className="text-sm font-semibold text-patina-charcoal">
+                Send Test Email
+              </h3>
+              <p className="text-xs text-patina-clay-beige mt-0.5">
+                Preview how your email looks in an inbox. Leave blank to send to your own address.
+              </p>
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <input
+                type="email"
+                value={testEmail}
+                onChange={(e) => setTestEmail(e.target.value)}
+                placeholder="your@email.com"
+                className="flex-1 px-3 py-2 text-sm border border-patina-clay-beige/30 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-patina-mocha-brown/20 focus:border-patina-mocha-brown"
+              />
+              <button
+                onClick={handleSendTest}
+                disabled={testSendStatus.kind === 'sending'}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border border-patina-clay-beige/30 text-patina-charcoal hover:bg-patina-off-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 <Mail className="w-3.5 h-3.5" />
-                Send Test
+                {testSendStatus.kind === 'sending' ? 'Sending…' : 'Send Test'}
               </button>
             </div>
+            {testSendStatus.kind === 'success' && (
+              <p className="mt-2 text-xs text-green-700">
+                Sent test to {testSendStatus.recipient}.
+              </p>
+            )}
+            {testSendStatus.kind === 'error' && (
+              <p className="mt-2 text-xs text-red-600">{testSendStatus.message}</p>
+            )}
           </div>
         </div>
 
@@ -937,6 +1057,198 @@ function StepContent() {
             )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Step 2 helpers: content layout mode ────────────────────────────────────
+
+function ContentModeToggle() {
+  const store = useCampaignWizardStore();
+  const { data: template } = useTemplate(store.templateId);
+
+  const hasBlocks =
+    Array.isArray(template?.content_blocks) &&
+    (template?.content_blocks?.length ?? 0) > 0;
+
+  const setMode = (mode: 'quick' | 'custom') => {
+    if (mode === 'custom' && !hasBlocks) return;
+    if (mode === 'custom' && !store.contentJson?.variables) {
+      const variables = normalizeTemplateVariables(template?.variables);
+      const seeded: Record<string, string> = {};
+      for (const v of variables) seeded[v.name] = v.sample;
+      store.setField('contentJson', {
+        ...store.contentJson,
+        variables: seeded,
+      });
+    }
+    store.setField('contentMode', mode);
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-patina-clay-beige">Content layout</span>
+      <div className="flex gap-1 bg-white rounded-lg p-0.5 border border-patina-clay-beige/20">
+        <button
+          type="button"
+          onClick={() => setMode('quick')}
+          className={cn(
+            'px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+            store.contentMode === 'quick'
+              ? 'bg-patina-mocha-brown text-white'
+              : 'text-patina-clay-beige hover:text-patina-charcoal'
+          )}
+        >
+          Quick
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('custom')}
+          disabled={!hasBlocks}
+          title={
+            hasBlocks
+              ? 'Use the template blocks and fill its variables'
+              : 'Pick a template built with the block builder to enable Custom layout'
+          }
+          className={cn(
+            'px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+            store.contentMode === 'custom'
+              ? 'bg-patina-mocha-brown text-white'
+              : hasBlocks
+                ? 'text-patina-clay-beige hover:text-patina-charcoal'
+                : 'text-patina-clay-beige/40 cursor-not-allowed'
+          )}
+        >
+          Custom layout
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CustomLayoutEditor({ templateId }: { templateId: string | null }) {
+  const store = useCampaignWizardStore();
+  const { data: template } = useTemplate(templateId);
+  const variables: TemplateVariable[] = useMemo(
+    () => normalizeTemplateVariables(template?.variables),
+    [template?.variables]
+  );
+
+  const currentVars = useMemo(() => {
+    return ((store.contentJson?.variables as Record<string, string>) || {});
+  }, [store.contentJson]);
+
+  const previewHtml = useMemo(() => {
+    const blocks = (template?.content_blocks || []) as unknown as ContentBlock[];
+    if (!blocks.length) return '';
+    const merged: Record<string, unknown> = {
+      ...buildSampleData(template?.variables),
+      ...currentVars,
+    };
+    return renderTemplate(blocks, { previewMode: true, variables: merged });
+  }, [template?.content_blocks, template?.variables, currentVars]);
+
+  if (!template) return null;
+
+  if (!Array.isArray(template.content_blocks) || template.content_blocks.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-patina-clay-beige/20 p-5">
+        <p className="text-sm text-patina-charcoal">
+          This template has no block layout. Switch back to{' '}
+          <strong>Quick</strong> mode or pick a template built with the block
+          builder.
+        </p>
+      </div>
+    );
+  }
+
+  const setVar = (name: string, value: string) => {
+    store.setContentVariable(name, value);
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="bg-white rounded-xl border border-patina-clay-beige/20 p-5 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-patina-charcoal">
+            Template Variables
+          </h3>
+          <p className="text-xs text-patina-clay-beige mt-0.5">
+            Fill in the merge tags defined by this template. Empty fields fall
+            back to the template author's sample values at preview time.
+          </p>
+        </div>
+
+        {variables.length === 0 ? (
+          <p className="text-sm text-patina-clay-beige">
+            This template doesn't define any variables yet. The block layout
+            will render exactly as the template author saved it.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {variables.map((variable) => {
+              const value = currentVars[variable.name] ?? '';
+              const showRequiredWarn = variable.required && !value.trim();
+              return (
+                <div key={variable.name}>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-medium text-patina-charcoal">
+                      {variable.label || variable.name}
+                      {variable.required && (
+                        <span className="text-red-500 ml-1">*</span>
+                      )}
+                    </label>
+                    <code className="text-[11px] text-patina-clay-beige font-mono">
+                      {`{{${variable.name}}}`}
+                    </code>
+                  </div>
+                  <input
+                    type="text"
+                    value={value}
+                    onChange={(e) => setVar(variable.name, e.target.value)}
+                    placeholder={variable.sample || `Enter ${variable.name}...`}
+                    className={cn(
+                      'w-full px-3 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 transition-colors',
+                      showRequiredWarn
+                        ? 'border-amber-300 focus:ring-amber-200'
+                        : 'border-patina-clay-beige/30 focus:ring-patina-mocha-brown/20 focus:border-patina-mocha-brown'
+                    )}
+                  />
+                  {showRequiredWarn && (
+                    <p className="mt-1 text-[11px] text-amber-700">
+                      Required by the template author.
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white rounded-xl border border-patina-clay-beige/20 overflow-hidden">
+        <div className="px-4 py-3 border-b border-patina-clay-beige/20">
+          <h3 className="text-sm font-semibold text-patina-charcoal">
+            Live Preview
+          </h3>
+          <p className="text-[11px] text-patina-clay-beige mt-0.5">
+            Renders the template's blocks with your values substituted in.
+          </p>
+        </div>
+        {previewHtml ? (
+          <iframe
+            srcDoc={previewHtml}
+            title="Custom layout preview"
+            className="w-full border-0"
+            style={{ height: '520px' }}
+            sandbox="allow-same-origin"
+          />
+        ) : (
+          <div className="h-[520px] flex items-center justify-center text-sm text-patina-clay-beige">
+            Loading preview…
+          </div>
+        )}
       </div>
     </div>
   );

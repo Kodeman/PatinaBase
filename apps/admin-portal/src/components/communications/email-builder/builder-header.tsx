@@ -69,6 +69,17 @@ export function BuilderHeader({ templateName, templateId, isSaving, onSave }: Bu
             >
               HTML
             </button>
+            <button
+              onClick={() => setEditorMode('variables')}
+              className={cn(
+                'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
+                editorMode === 'variables'
+                  ? 'bg-white shadow-sm text-patina-charcoal'
+                  : 'text-patina-clay-beige hover:text-patina-charcoal'
+              )}
+            >
+              Variables
+            </button>
           </div>
 
           {/* Device toggle */}

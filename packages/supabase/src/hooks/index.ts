@@ -505,14 +505,8 @@ export {
   useDeleteCampaign,
   useCancelCampaign,
   useAbVariantStats,
-  useCampaignRecipients,
 } from './use-campaigns';
-export type {
-  AbVariantStats,
-  CampaignRecipientRow,
-  CampaignRecipientsResult,
-  CampaignRecipientFilters,
-} from './use-campaigns';
+export type { AbVariantStats } from './use-campaigns';
 export {
   // Communications Dashboard
   useCommsDashboard,

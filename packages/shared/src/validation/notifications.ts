@@ -224,6 +224,24 @@ export const footerBlockPropsSchema = z.object({
   compliance_text: z.string(),
 });
 
+export const templateVariableSchema = z.object({
+  name: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, 'Variable name must start with a letter or underscore and contain only letters, numbers, and underscores'),
+  label: z.string().max(120).default(''),
+  sample: z.string().max(500).default(''),
+  required: z.boolean().default(false),
+});
+
+// Accept either the legacy string-array form or the richer object form so
+// existing rows continue to validate while new templates can persist labels,
+// sample values, and required flags.
+export const templateVariablesSchema = z.array(
+  z.union([z.string(), templateVariableSchema])
+);
+
 export const emailTemplateCreateSchema = z.object({
   slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with hyphens'),
   name: z.string().min(1).max(200),
@@ -232,7 +250,7 @@ export const emailTemplateCreateSchema = z.object({
   subject_default: z.string().max(200).optional(),
   content_blocks: z.array(contentBlockSchema).optional().default([]),
   html_content: z.string().optional(),
-  variables: z.array(z.string()).optional().default([]),
+  variables: templateVariablesSchema.optional().default([]),
 });
 
 export type EmailTemplateCreateInput = z.infer<typeof emailTemplateCreateSchema>;
@@ -244,7 +262,7 @@ export const emailTemplateUpdateSchema = z.object({
   subject_default: z.string().max(200).optional().nullable(),
   content_blocks: z.array(contentBlockSchema).optional(),
   html_content: z.string().optional(),
-  variables: z.array(z.string()).optional(),
+  variables: templateVariablesSchema.optional(),
   is_active: z.boolean().optional(),
 });
 

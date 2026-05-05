@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTemplates, useDeleteTemplate, useCreateTemplate } from '@patina/supabase/hooks';
-import { LayoutTemplate, Plus, Mail, Megaphone, Heart, Zap, Trash2, Copy } from 'lucide-react';
+import { useTemplates, useDeleteTemplate, useCreateTemplate, useUpdateTemplate } from '@patina/supabase/hooks';
+import { LayoutTemplate, Plus, Mail, Megaphone, Heart, Zap, Trash2, Copy, Timer } from 'lucide-react';
 import type { EmailTemplateCategory } from '@patina/shared/types';
 import { cn } from '@/lib/utils';
 
@@ -55,13 +55,112 @@ function ConfirmDialog({
   );
 }
 
+function FrequencyCapDialog({
+  open,
+  template,
+  onSave,
+  onCancel,
+}: {
+  open: boolean;
+  template: { id: string; name: string; frequency_cap_count?: number | null; frequency_cap_window_days?: number | null } | null;
+  onSave: (id: string, count: number | null, days: number | null) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [count, setCount] = useState<string>(
+    template?.frequency_cap_count != null ? String(template.frequency_cap_count) : '',
+  );
+  const [days, setDays] = useState<string>(
+    template?.frequency_cap_window_days != null ? String(template.frequency_cap_window_days) : '',
+  );
+  const [busy, setBusy] = useState(false);
+
+  if (!open || !template) return null;
+
+  const handleSubmit = async () => {
+    setBusy(true);
+    try {
+      const c = count.trim() ? parseInt(count, 10) : null;
+      const d = days.trim() ? parseInt(days, 10) : null;
+      // Both must be set, or neither.
+      if ((c == null) !== (d == null)) {
+        return;
+      }
+      if (c != null && (c <= 0 || (d != null && d <= 0))) return;
+      await onSave(template.id, c, d);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
+        <h3 className="text-lg font-display font-semibold text-patina-charcoal mb-2">Frequency cap</h3>
+        <p className="text-sm text-patina-clay-beige mb-4">
+          Maximum sends of <span className="font-medium text-patina-charcoal">{template.name}</span> per recipient. Leave both blank for no cap.
+        </p>
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <label className="text-xs font-medium text-patina-clay-beige uppercase tracking-wider">
+            Max sends
+            <input
+              type="number"
+              min={1}
+              value={count}
+              onChange={(e) => setCount(e.target.value)}
+              placeholder="1"
+              className="mt-1 w-full px-3 py-2 text-sm border border-patina-clay-beige/30 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-patina-mocha-brown/20"
+            />
+          </label>
+          <label className="text-xs font-medium text-patina-clay-beige uppercase tracking-wider">
+            In days
+            <input
+              type="number"
+              min={1}
+              value={days}
+              onChange={(e) => setDays(e.target.value)}
+              placeholder="7"
+              className="mt-1 w-full px-3 py-2 text-sm border border-patina-clay-beige/30 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-patina-mocha-brown/20"
+            />
+          </label>
+        </div>
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium text-patina-clay-beige hover:text-patina-charcoal transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={busy}
+            className="px-4 py-2 text-sm font-medium bg-patina-mocha-brown text-white rounded-lg hover:bg-patina-charcoal transition-colors disabled:opacity-50"
+          >
+            {busy ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatCap(count?: number | null, days?: number | null): string | null {
+  if (!count || !days) return null;
+  if (days === 7) return `${count}/wk`;
+  if (days === 14) return `${count}/2wk`;
+  if (days === 30) return `${count}/mo`;
+  if (days === 1) return `${count}/day`;
+  return `${count}/${days}d`;
+}
+
 export default function TemplatesPage() {
   const router = useRouter();
   const [filter, setFilter] = useState<FilterTab>('all');
   const { data: templates, isLoading } = useTemplates(filter === 'all' ? undefined : filter);
   const deleteTemplate = useDeleteTemplate();
   const createTemplate = useCreateTemplate();
+  const updateTemplate = useUpdateTemplate();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [capTarget, setCapTarget] = useState<{ id: string; name: string; frequency_cap_count?: number | null; frequency_cap_window_days?: number | null } | null>(null);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -170,6 +269,25 @@ export default function TemplatesPage() {
                   {/* Hover actions overlay */}
                   <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const t = template as typeof template & {
+                          frequency_cap_count?: number | null;
+                          frequency_cap_window_days?: number | null;
+                        };
+                        setCapTarget({
+                          id: template.id,
+                          name: template.name,
+                          frequency_cap_count: t.frequency_cap_count ?? null,
+                          frequency_cap_window_days: t.frequency_cap_window_days ?? null,
+                        });
+                      }}
+                      className="p-1.5 bg-white rounded-lg shadow-sm border border-patina-clay-beige/20 hover:bg-patina-off-white transition-colors"
+                      title="Frequency cap"
+                    >
+                      <Timer className="w-3.5 h-3.5 text-patina-clay-beige" />
+                    </button>
+                    <button
                       onClick={(e) => { e.stopPropagation(); handleDuplicate(template); }}
                       className="p-1.5 bg-white rounded-lg shadow-sm border border-patina-clay-beige/20 hover:bg-patina-off-white transition-colors"
                       title="Duplicate"
@@ -206,6 +324,20 @@ export default function TemplatesPage() {
                         Default: {template.subject_default}
                       </p>
                     )}
+                    {(() => {
+                      const t = template as typeof template & {
+                        frequency_cap_count?: number | null;
+                        frequency_cap_window_days?: number | null;
+                      };
+                      const cap = formatCap(t.frequency_cap_count, t.frequency_cap_window_days);
+                      if (!cap) return null;
+                      return (
+                        <p className="mt-2 inline-flex items-center gap-1 text-[11px] text-patina-mocha-brown bg-patina-off-white px-2 py-0.5 rounded-full">
+                          <Timer className="w-3 h-3" />
+                          {cap}
+                        </p>
+                      );
+                    })()}
                   </div>
                 </div>
               );
@@ -230,6 +362,20 @@ export default function TemplatesPage() {
         message="Are you sure you want to delete this template? This action cannot be undone."
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <FrequencyCapDialog
+        open={!!capTarget}
+        template={capTarget}
+        onSave={async (id, count, days) => {
+          await updateTemplate.mutateAsync({
+            id,
+            frequency_cap_count: count,
+            frequency_cap_window_days: days,
+          });
+          setCapTarget(null);
+        }}
+        onCancel={() => setCapTarget(null)}
       />
     </div>
   );
