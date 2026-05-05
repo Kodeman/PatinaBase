@@ -1,13 +1,20 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import { PortalButton } from '@/components/portal/button';
 import {
   useProposalScopeRooms,
   useAddScopeRoom,
   useUpdateScopeRoom,
   useRemoveScopeRoom,
+  useFFECategories,
+  useCreateFFECategory,
+  type FFECategory,
 } from '@patina/supabase';
+import {
+  FFECategoryPicker,
+  type FFECategoryOption,
+} from '@patina/design-system';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -19,21 +26,6 @@ const ROOM_TYPES = [
   { value: 'dining_room', label: 'Dining Room' },
   { value: 'office', label: 'Office' },
   { value: 'other', label: 'Other' },
-] as const;
-
-const FFE_CATEGORIES = [
-  'Seating',
-  'Tables',
-  'Lighting',
-  'Rugs',
-  'Window Treatments',
-  'Art & Accessories',
-  'Paint & Finish',
-  'Storage',
-  'Built-Ins',
-  'Dining Table',
-  'Sideboard',
-  'Table Linens',
 ] as const;
 
 type RoomType = (typeof ROOM_TYPES)[number]['value'];
@@ -73,25 +65,22 @@ function roomTypeLabel(value: string): string {
 
 function RoomForm({
   initial,
+  proposalId,
+  categories,
+  onCreateCustom,
   onSave,
   onCancel,
   isSaving,
 }: {
   initial: RoomFormState;
+  proposalId: string;
+  categories: FFECategoryOption[];
+  onCreateCustom?: (label: string) => Promise<{ slug: string }>;
   onSave: (form: RoomFormState) => void;
   onCancel: () => void;
   isSaving: boolean;
 }) {
   const [form, setForm] = useState<RoomFormState>(initial);
-
-  const toggleCategory = useCallback((cat: string) => {
-    setForm((prev) => ({
-      ...prev,
-      ffeCategories: prev.ffeCategories.includes(cat)
-        ? prev.ffeCategories.filter((c) => c !== cat)
-        : [...prev.ffeCategories, cat],
-    }));
-  }, []);
 
   const update = <K extends keyof RoomFormState>(key: K, value: RoomFormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -163,25 +152,15 @@ function RoomForm({
       {/* FFE Categories */}
       <div>
         <span className="type-meta mb-2 block">FF&E Categories</span>
-        <div className="flex flex-wrap gap-1.5">
-          {FFE_CATEGORIES.map((cat) => {
-            const active = form.ffeCategories.includes(cat);
-            return (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => toggleCategory(cat)}
-                className={`cursor-pointer whitespace-nowrap rounded-sm border px-2.5 py-1 font-body text-[0.72rem] font-medium transition-colors ${
-                  active
-                    ? 'border-[var(--accent-primary)] bg-[var(--bg-surface)] text-[var(--text-primary)]'
-                    : 'border-[var(--border-default)] bg-transparent text-[var(--text-muted)]'
-                }`}
-              >
-                {cat}
-              </button>
-            );
-          })}
-        </div>
+        <FFECategoryPicker
+          value={form.ffeCategories}
+          onChange={(slugs) => update('ffeCategories', slugs)}
+          categories={categories}
+          allowCustom={!!onCreateCustom}
+          onCreateCustom={onCreateCustom}
+          scope="proposal"
+          placeholder="Select FF&E categories…"
+        />
       </div>
 
       {/* Notes */}
@@ -228,12 +207,18 @@ interface ScopeRoom {
 function RoomCard({
   room,
   proposalId,
+  categories,
+  categoryLookup,
+  onCreateCustom,
   editingId,
   onEdit,
   onCancelEdit,
 }: {
   room: ScopeRoom;
   proposalId: string;
+  categories: FFECategoryOption[];
+  categoryLookup: Map<string, string>;
+  onCreateCustom?: (label: string) => Promise<{ slug: string }>;
   editingId: string | null;
   onEdit: (id: string) => void;
   onCancelEdit: () => void;
@@ -275,6 +260,9 @@ function RoomCard({
           ffeCategories: room.ffe_categories ?? [],
           notes: room.notes ?? '',
         }}
+        proposalId={proposalId}
+        categories={categories}
+        onCreateCustom={onCreateCustom}
         onSave={handleSave}
         onCancel={onCancelEdit}
         isSaving={updateRoom.isPending}
@@ -325,12 +313,12 @@ function RoomCard({
         </div>
       </div>
 
-      {/* FFE category tags */}
+      {/* FFE category tags — render as labels from the taxonomy */}
       {room.ffe_categories?.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-1.5">
-          {room.ffe_categories.map((cat) => (
+          {room.ffe_categories.map((slug) => (
             <span
-              key={cat}
+              key={slug}
               className="inline-flex whitespace-nowrap rounded-sm border px-2.5 py-1"
               style={{
                 fontFamily: 'var(--font-body)',
@@ -341,7 +329,7 @@ function RoomCard({
                 background: 'var(--bg-primary)',
               }}
             >
-              {cat}
+              {categoryLookup.get(slug) ?? slug}
             </span>
           ))}
         </div>
@@ -453,9 +441,34 @@ interface RoomsInScopeProps {
 
 export function RoomsInScope({ proposalId }: RoomsInScopeProps) {
   const { data: rooms = [], isLoading } = useProposalScopeRooms(proposalId);
+  const { data: ffeCategoryRows = [] } = useFFECategories({ proposalId });
   const addRoom = useAddScopeRoom();
+  const createCategory = useCreateFFECategory();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+
+  // Map taxonomy rows -> picker options + slug→label lookup.
+  const categoryOptions = useMemo<FFECategoryOption[]>(
+    () =>
+      ffeCategoryRows.map((c: FFECategory) => ({
+        slug: c.slug,
+        label: c.label,
+        icon: c.icon ?? undefined,
+        isCustom: !c.is_system,
+      })),
+    [ffeCategoryRows]
+  );
+  const categoryLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of ffeCategoryRows) map.set(c.slug, c.label);
+    return map;
+  }, [ffeCategoryRows]);
+
+  // The picker scopes new customs to the proposal.
+  const handleCreateCustomCategory = async (label: string) => {
+    const created = await createCategory.mutateAsync({ label, proposalId });
+    return { slug: created.slug };
+  };
 
   const handleAdd = (form: RoomFormState) => {
     addRoom.mutate(
@@ -512,6 +525,9 @@ export function RoomsInScope({ proposalId }: RoomsInScopeProps) {
             key={room.id}
             room={room}
             proposalId={proposalId}
+            categories={categoryOptions}
+            categoryLookup={categoryLookup}
+            onCreateCustom={handleCreateCustomCategory}
             editingId={editingId}
             onEdit={setEditingId}
             onCancelEdit={() => setEditingId(null)}
@@ -524,6 +540,9 @@ export function RoomsInScope({ proposalId }: RoomsInScopeProps) {
         <div className="mt-3">
           <RoomForm
             initial={EMPTY_FORM}
+            proposalId={proposalId}
+            categories={categoryOptions}
+            onCreateCustom={handleCreateCustomCategory}
             onSave={handleAdd}
             onCancel={() => setIsAdding(false)}
             isSaving={addRoom.isPending}
