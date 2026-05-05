@@ -248,6 +248,7 @@ export {
 export type {
   Proposal,
   ProposalItem,
+  ProposalItemType,
   ProposalFilters,
   ProposalSection,
   ProposalTemplate,

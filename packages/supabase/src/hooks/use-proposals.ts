@@ -8,6 +8,8 @@ const getSupabase = () => createBrowserClient();
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 
+export type ProposalItemType = 'fixed' | 'allowance' | 'tbd';
+
 export interface ProposalItem {
   id: string;
   proposal_id: string;
@@ -25,6 +27,12 @@ export interface ProposalItem {
   position: number;
   created_at: string;
   updated_at: string;
+  // Wave 1 schema (added in 00066): structured FF&E typing
+  item_type?: ProposalItemType;
+  scope_room_id?: string | null;
+  budget_min_cents?: number | null;
+  budget_max_cents?: number | null;
+  ffe_category?: string | null;
   // Joined data
   product?: {
     id: string;
@@ -320,6 +328,12 @@ export function useAddProposalItem() {
       notes,
       category,
       vendorName,
+      // Wave 1 — structured FF&E
+      itemType,
+      scopeRoomId,
+      budgetMinCents,
+      budgetMaxCents,
+      ffeCategory,
     }: {
       proposalId: string;
       productId?: string;
@@ -330,6 +344,11 @@ export function useAddProposalItem() {
       notes?: string;
       category?: string;
       vendorName?: string;
+      itemType?: ProposalItemType;
+      scopeRoomId?: string | null;
+      budgetMinCents?: number | null;
+      budgetMaxCents?: number | null;
+      ffeCategory?: string | null;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -361,6 +380,12 @@ export function useAddProposalItem() {
           category: category || null,
           vendor_name: vendorName || null,
           position: nextPosition,
+          // Wave 1 columns. Defaults match the table defaults from 00066.
+          item_type: itemType ?? 'fixed',
+          scope_room_id: scopeRoomId ?? null,
+          budget_min_cents: budgetMinCents ?? null,
+          budget_max_cents: budgetMaxCents ?? null,
+          ffe_category: ffeCategory ?? null,
         })
         .select()
         .single();
@@ -394,7 +419,24 @@ export function useUpdateProposalItem() {
     }: {
       itemId: string;
       proposalId: string;
-      updates: Partial<Pick<ProposalItem, 'quantity' | 'unit_price' | 'notes' | 'name' | 'description'>>;
+      updates: Partial<
+        Pick<
+          ProposalItem,
+          | 'quantity'
+          | 'unit_price'
+          | 'notes'
+          | 'name'
+          | 'description'
+          | 'item_type'
+          | 'scope_room_id'
+          | 'budget_min_cents'
+          | 'budget_max_cents'
+          | 'ffe_category'
+          | 'product_id'
+          | 'vendor_name'
+          | 'category'
+        >
+      >;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
