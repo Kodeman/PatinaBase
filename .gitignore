@@ -66,6 +66,16 @@ infra/seed-credentials.md
 
 # Local agent / scheduler state
 .claude/scheduled_tasks.lock
+.claude/worktrees/agent-*/
+
+# Recovery sidecars from git lost-found
+.recovery/
+
+# Mobile per-tool agent caches
+apps/mobile/Patina/.agents/
+apps/mobile/Patina/.blitz/
+apps/mobile/Patina/.claude/
+apps/mobile/Patina/.codex/
 
 # Repo-root scratch
 _tmp_*
