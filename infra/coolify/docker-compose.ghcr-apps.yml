@@ -297,7 +297,6 @@ services:
       SERVICE_NAME_DESIGNER_PORTAL: designer-portal
       SERVICE_NAME_ADMIN_PORTAL: admin-portal
       SERVICE_NAME_CLIENT_PORTAL: client-portal
-      APP_NAME: '${APP_NAME}'
       CDN_DOMAIN: '${CDN_DOMAIN}'
       CDN_PROVIDER: '${CDN_PROVIDER}'
       CF_API_TOKEN: '${CF_API_TOKEN}'
@@ -377,7 +376,6 @@ services:
       SERVICE_NAME_DESIGNER_PORTAL: designer-portal
       SERVICE_NAME_ADMIN_PORTAL: admin-portal
       SERVICE_NAME_CLIENT_PORTAL: client-portal
-      APP_NAME: '${APP_NAME}'
       CDN_DOMAIN: '${CDN_DOMAIN}'
       CDN_PROVIDER: '${CDN_PROVIDER}'
       CF_API_TOKEN: '${CF_API_TOKEN}'
@@ -476,7 +474,6 @@ services:
       SERVICE_NAME_DESIGNER_PORTAL: designer-portal
       SERVICE_NAME_ADMIN_PORTAL: admin-portal
       SERVICE_NAME_CLIENT_PORTAL: client-portal
-      APP_NAME: '${APP_NAME}'
       CDN_DOMAIN: '${CDN_DOMAIN}'
       CDN_PROVIDER: '${CDN_PROVIDER}'
       CF_API_TOKEN: '${CF_API_TOKEN}'
