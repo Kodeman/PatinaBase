@@ -793,3 +793,17 @@ export {
   computePhaseGateStatus,
 } from './use-phase-gates';
 export type { PhaseGate, PhaseGateKind, PhaseGateStatus } from './use-phase-gates';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase templates (Wave 5 — see migration 00135)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  usePhaseTemplates,
+  useApplyPhaseTemplate,
+} from './use-phase-templates';
+export type {
+  PhaseTemplate,
+  PhaseTemplatePhase,
+  PhaseTemplateDeliverable,
+  PhaseTemplateGate,
+} from './use-phase-templates';
