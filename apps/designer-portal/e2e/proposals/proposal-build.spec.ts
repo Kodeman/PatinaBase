@@ -509,6 +509,8 @@ test.describe.serial('proposal build → send → view → sign', () => {
   // We scroll to each section and wait 2.2s to satisfy the dwell gate.
   // ────────────────────────────────────────────────────────────────────────
   test('client opens and views proposal', async ({ authenticatedPage: _designerPage, browser }) => {
+    // Bigger budget: signin + navigation + 3×2.2s dwell + cleanup easily exceeds 30s default
+    test.setTimeout(120_000);
     // Fresh context — no cookies shared with the designer session
     const clientContext = await browser.newContext({ storageState: undefined });
     const clientPage = await clientContext.newPage();
@@ -587,6 +589,7 @@ test.describe.serial('proposal build → send → view → sign', () => {
   // Step 7: Client signs the proposal
   // ────────────────────────────────────────────────────────────────────────
   test('client signs proposal', async ({ authenticatedPage: _designerPage, browser }) => {
+    test.setTimeout(120_000);
     const clientContext = await browser.newContext({ storageState: undefined });
     const clientPage = await clientContext.newPage();
 
