@@ -75,9 +75,17 @@ function loadImageData(url: string): Promise<{ width: number; height: number; pi
  * the `new Worker(new URL(...), { type: 'module' })` pattern.
  */
 function spawnWorker(): Worker {
-  return new Worker(new URL('../../workers/palette-quantize.worker.ts', import.meta.url), {
-    type: 'module',
-  })
+  // The worker source ships in `src/workers/palette-quantize.worker.ts`. When the
+  // DS package is consumed pre-built (dist/index.js) the relative URL doesn't
+  // resolve, so consumer bundlers that statically analyze `new URL(..., import.meta.url)`
+  // would fail the build (e.g. Next.js webpack). The `webpackIgnore` comment skips
+  // that analysis. At runtime the URL still won't resolve under those bundlers —
+  // the caller's try/catch falls back to an error state until a follow-up wires
+  // a proper bundled-worker output (tsup `entry.workers` + per-consumer worker URL).
+  return new Worker(
+    new URL(/* webpackIgnore: true */ '../../workers/palette-quantize.worker.ts', import.meta.url),
+    { type: 'module' },
+  )
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
