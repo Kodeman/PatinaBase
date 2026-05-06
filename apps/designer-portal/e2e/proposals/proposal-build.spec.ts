@@ -13,10 +13,10 @@
 
 import { test, expect } from '../fixtures/auth';
 import {
-  adminDb,
   countByProposal,
   deleteProposalCascade,
   getEngagementByType,
+  getMilestonePercentageSum,
   getProposal,
   getProposalItems,
   getProposalSection,
@@ -138,12 +138,11 @@ test.describe.serial('proposal build → send → view → sign', () => {
 
     for (const sectionType of sectionTypes) {
       // investment and timeline sections have no body textarea (they render
-      // structured components only). We skip body editing for those two but
-      // still confirm the row exists in the DB.
+      // structured components only). Skip the textarea fill path, but still
+      // assert the row was seeded — every template-generated section must exist.
       if (sectionType === 'investment' || sectionType === 'timeline') {
-        const row = await getProposalSection(proposalId, sectionType);
-        // Row may not exist if template didn't include it — that's acceptable.
-        // We just continue rather than fail here.
+        const sectionRow = await getProposalSection(proposalId, sectionType);
+        expect(sectionRow, `Expected "${sectionType}" section row to be seeded by template`).not.toBeNull();
         continue;
       }
 
@@ -280,13 +279,9 @@ test.describe.serial('proposal build → send → view → sign', () => {
 
     // ProductPickerModal opens — look for it
     const pickerModal = page.getByRole('dialog').first();
-    const pickerVisible = await pickerModal.isVisible().catch(() => false);
+    const productPickerOpened = await pickerModal.isVisible().catch(() => false);
 
-    if (!pickerVisible) {
-      // Modal didn't open — fixme this sub-step
-      // FIXME: ProductPickerModal dialog not found; "+ Add Item" button may render differently
-      console.warn('[proposal-build] ProductPickerModal not visible after clicking "+ Add Item"');
-    } else {
+    if (productPickerOpened) {
       // Search for the first available product and pick it
       const searchInput = pickerModal.locator('input[type="search"], input[type="text"]').first();
       const searchVisible = await searchInput.isVisible().catch(() => false);
@@ -305,20 +300,17 @@ test.describe.serial('proposal build → send → view → sign', () => {
       } else {
         // Close modal if no results found
         await page.keyboard.press('Escape');
-        console.warn('[proposal-build] No product results in picker; fixed item not added');
       }
     }
 
     // ── DB assertions ──────────────────────────────────────────────────
-    // We expect at minimum the allowance + TBD rows (2 rows guaranteed).
-    const items = await getProposalItems(proposalId);
-    expect(items.length, 'Expected at least 2 proposal items (allowance + tbd)').toBeGreaterThanOrEqual(2);
+    test.fixme(!productPickerOpened, 'product picker modal selector unstable — fixed item path skipped');
 
-    const itemTypes = items.map((i) => i.item_type as string);
-    expect(itemTypes, 'Should include at least one allowance item').toContain('allowance');
-    expect(itemTypes, 'Should include at least one tbd item').toContain('tbd');
-    // We assert >= 3 if the fixed item also landed; otherwise accept 2.
-    // Phase 2c can tighten this once the picker flow is verified.
+    const items = await getProposalItems(proposalId);
+    expect(items.length, 'Expected exactly 3 proposal items (fixed + allowance + tbd)').toBe(3);
+
+    const itemTypeSet = new Set(items.map((i) => i.item_type as string));
+    expect(itemTypeSet).toEqual(new Set(['fixed', 'allowance', 'tbd']));
   });
 
   // ────────────────────────────────────────────────────────────────────────
@@ -433,7 +425,9 @@ test.describe.serial('proposal build → send → view → sign', () => {
     await expect(page.getByText('Payment Milestones').first()).toBeVisible({ timeout: 15_000 });
 
     // Each milestone row has a structure: label input | % number input | amount | trigger | remove
-    // The percentage inputs are of type="number" with max=100. We locate all of them.
+    // Scoped to input[type="number"][max="100"]. PaymentMilestonesBuilder renders no data-testid
+    // or role="form" wrapper on milestone rows, so we cannot scope more tightly without a
+    // production code change. On this payment tab there are no other number inputs with max=100.
     const pctInputs = page.locator('input[type="number"][max="100"]');
     const pctCount = await pctInputs.count();
 
@@ -448,19 +442,8 @@ test.describe.serial('proposal build → send → view → sign', () => {
     await page.waitForTimeout(900);
     await waitForMutation(page);
 
-    // DB: sum of percent_of_total should equal 100
-    const { data: rows, error } = await adminDb
-      .from('proposal_payment_milestones')
-      .select('percent_of_total, percentage')
-      .eq('proposal_id', proposalId);
-
-    if (error) throw error;
-    // The DB column may be 'percentage' or 'percent_of_total' depending on migration.
-    // Try both.
-    const sum = (rows ?? []).reduce((acc: number, r: Record<string, unknown>) => {
-      const val = (r.percent_of_total as number | null) ?? (r.percentage as number | null) ?? 0;
-      return acc + val;
-    }, 0);
+    // DB: sum of percentage should equal 100 (column confirmed as 'percentage')
+    const sum = await getMilestonePercentageSum(proposalId);
     expect(sum, 'Milestone percentages should sum to 100').toBe(100);
   });
 

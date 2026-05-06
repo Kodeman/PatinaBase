@@ -58,6 +58,18 @@ export async function getProposalSection(proposalId: string, sectionType: string
   return data;
 }
 
+export async function getMilestonePercentageSum(proposalId: string): Promise<number> {
+  const { data, error } = await adminDb
+    .from('proposal_payment_milestones')
+    .select('percentage')
+    .eq('proposal_id', proposalId);
+  if (error) throw error;
+  return (data ?? []).reduce((acc: number, row: { percentage: number | string | null }) => {
+    const v = row.percentage;
+    return acc + (typeof v === 'string' ? parseFloat(v) : v ?? 0);
+  }, 0);
+}
+
 export async function deleteProposalCascade(proposalId: string): Promise<void> {
   const { error } = await adminDb.from('proposals').delete().eq('id', proposalId);
   if (error) throw error;
