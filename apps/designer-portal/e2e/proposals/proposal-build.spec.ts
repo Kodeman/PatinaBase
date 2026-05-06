@@ -647,6 +647,11 @@ test.describe.serial('proposal build → send → view → sign', () => {
   // Cleanup
   // ────────────────────────────────────────────────────────────────────────
   test.afterAll(async () => {
+    if (process.env.KEEP_TEST_PROPOSAL === 'true') {
+      // eslint-disable-next-line no-console
+      console.log(`[KEEP_TEST_PROPOSAL] preserving proposal: ${proposalId}`);
+      return;
+    }
     if (proposalId) {
       await deleteProposalCascade(proposalId).catch((err) => {
         console.error('[proposal-build] afterAll cleanup failed:', err);
