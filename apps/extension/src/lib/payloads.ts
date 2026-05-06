@@ -115,3 +115,58 @@ export function buildProductStyleInserts(
     assigned_by: userId,
   }));
 }
+
+// ─── Proposal Capture Insert (Wave 2) ──────────────────────────────────────
+//
+// Builds a row matching the public.proposal_captures schema introduced by
+// migration 00130. Status is derived from how complete the targeting is:
+//   - all of proposal/room/category set → 'assigned'
+//   - otherwise                          → 'inbox'
+// Validation against the column set lives in the unit tests.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface BuildCapturePayloadInput {
+  designerId: string;
+  /** Optional: the products.id for the captured product (or null when
+   *  the capture is a stub that needs a draft promotion in the portal). */
+  productId: string | null;
+  proposalId: string | null;
+  scopeRoomId: string | null;
+  ffeCategorySlug: string | null;
+  sourceUrl: string;
+  rawPayload: Record<string, unknown>;
+  thumbnailUrl: string | null;
+}
+
+export type ProposalCaptureSaveStatus = 'inbox' | 'assigned';
+
+export function deriveCaptureStatus(input: {
+  proposalId: string | null;
+  scopeRoomId: string | null;
+  ffeCategorySlug: string | null;
+}): ProposalCaptureSaveStatus {
+  if (input.proposalId && input.scopeRoomId && input.ffeCategorySlug) {
+    return 'assigned';
+  }
+  return 'inbox';
+}
+
+export function buildCapturePayload(input: BuildCapturePayloadInput) {
+  const status = deriveCaptureStatus({
+    proposalId: input.proposalId,
+    scopeRoomId: input.scopeRoomId,
+    ffeCategorySlug: input.ffeCategorySlug,
+  });
+
+  return {
+    designer_id: input.designerId,
+    product_id: input.productId,
+    proposal_id: input.proposalId,
+    scope_room_id: input.scopeRoomId,
+    ffe_category_slug: input.ffeCategorySlug,
+    source_url: input.sourceUrl,
+    raw_payload: input.rawPayload,
+    thumbnail_url: input.thumbnailUrl,
+    status,
+  };
+}

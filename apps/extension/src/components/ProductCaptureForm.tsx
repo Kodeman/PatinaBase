@@ -15,6 +15,7 @@ import type {
 import { StrataMark } from './StrataMark';
 import { ImageCarousel } from './ImageCarousel';
 import { ProjectSelector } from './ProjectSelector';
+import { ProposalTargetSelector } from './ProposalTargetSelector';
 import { StyleChips } from './StyleChips';
 import { ConfidenceIndicator } from './ConfidenceIndicator';
 import { VendorCard } from './VendorCard';
@@ -81,6 +82,13 @@ interface ProductCaptureFormProps {
   setEditedFinish: (v: string) => void;
   editedDimensions: EditableDimensions;
   setEditedDimensions: (v: EditableDimensions) => void;
+  // Wave 2 — Proposal/Inbox targeting
+  proposalId: UUID | null;
+  setProposalId: (v: UUID | null) => void;
+  scopeRoomId: UUID | null;
+  setScopeRoomId: (v: UUID | null) => void;
+  ffeCategorySlug: string | null;
+  setFfeCategorySlug: (v: string | null) => void;
 }
 
 export function ProductCaptureForm({
@@ -134,6 +142,12 @@ export function ProductCaptureForm({
   setEditedFinish,
   editedDimensions,
   setEditedDimensions,
+  proposalId,
+  setProposalId,
+  scopeRoomId,
+  setScopeRoomId,
+  ffeCategorySlug,
+  setFfeCategorySlug,
 }: ProductCaptureFormProps) {
   const fieldError = (field: string) =>
     validation?.errors.find(e => e.field === field)?.message ?? null;
@@ -395,6 +409,34 @@ export function ProductCaptureForm({
             setIsPersonalCatalog(value);
           }}
           isLoading={isLoadingData}
+        />
+      </div>
+
+      {/* Proposal target (Wave 2) */}
+      <div className="space-y-2 rounded-md border border-pearl bg-off-white px-3 py-2">
+        <p className="font-mono text-[0.62rem] uppercase tracking-[0.06em] text-aged-oak">
+          Proposal Inbox
+        </p>
+        <p className="text-[0.78rem] text-mocha leading-snug">
+          Optionally target a proposal so this capture lands ready to drop into
+          the FF&amp;E schedule. Leave blank to send it to your inbox.
+        </p>
+        <ProposalTargetSelector
+          proposalId={proposalId}
+          scopeRoomId={scopeRoomId}
+          ffeCategorySlug={ffeCategorySlug}
+          onProposalChange={(v) => {
+            setHasInteracted(true);
+            setProposalId(v);
+          }}
+          onScopeRoomChange={(v) => {
+            setHasInteracted(true);
+            setScopeRoomId(v);
+          }}
+          onCategoryChange={(v) => {
+            setHasInteracted(true);
+            setFfeCategorySlug(v);
+          }}
         />
       </div>
 

@@ -19,6 +19,7 @@ import { supabase } from './lib/supabase';
 import { scorePageMode, detectModeFromUrl } from './lib/mode-detection';
 import { validateProductCapture } from './lib/capture-validation';
 import { usePortalSession } from './hooks/use-portal-session';
+import { buildCapturePayload } from './lib/payloads';
 import type { EditableDimensions } from './components/EditableDetails';
 import { dimensionsFromExtracted, dimensionsToPayload } from './components/EditableDetails';
 import { ModeToggle } from './components/ModeToggle';
@@ -114,6 +115,12 @@ function Popup() {
 
   // Vendor-only capture state
   const [extractedVendorData, setExtractedVendorData] = useState<ExtractedVendorData | null>(null);
+
+  // Wave 2 — Proposal/Inbox targeting (optional)
+  const [proposalId, setProposalId] = useState<UUID | null>(null);
+  const [scopeRoomId, setScopeRoomId] = useState<UUID | null>(null);
+  const [ffeCategorySlug, setFfeCategorySlug] = useState<string | null>(null);
+  const [savingToInbox, setSavingToInbox] = useState(false);
 
   // Navigation tracking state
   const [currentUrl, setCurrentUrl] = useState<string>('');
@@ -328,6 +335,9 @@ function Popup() {
     setEditedColors([]);
     setEditedFinish('');
     setEditedDimensions({ width: '', height: '', depth: '', seatHeight: '', seatDepth: '', armHeight: '', unit: 'in' });
+    setProposalId(null);
+    setScopeRoomId(null);
+    setFfeCategorySlug(null);
   }, []);
 
   // Re-extract when URL changes
@@ -959,6 +969,129 @@ function Popup() {
     }
   };
 
+  // Handle "Save to Inbox" — Wave 2 path. Creates a real product (so the
+  // catalog still has the row) and ALSO inserts a proposal_captures row
+  // pointing at it. Status is derived in buildCapturePayload (assigned vs
+  // inbox) based on whether all of proposal/room/category are set.
+  const handleSaveToInbox = async () => {
+    if (!user || !extractedData) return;
+
+    setHasInteracted(true);
+    setSavingToInbox(true);
+    setCaptureError('');
+
+    try {
+      const selectedImage = extractedData.images[selectedImageIndex];
+      const images = selectedImage
+        ? [selectedImage.url, ...extractedData.images.filter((_, i) => i !== selectedImageIndex).map(img => img.url)]
+        : extractedData.images.map(img => img.url);
+
+      const vendorId = manufacturer?.id || null;
+      const retailerId = retailer?.id || null;
+      const dimensionsPayload = dimensionsToPayload(editedDimensions);
+      const priceCents = price ? Math.round(parseFloat(price) * 100) : null;
+
+      // Insert the product first so we have a stable id to point the
+      // capture at. status='draft' here so it doesn't pollute the catalog
+      // until the designer promotes it.
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .insert({
+          name: productName || extractedData.productName || 'Untitled Product',
+          description: editedDescription || null,
+          source_url: extractedData.url,
+          images: images.slice(0, 10),
+          price_retail: priceCents,
+          materials: editedMaterials,
+          colors: editedColors.length > 0 ? editedColors : null,
+          finish: editedFinish || null,
+          available_colors: extractedData.availableColors || null,
+          dimensions: dimensionsPayload ? {
+            width: dimensionsPayload.width,
+            height: dimensionsPayload.height,
+            depth: dimensionsPayload.depth,
+            seatHeight: dimensionsPayload.seatHeight,
+            seatDepth: dimensionsPayload.seatDepth,
+            seatWidth: dimensionsPayload.seatWidth,
+            armHeight: dimensionsPayload.armHeight,
+            backHeight: dimensionsPayload.backHeight,
+            legHeight: dimensionsPayload.legHeight,
+            clearance: dimensionsPayload.clearance,
+            unit: dimensionsPayload.unit,
+          } : null,
+          vendor_id: vendorId,
+          retailer_id: retailerId,
+          captured_by: user.id,
+          captured_at: new Date().toISOString(),
+          status: 'draft',
+        })
+        .select('id')
+        .single();
+
+      if (productError) throw productError;
+      if (!product) throw new Error('Failed to create product');
+
+      // Style assignments (so taxonomy stays consistent across save paths).
+      if (selectedStyleIds.length > 0) {
+        const styleInserts = selectedStyleIds.map((styleId, index) => ({
+          product_id: product.id,
+          style_id: styleId,
+          confidence: 1.0,
+          is_primary: index === 0,
+          source: 'manual',
+          assigned_by: user.id,
+        }));
+        await supabase.from('product_styles').insert(styleInserts);
+      }
+
+      const capturePayload = buildCapturePayload({
+        designerId: user.id,
+        productId: product.id,
+        proposalId: proposalId,
+        scopeRoomId: scopeRoomId,
+        ffeCategorySlug: ffeCategorySlug,
+        sourceUrl: extractedData.url,
+        rawPayload: {
+          name: productName || extractedData.productName || null,
+          description: editedDescription || null,
+          price_retail_cents: priceCents,
+          vendor: manufacturer?.name ? { name: manufacturer.name } : null,
+          retailer: retailer?.name ? { name: retailer.name } : null,
+          note: note || null,
+          confidence: extractedData.confidence,
+        },
+        thumbnailUrl: images[0] ?? null,
+      });
+
+      const { error: captureError } = await supabase
+        .from('proposal_captures')
+        .insert(capturePayload);
+
+      if (captureError) throw captureError;
+
+      setCaptureSuccess(true);
+      extensionEvents.productCapture({
+        hasImages: (extractedData.images?.length ?? 0) > 0,
+        hasPrice: !!price,
+        confidence: extractedData.confidence || 'unknown',
+        captureMethod: 'new',
+      });
+    } catch (err) {
+      let errorMessage = 'Failed to save to inbox';
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (err && typeof err === 'object') {
+        const e = err as { message?: string; details?: string; hint?: string; code?: string };
+        errorMessage = e.message || e.details || e.hint || JSON.stringify(err);
+        if (e.code) errorMessage = `[${e.code}] ${errorMessage}`;
+      }
+      console.error('Save to inbox error:', err);
+      setCaptureError(errorMessage);
+    } finally {
+      setSavingToInbox(false);
+    }
+  };
+
   // Handle updating an existing product
   const handleUpdate = async () => {
     if (!user || !existingProduct || !extractedData) return;
@@ -1328,6 +1461,12 @@ function Popup() {
             setEditedFinish={setEditedFinish}
             editedDimensions={editedDimensions}
             setEditedDimensions={setEditedDimensions}
+            proposalId={proposalId}
+            setProposalId={setProposalId}
+            scopeRoomId={scopeRoomId}
+            setScopeRoomId={setScopeRoomId}
+            ffeCategorySlug={ffeCategorySlug}
+            setFfeCategorySlug={setFfeCategorySlug}
           />
         )}
 
@@ -1409,25 +1548,45 @@ function Popup() {
             {isCapturing ? 'Saving...' : captureSuccess ? 'Vendor Saved' : 'Save Vendor'}
           </button>
         ) : (
-          <button
-            onClick={existingProduct ? handleUpdate : handleCapture}
-            disabled={isCapturing || isExtracting || !extractedData || (productValidation != null && !productValidation.isValid)}
-            className={`w-full py-3 px-4 rounded-[3px] text-[0.85rem] font-medium transition-all ${
-              captureSuccess
-                ? 'bg-sage text-white shadow-md'
+          <div className="space-y-2">
+            <button
+              onClick={existingProduct ? handleUpdate : handleCapture}
+              disabled={isCapturing || isExtracting || savingToInbox || !extractedData || (productValidation != null && !productValidation.isValid)}
+              className={`w-full py-3 px-4 rounded-[3px] text-[0.85rem] font-medium transition-all ${
+                captureSuccess
+                  ? 'bg-sage text-white shadow-md'
+                  : existingProduct
+                  ? 'bg-dusty-blue text-white hover:bg-dusty-blue/90 shadow-md hover:shadow-lg'
+                  : 'bg-charcoal text-off-white hover:bg-mocha shadow-md hover:shadow-lg'
+              } disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none`}
+            >
+              {isCapturing
+                ? (existingProduct ? 'Updating...' : 'Saving...')
+                : captureSuccess
+                ? (existingProduct ? 'Updated' : 'Saved to Catalog')
                 : existingProduct
-                ? 'bg-dusty-blue text-white hover:bg-dusty-blue/90 shadow-md hover:shadow-lg'
-                : 'bg-charcoal text-off-white hover:bg-mocha shadow-md hover:shadow-lg'
-            } disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none`}
-          >
-            {isCapturing
-              ? (existingProduct ? 'Updating...' : 'Saving...')
-              : captureSuccess
-              ? (existingProduct ? 'Updated' : 'Saved to Catalog')
-              : existingProduct
-              ? 'Update Product'
-              : 'Save to Catalog'}
-          </button>
+                ? 'Update Product'
+                : 'Save to Catalog'}
+            </button>
+
+            {/* Wave 2 — Save to inbox / proposal target */}
+            {!existingProduct && (
+              <button
+                type="button"
+                onClick={handleSaveToInbox}
+                disabled={isCapturing || isExtracting || savingToInbox || !extractedData || (productValidation != null && !productValidation.isValid)}
+                className="w-full py-2.5 px-4 rounded-[3px] text-[0.82rem] font-medium border border-pearl bg-off-white text-charcoal hover:border-clay hover:text-mocha transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingToInbox
+                  ? 'Saving…'
+                  : captureSuccess
+                  ? 'Saved'
+                  : proposalId && scopeRoomId && ffeCategorySlug
+                  ? 'Save to Proposal'
+                  : 'Save to Inbox'}
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
