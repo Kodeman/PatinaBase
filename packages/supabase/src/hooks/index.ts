@@ -807,3 +807,26 @@ export type {
   PhaseTemplateDeliverable,
   PhaseTemplateGate,
 } from './use-phase-templates';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Color palette + paint colors (Wave 3 — see migrations 00131, 00132)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  usePalettes,
+  usePalette,
+  useUpsertPalette,
+  useDeletePalette,
+  useUpsertSwatch,
+  useDeleteSwatch,
+  useReorderSwatches,
+} from './use-palettes';
+export type {
+  PaletteSwatchRole,
+  ProposalPalette,
+  PaletteSwatch,
+  PaletteWithSwatches,
+  UpsertPaletteInput,
+  UpsertSwatchInput,
+} from './use-palettes';
+export { useSearchPaintColors, usePaintColor } from './use-paint-colors';
+export type { PaintColor, PaintColorBrand } from './use-paint-colors';

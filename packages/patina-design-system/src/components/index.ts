@@ -46,6 +46,8 @@ export * from './ColorPicker'
 export * from './FileUpload'
 export * from './SearchInput'
 export * from './PinInput'
+export * from './PaintColorPicker'
+export * from './ImagePaletteExtractor'
 
 // Feedback Components
 export * from './Alert'
