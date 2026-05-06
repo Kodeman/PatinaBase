@@ -1,13 +1,27 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PortalButton } from '@/components/portal/button';
 import {
   useProposalPhases,
   useAddProposalPhase,
   useUpdateProposalPhase,
   useRemoveProposalPhase,
+  useProposalPaymentMilestones,
 } from '@patina/supabase';
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from '@patina/design-system';
+import { DeliverablesEditor } from './deliverables-editor';
+import {
+  GateConditionsEditor,
+  type ProposalPhaseLite,
+  type PaymentMilestoneLite,
+} from './gate-conditions-editor';
+import { PhaseTimelineView } from './phase-timeline-view';
 
 const PHASE_KEY_OPTIONS = [
   { value: 'consultation', label: 'Consultation' },
@@ -19,15 +33,66 @@ const PHASE_KEY_OPTIONS = [
 ] as const;
 
 const DEFAULT_PHASES = [
-  { name: 'Schematic Design', phaseKey: 'concept_development', durationWeeks: 3, feeCents: 250000, revisionLimit: 2 },
-  { name: 'Design Development', phaseKey: 'design_refinement', durationWeeks: 4, feeCents: 350000, revisionLimit: 2 },
-  { name: 'Procurement Management', phaseKey: 'procurement', durationWeeks: 8, feeCents: 200000, revisionLimit: 1 },
-  { name: 'Installation & Styling', phaseKey: 'installation', durationWeeks: 3, feeCents: 150000, revisionLimit: 1 },
-  { name: 'Completion & Handover', phaseKey: 'final_walkthrough', durationWeeks: 1, feeCents: 50000, revisionLimit: 0 },
+  {
+    name: 'Schematic Design',
+    phaseKey: 'concept_development',
+    durationWeeks: 3,
+    feeCents: 250000,
+    revisionLimit: 2,
+  },
+  {
+    name: 'Design Development',
+    phaseKey: 'design_refinement',
+    durationWeeks: 4,
+    feeCents: 350000,
+    revisionLimit: 2,
+  },
+  {
+    name: 'Procurement Management',
+    phaseKey: 'procurement',
+    durationWeeks: 8,
+    feeCents: 200000,
+    revisionLimit: 1,
+  },
+  {
+    name: 'Installation & Styling',
+    phaseKey: 'installation',
+    durationWeeks: 3,
+    feeCents: 150000,
+    revisionLimit: 1,
+  },
+  {
+    name: 'Completion & Handover',
+    phaseKey: 'final_walkthrough',
+    durationWeeks: 1,
+    feeCents: 50000,
+    revisionLimit: 0,
+  },
 ];
 
 interface PhaseBuilderProps {
   proposalId: string;
+}
+
+interface ProposalPhaseRow {
+  id: string;
+  proposal_id: string;
+  name: string;
+  phase_key: string | null;
+  duration_weeks: number | null;
+  fee_cents: number;
+  revision_limit: number | null;
+  gate_condition: string | null;
+  sort_order: number;
+}
+
+interface ProposalPaymentMilestoneRow {
+  id: string;
+  proposal_id: string;
+  phase_id: string | null;
+  label: string;
+  percentage: number;
+  amount_cents: number;
 }
 
 function formatDollars(cents: number): string {
@@ -57,15 +122,22 @@ function useDebouncedSave(
 }
 
 export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
-  const { data: phases = [], isLoading } = useProposalPhases(proposalId);
+  const { data: phases = [], isLoading } = useProposalPhases(proposalId) as {
+    data: ProposalPhaseRow[];
+    isLoading: boolean;
+  };
+  const { data: milestones = [] } = useProposalPaymentMilestones(proposalId) as {
+    data: ProposalPaymentMilestoneRow[];
+  };
+
   const addPhase = useAddProposalPhase();
   const updatePhase = useUpdateProposalPhase();
   const removePhase = useRemoveProposalPhase();
 
-  // Local edit state keyed by phase id
+  // Local edit state keyed by phase id (used by the per-phase form rows).
   const [edits, setEdits] = useState<Record<string, Record<string, unknown>>>({});
 
-  // Sync server data into local state when phases load
+  // Sync server data into local state when phases load.
   useEffect(() => {
     if (phases.length > 0) {
       const next: Record<string, Record<string, unknown>> = {};
@@ -77,7 +149,6 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
             duration_weeks: p.duration_weeks,
             fee_cents: p.fee_cents,
             revision_limit: p.revision_limit,
-            gate_condition: p.gate_condition,
           };
         } else {
           next[p.id] = edits[p.id];
@@ -131,12 +202,33 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
   }
 
   const totalFee = phases.reduce(
-    (sum: number, p: { fee_cents: number }) => sum + (p.fee_cents || 0),
+    (sum: number, p: ProposalPhaseRow) => sum + (p.fee_cents || 0),
     0
   );
   const totalWeeks = phases.reduce(
-    (sum: number, p: { duration_weeks: number | null }) => sum + (p.duration_weeks || 0),
+    (sum: number, p: ProposalPhaseRow) => sum + (p.duration_weeks || 0),
     0
+  );
+
+  const allPhasesLite: ProposalPhaseLite[] = useMemo(
+    () =>
+      phases.map((p) => ({
+        id: p.id,
+        name: p.name,
+        sort_order: p.sort_order,
+      })),
+    [phases]
+  );
+
+  const milestonesLite: PaymentMilestoneLite[] = useMemo(
+    () =>
+      milestones.map((m) => ({
+        id: m.id,
+        label: m.label,
+        amount_cents: m.amount_cents,
+        percentage: m.percentage,
+      })),
+    [milestones]
   );
 
   if (isLoading) {
@@ -148,175 +240,221 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
   }
 
   return (
-    <div>
-      {/* Header */}
-      <div className="mb-4 flex items-center justify-between">
-        <span className="type-meta">Project Phases</span>
-        <div className="flex gap-2">
-          {phases.length === 0 && (
-            <PortalButton variant="secondary" onClick={handleAddDefaults}>
-              Add Defaults
+    <div className="flex flex-col gap-8">
+      {/* ─── Visual timeline ─────────────────────────────────────────────── */}
+      {phases.length > 0 && (
+        <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-5">
+          <PhaseTimelineView proposalId={proposalId} />
+        </div>
+      )}
+
+      {/* ─── Editable phase rows ─────────────────────────────────────────── */}
+      <div>
+        {/* Header */}
+        <div className="mb-4 flex items-center justify-between">
+          <span className="type-meta">Project Phases</span>
+          <div className="flex gap-2">
+            {phases.length === 0 && (
+              <PortalButton variant="secondary" onClick={handleAddDefaults}>
+                Add Defaults
+              </PortalButton>
+            )}
+            <PortalButton variant="secondary" onClick={handleAddPhase}>
+              + Add Phase
             </PortalButton>
-          )}
-          <PortalButton variant="secondary" onClick={handleAddPhase}>
-            + Add Phase
-          </PortalButton>
-        </div>
-      </div>
-
-      {/* Column headers */}
-      {phases.length > 0 && (
-        <div
-          className="grid gap-3 border-b border-[var(--border-default)] pb-1.5"
-          style={{ gridTemplateColumns: '1fr 120px 80px 120px 80px 1fr 36px' }}
-        >
-          <span className="type-meta-small">Phase Name</span>
-          <span className="type-meta-small">Type</span>
-          <span className="type-meta-small text-right">Weeks</span>
-          <span className="type-meta-small text-right">Fee</span>
-          <span className="type-meta-small text-center">Revisions</span>
-          <span className="type-meta-small">Gate Condition</span>
-          <span />
-        </div>
-      )}
-
-      {/* Phase rows */}
-      {phases.map((phase: Record<string, unknown>) => {
-        const id = phase.id as string;
-        const local = edits[id] || {};
-
-        return (
-          <div
-            key={id}
-            className="grid items-center gap-3 border-b py-2"
-            style={{
-              gridTemplateColumns: '1fr 120px 80px 120px 80px 1fr 36px',
-              borderColor: 'rgba(229, 226, 221, 0.4)',
-            }}
-          >
-            {/* Name */}
-            <input
-              type="text"
-              value={(local.name as string) ?? ''}
-              onChange={(e) => setField(id, 'name', e.target.value)}
-              className="w-full border-b border-transparent bg-transparent font-body text-[0.88rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
-            />
-
-            {/* Phase key select */}
-            <select
-              value={(local.phase_key as string) ?? ''}
-              onChange={(e) => setField(id, 'phase_key', e.target.value)}
-              className="w-full cursor-pointer border-b border-transparent bg-transparent font-body text-[0.78rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
-            >
-              <option value="">--</option>
-              {PHASE_KEY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-
-            {/* Duration weeks */}
-            <input
-              type="number"
-              min={0}
-              value={(local.duration_weeks as number) ?? 0}
-              onChange={(e) => setField(id, 'duration_weeks', parseInt(e.target.value) || 0)}
-              className="w-full border-b border-transparent bg-transparent text-right font-mono text-[0.82rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
-            />
-
-            {/* Fee (shown as dollars, stored as cents) */}
-            <div className="flex items-center justify-end gap-0.5">
-              <span className="font-mono text-[0.78rem] text-[var(--text-muted)]">$</span>
-              <input
-                type="number"
-                min={0}
-                step={100}
-                value={((local.fee_cents as number) ?? 0) / 100}
-                onChange={(e) =>
-                  setField(id, 'fee_cents', Math.round(parseFloat(e.target.value || '0') * 100))
-                }
-                className="w-full border-b border-transparent bg-transparent text-right font-mono text-[0.82rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
-              />
-            </div>
-
-            {/* Revision stepper */}
-            <div className="flex items-center justify-center gap-1.5">
-              <button
-                className="flex h-5 w-5 items-center justify-center rounded-[3px] border border-[var(--border-default)] text-[0.65rem] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
-                onClick={() =>
-                  setField(id, 'revision_limit', Math.max(0, ((local.revision_limit as number) ?? 0) - 1))
-                }
-              >
-                -
-              </button>
-              <span className="w-4 text-center font-mono text-[0.82rem] text-[var(--text-primary)]">
-                {(local.revision_limit as number) ?? 0}
-              </span>
-              <button
-                className="flex h-5 w-5 items-center justify-center rounded-[3px] border border-[var(--border-default)] text-[0.65rem] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
-                onClick={() =>
-                  setField(id, 'revision_limit', ((local.revision_limit as number) ?? 0) + 1)
-                }
-              >
-                +
-              </button>
-            </div>
-
-            {/* Gate condition */}
-            <input
-              type="text"
-              placeholder="e.g. Client sign-off"
-              value={(local.gate_condition as string) ?? ''}
-              onChange={(e) => setField(id, 'gate_condition', e.target.value)}
-              className="w-full border-b border-transparent bg-transparent font-body text-[0.78rem] text-[var(--text-muted)] outline-none placeholder:text-[var(--text-muted)]/40 focus:border-[var(--accent-primary)] focus:text-[var(--text-primary)]"
-            />
-
-            {/* Remove */}
-            <button
-              className="flex h-6 w-6 items-center justify-center rounded-[3px] text-[0.7rem] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
-              onClick={() => removePhase.mutate({ phaseId: id, proposalId })}
-              title="Remove phase"
-            >
-              x
-            </button>
           </div>
-        );
-      })}
-
-      {/* Summary */}
-      {phases.length > 0 && (
-        <div
-          className="mt-1 grid items-baseline gap-3 border-t-2 border-[var(--border-default)] pt-3"
-          style={{ gridTemplateColumns: '1fr 120px 80px 120px 80px 1fr 36px' }}
-        >
-          <span className="font-body text-[0.88rem] font-semibold text-[var(--text-primary)]">
-            Total
-          </span>
-          <span />
-          <span className="text-right font-mono text-[0.82rem] text-[var(--text-primary)]">
-            {totalWeeks}w
-          </span>
-          <span className="text-right font-display text-[0.95rem] font-semibold text-[var(--text-primary)]">
-            {formatDollars(totalFee)}
-          </span>
-          <span />
-          <span />
-          <span />
         </div>
-      )}
 
-      {/* Empty state */}
-      {phases.length === 0 && (
-        <div className="py-10 text-center">
-          <p className="font-body text-[0.88rem] text-[var(--text-muted)]">
-            No phases defined yet.
-          </p>
-          <p className="mt-1 font-body text-[0.78rem] text-[var(--text-muted)]">
-            Add a phase manually or start with the default template.
-          </p>
-        </div>
-      )}
+        {/* Column headers */}
+        {phases.length > 0 && (
+          <div
+            className="grid gap-3 border-b border-[var(--border-default)] pb-1.5"
+            style={{ gridTemplateColumns: '1fr 120px 80px 120px 80px 36px' }}
+          >
+            <span className="type-meta-small">Phase Name</span>
+            <span className="type-meta-small">Type</span>
+            <span className="type-meta-small text-right">Weeks</span>
+            <span className="type-meta-small text-right">Fee</span>
+            <span className="type-meta-small text-center">Revisions</span>
+            <span />
+          </div>
+        )}
+
+        {/* Phase rows */}
+        {phases.map((phase) => {
+          const id = phase.id;
+          const local = edits[id] || {};
+          const legacyText = phase.gate_condition;
+
+          return (
+            <div key={id}>
+              <div
+                className="grid items-center gap-3 border-b py-2"
+                style={{
+                  gridTemplateColumns: '1fr 120px 80px 120px 80px 36px',
+                  borderColor: 'rgba(229, 226, 221, 0.4)',
+                }}
+              >
+                {/* Name */}
+                <input
+                  type="text"
+                  value={(local.name as string) ?? ''}
+                  onChange={(e) => setField(id, 'name', e.target.value)}
+                  className="w-full border-b border-transparent bg-transparent font-body text-[0.88rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
+                />
+
+                {/* Phase key select */}
+                <select
+                  value={(local.phase_key as string) ?? ''}
+                  onChange={(e) => setField(id, 'phase_key', e.target.value)}
+                  className="w-full cursor-pointer border-b border-transparent bg-transparent font-body text-[0.78rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
+                >
+                  <option value="">--</option>
+                  {PHASE_KEY_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Duration weeks */}
+                <input
+                  type="number"
+                  min={0}
+                  value={(local.duration_weeks as number) ?? 0}
+                  onChange={(e) =>
+                    setField(id, 'duration_weeks', parseInt(e.target.value) || 0)
+                  }
+                  className="w-full border-b border-transparent bg-transparent text-right font-mono text-[0.82rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
+                />
+
+                {/* Fee (shown as dollars, stored as cents) */}
+                <div className="flex items-center justify-end gap-0.5">
+                  <span className="font-mono text-[0.78rem] text-[var(--text-muted)]">$</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={100}
+                    value={((local.fee_cents as number) ?? 0) / 100}
+                    onChange={(e) =>
+                      setField(
+                        id,
+                        'fee_cents',
+                        Math.round(parseFloat(e.target.value || '0') * 100)
+                      )
+                    }
+                    className="w-full border-b border-transparent bg-transparent text-right font-mono text-[0.82rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
+                  />
+                </div>
+
+                {/* Revision stepper */}
+                <div className="flex items-center justify-center gap-1.5">
+                  <button
+                    type="button"
+                    className="flex h-5 w-5 items-center justify-center rounded-[3px] border border-[var(--border-default)] text-[0.65rem] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
+                    onClick={() =>
+                      setField(
+                        id,
+                        'revision_limit',
+                        Math.max(0, ((local.revision_limit as number) ?? 0) - 1)
+                      )
+                    }
+                  >
+                    -
+                  </button>
+                  <span className="w-4 text-center font-mono text-[0.82rem] text-[var(--text-primary)]">
+                    {(local.revision_limit as number) ?? 0}
+                  </span>
+                  <button
+                    type="button"
+                    className="flex h-5 w-5 items-center justify-center rounded-[3px] border border-[var(--border-default)] text-[0.65rem] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
+                    onClick={() =>
+                      setField(id, 'revision_limit', ((local.revision_limit as number) ?? 0) + 1)
+                    }
+                  >
+                    +
+                  </button>
+                </div>
+
+                {/* Remove */}
+                <button
+                  type="button"
+                  className="flex h-6 w-6 items-center justify-center rounded-[3px] text-[0.7rem] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                  onClick={() => removePhase.mutate({ phaseId: id, proposalId })}
+                  title="Remove phase"
+                  aria-label="Remove phase"
+                >
+                  x
+                </button>
+              </div>
+
+              {/* Disclosure: deliverables + gates */}
+              <Accordion type="single" collapsible variant="default">
+                <AccordionItem value={`phase-${id}`}>
+                  <AccordionTrigger className="!py-2 font-mono text-[0.65rem] uppercase tracking-wider text-[var(--text-muted)] hover:!no-underline">
+                    Deliverables &amp; gates
+                    {legacyText && (
+                      <span
+                        className="ml-2 rounded-[2px] px-1 py-0 font-mono text-[0.55rem] uppercase tracking-wider"
+                        style={{
+                          color: 'var(--text-muted)',
+                          backgroundColor:
+                            'color-mix(in srgb, var(--text-muted) 8%, transparent)',
+                        }}
+                      >
+                        legacy text present
+                      </span>
+                    )}
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="flex flex-col gap-5 pb-4 pt-2">
+                      <DeliverablesEditor phaseId={id} />
+                      <GateConditionsEditor
+                        phaseId={id}
+                        allPhases={allPhasesLite}
+                        milestones={milestonesLite}
+                      />
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </div>
+          );
+        })}
+
+        {/* Summary */}
+        {phases.length > 0 && (
+          <div
+            className="mt-1 grid items-baseline gap-3 border-t-2 border-[var(--border-default)] pt-3"
+            style={{ gridTemplateColumns: '1fr 120px 80px 120px 80px 36px' }}
+          >
+            <span className="font-body text-[0.88rem] font-semibold text-[var(--text-primary)]">
+              Total
+            </span>
+            <span />
+            <span className="text-right font-mono text-[0.82rem] text-[var(--text-primary)]">
+              {totalWeeks}w
+            </span>
+            <span className="text-right font-display text-[0.95rem] font-semibold text-[var(--text-primary)]">
+              {formatDollars(totalFee)}
+            </span>
+            <span />
+            <span />
+          </div>
+        )}
+
+        {/* Empty state */}
+        {phases.length === 0 && (
+          <div className="py-10 text-center">
+            <p className="font-body text-[0.88rem] text-[var(--text-muted)]">
+              No phases defined yet.
+            </p>
+            <p className="mt-1 font-body text-[0.78rem] text-[var(--text-muted)]">
+              Add a phase manually or start with the default template.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
