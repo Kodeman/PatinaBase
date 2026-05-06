@@ -8,4 +8,5 @@ export {
   vendorEvents,
   teachingEvents,
   navEvents,
+  proposalEvents,
 } from './events';

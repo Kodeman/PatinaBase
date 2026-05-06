@@ -29,3 +29,21 @@ export const navEvents = {
   ctaClick: (ctaText: string, location: string) =>
     track('nav_cta_click', { cta_text: ctaText, location, platform: 'client' }),
 };
+
+export const proposalClientEvents = {
+  viewedByClient: (p: { proposalId: string }) =>
+    track('proposal_viewed_by_client', { proposal_id: p.proposalId, platform: 'client' }),
+  sectionViewed: (p: { proposalId: string; sectionType: string; durationSeconds: number }) =>
+    track('proposal_section_viewed', {
+      proposal_id: p.proposalId,
+      section_type: p.sectionType,
+      duration_seconds: p.durationSeconds,
+      platform: 'client',
+    }),
+  signed: (p: { proposalId: string; signedByName: string }) =>
+    track('proposal_signed', {
+      proposal_id: p.proposalId,
+      signed_by_name: p.signedByName,
+      platform: 'client',
+    }),
+};

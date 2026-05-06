@@ -54,3 +54,64 @@ export const navEvents = {
     track('nav_cta_click', { cta_text: ctaText, location }),
   commandPaletteOpen: () => track('command_palette_open'),
 };
+
+export const proposalEvents = {
+  created: (p: { proposalId: string; templateId?: string; hasProject: boolean }) =>
+    track('proposal_created', {
+      proposal_id: p.proposalId,
+      template_id: p.templateId,
+      has_project: p.hasProject,
+    }),
+  sectionSaved: (p: { proposalId: string; sectionType: string; bodyLength: number }) =>
+    track('proposal_section_saved', {
+      proposal_id: p.proposalId,
+      section_type: p.sectionType,
+      body_length: p.bodyLength,
+    }),
+  itemAdded: (p: {
+    proposalId: string;
+    itemType: 'fixed' | 'allowance' | 'tbd';
+    hasProduct: boolean;
+    lineTotal: number;
+  }) =>
+    track('proposal_item_added', {
+      proposal_id: p.proposalId,
+      item_type: p.itemType,
+      has_product: p.hasProduct,
+      line_total: p.lineTotal,
+    }),
+  scopeUpdated: (p: {
+    proposalId: string;
+    field: 'room' | 'phase' | 'exclusion' | 'milestone';
+    action: 'add' | 'update' | 'remove';
+  }) =>
+    track('proposal_scope_updated', {
+      proposal_id: p.proposalId,
+      field: p.field,
+      action: p.action,
+    }),
+  sent: (p: {
+    proposalId: string;
+    hasPersonalMessage: boolean;
+    hasCcEmail: boolean;
+    itemCount: number;
+    totalAmount: number;
+  }) =>
+    track('proposal_sent', {
+      proposal_id: p.proposalId,
+      has_personal_message: p.hasPersonalMessage,
+      has_cc_email: p.hasCcEmail,
+      item_count: p.itemCount,
+      total_amount: p.totalAmount,
+    }),
+  revisionCreated: (p: {
+    sourceProposalId: string;
+    newProposalId: string;
+    version: number;
+  }) =>
+    track('proposal_revision_created', {
+      source_proposal_id: p.sourceProposalId,
+      new_proposal_id: p.newProposalId,
+      version: p.version,
+    }),
+};
