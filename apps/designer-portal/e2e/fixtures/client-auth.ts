@@ -56,10 +56,13 @@ async function setupClientAuth(page: Page): Promise<void> {
       // AuthForm submit button uses submitText="Sign In"
       await page.getByRole('button', { name: /^sign in$/i }).click();
 
-      // Wait until the browser navigates away from the signin route
-      await page.waitForURL((url) => !url.toString().includes('/auth/signin'), {
-        timeout: 60_000,
-      });
+      // Wait until the browser lands on a known authenticated route.
+      // A positive allowlist prevents auth error redirects (e.g. /auth/error?error=…)
+      // from silently resolving this wait and producing misleading downstream failures.
+      await page.waitForURL(
+        /\/(proposals|projects|today|inbox|messages|decisions|orders|scans|account|preferences)/,
+        { timeout: 60_000 },
+      );
       return;
     } catch (err) {
       lastError = err as Error;
