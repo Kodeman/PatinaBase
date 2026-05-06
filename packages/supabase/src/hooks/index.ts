@@ -754,3 +754,22 @@ export type {
   SendMessageInput,
   ThreadOverride,
 } from './use-comms';
+export {
+  usePalettes,
+  usePalette,
+  useUpsertPalette,
+  useDeletePalette,
+  useUpsertSwatch,
+  useDeleteSwatch,
+  useReorderSwatches,
+} from './use-palettes';
+export type {
+  PaletteSwatchRole,
+  ProposalPalette,
+  PaletteSwatch,
+  PaletteWithSwatches,
+  UpsertPaletteInput,
+  UpsertSwatchInput,
+} from './use-palettes';
+export { useSearchPaintColors, usePaintColor } from './use-paint-colors';
+export type { PaintColor, PaintColorBrand } from './use-paint-colors';
