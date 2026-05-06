@@ -754,3 +754,27 @@ export type {
   SendMessageInput,
   ThreadOverride,
 } from './use-comms';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase deliverables + gates (Wave 4 — see migrations 00133, 00134)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  usePhaseDeliverables,
+  useAddDeliverable,
+  useUpdateDeliverable,
+  useToggleDeliverableCompleted,
+  useReorderDeliverables,
+  useDeleteDeliverable,
+} from './use-phase-deliverables';
+export type { PhaseDeliverable } from './use-phase-deliverables';
+
+export {
+  usePhaseGates,
+  useAddGate,
+  useUpdateGate,
+  useRemoveGate,
+  useSatisfyGate,
+  useDesignerOverrideGate,
+  computePhaseGateStatus,
+} from './use-phase-gates';
+export type { PhaseGate, PhaseGateKind, PhaseGateStatus } from './use-phase-gates';
