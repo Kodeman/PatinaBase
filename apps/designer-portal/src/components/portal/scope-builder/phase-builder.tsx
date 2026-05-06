@@ -21,6 +21,7 @@ import {
   type ProposalPhaseLite,
   type PaymentMilestoneLite,
 } from './gate-conditions-editor';
+import { PhaseTemplatePicker } from './phase-template-picker';
 import { PhaseTimelineView } from './phase-timeline-view';
 
 const PHASE_KEY_OPTIONS = [
@@ -136,6 +137,7 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
 
   // Local edit state keyed by phase id (used by the per-phase form rows).
   const [edits, setEdits] = useState<Record<string, Record<string, unknown>>>({});
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
 
   // Sync server data into local state when phases load.
   useEffect(() => {
@@ -254,6 +256,9 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
         <div className="mb-4 flex items-center justify-between">
           <span className="type-meta">Project Phases</span>
           <div className="flex gap-2">
+            <PortalButton variant="ghost" onClick={() => setTemplatePickerOpen(true)}>
+              Apply Template
+            </PortalButton>
             {phases.length === 0 && (
               <PortalButton variant="secondary" onClick={handleAddDefaults}>
                 Add Defaults
@@ -455,6 +460,13 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
           </div>
         )}
       </div>
+
+      {/* ─── Template picker modal ───────────────────────────────────────── */}
+      <PhaseTemplatePicker
+        proposalId={proposalId}
+        open={templatePickerOpen}
+        onOpenChange={setTemplatePickerOpen}
+      />
     </div>
   );
 }
