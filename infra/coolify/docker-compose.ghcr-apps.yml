@@ -74,6 +74,27 @@ services:
       SERVICE_NAME_DESIGNER_PORTAL: designer-portal
       SERVICE_NAME_ADMIN_PORTAL: admin-portal
       SERVICE_NAME_CLIENT_PORTAL: client-portal
+      ANON_KEY: '${ANON_KEY}'
+      CDN_DOMAIN: '${CDN_DOMAIN}'
+      CDN_PROVIDER: '${CDN_PROVIDER}'
+      CF_API_TOKEN: '${CF_API_TOKEN}'
+      MINIO_ROOT_PASSWORD: '${MINIO_ROOT_PASSWORD}'
+      MINIO_ROOT_USER: '${MINIO_ROOT_USER}'
+      NEXT_PUBLIC_SUPABASE_URL: '${NEXT_PUBLIC_SUPABASE_URL}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+      R2_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}'
+      R2_ACCOUNT_ID: '${R2_ACCOUNT_ID}'
+      R2_BUCKET_ARCHIVE: '${R2_BUCKET_ARCHIVE}'
+      R2_BUCKET_PROCESSED: '${R2_BUCKET_PROCESSED}'
+      R2_BUCKET_RAW: '${R2_BUCKET_RAW}'
+      R2_BUCKET_THUMBNAILS: '${R2_BUCKET_THUMBNAILS}'
+      R2_PUBLIC_BUCKET_URL: '${R2_PUBLIC_BUCKET_URL}'
+      R2_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}'
+      S3_BUCKET: '${S3_BUCKET}'
+      S3_REGION: '${S3_REGION}'
+      SERVICE_ROLE_KEY: '${SERVICE_ROLE_KEY}'
+      STORAGE_PROVIDER: '${STORAGE_PROVIDER}'
+      SUPABASE_SERVICE_ROLE_KEY: '${SUPABASE_SERVICE_ROLE_KEY}'
     ports:
       - '3015:3015'
     networks:
@@ -94,8 +115,6 @@ services:
       - coolify.service.subId=67
       - coolify.service.subType=application
       - coolify.service.subName=orders
-    env_file:
-      - .env
   media:
     container_name: media-oc8kggksw4s8sg08o4w0wsw4
     image: 'ghcr.io/kodeman/media:latest'
@@ -140,6 +159,18 @@ services:
       SERVICE_NAME_DESIGNER_PORTAL: designer-portal
       SERVICE_NAME_ADMIN_PORTAL: admin-portal
       SERVICE_NAME_CLIENT_PORTAL: client-portal
+      ANON_KEY: '${ANON_KEY}'
+      EASYPOST_API_KEY: '${EASYPOST_API_KEY}'
+      MINIO_ROOT_PASSWORD: '${MINIO_ROOT_PASSWORD}'
+      MINIO_ROOT_USER: '${MINIO_ROOT_USER}'
+      NEXT_PUBLIC_SUPABASE_URL: '${NEXT_PUBLIC_SUPABASE_URL}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+      S3_BUCKET: '${S3_BUCKET}'
+      S3_REGION: '${S3_REGION}'
+      SERVICE_ROLE_KEY: '${SERVICE_ROLE_KEY}'
+      STRIPE_SECRET_KEY: '${STRIPE_SECRET_KEY}'
+      STRIPE_WEBHOOK_SECRET: '${STRIPE_WEBHOOK_SECRET}'
+      SUPABASE_SERVICE_ROLE_KEY: '${SUPABASE_SERVICE_ROLE_KEY}'
     ports:
       - '3014:3014'
     labels:
@@ -166,8 +197,6 @@ services:
       patina_network: null
       oc8kggksw4s8sg08o4w0wsw4: null
       es8w8g0c00og4gsgg0k8w8o8: null
-    env_file:
-      - .env
   projects:
     container_name: projects-oc8kggksw4s8sg08o4w0wsw4
     image: 'ghcr.io/kodeman/projects:latest'
@@ -200,6 +229,30 @@ services:
       SERVICE_NAME_DESIGNER_PORTAL: designer-portal
       SERVICE_NAME_ADMIN_PORTAL: admin-portal
       SERVICE_NAME_CLIENT_PORTAL: client-portal
+      ANON_KEY: '${ANON_KEY}'
+      CDN_DOMAIN: '${CDN_DOMAIN}'
+      CDN_PROVIDER: '${CDN_PROVIDER}'
+      CF_API_TOKEN: '${CF_API_TOKEN}'
+      EASYPOST_API_KEY: '${EASYPOST_API_KEY}'
+      MINIO_ROOT_PASSWORD: '${MINIO_ROOT_PASSWORD}'
+      MINIO_ROOT_USER: '${MINIO_ROOT_USER}'
+      NEXT_PUBLIC_SUPABASE_URL: '${NEXT_PUBLIC_SUPABASE_URL}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+      R2_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}'
+      R2_ACCOUNT_ID: '${R2_ACCOUNT_ID}'
+      R2_BUCKET_ARCHIVE: '${R2_BUCKET_ARCHIVE}'
+      R2_BUCKET_PROCESSED: '${R2_BUCKET_PROCESSED}'
+      R2_BUCKET_RAW: '${R2_BUCKET_RAW}'
+      R2_BUCKET_THUMBNAILS: '${R2_BUCKET_THUMBNAILS}'
+      R2_PUBLIC_BUCKET_URL: '${R2_PUBLIC_BUCKET_URL}'
+      R2_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}'
+      S3_BUCKET: '${S3_BUCKET}'
+      S3_REGION: '${S3_REGION}'
+      SERVICE_ROLE_KEY: '${SERVICE_ROLE_KEY}'
+      STORAGE_PROVIDER: '${STORAGE_PROVIDER}'
+      STRIPE_SECRET_KEY: '${STRIPE_SECRET_KEY}'
+      STRIPE_WEBHOOK_SECRET: '${STRIPE_WEBHOOK_SECRET}'
+      SUPABASE_SERVICE_ROLE_KEY: '${SUPABASE_SERVICE_ROLE_KEY}'
     ports:
       - '3016:3016'
     networks:
@@ -220,8 +273,6 @@ services:
       - coolify.service.subId=69
       - coolify.service.subType=application
       - coolify.service.subName=projects
-    env_file:
-      - .env
   designer-portal:
     container_name: designer-portal-oc8kggksw4s8sg08o4w0wsw4
     image: 'ghcr.io/kodeman/designer-portal:latest'
@@ -246,6 +297,30 @@ services:
       SERVICE_NAME_DESIGNER_PORTAL: designer-portal
       SERVICE_NAME_ADMIN_PORTAL: admin-portal
       SERVICE_NAME_CLIENT_PORTAL: client-portal
+      APP_NAME: '${APP_NAME}'
+      CDN_DOMAIN: '${CDN_DOMAIN}'
+      CDN_PROVIDER: '${CDN_PROVIDER}'
+      CF_API_TOKEN: '${CF_API_TOKEN}'
+      EASYPOST_API_KEY: '${EASYPOST_API_KEY}'
+      JWT_SECRET: '${JWT_SECRET}'
+      MINIO_ROOT_PASSWORD: '${MINIO_ROOT_PASSWORD}'
+      MINIO_ROOT_USER: '${MINIO_ROOT_USER}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+      R2_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}'
+      R2_ACCOUNT_ID: '${R2_ACCOUNT_ID}'
+      R2_BUCKET_ARCHIVE: '${R2_BUCKET_ARCHIVE}'
+      R2_BUCKET_PROCESSED: '${R2_BUCKET_PROCESSED}'
+      R2_BUCKET_RAW: '${R2_BUCKET_RAW}'
+      R2_BUCKET_THUMBNAILS: '${R2_BUCKET_THUMBNAILS}'
+      R2_PUBLIC_BUCKET_URL: '${R2_PUBLIC_BUCKET_URL}'
+      R2_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}'
+      REDIS_PASSWORD: '${REDIS_PASSWORD}'
+      S3_BUCKET: '${S3_BUCKET}'
+      S3_REGION: '${S3_REGION}'
+      SERVICE_ROLE_KEY: '${SERVICE_ROLE_KEY}'
+      STORAGE_PROVIDER: '${STORAGE_PROVIDER}'
+      STRIPE_SECRET_KEY: '${STRIPE_SECRET_KEY}'
+      STRIPE_WEBHOOK_SECRET: '${STRIPE_WEBHOOK_SECRET}'
     ports:
       - '3000:3000'
     networks:
@@ -279,8 +354,6 @@ services:
       - 'caddy_0.try_files={path} /index.html /index.php'
       - 'caddy_0=http://app.patina.cloud'
       - caddy_ingress_network=oc8kggksw4s8sg08o4w0wsw4
-    env_file:
-      - .env
   admin-portal:
     container_name: admin-portal-oc8kggksw4s8sg08o4w0wsw4
     image: 'ghcr.io/kodeman/admin-portal:latest'
@@ -304,6 +377,30 @@ services:
       SERVICE_NAME_DESIGNER_PORTAL: designer-portal
       SERVICE_NAME_ADMIN_PORTAL: admin-portal
       SERVICE_NAME_CLIENT_PORTAL: client-portal
+      APP_NAME: '${APP_NAME}'
+      CDN_DOMAIN: '${CDN_DOMAIN}'
+      CDN_PROVIDER: '${CDN_PROVIDER}'
+      CF_API_TOKEN: '${CF_API_TOKEN}'
+      EASYPOST_API_KEY: '${EASYPOST_API_KEY}'
+      JWT_SECRET: '${JWT_SECRET}'
+      MINIO_ROOT_PASSWORD: '${MINIO_ROOT_PASSWORD}'
+      MINIO_ROOT_USER: '${MINIO_ROOT_USER}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+      R2_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}'
+      R2_ACCOUNT_ID: '${R2_ACCOUNT_ID}'
+      R2_BUCKET_ARCHIVE: '${R2_BUCKET_ARCHIVE}'
+      R2_BUCKET_PROCESSED: '${R2_BUCKET_PROCESSED}'
+      R2_BUCKET_RAW: '${R2_BUCKET_RAW}'
+      R2_BUCKET_THUMBNAILS: '${R2_BUCKET_THUMBNAILS}'
+      R2_PUBLIC_BUCKET_URL: '${R2_PUBLIC_BUCKET_URL}'
+      R2_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}'
+      REDIS_PASSWORD: '${REDIS_PASSWORD}'
+      S3_BUCKET: '${S3_BUCKET}'
+      S3_REGION: '${S3_REGION}'
+      SERVICE_ROLE_KEY: '${SERVICE_ROLE_KEY}'
+      STORAGE_PROVIDER: '${STORAGE_PROVIDER}'
+      STRIPE_SECRET_KEY: '${STRIPE_SECRET_KEY}'
+      STRIPE_WEBHOOK_SECRET: '${STRIPE_WEBHOOK_SECRET}'
     ports:
       - '3001:3000'
     networks:
@@ -337,8 +434,6 @@ services:
       - 'caddy_0.try_files={path} /index.html /index.php'
       - 'caddy_0=http://admin.patina.cloud'
       - caddy_ingress_network=oc8kggksw4s8sg08o4w0wsw4
-    env_file:
-      - .env
   client-portal:
     container_name: client-portal-oc8kggksw4s8sg08o4w0wsw4
     image: 'ghcr.io/kodeman/client-portal:latest'
@@ -381,14 +476,36 @@ services:
       SERVICE_NAME_DESIGNER_PORTAL: designer-portal
       SERVICE_NAME_ADMIN_PORTAL: admin-portal
       SERVICE_NAME_CLIENT_PORTAL: client-portal
+      APP_NAME: '${APP_NAME}'
+      CDN_DOMAIN: '${CDN_DOMAIN}'
+      CDN_PROVIDER: '${CDN_PROVIDER}'
+      CF_API_TOKEN: '${CF_API_TOKEN}'
+      EASYPOST_API_KEY: '${EASYPOST_API_KEY}'
+      JWT_SECRET: '${JWT_SECRET}'
+      MINIO_ROOT_PASSWORD: '${MINIO_ROOT_PASSWORD}'
+      MINIO_ROOT_USER: '${MINIO_ROOT_USER}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+      R2_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}'
+      R2_ACCOUNT_ID: '${R2_ACCOUNT_ID}'
+      R2_BUCKET_ARCHIVE: '${R2_BUCKET_ARCHIVE}'
+      R2_BUCKET_PROCESSED: '${R2_BUCKET_PROCESSED}'
+      R2_BUCKET_RAW: '${R2_BUCKET_RAW}'
+      R2_BUCKET_THUMBNAILS: '${R2_BUCKET_THUMBNAILS}'
+      R2_PUBLIC_BUCKET_URL: '${R2_PUBLIC_BUCKET_URL}'
+      R2_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}'
+      REDIS_PASSWORD: '${REDIS_PASSWORD}'
+      S3_BUCKET: '${S3_BUCKET}'
+      S3_REGION: '${S3_REGION}'
+      SERVICE_ROLE_KEY: '${SERVICE_ROLE_KEY}'
+      STORAGE_PROVIDER: '${STORAGE_PROVIDER}'
+      STRIPE_SECRET_KEY: '${STRIPE_SECRET_KEY}'
+      STRIPE_WEBHOOK_SECRET: '${STRIPE_WEBHOOK_SECRET}'
     ports:
       - '3002:3000'
     networks:
       patina_network: null
       oc8kggksw4s8sg08o4w0wsw4: null
       es8w8g0c00og4gsgg0k8w8o8: null
-    env_file:
-      - .env
 networks:
   patina_network:
     external: true
