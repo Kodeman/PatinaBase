@@ -2,11 +2,13 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { DndContext, useDroppable, type DragEndEvent } from '@dnd-kit/core';
 import { PortalButton } from '@/components/portal/button';
 import {
   useProposalScopeRooms,
   useFFECategories,
   useProduct,
+  useConsumeCapture,
   createBrowserClient,
   type ProposalItemType,
 } from '@patina/supabase';
@@ -16,6 +18,10 @@ import {
   useRemoveProposalItem,
 } from '@/hooks/use-proposals';
 import { ProductPickerModal } from '@/components/portal/proposals/product-picker-modal';
+import {
+  CaptureInbox,
+  parseCaptureDraggableId,
+} from '@/components/portal/proposals/capture-inbox';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -534,6 +540,184 @@ function ProductAdder({
   );
 }
 
+// ─── Drop target ─────────────────────────────────────────────────────────────
+
+const ROOM_DROPPABLE_PREFIX = 'ffe-schedule-room:';
+const UNASSIGNED_DROPPABLE_ID = 'ffe-schedule-unassigned';
+
+function roomDroppableId(roomId: string): string {
+  return `${ROOM_DROPPABLE_PREFIX}${roomId}`;
+}
+
+function parseRoomDroppableId(id: string | number | null | undefined): string | null {
+  if (typeof id !== 'string') return null;
+  if (id === UNASSIGNED_DROPPABLE_ID) return null;
+  if (!id.startsWith(ROOM_DROPPABLE_PREFIX)) return null;
+  const rest = id.slice(ROOM_DROPPABLE_PREFIX.length);
+  return rest.length > 0 ? rest : null;
+}
+
+function isFFEScheduleDroppable(id: string | number | null | undefined): boolean {
+  if (typeof id !== 'string') return false;
+  return id === UNASSIGNED_DROPPABLE_ID || id.startsWith(ROOM_DROPPABLE_PREFIX);
+}
+
+function RoomDropZone({
+  droppableId,
+  children,
+}: {
+  droppableId: string;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: droppableId });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-md transition-colors ${
+        isOver ? 'bg-[rgba(122,155,118,0.06)]' : ''
+      }`}
+      style={{
+        boxShadow: isOver ? '0 0 0 1px var(--accent-primary)' : 'none',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ─── Category prompt modal ───────────────────────────────────────────────────
+//
+// Shown after a capture is dropped on a room: forces the designer to pick
+// the FF&E category before consume_capture is called (the RPC requires
+// it).
+// ═══════════════════════════════════════════════════════════════════════════
+
+function CategoryPromptModal({
+  open,
+  roomName,
+  categories,
+  isSaving,
+  errorMessage,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  roomName: string;
+  categories: Array<{ slug: string; label: string }>;
+  isSaving: boolean;
+  errorMessage: string | null;
+  onConfirm: (categorySlug: string, qty: number) => void;
+  onCancel: () => void;
+}) {
+  const [slug, setSlug] = useState('');
+  const [qty, setQty] = useState('1');
+
+  // Reset on open.
+  useMemo(() => {
+    if (open) {
+      setSlug('');
+      setQty('1');
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const parsedQty = Math.max(1, Math.floor(Number(qty) || 1));
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="capture-drop-title"
+      className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/40 p-8"
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-[480px] rounded-md border bg-[var(--bg-surface)] p-6 shadow-xl"
+        style={{ borderColor: 'var(--border-default)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-baseline justify-between">
+          <h3 id="capture-drop-title" className="type-section-head" style={{ fontSize: '1.05rem' }}>
+            Add capture to {roomName}
+          </h3>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-[1.1rem] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            aria-label="Cancel"
+          >
+            ×
+          </button>
+        </div>
+        <p
+          className="mb-3"
+          style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: '0.78rem',
+            color: 'var(--text-muted)',
+            lineHeight: 1.5,
+          }}
+        >
+          Pick an FF&amp;E category for this line item. We&apos;ll add it to the
+          schedule as a fixed item.
+        </p>
+
+        <div className="grid gap-3" style={{ gridTemplateColumns: '2fr 1fr' }}>
+          <label className="block">
+            <span className="type-meta mb-1 block">Category *</span>
+            <select
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
+            >
+              <option value="">Select…</option>
+              {categories.map((c) => (
+                <option key={c.slug} value={c.slug}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="type-meta mb-1 block">Qty</span>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
+            />
+          </label>
+        </div>
+
+        {errorMessage && (
+          <div
+            role="alert"
+            className="mt-3 rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+          >
+            {errorMessage}
+          </div>
+        )}
+
+        <div className="mt-4 flex items-center gap-2">
+          <PortalButton
+            variant="primary"
+            onClick={() => onConfirm(slug, parsedQty)}
+            disabled={!slug || isSaving}
+          >
+            {isSaving ? 'Adding…' : 'Add to schedule'}
+          </PortalButton>
+          <PortalButton variant="ghost" onClick={onCancel} disabled={isSaving}>
+            Cancel
+          </PortalButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 interface FFEScheduleBuilderProps {
@@ -545,11 +729,18 @@ type PickerContext = {
   ffeCategorySlug: string | null;
 };
 
+interface CaptureDropContext {
+  captureId: string;
+  scopeRoomId: string;
+  roomName: string;
+}
+
 export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
   const { data: rooms = [] } = useProposalScopeRooms(proposalId);
   const { data: categories = [] } = useFFECategories({ proposalId });
 
   const addItem = useAddProposalItem();
+  const consumeCapture = useConsumeCapture();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerCtx, setPickerCtx] = useState<PickerContext>({
     scopeRoomId: null,
@@ -558,6 +749,8 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
   const [pickedProductId, setPickedProductId] = useState<string | null>(null);
   const [allowanceMode, setAllowanceMode] = useState(false);
   const [tbdMode, setTbdMode] = useState(false);
+  const [captureDrop, setCaptureDrop] = useState<CaptureDropContext | null>(null);
+  const [captureDropError, setCaptureDropError] = useState<string | null>(null);
 
   const { data: items = [], isLoading } = useProposalItems(proposalId);
 
@@ -642,7 +835,52 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
     );
   };
 
+  // Map a drag-end (capture dragged from inbox onto a room droppable) into a
+  // capture-drop context. The category is collected via CategoryPromptModal.
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+    if (!isFFEScheduleDroppable(over.id)) return;
+    const captureId = parseCaptureDraggableId(active.id);
+    if (!captureId) return;
+
+    // Drops on the unassigned zone require an explicit room; reject for now.
+    const scopeRoomId = parseRoomDroppableId(over.id);
+    if (!scopeRoomId) return;
+
+    const room = typedRooms.find((r) => r.id === scopeRoomId);
+    if (!room) return;
+
+    setCaptureDropError(null);
+    setCaptureDrop({ captureId, scopeRoomId, roomName: room.name });
+  };
+
+  const handleConfirmCaptureDrop = (categorySlug: string, qty: number) => {
+    if (!captureDrop) return;
+    setCaptureDropError(null);
+    consumeCapture.mutate(
+      {
+        captureId: captureDrop.captureId,
+        proposalId,
+        scopeRoomId: captureDrop.scopeRoomId,
+        ffeCategorySlug: categorySlug,
+        qty,
+      },
+      {
+        onSuccess: () => {
+          setCaptureDrop(null);
+        },
+        onError: (err) => {
+          setCaptureDropError(
+            err instanceof Error ? err.message : 'Failed to add capture to schedule'
+          );
+        },
+      }
+    );
+  };
+
   return (
+    <DndContext onDragEnd={handleDragEnd}>
     <div>
       <h3
         style={{
@@ -704,31 +942,71 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
         </div>
       )}
 
-      {Object.entries(grouped).map(([groupId, group]) => (
-        <div key={groupId}>
-          <div
-            className="mb-1 mt-3"
-            style={{
-              fontFamily: 'var(--font-meta)',
-              fontSize: '0.62rem',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-              color: 'var(--color-clay)',
-            }}
-          >
-            {group.roomName}
-          </div>
+      {/* Render groups for rooms that already have items, wrapped in droppables. */}
+      {Object.entries(grouped).map(([groupId, group]) => {
+        const droppableId =
+          groupId === '__unassigned' ? UNASSIGNED_DROPPABLE_ID : roomDroppableId(groupId);
+        return (
+          <RoomDropZone key={groupId} droppableId={droppableId}>
+            <div>
+              <div
+                className="mb-1 mt-3"
+                style={{
+                  fontFamily: 'var(--font-meta)',
+                  fontSize: '0.62rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  color: 'var(--color-clay)',
+                }}
+              >
+                {group.roomName}
+              </div>
 
-          {group.items.map((item) => (
-            <ItemRow
-              key={item.id}
-              item={item}
-              proposalId={proposalId}
-              categoryLookup={categoryLookup}
-            />
-          ))}
-        </div>
-      ))}
+              {group.items.map((item) => (
+                <ItemRow
+                  key={item.id}
+                  item={item}
+                  proposalId={proposalId}
+                  categoryLookup={categoryLookup}
+                />
+              ))}
+            </div>
+          </RoomDropZone>
+        );
+      })}
+
+      {/* Empty room droppables — surface a drop target for any scope_rooms
+          that don't yet have any items so the designer can drag captures
+          straight into them. */}
+      {typedRooms
+        .filter((room) => !grouped[room.id])
+        .map((room) => (
+          <RoomDropZone key={`empty-${room.id}`} droppableId={roomDroppableId(room.id)}>
+            <div className="mt-3 rounded-md border border-dashed px-3 py-3" style={{ borderColor: 'var(--border-default)' }}>
+              <div
+                style={{
+                  fontFamily: 'var(--font-meta)',
+                  fontSize: '0.62rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  color: 'var(--color-clay)',
+                }}
+              >
+                {room.name}
+              </div>
+              <div
+                style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '0.72rem',
+                  color: 'var(--text-muted)',
+                  marginTop: '0.25rem',
+                }}
+              >
+                Drop a capture here, or use + Add Item.
+              </div>
+            </div>
+          </RoomDropZone>
+        ))}
 
       {!isLoading && (items as FFEItem[]).length === 0 && (
         <div
@@ -842,7 +1120,26 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
         defaultCategorySlug={pickerCtx.ffeCategorySlug ?? undefined}
         onPick={(productId) => setPickedProductId(productId)}
       />
+
+      {/* Capture inbox + drag-and-drop into rooms above */}
+      <div className="mt-6 border-t pt-4" style={{ borderColor: 'var(--border-default)' }}>
+        <CaptureInbox mode="panel" />
+      </div>
+
+      <CategoryPromptModal
+        open={!!captureDrop}
+        roomName={captureDrop?.roomName ?? ''}
+        categories={categoryOptions}
+        isSaving={consumeCapture.isPending}
+        errorMessage={captureDropError}
+        onConfirm={handleConfirmCaptureDrop}
+        onCancel={() => {
+          setCaptureDrop(null);
+          setCaptureDropError(null);
+        }}
+      />
     </div>
+    </DndContext>
   );
 }
 

@@ -17,6 +17,13 @@ interface QueuedVendorData {
   retailer: VendorSelection | null;
 }
 
+// Where the capture is intended to land. 'project' = legacy
+// project_products workflow; 'proposal' = persisted as a real product
+// AND a proposal_captures row that already targets a specific
+// proposal/room/category; 'inbox' = persisted as a real product (or
+// stub) AND a proposal_captures row in 'inbox' status.
+export type CaptureSaveTarget = 'project' | 'proposal' | 'inbox';
+
 // Queue item interface - supports both product and vendor captures
 interface QueuedCapture {
   id: string;
@@ -27,12 +34,18 @@ interface QueuedCapture {
   projectId?: string | null;          // Project to add the product to
   styleIds?: string[];                // Style assignments for the product
   note?: string | null;               // Note for project_products
+  // Wave 2 — Proposal/Inbox targeting
+  proposalId?: string | null;
+  scopeRoomId?: string | null;
+  ffeCategorySlug?: string | null;
+  saveTarget?: CaptureSaveTarget;     // Defaults to 'project' for legacy items
   attempts: number;
   lastAttempt: string | null;
   createdAt: string;
 }
 
-const QUEUE_KEY = 'capture_queue';
+const QUEUE_KEY = 'capture_queue_v2';
+const LEGACY_QUEUE_KEY = 'capture_queue';
 
 // ─── Queue Management ─────────────────────────────────────────────────────────
 
@@ -53,6 +66,11 @@ interface AddToQueueOptions {
   projectId?: string | null;
   styleIds?: string[];
   note?: string | null;
+  // Wave 2
+  proposalId?: string | null;
+  scopeRoomId?: string | null;
+  ffeCategorySlug?: string | null;
+  saveTarget?: CaptureSaveTarget;
 }
 
 async function addToQueue(capture: QuickCaptureRequest, options: AddToQueueOptions = { type: 'product' }): Promise<string> {
@@ -68,6 +86,10 @@ async function addToQueue(capture: QuickCaptureRequest, options: AddToQueueOptio
     projectId: options.projectId,
     styleIds: options.styleIds,
     note: options.note,
+    proposalId: options.proposalId ?? null,
+    scopeRoomId: options.scopeRoomId ?? null,
+    ffeCategorySlug: options.ffeCategorySlug ?? null,
+    saveTarget: options.saveTarget ?? 'project',
     attempts: 0,
     lastAttempt: null,
     createdAt: new Date().toISOString(),
@@ -75,6 +97,49 @@ async function addToQueue(capture: QuickCaptureRequest, options: AddToQueueOptio
 
   await saveQueue(queue);
   return id;
+}
+
+/**
+ * One-time migration for the capture_queue → capture_queue_v2 storage key.
+ * Legacy entries get `saveTarget='project'` and the new optional fields
+ * default to null. Idempotent: if no legacy queue exists or the migration
+ * already ran, this is a no-op.
+ */
+async function migrateLegacyQueueIfNeeded(): Promise<void> {
+  // If v2 already exists, skip. We don't merge older rows — the legacy
+  // worker would still own them.
+  const existingV2 = await storage.get<QueuedCapture[]>(QUEUE_KEY);
+  if (existingV2 && existingV2.length > 0) {
+    await storage.remove(LEGACY_QUEUE_KEY);
+    return;
+  }
+
+  const legacy = await storage.get<Array<Partial<QueuedCapture>>>(LEGACY_QUEUE_KEY);
+  if (!legacy || legacy.length === 0) {
+    await storage.remove(LEGACY_QUEUE_KEY);
+    return;
+  }
+
+  const migrated: QueuedCapture[] = legacy.map((item) => ({
+    id: item.id ?? crypto.randomUUID(),
+    type: (item.type as 'product' | 'vendor') ?? 'product',
+    data: item.data as QuickCaptureRequest,
+    vendors: item.vendors,
+    vendorData: item.vendorData,
+    projectId: item.projectId ?? null,
+    styleIds: item.styleIds,
+    note: item.note ?? null,
+    proposalId: null,
+    scopeRoomId: null,
+    ffeCategorySlug: null,
+    saveTarget: 'project',
+    attempts: item.attempts ?? 0,
+    lastAttempt: item.lastAttempt ?? null,
+    createdAt: item.createdAt ?? new Date().toISOString(),
+  }));
+
+  await storage.set(QUEUE_KEY, migrated);
+  await storage.remove(LEGACY_QUEUE_KEY);
 }
 
 async function removeFromQueue(id: string): Promise<void> {
@@ -154,6 +219,11 @@ async function syncQueue(): Promise<void> {
         const priceRetail = captureData.price
           ? Math.round(parseFloat(captureData.price) * 100)
           : null;
+        const target: CaptureSaveTarget = item.saveTarget ?? 'project';
+
+        // Drafts only need a stub when targeting an inbox without a real
+        // product page. Otherwise treat the row as a fully published product.
+        const productStatus = target === 'inbox' && !captureData.url ? 'draft' : 'published';
 
         const { data: product, error } = await supabase.from('products').insert({
           name: captureData.title || 'Untitled Product',
@@ -163,21 +233,12 @@ async function syncQueue(): Promise<void> {
           price_retail: priceRetail,
           captured_by: session.user.id,
           captured_at: new Date().toISOString(),
-          status: 'published',
+          status: productStatus,
         }).select('id').single();
 
         if (error) throw error;
 
-        // Add to project if specified
-        if (item.projectId && product) {
-          await supabase.from('project_products').insert({
-            project_id: item.projectId,
-            product_id: product.id,
-            notes: item.note || null,
-          });
-        }
-
-        // Add style assignments if specified
+        // Add style assignments if specified — same for all targets.
         if (item.styleIds && item.styleIds.length > 0 && product) {
           const styleInserts = item.styleIds.map((styleId, index) => ({
             product_id: product.id,
@@ -188,6 +249,39 @@ async function syncQueue(): Promise<void> {
             assigned_by: session.user.id,
           }));
           await supabase.from('product_styles').insert(styleInserts);
+        }
+
+        if (target === 'project') {
+          // Legacy path — add to project if specified.
+          if (item.projectId && product) {
+            await supabase.from('project_products').insert({
+              project_id: item.projectId,
+              product_id: product.id,
+              notes: item.note || null,
+            });
+          }
+        } else if (product && (target === 'proposal' || target === 'inbox')) {
+          // Wave 2 — write a proposal_captures row with the right targeting.
+          const allTargeted =
+            !!item.proposalId && !!item.scopeRoomId && !!item.ffeCategorySlug;
+          const captureStatus = target === 'proposal' && allTargeted ? 'assigned' : 'inbox';
+
+          await supabase.from('proposal_captures').insert({
+            designer_id: session.user.id,
+            product_id: product.id,
+            proposal_id: item.proposalId ?? null,
+            scope_room_id: item.scopeRoomId ?? null,
+            ffe_category_slug: item.ffeCategorySlug ?? null,
+            source_url: captureData.url,
+            raw_payload: {
+              name: captureData.title ?? null,
+              description: captureData.description ?? null,
+              price_retail_cents: priceRetail,
+              note: item.note ?? null,
+            },
+            thumbnail_url: captureData.images?.[0] ?? null,
+            status: captureStatus,
+          });
         }
         // Success — don't add to remaining
       }
@@ -283,6 +377,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         projectId: message.projectId,
         styleIds: message.styleIds,
         note: message.note,
+        proposalId: message.proposalId ?? null,
+        scopeRoomId: message.scopeRoomId ?? null,
+        ffeCategorySlug: message.ffeCategorySlug ?? null,
+        saveTarget: message.saveTarget,
       }).then(id => {
         sendResponse({ success: true, queueId: id });
       });
@@ -333,8 +431,10 @@ chrome.runtime.onInstalled.addListener(() => {
     contexts: ['page', 'image'],
   });
 
-  // Initialize badge
-  updateBadge();
+  // Migrate any pre-Wave-2 queue entries forward, then refresh the badge.
+  void migrateLegacyQueueIfNeeded().then(() => {
+    void updateBadge();
+  });
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
@@ -355,8 +455,10 @@ if (typeof window !== 'undefined') {
 
 // Sync on startup
 chrome.runtime.onStartup.addListener(() => {
-  updateBadge();
-  syncQueue();
+  void migrateLegacyQueueIfNeeded().then(async () => {
+    await updateBadge();
+    await syncQueue();
+  });
 });
 
 // Periodic sync using alarms (Manifest V3 doesn't allow setInterval in service workers)

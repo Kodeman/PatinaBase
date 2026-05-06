@@ -1,7 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useProducts, useCreateDraftProduct } from '@patina/supabase';
+import {
+  useProducts,
+  useCreateDraftProduct,
+  useProposalCaptures,
+  type ProposalCapture,
+} from '@patina/supabase';
 import { PortalButton } from '@/components/portal/button';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -20,7 +25,7 @@ export interface ProductPickerModalProps {
   allowDraftCreate?: boolean;
 }
 
-type Tab = 'catalog' | 'draft';
+type Tab = 'catalog' | 'captures' | 'draft';
 
 interface CatalogProductRow {
   id: string;
@@ -291,6 +296,202 @@ function DraftTab({ onPick }: { onPick: (productId: string) => void }) {
   );
 }
 
+// ─── Captures tab ──────────────────────────────────────────────────────────────
+
+function captureName(c: ProposalCapture): string {
+  const payload = c.raw_payload ?? {};
+  const fromKey = (key: string) => {
+    const v = (payload as Record<string, unknown>)[key];
+    return typeof v === 'string' && v.trim() ? v : null;
+  };
+  return fromKey('name') ?? fromKey('productName') ?? fromKey('title') ?? 'Untitled capture';
+}
+
+function captureVendorName(c: ProposalCapture): string | null {
+  const payload = c.raw_payload ?? {};
+  const fromKey = (key: string) => {
+    const v = (payload as Record<string, unknown>)[key];
+    return typeof v === 'string' && v.trim() ? v : null;
+  };
+  const direct = fromKey('vendor_name') ?? fromKey('vendorName');
+  if (direct) return direct;
+  const vendor = (payload as Record<string, unknown>).vendor;
+  if (vendor && typeof vendor === 'object') {
+    const name = (vendor as Record<string, unknown>).name;
+    if (typeof name === 'string' && name.trim()) return name;
+  }
+  return fromKey('manufacturer') ?? fromKey('brand');
+}
+
+function CapturesTab({ onPick }: { onPick: (productId: string) => void }) {
+  const { data: captures = [], isLoading, isError, error } = useProposalCaptures({
+    status: 'inbox',
+  });
+  const createDraft = useCreateDraftProduct();
+  const [promotingId, setPromotingId] = useState<string | null>(null);
+  const [promoteError, setPromoteError] = useState<string | null>(null);
+
+  const handlePromoteAndPick = async (capture: ProposalCapture) => {
+    setPromoteError(null);
+    setPromotingId(capture.id);
+    try {
+      const payload = (capture.raw_payload ?? {}) as Record<string, unknown>;
+      const priceRaw = payload['price_retail_cents'] ?? payload['priceRetailCents'];
+      const priceDollars =
+        typeof priceRaw === 'number' && Number.isFinite(priceRaw)
+          ? priceRaw / 100
+          : (() => {
+              const dollars = payload['priceRetailDollars'] ?? payload['price'];
+              return typeof dollars === 'number' && Number.isFinite(dollars)
+                ? dollars
+                : undefined;
+            })();
+      const result = await createDraft.mutateAsync({
+        name: captureName(capture),
+        brand: captureVendorName(capture) ?? undefined,
+        sourceUrl: capture.source_url,
+        priceRetailDollars: priceDollars,
+      });
+      onPick(result.id);
+    } catch (err) {
+      setPromoteError(err instanceof Error ? err.message : 'Failed to promote draft');
+    } finally {
+      setPromotingId(null);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      {isLoading && (
+        <div
+          className="py-8 text-center type-body"
+          style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}
+        >
+          Loading captures…
+        </div>
+      )}
+
+      {isError && (
+        <div className="rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          {(error as Error)?.message ?? 'Failed to load captures.'}
+        </div>
+      )}
+
+      {!isLoading && !isError && captures.length === 0 && (
+        <div
+          className="py-8 text-center type-body"
+          style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}
+        >
+          No captures yet. Use the Patina extension to capture products from the web,
+          then return here to add them to a proposal.
+        </div>
+      )}
+
+      {promoteError && (
+        <div className="rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          {promoteError}
+        </div>
+      )}
+
+      {!isLoading && captures.length > 0 && (
+        <div className="flex max-h-[380px] flex-col gap-2 overflow-y-auto pr-1">
+          {captures.map((capture) => {
+            const name = captureName(capture);
+            const vendor = captureVendorName(capture);
+            const isPromoting = promotingId === capture.id;
+            const handleClick = () => {
+              if (capture.product_id) {
+                onPick(capture.product_id);
+              } else {
+                void handlePromoteAndPick(capture);
+              }
+            };
+            const sourceLabel = (() => {
+              try {
+                return new URL(capture.source_url).hostname.replace(/^www\./, '');
+              } catch {
+                return capture.source_url;
+              }
+            })();
+
+            return (
+              <button
+                key={capture.id}
+                type="button"
+                disabled={isPromoting || createDraft.isPending}
+                onClick={handleClick}
+                className="group flex cursor-pointer items-center gap-3 rounded-sm border border-[var(--border-default)] p-2 text-left transition-colors hover:border-[var(--accent-primary)] disabled:opacity-50"
+              >
+                <div
+                  className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-sm"
+                  style={{ backgroundColor: 'var(--bg-surface)' }}
+                >
+                  {capture.thumbnail_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={capture.thumbnail_url}
+                      alt=""
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div
+                      className="flex h-full w-full items-center justify-center"
+                      style={{ color: 'var(--text-muted)', fontSize: '0.55rem' }}
+                    >
+                      No img
+                    </div>
+                  )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div
+                    className="truncate"
+                    style={{
+                      fontFamily: 'var(--font-body)',
+                      fontSize: '0.82rem',
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    {name}
+                  </div>
+                  <div
+                    className="mt-0.5 flex items-center gap-2"
+                    style={{
+                      fontFamily: 'var(--font-body)',
+                      fontSize: '0.68rem',
+                      color: 'var(--color-aged-oak)',
+                    }}
+                  >
+                    {vendor && <span className="truncate italic">{vendor}</span>}
+                    <span style={{ color: 'var(--text-muted)' }}>· {sourceLabel}</span>
+                  </div>
+                </div>
+
+                <span
+                  style={{
+                    fontFamily: 'var(--font-meta)',
+                    fontSize: '0.58rem',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    color: capture.product_id ? 'var(--color-sage)' : 'var(--color-golden-hour)',
+                  }}
+                >
+                  {isPromoting
+                    ? 'Promoting…'
+                    : capture.product_id
+                      ? 'Catalog'
+                      : 'Promote draft'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Modal shell ─────────────────────────────────────────────────────────────
 
 export function ProductPickerModal({
@@ -371,6 +572,19 @@ export function ProductPickerModal({
           >
             Catalog
           </button>
+          <button
+            role="tab"
+            type="button"
+            aria-selected={tab === 'captures'}
+            onClick={() => setTab('captures')}
+            className={`cursor-pointer px-3 py-2 font-body text-[0.82rem] font-medium transition-colors ${
+              tab === 'captures'
+                ? 'border-b-2 border-[var(--accent-primary)] text-[var(--text-primary)]'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            Captures
+          </button>
           {allowDraftCreate && (
             <button
               role="tab"
@@ -392,6 +606,7 @@ export function ProductPickerModal({
         {tab === 'catalog' && (
           <CatalogTab defaultCategorySlug={defaultCategorySlug} onPick={handlePick} />
         )}
+        {tab === 'captures' && <CapturesTab onPick={handlePick} />}
         {tab === 'draft' && allowDraftCreate && <DraftTab onPick={handlePick} />}
       </div>
     </div>

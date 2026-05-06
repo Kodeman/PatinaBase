@@ -608,6 +608,21 @@ export {
   useActivateProposal,
 } from './use-proposal-activation';
 export {
+  // Proposal Captures (Wave 2)
+  useProposalCaptures,
+  useAssignCapture,
+  useConsumeCapture,
+  useDismissCapture,
+} from './use-proposal-captures';
+export type {
+  ProposalCapture,
+  UseProposalCapturesOptions,
+  AssignCaptureInput,
+  ConsumeCaptureInput,
+  ConsumeCaptureResult,
+  DismissCaptureInput,
+} from './use-proposal-captures';
+export {
   // Project Team & Permissions (00084)
   useProjectTeamMembers,
   useAddProjectTeamMember,
