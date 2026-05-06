@@ -74,3 +74,23 @@ export async function deleteProposalCascade(proposalId: string): Promise<void> {
   const { error } = await adminDb.from('proposals').delete().eq('id', proposalId);
   if (error) throw error;
 }
+
+export async function getUserIdByEmail(email: string): Promise<string> {
+  // Service-role auth admin API: paginated list, filter by email.
+  const { data, error } = await adminDb.auth.admin.listUsers();
+  if (error) throw error;
+  const user = data.users.find((u) => u.email === email);
+  if (!user) throw new Error(`Auth user not found for email: ${email}`);
+  return user.id;
+}
+
+export async function setProposalClient(proposalId: string, clientUserId: string): Promise<void> {
+  // The new-proposal flow doesn't link a client when no project is selected,
+  // and useSendProposal doesn't backfill it. The viewer RLS policy requires
+  // proposals.client_id = auth.uid(), so we must set it before the client opens.
+  const { error } = await adminDb
+    .from('proposals')
+    .update({ client_id: clientUserId })
+    .eq('id', proposalId);
+  if (error) throw error;
+}

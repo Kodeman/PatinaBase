@@ -20,6 +20,8 @@ import {
   getProposal,
   getProposalItems,
   getProposalSection,
+  getUserIdByEmail,
+  setProposalClient,
 } from '../helpers/supabase-admin';
 
 // --------------------------------------------------------------------------
@@ -511,6 +513,13 @@ test.describe.serial('proposal build → send → view → sign', () => {
   test('client opens and views proposal', async ({ authenticatedPage: _designerPage, browser }) => {
     // Bigger budget: signin + navigation + 3×2.2s dwell + cleanup easily exceeds 30s default
     test.setTimeout(120_000);
+
+    // Link this proposal to the test client so RLS lets them read it. The
+    // standard new-proposal flow doesn't link a client when no project is
+    // selected, and useSendProposal doesn't backfill it.
+    const clientUserId = await getUserIdByEmail(CLIENT_EMAIL);
+    await setProposalClient(proposalId, clientUserId);
+
     // Fresh context — no cookies shared with the designer session
     const clientContext = await browser.newContext({ storageState: undefined });
     const clientPage = await clientContext.newPage();
