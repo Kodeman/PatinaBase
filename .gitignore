@@ -60,6 +60,9 @@ npm-debug.log*
 pnpm-debug.log*
 
 infra/seed-credentials.md
+infra/coolify/prod-env-snapshot.txt
+infra/coolify/coolify-env-*.txt
+infra/coolify/missing-coolify-vars.md
 
 # Cloudflare Workers local dev secrets
 *.dev.vars
