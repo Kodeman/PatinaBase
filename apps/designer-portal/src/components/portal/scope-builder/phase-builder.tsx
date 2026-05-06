@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PortalButton } from '@/components/portal/button';
+import { proposalEvents } from '@/lib/analytics';
 import {
   useProposalPhases,
   useAddProposalPhase,
@@ -165,7 +166,14 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
   const debouncedUpdate = useDebouncedSave(
     useCallback(
       (phaseId: string, propId: string, updates: Record<string, unknown>) => {
-        updatePhase.mutate({ phaseId, proposalId: propId, updates });
+        updatePhase.mutate(
+          { phaseId, proposalId: propId, updates },
+          {
+            onSuccess: () => {
+              proposalEvents.scopeUpdated({ proposalId: propId, field: 'phase', action: 'update' });
+            },
+          }
+        );
       },
       [updatePhase]
     )
@@ -180,26 +188,40 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
   }
 
   function handleAddPhase() {
-    addPhase.mutate({
-      proposalId,
-      name: 'New Phase',
-      phaseKey: 'consultation',
-      durationWeeks: 2,
-      feeCents: 0,
-      revisionLimit: 2,
-    });
+    addPhase.mutate(
+      {
+        proposalId,
+        name: 'New Phase',
+        phaseKey: 'consultation',
+        durationWeeks: 2,
+        feeCents: 0,
+        revisionLimit: 2,
+      },
+      {
+        onSuccess: () => {
+          proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'add' });
+        },
+      }
+    );
   }
 
   function handleAddDefaults() {
     DEFAULT_PHASES.forEach((d) => {
-      addPhase.mutate({
-        proposalId,
-        name: d.name,
-        phaseKey: d.phaseKey,
-        durationWeeks: d.durationWeeks,
-        feeCents: d.feeCents,
-        revisionLimit: d.revisionLimit,
-      });
+      addPhase.mutate(
+        {
+          proposalId,
+          name: d.name,
+          phaseKey: d.phaseKey,
+          durationWeeks: d.durationWeeks,
+          feeCents: d.feeCents,
+          revisionLimit: d.revisionLimit,
+        },
+        {
+          onSuccess: () => {
+            proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'add' });
+          },
+        }
+      );
     });
   }
 
@@ -385,7 +407,16 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
                 <button
                   type="button"
                   className="flex h-6 w-6 items-center justify-center rounded-[3px] text-[0.7rem] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
-                  onClick={() => removePhase.mutate({ phaseId: id, proposalId })}
+                  onClick={() =>
+                    removePhase.mutate(
+                      { phaseId: id, proposalId },
+                      {
+                        onSuccess: () => {
+                          proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'remove' });
+                        },
+                      }
+                    )
+                  }
                   title="Remove phase"
                   aria-label="Remove phase"
                 >

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { PortalButton } from '@/components/portal/button';
+import { proposalEvents } from '@/lib/analytics';
 import {
   useProposalExclusions,
   useAddExclusion,
@@ -48,6 +49,7 @@ export function ExclusionsList({ proposalId }: ExclusionsListProps) {
       { proposalId, description: newText.trim(), category: newCategory },
       {
         onSuccess: () => {
+          proposalEvents.scopeUpdated({ proposalId, field: 'exclusion', action: 'add' });
           setNewText('');
           setIsAdding(false);
         },
@@ -61,7 +63,14 @@ export function ExclusionsList({ proposalId }: ExclusionsListProps) {
     );
     COMMON_DEFAULTS.forEach((d) => {
       if (!existingDescriptions.has(d.description.toLowerCase())) {
-        addExclusion.mutate({ proposalId, description: d.description, category: d.category });
+        addExclusion.mutate(
+          { proposalId, description: d.description, category: d.category },
+          {
+            onSuccess: () => {
+              proposalEvents.scopeUpdated({ proposalId, field: 'exclusion', action: 'add' });
+            },
+          }
+        );
       }
     });
   }
@@ -128,7 +137,16 @@ export function ExclusionsList({ proposalId }: ExclusionsListProps) {
           {/* Remove */}
           <button
             className="shrink-0 rounded-[3px] px-1.5 py-0.5 text-[0.7rem] text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] group-hover:opacity-100"
-            onClick={() => removeExclusion.mutate({ exclusionId: excl.id, proposalId })}
+            onClick={() =>
+              removeExclusion.mutate(
+                { exclusionId: excl.id, proposalId },
+                {
+                  onSuccess: () => {
+                    proposalEvents.scopeUpdated({ proposalId, field: 'exclusion', action: 'remove' });
+                  },
+                }
+              )
+            }
             title="Remove"
           >
             x

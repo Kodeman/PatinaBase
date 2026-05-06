@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DndContext, useDroppable, type DragEndEvent } from '@dnd-kit/core';
 import { PortalButton } from '@/components/portal/button';
+import { proposalEvents } from '@/lib/analytics';
 import {
   useProposalScopeRooms,
   useFFECategories,
@@ -521,6 +522,14 @@ function ProductAdder({
         ffeCategory: ffeCategorySlug,
       },
       {
+        onSuccess: () => {
+          proposalEvents.itemAdded({
+            proposalId,
+            itemType: 'fixed',
+            hasProduct: true,
+            lineTotal: product.price_retail ?? 0,
+          });
+        },
         onSettled: onDone,
       }
     );
@@ -802,6 +811,8 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
   }, [items]);
 
   const handleAllowanceSave = (form: AllowanceFormState) => {
+    const budgetMin = Math.round(parseFloat(form.minDollars || '0') * 100);
+    const budgetMax = Math.round(parseFloat(form.maxDollars || '0') * 100);
     addItem.mutate(
       {
         proposalId,
@@ -812,10 +823,20 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
         itemType: 'allowance',
         scopeRoomId: form.scopeRoomId || null,
         ffeCategory: form.ffeCategory,
-        budgetMinCents: Math.round(parseFloat(form.minDollars || '0') * 100),
-        budgetMaxCents: Math.round(parseFloat(form.maxDollars || '0') * 100),
+        budgetMinCents: budgetMin,
+        budgetMaxCents: budgetMax,
       },
-      { onSuccess: () => setAllowanceMode(false) }
+      {
+        onSuccess: () => {
+          proposalEvents.itemAdded({
+            proposalId,
+            itemType: 'allowance',
+            hasProduct: false,
+            lineTotal: Math.round((budgetMin + budgetMax) / 2),
+          });
+          setAllowanceMode(false);
+        },
+      }
     );
   };
 
@@ -831,7 +852,17 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
         scopeRoomId: form.scopeRoomId || null,
         ffeCategory: form.ffeCategory,
       },
-      { onSuccess: () => setTbdMode(false) }
+      {
+        onSuccess: () => {
+          proposalEvents.itemAdded({
+            proposalId,
+            itemType: 'tbd',
+            hasProduct: false,
+            lineTotal: 0,
+          });
+          setTbdMode(false);
+        },
+      }
     );
   };
 

@@ -8,6 +8,7 @@ import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { TemplateCard } from '@/components/portal/template-card';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { proposalEvents } from '@/lib/analytics';
 
 export default function NewProposalPage() {
   const router = useRouter();
@@ -32,6 +33,11 @@ export default function NewProposalPage() {
         templateId: selectedTemplateId,
       });
 
+      proposalEvents.created({
+        proposalId: result.id,
+        templateId: selectedTemplateId ?? undefined,
+        hasProject: !!selectedProjectId,
+      });
       router.push(`/portal/proposals/${result.id}`);
     } catch (err) {
       console.error('Failed to create proposal:', err);

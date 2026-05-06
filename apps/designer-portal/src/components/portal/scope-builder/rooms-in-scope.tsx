@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { PortalButton } from '@/components/portal/button';
+import { proposalEvents } from '@/lib/analytics';
 import {
   useProposalScopeRooms,
   useAddScopeRoom,
@@ -241,12 +242,24 @@ function RoomCard({
           notes: form.notes || null,
         },
       },
-      { onSuccess: () => onCancelEdit() },
+      {
+        onSuccess: () => {
+          proposalEvents.scopeUpdated({ proposalId, field: 'room', action: 'update' });
+          onCancelEdit();
+        },
+      },
     );
   };
 
   const handleRemove = () => {
-    removeRoom.mutate({ roomId: room.id, proposalId });
+    removeRoom.mutate(
+      { roomId: room.id, proposalId },
+      {
+        onSuccess: () => {
+          proposalEvents.scopeUpdated({ proposalId, field: 'room', action: 'remove' });
+        },
+      },
+    );
   };
 
   if (isEditing) {
@@ -481,7 +494,12 @@ export function RoomsInScope({ proposalId }: RoomsInScopeProps) {
         ffeCategories: form.ffeCategories,
         notes: form.notes || undefined,
       },
-      { onSuccess: () => setIsAdding(false) },
+      {
+        onSuccess: () => {
+          proposalEvents.scopeUpdated({ proposalId, field: 'room', action: 'add' });
+          setIsAdding(false);
+        },
+      },
     );
   };
 

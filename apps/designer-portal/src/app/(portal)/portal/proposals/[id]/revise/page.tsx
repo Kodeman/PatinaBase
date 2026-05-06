@@ -14,6 +14,7 @@ import { RevisionFeedback } from '@/components/portal/revision-feedback';
 import { VersionTag } from '@/components/portal/version-tag';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { proposalEvents } from '@/lib/analytics';
 
 export default function ReviseProposalPage({
   params,
@@ -36,6 +37,11 @@ export default function ReviseProposalPage({
       const newProposal = await createRevision.mutateAsync({
         sourceProposalId: id,
         revisionSummary: revisionSummary || undefined,
+      });
+      proposalEvents.revisionCreated({
+        sourceProposalId: id,
+        newProposalId: newProposal.id,
+        version: newProposal.version ?? 0,
       });
       router.push(`/portal/proposals/${newProposal.id}`);
     } catch (err) {

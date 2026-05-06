@@ -10,6 +10,7 @@ import {
 } from '@/hooks/use-proposals';
 import { useAuth } from '@/hooks/use-auth';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
+import { proposalEvents } from '@/lib/analytics';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
@@ -69,14 +70,25 @@ export default function ProposalDetailPage({
       const section = sections?.find((s) => s.id === sectionId);
       if (!section) return;
 
-      upsertSection.mutate({
-        id: sectionId,
-        proposalId: id,
-        type: section.type,
-        title: updates.title ?? section.title,
-        body: updates.body ?? section.body ?? undefined,
-        metadata: updates.metadata ?? section.metadata,
-      });
+      upsertSection.mutate(
+        {
+          id: sectionId,
+          proposalId: id,
+          type: section.type,
+          title: updates.title ?? section.title,
+          body: updates.body ?? section.body ?? undefined,
+          metadata: updates.metadata ?? section.metadata,
+        },
+        {
+          onSuccess: () => {
+            proposalEvents.sectionSaved({
+              proposalId: id,
+              sectionType: section.type,
+              bodyLength: (updates.body ?? section.body ?? '').length,
+            });
+          },
+        }
+      );
     },
     [id, sections, upsertSection]
   );

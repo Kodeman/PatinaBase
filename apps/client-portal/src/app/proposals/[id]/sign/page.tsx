@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useClientProposal } from '@/hooks/use-proposals-client';
 import { useAuth } from '@/hooks/use-auth';
+import { proposalClientEvents } from '@/lib/analytics/events';
 
 export default function ClientProposalSignPage({
   params,
@@ -77,6 +78,7 @@ export default function ClientProposalSignPage({
         const body = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(body.error || 'Failed to sign proposal.');
       }
+      proposalClientEvents.signed({ proposalId: id, signedByName: name.trim() });
       router.push(`/proposals/${id}`);
       router.refresh();
     } catch (err) {

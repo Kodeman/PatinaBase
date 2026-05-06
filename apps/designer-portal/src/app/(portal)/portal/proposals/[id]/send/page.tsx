@@ -6,6 +6,7 @@ import { useProposal, useSendProposal } from '@/hooks/use-proposals';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { proposalEvents } from '@/lib/analytics';
 
 const EXPIRY_OPTIONS = [
   { value: '7', label: '7 days' },
@@ -51,6 +52,13 @@ export default function SendProposalPage({
         personalMessage: personalMessage || undefined,
         ccEmail: ccEmail || undefined,
         validUntil,
+      });
+      proposalEvents.sent({
+        proposalId: id,
+        hasPersonalMessage: !!personalMessage,
+        hasCcEmail: !!ccEmail,
+        itemCount: proposal?.items?.length ?? 0,
+        totalAmount: proposal?.total_amount ?? 0,
       });
       router.push(`/portal/proposals/${id}`);
     } catch (err) {

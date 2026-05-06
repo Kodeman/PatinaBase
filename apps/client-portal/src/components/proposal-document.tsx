@@ -5,6 +5,7 @@ import { createBrowserClient } from '@patina/supabase';
 import type { Proposal, ProposalSection, ProposalItem } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { StrataMark } from '@/components/strata-mark';
+import { proposalClientEvents } from '@/lib/analytics/events';
 
 interface ProposalDocumentProps {
   proposal: Proposal & { items?: ProposalItem[]; version?: number };
@@ -60,6 +61,7 @@ export function ProposalDocument({ proposal, sections, trackEngagement = true }:
 
     hasRecordedOpen.current = true;
     void recordEvent('opened');
+    proposalClientEvents.viewedByClient({ proposalId: proposal.id });
 
     if (proposal.status === 'sent') {
       void (async () => {
@@ -86,6 +88,11 @@ export function ProposalDocument({ proposal, sections, trackEngagement = true }:
         const elapsed = Math.round((Date.now() - sectionStartRef.current) / 1000);
         if (elapsed >= 2) {
           void recordEvent('section_viewed', activeSectionRef.current, elapsed);
+          proposalClientEvents.sectionViewed({
+            proposalId: proposal.id,
+            sectionType: activeSectionRef.current,
+            durationSeconds: elapsed,
+          });
         }
       }
     };

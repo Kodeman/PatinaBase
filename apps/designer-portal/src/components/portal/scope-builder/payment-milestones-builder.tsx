@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { PortalButton } from '@/components/portal/button';
+import { proposalEvents } from '@/lib/analytics';
 import {
   useProposalPaymentMilestones,
   useAddPaymentMilestone,
@@ -66,7 +67,14 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
       timers.current.set(
         milestoneId,
         setTimeout(() => {
-          updateMilestone.mutate({ milestoneId, proposalId, updates });
+          updateMilestone.mutate(
+            { milestoneId, proposalId, updates },
+            {
+              onSuccess: () => {
+                proposalEvents.scopeUpdated({ proposalId, field: 'milestone', action: 'update' });
+              },
+            }
+          );
           timers.current.delete(milestoneId);
         }, 600)
       );
@@ -93,12 +101,19 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
   }
 
   function handleAdd() {
-    addMilestone.mutate({
-      proposalId,
-      label: 'New Milestone',
-      percentage: 0,
-      amountCents: 0,
-    });
+    addMilestone.mutate(
+      {
+        proposalId,
+        label: 'New Milestone',
+        percentage: 0,
+        amountCents: 0,
+      },
+      {
+        onSuccess: () => {
+          proposalEvents.scopeUpdated({ proposalId, field: 'milestone', action: 'add' });
+        },
+      }
+    );
   }
 
   const totalPercentage = milestones.reduce(
@@ -259,7 +274,16 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
               {/* Remove */}
               <button
                 className="flex h-6 w-6 items-center justify-center rounded-[3px] text-[0.7rem] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
-                onClick={() => removeMilestone.mutate({ milestoneId: m.id, proposalId })}
+                onClick={() =>
+                  removeMilestone.mutate(
+                    { milestoneId: m.id, proposalId },
+                    {
+                      onSuccess: () => {
+                        proposalEvents.scopeUpdated({ proposalId, field: 'milestone', action: 'remove' });
+                      },
+                    }
+                  )
+                }
                 title="Remove milestone"
               >
                 x
