@@ -473,13 +473,14 @@ test.describe.serial('proposal build → send → view → sign', () => {
   test('send the proposal', async ({ authenticatedPage: page }) => {
     await page.goto(`/portal/proposals/${proposalId}/send`, { waitUntil: 'networkidle' });
 
-    // Fill recipient email (required to enable the Send button)
-    const recipientInput = page.getByLabel(/recipient email/i);
+    // Fill recipient email (required to enable the Send button).
+    // Labels on the send page lack `htmlFor`, so use placeholder selectors.
+    const recipientInput = page.getByPlaceholder('client@email.com');
     await recipientInput.waitFor({ state: 'visible', timeout: 10_000 });
     await recipientInput.fill(CLIENT_EMAIL);
 
     // Fill personal message
-    const messageArea = page.getByLabel(/personal message/i);
+    const messageArea = page.getByPlaceholder(/write a personal note/i);
     await messageArea.fill('Here is your proposal, please review and sign.');
 
     // Click "Send Proposal →"
