@@ -3,16 +3,21 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { PortalButton } from '@/components/portal/button';
-import { useProposalScopeRooms, createBrowserClient } from '@patina/supabase';
+import {
+  useProposalScopeRooms,
+  useFFECategories,
+  useProduct,
+  createBrowserClient,
+  type ProposalItemType,
+} from '@patina/supabase';
 import {
   useAddProposalItem,
   useUpdateProposalItem,
   useRemoveProposalItem,
 } from '@/hooks/use-proposals';
+import { ProductPickerModal } from '@/components/portal/proposals/product-picker-modal';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-
-type ItemType = 'fixed' | 'allowance' | 'tbd';
 
 interface FFEItem {
   id: string;
@@ -24,39 +29,19 @@ interface FFEItem {
   category: string | null;
   vendor_name: string | null;
   position: number;
-  scope_room_id?: string | null;
+  scope_room_id: string | null;
+  product_id: string | null;
+  item_type: ProposalItemType;
+  budget_min_cents: number | null;
+  budget_max_cents: number | null;
+  ffe_category: string | null;
 }
 
 interface ScopeRoom {
   id: string;
   name: string;
+  ffe_categories: string[] | null;
 }
-
-interface ItemFormState {
-  itemType: ItemType;
-  name: string;
-  quantity: string;
-  vendorName: string;
-  unitPrice: string;
-  minPrice: string;
-  maxPrice: string;
-  category: string;
-  roomId: string;
-  notes: string;
-}
-
-const EMPTY_FORM: ItemFormState = {
-  itemType: 'fixed',
-  name: '',
-  quantity: '1',
-  vendorName: '',
-  unitPrice: '',
-  minPrice: '',
-  maxPrice: '',
-  category: '',
-  roomId: '',
-  notes: '',
-};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -67,13 +52,7 @@ function formatDollars(cents: number): string {
   })}`;
 }
 
-function parseItemType(item: FFEItem): ItemType {
-  if (item.notes?.includes('[tbd]') || (!item.unit_price && !item.vendor_name)) return 'tbd';
-  if (item.notes?.includes('[allowance]') || item.vendor_name === 'TBD') return 'allowance';
-  return 'fixed';
-}
-
-function typeTagStyle(type: ItemType): { color: string; bg: string } {
+function typeTagStyle(type: ProposalItemType): { color: string; bg: string } {
   switch (type) {
     case 'fixed':
       return { color: 'var(--color-sage)', bg: 'rgba(122, 155, 118, 0.08)' };
@@ -84,7 +63,7 @@ function typeTagStyle(type: ItemType): { color: string; bg: string } {
   }
 }
 
-function typeLabel(type: ItemType): string {
+function typeLabel(type: ProposalItemType): string {
   switch (type) {
     case 'fixed':
       return 'Fixed';
@@ -95,77 +74,77 @@ function typeLabel(type: ItemType): string {
   }
 }
 
-// ─── Type Selector ───────────────────────────────────────────────────────────
-
-function TypeSelector({
-  value,
-  onChange,
-}: {
-  value: ItemType;
-  onChange: (t: ItemType) => void;
-}) {
-  const types: ItemType[] = ['fixed', 'allowance', 'tbd'];
-
-  return (
-    <div className="mb-4">
-      <span className="type-meta mb-2 block">Item Type</span>
-      <div className="flex gap-2">
-        {types.map((t) => {
-          const style = typeTagStyle(t);
-          const active = value === t;
-          return (
-            <button
-              key={t}
-              type="button"
-              onClick={() => onChange(t)}
-              className={`cursor-pointer rounded-sm border px-3 py-1.5 font-body text-[0.78rem] font-medium transition-colors ${
-                active ? 'border-[var(--accent-primary)]' : 'border-[var(--border-default)]'
-              }`}
-              style={{
-                color: active ? style.color : 'var(--text-muted)',
-                background: active ? style.bg : 'transparent',
-              }}
-            >
-              {typeLabel(t)}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
+function categoryLabel(slug: string | null, lookup: Map<string, string>): string {
+  if (!slug) return '';
+  return lookup.get(slug) ?? slug;
 }
 
-// ─── Item Form ───────────────────────────────────────────────────────────────
+// ─── Allowance form (range required, category required) ─────────────────────
 
-function ItemForm({
+interface AllowanceFormState {
+  ffeCategory: string;
+  scopeRoomId: string;
+  minDollars: string;
+  maxDollars: string;
+  notes: string;
+}
+
+const EMPTY_ALLOWANCE_FORM: AllowanceFormState = {
+  ffeCategory: '',
+  scopeRoomId: '',
+  minDollars: '',
+  maxDollars: '',
+  notes: '',
+};
+
+function AllowanceForm({
   rooms,
-  initial,
+  categories,
   onSave,
   onCancel,
   isSaving,
 }: {
   rooms: ScopeRoom[];
-  initial: ItemFormState;
-  onSave: (form: ItemFormState) => void;
+  categories: Array<{ slug: string; label: string }>;
+  onSave: (form: AllowanceFormState) => void;
   onCancel: () => void;
   isSaving: boolean;
 }) {
-  const [form, setForm] = useState<ItemFormState>(initial);
+  const [form, setForm] = useState<AllowanceFormState>(EMPTY_ALLOWANCE_FORM);
 
-  const update = <K extends keyof ItemFormState>(key: K, value: ItemFormState[K]) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
+  const update = <K extends keyof AllowanceFormState>(key: K, v: AllowanceFormState[K]) =>
+    setForm((prev) => ({ ...prev, [key]: v }));
+
+  const minN = parseFloat(form.minDollars);
+  const maxN = parseFloat(form.maxDollars);
+  const rangeOk =
+    !Number.isNaN(minN) && !Number.isNaN(maxN) && minN >= 0 && maxN >= 0 && minN <= maxN;
+  const canSave = !!form.ffeCategory && rangeOk;
 
   return (
     <div className="space-y-3 rounded-md border border-[var(--accent-primary)] p-4">
-      <TypeSelector value={form.itemType} onChange={(t) => update('itemType', t)} />
+      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <label className="block">
+          <span className="type-meta mb-1 block">Category *</span>
+          <select
+            value={form.ffeCategory}
+            onChange={(e) => update('ffeCategory', e.target.value)}
+            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
+          >
+            <option value="">Select…</option>
+            {categories.map((c) => (
+              <option key={c.slug} value={c.slug}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </label>
 
-      {/* Room selector */}
-      {rooms.length > 0 && (
         <label className="block">
           <span className="type-meta mb-1 block">Room</span>
           <select
-            value={form.roomId}
-            onChange={(e) => update('roomId', e.target.value)}
+            value={form.scopeRoomId}
+            onChange={(e) => update('scopeRoomId', e.target.value)}
             className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
           >
             <option value="">Unassigned</option>
@@ -176,73 +155,11 @@ function ItemForm({
             ))}
           </select>
         </label>
-      )}
-
-      {/* Name row */}
-      <div
-        className="grid gap-3"
-        style={{ gridTemplateColumns: form.itemType === 'tbd' ? '1fr 1fr' : '1fr' }}
-      >
-        <label className="block">
-          <span className="type-meta mb-1 block">
-            {form.itemType === 'tbd' ? 'Category' : 'Item Name'}
-          </span>
-          <input
-            type="text"
-            value={form.name}
-            onChange={(e) => update('name', e.target.value)}
-            placeholder={
-              form.itemType === 'tbd'
-                ? 'e.g. Accent Lighting'
-                : 'e.g. Restoration Hardware Cloud Sofa'
-            }
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
-          />
-        </label>
-        {form.itemType === 'tbd' && (
-          <label className="block">
-            <span className="type-meta mb-1 block">Category</span>
-            <input
-              type="text"
-              value={form.category}
-              onChange={(e) => update('category', e.target.value)}
-              placeholder="e.g. Lighting"
-              className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
-            />
-          </label>
-        )}
       </div>
 
-      {/* Qty + Vendor (for fixed/allowance) */}
-      {form.itemType !== 'tbd' && (
-        <div className="grid gap-3" style={{ gridTemplateColumns: '80px 1fr' }}>
-          <label className="block">
-            <span className="type-meta mb-1 block">Qty</span>
-            <input
-              type="number"
-              min="1"
-              value={form.quantity}
-              onChange={(e) => update('quantity', e.target.value)}
-              className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
-            />
-          </label>
-          <label className="block">
-            <span className="type-meta mb-1 block">Vendor</span>
-            <input
-              type="text"
-              value={form.vendorName}
-              onChange={(e) => update('vendorName', e.target.value)}
-              placeholder={form.itemType === 'allowance' ? 'TBD' : 'e.g. Holly Hunt'}
-              className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
-            />
-          </label>
-        </div>
-      )}
-
-      {/* Price fields */}
-      {form.itemType === 'fixed' && (
+      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <label className="block">
-          <span className="type-meta mb-1 block">Unit Price</span>
+          <span className="type-meta mb-1 block">Min *</span>
           <div className="relative">
             <span
               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-body text-[0.88rem]"
@@ -253,79 +170,48 @@ function ItemForm({
             <input
               type="number"
               min="0"
-              step="1"
-              value={form.unitPrice}
-              onChange={(e) => update('unitPrice', e.target.value)}
+              value={form.minDollars}
+              onChange={(e) => update('minDollars', e.target.value)}
               placeholder="0"
               className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent py-2 pl-7 pr-3 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
             />
           </div>
         </label>
-      )}
+        <label className="block">
+          <span className="type-meta mb-1 block">Max *</span>
+          <div className="relative">
+            <span
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-body text-[0.88rem]"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              $
+            </span>
+            <input
+              type="number"
+              min="0"
+              value={form.maxDollars}
+              onChange={(e) => update('maxDollars', e.target.value)}
+              placeholder="0"
+              className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent py-2 pl-7 pr-3 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
+            />
+          </div>
+        </label>
+      </div>
 
-      {(form.itemType === 'allowance' || form.itemType === 'tbd') && (
-        <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
-          <label className="block">
-            <span className="type-meta mb-1 block">Est. Min</span>
-            <div className="relative">
-              <span
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-body text-[0.88rem]"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                $
-              </span>
-              <input
-                type="number"
-                min="0"
-                value={form.minPrice}
-                onChange={(e) => update('minPrice', e.target.value)}
-                placeholder="0"
-                className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent py-2 pl-7 pr-3 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
-              />
-            </div>
-          </label>
-          <label className="block">
-            <span className="type-meta mb-1 block">Est. Max</span>
-            <div className="relative">
-              <span
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-body text-[0.88rem]"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                $
-              </span>
-              <input
-                type="number"
-                min="0"
-                value={form.maxPrice}
-                onChange={(e) => update('maxPrice', e.target.value)}
-                placeholder="0"
-                className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent py-2 pl-7 pr-3 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
-              />
-            </div>
-          </label>
-        </div>
-      )}
-
-      {/* Notes */}
       <label className="block">
         <span className="type-meta mb-1 block">Notes (optional)</span>
         <textarea
           value={form.notes}
           onChange={(e) => update('notes', e.target.value)}
           rows={2}
-          placeholder="Specification notes, lead time, COM details..."
+          placeholder="Specification notes, lead time, COM details…"
           className="w-full resize-none rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.82rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
         />
       </label>
 
-      {/* Actions */}
       <div className="flex items-center gap-2">
-        <PortalButton
-          variant="primary"
-          onClick={() => onSave(form)}
-          disabled={!form.name.trim() || isSaving}
-        >
-          {isSaving ? 'Saving...' : 'Save Item'}
+        <PortalButton variant="primary" onClick={() => onSave(form)} disabled={!canSave || isSaving}>
+          {isSaving ? 'Saving…' : 'Save Allowance'}
         </PortalButton>
         <PortalButton variant="ghost" onClick={onCancel} disabled={isSaving}>
           Cancel
@@ -335,110 +221,140 @@ function ItemForm({
   );
 }
 
-// ─── Item Row ────────────────────────────────────────────────────────────────
+// ─── TBD form (category required) ────────────────────────────────────────────
+
+interface TbdFormState {
+  ffeCategory: string;
+  scopeRoomId: string;
+  notes: string;
+}
+
+const EMPTY_TBD_FORM: TbdFormState = {
+  ffeCategory: '',
+  scopeRoomId: '',
+  notes: '',
+};
+
+function TbdForm({
+  rooms,
+  categories,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  rooms: ScopeRoom[];
+  categories: Array<{ slug: string; label: string }>;
+  onSave: (form: TbdFormState) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [form, setForm] = useState<TbdFormState>(EMPTY_TBD_FORM);
+  const update = <K extends keyof TbdFormState>(key: K, v: TbdFormState[K]) =>
+    setForm((prev) => ({ ...prev, [key]: v }));
+
+  return (
+    <div className="space-y-3 rounded-md border border-[var(--accent-primary)] p-4">
+      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <label className="block">
+          <span className="type-meta mb-1 block">Category *</span>
+          <select
+            value={form.ffeCategory}
+            onChange={(e) => update('ffeCategory', e.target.value)}
+            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
+          >
+            <option value="">Select…</option>
+            {categories.map((c) => (
+              <option key={c.slug} value={c.slug}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="type-meta mb-1 block">Room</span>
+          <select
+            value={form.scopeRoomId}
+            onChange={(e) => update('scopeRoomId', e.target.value)}
+            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
+          >
+            <option value="">Unassigned</option>
+            {rooms.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <label className="block">
+        <span className="type-meta mb-1 block">Notes (optional)</span>
+        <textarea
+          value={form.notes}
+          onChange={(e) => update('notes', e.target.value)}
+          rows={2}
+          placeholder="What still needs to be specified, vendor quotes pending, etc."
+          className="w-full resize-none rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.82rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
+        />
+      </label>
+
+      <div className="flex items-center gap-2">
+        <PortalButton
+          variant="primary"
+          onClick={() => onSave(form)}
+          disabled={!form.ffeCategory || isSaving}
+        >
+          {isSaving ? 'Saving…' : 'Save TBD'}
+        </PortalButton>
+        <PortalButton variant="ghost" onClick={onCancel} disabled={isSaving}>
+          Cancel
+        </PortalButton>
+      </div>
+    </div>
+  );
+}
+
+// ─── Item row ────────────────────────────────────────────────────────────────
 
 function ItemRow({
   item,
   proposalId,
-  rooms,
-  editingId,
-  onEdit,
-  onCancelEdit,
+  categoryLookup,
 }: {
   item: FFEItem;
   proposalId: string;
-  rooms: ScopeRoom[];
-  editingId: string | null;
-  onEdit: (id: string) => void;
-  onCancelEdit: () => void;
+  categoryLookup: Map<string, string>;
 }) {
-  const updateItem = useUpdateProposalItem();
   const removeItem = useRemoveProposalItem();
-  const itemType = parseItemType(item);
-  const style = typeTagStyle(itemType);
-  const isEditing = editingId === item.id;
+  const style = typeTagStyle(item.item_type);
+  const lineCost = item.unit_price * item.quantity;
 
-  const handleSave = (form: ItemFormState) => {
-    const priceCents =
-      form.itemType === 'fixed'
-        ? Math.round(parseFloat(form.unitPrice || '0') * 100)
-        : Math.round(parseFloat(form.maxPrice || form.minPrice || '0') * 100);
-
-    const notesTag =
-      form.itemType === 'tbd'
-        ? '[tbd]'
-        : form.itemType === 'allowance'
-          ? `[allowance] range: $${form.minPrice || 0}-$${form.maxPrice || 0}`
-          : '';
-
-    const notes = [notesTag, form.notes].filter(Boolean).join(' ');
-
-    updateItem.mutate(
-      {
-        itemId: item.id,
-        proposalId,
-        updates: {
-          name: form.name,
-          quantity: parseInt(form.quantity, 10) || 1,
-          unit_price: priceCents,
-          notes: notes || null,
-        },
-      },
-      { onSuccess: () => onCancelEdit() },
-    );
-  };
+  const rangeText =
+    item.item_type === 'allowance' &&
+    typeof item.budget_min_cents === 'number' &&
+    typeof item.budget_max_cents === 'number'
+      ? `${formatDollars(item.budget_min_cents)} – ${formatDollars(item.budget_max_cents)}`
+      : null;
 
   const handleRemove = () => {
     removeItem.mutate({ itemId: item.id, proposalId });
   };
 
-  if (isEditing) {
-    // Parse existing notes for form state
-    const isAllowance = itemType === 'allowance';
-    const isTbd = itemType === 'tbd';
-    const rangeMatch = item.notes?.match(/range: \$(\d+)-\$(\d+)/);
-    const cleanNotes = (item.notes ?? '')
-      .replace(/\[(tbd|allowance)\]\s*/, '')
-      .replace(/range: \$\d+-\$\d+\s*/, '')
-      .trim();
-
-    return (
-      <div className="col-span-full">
-        <ItemForm
-          rooms={rooms}
-          initial={{
-            itemType,
-            name: item.name,
-            quantity: String(item.quantity),
-            vendorName: item.vendor_name ?? '',
-            unitPrice: !isAllowance && !isTbd ? String((item.unit_price || 0) / 100) : '',
-            minPrice: rangeMatch ? rangeMatch[1] : '',
-            maxPrice: rangeMatch ? rangeMatch[2] : '',
-            category: item.category ?? '',
-            roomId: item.scope_room_id ?? '',
-            notes: cleanNotes,
-          }}
-          onSave={handleSave}
-          onCancel={onCancelEdit}
-          isSaving={updateItem.isPending}
-        />
-      </div>
-    );
-  }
-
-  const lineCost = item.unit_price
-    ? item.unit_price * item.quantity
-    : 0;
+  const subtitle = item.vendor_name
+    ? item.vendor_name
+    : item.ffe_category
+      ? categoryLabel(item.ffe_category, categoryLookup)
+      : null;
 
   return (
     <div
       className="group grid items-center gap-2 border-b py-2"
       style={{
-        gridTemplateColumns: '1fr 60px 80px 100px 40px',
+        gridTemplateColumns: '1fr 60px 80px 120px 40px',
         borderColor: 'rgba(229, 226, 221, 0.4)',
       }}
     >
-      {/* Name + vendor */}
       <div>
         <div
           style={{
@@ -447,9 +363,9 @@ function ItemRow({
             color: 'var(--text-primary)',
           }}
         >
-          {item.name}
+          {item.name || categoryLabel(item.ffe_category, categoryLookup) || 'Untitled'}
         </div>
-        {item.vendor_name && (
+        {subtitle && (
           <div
             style={{
               fontFamily: 'var(--font-body)',
@@ -458,12 +374,11 @@ function ItemRow({
               color: 'var(--color-aged-oak)',
             }}
           >
-            {item.vendor_name}
+            {subtitle}
           </div>
         )}
       </div>
 
-      {/* Qty */}
       <div
         className="text-right"
         style={{
@@ -474,10 +389,9 @@ function ItemRow({
           color: 'var(--text-muted)',
         }}
       >
-        {item.quantity}
+        {item.item_type === 'tbd' ? '—' : item.quantity}
       </div>
 
-      {/* Type tag */}
       <div className="text-right">
         <span
           className="inline-flex whitespace-nowrap rounded-sm px-1.5 py-0.5"
@@ -490,40 +404,33 @@ function ItemRow({
             background: style.bg,
           }}
         >
-          {typeLabel(itemType)}
+          {typeLabel(item.item_type)}
         </span>
       </div>
 
-      {/* Est. Cost */}
       <div
         className="text-right"
         style={{
           fontFamily: 'var(--font-display)',
           fontWeight: 500,
           fontSize: '0.82rem',
-          color: lineCost > 0 ? 'var(--text-primary)' : 'var(--text-muted)',
+          color: lineCost > 0 || rangeText ? 'var(--text-primary)' : 'var(--text-muted)',
         }}
       >
-        {lineCost > 0 ? formatDollars(lineCost) : '---'}
+        {item.item_type === 'allowance' && rangeText
+          ? rangeText
+          : lineCost > 0
+            ? formatDollars(lineCost)
+            : '—'}
       </div>
 
-      {/* Actions */}
       <div className="flex justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <button
-          onClick={() => onEdit(item.id)}
-          className="cursor-pointer p-0.5 text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
-          title="Edit"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-          </svg>
-        </button>
         <button
           onClick={handleRemove}
           disabled={removeItem.isPending}
           className="cursor-pointer p-0.5 text-[var(--text-muted)] transition-colors hover:text-[var(--color-terracotta)]"
           title="Remove"
+          aria-label="Remove item"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 6L6 18M6 6l12 12" />
@@ -534,80 +441,204 @@ function ItemRow({
   );
 }
 
-// ─── Main Component ──────────────────────────────────────────────────────────
+// ─── Picker → Add product wrapper ────────────────────────────────────────────
+
+/**
+ * When the picker returns a product id, we fetch the product and create a
+ * proposal_item with item_type='fixed'. This component is gated by the
+ * pickerOpen state in the parent.
+ */
+function ProductAdder({
+  proposalId,
+  productId,
+  scopeRoomId,
+  ffeCategorySlug,
+  onDone,
+}: {
+  proposalId: string;
+  productId: string | null;
+  scopeRoomId: string | null;
+  ffeCategorySlug: string | null;
+  onDone: () => void;
+}) {
+  const productQ = useProduct(productId ?? '');
+  const addItem = useAddProposalItem();
+
+  if (!productId) return null;
+  if (productQ.isLoading) {
+    return (
+      <div
+        className="rounded-md border border-dashed px-3 py-3 text-center type-body"
+        style={{
+          borderColor: 'var(--border-default)',
+          color: 'var(--text-muted)',
+          fontSize: '0.78rem',
+        }}
+      >
+        Loading product…
+      </div>
+    );
+  }
+  if (productQ.isError) {
+    return (
+      <div className="rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+        Failed to load product. Try picking again.
+        <PortalButton variant="ghost" onClick={onDone}>Dismiss</PortalButton>
+      </div>
+    );
+  }
+  if (!productQ.data) return null;
+
+  const product = productQ.data as {
+    id: string;
+    name: string;
+    price_retail: number | null;
+    vendor_id: string | null;
+    vendor?: { name?: string | null } | null;
+  };
+
+  // Add the item exactly once. A useEffect would over-react to rerenders;
+  // a plain mutate inside render would dispatch repeatedly. We use a guard
+  // ref pattern via mutation's idle->pending transition: only fire when
+  // idle.
+  if (addItem.isIdle) {
+    addItem.mutate(
+      {
+        proposalId,
+        productId: product.id,
+        name: product.name,
+        quantity: 1,
+        unitPrice: product.price_retail ?? 0,
+        vendorName: product.vendor?.name ?? undefined,
+        itemType: 'fixed',
+        scopeRoomId,
+        ffeCategory: ffeCategorySlug,
+      },
+      {
+        onSettled: onDone,
+      }
+    );
+  }
+
+  return (
+    <div
+      className="rounded-md border border-dashed px-3 py-3 text-center type-body"
+      style={{
+        borderColor: 'var(--border-default)',
+        color: 'var(--text-muted)',
+        fontSize: '0.78rem',
+      }}
+    >
+      {addItem.isPending ? 'Adding to schedule…' : 'Adding…'}
+    </div>
+  );
+}
+
+// ─── Main component ──────────────────────────────────────────────────────────
 
 interface FFEScheduleBuilderProps {
   proposalId: string;
 }
 
+type PickerContext = {
+  scopeRoomId: string | null;
+  ffeCategorySlug: string | null;
+};
+
 export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
   const { data: rooms = [] } = useProposalScopeRooms(proposalId);
-  const addItem = useAddProposalItem();
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [isAdding, setIsAdding] = useState(false);
+  const { data: categories = [] } = useFFECategories({ proposalId });
 
-  // We need proposal items -- use the same query pattern
-  // Items come from proposal_items table, grouped by scope_room_id
+  const addItem = useAddProposalItem();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerCtx, setPickerCtx] = useState<PickerContext>({
+    scopeRoomId: null,
+    ffeCategorySlug: null,
+  });
+  const [pickedProductId, setPickedProductId] = useState<string | null>(null);
+  const [allowanceMode, setAllowanceMode] = useState(false);
+  const [tbdMode, setTbdMode] = useState(false);
+
   const { data: items = [], isLoading } = useProposalItems(proposalId);
 
   const typedRooms = rooms as ScopeRoom[];
 
-  // Group items by room
+  const categoryLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of categories) map.set(c.slug, c.label);
+    return map;
+  }, [categories]);
+
+  const categoryOptions = useMemo(
+    () => categories.map((c) => ({ slug: c.slug, label: c.label })),
+    [categories]
+  );
+
+  // Group items by room.
   const grouped = useMemo(() => {
     const typedItems = items as FFEItem[];
     const groups: Record<string, { roomName: string; items: FFEItem[] }> = {};
 
-    // Unassigned group
     const unassigned = typedItems.filter((i) => !i.scope_room_id);
     if (unassigned.length > 0) {
       groups['__unassigned'] = { roomName: 'Unassigned', items: unassigned };
     }
 
-    // Room groups
     for (const room of typedRooms) {
       const roomItems = typedItems.filter((i) => i.scope_room_id === room.id);
       if (roomItems.length > 0) {
         groups[room.id] = { roomName: room.name, items: roomItems };
       }
     }
-
     return groups;
   }, [items, typedRooms]);
 
-  // Totals
   const totalEstimate = useMemo(() => {
-    return (items as FFEItem[]).reduce(
-      (sum, i) => sum + (i.unit_price || 0) * (i.quantity || 1),
-      0,
-    );
+    return (items as FFEItem[]).reduce((sum, i) => {
+      if (i.item_type === 'fixed') return sum + (i.unit_price || 0) * (i.quantity || 1);
+      // For allowances, take the midpoint of min/max as the "expected".
+      if (
+        i.item_type === 'allowance' &&
+        typeof i.budget_min_cents === 'number' &&
+        typeof i.budget_max_cents === 'number'
+      ) {
+        return sum + Math.round((i.budget_min_cents + i.budget_max_cents) / 2);
+      }
+      return sum;
+    }, 0);
   }, [items]);
 
-  const handleAdd = (form: ItemFormState) => {
-    const priceCents =
-      form.itemType === 'fixed'
-        ? Math.round(parseFloat(form.unitPrice || '0') * 100)
-        : Math.round(parseFloat(form.maxPrice || form.minPrice || '0') * 100);
-
-    const notesTag =
-      form.itemType === 'tbd'
-        ? '[tbd]'
-        : form.itemType === 'allowance'
-          ? `[allowance] range: $${form.minPrice || 0}-$${form.maxPrice || 0}`
-          : '';
-
-    const notes = [notesTag, form.notes].filter(Boolean).join(' ');
-
+  const handleAllowanceSave = (form: AllowanceFormState) => {
     addItem.mutate(
       {
         proposalId,
-        name: form.name,
-        quantity: parseInt(form.quantity, 10) || 1,
-        unitPrice: priceCents,
-        vendorName: form.vendorName || (form.itemType === 'allowance' ? 'TBD' : undefined),
-        category: form.category || undefined,
-        notes: notes || undefined,
+        name: categoryLookup.get(form.ffeCategory) ?? form.ffeCategory,
+        quantity: 1,
+        unitPrice: 0,
+        notes: form.notes || undefined,
+        itemType: 'allowance',
+        scopeRoomId: form.scopeRoomId || null,
+        ffeCategory: form.ffeCategory,
+        budgetMinCents: Math.round(parseFloat(form.minDollars || '0') * 100),
+        budgetMaxCents: Math.round(parseFloat(form.maxDollars || '0') * 100),
       },
-      { onSuccess: () => setIsAdding(false) },
+      { onSuccess: () => setAllowanceMode(false) }
+    );
+  };
+
+  const handleTbdSave = (form: TbdFormState) => {
+    addItem.mutate(
+      {
+        proposalId,
+        name: categoryLookup.get(form.ffeCategory) ?? form.ffeCategory,
+        quantity: 1,
+        unitPrice: 0,
+        notes: form.notes || undefined,
+        itemType: 'tbd',
+        scopeRoomId: form.scopeRoomId || null,
+        ffeCategory: form.ffeCategory,
+      },
+      { onSuccess: () => setTbdMode(false) }
     );
   };
 
@@ -622,7 +653,7 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
           marginBottom: '0.25rem',
         }}
       >
-        Preliminary FF&E Schedule
+        Preliminary FF&amp;E Schedule
       </h3>
       <div
         style={{
@@ -636,15 +667,14 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
         {totalEstimate > 0 ? ` · Est. total: ${formatDollars(totalEstimate)}` : ''}
       </div>
 
-      {/* Column headers */}
       <div
         className="mb-1 grid items-center gap-2 border-b py-1"
         style={{
-          gridTemplateColumns: '1fr 60px 80px 100px 40px',
+          gridTemplateColumns: '1fr 60px 80px 120px 40px',
           borderColor: 'var(--border-default)',
         }}
       >
-        {['Item / Vendor', 'Qty', 'Type', 'Est. Cost', ''].map((h) => (
+        {['Item / Vendor', 'Qty', 'Type', 'Cost / Range', ''].map((h) => (
           <span
             key={h || 'actions'}
             style={{
@@ -670,16 +700,14 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
             color: 'var(--text-muted)',
           }}
         >
-          Loading schedule...
+          Loading schedule…
         </div>
       )}
 
-      {/* Grouped items */}
       {Object.entries(grouped).map(([groupId, group]) => (
         <div key={groupId}>
-          {/* Room label */}
           <div
-            className="mt-3 mb-1"
+            className="mb-1 mt-3"
             style={{
               fontFamily: 'var(--font-meta)',
               fontSize: '0.62rem',
@@ -691,22 +719,17 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
             {group.roomName}
           </div>
 
-          {/* Items */}
           {group.items.map((item) => (
             <ItemRow
               key={item.id}
               item={item}
               proposalId={proposalId}
-              rooms={typedRooms}
-              editingId={editingId}
-              onEdit={setEditingId}
-              onCancelEdit={() => setEditingId(null)}
+              categoryLookup={categoryLookup}
             />
           ))}
         </div>
       ))}
 
-      {/* Empty state */}
       {!isLoading && (items as FFEItem[]).length === 0 && (
         <div
           className="py-8 text-center"
@@ -716,15 +739,14 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
             color: 'var(--text-muted)',
           }}
         >
-          No items yet. Add your first FF&E item to begin building the schedule.
+          No items yet. Add your first FF&amp;E item to begin building the schedule.
         </div>
       )}
 
-      {/* Total row */}
       {(items as FFEItem[]).length > 0 && (
         <div
           className="mt-1 grid items-baseline gap-2 border-t-2 border-[var(--border-default)] pt-3"
-          style={{ gridTemplateColumns: '1fr 60px 80px 100px 40px' }}
+          style={{ gridTemplateColumns: '1fr 60px 80px 120px 40px' }}
         >
           <span
             style={{
@@ -753,30 +775,78 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
         </div>
       )}
 
-      {/* Add item */}
-      {isAdding ? (
+      {/* Inline allowance form */}
+      {allowanceMode && (
         <div className="mt-3">
-          <ItemForm
+          <AllowanceForm
             rooms={typedRooms}
-            initial={EMPTY_FORM}
-            onSave={handleAdd}
-            onCancel={() => setIsAdding(false)}
+            categories={categoryOptions}
+            onSave={handleAllowanceSave}
+            onCancel={() => setAllowanceMode(false)}
             isSaving={addItem.isPending}
           />
         </div>
-      ) : (
+      )}
+
+      {/* Inline TBD form */}
+      {tbdMode && (
         <div className="mt-3">
-          <PortalButton variant="secondary" onClick={() => setIsAdding(true)}>
+          <TbdForm
+            rooms={typedRooms}
+            categories={categoryOptions}
+            onSave={handleTbdSave}
+            onCancel={() => setTbdMode(false)}
+            isSaving={addItem.isPending}
+          />
+        </div>
+      )}
+
+      {/* In-flight product add */}
+      {pickedProductId && (
+        <div className="mt-3">
+          <ProductAdder
+            proposalId={proposalId}
+            productId={pickedProductId}
+            scopeRoomId={pickerCtx.scopeRoomId}
+            ffeCategorySlug={pickerCtx.ffeCategorySlug}
+            onDone={() => setPickedProductId(null)}
+          />
+        </div>
+      )}
+
+      {/* Action buttons */}
+      {!allowanceMode && !tbdMode && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <PortalButton
+            variant="primary"
+            onClick={() => {
+              setPickerCtx({ scopeRoomId: null, ffeCategorySlug: null });
+              setPickerOpen(true);
+            }}
+          >
             + Add Item
+          </PortalButton>
+          <PortalButton variant="secondary" onClick={() => setAllowanceMode(true)}>
+            + Add Allowance
+          </PortalButton>
+          <PortalButton variant="ghost" onClick={() => setTbdMode(true)}>
+            + Add TBD
           </PortalButton>
         </div>
       )}
+
+      {/* Product picker modal */}
+      <ProductPickerModal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        defaultCategorySlug={pickerCtx.ffeCategorySlug ?? undefined}
+        onPick={(productId) => setPickedProductId(productId)}
+      />
     </div>
   );
 }
 
-// ─── Local hook for proposal items with scope_room_id ────────────────────────
-// This wraps the proposal items query to include scope_room_id field
+// ─── Local hook for proposal items with all wave-1 columns ───────────────────
 
 function useProposalItems(proposalId: string) {
   return useQuery({

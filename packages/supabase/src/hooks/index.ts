@@ -5,8 +5,26 @@ export {
   useProductWithVendorPricing,
   useCreateProduct,
   useUpdateProduct,
+  useCreateDraftProduct,
 } from './use-products';
-export type { ProductWithVendorPricing, VendorPricingInfo, ProductSort } from './use-products';
+export type {
+  ProductWithVendorPricing,
+  VendorPricingInfo,
+  ProductSort,
+  UseProductsOptions,
+  CreateDraftProductInput,
+} from './use-products';
+export {
+  useFFECategories,
+  useCreateFFECategory,
+  useDeleteFFECategory,
+  slugifyFFECategoryLabel,
+} from './use-ffe-categories';
+export type {
+  FFECategory,
+  UseFFECategoriesOptions,
+  CreateFFECategoryInput,
+} from './use-ffe-categories';
 export { useStyles, useCreateStyle } from './use-styles';
 export {
   useProjects,
@@ -230,6 +248,7 @@ export {
 export type {
   Proposal,
   ProposalItem,
+  ProposalItemType,
   ProposalFilters,
   ProposalSection,
   ProposalTemplate,
@@ -645,19 +664,7 @@ export type {
   DuplicateReport,
 } from './use-duplicate-detection';
 export {
-  useCompanionConversation,
-  useCompanionHistory,
-  useSendCompanionMessage,
-  useCompanionQuickActions,
-} from './use-companion';
-export {
-  useInboxNotifications,
-  useInboxMessages,
-  useUnreadInboxCount,
-  useInboxNotificationsRealtime,
-  inboxKeys,
-} from './use-inbox';
-export {
+  // Notification DLQ (admin)
   useDlqEntries,
   useFailedNotificationCount,
   useRetryDlqEntry,
@@ -671,6 +678,19 @@ export type {
   RetryDlqResult,
   BulkRetryDlqResult,
 } from './use-dlq';
+export {
+  useCompanionConversation,
+  useCompanionHistory,
+  useSendCompanionMessage,
+  useCompanionQuickActions,
+} from './use-companion';
+export {
+  useInboxNotifications,
+  useInboxMessages,
+  useUnreadInboxCount,
+  useInboxNotificationsRealtime,
+  inboxKeys,
+} from './use-inbox';
 export type {
   InboxNotification,
   InboxNotificationFilters,
