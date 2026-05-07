@@ -94,3 +94,95 @@ export async function setProposalClient(proposalId: string, clientUserId: string
     .eq('id', proposalId);
   if (error) throw error;
 }
+
+// ─── FF&E test helpers (capture inbox + extended item select) ────────────────
+
+export interface InsertCapturePayload {
+  designer_id: string;
+  product_id?: string | null;
+  proposal_id?: string | null;
+  scope_room_id?: string | null;
+  ffe_category_slug?: string | null;
+  source_url: string;
+  raw_payload?: Record<string, unknown>;
+  thumbnail_url?: string | null;
+  status?: 'inbox' | 'assigned' | 'consumed' | 'dismissed';
+}
+
+export async function insertProposalCapture(payload: InsertCapturePayload) {
+  const row = {
+    raw_payload: {},
+    status: 'inbox' as const,
+    ...payload,
+  };
+  const { data, error } = await adminDb
+    .from('proposal_captures')
+    .insert(row)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function getCaptureById(id: string) {
+  const { data, error } = await adminDb
+    .from('proposal_captures')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function getProposalCaptures(
+  designerId: string,
+  opts?: { status?: 'inbox' | 'assigned' | 'consumed' | 'dismissed' },
+) {
+  let q = adminDb.from('proposal_captures').select('*').eq('designer_id', designerId);
+  if (opts?.status) q = q.eq('status', opts.status);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getProposalItemsFull(proposalId: string) {
+  const { data, error } = await adminDb
+    .from('proposal_items')
+    .select(
+      'id, item_type, product_id, scope_room_id, ffe_category, name, quantity, unit_price, line_total, budget_min_cents, budget_max_cents, position',
+    )
+    .eq('proposal_id', proposalId)
+    .order('position', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getProposalScopeRooms(proposalId: string) {
+  const { data, error } = await adminDb
+    .from('proposal_scope_rooms')
+    .select('id, name, sort_order')
+    .eq('proposal_id', proposalId)
+    .order('sort_order', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export interface ConsumeCaptureRpcArgs {
+  captureId: string;
+  proposalId: string;
+  scopeRoomId: string;
+  ffeCategorySlug: string;
+  qty?: number;
+}
+
+export async function consumeCaptureViaRpc(args: ConsumeCaptureRpcArgs): Promise<string> {
+  const { data, error } = await adminDb.rpc('consume_capture', {
+    p_capture_id: args.captureId,
+    p_proposal_id: args.proposalId,
+    p_scope_room_id: args.scopeRoomId,
+    p_ffe_category_slug: args.ffeCategorySlug,
+    p_qty: args.qty ?? 1,
+  });
+  if (error) throw error;
+  return data as string;
+}
