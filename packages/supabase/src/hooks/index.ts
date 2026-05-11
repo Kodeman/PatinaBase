@@ -636,6 +636,16 @@ export type {
   ProjectPermissions,
 } from './use-project-team';
 export {
+  // Proposal Team (00137)
+  useProposalTeamMembers,
+  useAddProposalTeamMember,
+  useRemoveProposalTeamMember,
+} from './use-proposal-team';
+export type {
+  ProposalRole,
+  ProposalTeamMember,
+} from './use-proposal-team';
+export {
   // Scope Changes
   useScopeChangeRequests,
   useScopeChangeRequest,

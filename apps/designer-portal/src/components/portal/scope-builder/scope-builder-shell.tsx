@@ -10,6 +10,7 @@ import { PhaseBuilder } from './phase-builder';
 import { ExclusionsList } from './exclusions-list';
 import { PaymentMilestonesBuilder } from './payment-milestones-builder';
 import { ChangeOrderTermsEditor } from './change-order-terms-editor';
+import { ProposalTeamPicker } from './proposal-team-picker';
 
 interface ScopeBuilderShellProps {
   proposalId: string;
@@ -132,6 +133,17 @@ export function ScopeBuilderShell({
         <p className="mt-2 type-body-small text-[var(--text-muted)]">
           Captured here so the activated project picks it up automatically.
         </p>
+      </div>
+
+      {/* Project team — copies into project_team_members on activation */}
+      <div className="mb-6 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-5">
+        <div className="mb-3 flex items-baseline justify-between">
+          <span className="type-meta text-[var(--accent-primary)]">Project Team</span>
+          <span className="font-mono text-[0.58rem] uppercase tracking-wider text-[var(--text-muted)]">
+            Carries forward on activation
+          </span>
+        </div>
+        <ProposalTeamPicker proposalId={proposalId} />
       </div>
 
       {/* Tab strip */}
