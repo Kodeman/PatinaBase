@@ -50,6 +50,7 @@ export interface Proposal {
   title: string;
   description: string | null;
   project_address: string | null;
+  client_visibility_tier: 'full' | 'milestone' | 'curated' | null;
   total_amount: number;
   status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired';
   valid_until: string | null;
@@ -290,7 +291,7 @@ export function useUpdateProposal() {
       updates,
     }: {
       proposalId: string;
-      updates: Partial<Pick<Proposal, 'title' | 'description' | 'project_address' | 'valid_until' | 'client_id' | 'project_id'>>;
+      updates: Partial<Pick<Proposal, 'title' | 'description' | 'project_address' | 'client_visibility_tier' | 'valid_until' | 'client_id' | 'project_id'>>;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;

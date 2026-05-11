@@ -69,6 +69,13 @@ export function ScopeBuilderShell({
     updateProposal.mutate({ proposalId, updates: { project_address: next || null } });
   };
 
+  const visibilityTier: 'full' | 'milestone' | 'curated' =
+    proposal?.client_visibility_tier ?? 'milestone';
+  const updateVisibilityTier = (next: 'full' | 'milestone' | 'curated') => {
+    if (next === visibilityTier) return;
+    updateProposal.mutate({ proposalId, updates: { client_visibility_tier: next } });
+  };
+
   const setTab = (next: Tab) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('tab', next);
@@ -113,26 +120,49 @@ export function ScopeBuilderShell({
         </div>
       )}
 
-      {/* Project basics — site address (carries forward to project.site_address on activation) */}
-      <div className="mb-6 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-5">
-        <label
-          htmlFor="project-address"
-          className="mb-2 block font-mono text-[0.58rem] uppercase tracking-wider text-[var(--text-muted)]"
-        >
-          Site Address
-        </label>
-        <input
-          id="project-address"
-          type="text"
-          value={addressDraft}
-          onChange={(e) => setAddressDraft(e.target.value)}
-          onBlur={commitAddress}
-          placeholder="123 Main St, City, ST 00000"
-          className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-primary)] focus:outline-none"
-        />
-        <p className="mt-2 type-body-small text-[var(--text-muted)]">
-          Captured here so the activated project picks it up automatically.
-        </p>
+      {/* Project basics — site address + client visibility (carry forward on activation) */}
+      <div className="mb-6 grid gap-5 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-5 sm:grid-cols-[1fr_220px]">
+        <div>
+          <label
+            htmlFor="project-address"
+            className="mb-2 block font-mono text-[0.58rem] uppercase tracking-wider text-[var(--text-muted)]"
+          >
+            Site Address
+          </label>
+          <input
+            id="project-address"
+            type="text"
+            value={addressDraft}
+            onChange={(e) => setAddressDraft(e.target.value)}
+            onBlur={commitAddress}
+            placeholder="123 Main St, City, ST 00000"
+            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-primary)] focus:outline-none"
+          />
+          <p className="mt-2 type-body-small text-[var(--text-muted)]">
+            Both fields carry forward to the project on activation.
+          </p>
+        </div>
+        <div>
+          <label
+            htmlFor="project-visibility"
+            className="mb-2 block font-mono text-[0.58rem] uppercase tracking-wider text-[var(--text-muted)]"
+          >
+            Client Visibility
+          </label>
+          <select
+            id="project-visibility"
+            value={visibilityTier}
+            onChange={(e) => updateVisibilityTier(e.target.value as 'full' | 'milestone' | 'curated')}
+            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-sm text-[var(--text-primary)] focus:border-[var(--accent-primary)] focus:outline-none"
+          >
+            <option value="milestone">Milestones only (default)</option>
+            <option value="full">Full project view</option>
+            <option value="curated">Curated highlights</option>
+          </select>
+          <p className="mt-2 type-body-small text-[var(--text-muted)]">
+            What the client sees in their portal.
+          </p>
+        </div>
       </div>
 
       {/* Project team — copies into project_team_members on activation */}
