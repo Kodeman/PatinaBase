@@ -51,6 +51,7 @@ final class DailyRoomViewModel {
 
     private var toastTask: Task<Void, Never>?
     private var feedTask: Task<Void, Never>?
+    private var storyTask: Task<Void, Never>?
 
     // MARK: - Derived
 
@@ -79,7 +80,8 @@ final class DailyRoomViewModel {
     // MARK: - Lifecycle
 
     func load() {
-        todayStory = .mock
+        todayStory = nil
+        refreshTodaysStory()
         if let ctx = modelContext {
             let store = RoomStore(context: ctx)
             let realRooms = store.allRooms()
@@ -106,17 +108,40 @@ final class DailyRoomViewModel {
         } else {
             selectedRoomID = rooms.first?.id
         }
-        allRecommendations = DailyRecommendation.mockAll
+        // No mock seed — recommendations are populated exclusively from the
+        // backend in refreshFeedForSelectedRoom().
+        allRecommendations = []
         refreshFeedForSelectedRoom()
     }
 
-    /// Fetch the room-aware feed for the currently selected room. Falls
-    /// back silently to the mock list if the room has no remote id or the
-    /// request fails — keeps the UI usable offline and for mock rooms.
+    /// Fetch today's editorial story from `editorial_stories` and bind to
+    /// `todayStory`. Silent fail — the home screen renders without the
+    /// story card when the request fails.
+    func refreshTodaysStory() {
+        storyTask?.cancel()
+        storyTask = Task { [weak self] in
+            do {
+                let remote = try await EditorialStoriesAPIClient.shared.fetchTodaysStory()
+                await MainActor.run {
+                    guard let self else { return }
+                    self.todayStory = remote.map { DailyStory(from: $0) }
+                }
+            } catch {
+                #if DEBUG
+                print("[DailyRoomVM] story fetch failed: \(error)")
+                #endif
+            }
+        }
+    }
+
+    /// Fetch the room-aware feed for the currently selected room. The
+    /// remote response is the sole source of recommendations — there is
+    /// no local mock fallback in production.
     func refreshFeedForSelectedRoom() {
         guard let localId = selectedRoomID,
               let remoteId = remoteIdByLocal[localId] else {
             spatialContext = [:]
+            allRecommendations = []
             return
         }
         feedTask?.cancel()
@@ -130,18 +155,53 @@ final class DailyRoomViewModel {
                             ($0.id, $0.spatial_context ?? [:])
                         }
                     )
-                    // Merge remote ranking into the existing mock list when
-                    // possible so ordering reflects the room. Products not
-                    // found in the local mock are appended.
-                    // NOTE: this is a lightweight blend — a full migration
-                    // to remote products is a follow-up.
+                    self.allRecommendations = response.products.map { fp in
+                        DailyRoomViewModel.recommendation(from: fp)
+                    }
                 }
             } catch {
                 #if DEBUG
                 print("[DailyRoomVM] feed fetch failed: \(error)")
                 #endif
+                await MainActor.run { [weak self] in
+                    self?.allRecommendations = []
+                }
             }
         }
+    }
+
+    /// Convert a remote `FeedProduct` into the UI's `DailyRecommendation`.
+    /// `whyCopy` is sourced from `spatial_context["why"]` when available;
+    /// the spatial-context dictionary is also wired into `spatialContext`
+    /// so `DailyProductCard` can render "why it fits" text.
+    private static func recommendation(from fp: FeedProduct) -> DailyRecommendation {
+        let priceCents = Int((fp.price_retail ?? 0).rounded())
+        let product = Product(
+            id: fp.id,
+            name: fp.name,
+            priceCents: priceCents,
+            matchScore: 80,
+            makerName: "",
+            makerLocation: nil,
+            makerStory: nil,
+            imageURL: fp.images?.first,
+            usdzURL: nil,
+            styleTags: [],
+            materialTags: [],
+            badges: [],
+            category: .decor,
+            tier: .styleMatch
+        )
+        let why = fp.spatial_context?["why"] ?? ""
+        return DailyRecommendation(
+            id: fp.id,
+            product: product,
+            matchScore: 80,
+            tier: .standard,
+            whyCopy: why,
+            insight: nil,
+            pairing: nil
+        )
     }
 
     // MARK: - Intent
