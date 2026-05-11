@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { formatShortDate } from '@patina/utils';
 import { useProposals, useProposalStats } from '@/hooks/use-proposals';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { FilterRow } from '@/components/portal/filter-row';
@@ -17,11 +18,6 @@ const STATUS_FILTERS = [
   { key: 'accepted', label: 'Signed' },
   { key: 'expired', label: 'Expired' },
 ];
-
-function formatRelativeDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
 
 export default function ProposalsPage() {
   const router = useRouter();
@@ -117,16 +113,16 @@ export default function ProposalsPage() {
           {proposals.map((proposal) => {
             // Build subtitle
             const parts: string[] = [];
-            if (proposal.sent_at) parts.push(`Sent ${formatRelativeDate(proposal.sent_at)}`);
+            if (proposal.sent_at) parts.push(`Sent ${formatShortDate(proposal.sent_at)}`);
             if (proposal.valid_until) {
               const expDate = new Date(proposal.valid_until);
               const now = new Date();
               if (expDate > now) {
-                parts.push(`Expires ${formatRelativeDate(proposal.valid_until)}`);
+                parts.push(`Expires ${formatShortDate(proposal.valid_until)}`);
               }
             }
             if (proposal.status === 'draft') {
-              parts.push(`Last edited ${formatRelativeDate(proposal.updated_at)}`);
+              parts.push(`Last edited ${formatShortDate(proposal.updated_at)}`);
             }
 
             return (

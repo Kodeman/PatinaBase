@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { formatCents, formatCentsCompact, formatRelativeDate } from '@patina/utils';
 import { useProjects, useProjectListMetrics, useUpdateProject } from '@/hooks/use-projects';
 import { FilterRow } from '@/components/portal/filter-row';
 import { MetricsRow } from '@/components/portal/metrics-row';
@@ -42,27 +43,6 @@ const projectUpdatedAt = (p: AnyProject): string =>
 
 function formatPhase(phase: string): string {
   return phase.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatBudgetCompact(cents: number): string {
-  const dollars = cents / 100;
-  if (dollars >= 1000) return `$${(dollars / 1000).toFixed(dollars >= 10000 ? 0 : 1)}k`;
-  return `$${dollars.toLocaleString()}`;
-}
-
-function formatBudget(cents: number): string {
-  return `$${(cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
-}
-
-function formatRelativeDate(iso: string): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  if (days < 7) return `${days}d ago`;
-  if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 // ── Status filter tabs ───────────────────────────────────────────────────────
@@ -290,7 +270,7 @@ export default function ProjectsPage() {
     return [
       {
         label: 'Active Value',
-        value: formatBudgetCompact(metrics.activeValue),
+        value: formatCentsCompact(metrics.activeValue),
         subtitle: `across ${metrics.activeCount} projects`,
         trend: 'neutral' as const,
       },
@@ -302,7 +282,7 @@ export default function ProjectsPage() {
       },
       {
         label: 'Invoiced',
-        value: formatBudgetCompact(metrics.invoicedMTD),
+        value: formatCentsCompact(metrics.invoicedMTD),
         subtitle: 'total invoiced',
         trend: 'up' as const,
       },
@@ -518,7 +498,7 @@ function ListView({
             </span>
             <ProgressBar progress={projectProgress(project)} />
             <span className="text-right font-heading text-[0.95rem] font-semibold text-[var(--text-primary)]">
-              {formatBudget(projectBudgetCents(project))}
+              {formatCents(projectBudgetCents(project))}
             </span>
             <span className="text-right type-meta-small text-[var(--text-muted)]">
               {formatRelativeDate(projectUpdatedAt(project))}
@@ -581,7 +561,7 @@ function GridView({
               <ProgressBar progress={projectProgress(project)} />
               <div className="mt-3 flex items-baseline justify-between">
                 <span className="font-heading text-[1.05rem] font-semibold text-[var(--text-primary)]">
-                  {formatBudget(projectBudgetCents(project))}
+                  {formatCents(projectBudgetCents(project))}
                 </span>
                 <span className="type-meta-small text-[var(--text-muted)]">
                   {formatRelativeDate(projectUpdatedAt(project))}
