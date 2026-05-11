@@ -464,8 +464,9 @@ chrome.runtime.onStartup.addListener(() => {
 // Periodic sync using alarms (Manifest V3 doesn't allow setInterval in service workers)
 chrome.alarms?.create('sync-queue', { periodInMinutes: 5 });
 chrome.alarms?.create('check-update', { periodInMinutes: 60 });
+chrome.alarms?.create('refresh-token', { periodInMinutes: 30 });
 
-chrome.alarms?.onAlarm?.addListener(alarm => {
+chrome.alarms?.onAlarm?.addListener(async alarm => {
   if (alarm.name === 'sync-queue') {
     syncQueue();
   }
@@ -478,6 +479,22 @@ chrome.alarms?.onAlarm?.addListener(alarm => {
         });
       }
     });
+  }
+  if (alarm.name === 'refresh-token') {
+    // Proactively refresh the Supabase session in the SW so the offline
+    // capture queue still has a valid JWT when the sidepanel is closed.
+    // Supabase tokens last 1h by default; refresh ~25min before expiry.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const expiresAt = session.expires_at ?? 0;
+    const msUntilExpiry = expiresAt * 1000 - Date.now();
+    if (msUntilExpiry < 35 * 60_000) {
+      try {
+        await supabase.auth.refreshSession();
+      } catch (err) {
+        console.warn('[background] token refresh failed', err);
+      }
+    }
   }
 });
 
