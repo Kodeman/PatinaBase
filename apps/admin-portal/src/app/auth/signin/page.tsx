@@ -148,8 +148,7 @@ function SignInContent() {
 
     try {
       await sendMagicLink.mutateAsync({ email: data.email });
-      // The verify-otp page lands in Task 3.2 — until then, Next typed routes won't resolve it.
-      router.push(`/auth/verify-otp?email=${encodeURIComponent(data.email)}` as any);
+      router.push(`/auth/verify-otp?email=${encodeURIComponent(data.email)}`);
     } catch (err) {
       console.error('[Magic Link] Exception:', err);
       const message =
