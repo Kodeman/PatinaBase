@@ -2,6 +2,17 @@
 
 Operational steps for the Patina authentication system that cannot be performed by code changes alone — Supabase Studio toggles, redirect-allowlist edits, deploy-time checks. Pair with the implementation plan at `docs/plans/patina-auth-full-rollout.md` (mirror of `~/.claude/plans/using-the-chrome-extention-lazy-stream.md`).
 
+## TL;DR — what Kody needs to do after the auth rollout deploys
+
+Code commits (21 of them) cover Phase 1 fixes (Google button, QR endpoint, extension storage adapter, iOS email-confirm UX), Phase 2 SSO (cookie domain, portal-domain checks), and Phase 3 magic-link UI (signin toggle, OTP verify page, extension link, iOS code-entry). The rest of the rollout is configuration in Supabase Studio + manual verification.
+
+**Operator sequence (do in order):**
+1. **Section 1 — Enable MFA at project level** before deploying Phase 1. Without this, the admin MFA enrollment flow is dead code in production.
+2. **Section 2 — Update redirect allowlist** before deploying Phase 2 or Phase 3. Without these entries, OAuth + magic-link redirects 4xx.
+3. **Deploy** all 21 commits to all three portals + Chrome extension + iOS build. Coolify deploys for portals; extension + iOS need their own release pipelines.
+4. **Section 3 — Walk the 7-step SSO verification matrix** in a fresh incognito window after deploy.
+5. (Future) **Section 4 — Re-enable Google OAuth** if/when product wants it — requires Google Cloud OAuth client + flipping `NEXT_PUBLIC_ENABLED_OAUTH_PROVIDERS` from `apple` to `apple,google`.
+
 Self-hosted Supabase Studio: `https://supabase.patina.cloud`.
 Self-hosted Supabase API (Kong): `https://api.patina.cloud`.
 
