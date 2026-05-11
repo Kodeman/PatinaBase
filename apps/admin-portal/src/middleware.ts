@@ -33,11 +33,24 @@ export async function middleware(req: NextRequest) {
     return res;
   }
 
-  // Helper: create a redirect that preserves Supabase auth cookies from res
+  // Helper: create a redirect that preserves Supabase auth cookies from res.
+  // Use the object-set form so domain/secure/sameSite/path/httpOnly/TTL
+  // attributes carry over — the (name, value) shorthand drops them, which
+  // would defeat the cross-subdomain cookie scoping from Task 2.1.
   const redirectWithCookies = (url: URL) => {
     const redirect = NextResponse.redirect(url);
     res.cookies.getAll().forEach((cookie) => {
-      redirect.cookies.set(cookie.name, cookie.value);
+      redirect.cookies.set({
+        name: cookie.name,
+        value: cookie.value,
+        domain: cookie.domain,
+        path: cookie.path,
+        secure: cookie.secure,
+        sameSite: cookie.sameSite as 'lax' | 'strict' | 'none' | undefined,
+        httpOnly: cookie.httpOnly,
+        expires: cookie.expires,
+        maxAge: cookie.maxAge,
+      });
     });
     return redirect;
   };

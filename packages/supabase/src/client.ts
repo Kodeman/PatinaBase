@@ -81,8 +81,10 @@ export function createMiddlewareClient(
   response: { cookies: { set: (cookie: { name: string; value: string; [key: string]: unknown }) => void } }
 ) {
   // Detect host so cookies can be scoped to `.patina.cloud` in production
-  // while remaining host-only on localhost. Trust `x-forwarded-host` first
-  // because Cloudflare Tunnel / Traefik rewrite the inbound Host header.
+  // while remaining host-only on localhost.
+  // Prefer x-forwarded-host if set (e.g. behind a future reverse proxy that
+  // rewrites the inbound Host header). The current cloudflared topology
+  // preserves the original Host, so this falls back to `host` in production.
   const forwardedHost = request.headers?.get('x-forwarded-host') ?? undefined;
   const rawHost = request.headers?.get('host') ?? undefined;
   const host = forwardedHost ?? rawHost;

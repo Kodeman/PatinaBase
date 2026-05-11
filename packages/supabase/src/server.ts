@@ -21,6 +21,9 @@ async function resolveServerCookieOptions() {
   let host: string | undefined;
   try {
     const headerStore = await headers();
+    // Prefer x-forwarded-host if set (e.g. behind a future reverse proxy that
+    // rewrites the inbound Host header). The current cloudflared topology
+    // preserves the original Host, so this falls back to `host` in production.
     host =
       headerStore.get('x-forwarded-host') ??
       headerStore.get('host') ??
