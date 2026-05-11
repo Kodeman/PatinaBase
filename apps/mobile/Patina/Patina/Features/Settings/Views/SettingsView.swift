@@ -9,8 +9,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var notificationsOn = true
-    @State private var hapticOn = true
+    @State private var settings = SettingsService.shared
     /// Cellular opt-in for large scan artifact uploads. Backing store is
     /// read by `RoomScanSyncService` at upload-time — UserDefaults key
     /// `patina.scanUploadOnCellularEnabled` keeps the two sides in sync.
@@ -36,8 +35,24 @@ struct SettingsView: View {
 
                 // Preferences group
                 settingsGroup(title: "Preferences") {
-                    settingsToggleRow(icon: "bell", iconColor: PatinaColors.terracotta, label: "Notifications", isOn: $notificationsOn)
-                    settingsToggleRow(icon: "hand.tap", iconColor: PatinaColors.agedOak, label: "Haptic Feedback", isOn: $hapticOn)
+                    settingsToggleRow(
+                        icon: "bell",
+                        iconColor: PatinaColors.terracotta,
+                        label: "Notifications",
+                        isOn: Binding(
+                            get: { settings.notificationsEnabled },
+                            set: { settings.setNotificationsEnabled($0) }
+                        )
+                    )
+                    settingsToggleRow(
+                        icon: "hand.tap",
+                        iconColor: PatinaColors.agedOak,
+                        label: "Haptic Feedback",
+                        isOn: Binding(
+                            get: { settings.hapticsEnabled },
+                            set: { settings.setHapticsEnabled($0) }
+                        )
+                    )
                     settingsToggleRow(icon: "antenna.radiowaves.left.and.right", iconColor: PatinaColors.dustyBlue, label: "Upload scans on cellular", isOn: $uploadOnCellular)
                     settingsRow(icon: "moon", iconColor: PatinaColors.dustyBlue, label: "Appearance")
                 }
@@ -54,6 +69,9 @@ struct SettingsView: View {
         }
         .background(PatinaColors.offWhite)
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await settings.load()
+        }
     }
 
     // MARK: - Components
