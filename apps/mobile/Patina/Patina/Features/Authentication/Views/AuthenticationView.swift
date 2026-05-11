@@ -27,13 +27,18 @@ public struct AuthenticationView: View {
                     formContent
 
                     // Sign in with Apple
-                    if viewModel.mode != .resetPassword {
+                    if viewModel.mode != .resetPassword
+                        && viewModel.emailAwaitingVerification == nil {
                         divider
                         appleSignIn
                     }
 
-                    // Mode switcher
-                    modeSwitcher
+                    // Mode switcher — hidden while the user is in the
+                    // email-verification recovery flow; the recovery panel
+                    // owns the "use a different email" affordance.
+                    if viewModel.emailAwaitingVerification == nil {
+                        modeSwitcher
+                    }
                 }
                 .padding(PatinaSpacing.xl)
             }
@@ -57,7 +62,7 @@ public struct AuthenticationView: View {
             StrataMarkView(color: PatinaColors.mochaBrown, scale: 1.2)
                 .padding(.bottom, PatinaSpacing.sm)
 
-            Text(viewModel.mode.rawValue)
+            Text(headerTitle)
                 .font(PatinaTypography.h2)
                 .foregroundColor(PatinaColors.Text.primary)
 
@@ -69,7 +74,17 @@ public struct AuthenticationView: View {
         .padding(.top, PatinaSpacing.xl)
     }
 
+    private var headerTitle: String {
+        if viewModel.emailAwaitingVerification != nil {
+            return "Verify your email"
+        }
+        return viewModel.mode.rawValue
+    }
+
     private var headerSubtitle: String {
+        if viewModel.emailAwaitingVerification != nil {
+            return "One last step before you can sign in"
+        }
         switch viewModel.mode {
         case .signIn:
             return "Welcome back to Patina"
@@ -112,8 +127,11 @@ public struct AuthenticationView: View {
                     .accessibilityIdentifier("auth.form.errorBanner")
             }
 
-            // Magic link sent state
-            if viewModel.mode == .magicLink && viewModel.magicLinkSent {
+            // Email-not-confirmed recovery state (production blocks
+            // password sign-in until the verification link is clicked).
+            if viewModel.emailAwaitingVerification != nil {
+                emailVerificationNeededView
+            } else if viewModel.mode == .magicLink && viewModel.magicLinkSent {
                 magicLinkSentView
             } else {
                 // Display name (sign up only)
@@ -218,6 +236,98 @@ public struct AuthenticationView: View {
                     .font(PatinaTypography.bodySmall)
                     .foregroundColor(PatinaColors.Text.muted)
             }
+        }
+        .padding(.vertical, PatinaSpacing.lg)
+    }
+
+    // MARK: - Email Verification Needed
+
+    private var emailVerificationNeededView: some View {
+        let unverifiedEmail = viewModel.emailAwaitingVerification ?? ""
+
+        return VStack(spacing: PatinaSpacing.lg) {
+            // Inbox icon
+            Image(systemName: "envelope.badge.fill")
+                .font(.system(size: 48))
+                .foregroundColor(PatinaColors.mochaBrown)
+                .padding(.bottom, PatinaSpacing.sm)
+
+            Text("Check your inbox")
+                .font(PatinaTypography.h3)
+                .foregroundColor(PatinaColors.Text.primary)
+
+            Text("We sent a verification link to")
+                .font(PatinaTypography.body)
+                .foregroundColor(PatinaColors.Text.secondary)
+
+            Text(unverifiedEmail)
+                .font(PatinaTypography.bodyMedium)
+                .foregroundColor(PatinaColors.Text.primary)
+                .accessibilityIdentifier("auth.verification.emailLabel")
+
+            Text("Tap the link in that email, then come back here to sign in.")
+                .font(PatinaTypography.bodySmall)
+                .foregroundColor(PatinaColors.Text.muted)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // Resend success indicator
+            if viewModel.verificationResendSuccess {
+                HStack(spacing: PatinaSpacing.sm) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text("Verification email sent")
+                        .font(PatinaTypography.bodySmall)
+                        .foregroundColor(.green)
+                }
+                .padding(PatinaSpacing.md)
+                .frame(maxWidth: .infinity)
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(PatinaRadius.md)
+            }
+
+            // Resend button
+            Button {
+                Task {
+                    await viewModel.resendVerificationEmail()
+                }
+            } label: {
+                HStack {
+                    if viewModel.isResendingVerification {
+                        ProgressView()
+                            .tint(PatinaColors.mochaBrown)
+                    } else {
+                        Text(viewModel.verificationResendCooldown > 0
+                             ? "Resend in \(viewModel.verificationResendCooldown)s"
+                             : "Resend verification email")
+                    }
+                }
+                .font(PatinaTypography.bodyMedium)
+                .foregroundColor(PatinaColors.mochaBrown)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, PatinaSpacing.md)
+                .background(PatinaColors.Background.secondary)
+                .cornerRadius(PatinaRadius.lg)
+                .overlay(
+                    RoundedRectangle(cornerRadius: PatinaRadius.lg)
+                        .stroke(PatinaColors.mochaBrown, lineWidth: 1)
+                )
+            }
+            .disabled(viewModel.isResendingVerification
+                      || viewModel.verificationResendCooldown > 0)
+            .accessibilityIdentifier("auth.verification.resendButton")
+
+            // Use different email button — returns to the sign-in form
+            // so the user can try a different account.
+            Button {
+                viewModel.mode = .signIn
+                viewModel.clearForm()
+            } label: {
+                Text("Use a different email")
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundColor(PatinaColors.Text.muted)
+            }
+            .accessibilityIdentifier("auth.verification.useDifferentEmailButton")
         }
         .padding(.vertical, PatinaSpacing.lg)
     }

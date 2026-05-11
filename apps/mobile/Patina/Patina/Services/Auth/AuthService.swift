@@ -135,9 +135,34 @@ public final class AuthService {
             )
             self.session = session
         } catch {
+            // GoTrue returns `email_not_confirmed` when a fresh signup tries
+            // to sign in before clicking the verification link. Surface this
+            // as a distinct error so the UI can offer a "check your inbox"
+            // recovery panel with a resend-verification action, instead of
+            // the generic "invalid credentials" message the SDK provides.
+            if Self.isEmailNotConfirmedError(error) {
+                let mapped = AuthServiceError.emailNotConfirmed(email: email)
+                errorMessage = mapped.localizedDescription
+                throw mapped
+            }
             errorMessage = error.localizedDescription
             throw error
         }
+    }
+
+    /// Detect whether a thrown auth error represents the `email_not_confirmed`
+    /// branch from GoTrue. Tries the typed `AuthError.errorCode` first
+    /// (supabase-swift 2.x exposes this directly), then falls back to a
+    /// message match for safety if the server returns the code without a
+    /// typed wrapper.
+    private static func isEmailNotConfirmedError(_ error: any Error) -> Bool {
+        if let authError = error as? AuthError,
+           authError.errorCode == .emailNotConfirmed {
+            return true
+        }
+        let description = error.localizedDescription.lowercased()
+        return description.contains("email not confirmed")
+            || description.contains("email_not_confirmed")
     }
 
     /// Sign in with Apple
@@ -225,6 +250,32 @@ public final class AuthService {
         }
     }
 
+    // MARK: - Email Verification
+
+    /// Resend the signup confirmation email for an unverified account.
+    ///
+    /// GoTrue's resend endpoint always succeeds (whether or not the email
+    /// exists in the system) to avoid leaking account-existence info — so
+    /// the only failures surfaced here are transport or rate-limit errors
+    /// from the SDK.
+    @MainActor
+    public func resendVerificationEmail(_ email: String) async throws {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        do {
+            try await supabase.auth.resend(
+                email: email,
+                type: .signup,
+                emailRedirectTo: URL(string: "\(APIConfiguration.appURLScheme)://auth/callback")
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+            throw error
+        }
+    }
+
     // MARK: - Password Reset
 
     /// Send password reset email
@@ -304,6 +355,29 @@ public final class AuthService {
             return session
         } catch {
             return nil
+        }
+    }
+}
+
+// MARK: - Errors
+
+/// Errors surfaced by `AuthService` that need distinct UI handling.
+///
+/// Most failures from the underlying supabase-swift `AuthError` are routed
+/// through `errorMessage` and re-thrown unchanged. This enum is reserved
+/// for branches that the UI needs to recognise and recover from, like
+/// `.emailNotConfirmed` (production requires email verification before
+/// password sign-in).
+public enum AuthServiceError: LocalizedError, Equatable {
+    /// Sign-in failed because the account exists but the email has not
+    /// been verified. Carries the email so the recovery panel can address
+    /// the user and offer a resend action.
+    case emailNotConfirmed(email: String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .emailNotConfirmed:
+            return "Please verify your email address before signing in. Check your inbox for the verification link."
         }
     }
 }

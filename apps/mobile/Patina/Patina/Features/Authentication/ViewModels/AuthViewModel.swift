@@ -64,6 +64,24 @@ public final class AuthViewModel {
     /// Cooldown timer for magic link resend
     public var magicLinkCooldown: Int = 0
 
+    /// Email whose verification we're awaiting. When set, the view should
+    /// render the "check your inbox" recovery panel instead of the form.
+    /// Production has `mailer_autoconfirm: false`, so fresh signups can't
+    /// password-sign-in until they click the verification link.
+    public var emailAwaitingVerification: String?
+
+    /// Whether the resend-verification request is in flight. Distinct from
+    /// `authService.isLoading` so the recovery panel can show its own
+    /// spinner without re-disabling the rest of the form.
+    public var isResendingVerification: Bool = false
+
+    /// Cooldown timer (seconds) for resend-verification to prevent rapid
+    /// taps against GoTrue's rate limits.
+    public var verificationResendCooldown: Int = 0
+
+    /// Transient success message shown after a verification email resend.
+    public var verificationResendSuccess: Bool = false
+
     // MARK: - Private
 
     private let authService = AuthService.shared
@@ -92,6 +110,12 @@ public final class AuthViewModel {
         do {
             try await authService.signIn(email: email, password: password)
             coordinator?.setAuthState(.authenticated(userId: authService.currentUser?.id.uuidString ?? ""))
+        } catch AuthServiceError.emailNotConfirmed(let unverifiedEmail) {
+            // Route to the "check your inbox" recovery panel. Clear the
+            // generic error banner from authService so it doesn't shadow
+            // the new UI, and stash the email for the resend action.
+            emailAwaitingVerification = unverifiedEmail
+            authService.clearError()
         } catch {
             // Error is already set in authService
         }
@@ -164,6 +188,42 @@ public final class AuthViewModel {
         }
     }
 
+    /// Resend the signup verification email for the address the user
+    /// just attempted to sign in with. No-ops if there's no email
+    /// awaiting verification or a resend is already in flight.
+    @MainActor
+    public func resendVerificationEmail() async {
+        guard let email = emailAwaitingVerification else { return }
+        guard !isResendingVerification else { return }
+        guard verificationResendCooldown == 0 else { return }
+
+        isResendingVerification = true
+        verificationResendSuccess = false
+        authService.clearError()
+        defer { isResendingVerification = false }
+
+        do {
+            try await authService.resendVerificationEmail(email)
+            verificationResendSuccess = true
+            verificationResendCooldown = 60
+            startVerificationResendCooldownTimer()
+        } catch {
+            // authService.errorMessage is already set; the recovery panel
+            // surfaces it via the same error banner the form uses.
+        }
+    }
+
+    /// Tick down the verification-resend cooldown. Mirrors the magic-link
+    /// cooldown pattern so the two resend flows feel consistent.
+    private func startVerificationResendCooldownTimer() {
+        Task { @MainActor in
+            while verificationResendCooldown > 0 {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                verificationResendCooldown -= 1
+            }
+        }
+    }
+
     /// Handle Sign in with Google (OAuth web flow)
     @MainActor
     public func handleGoogleSignIn() async {
@@ -204,6 +264,10 @@ public final class AuthViewModel {
         magicLinkSent = false
         magicLinkEmail = ""
         magicLinkCooldown = 0
+        emailAwaitingVerification = nil
+        isResendingVerification = false
+        verificationResendCooldown = 0
+        verificationResendSuccess = false
     }
 }
 
