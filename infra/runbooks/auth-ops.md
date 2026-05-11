@@ -154,7 +154,94 @@ This restores fail-open behavior. Then disable `GOTRUE_MFA_ENABLED` and restart 
 
 ## 3. SSO end-to-end verification (Task 2.4)
 
-*Section pending Task 2.4.*
+Run this AFTER deploying the Phase 2 changes (cookie-domain helper, redirect-cookie attribute preservation, portal-domain middleware on designer + client). Confirms cross-subdomain SSO works as designed.
+
+**Prerequisites:**
+- Phase 1 + Phase 2 deployed to all three portals
+- Section 2 (redirect allowlist) complete
+- At least one user with role(s) in EACH of these domains:
+  - `admin` (kody@kochaver.com qualifies)
+  - `designer`-only (no admin) — find one via `select email from profiles p join user_roles ur on ur.user_id = p.id join roles r on r.id = ur.role_id where r.domain = 'designer' and not exists (select 1 from user_roles ur2 join roles r2 on r2.id = ur2.role_id where ur2.user_id = p.id and r2.domain = 'admin');`
+  - `consumer`-only — similar pattern with `domain = 'consumer'`
+
+### Test matrix
+
+Run each in a fresh incognito window. Use DevTools → Application → Cookies to inspect the Supabase auth cookie.
+
+#### Test 1 — Admin staff: cross-portal session shares (positive)
+
+1. Sign in as `kody@kochaver.com` on `https://app.patina.cloud`
+2. Confirm cookie scope: `sb-<ref>-auth-token` has `Domain=.patina.cloud`, `Secure`, `SameSite=Lax`, `Path=/`
+3. Open `https://admin.patina.cloud` in a new tab in the SAME incognito window
+4. Expected: signed in (no signin redirect)
+5. Open `https://client.patina.cloud` in a new tab
+6. Expected: signed in but bounced to `/unauthorized` because kody's roles don't include the `consumer` domain
+7. Confirm `/unauthorized` shows the wrong-portal panel + sign-out link
+
+#### Test 2 — Designer-only user: blocked on admin + client (negative carryover)
+
+1. Sign in as the designer-only user on `https://app.patina.cloud`
+2. Confirm landing on `/portal` (the designer workspace)
+3. Open `https://admin.patina.cloud` in a new tab
+4. Expected: signed in but bounced to admin's `/unauthorized` (admin middleware's `roles.domain='admin'` check blocks)
+5. Open `https://client.patina.cloud` in a new tab
+6. Expected: signed in but bounced to client's `/unauthorized` (client middleware's `{consumer, admin}` check blocks)
+
+#### Test 3 — Consumer-only user: blocked on app + admin (negative carryover)
+
+1. Sign in as the consumer-only user on `https://client.patina.cloud`
+2. Confirm landing on `/` (client home)
+3. Open `https://app.patina.cloud` in a new tab
+4. Expected: signed in but bounced to designer's `/unauthorized`
+5. Open `https://admin.patina.cloud` in a new tab
+6. Expected: signed in but bounced to admin's `/unauthorized`
+
+#### Test 4 — Sign-out propagates across portals
+
+1. Sign in as `kody@kochaver.com` on `https://app.patina.cloud`
+2. Open `https://admin.patina.cloud` in a new tab; confirm signed in
+3. On the `app.patina.cloud` tab, sign out
+4. Reload the `admin.patina.cloud` tab
+5. Expected: bounced to `/auth/signin` (cookie removal propagated)
+6. Inspect cookies: `sb-<ref>-auth-token` should be absent or expired with `Domain=.patina.cloud`
+
+#### Test 5 — Apple OAuth callback respects allowlist
+
+1. From `https://app.patina.cloud/auth/signin`, click "Continue with Apple"
+2. Complete Apple flow
+3. Expected: redirect chain through `/auth/callback?code=...`, then land on `/portal`. No `error=invalid_redirect_uri` query string anywhere in the chain.
+
+#### Test 6 — Password reset callback respects allowlist
+
+1. From `https://app.patina.cloud/auth/signin`, click "Forgot password"
+2. Submit your email
+3. Open the inbox email
+4. Click the reset link
+5. Expected: land on `https://app.patina.cloud/auth/callback?type=recovery&...` and proceed to a password-set form. No `localhost` placeholder.
+
+#### Test 7 — Middleware redirect preserves cookie attributes
+
+This is the Task 2.1 follow-up regression test (the one that fixed `redirectWithCookies` dropping attributes).
+
+1. Clear all cookies
+2. Visit `https://app.patina.cloud/portal/clients` directly (a protected page)
+3. Expect redirect to `https://app.patina.cloud/auth/signin?callbackUrl=/portal/clients`
+4. Inspect Set-Cookie headers on the redirect response (DevTools → Network → the 307 response)
+5. Expected: any `sb-` cookies in the Set-Cookie chain have `Domain=.patina.cloud`, `Secure`, `SameSite=Lax`
+
+### Done when
+
+- [ ] All 7 tests above pass
+- [ ] Cookie inspection confirms `Domain=.patina.cloud` on every Supabase auth cookie
+- [ ] No `invalid_redirect_uri` observed in any OAuth or magic-link redirect chain
+- [ ] No regression: previously-working flows (Apple OAuth, password reset) still succeed
+
+### Rollback
+
+If SSO breaks production sign-ins:
+1. Revert the `getCookieDomain` env-var override path: set `SUPABASE_COOKIE_DOMAIN=` (empty) in each portal's Coolify env. With no domain returned, cookies revert to host-only scope.
+2. If that's insufficient, revert commits `cb32565` (Task 2.1) and `5bf0b21` (Task 2.1 follow-up) and redeploy.
+3. The portal-domain checks (Task 2.3) can be disabled by removing the `SUPABASE_SERVICE_ROLE_KEY` env var from a portal — the middleware fails open without it. Use sparingly; this opens cross-portal access for all signed-in users.
 
 ## 4. Google OAuth re-enablement (when ready)
 
