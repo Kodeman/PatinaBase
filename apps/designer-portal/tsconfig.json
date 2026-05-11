@@ -34,6 +34,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "../../packages/types/src/**/*.ts",
+    "../../packages/utils/src/**/*.ts",
     "../../packages/patina-design-system/src/**/*.ts",
     "../../packages/patina-design-system/src/**/*.tsx"
   ],
