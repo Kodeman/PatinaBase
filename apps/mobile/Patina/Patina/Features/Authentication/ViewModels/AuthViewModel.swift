@@ -86,6 +86,8 @@ public final class AuthViewModel {
 
     private let authService = AuthService.shared
     private var coordinator: AppCoordinator?
+    private var cooldownTask: Task<Void, Never>?
+    private var verificationCooldownTask: Task<Void, Never>?
 
     // MARK: - Initialization
 
@@ -180,10 +182,12 @@ public final class AuthViewModel {
 
     /// Start cooldown timer for magic link resend
     private func startCooldownTimer() {
-        Task { @MainActor in
+        cooldownTask?.cancel()
+        cooldownTask = Task { @MainActor in
             while magicLinkCooldown > 0 {
+                guard !Task.isCancelled else { break }
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
-                magicLinkCooldown -= 1
+                magicLinkCooldown = max(0, magicLinkCooldown - 1)
             }
         }
     }
@@ -216,10 +220,12 @@ public final class AuthViewModel {
     /// Tick down the verification-resend cooldown. Mirrors the magic-link
     /// cooldown pattern so the two resend flows feel consistent.
     private func startVerificationResendCooldownTimer() {
-        Task { @MainActor in
+        verificationCooldownTask?.cancel()
+        verificationCooldownTask = Task { @MainActor in
             while verificationResendCooldown > 0 {
+                guard !Task.isCancelled else { break }
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
-                verificationResendCooldown -= 1
+                verificationResendCooldown = max(0, verificationResendCooldown - 1)
             }
         }
     }

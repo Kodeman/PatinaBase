@@ -141,9 +141,11 @@ public final class AuthService {
             // recovery panel with a resend-verification action, instead of
             // the generic "invalid credentials" message the SDK provides.
             if Self.isEmailNotConfirmedError(error) {
-                let mapped = AuthServiceError.emailNotConfirmed(email: email)
-                errorMessage = mapped.localizedDescription
-                throw mapped
+                // Do not set errorMessage — the view model routes this case
+                // to the "check your inbox" recovery panel, not the error
+                // banner. Setting errorMessage here would cause a one-frame
+                // red flash before the view model calls clearError().
+                throw AuthServiceError.emailNotConfirmed(email: email)
             }
             errorMessage = error.localizedDescription
             throw error
