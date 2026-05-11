@@ -176,12 +176,28 @@ struct DesignerConsultationView: View {
     // MARK: - Submit
 
     private func submitRequest() {
+        guard !isSubmitting else { return }
         isSubmitting = true
-        // In production: POST to /api/leads
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            isSubmitting = false
-            showSuccess = true
-            HapticManager.shared.notification(.success)
+        let request = DesignServiceRequest(
+            serviceType: .consultation,
+            timeline: .flexible,
+            budget: .fiveToFifteen,
+            description: visionText.trimmingCharacters(in: .whitespacesAndNewlines),
+            roomId: selectedRoomIds.first
+        )
+        Task { @MainActor in
+            do {
+                _ = try await DesignServicesService.shared.submitRequest(request)
+                isSubmitting = false
+                showSuccess = true
+                HapticManager.shared.notification(.success)
+            } catch {
+                isSubmitting = false
+                HapticManager.shared.notification(.error)
+                #if DEBUG
+                print("[DesignerConsultation] submit failed: \(error.localizedDescription)")
+                #endif
+            }
         }
     }
 

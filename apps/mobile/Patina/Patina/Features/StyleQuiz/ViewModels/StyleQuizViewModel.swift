@@ -121,22 +121,35 @@ final class StyleQuizViewModel {
         // Record final question timing
         recordTiming()
 
-        // Build the result locally first (immediate feedback)
+        // Build the local result so we can show something immediately if the
+        // network is slow. It will be replaced with the server-authoritative
+        // result once the RPC returns.
         let localResult = computeLocalResult()
+        self.result = localResult
 
-        // Also submit to server for persistent style signals
         let submission = buildSubmission()
-        Task {
+        Task { [weak self] in
             do {
-                _ = try await ProductAPIClient.shared.processStyleQuiz(answers: submission)
+                let response = try await ProductAPIClient.shared.processStyleQuiz(answers: submission)
+                let serverResult = StyleProfileResult.from(serverResponse: response, fallback: localResult)
+                await MainActor.run {
+                    guard let self else { return }
+                    self.result = serverResult
+                    self.isComplete = true
+                    self.isSubmitting = false
+                }
             } catch {
-                print("[StyleQuiz] Server submission failed (local result used): \(error.localizedDescription)")
+                #if DEBUG
+                print("[StyleQuiz] Server submission failed; using local result: \(error.localizedDescription)")
+                #endif
+                await MainActor.run {
+                    guard let self else { return }
+                    // Keep the local result already on `self.result`.
+                    self.isComplete = true
+                    self.isSubmitting = false
+                }
             }
         }
-
-        self.result = localResult
-        self.isComplete = true
-        self.isSubmitting = false
     }
 
     /// Compute a style profile result locally from quiz selections

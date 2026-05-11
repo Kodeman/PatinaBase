@@ -151,4 +151,44 @@ public struct StyleProfileResult: Hashable {
     public var confidencePercent: Int {
         Int(confidence * 100)
     }
+
+    /// Build a `StyleProfileResult` from the JSON returned by the
+    /// `process_style_quiz` RPC. Falls back to fields from `fallback` when
+    /// a server field is missing or malformed.
+    public static func from(
+        serverResponse response: [String: Any]?,
+        fallback: StyleProfileResult
+    ) -> StyleProfileResult {
+        guard let response else { return fallback }
+
+        // The RPC currently returns either:
+        //   - a single object with profile fields
+        //   - an envelope `{ "profile": { ... } }` or `{ "result": { ... } }`
+        // Handle both shapes.
+        let profile: [String: Any] = (response["profile"] as? [String: Any])
+            ?? (response["result"] as? [String: Any])
+            ?? response
+
+        let primaryStyle = profile["primary_style"] as? String ?? fallback.primaryStyle
+        let secondaryStyle = profile["secondary_style"] as? String ?? fallback.secondaryStyle
+        let primaryMaterial = profile["primary_material"] as? String ?? fallback.primaryMaterial
+        let paletteWarmth = profile["palette_warmth"] as? String ?? fallback.paletteWarmth
+        let budgetLabel = profile["budget_label"] as? String ?? fallback.budgetLabel
+        let budgetMin = (profile["budget_min"] as? Int) ?? (profile["budget_min"] as? Double).map(Int.init) ?? fallback.budgetMin
+        let budgetMax = (profile["budget_max"] as? Int) ?? (profile["budget_max"] as? Double).map(Int.init) ?? fallback.budgetMax
+        let confidence = (profile["confidence"] as? Double)
+            ?? (profile["confidence"] as? Int).map(Double.init)
+            ?? fallback.confidence
+
+        return StyleProfileResult(
+            primaryStyle: primaryStyle,
+            secondaryStyle: secondaryStyle,
+            primaryMaterial: primaryMaterial,
+            paletteWarmth: paletteWarmth,
+            budgetLabel: budgetLabel,
+            budgetMin: budgetMin,
+            budgetMax: budgetMax,
+            confidence: confidence
+        )
+    }
 }
