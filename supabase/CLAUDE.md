@@ -29,6 +29,45 @@ Sequential numbered files in `migrations/`. Never modify existing migrations - a
 
 Pre-00139 rows have `total_amount_cents` backfilled from `budget_cents` and may use `budget_cents` to mean "invoice total" until manually re-aligned. New consumers reading "invoice total" should fall back: `total_amount_cents ?? budget_cents`.
 
+## Proposal → project activation
+
+`activate_proposal_as_project(p_proposal_id, p_start_date)` (latest body in `00140_proposal_project_richer_carry.sql`) is the bridge. Preconditions: `proposals.status = 'accepted'` and `proposals.project_id IS NULL`.
+
+Status transitions and side effects:
+
+| Before | After (atomic) |
+|---|---|
+| `proposals.status = 'accepted'` | unchanged — proposal stays signed |
+| `proposals.project_id = NULL` | `proposals.project_id = <new project uuid>` (back-link) |
+| `designer_clients.status ∈ ('lead', 'proposal')` | `designer_clients.status = 'active'` |
+| (no project row) | new `projects` row with `status = 'active'`, `start_date = p_start_date` |
+| (no project rows) | first `project_phases.status = 'in_progress'`, others `'pending'`; `current_phase` = first phase's `phase_key` |
+| (no milestones) | first `project_payment_milestones.status = 'outstanding'` with `due_date = p_start_date`; others `'pending'` with `due_date = NULL` |
+| (no FF&E rows) | `project_ffe_items.status = 'specified'`; `eta` seeded from `proposal_items.lead_time_weeks` when set |
+
+Data copied 1:1 (with back-references where useful):
+
+| Source | Target | Notes |
+|---|---|---|
+| `proposals.title` | `projects.name` | |
+| `proposals.description` | `projects.notes` | |
+| `proposals.personal_message` | `projects.kickoff_message` | rendered in Project Brief |
+| `proposals.project_address` | `projects.site_address` | |
+| `proposals.total_amount` | `projects.total_amount_cents` | invoice total |
+| `Σ proposal_items.line_total` | `projects.budget_cents` | FF&E subtotal |
+| `Σ proposal_phases.fee_cents` | `projects.design_fee_cents` | |
+| `proposal_exclusions[]` | `projects.scope_boundaries` (JSONB) | |
+| `proposal_change_order_terms` | `projects.change_order_terms` (JSONB) | |
+| `proposal_scope_rooms` | `project_rooms` | back-ref `source_scope_room_id` |
+| `proposal_items` | `project_ffe_items` | back-ref `source_proposal_item_id`; `internal_notes` appended to `notes` with `"Internal: "` prefix |
+| `proposal_phases` | `project_phases` | back-ref `source_proposal_phase_id`; phase dates computed from `p_start_date` |
+| `proposal_payment_milestones` | `project_payment_milestones` | phase mapping preserved |
+| `proposal_team_members` | `project_team_members` | `assigned_by = proposal.designer_id`, `ON CONFLICT DO NOTHING` |
+| `proposal_sections` | `project_narrative_sections` | back-ref `source_section_id` |
+| `proposal_palettes` (+ `palette_swatches`) | `project_palettes.swatches` (JSONB) | swatches embedded; scope_room re-mapped |
+
+Lead designer (`proposals.designer_id`) and primary client (`proposals.client_id`) carry over to the project columns of the same name — they are **not** also inserted into `proposal_team_members` / `project_team_members`.
+
 ## Structure
 
 - `migrations/`: Schema changes (00001_, 00002_, etc.)
