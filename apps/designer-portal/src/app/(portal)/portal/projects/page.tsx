@@ -28,7 +28,7 @@ const VIEW_STORAGE_KEY = 'patina:projects:view';
 
 const projectName = (p: AnyProject): string => p.name || 'Untitled';
 const projectBudgetCents = (p: AnyProject): number =>
-  p.budget_cents ?? p.budget ?? 0;
+  p.total_amount_cents ?? p.budget_cents ?? p.budget ?? 0;
 const projectProgress = (p: AnyProject): number => p.progress ?? 0;
 const projectClientName = (p: AnyProject): string =>
   p.client_name || p.client?.full_name || '';

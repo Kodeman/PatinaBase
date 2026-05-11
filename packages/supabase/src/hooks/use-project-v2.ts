@@ -333,7 +333,7 @@ export function useProjectFinancials(projectId: string) {
       const supabase = getSupabase() as any;
 
       const [projectRes, roomsRes, itemsRes] = await Promise.all([
-        supabase.from('projects').select('budget_cents, committed_cents, actual_cents, design_fee_cents').eq('id', projectId).single(),
+        supabase.from('projects').select('budget_cents, total_amount_cents, committed_cents, actual_cents, design_fee_cents').eq('id', projectId).single(),
         supabase.from('project_rooms').select('id, name, budget_cents, committed_cents, actual_cents').eq('project_id', projectId),
         supabase.from('project_ffe_items').select('ffe_category, line_total_cents, status').eq('project_id', projectId),
       ]);
@@ -359,6 +359,7 @@ export function useProjectFinancials(projectId: string) {
 
       return {
         budgetCents: project?.budget_cents || 0,
+        totalAmountCents: project?.total_amount_cents ?? project?.budget_cents ?? 0,
         committedCents: project?.committed_cents || 0,
         actualCents: project?.actual_cents || 0,
         designFeeCents: project?.design_fee_cents || 0,
