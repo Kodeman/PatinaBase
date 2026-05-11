@@ -593,6 +593,7 @@ export {
 export {
   // Project v2 (scope-aware)
   useProjectV2,
+  useProjectNarrativeSections,
   useProjectRooms,
   useProjectFFEItems,
   useUpdateFFEItemStatus,
@@ -602,7 +603,7 @@ export {
   useUpdatePaymentMilestoneStatus,
   useProjectFinancials,
 } from './use-project-v2';
-export type { FFEItemFilters } from './use-project-v2';
+export type { FFEItemFilters, ProjectNarrativeSection } from './use-project-v2';
 export {
   // Proposal Activation
   useActivateProposal,

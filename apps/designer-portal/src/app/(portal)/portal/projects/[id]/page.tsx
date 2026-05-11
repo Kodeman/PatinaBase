@@ -24,6 +24,7 @@ import {
   EditModeBar,
   ProjectIdentityHeader,
   KeyMetricsRow,
+  ProjectBriefPanel,
   RoomScopeGrid,
   PhaseTimelineV2,
   FFEScheduleTable,
@@ -196,7 +197,10 @@ export default function ProjectDetailPage({
           <span className="type-meta-small text-[var(--accent-primary)]">View history &rarr;</span>
         </Link>
 
-        {/* Zone 3: Room-by-Room Scope */}
+        {/* Zone 3a: Project Brief (preserved proposal narrative) */}
+        <ProjectBriefPanel projectId={id} />
+
+        {/* Zone 3b: Room-by-Room Scope */}
         {adaptedRooms.length > 0 && (
           <>
             <RoomScopeGrid rooms={adaptedRooms} />

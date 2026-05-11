@@ -31,6 +31,41 @@ export function useProjectV2(projectId: string) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// PROJECT NARRATIVE SECTIONS (00138 — mirror of proposal_sections)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface ProjectNarrativeSection {
+  id: string;
+  project_id: string;
+  source_section_id: string | null;
+  type: string;
+  title: string;
+  body: string | null;
+  metadata: Record<string, unknown> | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export function useProjectNarrativeSections(projectId: string) {
+  return useQuery({
+    queryKey: ['project-narrative-sections', projectId],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('project_narrative_sections')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('sort_order', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ProjectNarrativeSection[];
+    },
+    enabled: !!projectId,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // PROJECT ROOMS
 // ═══════════════════════════════════════════════════════════════════════════
 
