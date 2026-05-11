@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS editorial_stories (
   maker_avatar_gradient_key TEXT,
 
   -- Optional product spotlight
-  featured_product_id  TEXT REFERENCES products(id) ON DELETE SET NULL,
+  featured_product_id  UUID REFERENCES products(id) ON DELETE SET NULL,
 
   -- Audience targeting (simple tag list; future: per-domain filters)
   audience_tags        TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
