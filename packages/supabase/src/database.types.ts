@@ -34,8 +34,43 @@ export type Database = {
   }
   public: {
     Tables: {
+      _comms_backfill_legacy_map: {
+        Row: {
+          legacy_message_id: string
+          migrated_at: string
+          new_message_id: string
+        }
+        Insert: {
+          legacy_message_id: string
+          migrated_at?: string
+          new_message_id: string
+        }
+        Update: {
+          legacy_message_id?: string
+          migrated_at?: string
+          new_message_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "_comms_backfill_legacy_map_legacy_message_id_fkey"
+            columns: ["legacy_message_id"]
+            isOneToOne: true
+            referencedRelation: "client_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "_comms_backfill_legacy_map_new_message_id_fkey"
+            columns: ["new_message_id"]
+            isOneToOne: false
+            referencedRelation: "comms_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       account_deletion_requests: {
         Row: {
+          approved_at: string | null
+          approved_by: string | null
           cancellation_reason: string | null
           cancelled_at: string | null
           cancelled_by: string | null
@@ -43,6 +78,7 @@ export type Database = {
           created_at: string
           deleted_data: Json | null
           id: string
+          notes: string | null
           processing_started_at: string | null
           reason: string | null
           requested_at: string
@@ -52,6 +88,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
           cancellation_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
@@ -59,6 +97,7 @@ export type Database = {
           created_at?: string
           deleted_data?: Json | null
           id?: string
+          notes?: string | null
           processing_started_at?: string | null
           reason?: string | null
           requested_at?: string
@@ -68,6 +107,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          approved_at?: string | null
+          approved_by?: string | null
           cancellation_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
@@ -75,6 +116,7 @@ export type Database = {
           created_at?: string
           deleted_data?: Json | null
           id?: string
+          notes?: string | null
           processing_started_at?: string | null
           reason?: string | null
           requested_at?: string
@@ -83,7 +125,22 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "account_deletion_requests_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_deletion_requests_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       api_keys: {
         Row: {
@@ -399,6 +456,7 @@ export type Database = {
           emails: Json
           id: string
           is_active: boolean
+          last_triggered_at: string | null
           name: string
           status: Database["public"]["Enums"]["sequence_status"]
           steps_json: Json
@@ -416,6 +474,7 @@ export type Database = {
           emails?: Json
           id?: string
           is_active?: boolean
+          last_triggered_at?: string | null
           name: string
           status?: Database["public"]["Enums"]["sequence_status"]
           steps_json?: Json
@@ -433,6 +492,7 @@ export type Database = {
           emails?: Json
           id?: string
           is_active?: boolean
+          last_triggered_at?: string | null
           name?: string
           status?: Database["public"]["Enums"]["sequence_status"]
           steps_json?: Json
@@ -806,6 +866,9 @@ export type Database = {
       client_decisions: {
         Row: {
           blocking_status: string
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
           context: string | null
           created_at: string
           decision_type: string
@@ -829,6 +892,9 @@ export type Database = {
         }
         Insert: {
           blocking_status?: string
+          client_consent_method?: string | null
+          client_consented_at?: string | null
+          client_signature?: string | null
           context?: string | null
           created_at?: string
           decision_type?: string
@@ -852,6 +918,9 @@ export type Database = {
         }
         Update: {
           blocking_status?: string
+          client_consent_method?: string | null
+          client_consented_at?: string | null
+          client_signature?: string | null
           context?: string | null
           created_at?: string
           decision_type?: string
@@ -907,6 +976,84 @@ export type Database = {
             columns: ["recommended_option_id"]
             isOneToOne: false
             referencedRelation: "client_decision_options"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_invitations: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          designer_id: string
+          email: string
+          expires_at: string
+          id: string
+          personal_message: string | null
+          project_id: string | null
+          sent_at: string
+          token: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          designer_id: string
+          email: string
+          expires_at?: string
+          id?: string
+          personal_message?: string | null
+          project_id?: string | null
+          sent_at?: string
+          token: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          designer_id?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          personal_message?: string | null
+          project_id?: string | null
+          sent_at?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_invitations_accepted_by_fkey"
+            columns: ["accepted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_invitations_accepted_by_fkey"
+            columns: ["accepted_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_invitations_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_invitations_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_invitations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -1837,8 +1984,37 @@ export type Database = {
         }
         Relationships: []
       }
+      data_erasure_log: {
+        Row: {
+          completed: boolean
+          erased_at: string
+          id: string
+          reason: string | null
+          requested_by_user_id: string | null
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean
+          erased_at?: string
+          id?: string
+          reason?: string | null
+          requested_by_user_id?: string | null
+          user_id: string
+        }
+        Update: {
+          completed?: boolean
+          erased_at?: string
+          id?: string
+          reason?: string | null
+          requested_by_user_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       data_export_requests: {
         Row: {
+          approved_at: string | null
+          approved_by: string | null
           completed_at: string | null
           created_at: string
           download_url: string | null
@@ -1847,6 +2023,7 @@ export type Database = {
           file_size_bytes: number | null
           id: string
           included_data: string[]
+          notes: string | null
           processing_started_at: string | null
           requested_at: string
           retry_count: number
@@ -1855,6 +2032,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
           completed_at?: string | null
           created_at?: string
           download_url?: string | null
@@ -1863,6 +2042,7 @@ export type Database = {
           file_size_bytes?: number | null
           id?: string
           included_data?: string[]
+          notes?: string | null
           processing_started_at?: string | null
           requested_at?: string
           retry_count?: number
@@ -1871,6 +2051,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          approved_at?: string | null
+          approved_by?: string | null
           completed_at?: string | null
           created_at?: string
           download_url?: string | null
@@ -1879,6 +2061,7 @@ export type Database = {
           file_size_bytes?: number | null
           id?: string
           included_data?: string[]
+          notes?: string | null
           processing_started_at?: string | null
           requested_at?: string
           retry_count?: number
@@ -1886,7 +2069,22 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "data_export_requests_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "data_export_requests_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       decision_comments: {
         Row: {
@@ -2406,6 +2604,92 @@ export type Database = {
           },
         ]
       }
+      device_pair_sessions: {
+        Row: {
+          consumed_at: string | null
+          created_at: string
+          device_info: Json | null
+          expires_at: string
+          nonce: string
+          origin_browser: string | null
+          origin_ip: unknown
+          origin_os: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          consumed_at?: string | null
+          created_at?: string
+          device_info?: Json | null
+          expires_at: string
+          nonce: string
+          origin_browser?: string | null
+          origin_ip?: unknown
+          origin_os?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          consumed_at?: string | null
+          created_at?: string
+          device_info?: Json | null
+          expires_at?: string
+          nonce?: string
+          origin_browser?: string | null
+          origin_ip?: unknown
+          origin_os?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      email_template_versions: {
+        Row: {
+          content_blocks: Json | null
+          created_at: string
+          edited_by: string | null
+          html_content: string | null
+          id: string
+          name: string | null
+          subject_default: string | null
+          template_id: string
+          variables: Json | null
+          version_num: number
+        }
+        Insert: {
+          content_blocks?: Json | null
+          created_at?: string
+          edited_by?: string | null
+          html_content?: string | null
+          id?: string
+          name?: string | null
+          subject_default?: string | null
+          template_id: string
+          variables?: Json | null
+          version_num: number
+        }
+        Update: {
+          content_blocks?: Json | null
+          created_at?: string
+          edited_by?: string | null
+          html_content?: string | null
+          id?: string
+          name?: string | null
+          subject_default?: string | null
+          template_id?: string
+          variables?: Json | null
+          version_num?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_template_versions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_templates: {
         Row: {
           category: Database["public"]["Enums"]["email_template_category"]
@@ -2413,6 +2697,8 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          frequency_cap_count: number | null
+          frequency_cap_window_days: number | null
           html_content: string
           id: string
           is_active: boolean
@@ -2429,6 +2715,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          frequency_cap_count?: number | null
+          frequency_cap_window_days?: number | null
           html_content?: string
           id?: string
           is_active?: boolean
@@ -2445,6 +2733,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          frequency_cap_count?: number | null
+          frequency_cap_window_days?: number | null
           html_content?: string
           id?: string
           is_active?: boolean
@@ -2555,6 +2845,77 @@ export type Database = {
             columns: ["room_id"]
             isOneToOne: false
             referencedRelation: "rooms_with_hero_frames"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ffe_categories: {
+        Row: {
+          created_at: string
+          designer_id: string | null
+          icon: string | null
+          id: string
+          is_system: boolean
+          label: string
+          parent_id: string | null
+          proposal_id: string | null
+          slug: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          designer_id?: string | null
+          icon?: string | null
+          id?: string
+          is_system?: boolean
+          label: string
+          parent_id?: string | null
+          proposal_id?: string | null
+          slug: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          designer_id?: string | null
+          icon?: string | null
+          id?: string
+          is_system?: boolean
+          label?: string
+          parent_id?: string | null
+          proposal_id?: string | null
+          slug?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ffe_categories_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ffe_categories_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ffe_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "ffe_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ffe_categories_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
             referencedColumns: ["id"]
           },
         ]
@@ -2961,6 +3322,7 @@ export type Database = {
           created_at: string
           digest_frequency: Database["public"]["Enums"]["digest_frequency"]
           id: string
+          last_digest_sent_at: string | null
           quiet_hours_enabled: boolean
           quiet_hours_end: string | null
           quiet_hours_start: string | null
@@ -2995,6 +3357,7 @@ export type Database = {
           created_at?: string
           digest_frequency?: Database["public"]["Enums"]["digest_frequency"]
           id?: string
+          last_digest_sent_at?: string | null
           quiet_hours_enabled?: boolean
           quiet_hours_end?: string | null
           quiet_hours_start?: string | null
@@ -3029,6 +3392,7 @@ export type Database = {
           created_at?: string
           digest_frequency?: Database["public"]["Enums"]["digest_frequency"]
           id?: string
+          last_digest_sent_at?: string | null
           quiet_hours_enabled?: boolean
           quiet_hours_end?: string | null
           quiet_hours_start?: string | null
@@ -3283,6 +3647,99 @@ export type Database = {
         }
         Relationships: []
       }
+      paint_colors: {
+        Row: {
+          brand: string
+          code: string
+          created_at: string
+          family: string | null
+          hex: string
+          id: string
+          lrv: number | null
+          name: string
+          search_vector: unknown
+        }
+        Insert: {
+          brand: string
+          code: string
+          created_at?: string
+          family?: string | null
+          hex: string
+          id?: string
+          lrv?: number | null
+          name: string
+          search_vector?: unknown
+        }
+        Update: {
+          brand?: string
+          code?: string
+          created_at?: string
+          family?: string | null
+          hex?: string
+          id?: string
+          lrv?: number | null
+          name?: string
+          search_vector?: unknown
+        }
+        Relationships: []
+      }
+      palette_swatches: {
+        Row: {
+          brand: string | null
+          brand_code: string | null
+          created_at: string
+          hex: string
+          id: string
+          name: string | null
+          paint_color_id: string | null
+          palette_id: string
+          role: string | null
+          sort_order: number
+          source_pixel: Json | null
+        }
+        Insert: {
+          brand?: string | null
+          brand_code?: string | null
+          created_at?: string
+          hex: string
+          id?: string
+          name?: string | null
+          paint_color_id?: string | null
+          palette_id: string
+          role?: string | null
+          sort_order?: number
+          source_pixel?: Json | null
+        }
+        Update: {
+          brand?: string | null
+          brand_code?: string | null
+          created_at?: string
+          hex?: string
+          id?: string
+          name?: string | null
+          paint_color_id?: string | null
+          palette_id?: string
+          role?: string | null
+          sort_order?: number
+          source_pixel?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "palette_swatches_paint_color_fk"
+            columns: ["paint_color_id"]
+            isOneToOne: false
+            referencedRelation: "paint_colors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "palette_swatches_palette_id_fkey"
+            columns: ["palette_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_palettes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       permissions: {
         Row: {
           action: string
@@ -3312,6 +3769,57 @@ export type Database = {
           scope?: string | null
         }
         Relationships: []
+      }
+      phase_templates: {
+        Row: {
+          created_at: string
+          description: string | null
+          designer_id: string | null
+          id: string
+          is_system: boolean
+          label: string
+          phases: Json
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          designer_id?: string | null
+          id?: string
+          is_system?: boolean
+          label: string
+          phases: Json
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          designer_id?: string | null
+          id?: string
+          is_system?: boolean
+          label?: string
+          phases?: Json
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_templates_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_templates_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pipeline_vendor_scores: {
         Row: {
@@ -3914,7 +4422,7 @@ export type Database = {
           sku: string | null
           slug: string | null
           source_url: string | null
-          status: string | null
+          status: string
           style_tags: string[] | null
           tags: string[] | null
           updated_at: string | null
@@ -3949,7 +4457,7 @@ export type Database = {
           sku?: string | null
           slug?: string | null
           source_url?: string | null
-          status?: string | null
+          status?: string
           style_tags?: string[] | null
           tags?: string[] | null
           updated_at?: string | null
@@ -3984,7 +4492,7 @@ export type Database = {
           sku?: string | null
           slug?: string | null
           source_url?: string | null
-          status?: string | null
+          status?: string
           style_tags?: string[] | null
           tags?: string[] | null
           updated_at?: string | null
@@ -4028,6 +4536,7 @@ export type Database = {
           is_designer: boolean | null
           is_verified: boolean | null
           last_active_at: string | null
+          mfa_enforced: boolean
           original_source: string | null
           original_utm: Json | null
           phone: string | null
@@ -4060,6 +4569,7 @@ export type Database = {
           is_designer?: boolean | null
           is_verified?: boolean | null
           last_active_at?: string | null
+          mfa_enforced?: boolean
           original_source?: string | null
           original_utm?: Json | null
           phone?: string | null
@@ -4092,6 +4602,7 @@ export type Database = {
           is_designer?: boolean | null
           is_verified?: boolean | null
           last_active_at?: string | null
+          mfa_enforced?: boolean
           original_source?: string | null
           original_utm?: Json | null
           phone?: string | null
@@ -4290,6 +4801,60 @@ export type Database = {
             columns: ["source_proposal_item_id"]
             isOneToOne: false
             referencedRelation: "proposal_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_narrative_sections: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          metadata: Json | null
+          project_id: string
+          sort_order: number
+          source_section_id: string | null
+          title: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          project_id: string
+          sort_order?: number
+          source_section_id?: string | null
+          title: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          project_id?: string
+          sort_order?: number
+          source_section_id?: string | null
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_narrative_sections_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_narrative_sections_source_section_id_fkey"
+            columns: ["source_section_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_sections"
             referencedColumns: ["id"]
           },
         ]
@@ -4713,12 +5278,14 @@ export type Database = {
           proposal_id: string | null
           scope_boundaries: Json | null
           share_token: string | null
+          site_address: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
           studio_id: string | null
           target_end_date: string | null
           timeline_end: string | null
           timeline_start: string | null
+          total_amount_cents: number | null
           updated_at: string | null
         }
         Insert: {
@@ -4747,12 +5314,14 @@ export type Database = {
           proposal_id?: string | null
           scope_boundaries?: Json | null
           share_token?: string | null
+          site_address?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
           studio_id?: string | null
           target_end_date?: string | null
           timeline_end?: string | null
           timeline_start?: string | null
+          total_amount_cents?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -4781,12 +5350,14 @@ export type Database = {
           proposal_id?: string | null
           scope_boundaries?: Json | null
           share_token?: string | null
+          site_address?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
           studio_id?: string | null
           target_end_date?: string | null
           timeline_end?: string | null
           timeline_start?: string | null
+          total_amount_cents?: number | null
           updated_at?: string | null
         }
         Relationships: [
@@ -4844,6 +5415,97 @@ export type Database = {
             columns: ["studio_id"]
             isOneToOne: false
             referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_captures: {
+        Row: {
+          captured_at: string
+          consumed_at: string | null
+          consumed_proposal_item_id: string | null
+          designer_id: string
+          ffe_category_slug: string | null
+          id: string
+          product_id: string | null
+          proposal_id: string | null
+          raw_payload: Json
+          scope_room_id: string | null
+          source_url: string
+          status: string
+          thumbnail_url: string | null
+        }
+        Insert: {
+          captured_at?: string
+          consumed_at?: string | null
+          consumed_proposal_item_id?: string | null
+          designer_id: string
+          ffe_category_slug?: string | null
+          id?: string
+          product_id?: string | null
+          proposal_id?: string | null
+          raw_payload?: Json
+          scope_room_id?: string | null
+          source_url: string
+          status?: string
+          thumbnail_url?: string | null
+        }
+        Update: {
+          captured_at?: string
+          consumed_at?: string | null
+          consumed_proposal_item_id?: string | null
+          designer_id?: string
+          ffe_category_slug?: string | null
+          id?: string
+          product_id?: string | null
+          proposal_id?: string | null
+          raw_payload?: Json
+          scope_room_id?: string | null
+          source_url?: string
+          status?: string
+          thumbnail_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_captures_consumed_proposal_item_id_fkey"
+            columns: ["consumed_proposal_item_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_captures_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_captures_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_captures_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_captures_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_captures_scope_room_id_fkey"
+            columns: ["scope_room_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_scope_rooms"
             referencedColumns: ["id"]
           },
         ]
@@ -5095,6 +5757,60 @@ export type Database = {
           },
         ]
       }
+      proposal_palettes: {
+        Row: {
+          created_at: string
+          id: string
+          is_primary: boolean
+          name: string
+          notes: string | null
+          proposal_id: string
+          scope_room_id: string | null
+          sort_order: number
+          source_image_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          name: string
+          notes?: string | null
+          proposal_id: string
+          scope_room_id?: string | null
+          sort_order?: number
+          source_image_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          name?: string
+          notes?: string | null
+          proposal_id?: string
+          scope_room_id?: string | null
+          sort_order?: number
+          source_image_url?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_palettes_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_palettes_scope_room_id_fkey"
+            columns: ["scope_room_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_scope_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       proposal_payment_milestones: {
         Row: {
           amount_cents: number
@@ -5142,6 +5858,128 @@ export type Database = {
             columns: ["proposal_id"]
             isOneToOne: false
             referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_phase_deliverables: {
+        Row: {
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_required: boolean
+          label: string
+          phase_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_required?: boolean
+          label: string
+          phase_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_required?: boolean
+          label?: string
+          phase_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_phase_deliverables_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_phase_deliverables_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_phase_deliverables_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_phases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_phase_gates: {
+        Row: {
+          created_at: string
+          gate_kind: string
+          id: string
+          override_reason: string | null
+          payload: Json
+          phase_id: string
+          satisfied_at: string | null
+          satisfied_by: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          gate_kind: string
+          id?: string
+          override_reason?: string | null
+          payload?: Json
+          phase_id: string
+          satisfied_at?: string | null
+          satisfied_by?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          gate_kind?: string
+          id?: string
+          override_reason?: string | null
+          payload?: Json
+          phase_id?: string
+          satisfied_at?: string | null
+          satisfied_by?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_phase_gates_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_phase_gates_satisfied_by_fkey"
+            columns: ["satisfied_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_phase_gates_satisfied_by_fkey"
+            columns: ["satisfied_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
           },
         ]
@@ -5313,6 +6151,61 @@ export type Database = {
           },
         ]
       }
+      proposal_team_members: {
+        Row: {
+          created_at: string
+          id: string
+          permissions: Json | null
+          proposal_id: string
+          role: string
+          sort_order: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          permissions?: Json | null
+          proposal_id: string
+          role: string
+          sort_order?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          permissions?: Json | null
+          proposal_id?: string
+          role?: string
+          sort_order?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_team_members_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_team_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_team_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       proposal_templates: {
         Row: {
           created_at: string
@@ -5381,6 +6274,7 @@ export type Database = {
           payment_notes: string | null
           payment_terms: string | null
           personal_message: string | null
+          project_address: string | null
           project_id: string | null
           revision_summary: string | null
           sent_at: string | null
@@ -5418,6 +6312,7 @@ export type Database = {
           payment_notes?: string | null
           payment_terms?: string | null
           personal_message?: string | null
+          project_address?: string | null
           project_id?: string | null
           revision_summary?: string | null
           sent_at?: string | null
@@ -5455,6 +6350,7 @@ export type Database = {
           payment_notes?: string | null
           payment_terms?: string | null
           personal_message?: string | null
+          project_address?: string | null
           project_id?: string | null
           revision_summary?: string | null
           sent_at?: string | null
@@ -7339,6 +8235,20 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "vendor_reviews_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_reviews_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "vendor_reviews_vendor_id_fkey"
             columns: ["vendor_id"]
             isOneToOne: false
@@ -7934,12 +8844,26 @@ export type Database = {
         }
         Returns: undefined
       }
+      apply_phase_template: {
+        Args: { p_proposal_id: string; p_template_slug: string }
+        Returns: string[]
+      }
       apply_scope_change: { Args: { p_request_id: string }; Returns: undefined }
       calculate_engagement_score: {
         Args: { p_user_id: string }
         Returns: number
       }
       comms_resolve_role: { Args: { p_user_id: string }; Returns: string }
+      consume_capture: {
+        Args: {
+          p_capture_id: string
+          p_ffe_category_slug: string
+          p_proposal_id: string
+          p_qty?: number
+          p_scope_room_id: string
+        }
+        Returns: string
+      }
       decrement_room_saved_items: {
         Args: { p_count?: number; p_room_id: string }
         Returns: undefined
@@ -8035,6 +8959,17 @@ export type Database = {
           total_count: number
         }[]
       }
+      get_decision_bottleneck_phases_admin: {
+        Args: never
+        Returns: {
+          avg_response_hours: number
+          linked_phase: string
+          overdue_count: number
+          pending_count: number
+          responded_count: number
+          total_count: number
+        }[]
+      }
       get_embedding_stats: {
         Args: never
         Returns: {
@@ -8049,6 +8984,28 @@ export type Database = {
       get_or_create_conversation: {
         Args: { p_context?: Json; p_screen?: string; p_user_id: string }
         Returns: string
+      }
+      get_outbox_counts: {
+        Args: never
+        Returns: {
+          oldest_unpublished: string
+          published: number
+          source: string
+          unpublished: number
+        }[]
+      }
+      get_outbox_events: {
+        Args: { p_limit?: number; p_unpublished_only?: boolean }
+        Returns: {
+          created_at: string
+          event_type: string
+          id: string
+          last_error: string
+          published: boolean
+          published_at: string
+          retry_count: number
+          source: string
+        }[]
       }
       get_recommendations: {
         Args: {
@@ -8136,6 +9093,15 @@ export type Database = {
         Args: { _project_id: string; _user_id?: string }
         Returns: boolean
       }
+      list_designer_open_proposals: {
+        Args: { p_designer_id?: string }
+        Returns: {
+          id: string
+          project_name: string
+          scope_rooms_count: number
+          title: string
+        }[]
+      }
       mark_scan_upload_complete: {
         Args: { p_scan_id: string }
         Returns: undefined
@@ -8144,6 +9110,7 @@ export type Database = {
         Args: { p_kind: string; p_scan_id: string; p_sha: string }
         Returns: undefined
       }
+      migrate_legacy_ffe_notes: { Args: never; Returns: number }
       next_co_number: { Args: { p_project_id: string }; Returns: string }
       process_style_quiz: {
         Args: { quiz_answers: Json; timings?: Json }
