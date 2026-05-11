@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createMiddlewareClient } from '@patina/supabase/client';
+import { createClient } from '@supabase/supabase-js';
+
+// Domains permitted on the designer portal shell. `designer` covers studio
+// roles (independent_designer, studio_owner, studio_admin, studio_designer);
+// `admin` covers staff (super_admin, support_agent, ml_operator, quality_control)
+// who need cross-portal access for ops/support.
+const DESIGNER_PORTAL_DOMAINS = new Set(['designer', 'admin']);
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
@@ -12,6 +19,7 @@ export async function middleware(req: NextRequest) {
   const isAuthPage = req.nextUrl.pathname.startsWith('/auth') || req.nextUrl.pathname.startsWith('/login');
   const isPublicPage = req.nextUrl.pathname === '/';
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');
+  const isUnauthorizedPage = req.nextUrl.pathname === '/unauthorized';
   const isAuthenticated = !!user;
 
   // Get the actual host from headers (handles proxy scenarios)
@@ -69,6 +77,57 @@ export async function middleware(req: NextRequest) {
     const loginUrl = new URL('/auth/signin', baseUrl);
     loginUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
     return redirectWithCookies(loginUrl);
+  }
+
+  // For authenticated users on protected pages (not auth, not public, not unauthorized),
+  // verify they have a role whose domain permits access to the designer portal.
+  // With SSO cookie carry across .patina.cloud, a manufacturer or pure-client user
+  // could otherwise land on the designer shell.
+  if (isAuthenticated && !isAuthPage && !isPublicPage && !isUnauthorizedPage) {
+    try {
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+      if (serviceRoleKey && supabaseUrl) {
+        const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+
+        const { data: roleRows } = await adminClient
+          .from('user_roles')
+          .select('roles!inner(domain)')
+          .eq('user_id', user!.id);
+
+        const userDomains = new Set(
+          (roleRows ?? [])
+            .map((r: { roles?: { domain?: string | null } | { domain?: string | null }[] | null }) => {
+              // PostgREST may return the joined `roles` as an object or array
+              // depending on relationship cardinality; normalize both shapes.
+              const rel = r.roles;
+              if (Array.isArray(rel)) return rel[0]?.domain ?? null;
+              return rel?.domain ?? null;
+            })
+            .filter((d): d is string => d != null),
+        );
+
+        // Legacy bypass: users with no user_roles row pass through. In current
+        // production every profile is backfilled (00126) and the handle_new_user
+        // trigger seeds an app_user role on signup, so this branch is largely
+        // defensive — but we keep it so a misconfigured fresh account doesn't
+        // get locked out of the only shell they could use to self-recover.
+        const isPermitted =
+          userDomains.size === 0 ||
+          Array.from(userDomains).some((d) => DESIGNER_PORTAL_DOMAINS.has(d));
+
+        if (!isPermitted) {
+          return redirectWithCookies(new URL('/unauthorized', baseUrl));
+        }
+      }
+    } catch {
+      // If the role check itself fails (network, transient DB issue), fail open —
+      // API routes still enforce roles per-endpoint and we'd rather not lock
+      // designers out of the portal on a transient infra blip.
+    }
   }
 
   return res;
