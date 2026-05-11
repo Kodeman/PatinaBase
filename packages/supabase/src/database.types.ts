@@ -4859,6 +4859,73 @@ export type Database = {
           },
         ]
       }
+      project_palettes: {
+        Row: {
+          created_at: string
+          id: string
+          is_primary: boolean
+          name: string
+          notes: string | null
+          project_id: string
+          scope_room_id: string | null
+          sort_order: number
+          source_image_url: string | null
+          source_palette_id: string | null
+          swatches: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          name: string
+          notes?: string | null
+          project_id: string
+          scope_room_id?: string | null
+          sort_order?: number
+          source_image_url?: string | null
+          source_palette_id?: string | null
+          swatches?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          name?: string
+          notes?: string | null
+          project_id?: string
+          scope_room_id?: string | null
+          sort_order?: number
+          source_image_url?: string | null
+          source_palette_id?: string | null
+          swatches?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_palettes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_palettes_scope_room_id_fkey"
+            columns: ["scope_room_id"]
+            isOneToOne: false
+            referencedRelation: "project_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_palettes_source_palette_id_fkey"
+            columns: ["source_palette_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_palettes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_payment_milestones: {
         Row: {
           amount_cents: number
@@ -5272,6 +5339,7 @@ export type Database = {
           expected_completion_date: string | null
           id: string
           kickoff_date: string | null
+          kickoff_message: string | null
           lead_designer_id: string | null
           name: string
           notes: string | null
@@ -5308,6 +5376,7 @@ export type Database = {
           expected_completion_date?: string | null
           id?: string
           kickoff_date?: string | null
+          kickoff_message?: string | null
           lead_designer_id?: string | null
           name: string
           notes?: string | null
@@ -5344,6 +5413,7 @@ export type Database = {
           expected_completion_date?: string | null
           id?: string
           kickoff_date?: string | null
+          kickoff_message?: string | null
           lead_designer_id?: string | null
           name?: string
           notes?: string | null
