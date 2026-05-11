@@ -39,7 +39,19 @@ Self-hosted Supabase API (Kong): `https://api.patina.cloud`.
 
 2. Open Authentication → Providers → Multi-Factor Authentication. Enable TOTP. Save.
 
-3. Verify by querying the public settings endpoint:
+3. **Stack-env path (current setup — recommended).** The compose file at `infra/coolify/docker-compose.supabase-coolify.yml` reads `${ENABLE_MFA:-false}` for three GoTrue env vars (`GOTRUE_MFA_ENABLED`, `GOTRUE_MFA_TOTP_ENROLL_ENABLED`, `GOTRUE_MFA_TOTP_VERIFY_ENABLED`). To enable MFA at the project level:
+
+   a. In Coolify → Strata → production → Supabase Stack → Environment Variables, click **+ Add** and create:
+      ```
+      Key: ENABLE_MFA
+      Value: true
+      Available at Buildtime: ✓
+      Available at Runtime: ✓
+      ```
+      Save.
+   b. Click **Restart** at the top of the Supabase Stack page (or restart just the Auth service via its Restart button). The recreate is needed because compose env interpolation only happens at container creation, not on `docker restart`.
+
+4. **Verify** by querying the public settings endpoint:
    ```bash
    curl -s "https://api.patina.cloud/auth/v1/settings" \
      -H "apikey: $NEXT_PUBLIC_SUPABASE_ANON_KEY" \
@@ -47,21 +59,7 @@ Self-hosted Supabase API (Kong): `https://api.patina.cloud`.
    ```
    Expected: `true`.
 
-   If Studio doesn't expose this toggle directly (some self-hosted Supabase Studios don't surface MFA settings yet), use the GoTrue admin API:
-   ```bash
-   curl -X PATCH "https://api.patina.cloud/auth/v1/admin/settings" \
-     -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-     -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-     -H "Content-Type: application/json" \
-     -d '{"MFA_ENABLED":true}'
-   ```
-   The flag name varies by GoTrue version. If neither `MFA_ENABLED` nor `mfa_enabled` works via API, edit the GoTrue env var directly. In `infra/coolify/docker-compose.supabase-coolify.yml` (or equivalent), find the `auth` (GoTrue) service and add/set:
-   ```
-   GOTRUE_MFA_ENABLED=true
-   ```
-   Then restart the auth service (Coolify UI: auth service → Restart, or via SSH: `docker compose -f /path/to/compose.yml up -d --force-recreate auth`).
-
-4. Re-verify with the curl above. Must return `true`.
+   If the value is still `false`, the auth container didn't actually recreate. SSH and run `docker compose -f infra/coolify/docker-compose.supabase-coolify.yml up -d --force-recreate auth` on the production host (or the equivalent Coolify-managed path).
 
 ### Smoke test the admin enrollment flow
 
@@ -89,7 +87,7 @@ If MFA enablement breaks an admin's ability to sign in, immediately:
 UPDATE public.profiles SET mfa_enforced = false WHERE mfa_enforced = true;
 ```
 
-This restores fail-open behavior. Then disable `GOTRUE_MFA_ENABLED` and restart the auth service if needed.
+This restores fail-open behavior. Then flip `ENABLE_MFA=false` in the Supabase Stack env vars and recreate the auth container.
 
 ### Done when
 
