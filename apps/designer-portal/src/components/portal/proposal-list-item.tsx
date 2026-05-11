@@ -1,7 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ProposalStatusBadge } from './proposal-status-badge';
+import { StatusBadge } from '@patina/catalog-ui';
+import { getProposalStatusDisplay } from '@/lib/proposal-status';
 
 interface ProposalListItemProps {
   id: string;
@@ -53,7 +54,10 @@ export function ProposalListItem({
         {formattedValue}
       </div>
       <div className="text-right">
-        <ProposalStatusBadge status={status} />
+        {(() => {
+          const { variant, label } = getProposalStatusDisplay(status);
+          return <StatusBadge variant={variant} label={label} />;
+        })()}
         {engagementHint && (
           <div
             className="mt-1"

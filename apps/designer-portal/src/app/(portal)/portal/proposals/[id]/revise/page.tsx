@@ -9,7 +9,8 @@ import {
   useUpdateProposal,
 } from '@/hooks/use-proposals';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
-import { ProposalStatusBadge } from '@/components/portal/proposal-status-badge';
+import { StatusBadge } from '@patina/catalog-ui';
+import { getProposalStatusDisplay } from '@/lib/proposal-status';
 import { RevisionFeedback } from '@/components/portal/revision-feedback';
 import { VersionTag } from '@/components/portal/version-tag';
 import { PortalButton } from '@/components/portal/button';
@@ -86,7 +87,10 @@ export default function ReviseProposalPage({
 
       {/* Status badge */}
       <div className="mb-2 flex items-center gap-2">
-        <ProposalStatusBadge status="revised" />
+        {(() => {
+          const { variant, label } = getProposalStatusDisplay('revised');
+          return <StatusBadge variant={variant} label={label} />;
+        })()}
       </div>
 
       <h1 className="type-section-head mb-1" style={{ fontSize: '1.5rem' }}>

@@ -10,7 +10,7 @@ import { ProgressBar } from '@/components/portal/progress-bar';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { EmptyState } from '@/components/portal/empty-state';
 import { SearchInput } from '@/components/portal/search-input';
-import { StatusDot } from '@/components/portal/status-dot';
+import { StatusBadge } from '@patina/catalog-ui';
 import { ViewToggle, type ViewMode } from '@/components/portal/view-toggle';
 import {
   FacetedFilterPopover,
@@ -485,7 +485,7 @@ function ListView({
               href={`/portal/projects/${project.id}`}
               className="flex items-center gap-2 no-underline"
             >
-              <StatusDot variant={variant} size="sm" />
+              <StatusBadge variant={variant} mode="dot" size="sm" />
               <span className="font-body text-[0.92rem] font-medium text-[var(--text-primary)]">
                 {projectName(project)}
               </span>
@@ -546,7 +546,7 @@ function GridView({
             <Link href={`/portal/projects/${project.id}`} className="block no-underline">
               <div className="mb-3 flex items-start justify-between gap-2 pr-6">
                 <div className="flex min-w-0 items-baseline gap-2">
-                  <StatusDot variant={variant} size="sm" />
+                  <StatusBadge variant={variant} mode="dot" size="sm" />
                   <span className="truncate font-body text-[0.95rem] font-medium text-[var(--text-primary)]">
                     {projectName(project)}
                   </span>

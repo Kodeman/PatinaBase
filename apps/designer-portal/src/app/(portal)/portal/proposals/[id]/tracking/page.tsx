@@ -9,7 +9,8 @@ import {
 } from '@/hooks/use-proposals';
 import { useSendProposal, useDuplicateProposal } from '@patina/supabase';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
-import { ProposalStatusBadge } from '@/components/portal/proposal-status-badge';
+import { StatusBadge } from '@patina/catalog-ui';
+import { getProposalStatusDisplay } from '@/lib/proposal-status';
 import { MetricsRow } from '@/components/portal/metrics-row';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
@@ -138,7 +139,10 @@ export default function ProposalTrackingPage({
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="mb-2 flex items-center gap-2">
-            <ProposalStatusBadge status={proposal.status} />
+            {(() => {
+              const { variant, label } = getProposalStatusDisplay(proposal.status);
+              return <StatusBadge variant={variant} label={label} />;
+            })()}
             {proposal.valid_until && (
               <span className="type-meta-small">
                 &middot; Expires{' '}

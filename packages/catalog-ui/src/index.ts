@@ -1,3 +1,10 @@
+export {
+  StatusBadge,
+  type StatusBadgeProps,
+  type StatusBadgeVariant,
+  type StatusBadgeMode,
+  type StatusBadgeSize,
+} from './components/status-badge';
 export { ProductCard, type ProductCardProps } from './components/product-card';
 export { ProductListItem, type ProductListItemProps } from './components/product-list-item';
 export { TierBadge } from './components/tier-badge';
