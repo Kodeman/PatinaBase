@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useSendMagicLink, useVerifyOtp } from '@patina/supabase';
 import { Alert, Button, Input } from '@patina/design-system';
 import Link from 'next/link';
+import { authEvents } from '@/lib/analytics/events';
 
 function VerifyOtpContent() {
   const router = useRouter();
@@ -57,6 +58,7 @@ function VerifyOtpContent() {
 
     try {
       await verifyOtp.mutateAsync({ email, token, type: 'email' });
+      authEvents.login('magic-link');
       router.replace('/dashboard');
     } catch (err) {
       const message =
