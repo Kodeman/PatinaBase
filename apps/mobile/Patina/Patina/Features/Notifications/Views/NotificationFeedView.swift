@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct NotificationFeedView: View {
+    @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel = NotificationsViewModel()
 
     var body: some View {
@@ -60,7 +61,7 @@ struct NotificationFeedView: View {
                     ForEach(viewModel.notifications) { notification in
                         notificationRow(notification)
                             .onTapGesture {
-                                viewModel.markRead(notification)
+                                handleTap(notification)
                             }
                     }
                 }
@@ -112,6 +113,19 @@ struct NotificationFeedView: View {
         }
         .padding(.horizontal, 32)
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Tap handling
+
+    /// Mark the row opened and, when the entity is recognized, push the
+    /// matching detail route through the coordinator. Unknown entity
+    /// types fall through with no navigation — the user stays on the
+    /// feed but the row is still marked read.
+    private func handleTap(_ notification: AppNotification) {
+        viewModel.markRead(notification)
+        if let route = NotificationRouter.route(for: notification) {
+            coordinator.navigate(to: route)
+        }
     }
 
     // MARK: - Notification Row

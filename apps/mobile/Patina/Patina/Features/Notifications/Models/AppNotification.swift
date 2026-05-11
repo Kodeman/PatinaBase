@@ -18,6 +18,14 @@ struct AppNotification: Identifiable {
     let body: String
     let timestamp: Date
     var isRead: Bool
+    /// Entity kind referenced by `notification_log.metadata.entity_type`
+    /// (e.g. `"project"`, `"decision"`, `"thread"`, `"room"`, `"product"`).
+    /// Drives feed-tap and APNs deep-link routing via `NotificationRouter`.
+    let entityType: String?
+    /// Entity id referenced by `notification_log.metadata.entity_id`. Format
+    /// depends on the entity (UUID for rooms/projects/decisions/threads,
+    /// freeform string for products).
+    let entityId: String?
 
     init(
         id: UUID = UUID(),
@@ -26,7 +34,9 @@ struct AppNotification: Identifiable {
         title: String,
         body: String,
         timestamp: Date,
-        isRead: Bool = false
+        isRead: Bool = false,
+        entityType: String? = nil,
+        entityId: String? = nil
     ) {
         self.id = id
         self.remoteId = remoteId
@@ -35,6 +45,8 @@ struct AppNotification: Identifiable {
         self.body = body
         self.timestamp = timestamp
         self.isRead = isRead
+        self.entityType = entityType
+        self.entityId = entityId
     }
 
     var icon: String {

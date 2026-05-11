@@ -136,13 +136,21 @@ extension AppNotification {
             ?? remote.metadata?["preview"]?.value as? String
             ?? ""
 
+        // `notification_log` has no first-class entity columns (migration
+        // 00041); routing payload lives in `metadata.entity_type` /
+        // `metadata.entity_id` to mirror the APNs envelope shape.
+        let entityType = remote.metadata?["entity_type"]?.value as? String
+        let entityId = remote.metadata?["entity_id"]?.value as? String
+
         self.init(
             remoteId: remote.id,
             type: type,
             title: title,
             body: body,
             timestamp: createdDate,
-            isRead: remote.opened_at != nil || remote.status == "opened" || remote.status == "clicked"
+            isRead: remote.opened_at != nil || remote.status == "opened" || remote.status == "clicked",
+            entityType: entityType,
+            entityId: entityId
         )
     }
 }

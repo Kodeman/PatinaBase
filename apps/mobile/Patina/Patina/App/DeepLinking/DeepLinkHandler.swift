@@ -18,6 +18,12 @@ public final class DeepLinkHandler {
     private var coordinator: AppCoordinator?
     private let qrAuthService = QRAuthService.shared
 
+    /// Route deferred until the coordinator is configured. The APNs
+    /// delegate fires on cold launch before SwiftUI has stood up the
+    /// coordinator — we stash the route here and replay it during
+    /// `configure(coordinator:)`.
+    private var pendingRoute: AppRoute?
+
     // MARK: - Initialization
 
     private init() {}
@@ -28,6 +34,21 @@ public final class DeepLinkHandler {
     /// - Parameter coordinator: The app coordinator for navigation
     public func configure(coordinator: AppCoordinator) {
         self.coordinator = coordinator
+        if let pending = pendingRoute {
+            pendingRoute = nil
+            coordinator.navigate(to: pending)
+        }
+    }
+
+    /// Push an `AppRoute` through the coordinator, or stash it until
+    /// `configure(coordinator:)` is called if the app is mid-launch.
+    /// Used by `PatinaAppDelegate` to deliver APNs taps.
+    public func navigate(to route: AppRoute) {
+        if let coordinator {
+            coordinator.navigate(to: route)
+        } else {
+            pendingRoute = route
+        }
     }
 
     // MARK: - URL Handling
