@@ -54,7 +54,11 @@ struct ThreadDetailView: View {
             composer
         }
         .background(PatinaColors.offWhite)
-        .task { await viewModel.load() }
+        .task {
+            await viewModel.load()
+            viewModel.startLiveUpdates()
+        }
+        .onDisappear { viewModel.stopLiveUpdates() }
         .navigationBarTitleDisplayMode(.inline)
     }
 
