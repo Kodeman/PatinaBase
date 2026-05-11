@@ -1,6 +1,7 @@
 import { createClient as createSupabaseClient, SupabaseClient } from '@supabase/supabase-js';
 import { createBrowserClient as createSSRBrowserClient, createServerClient as createSSRServerClient } from '@supabase/ssr';
 import type { Database } from './database.types';
+import { getCookieDomain } from './lib/cookie-domain';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SUPABASE CLIENT FACTORY
@@ -8,6 +9,26 @@ import type { Database } from './database.types';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+/**
+ * Build the auth-cookie options based on the resolved cookie domain. When a
+ * domain is set we're on a `*.patina.cloud` host, so layer in `secure: true`
+ * (cookie must be transmitted over HTTPS) and explicit `sameSite: 'lax'` /
+ * `path: '/'` so cross-subdomain GET navigation still flows.
+ *
+ * When no domain resolves (localhost, IPs, etc.) we return an empty object —
+ * the browser will use host-only scope and HTTP without breaking dev.
+ */
+function buildAuthCookieOptions(host?: string) {
+  const domain = getCookieDomain(host);
+  if (!domain) return {};
+  return {
+    domain,
+    sameSite: 'lax' as const,
+    secure: true,
+    path: '/',
+  };
+}
 
 /**
  * Browser client - for client components (legacy, non-SSR)
@@ -33,14 +54,19 @@ declare global {
 }
 
 export function createBrowserClient(): SupabaseClient<Database> {
+  const cookieOptions = buildAuthCookieOptions();
   if (typeof window !== 'undefined') {
     if (!globalThis.__supabaseBrowserClient) {
-      globalThis.__supabaseBrowserClient = createSSRBrowserClient<Database>(supabaseUrl, supabaseAnonKey) as unknown as SupabaseClient<Database>;
+      globalThis.__supabaseBrowserClient = createSSRBrowserClient<Database>(supabaseUrl, supabaseAnonKey, {
+        cookieOptions,
+      }) as unknown as SupabaseClient<Database>;
     }
     return globalThis.__supabaseBrowserClient;
   }
   // SSR fallback - create new instance (will be replaced on client)
-  return createSSRBrowserClient<Database>(supabaseUrl, supabaseAnonKey) as unknown as SupabaseClient<Database>;
+  return createSSRBrowserClient<Database>(supabaseUrl, supabaseAnonKey, {
+    cookieOptions,
+  }) as unknown as SupabaseClient<Database>;
 }
 
 /**
@@ -48,10 +74,25 @@ export function createBrowserClient(): SupabaseClient<Database> {
  * Handles cookie operations via request/response
  */
 export function createMiddlewareClient(
-  request: { cookies: { get: (name: string) => { name: string; value: string } | undefined; getAll: () => { name: string; value: string }[]; set: (name: string, value: string) => void } },
+  request: {
+    cookies: { get: (name: string) => { name: string; value: string } | undefined; getAll: () => { name: string; value: string }[]; set: (name: string, value: string) => void };
+    headers?: { get: (name: string) => string | null };
+  },
   response: { cookies: { set: (cookie: { name: string; value: string; [key: string]: unknown }) => void } }
 ) {
+  // Detect host so cookies can be scoped to `.patina.cloud` in production
+  // while remaining host-only on localhost. Trust `x-forwarded-host` first
+  // because Cloudflare Tunnel / Traefik rewrite the inbound Host header.
+  const forwardedHost = request.headers?.get('x-forwarded-host') ?? undefined;
+  const rawHost = request.headers?.get('host') ?? undefined;
+  const host = forwardedHost ?? rawHost;
+  // Strip an optional `:port` suffix so `localhost:3000` is recognised as
+  // `localhost` and skipped, and `app.patina.cloud:443` matches our suffix.
+  const hostname = host?.replace(/:\d+$/, '');
+  const cookieOptions = buildAuthCookieOptions(hostname);
+
   return createSSRServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+    cookieOptions,
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -60,8 +101,9 @@ export function createMiddlewareClient(
         cookiesToSet.forEach(({ name, value, options }) => {
           // Set on request so downstream Route Handlers see refreshed tokens
           request.cookies.set(name, value);
-          // Set on response so the browser stores refreshed tokens
-          response.cookies.set({ name, value, ...options });
+          // Set on response so the browser stores refreshed tokens. Merge in
+          // cookieOptions so the domain/secure flags reach the response.
+          response.cookies.set({ name, value, ...cookieOptions, ...options });
         });
       },
     },

@@ -4,11 +4,41 @@
  */
 import { createServerClient as createSSRServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import type { Database } from './database.types';
+import { getCookieDomain } from './lib/cookie-domain';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+/**
+ * Resolve the cookie-options to apply when this server client writes session
+ * cookies. We need to scope to `.patina.cloud` on production subdomains so
+ * the session is shared with the other portals, but leave host-only behavior
+ * on localhost. See `lib/cookie-domain.ts` for the decision logic.
+ */
+async function resolveServerCookieOptions() {
+  let host: string | undefined;
+  try {
+    const headerStore = await headers();
+    host =
+      headerStore.get('x-forwarded-host') ??
+      headerStore.get('host') ??
+      undefined;
+    host = host?.replace(/:\d+$/, '');
+  } catch {
+    // `headers()` isn't available in some contexts (e.g. static rendering).
+    // Fall back to env-var / window detection inside getCookieDomain().
+  }
+  const domain = getCookieDomain(host);
+  if (!domain) return {};
+  return {
+    domain,
+    sameSite: 'lax' as const,
+    secure: true,
+    path: '/',
+  };
+}
 
 /**
  * Create a Supabase client with the service role key. Bypasses RLS — use
@@ -38,8 +68,10 @@ export function createServiceClient() {
  */
 export async function createServerClient() {
   const cookieStore = await cookies();
+  const cookieOptions = await resolveServerCookieOptions();
 
   return createSSRServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+    cookieOptions,
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -47,7 +79,9 @@ export async function createServerClient() {
       setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
         try {
           cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options as any)
+            // Merge cookieOptions defensively so domain/secure flags are
+            // always applied — even if a caller passes per-cookie overrides.
+            cookieStore.set(name, value, { ...cookieOptions, ...options } as any)
           );
         } catch {
           // setAll can throw in Server Components (read-only cookies)
