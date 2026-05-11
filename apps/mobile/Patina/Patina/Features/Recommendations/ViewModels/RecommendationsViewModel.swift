@@ -49,10 +49,12 @@ final class RecommendationsViewModel {
         } catch {
             await MainActor.run {
                 self.error = "Couldn't load recommendations"
+                self.products = []
                 self.isLoading = false
-                // Load mock data as fallback
-                self.products = Product.mockProducts
             }
+            #if DEBUG
+            print("[Recommendations] load failed: \(error.localizedDescription)")
+            #endif
         }
     }
 
@@ -66,7 +68,7 @@ final class RecommendationsViewModel {
         }
     }
 
-    func saveProduct(_ product: Product, context: ModelContext) {
+    func saveProduct(_ product: Product, context: ModelContext, roomRemoteId: String? = nil) {
         // Save to SwiftData as TableItemModel
         let item = TableItemModel(
             name: product.name,
@@ -76,6 +78,31 @@ final class RecommendationsViewModel {
             priceInCents: product.priceCents
         )
         context.insert(item)
+
+        // Mirror to Supabase `saved_items` so the save follows the user
+        // across devices and surfaces in the designer portal.
+        if let roomRemoteId {
+            Task {
+                do {
+                    let userId = try await RoomsAPIClient.shared.resolveUserId()
+                    let payload = CreateSavedItemPayload(
+                        room_id: roomRemoteId,
+                        user_id: userId,
+                        product_id: product.id,
+                        name: product.name,
+                        image_url: product.imageURL,
+                        price_in_cents: product.priceCents,
+                        source: "ios",
+                        notes: nil
+                    )
+                    _ = try await RoomsAPIClient.shared.createItem(payload)
+                } catch {
+                    #if DEBUG
+                    print("[Recommendations] save sync failed: \(error.localizedDescription)")
+                    #endif
+                }
+            }
+        }
 
         // Track interaction
         Task {

@@ -100,9 +100,12 @@ final class ARPlacementViewModel {
             }
         } catch {
             await MainActor.run {
-                self.product = Product.mockProducts.first { $0.id == id }
+                self.product = nil
                 self.isLoading = false
             }
+            #if DEBUG
+            print("[ARPlacement] product fetch failed: \(error.localizedDescription)")
+            #endif
         }
     }
 

@@ -57,17 +57,15 @@ actor ProductAPIClient {
 
         request.httpBody = try JSONSerialization.data(withJSONObject: params)
 
-        do {
-            let (data, _) = try await session.data(for: request)
-            let items = try JSONDecoder().decode([Product].self, from: data)
-            return RecommendationsResponse(items: items, total: items.count, roomId: roomId, roomName: nil)
-        } catch {
-            // Fall back to mock data during development
-            print("[ProductAPI] Recommendations failed, using mock: \(error.localizedDescription)")
-            let items = Product.mockProducts
-            let filtered = category != nil ? items.filter { $0.category == category } : items
-            return RecommendationsResponse(items: filtered, total: filtered.count, roomId: roomId, roomName: nil)
+        let (data, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            #if DEBUG
+            print("[ProductAPI] Recommendations HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            #endif
+            throw ProductAPIError.http(status: http.statusCode)
         }
+        let items = try JSONDecoder().decode([Product].self, from: data)
+        return RecommendationsResponse(items: items, total: items.count, roomId: roomId, roomName: nil)
     }
 
     // MARK: - Single Product (PostgREST direct query)
@@ -86,20 +84,17 @@ actor ProductAPIClient {
         directRequest.httpMethod = "GET"
         await applyHeaders(to: &directRequest)
 
-        do {
-            let (data, _) = try await session.data(for: directRequest)
-            // PostgREST returns an array; decode and map to Product
-            let rawProducts = try JSONDecoder().decode([RawProductWithVendor].self, from: data)
-            guard let raw = rawProducts.first else { throw ProductAPIError.notFound }
-            return raw.toProduct()
-        } catch {
-            // Fall back to mock
-            print("[ProductAPI] Product fetch failed, using mock: \(error.localizedDescription)")
-            guard let product = Product.mockProducts.first(where: { $0.id == id }) else {
-                throw ProductAPIError.notFound
-            }
-            return product
+        let (data, response) = try await session.data(for: directRequest)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            #if DEBUG
+            print("[ProductAPI] Product fetch HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            #endif
+            throw ProductAPIError.http(status: http.statusCode)
         }
+        // PostgREST returns an array; decode and map to Product
+        let rawProducts = try JSONDecoder().decode([RawProductWithVendor].self, from: data)
+        guard let raw = rawProducts.first else { throw ProductAPIError.notFound }
+        return raw.toProduct()
     }
 
     // MARK: - Interactions
@@ -193,4 +188,5 @@ enum ProductAPIError: Error {
     case notFound
     case networkError(Error)
     case decodingError(Error)
+    case http(status: Int)
 }

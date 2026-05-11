@@ -104,4 +104,29 @@ public enum PatinaGradients {
             endPoint: .bottom
         )
     }
+
+    /// Map a server-supplied gradient key (e.g. `"hero"`, `"walnut"`) to one
+    /// of our static gradients. Returns `nil` when the key is unknown so the
+    /// caller can choose a default.
+    public static func gradient(forKey key: String?) -> LinearGradient? {
+        guard let key = key?.lowercased() else { return nil }
+        switch key {
+        case "warm":     return warm
+        case "dusk":     return dusk
+        case "earth":    return earth
+        case "sage":     return sageGradient
+        case "leather":  return leather
+        case "linen":    return linen
+        case "stone":    return stone
+        case "wood":     return wood
+        case "metal":    return metal
+        case "rattan":   return rattan
+        case "hero":     return hero
+        case "hero2":    return hero2
+        case "walnut":   return walnut
+        case "cherry":   return cherry
+        case "sunrise":  return sunrise
+        default:         return nil
+        }
+    }
 }

@@ -90,10 +90,12 @@ final class ProductDetailViewModel {
         } catch {
             await MainActor.run {
                 self.error = "Couldn't load product"
+                self.product = nil
                 self.isLoading = false
-                // Fallback to mock
-                self.product = Product.mockProducts.first { $0.id == id }
             }
+            #if DEBUG
+            print("[ProductDetail] load failed: \(error.localizedDescription)")
+            #endif
         }
     }
 
