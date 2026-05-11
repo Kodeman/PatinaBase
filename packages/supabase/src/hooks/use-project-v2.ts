@@ -66,6 +66,53 @@ export function useProjectNarrativeSections(projectId: string) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// PROJECT PALETTES (00140 — mirror of proposal_palettes; swatches embedded)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface ProjectPaletteSwatch {
+  hex: string;
+  name: string | null;
+  role: string | null;
+  brand: string | null;
+  brand_code: string | null;
+  paint_color_id: string | null;
+  sort_order: number;
+}
+
+export interface ProjectPalette {
+  id: string;
+  project_id: string;
+  source_palette_id: string | null;
+  scope_room_id: string | null;
+  name: string;
+  is_primary: boolean;
+  source_image_url: string | null;
+  notes: string | null;
+  swatches: ProjectPaletteSwatch[];
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export function useProjectPalettes(projectId: string) {
+  return useQuery({
+    queryKey: ['project-palettes', projectId],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('project_palettes')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('sort_order', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ProjectPalette[];
+    },
+    enabled: !!projectId,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // PROJECT ROOMS
 // ═══════════════════════════════════════════════════════════════════════════
 

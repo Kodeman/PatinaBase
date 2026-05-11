@@ -198,7 +198,10 @@ export default function ProjectDetailPage({
         </Link>
 
         {/* Zone 3a: Project Brief (preserved proposal narrative) */}
-        <ProjectBriefPanel projectId={id} />
+        <ProjectBriefPanel
+          projectId={id}
+          kickoffMessage={(project as { kickoff_message?: string | null }).kickoff_message ?? null}
+        />
 
         {/* Zone 3b: Room-by-Room Scope */}
         {adaptedRooms.length > 0 && (
