@@ -358,7 +358,7 @@ struct RoomProjectView: View {
         case .viewAR:
             coordinator.navigate(to: .arPlacement(
                 productId: item.productId,
-                roomRemoteId: room?.remoteId?.uuidString
+                roomRemoteId: room?.remoteId
             ))
         case .viewDetail:
             coordinator.navigate(to: .pieceDetail(pieceId: item.productId))
