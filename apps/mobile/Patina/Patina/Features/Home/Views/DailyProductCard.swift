@@ -203,7 +203,7 @@ private struct MatchedImage: ViewModifier {
 #Preview {
     ScrollView {
         VStack {
-            ForEach(DailyRecommendation.mockAll) { rec in
+            ForEach(DailyRecommendation.previewAll) { rec in
                 DailyProductCard(recommendation: rec, onAdd: {})
             }
         }

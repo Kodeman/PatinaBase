@@ -95,6 +95,6 @@ struct DailyStoryCard: View {
 }
 
 #Preview {
-    DailyStoryCard(story: .mock)
+    DailyStoryCard(story: .preview)
         .background(PatinaColors.offWhite)
 }

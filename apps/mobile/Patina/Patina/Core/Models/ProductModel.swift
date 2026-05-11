@@ -174,10 +174,16 @@ struct InteractionEvent: Codable {
     }
 }
 
-// MARK: - Mock Data
+// MARK: - Preview Data
+//
+// `previewProducts` is intentionally `#if DEBUG`-gated and only used by
+// SwiftUI `#Preview` blocks. Runtime code paths must never reach for this
+// — every product surfaced to a real user comes from the Supabase backend
+// via `ProductAPIClient`.
 
+#if DEBUG
 extension Product {
-    static let mockProducts: [Product] = [
+    static let previewProducts: [Product] = [
         Product(id: "p1", name: "Walnut Lounge Chair", priceCents: 285000, matchScore: 92,
                 makerName: "Chilton Furniture", makerLocation: "Freeport, ME",
                 makerStory: "Each chair starts as a conversation with the wood. Walnut tells you where it wants to bend.",
@@ -220,3 +226,4 @@ extension Product {
                 category: .lighting, tier: .styleMatch),
     ]
 }
+#endif

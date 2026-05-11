@@ -36,8 +36,7 @@ struct ProductDetailView: View {
             } else if viewModel.isLoading {
                 loadingView
             } else {
-                // Fallback with placeholder
-                productContent(Product.mockProducts[0])
+                errorView
             }
         }
         .background(PatinaColors.offWhite)
@@ -310,6 +309,31 @@ struct ProductDetailView: View {
         }
         .frame(maxWidth: .infinity)
     }
+
+    // MARK: - Error
+
+    private var errorView: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 28))
+                .foregroundColor(PatinaColors.agedOak)
+            Text(viewModel.error ?? "Couldn't load this piece")
+                .font(PatinaTypography.bodySmall)
+                .foregroundColor(PatinaColors.mocha)
+                .multilineTextAlignment(.center)
+            if let productId {
+                Button("Try Again") {
+                    Task { await viewModel.loadProduct(id: productId) }
+                }
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundColor(PatinaColors.clay)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 32)
+        .frame(maxWidth: .infinity)
+    }
 }
 
 // MARK: - Badge Display Names
@@ -368,5 +392,5 @@ struct FlowLayout: Layout {
 }
 
 #Preview {
-    ProductDetailView(product: Product.mockProducts[0])
+    ProductDetailView(product: Product.previewProducts[0])
 }

@@ -27,8 +27,11 @@ struct DailyStory: Identifiable, Hashable {
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
+#if DEBUG
 extension DailyStory {
-    static let mock = DailyStory(
+    /// SwiftUI preview-only sample. Never read at runtime — production content
+    /// comes from `editorial_stories` via `EditorialStoriesAPIClient`.
+    static let preview = DailyStory(
         id: "story-chilton",
         tag: "Maker Spotlight",
         title: "The Grain Whisperer of Maine",
@@ -40,6 +43,7 @@ extension DailyStory {
         makerName: "Jonathan Chilton",
         makerLocation: "Freeport, Maine",
         makerAvatarGradient: PatinaGradients.earth,
-        featuredProductID: "p1"
+        featuredProductID: nil
     )
 }
+#endif

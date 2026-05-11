@@ -8,12 +8,34 @@
 import SwiftUI
 
 struct AppNotification: Identifiable {
-    let id = UUID()
+    /// Local UUID for `Identifiable`. Stable per notification.
+    let id: UUID
+    /// Server-side row id from `notification_log.id`, when this entry came
+    /// from the backend. `nil` for preview-only entries.
+    let remoteId: String?
     let type: AppNotificationType
     let title: String
     let body: String
     let timestamp: Date
-    var isRead: Bool = false
+    var isRead: Bool
+
+    init(
+        id: UUID = UUID(),
+        remoteId: String? = nil,
+        type: AppNotificationType,
+        title: String,
+        body: String,
+        timestamp: Date,
+        isRead: Bool = false
+    ) {
+        self.id = id
+        self.remoteId = remoteId
+        self.type = type
+        self.title = title
+        self.body = body
+        self.timestamp = timestamp
+        self.isRead = isRead
+    }
 
     var icon: String {
         type.icon
@@ -60,10 +82,13 @@ enum AppNotificationType {
     }
 }
 
-// MARK: - Mock Data
+// MARK: - Preview Data
 
+#if DEBUG
 extension AppNotification {
-    static let mockNotifications: [AppNotification] = [
+    /// SwiftUI preview-only sample. Never read at runtime — production
+    /// entries come from `NotificationsAPIClient`.
+    static let previewNotifications: [AppNotification] = [
         AppNotification(type: .newRecommendations, title: "New pieces for your living room",
                        body: "3 new items match your warm minimalist style",
                        timestamp: Date().addingTimeInterval(-1800)),
@@ -81,3 +106,4 @@ extension AppNotification {
                        timestamp: Date().addingTimeInterval(-259200), isRead: true),
     ]
 }
+#endif

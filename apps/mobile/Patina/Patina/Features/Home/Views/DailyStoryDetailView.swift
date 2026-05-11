@@ -191,6 +191,6 @@ struct DailyStoryDetailView: View {
 
 #Preview {
     NavigationStack {
-        DailyStoryDetailView(story: .mock, featuredProduct: Product.mockProducts[0])
+        DailyStoryDetailView(story: .preview, featuredProduct: Product.previewProducts[0])
     }
 }

@@ -95,7 +95,7 @@ struct AddToRoomSheet: View {
 
 #Preview {
     AddToRoomSheet(
-        product: Product.mockProducts[0],
+        product: Product.previewProducts[0],
         rooms: RoomSummary.mockAll,
         onSelect: { _ in },
         onNewRoom: { }

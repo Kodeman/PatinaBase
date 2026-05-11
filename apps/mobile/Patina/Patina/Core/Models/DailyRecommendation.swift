@@ -65,10 +65,13 @@ struct DailyRecommendation: Identifiable, Hashable {
     }
 }
 
+#if DEBUG
 extension DailyRecommendation {
-    static let mockAll: [DailyRecommendation] = [
+    /// SwiftUI preview-only sample. Never read at runtime — production content
+    /// comes from `FeedAPIClient`/`ProductAPIClient` recommendations.
+    static let previewAll: [DailyRecommendation] = [
         DailyRecommendation(
-            product: Product.mockProducts[0],
+            product: Product.previewProducts[0],
             matchScore: 92,
             tier: .designerSelection,
             whyCopy: "Hand-rubbed walnut catches your west-facing afternoon light beautifully.",
@@ -82,7 +85,7 @@ extension DailyRecommendation {
             )
         ),
         DailyRecommendation(
-            product: Product.mockProducts[1],
+            product: Product.previewProducts[1],
             matchScore: 88,
             tier: .editorPick,
             whyCopy: "Soft linen weave echoes the warm minimalism of your style profile.",
@@ -93,7 +96,7 @@ extension DailyRecommendation {
             pairing: nil
         ),
         DailyRecommendation(
-            product: Product.mockProducts[5],
+            product: Product.previewProducts[5],
             matchScore: 84,
             tier: .standard,
             whyCopy: "Brass warms with age — the patina you'll watch develop year by year.",
@@ -102,3 +105,4 @@ extension DailyRecommendation {
         )
     ]
 }
+#endif

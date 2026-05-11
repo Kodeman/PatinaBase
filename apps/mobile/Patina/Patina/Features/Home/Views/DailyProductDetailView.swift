@@ -331,7 +331,7 @@ struct DailyProductDetailView: View {
         @Namespace var ns
         var body: some View {
             DailyProductDetailView(
-                recommendation: DailyRecommendation.mockAll[0],
+                recommendation: DailyRecommendation.previewAll[0],
                 namespace: ns,
                 onDismiss: {}
             )
