@@ -301,6 +301,7 @@ function SignInContent() {
         {/* Expandable Email/Password */}
         <div className="mt-6">
           <button
+            type="button"
             onClick={() => setShowEmailForm(!showEmailForm)}
             className="type-meta w-full flex items-center justify-center gap-2 py-3 hover:text-patina-clay transition-colors"
           >
@@ -344,7 +345,8 @@ function SignInContent() {
                   setAuthMode((m) => (m === 'magic' ? 'password' : 'magic'));
                   setFormError(null);
                 }}
-                className="type-body-small mt-4 w-full text-center text-patina-clay hover:text-patina-aged-oak transition-colors"
+                disabled={sendMagicLink.isPending}
+                className="type-body-small mt-4 w-full text-center text-patina-clay hover:text-patina-aged-oak transition-colors disabled:opacity-50"
                 aria-label={
                   authMode === 'magic'
                     ? 'Switch to password sign in'
