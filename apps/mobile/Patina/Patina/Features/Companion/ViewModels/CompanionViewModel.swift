@@ -218,6 +218,13 @@ public final class CompanionViewModel {
         case .scanReveal: return "scan_reveal"
         case .scanFloorPlan: return "scan_floor_plan"
         case .scanFallbackEntry: return "scan_fallback_entry"
+        case .designerHome: return "designer_home"
+        case .projectList: return "project_list"
+        case .projectDetail: return "project_detail"
+        case .decisionList: return "decision_list"
+        case .decisionDetail: return "decision_detail"
+        case .threadList: return "thread_list"
+        case .threadDetail: return "thread_detail"
         }
     }
 

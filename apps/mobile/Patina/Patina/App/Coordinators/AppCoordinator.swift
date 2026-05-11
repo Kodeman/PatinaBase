@@ -216,6 +216,17 @@ public final class AppCoordinator: Coordinator {
         // First Launch routes are handled by FirstLaunchContainerView
         case .walkInvitation, .cameraPermission, .walkComplete, .firstEmergence, .roomNaming:
             updateContext(for: route)
+
+        // MVP v1 expanded routes
+        case .designerHome:
+            phase = .main
+            navigationPath = NavigationPath()
+            updateContext(for: route)
+        case .projectList, .projectDetail,
+             .decisionList, .decisionDetail,
+             .threadList, .threadDetail:
+            navigationPath.append(route)
+            updateContext(for: route)
         }
     }
 
@@ -282,6 +293,14 @@ public final class AppCoordinator: Coordinator {
         case .firstEmergence:
             companionContext.walkProgress = nil
         case .roomNaming:
+            companionContext.walkProgress = nil
+
+        // MVP v1 expanded routes — clear viewing context.
+        case .designerHome,
+             .projectList, .projectDetail,
+             .decisionList, .decisionDetail,
+             .threadList, .threadDetail:
+            companionContext.viewingPiece = nil
             companionContext.walkProgress = nil
         }
     }

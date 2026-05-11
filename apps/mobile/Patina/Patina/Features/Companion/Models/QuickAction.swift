@@ -149,6 +149,12 @@ public enum QuickActionFactory {
              .scanFallbackEntry:
             // Quiet Conversation flow owns its own controls — Companion stays quiet.
             return []
+        case .designerHome,
+             .projectList, .projectDetail,
+             .decisionList, .decisionDetail,
+             .threadList, .threadDetail:
+            // B2B surfaces have their own navigation — keep the Companion quiet.
+            return []
         }
     }
 

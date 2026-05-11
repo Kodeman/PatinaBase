@@ -191,6 +191,20 @@ public struct CompanionContext: Equatable {
             return "Your floor plan"
         case .scanFallbackEntry:
             return "Entering room details"
+        case .designerHome:
+            return "Designer dashboard"
+        case .projectList:
+            return "Projects"
+        case .projectDetail:
+            return "Project details"
+        case .decisionList:
+            return "Decisions waiting"
+        case .decisionDetail:
+            return "Reviewing a decision"
+        case .threadList:
+            return "Conversations"
+        case .threadDetail:
+            return "In conversation"
         }
     }
 
@@ -270,6 +284,14 @@ public struct CompanionContext: Equatable {
             return "square.split.bottomrightquarter"
         case .scanFallbackEntry:
             return "pencil.and.ruler"
+        case .designerHome:
+            return "rectangle.stack"
+        case .projectList, .projectDetail:
+            return "folder"
+        case .decisionList, .decisionDetail:
+            return "checkmark.seal"
+        case .threadList, .threadDetail:
+            return "bubble.left.and.bubble.right"
         }
     }
 }

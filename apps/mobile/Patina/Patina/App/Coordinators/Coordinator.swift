@@ -71,6 +71,15 @@ public enum AppRoute: Hashable {
     case notifications
     case designerConsultation
 
+    // MVP v1 expanded — dual-mode + B2B surfaces
+    case designerHome                                 // designer dashboard
+    case projectList                                  // client: list of projects
+    case projectDetail(projectId: String)             // client: project detail
+    case decisionList                                 // client: pending decisions
+    case decisionDetail(decisionId: String)           // client: review options
+    case threadList                                   // messaging inbox
+    case threadDetail(threadId: String)               // messaging conversation
+
     // First Launch routes
     case walkInvitation
     case cameraPermission
@@ -128,6 +137,13 @@ public enum AppRoute: Hashable {
         case .walkComplete: return "Walk Complete"
         case .firstEmergence: return "First Emergence"
         case .roomNaming: return "Room Naming"
+        case .designerHome: return "Designer Home"
+        case .projectList: return "Projects"
+        case .projectDetail: return "Project"
+        case .decisionList: return "Decisions"
+        case .decisionDetail: return "Decision"
+        case .threadList: return "Messages"
+        case .threadDetail: return "Conversation"
         }
     }
 
