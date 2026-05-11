@@ -189,7 +189,7 @@ function SignInContent() {
           </div>
 
           {/* OAuth Buttons */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className={`grid gap-3 ${isOAuthProviderEnabled('google') ? 'grid-cols-2' : 'grid-cols-1'}`}>
             {isOAuthProviderEnabled('google') && (
               <Button
                 variant="outline"

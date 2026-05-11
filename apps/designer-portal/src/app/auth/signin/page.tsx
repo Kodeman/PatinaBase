@@ -233,7 +233,7 @@ function SignInContent() {
         <p className="type-meta mb-6">Or continue with</p>
 
         {/* OAuth Buttons */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className={`grid gap-4 ${isOAuthProviderEnabled('google') ? 'grid-cols-2' : 'grid-cols-1'}`}>
           {isOAuthProviderEnabled('google') && (
             <button
               onClick={() => handleOAuthSignIn('google')}
