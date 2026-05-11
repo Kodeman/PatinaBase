@@ -82,12 +82,31 @@ public final class AuthViewModel {
     /// Transient success message shown after a verification email resend.
     public var verificationResendSuccess: Bool = false
 
+    /// Whether the "Enter code instead" OTP entry panel is shown in place
+    /// of the magic-link confirmation. Toggled by the user from the
+    /// post-send panel when they can't click the email link (shared-email
+    /// setups, broken universal links, etc.).
+    public var showOtpEntry: Bool = false
+
+    /// 6-digit OTP code bound to the entry field. Non-digits are stripped
+    /// by the view's `onChange` so the regex check stays simple.
+    public var otpToken: String = ""
+
+    /// Whether an OTP verify is currently in flight. Distinct from
+    /// `authService.isLoading` so the verify button can disable itself
+    /// without blocking the rest of the panel.
+    public var isVerifyingOtp: Bool = false
+
     // MARK: - Private
 
     private let authService = AuthService.shared
     private var coordinator: AppCoordinator?
     private var cooldownTask: Task<Void, Never>?
     private var verificationCooldownTask: Task<Void, Never>?
+
+    /// Cancel-safe handle for the in-flight OTP verify so rapid taps
+    /// don't fan out into concurrent verify requests (Task 1.5 pattern).
+    private var verifyOtpTask: Task<Void, Never>?
 
     // MARK: - Initialization
 
@@ -165,6 +184,57 @@ public final class AuthViewModel {
         } catch {
             // Error is already set in authService
         }
+    }
+
+    /// Show the "Enter code instead" OTP entry panel from the magic-link
+    /// post-send view. Clears any existing error so the previous send's
+    /// failure (if any) doesn't shadow the new entry surface, but keeps
+    /// `magicLinkEmail` since that's the address the OTP was sent to.
+    @MainActor
+    public func showOtpEntryForMagicLink() {
+        showOtpEntry = true
+        otpToken = ""
+        isVerifyingOtp = false
+        authService.clearError()
+    }
+
+    /// Verify the 6-digit OTP code the user pasted from their email.
+    ///
+    /// Coalesces rapid taps via a stored task handle (Task 1.5 pattern):
+    /// if a verify is already in flight, this is a no-op. On success, the
+    /// auth state listener in `AuthService` drives navigation away from
+    /// the auth screen — no explicit `coordinator?.setAuthState` call is
+    /// needed here. On failure, `authService.errorMessage` is surfaced
+    /// through the same error banner the rest of the form uses.
+    @MainActor
+    public func verifyOtp() async {
+        guard !isVerifyingOtp else { return }
+        guard otpToken.count == 6 else { return }
+        verifyOtpTask?.cancel()
+
+        let email = magicLinkEmail
+        let token = otpToken
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.isVerifyingOtp = true
+            defer { self.isVerifyingOtp = false }
+            do {
+                try await self.authService.verifyOtp(email: email, token: token)
+                // Auth state listener handles session + navigation.
+                self.coordinator?.setAuthState(
+                    .authenticated(
+                        userId: self.authService.currentUser?.id.uuidString ?? ""
+                    )
+                )
+            } catch {
+                // authService.errorMessage is already set; clear the
+                // entered token so the user can retype without backspacing
+                // through six digits.
+                self.otpToken = ""
+            }
+        }
+        verifyOtpTask = task
+        await task.value
     }
 
     /// Resend magic link
@@ -274,6 +344,11 @@ public final class AuthViewModel {
         isResendingVerification = false
         verificationResendCooldown = 0
         verificationResendSuccess = false
+        verifyOtpTask?.cancel()
+        verifyOtpTask = nil
+        showOtpEntry = false
+        otpToken = ""
+        isVerifyingOtp = false
     }
 }
 

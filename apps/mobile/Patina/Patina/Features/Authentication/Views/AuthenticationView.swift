@@ -131,6 +131,10 @@ public struct AuthenticationView: View {
             // password sign-in until the verification link is clicked).
             if viewModel.emailAwaitingVerification != nil {
                 emailVerificationNeededView
+            } else if viewModel.mode == .magicLink
+                        && viewModel.magicLinkSent
+                        && viewModel.showOtpEntry {
+                otpEntryView
             } else if viewModel.mode == .magicLink && viewModel.magicLinkSent {
                 magicLinkSentView
             } else {
@@ -227,6 +231,19 @@ public struct AuthenticationView: View {
             }
             .disabled(viewModel.magicLinkCooldown > 0 || viewModel.isLoading)
 
+            // Enter code instead — for users who can't click the email
+            // link in-app (Android-for-email + iPhone-for-app, broken
+            // universal-link handling, etc.). Takes them to the OTP
+            // entry surface that wraps supabase-swift's verifyOTP.
+            Button {
+                viewModel.showOtpEntryForMagicLink()
+            } label: {
+                Text("Enter code instead")
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundColor(PatinaColors.mochaBrown)
+            }
+            .accessibilityIdentifier("auth.magicLink.enterCodeButton")
+
             // Use different email button
             Button {
                 viewModel.magicLinkSent = false
@@ -236,6 +253,97 @@ public struct AuthenticationView: View {
                     .font(PatinaTypography.bodySmall)
                     .foregroundColor(PatinaColors.Text.muted)
             }
+        }
+        .padding(.vertical, PatinaSpacing.lg)
+    }
+
+    // MARK: - OTP Entry
+
+    private var otpEntryView: some View {
+        VStack(spacing: PatinaSpacing.lg) {
+            // Number-pad / lock icon
+            Image(systemName: "number")
+                .font(.system(size: 48))
+                .foregroundColor(PatinaColors.mochaBrown)
+                .padding(.bottom, PatinaSpacing.sm)
+
+            Text("Enter your sign-in code")
+                .font(PatinaTypography.h3)
+                .foregroundColor(PatinaColors.Text.primary)
+
+            Text("Enter the 6-digit code from your email")
+                .font(PatinaTypography.body)
+                .foregroundColor(PatinaColors.Text.secondary)
+                .multilineTextAlignment(.center)
+
+            Text(viewModel.magicLinkEmail)
+                .font(PatinaTypography.bodyMedium)
+                .foregroundColor(PatinaColors.Text.primary)
+
+            // 6-digit code field
+            TextField("000000", text: $viewModel.otpToken)
+                .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
+                .font(.system(.title2, design: .monospaced))
+                .multilineTextAlignment(.center)
+                .padding(PatinaSpacing.md)
+                .background(PatinaColors.Background.secondary)
+                .cornerRadius(PatinaRadius.lg)
+                .overlay(
+                    RoundedRectangle(cornerRadius: PatinaRadius.lg)
+                        .stroke(PatinaColors.clayBeige.opacity(0.2), lineWidth: 1)
+                )
+                .onChange(of: viewModel.otpToken) { _, newValue in
+                    // Strip any non-digit characters (paste, autofill,
+                    // anything else) and cap at 6 characters.
+                    let digits = newValue.filter(\.isNumber)
+                    let trimmed = String(digits.prefix(6))
+                    if trimmed != newValue {
+                        viewModel.otpToken = trimmed
+                    }
+                }
+                .accessibilityIdentifier("auth.otp.tokenField")
+
+            // Verify button
+            Button {
+                Task {
+                    await viewModel.verifyOtp()
+                }
+            } label: {
+                HStack {
+                    if viewModel.isVerifyingOtp {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Text("Verify")
+                    }
+                }
+                .font(PatinaTypography.bodyMedium)
+                .foregroundColor(PatinaColors.Text.inverse)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, PatinaSpacing.md)
+                .background(
+                    (viewModel.otpToken.count == 6 && !viewModel.isVerifyingOtp)
+                    ? PatinaColors.charcoal
+                    : PatinaColors.clayBeige
+                )
+                .cornerRadius(PatinaRadius.lg)
+            }
+            .disabled(viewModel.otpToken.count != 6 || viewModel.isVerifyingOtp)
+            .accessibilityIdentifier("auth.otp.verifyButton")
+
+            // Back to email link — returns to the magic-link-sent panel
+            // without losing the sent state (so the user can still resend
+            // or try a different email from there).
+            Button {
+                viewModel.showOtpEntry = false
+                viewModel.otpToken = ""
+            } label: {
+                Text("← Back to email")
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundColor(PatinaColors.Text.muted)
+            }
+            .accessibilityIdentifier("auth.otp.backButton")
         }
         .padding(.vertical, PatinaSpacing.lg)
     }

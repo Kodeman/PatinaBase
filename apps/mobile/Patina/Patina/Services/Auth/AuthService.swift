@@ -315,6 +315,40 @@ public final class AuthService {
         }
     }
 
+    /// Verify a 6-digit OTP code that was emailed alongside the magic link.
+    ///
+    /// This is the explicit "Enter code instead" path: the user receives
+    /// both a clickable link and a one-time code in the same email, and
+    /// when the link can't be opened in-app (shared-email setups, broken
+    /// universal-link handling, etc.) they can paste the code directly.
+    ///
+    /// On success the session is established via supabase-swift's
+    /// `verifyOTP(email:token:type:)`, and the auth state listener in
+    /// `startAuthStateListener` picks up the `signedIn` event — so this
+    /// method does not need to mutate `session` itself.
+    @MainActor
+    public func verifyOtp(email: String, token: String) async throws {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        do {
+            // `EmailOTPType.email` matches the supabase-js `type: 'email'`
+            // used by the web portals' verify-otp flow — GoTrue accepts
+            // this for codes issued by `signInWithOTP(email:)`.
+            try await supabase.auth.verifyOTP(
+                email: email,
+                token: token,
+                type: .email
+            )
+            // Session is set by the auth state change listener; nothing
+            // else to do here.
+        } catch {
+            errorMessage = error.localizedDescription
+            throw error
+        }
+    }
+
     /// Handle magic link URL callback
     @MainActor
     public func handleMagicLinkURL(_ url: URL) async throws {
