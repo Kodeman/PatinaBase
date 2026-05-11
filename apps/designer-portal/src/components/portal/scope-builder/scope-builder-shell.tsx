@@ -1,6 +1,7 @@
 'use client';
 
-import { useScopeBuilderSummary } from '@patina/supabase';
+import { useState, useEffect } from 'react';
+import { useScopeBuilderSummary, useProposal, useUpdateProposal } from '@patina/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { RoomsInScope } from './rooms-in-scope';
 import { FFEScheduleBuilder } from './ffe-schedule-builder';
@@ -52,6 +53,21 @@ export function ScopeBuilderShell({
   const { data: summary } = useScopeBuilderSummary(proposalId);
   const totalProjectCents = (summary?.totalBudgetCents || 0) + (summary?.totalDesignFeeCents || 0);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: proposal } = useProposal(proposalId) as { data: any };
+  const updateProposal = useUpdateProposal();
+  const [addressDraft, setAddressDraft] = useState('');
+  useEffect(() => {
+    if (proposal?.project_address !== undefined && proposal?.project_address !== null) {
+      setAddressDraft(proposal.project_address);
+    }
+  }, [proposal?.project_address]);
+  const commitAddress = () => {
+    const next = addressDraft.trim();
+    if ((proposal?.project_address ?? '') === next) return;
+    updateProposal.mutate({ proposalId, updates: { project_address: next || null } });
+  };
+
   const setTab = (next: Tab) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('tab', next);
@@ -95,6 +111,28 @@ export function ScopeBuilderShell({
           </div>
         </div>
       )}
+
+      {/* Project basics — site address (carries forward to project.site_address on activation) */}
+      <div className="mb-6 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-5">
+        <label
+          htmlFor="project-address"
+          className="mb-2 block font-mono text-[0.58rem] uppercase tracking-wider text-[var(--text-muted)]"
+        >
+          Site Address
+        </label>
+        <input
+          id="project-address"
+          type="text"
+          value={addressDraft}
+          onChange={(e) => setAddressDraft(e.target.value)}
+          onBlur={commitAddress}
+          placeholder="123 Main St, City, ST 00000"
+          className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-primary)] focus:outline-none"
+        />
+        <p className="mt-2 type-body-small text-[var(--text-muted)]">
+          Captured here so the activated project picks it up automatically.
+        </p>
+      </div>
 
       {/* Tab strip */}
       <div className="mb-6 flex flex-wrap gap-1 border-b border-[var(--border-default)]">

@@ -33,7 +33,7 @@ const projectProgress = (p: AnyProject): number => p.progress ?? 0;
 const projectClientName = (p: AnyProject): string =>
   p.client_name || p.client?.full_name || '';
 const projectAddress = (p: AnyProject): string =>
-  p.client_location || p.address || '';
+  p.site_address || p.client_location || p.address || '';
 const projectPhase = (p: AnyProject): string => p.current_phase || 'consultation';
 const projectDesignerName = (p: AnyProject): string =>
   p.designer?.full_name || p.designer_name || '';

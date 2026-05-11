@@ -7,6 +7,7 @@ interface ProjectIdentityHeaderProps {
     name: string;
     client_name?: string;
     client_location?: string;
+    site_address?: string | null;
     startDate: string;
   };
   phase: ProjectPhase;
@@ -63,7 +64,10 @@ export function ProjectIdentityHeader({ project, phase, projectId }: ProjectIden
           }}
         >
           {project.client_name}
-          {project.client_location ? ` · ${project.client_location}` : ''}
+          {(() => {
+            const where = project.site_address || project.client_location;
+            return where ? ` · ${where}` : '';
+          })()}
           {' · Started '}
           {new Date(project.startDate).toLocaleDateString('en-US', {
             month: 'short',
