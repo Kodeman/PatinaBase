@@ -468,7 +468,12 @@ chrome.alarms?.create('refresh-token', { periodInMinutes: 30 });
 
 chrome.alarms?.onAlarm?.addListener(async alarm => {
   if (alarm.name === 'sync-queue') {
-    syncQueue();
+    // await so MV3 keeps the SW alive until the queue fully drains.
+    try {
+      await syncQueue();
+    } catch (err) {
+      console.warn('[background] sync-queue failed', err);
+    }
   }
   if (alarm.name === 'check-update') {
     checkForUpdate().then(state => {
@@ -483,12 +488,15 @@ chrome.alarms?.onAlarm?.addListener(async alarm => {
   if (alarm.name === 'refresh-token') {
     // Proactively refresh the Supabase session in the SW so the offline
     // capture queue still has a valid JWT when the sidepanel is closed.
-    // Supabase tokens last 1h by default; refresh ~25min before expiry.
+    // Threshold matches GoTrue's EXPIRY_MARGIN (10 min): if the SW was
+    // alive, GoTrue's autoRefreshToken already refreshed and expires_at is
+    // fresh so this branch is skipped; if the SW was dormant, this alarm
+    // reanimates it and performs the refresh without racing GoTrue.
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     const expiresAt = session.expires_at ?? 0;
     const msUntilExpiry = expiresAt * 1000 - Date.now();
-    if (msUntilExpiry < 35 * 60_000) {
+    if (msUntilExpiry < 10 * 60_000) {
       try {
         await supabase.auth.refreshSession();
       } catch (err) {
