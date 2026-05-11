@@ -92,7 +92,65 @@ This restores fail-open behavior. Then disable `GOTRUE_MFA_ENABLED` and restart 
 
 ## 2. Supabase redirect allowlist (Task 2.2)
 
-*Section pending Task 2.2 — will be filled in when Phase 2 lands.*
+**Why:** With Phase 2's cookie-domain change in `@patina/supabase`, all three portal subdomains plus iOS deep links must be on Supabase's redirect allowlist so OAuth callbacks, magic-link redirects, and recovery flows all succeed. Without this, OAuth providers will reject the redirect with `invalid_redirect_uri` and magic links will silently 404.
+
+**Who:** Studio admin (`kody@kochaver.com`).
+
+**Risk:** Low. Adding entries to the allowlist is purely additive; the only way to break things is to leave a typo'd URL on the list that an attacker could target as an open redirect. Use the exact URLs below.
+
+### Steps
+
+1. Sign in to `https://supabase.patina.cloud` as a Studio admin.
+
+2. Open Authentication → URL Configuration.
+
+3. **Site URL:** confirm the primary canonical app URL is set to `https://app.patina.cloud`. (Supabase uses Site URL as the default redirect destination when no explicit `redirectTo` is provided by the calling code.)
+
+4. **Additional Redirect URLs:** ensure ALL of the following are listed (paste each on its own line, or use the multi-input UI; Supabase deduplicates):
+
+   ```
+   https://app.patina.cloud
+   https://app.patina.cloud/auth/callback
+   https://app.patina.cloud/auth/verify-otp
+   https://admin.patina.cloud
+   https://admin.patina.cloud/auth/callback
+   https://admin.patina.cloud/auth/verify-otp
+   https://client.patina.cloud
+   https://client.patina.cloud/auth/callback
+   https://client.patina.cloud/auth/verify-otp
+   patina://auth/callback
+   patina://auth/qr
+   ```
+
+   Notes:
+   - The `/auth/callback` paths handle OAuth + recovery redirects.
+   - The `/auth/verify-otp` paths handle magic-link redirects from Phase 3.
+   - `patina://auth/callback` is the iOS deep-link target for password resets and magic links.
+   - `patina://auth/qr` is the iOS deep-link target for cross-device QR pairing (used by `QRAuthService.handleDeepLink`).
+
+5. Click Save. Supabase may not surface a verification UI; cross-check by triggering an OAuth signin (see Section 3) and inspecting the redirect chain in DevTools → Network. The `auth/v1/authorize` redirect should bounce to the requested URL without an `error=invalid_redirect_uri` query string.
+
+6. If using the management API instead of the Studio UI:
+   ```bash
+   # Pseudo-command — exact endpoint varies by GoTrue version. Verify against
+   # https://supabase.com/docs/reference/api/v1-update-a-project-config
+   curl -X PATCH "$SUPABASE_URL/auth/v1/admin/config" \
+     -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "SITE_URL": "https://app.patina.cloud",
+       "URI_ALLOW_LIST": "https://app.patina.cloud,https://app.patina.cloud/auth/callback,https://app.patina.cloud/auth/verify-otp,https://admin.patina.cloud,https://admin.patina.cloud/auth/callback,https://admin.patina.cloud/auth/verify-otp,https://client.patina.cloud,https://client.patina.cloud/auth/callback,https://client.patina.cloud/auth/verify-otp,patina://auth/callback,patina://auth/qr"
+     }'
+   ```
+   If Studio doesn't allow saving the custom URL scheme (`patina://`) directly, set `GOTRUE_URI_ALLOW_LIST` via the GoTrue env in `infra/coolify/docker-compose.supabase-coolify.yml` and restart the auth service.
+
+### Done when
+
+- [ ] Site URL = `https://app.patina.cloud`
+- [ ] Additional Redirect URLs list contains all 11 entries above
+- [ ] Triggering a password-reset email from a portal sends an email whose link goes through `auth/v1/verify` and lands on `https://<portal>/auth/callback?type=recovery&...` (NOT the Supabase default `localhost:3000` placeholder)
+- [ ] Triggering a magic link from a portal completes a full sign-in
+- [ ] Tapping a magic-link in iOS Mail opens the Patina app via `patina://auth/callback`
 
 ## 3. SSO end-to-end verification (Task 2.4)
 
