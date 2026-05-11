@@ -5,6 +5,7 @@ export {
   type StatusBadgeMode,
   type StatusBadgeSize,
 } from './components/status-badge';
+export { RowItem, type RowItemProps } from './components/row-item';
 export { ProductCard, type ProductCardProps } from './components/product-card';
 export { ProductListItem, type ProductListItemProps } from './components/product-list-item';
 export { TierBadge } from './components/tier-badge';

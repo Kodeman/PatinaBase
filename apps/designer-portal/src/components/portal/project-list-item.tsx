@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { RowItem } from '@patina/catalog-ui';
 import { ProgressBar } from './progress-bar';
 
 interface ProjectListItemProps {
@@ -10,27 +11,15 @@ interface ProjectListItemProps {
   progress: number;
 }
 
-export function ProjectListItem({
-  id,
-  name,
-  phase,
-  progress,
-}: ProjectListItemProps) {
+export function ProjectListItem({ id, name, phase, progress }: ProjectListItemProps) {
   const router = useRouter();
 
   return (
-    <div
-      className="cursor-pointer border-b border-[var(--border-subtle)] py-[1.1rem] transition-all hover:bg-[var(--bg-hover)] hover:-translate-y-[1px] hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
-      style={{ transitionDuration: 'var(--duration-fast)' }}
+    <RowItem
       onClick={() => router.push(`/portal/projects/${id}`)}
-    >
-      <div className="flex items-baseline justify-between">
-        <span className="type-label">{name}</span>
-        <span className="type-meta">{phase}</span>
-      </div>
-      <div className="mt-2.5">
-        <ProgressBar progress={progress} />
-      </div>
-    </div>
+      leading={<span className="type-label">{name}</span>}
+      end={<span className="type-meta">{phase}</span>}
+      below={<ProgressBar progress={progress} />}
+    />
   );
 }
