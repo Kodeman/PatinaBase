@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createBrowserClient, isOAuthProviderEnabled } from '@patina/supabase';
+import { createBrowserClient, isOAuthProviderEnabled, useSendMagicLink } from '@patina/supabase';
 import { AuthForm, type AuthFormField, Alert, DevAccountsPanel } from '@patina/design-system';
 import { getAccountsForPortal } from '@patina/types';
 import Link from 'next/link';
@@ -64,6 +64,9 @@ function SignInContent() {
   const [devAuthError, setDevAuthError] = useState<string | null>(null);
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
   const [showEmailForm, setShowEmailForm] = useState(false);
+  const [authMode, setAuthMode] = useState<'password' | 'magic'>('password');
+
+  const sendMagicLink = useSendMagicLink();
 
   const devAccounts = getAccountsForPortal('designer');
 
@@ -83,6 +86,17 @@ function SignInContent() {
       placeholder: 'Enter your password',
       required: true,
       autoComplete: 'current-password',
+    },
+  ];
+
+  const magicFields: AuthFormField[] = [
+    {
+      name: 'email',
+      label: 'Email Address',
+      type: 'email',
+      placeholder: 'you@example.com',
+      required: true,
+      autoComplete: 'email',
     },
   ];
 
@@ -143,6 +157,20 @@ function SignInContent() {
       console.error('[Credentials SignIn] Exception:', err);
       setFormError('An error occurred during sign in');
       setIsLoading(false);
+    }
+  };
+
+  const handleMagicLinkSubmit = async (data: Record<string, string>) => {
+    setFormError(null);
+
+    try {
+      await sendMagicLink.mutateAsync({ email: data.email });
+      router.push(`/auth/verify-otp?email=${encodeURIComponent(data.email)}`);
+    } catch (err) {
+      console.error('[Magic Link] Exception:', err);
+      const message =
+        err instanceof Error ? err.message : 'Failed to send sign-in code. Please try again.';
+      setFormError(message);
     }
   };
 
@@ -288,14 +316,44 @@ function SignInContent() {
 
           {showEmailForm && (
             <div className="mt-4">
-              <AuthForm
-                title=""
-                fields={fields}
-                submitText={isLoading ? 'Signing in...' : 'Sign In'}
-                isLoading={isLoading}
-                error={formError || undefined}
-                onSubmit={handleCredentialsSignIn}
-              />
+              {authMode === 'magic' ? (
+                <AuthForm
+                  key="magic"
+                  title=""
+                  fields={magicFields}
+                  submitText={sendMagicLink.isPending ? 'Sending code...' : 'Send code'}
+                  isLoading={sendMagicLink.isPending}
+                  error={formError || undefined}
+                  onSubmit={handleMagicLinkSubmit}
+                />
+              ) : (
+                <AuthForm
+                  key="password"
+                  title=""
+                  fields={fields}
+                  submitText={isLoading ? 'Signing in...' : 'Sign In'}
+                  isLoading={isLoading}
+                  error={formError || undefined}
+                  onSubmit={handleCredentialsSignIn}
+                />
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode((m) => (m === 'magic' ? 'password' : 'magic'));
+                  setFormError(null);
+                }}
+                className="type-body-small mt-4 w-full text-center text-patina-clay hover:text-patina-aged-oak transition-colors"
+                aria-label={
+                  authMode === 'magic'
+                    ? 'Switch to password sign in'
+                    : 'Switch to magic link sign in'
+                }
+                data-testid="auth-mode-toggle"
+              >
+                {authMode === 'magic' ? 'Use password instead' : 'Email me a code'}
+              </button>
             </div>
           )}
         </div>
