@@ -5724,7 +5724,7 @@ export type Database = {
           internal_notes: string | null
           item_type: string
           lead_time_weeks: number | null
-          line_total: number
+          line_total_cents: number
           markup_percent: number | null
           name: string
           notes: string | null
@@ -5752,7 +5752,7 @@ export type Database = {
           internal_notes?: string | null
           item_type?: string
           lead_time_weeks?: number | null
-          line_total: number
+          line_total_cents: number
           markup_percent?: number | null
           name: string
           notes?: string | null
@@ -5780,7 +5780,7 @@ export type Database = {
           internal_notes?: string | null
           item_type?: string
           lead_time_weeks?: number | null
-          line_total?: number
+          line_total_cents?: number
           markup_percent?: number | null
           name?: string
           notes?: string | null
@@ -6330,6 +6330,7 @@ export type Database = {
           cc_email: string | null
           client_feedback: string | null
           client_id: string | null
+          client_visibility_tier: string | null
           cover_image: string | null
           created_at: string
           decline_reason: string | null
@@ -6368,6 +6369,7 @@ export type Database = {
           cc_email?: string | null
           client_feedback?: string | null
           client_id?: string | null
+          client_visibility_tier?: string | null
           cover_image?: string | null
           created_at?: string
           decline_reason?: string | null
@@ -6406,6 +6408,7 @@ export type Database = {
           cc_email?: string | null
           client_feedback?: string | null
           client_id?: string | null
+          client_visibility_tier?: string | null
           cover_image?: string | null
           created_at?: string
           decline_reason?: string | null

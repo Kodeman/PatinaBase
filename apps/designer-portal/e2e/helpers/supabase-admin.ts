@@ -40,7 +40,7 @@ export async function getEngagementByType(proposalId: string) {
 export async function getProposalItems(proposalId: string) {
   const { data, error } = await adminDb
     .from('proposal_items')
-    .select('id, item_type, line_total, name, position')
+    .select('id, item_type, line_total_cents, name, position')
     .eq('proposal_id', proposalId)
     .order('position', { ascending: true });
   if (error) throw error;
@@ -149,7 +149,7 @@ export async function getProposalItemsFull(proposalId: string) {
   const { data, error } = await adminDb
     .from('proposal_items')
     .select(
-      'id, item_type, product_id, scope_room_id, ffe_category, name, quantity, unit_price, line_total, budget_min_cents, budget_max_cents, position',
+      'id, item_type, product_id, scope_room_id, ffe_category, name, quantity, unit_price, line_total_cents, budget_min_cents, budget_max_cents, position',
     )
     .eq('proposal_id', proposalId)
     .order('position', { ascending: true });

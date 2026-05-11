@@ -84,7 +84,7 @@ BEGIN
   -- Items for proposal 2 (mix of vendors so the selections list has texture)
   INSERT INTO public.proposal_items (
     proposal_id, name, description, quantity,
-    unit_price, unit_sell_price, line_total, vendor_name, position
+    unit_price, unit_sell_price, line_total_cents, vendor_name, position
   ) VALUES
     (v_sent, 'Walnut sectional sofa', 'Custom 102" sectional, charcoal mohair', 1,
      650000, 650000, 650000, 'Lawson', 0),

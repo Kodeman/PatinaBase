@@ -21,7 +21,7 @@ export interface ProposalItem {
   quantity: number;
   unit_price: number;
   unit_sell_price: number;
-  line_total: number;
+  line_total_cents: number;
   vendor_name: string | null;
   notes: string | null;
   position: number;
@@ -377,7 +377,7 @@ export function useAddProposalItem() {
           quantity,
           unit_price: unitPrice,
           unit_sell_price: sellPrice,
-          line_total: lineTotal,
+          line_total_cents: lineTotal,
           notes: notes || null,
           category: category || null,
           vendor_name: vendorName || null,
@@ -1184,12 +1184,12 @@ async function updateProposalTotal(supabase: any, proposalId: string) {
   // Calculate total from items
   const { data: items } = await supabase
     .from('proposal_items')
-    .select('line_total')
+    .select('line_total_cents')
     .eq('proposal_id', proposalId);
 
   const total = (items ?? []).reduce(
-    (sum: number, item: { line_total: number }) =>
-      sum + (item.line_total || 0),
+    (sum: number, item: { line_total_cents: number }) =>
+      sum + (item.line_total_cents || 0),
     0
   );
 
