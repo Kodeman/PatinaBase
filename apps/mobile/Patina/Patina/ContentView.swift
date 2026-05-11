@@ -275,9 +275,19 @@ struct ContentView: View {
 
     // MARK: - Home View
 
-    /// Home: The Daily Room (handles its own empty state)
+    /// Home view chosen by the signed-in user's role. Designers land on
+    /// the designer dashboard; consumers (or unsigned users) land on the
+    /// DailyRoom. Hydrated roles come from `ProfileService.shared`.
+    @ViewBuilder
     private var mainHomeView: some View {
-        DailyRoomView()
+        let roles = ProfileService.shared.roles
+        let hasDesigner = roles.contains("designer")
+        let hasConsumer = roles.contains("consumer") || roles.isEmpty
+        if hasDesigner && !hasConsumer {
+            DesignerHomeView()
+        } else {
+            DailyRoomView()
+        }
     }
 
     // MARK: - Navigation Destinations
@@ -424,6 +434,34 @@ struct ContentView: View {
         case .scanFallbackEntry:
             quietConversationEntry
                 .navigationBarHidden(true)
+
+        case .designerHome:
+            DesignerHomeView()
+                .navigationBarHidden(true)
+
+        case .projectList:
+            ProjectListView()
+                .navigationBarHidden(true)
+
+        case .projectDetail(let projectId):
+            ProjectDetailView(projectId: projectId)
+                .navigationBarHidden(true)
+
+        case .decisionList:
+            DecisionListView()
+                .navigationBarHidden(true)
+
+        case .decisionDetail(let decisionId):
+            DecisionDetailView(decisionId: decisionId)
+                .navigationBarHidden(true)
+
+        case .threadList:
+            ThreadListView()
+                .navigationBarHidden(true)
+
+        case .threadDetail(let threadId):
+            ThreadDetailView(threadId: threadId)
+                .navigationBarTitleDisplayMode(.inline)
         }
     }
 
