@@ -173,35 +173,50 @@ final class DailyRoomViewModel {
     /// Convert a remote `FeedProduct` into the UI's `DailyRecommendation`.
     /// `whyCopy` is sourced from `spatial_context["why"]` when available;
     /// the spatial-context dictionary is also wired into `spatialContext`
-    /// so `DailyProductCard` can render "why it fits" text.
+    /// so `DailyProductCard` can render "why it fits" text. Maker name,
+    /// product tier, and badges come from the server-side join + tier
+    /// derivation in `/api/feed/:roomId`.
     private static func recommendation(from fp: FeedProduct) -> DailyRecommendation {
         let priceCents = Int((fp.price_retail ?? 0).rounded())
+        let productTier = ProductTier(rawValue: fp.tier ?? "") ?? .styleMatch
         let product = Product(
             id: fp.id,
             name: fp.name,
             priceCents: priceCents,
             matchScore: 80,
-            makerName: "",
+            makerName: fp.maker_name ?? "Unknown Maker",
             makerLocation: nil,
             makerStory: nil,
             imageURL: fp.images?.first,
             usdzURL: nil,
             styleTags: [],
             materialTags: [],
-            badges: [],
+            badges: fp.badges ?? [],
             category: .decor,
-            tier: .styleMatch
+            tier: productTier
         )
         let why = fp.spatial_context?["why"] ?? ""
         return DailyRecommendation(
             id: fp.id,
             product: product,
             matchScore: 80,
-            tier: .standard,
+            tier: Self.dailyTier(from: fp.tier),
             whyCopy: why,
             insight: nil,
             pairing: nil
         )
+    }
+
+    /// Map the server-derived tier string onto the home card's tier enum.
+    /// Server emits `designer_selection`, `style_match`, `new_arrival`
+    /// (see `get_recommendations` RPC in migration 00067). The Daily Room
+    /// card surfaces only `designerSelection` and `standard` today; new
+    /// arrivals and plain style matches both fall under `standard`.
+    private static func dailyTier(from raw: String?) -> DailyRecommendation.Tier {
+        switch raw {
+        case "designer_selection": return .designerSelection
+        default: return .standard
+        }
     }
 
     // MARK: - Intent

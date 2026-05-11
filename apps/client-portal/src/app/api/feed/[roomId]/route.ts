@@ -60,11 +60,16 @@ export async function GET(
     });
   }
 
-  // 3. Load products + spatial context in parallel
+  // 3. Load products + spatial context in parallel.
+  // The product select pulls `tags`, `quality_score`, and `published_at`
+  // (used to derive tier) and joins `vendors(name)` so the iOS card can
+  // render maker name, tier, and badges without a second round-trip.
   const [productsRes, spatialRes] = await Promise.all([
     admin
       .from('products')
-      .select('id, name, price_retail, images, dimensions, vendor_id')
+      .select(
+        'id, name, price_retail, images, dimensions, vendor_id, tags, quality_score, published_at, vendors(name)',
+      )
       .in('id', pageIds),
     admin
       .from('spatial_context')
@@ -83,15 +88,34 @@ export async function GET(
     spatialByProduct.set((row as any).product_id, existing);
   }
 
-  // 4. Preserve ranking order
+  // Tier derivation mirrors the convention in `get_recommendations` (00067):
+  //   quality_score >= 80         → designer_selection
+  //   published_at IS NOT NULL    → style_match
+  //   otherwise                   → new_arrival
+  const deriveTier = (p: { quality_score?: number | null; published_at?: string | null }) => {
+    if ((p.quality_score ?? 0) >= 80) return 'designer_selection';
+    if (p.published_at) return 'style_match';
+    return 'new_arrival';
+  };
+
+  // 4. Preserve ranking order. The shape returned to the client flattens
+  // the vendor join into `maker_name`, surfaces `badges` from `tags`, and
+  // computes `tier` from `quality_score`/`published_at`.
   const productsById = new Map((productsRes.data ?? []).map((p: any) => [p.id, p]));
   const products = pageIds
     .map((id) => productsById.get(id))
     .filter(Boolean)
-    .map((p: any) => ({
-      ...p,
-      spatial_context: spatialByProduct.get(p.id) ?? {},
-    }));
+    .map((p: any) => {
+      const vendor = Array.isArray(p.vendors) ? p.vendors[0] : p.vendors;
+      const { tags, quality_score, published_at, vendors: _vendors, ...rest } = p;
+      return {
+        ...rest,
+        maker_name: vendor?.name ?? null,
+        tier: deriveTier({ quality_score, published_at }),
+        badges: tags ?? [],
+        spatial_context: spatialByProduct.get(p.id) ?? {},
+      };
+    });
 
   return NextResponse.json({
     room,

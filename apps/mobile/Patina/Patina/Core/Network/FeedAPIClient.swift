@@ -20,6 +20,17 @@ public struct FeedProduct: Codable, Sendable {
     public let dimensions: [String: AnyCodable]?
     public let vendor_id: String?
     public let spatial_context: [String: String]?
+    /// Vendor display name, surfaced from the products → vendors join in
+    /// the `/api/feed/:roomId` route. Optional because legacy products
+    /// may not have a vendor row attached.
+    public let maker_name: String?
+    /// Server-derived tier string. One of `designer_selection`,
+    /// `style_match`, `new_arrival` — matches the `get_recommendations`
+    /// RPC convention (migration 00067).
+    public let tier: String?
+    /// Product badge tags (e.g. `handcrafted`, `made_in_usa`). Sourced
+    /// from `products.tags`.
+    public let badges: [String]?
 }
 
 public struct FeedResponse: Codable, Sendable {
