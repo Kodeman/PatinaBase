@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useQRAuth } from '../hooks/use-qr-auth';
-import { supabase } from '../lib/supabase';
+import { supabase, PORTAL_URL } from '../lib/supabase';
 import { LoadingStrata } from './LoadingStrata';
 import { StrataMark } from './StrataMark';
 
@@ -13,6 +13,15 @@ export function AuthScreen() {
   const [authError, setAuthError] = useState('');
 
   const qr = useQRAuth();
+
+  const handleOpenPortalSignin = () => {
+    const url = `${PORTAL_URL}/auth/signin?source=ext`;
+    if (typeof chrome !== 'undefined' && chrome.tabs?.create) {
+      chrome.tabs.create({ url });
+    } else {
+      window.open(url, '_blank');
+    }
+  };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -202,6 +211,18 @@ export function AuthScreen() {
             >
               Sign in with email
             </button>
+
+            <button
+              onClick={handleOpenPortalSignin}
+              data-testid="auth.openPortalSignin"
+              className="mt-2 w-full py-2 px-4 text-sm text-aged-oak border border-pearl/60 rounded-[3px]
+                       hover:text-charcoal hover:border-pearl transition-all"
+            >
+              Use email code on patina.cloud
+            </button>
+            <p className="mt-1 text-[0.65rem] text-aged-oak/70 text-center">
+              After you sign in, this extension will pick up your session automatically.
+            </p>
           </>
         )}
       </div>
