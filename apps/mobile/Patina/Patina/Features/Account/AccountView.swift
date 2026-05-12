@@ -12,8 +12,18 @@ import Auth
 struct AccountView: View {
     @Environment(\.appCoordinator) private var coordinator
     @State private var showingSignOutAlert = false
+    @State private var homeMode: SettingsService.HomeMode = SettingsService.shared.preferredHomeMode
 
     private var authService: AuthService { AuthService.shared }
+    private var profileService: ProfileService { ProfileService.shared }
+
+    /// Show the Workspace section only when the signed-in user actually
+    /// has both designer and consumer roles. Solo-role users have a
+    /// deterministic home, so the toggle would be confusing.
+    private var showsWorkspaceToggle: Bool {
+        let roles = profileService.roles
+        return roles.contains("designer") && roles.contains("consumer")
+    }
 
     var body: some View {
         NavigationStack {
@@ -24,6 +34,10 @@ struct AccountView: View {
 
                     // Account info
                     accountSection
+
+                    if showsWorkspaceToggle {
+                        workspaceSection
+                    }
 
                     // Actions
                     actionsSection
@@ -103,6 +117,55 @@ struct AccountView: View {
             }
             .background(PaperBackground(cornerRadius: PatinaRadius.lg))
         }
+    }
+
+    // MARK: - Workspace Section
+
+    private var workspaceSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader("Workspace")
+
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Mode")
+                        .font(PatinaTypography.body)
+                        .foregroundColor(PatinaColors.Text.secondary)
+                    Spacer()
+                    Menu {
+                        Button("Auto") { applyHomeMode(.auto) }
+                        Button("Designer") { applyHomeMode(.designer) }
+                        Button("Consumer") { applyHomeMode(.consumer) }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(homeModeLabel(homeMode))
+                                .font(PatinaTypography.body)
+                                .foregroundColor(PatinaColors.Text.primary)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(PatinaColors.Text.muted)
+                        }
+                    }
+                }
+                .padding(PatinaSpacing.md)
+            }
+            .background(PaperBackground(cornerRadius: PatinaRadius.lg))
+        }
+    }
+
+    private func homeModeLabel(_ mode: SettingsService.HomeMode) -> String {
+        switch mode {
+        case .auto: return "Auto"
+        case .designer: return "Designer"
+        case .consumer: return "Consumer"
+        }
+    }
+
+    private func applyHomeMode(_ mode: SettingsService.HomeMode) {
+        homeMode = mode
+        SettingsService.shared.setPreferredHomeMode(mode)
+        // Bounce back to the root so mainHomeView re-evaluates with the
+        // new preference. The sheet stays open per existing patterns.
+        coordinator.navigate(to: .heroFrame)
     }
 
     // MARK: - Actions Section

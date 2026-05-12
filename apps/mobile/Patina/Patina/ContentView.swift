@@ -275,17 +275,27 @@ struct ContentView: View {
 
     // MARK: - Home View
 
-    /// Home view chosen by the signed-in user's role. Designers land on
-    /// the designer dashboard; consumers (or unsigned users) land on the
-    /// DailyRoom. Hydrated roles come from `ProfileService.shared`.
+    /// Home view chosen by the signed-in user's role and saved home
+    /// preference. Designers (and dual-role users in auto mode) land on
+    /// the designer dashboard; consumers (and dual-role users who opted
+    /// into consumer mode) land on the DailyRoom. Roles come from
+    /// `ProfileService.shared`; the dual-role preference comes from
+    /// `SettingsService.shared.preferredHomeMode`.
     @ViewBuilder
     private var mainHomeView: some View {
         let roles = ProfileService.shared.roles
         let hasDesigner = roles.contains("designer")
         let hasConsumer = roles.contains("consumer") || roles.isEmpty
-        if hasDesigner && !hasConsumer {
+        let preferred = SettingsService.shared.preferredHomeMode
+
+        switch (hasDesigner, hasConsumer, preferred) {
+        case (true, _, .designer):
             DesignerHomeView()
-        } else {
+        case (true, false, _):
+            DesignerHomeView()
+        case (true, true, .auto):
+            DesignerHomeView()
+        default:
             DailyRoomView()
         }
     }
