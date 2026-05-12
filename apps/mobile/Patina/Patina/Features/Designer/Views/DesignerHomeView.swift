@@ -33,6 +33,17 @@ struct DesignerHomeView: View {
         .background(PatinaColors.offWhite)
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
+        .onAppear {
+            // mainHomeView resolves to DesignerHomeView implicitly (without
+            // an explicit navigate(.designerHome) call), so the Companion
+            // context defaults to .heroFrame and the "What next?" sheet
+            // shows the consumer action set. Drive the coordinator to
+            // .designerHome here so the sheet picks up the designer-mode
+            // entries (Projects / Decisions / Messages / Consumer view).
+            if coordinator.currentScreen != .designerHome {
+                coordinator.navigate(to: .designerHome)
+            }
+        }
     }
 
     private var allEmpty: Bool {

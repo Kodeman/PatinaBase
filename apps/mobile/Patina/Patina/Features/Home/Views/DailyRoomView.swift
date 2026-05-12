@@ -75,6 +75,17 @@ struct DailyRoomView: View {
                 viewModel.load()
             }
         }
+        .onAppear {
+            // mainHomeView can resolve to DailyRoomView implicitly (no
+            // navigate call), e.g. when a dual-role user flips Workspace
+            // back to Consumer. Without this, the Companion context can
+            // be stuck at .designerHome from a prior session and the
+            // sheet will show the designer action set on the consumer
+            // home. Mirror of the DesignerHomeView fix.
+            if coordinator.currentScreen != .heroFrame {
+                coordinator.navigate(to: .heroFrame)
+            }
+        }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 viewModel.load()

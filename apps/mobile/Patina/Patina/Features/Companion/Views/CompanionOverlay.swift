@@ -229,12 +229,18 @@ public struct CompanionOverlay: View {
                 }
                 .padding(.bottom, 16)
 
-                // Dynamic actions from context provider
+                // Dynamic actions from context provider. Read auth state
+                // directly from the @Observable AuthService rather than the
+                // @State copy below — the @State snapshots auth on View init,
+                // which is racy on cold launch where supabase-swift restores
+                // the session asynchronously and the `.task` watcher can miss
+                // the `.initialSession` event. The @Observable read here is
+                // tracked by SwiftUI and re-renders when auth state flips.
                 VStack(spacing: 6) {
                     let actions = CompanionActionProvider.actions(
                         for: coordinator.currentScreen,
                         context: coordinator.companionContext,
-                        isAuthenticated: isAuthenticated
+                        isAuthenticated: AuthService.shared.isAuthenticated
                     )
                     ForEach(actions) { item in
                         companionAction(
