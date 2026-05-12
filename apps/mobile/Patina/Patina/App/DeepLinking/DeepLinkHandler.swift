@@ -84,16 +84,26 @@ public final class DeepLinkHandler {
 
     // MARK: - Auth URLs
 
-    /// Handle authentication-related URLs (patina://auth?session=xxx&exp=xxx or patina://auth/callback?code=xxx)
+    /// Handle authentication-related URLs (patina://auth?session=xxx&exp=xxx
+    /// or patina://auth/callback?code=xxx for PKCE / #access_token=... for
+    /// implicit-flow magic links).
     private func handleAuthURL(_ url: URL) -> Bool {
-        // Check for magic link callback (has code parameter)
-        if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-           components.queryItems?.contains(where: { $0.name == "code" }) == true {
-            // This is a magic link callback
+        // A magic-link callback can arrive with either:
+        //   • PKCE flow: `?code=…` in the query string
+        //   • Implicit flow: `#access_token=…&refresh_token=…` in the fragment
+        // GoTrue's `/verify` redirect uses the implicit form, so the
+        // previous query-only gate silently dropped magic-link logins
+        // when the tokens were in the fragment.
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let hasCodeQuery = components?.queryItems?.contains(where: { $0.name == "code" }) == true
+        let fragment = url.fragment ?? ""
+        let hasFragmentTokens = fragment.contains("access_token") || fragment.contains("refresh_token")
+        let isCallbackPath = url.path.hasPrefix("/callback") || (url.host == "auth" && url.path == "/callback")
+
+        if hasCodeQuery || hasFragmentTokens || isCallbackPath {
             Task {
                 do {
                     try await AuthService.shared.handleMagicLinkURL(url)
-                    // Dismiss any auth sheet and navigate to main app
                     await MainActor.run {
                         coordinator?.showingAuth = false
                     }

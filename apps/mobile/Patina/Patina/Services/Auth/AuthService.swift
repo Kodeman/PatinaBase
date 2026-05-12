@@ -83,6 +83,23 @@ public final class AuthService {
                     }
                 }
 
+                // Event-agnostic hydration: whenever the stream yields a
+                // session with a user, make sure ProfileService and
+                // SettingsService are loaded. This catches `.signedIn`,
+                // `.initialSession` (cold launch w/ restored session,
+                // requires emitLocalSessionAsInitialSession=true on the
+                // client), `.tokenRefreshed`, `.userUpdated` — every
+                // case where the SDK confirms a user. Gate on the
+                // *presence* of currentProfile rather than `isLoaded`,
+                // because the previous gate locked out retries when the
+                // initial fetch landed an empty result (which happens
+                // when the SDK's auth context lags the event by a tick).
+                if let user = session?.user, ProfileService.shared.currentProfile == nil {
+                    print("Hydrating profile for user (event=\(event)): \(user.id.uuidString)")
+                    await ProfileService.shared.fetchProfile(userId: user.id.uuidString)
+                    await SettingsService.shared.load()
+                }
+
                 switch event {
                 case .signedIn:
                     print("User signed in: \(session?.user.id.uuidString ?? "unknown")")
@@ -92,8 +109,6 @@ public final class AuthService {
                             "email_domain": emailDomain,
                             "platform": "ios"
                         ])
-                        // Hydrate profile + roles (mirrors portal useAuth pattern)
-                        await ProfileService.shared.fetchProfile(userId: user.id.uuidString)
                     }
                 case .signedOut:
                     print("User signed out")
@@ -349,13 +364,39 @@ public final class AuthService {
         }
     }
 
-    /// Handle magic link URL callback
+    /// Handle magic link URL callback. GoTrue's `/verify` endpoint
+    /// redirects to `patina://auth/callback#access_token=…&refresh_token=…`
+    /// (implicit-flow tokens in the URL fragment). The Supabase Swift SDK
+    /// defaults to PKCE and `session(from:)` throws on implicit-flow URLs,
+    /// so we parse the fragment ourselves and install the session via
+    /// `setSession(accessToken:refreshToken:)`. If the URL is a PKCE
+    /// callback (`?code=…`), fall back to the SDK's parser.
     @MainActor
     public func handleMagicLinkURL(_ url: URL) async throws {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
 
+        // Try implicit-flow first: tokens live in the URL fragment.
+        if let fragment = url.fragment, !fragment.isEmpty {
+            let params = parseURLFragment(fragment)
+            if let accessToken = params["access_token"],
+               let refreshToken = params["refresh_token"] {
+                do {
+                    let session = try await supabase.auth.setSession(
+                        accessToken: accessToken,
+                        refreshToken: refreshToken
+                    )
+                    self.session = session
+                    return
+                } catch {
+                    errorMessage = error.localizedDescription
+                    throw error
+                }
+            }
+        }
+
+        // PKCE / code-exchange flow — let the SDK handle it.
         do {
             let session = try await supabase.auth.session(from: url)
             self.session = session
@@ -363,6 +404,19 @@ public final class AuthService {
             errorMessage = error.localizedDescription
             throw error
         }
+    }
+
+    /// Parse a URL fragment like `a=1&b=2` into a dictionary.
+    private nonisolated func parseURLFragment(_ fragment: String) -> [String: String] {
+        var out: [String: String] = [:]
+        for pair in fragment.split(separator: "&") {
+            let parts = pair.split(separator: "=", maxSplits: 1).map(String.init)
+            guard parts.count == 2 else { continue }
+            let key = parts[0].removingPercentEncoding ?? parts[0]
+            let value = parts[1].removingPercentEncoding ?? parts[1]
+            out[key] = value
+        }
+        return out
     }
 
     // MARK: - Session Management
