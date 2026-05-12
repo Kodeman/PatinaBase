@@ -85,15 +85,15 @@ These feed the lead triggers (00042) and pg_cron invoker (00079).
 
 ### Domain DNS
 
-Set up on `notify.patina.cloud` (or the domain you publish in `send.ts` and edge functions):
+Production sender domain is the apex `patina.cloud` (verified on Resend; sender is `Patina <hello@patina.cloud>`). DNS records from the Resend dashboard:
 
-| Record | Host                 | Value                                                    |
-|--------|----------------------|----------------------------------------------------------|
-| TXT    | `notify`             | `v=spf1 include:amazonses.com ~all` (exact per Resend)    |
-| CNAME  | `resend._domainkey.notify` | (copy from Resend dashboard)                        |
-| TXT    | `_dmarc`             | `v=DMARC1; p=quarantine; rua=mailto:dmarc@patina.cloud`  |
+| Record | Host           | Value                                                    |
+|--------|----------------|----------------------------------------------------------|
+| TXT    | `send`         | `v=spf1 include:amazonses.com ~all` (exact per Resend)   |
+| CNAME  | `resend._domainkey` | (copy from Resend dashboard)                        |
+| TXT    | `_dmarc`       | `v=DMARC1; p=quarantine; rua=mailto:dmarc@patina.cloud`  |
 
-Verify: `dig TXT notify.patina.cloud` shows SPF + DMARC; status "Verified" in Resend.
+Verify: `dig TXT patina.cloud` shows SPF + DMARC; status "Verified" in Resend.
 
 ### Webhook
 
@@ -178,11 +178,50 @@ jobs. Re-running is safe (uses `cron.unschedule` → `cron.schedule`).
 
 After any deploy or secret change, run through this checklist.
 
+### 0. Production health probes (read-only)
+
+These are the commands the 2026-05-12 audit used to confirm the live stack. Run them first after any deploy:
+
+```bash
+# Coolify Supabase Stack state
+COOLIFY_FQDN='https://coolify.patina.cloud'
+COOLIFY_TOKEN=...                                   # from infra/coolify/.env.coolify
+curl -sS -H "Authorization: Bearer $COOLIFY_TOKEN" "$COOLIFY_FQDN/api/v1/services/es8w8g0c00og4gsgg0k8w8o8" \
+  | jq '.applications | map({name, status, image})'
+
+# Direct edge function reachability
+ANON_KEY=...                                        # SUPABASE_ANON_KEY from functions container env
+curl -sS -X POST "https://api.patina.cloud/functions/v1/campaign-scheduler" \
+  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY" \
+  -H "Content-Type: application/json" -d '{}'
+# Expect: {"dispatched":0,"checked_at":"…"}
+
+# Resend webhook reachable (no apikey by design — Svix sig is the auth)
+curl -sS -X POST "https://api.patina.cloud/functions/v1/resend-webhook" \
+  -H "Content-Type: application/json" -d '{}'
+# Expect: {"error":"Missing webhook signature headers"} HTTP 401
+
+# pg_cron jobs registered + actually firing successfully
+ssh kody@192.168.1.14 'sudo -n docker exec -e PGPASSWORD=… db-es8w8g0c00og4gsgg0k8w8o8 \
+  psql -U supabase_admin -d postgres -c "
+    SELECT jobid, jobname, schedule, active FROM cron.job ORDER BY jobid;
+    SELECT id, status_code, left(content::text,80), created
+      FROM net._http_response WHERE created > now() - interval '"'"'30 minutes'"'"' ORDER BY id DESC LIMIT 6;"'
+# Expect: 11+ jobs, all active=t, and ALL http_response status_code = 200.
+# If any are 401, app.settings.service_role_key is stale — see "Common operations → Refresh pg_cron auth".
+
+# notification_log shows real traffic
+ssh kody@192.168.1.14 'sudo -n docker exec -e PGPASSWORD=… db-es8w8g0c00og4gsgg0k8w8o8 \
+  psql -U supabase_admin -d postgres -c "
+    SELECT type, channel, status, count(*) FROM notification_log
+    WHERE created_at > now() - interval '"'"'7 days'"'"' GROUP BY 1,2,3;"'
+```
+
 ### 1. Resend & domain
 
 ```
-dig TXT notify.patina.cloud            # SPF + DMARC present
-dig CNAME resend._domainkey.notify.patina.cloud   # DKIM
+dig TXT patina.cloud                  # SPF + DMARC present
+dig CNAME resend._domainkey.patina.cloud   # DKIM
 ```
 
 Send a test:
@@ -263,6 +302,19 @@ WHERE id = '<user-id>';
 ```
 
 (Or use the admin-portal `/communications/suppressed` UI once Phase 5 ships.)
+
+### Refresh pg_cron auth (when net._http_response shows 401s)
+
+If `net._http_response` shows 401 "Invalid authentication credentials" for cron-triggered invocations, the postgres GUC `app.settings.service_role_key` has drifted from the SUPABASE_SERVICE_ROLE_KEY in the running Kong/functions stack. Fix by realigning the GUC to whatever Kong currently accepts:
+
+```bash
+CURRENT_SR=$(ssh kody@192.168.1.14 'sudo -n docker exec functions-es8w8g0c00og4gsgg0k8w8o8 sh -c "echo \$SUPABASE_SERVICE_ROLE_KEY"')
+echo "ALTER DATABASE postgres SET app.settings.service_role_key TO '$CURRENT_SR';
+ALTER DATABASE postgres SET app.settings.supabase_url TO 'https://api.patina.cloud';" \
+  | ssh kody@192.168.1.14 'sudo -n docker exec -i -e PGPASSWORD=… db-es8w8g0c00og4gsgg0k8w8o8 psql -U supabase_admin -d postgres'
+```
+
+New sessions (including the next cron tick within 5 min) will use the refreshed value. Do NOT skip the URL line — both GUCs are read by `invoke_edge_function()`.
 
 ### Re-trigger a scheduled campaign manually
 

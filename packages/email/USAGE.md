@@ -361,14 +361,14 @@ Returns null if all props are empty.
 
 | Key | Address | Used For |
 |---|---|---|
-| `transactional` | `Patina <hello@notify.patina.com>` | Default for `sendEmail()` |
-| `marketing` | `Patina <hello@mail.patina.com>` | Default for `sendBatchEmails()` |
+| `transactional` | `Patina <hello@patina.cloud>` (or `RESEND_FROM_TRANSACTIONAL` / `RESEND_FROM`) | Default for `sendEmail()` |
+| `marketing` | `Patina <hello@patina.cloud>` (or `RESEND_FROM_MARKETING` / `RESEND_FROM`) | Default for `sendBatchEmails()` |
 
 Override with the `from` option:
 
 ```typescript
 sendEmail({
-  from: 'Patina Design <team@notify.patina.com>',
+  from: 'Patina Design <team@patina.cloud>',
   // ...
 });
 ```
