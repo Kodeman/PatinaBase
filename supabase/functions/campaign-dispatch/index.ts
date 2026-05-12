@@ -442,7 +442,10 @@ serve(async (req) => {
               );
 
           return {
-            from: Deno.env.get("RESEND_FROM") || "Patina <hello@patina.cloud>",
+            from:
+              Deno.env.get("RESEND_FROM_MARKETING") ||
+              Deno.env.get("RESEND_FROM") ||
+              "Patina <hello@patina.cloud>",
             to: [recipient.email],
             subject: group.subject,
             html,

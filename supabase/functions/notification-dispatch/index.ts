@@ -238,7 +238,10 @@ async function sendEmailViaResend(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      from: Deno.env.get("RESEND_FROM") || "Patina <hello@patina.cloud>",
+      from:
+        Deno.env.get("RESEND_FROM_TRANSACTIONAL") ||
+        Deno.env.get("RESEND_FROM") ||
+        "Patina <hello@patina.cloud>",
       to: [params.to],
       subject: params.subject,
       html: params.html,
