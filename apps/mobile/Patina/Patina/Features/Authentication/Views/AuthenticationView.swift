@@ -614,10 +614,14 @@ struct PatinaTextField: View {
 
             if isSecure {
                 SecureField(placeholder, text: $text)
+                    .foregroundColor(PatinaColors.Text.primary)
+                    .tint(PatinaColors.mochaBrown)
             } else {
                 TextField(placeholder, text: $text)
                     .keyboardType(keyboardType)
                     .textInputAutocapitalization(autocapitalization)
+                    .foregroundColor(PatinaColors.Text.primary)
+                    .tint(PatinaColors.mochaBrown)
             }
         }
         .font(PatinaTypography.body)
