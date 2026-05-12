@@ -75,7 +75,50 @@ enum CompanionActionProvider {
                     hint: "Discover your style",
                     route: .styleQuiz
                 ),
+                CompanionActionItem(
+                    icon: "bell", label: "Notifications",
+                    hint: "Updates from your projects",
+                    route: .notifications
+                ),
             ]
+            if ProfileService.shared.roles.contains("designer") {
+                items.append(CompanionActionItem(
+                    icon: "rectangle.grid.2x2", label: "Designer workspace",
+                    hint: "Projects · Decisions · Messages",
+                    route: .designerHome
+                ))
+            }
+
+        case .designerHome:
+            items = [
+                CompanionActionItem(
+                    icon: "folder", label: "Projects",
+                    hint: "Active engagements", isSuggested: true,
+                    route: .projectList
+                ),
+                CompanionActionItem(
+                    icon: "checkmark.seal", label: "Decisions",
+                    hint: "Awaiting client approval",
+                    route: .decisionList
+                ),
+                CompanionActionItem(
+                    icon: "bubble.left.and.bubble.right", label: "Messages",
+                    hint: "Client threads",
+                    route: .threadList
+                ),
+                CompanionActionItem(
+                    icon: "bell", label: "Notifications",
+                    hint: "Updates across your projects",
+                    route: .notifications
+                ),
+            ]
+            if ProfileService.shared.roles.contains("consumer") {
+                items.append(CompanionActionItem(
+                    icon: "house", label: "Consumer view",
+                    hint: "Switch to your daily room",
+                    route: .heroFrame
+                ))
+            }
 
         case .emergence, .roomEmergence:
             items = [
