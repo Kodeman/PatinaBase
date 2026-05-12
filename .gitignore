@@ -50,6 +50,10 @@ infra/coolify/.env.coolify
 # iOS app local secrets (Secrets.example.swift is the committed template)
 apps/mobile/Patina/Patina/App/Configuration/Secrets.swift
 
+# iOS app generated build-stamp (rewritten by the "Stamp Git SHA" phase
+# on every Debug build; Release builds leave sha empty)
+apps/mobile/Patina/Patina/Generated/GitCommit.swift
+
 # iOS xcuserdata — per-user Xcode state, not source of truth
 apps/mobile/Patina/Patina.xcodeproj/project.xcworkspace/xcuserdata/
 apps/mobile/Patina/Patina.xcodeproj/xcuserdata/

@@ -130,6 +130,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = CBB2D0372F1D20F8007686CD /* Build configuration list for PBXNativeTarget "Patina" */;
 			buildPhases = (
+				CBE19A312F1D5E34007686CD /* Stamp Git SHA */,
 				CBB2D0122F1D20F7007686CD /* Sources */,
 				CBB2D0132F1D20F7007686CD /* Frameworks */,
 				CBB2D0142F1D20F7007686CD /* Resources */,
@@ -293,6 +294,26 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "if which swiftlint > /dev/null; then\n  cd \"${SRCROOT}\"\n  swiftlint lint Patina || true\nelse\n  echo \"warning: SwiftLint not installed, download from https://github.com/realm/SwiftLint\"\nfi\n";
+		};
+		CBE19A312F1D5E34007686CD /* Stamp Git SHA */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Stamp Git SHA";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Patina/Generated/GitCommit.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\nOUT=\"${SRCROOT}/Patina/Generated/GitCommit.swift\"\nmkdir -p \"$(dirname \"$OUT\")\"\nif [ \"$CONFIGURATION\" != \"Debug\" ]; then\n  SHA=\"\"\nelse\n  SHA=$(git -C \"${SRCROOT}\" rev-parse --short=8 HEAD 2>/dev/null || echo \"\")\n  if ! git -C \"${SRCROOT}\" diff --quiet 2>/dev/null; then\n    SHA=\"${SHA}+\"\n  fi\nfi\nNEW=$(/bin/cat <<EOF\n// GENERATED — rewritten by the \"Stamp Git SHA\" Run Script phase.\n// Do not edit by hand.\n\nimport Foundation\n\npublic enum GitCommit {\n    public static let sha: String = \"${SHA}\"\n}\nEOF\n)\nif [ -f \"$OUT\" ] && [ \"$(/bin/cat \"$OUT\")\" = \"$NEW\" ]; then\n  exit 0\nfi\nprintf '%s\\n' \"$NEW\" > \"$OUT\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

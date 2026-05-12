@@ -66,7 +66,19 @@ public enum AppConfiguration {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
     }
 
+    /// Short git SHA stamped by the "Stamp Git SHA" Run Script build
+    /// phase (Debug only). Nil for Release archives, so App Store
+    /// builds stay reproducible. The script rewrites
+    /// `Patina/Generated/GitCommit.swift` before Sources compiles.
+    public static var gitCommit: String? {
+        let sha = GitCommit.sha
+        return sha.isEmpty ? nil : sha
+    }
+
     public static var fullVersion: String {
-        "\(appVersion) (\(buildNumber))"
+        if let sha = gitCommit {
+            return "\(appVersion) (\(buildNumber)) · \(sha)"
+        }
+        return "\(appVersion) (\(buildNumber))"
     }
 }
