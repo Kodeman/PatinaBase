@@ -4,9 +4,8 @@
     "blitz-iphone" : {
       "command" : [
         "\/Users\/kody\/.blitz\/bin\/blitz-detached-mcp",
-        "\/Users\/kody\/.blitz\/node-runtime\/bin\/npx",
-        "-y",
-        "@blitzdev\/iphone-mcp"
+        "\/Users\/kody\/.blitz\/node-runtime\/bin\/node",
+        "\/Users\/kody\/.blitz\/node-runtime\/bin\/iphone-mcp"
       ],
       "enabled" : true,
       "environment" : {
@@ -44,6 +43,7 @@
     "blitz-macos_app_store_build" : "allow",
     "blitz-macos_app_store_setup_signing" : "allow",
     "blitz-macos_app_store_upload" : "allow",
+    "blitz-macos_asc_confirm_created_app" : "allow",
     "blitz-macos_asc_create_iap" : "allow",
     "blitz-macos_asc_create_subscription" : "allow",
     "blitz-macos_asc_create_version" : "allow",
@@ -65,6 +65,9 @@
     "blitz-macos_project_list" : "allow",
     "blitz-macos_project_open" : "allow",
     "blitz-macos_screenshots_add_asset" : "allow",
+    "blitz-macos_screenshots_put_track_slot" : "allow",
+    "blitz-macos_screenshots_remove_track_slot" : "allow",
+    "blitz-macos_screenshots_reorder_track" : "allow",
     "blitz-macos_screenshots_save" : "allow",
     "blitz-macos_screenshots_set_track" : "allow",
     "blitz-macos_screenshots_switch_localization" : "allow",
