@@ -116,6 +116,10 @@ public final class BackgroundScanUploader: NSObject {
     private final class Tracker {
         let descriptor: UploadDescriptor
         var attempts: Int = 1
+        /// Accumulated response body. Storage returns a JSON error payload
+        /// on 4xx that explains the failure (e.g. "mime type ... is not
+        /// supported" or RLS detail); without capturing it we'd be guessing.
+        var responseBody: Data = Data()
         init(_ d: UploadDescriptor) { self.descriptor = d }
     }
 
@@ -178,7 +182,15 @@ public final class BackgroundScanUploader: NSObject {
         let anonKey = AppConfiguration.supabaseAnonKey
 
         var request = URLRequest(url: url)
-        request.httpMethod = "PUT"
+        // Supabase Storage's REST API uses POST to *create* a file and PUT
+        // to *update* an existing one. The 2026-05-13 retest showed scan
+        // E3359067's worldMap artifact failing with HTTP 400 from this path
+        // even though the same scan's other 4 artifacts (uploaded inline
+        // via supabase-swift) all succeeded — because supabase-swift uses
+        // POST. PUT against a non-existent object is the wrong verb and
+        // Storage rejects it. Use POST with x-upsert: true for the upsert
+        // semantics we actually want.
+        request.httpMethod = "POST"
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue(anonKey, forHTTPHeaderField: "apikey")
         request.setValue(descriptor.mimeType, forHTTPHeaderField: "Content-Type")
@@ -195,6 +207,20 @@ public final class BackgroundScanUploader: NSObject {
 // MARK: - URLSession delegates
 
 extension BackgroundScanUploader: URLSessionDelegate, URLSessionTaskDelegate, URLSessionDataDelegate {
+
+    public nonisolated func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        didReceive data: Data
+    ) {
+        // Append response body bytes into the tracker so 4xx error payloads
+        // (Storage returns JSON like {"statusCode":"413","error":...,"message":...})
+        // are available when didComplete fires.
+        let captured = data
+        Task { @MainActor in
+            inflight[dataTask]?.responseBody.append(captured)
+        }
+    }
 
     public nonisolated func urlSession(
         _ session: URLSession,
@@ -251,13 +277,17 @@ extension BackgroundScanUploader: URLSessionDelegate, URLSessionTaskDelegate, UR
             }
             let code = http.statusCode
             guard (200..<300).contains(code) else {
-                logger.error("http \(code, privacy: .public) artifact=\(descriptor.artifactKind, privacy: .public)")
+                let bodySnippet = String(data: tracker.responseBody.prefix(512), encoding: .utf8) ?? ""
+                logger.error("http \(code, privacy: .public) artifact=\(descriptor.artifactKind, privacy: .public) body=\(bodySnippet, privacy: .public)")
                 UploadDiagnosticsLog.shared.log(
                     event: "bg.http_error",
                     scanId: descriptor.scanId,
                     artifactKind: descriptor.artifactKind,
                     httpStatus: code,
-                    extra: ["path": descriptor.storagePath]
+                    extra: [
+                        "path": descriptor.storagePath,
+                        "body": String(bodySnippet.prefix(300))
+                    ]
                 )
                 if code == 401 {
                     // Token expired mid-flight. Refresh once and retry.
