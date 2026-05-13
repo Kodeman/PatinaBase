@@ -272,6 +272,7 @@ public struct ScanReviewView: View {
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(PatinaColors.pearl, lineWidth: 1.5)
                 )
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
