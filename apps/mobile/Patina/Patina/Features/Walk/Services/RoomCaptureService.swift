@@ -669,50 +669,110 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
             self.frameCaptureService.stopCapture()
             self.posedPhotoService?.stop()
 
+            let scanId = self.bundleWriter?.scanId
+
             if let error = error {
                 self.errorMessage = error.localizedDescription
                 self.sessionFailure = error
                 #if DEBUG
                 print("[RoomCaptureService] capture session ended with error: \(error.localizedDescription)")
                 #endif
+                UploadDiagnosticsLog.shared.log(
+                    event: "capture.session_failed",
+                    scanId: scanId,
+                    error: error.localizedDescription
+                )
                 self.onError?(error)
                 return
             }
 
-            // Process the captured room data using RoomBuilder
-            do {
-                let roomBuilder = RoomBuilder(options: [.beautifyObjects])
-                let finalRoom = try await roomBuilder.capturedRoom(from: data)
+            // Build the final CapturedRoom with one retry. A RoomBuilder
+            // failure used to abort the whole flow (the 2026-05-12 producer-
+            // side bug): freezeBundleArtifacts was inside the same do-block
+            // and got skipped, leaving manifest.artifacts empty and every
+            // structural file (usdz, captured_room, world_map, mesh) missing
+            // from the bundle. Now we attempt RoomBuilder, log the outcome,
+            // and ALWAYS continue to freezeBundleArtifacts — the world map /
+            // mesh / depth / coverage / photos paths don't depend on
+            // `capturedRoom` and should still land.
+            var finalRoom: CapturedRoom?
+            var roomBuildError: Error?
+            for attempt in 1...2 {
+                do {
+                    let roomBuilder = RoomBuilder(options: [.beautifyObjects])
+                    finalRoom = try await roomBuilder.capturedRoom(from: data)
+                    break
+                } catch {
+                    roomBuildError = error
+                    UploadDiagnosticsLog.shared.log(
+                        event: "capture.room_build_attempt_failed",
+                        scanId: scanId,
+                        error: error.localizedDescription,
+                        extra: ["attempt": String(attempt)]
+                    )
+                    if attempt == 1 {
+                        try? await Task.sleep(nanoseconds: 500_000_000)
+                    }
+                }
+            }
+
+            if let finalRoom = finalRoom {
                 self.capturedRoom = finalRoom
                 self.scanProgress = 1.0
-
-                // Final feature processing
                 self.processDetectedObjects(from: finalRoom)
-
-                // Score and select the hero frame (legacy, in-memory path)
                 _ = await self.finalizeHeroFrame()
-
-                // Freeze the v2 advanced scan bundle on disk. This stops at
-                // artifact-emission — the manifest is NOT sealed yet, and
-                // `completedAt` stays nil until the Wave-4 review step calls
-                // `finalizeBundleAfterReview(...)`.
-                await self.freezeBundleArtifacts(arSession: session.arSession)
-
-                // Track scan completion
-                let scanDuration = self.scanStartTime.map { Date().timeIntervalSince($0) } ?? 0
-                let qualityGrade = await self.qualityMonitor.finalMetrics().grade
-                WalkAnalytics.shared.trackRoomScanCompleted(
-                    roomType: "living_room",
-                    scanDuration: scanDuration,
-                    objectsDetected: self.detectedFeatures.count,
-                    coveragePercentage: Double(self.scanProgress),
-                    qualityGrade: String(describing: qualityGrade)
+                UploadDiagnosticsLog.shared.log(
+                    event: "capture.room_built",
+                    scanId: scanId,
+                    extra: [
+                        "walls": String(finalRoom.walls.count),
+                        "objects": String(finalRoom.objects.count)
+                    ]
                 )
+            } else {
+                // RoomBuilder unrecoverable — but we keep going so the
+                // bundle gets whatever the AR session and depth recorder
+                // produced. Without `capturedRoom`, USDZ + captured_room
+                // JSON will self-skip; mesh / world_map / depth / coverage /
+                // photos still apply.
+                let message = roomBuildError?.localizedDescription ?? "RoomBuilder returned nil"
+                self.errorMessage = "RoomBuilder failed: \(message)"
+                self.sessionFailure = roomBuildError
+                UploadDiagnosticsLog.shared.log(
+                    event: "capture.room_build_failed",
+                    scanId: scanId,
+                    error: message
+                )
+                #if DEBUG
+                print("[RoomCaptureService] RoomBuilder failed after retry: \(message) — continuing with partial freeze")
+                #endif
+            }
 
+            // Always freeze whatever artifacts we have. The manifest will
+            // be sealed later by finalizeBundleAfterReview; what we miss
+            // here stays missing, but at least mesh / depth / world_map /
+            // coverage / photos are persisted.
+            await self.freezeBundleArtifacts(arSession: session.arSession)
+
+            // Telemetry uses whatever progress we have. Quality grade is
+            // still meaningful from optical/coverage analyzers.
+            let scanDuration = self.scanStartTime.map { Date().timeIntervalSince($0) } ?? 0
+            let qualityGrade = await self.qualityMonitor.finalMetrics().grade
+            WalkAnalytics.shared.trackRoomScanCompleted(
+                roomType: "living_room",
+                scanDuration: scanDuration,
+                objectsDetected: self.detectedFeatures.count,
+                coveragePercentage: Double(self.scanProgress),
+                qualityGrade: String(describing: qualityGrade)
+            )
+
+            // Notify downstream. With a successful RoomBuilder, the room is
+            // passed; otherwise, surface the producer error so callers can
+            // decide whether to present an explicit failure UI.
+            if let finalRoom = finalRoom {
                 self.onScanComplete?(finalRoom)
-            } catch {
-                self.errorMessage = "Failed to process room: \(error.localizedDescription)"
-                self.onError?(error)
+            } else if let roomBuildError = roomBuildError {
+                self.onError?(roomBuildError)
             }
         }
     }
@@ -725,23 +785,47 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
     /// if (e.g.) the world map isn't available yet.
     @MainActor
     private func freezeBundleArtifacts(arSession: ARSession) async {
-        guard let writer = bundleWriter else { return }
+        guard let writer = bundleWriter else {
+            UploadDiagnosticsLog.shared.log(event: "freeze.no_writer")
+            return
+        }
+        let scanId = writer.scanId
+        UploadDiagnosticsLog.shared.log(event: "freeze.start", scanId: scanId)
 
         // 1. CapturedRoom parametric JSON (authoritative geometry)
-        _ = await exportCapturedRoomJSON()
+        let crj = await exportCapturedRoomJSON()
+        UploadDiagnosticsLog.shared.log(
+            event: crj != nil ? "freeze.captured_room_json.ok" : "freeze.captured_room_json.skipped",
+            scanId: scanId,
+            extra: ["has_captured_room": capturedRoom == nil ? "false" : "true"]
+        )
 
         // 2. USDZ (beautified mesh for ARQuickLook)
-        _ = await exportUSDZToBundle()
+        let usdz = await exportUSDZToBundle()
+        UploadDiagnosticsLog.shared.log(
+            event: usdz != nil ? "freeze.usdz.ok" : "freeze.usdz.skipped",
+            scanId: scanId,
+            extra: ["has_captured_room": capturedRoom == nil ? "false" : "true"]
+        )
 
         // 3. ARWorldMap
-        _ = await WorldMapExporter.exportToBundle(session: arSession, bundle: writer)
+        let wm = await WorldMapExporter.exportToBundle(session: arSession, bundle: writer)
+        UploadDiagnosticsLog.shared.log(
+            event: wm != nil ? "freeze.world_map.ok" : "freeze.world_map.failed",
+            scanId: scanId
+        )
 
         // 4. Scene mesh from accumulated ARMeshAnchors. Using the cached
         // set (built up during the scan via didAdd/didUpdate) instead of
         // `arSession.currentFrame?.anchors` — by the time didEndWith fires
         // the session has usually cleared its anchor list.
         let anchors = Array(meshAnchors.values)
-        _ = SceneMeshExporter.exportToBundle(anchors: anchors, bundle: writer)
+        let mesh = SceneMeshExporter.exportToBundle(anchors: anchors, bundle: writer)
+        UploadDiagnosticsLog.shared.log(
+            event: mesh != nil ? "freeze.mesh.ok" : "freeze.mesh.failed",
+            scanId: scanId,
+            extra: ["anchor_count": String(anchors.count)]
+        )
 
         // 5. Flush the depth recorder so its NDJSON index is fully on disk
         //    before we zip the depth/ directory or register the index as
@@ -820,6 +904,20 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
             coverageHeatmapPresent: coverageHeatmapPresent
         )
         try? writer.updateCaptureEnvironment(env)
+
+        // Diagnostic line: total artifact count at freeze end. If this lands
+        // as zero, every individual exporter above silently failed and the
+        // upload pipeline will refuse to mark the scan complete (see
+        // RoomScanSyncService.swift uploadRoomScan's empty-artifacts guard).
+        let frozenArtifacts = writer.currentManifest().artifacts.map { $0.kind.rawValue }
+        UploadDiagnosticsLog.shared.log(
+            event: "freeze.end",
+            scanId: scanId,
+            extra: [
+                "artifact_count": String(frozenArtifacts.count),
+                "kinds": frozenArtifacts.joined(separator: ",")
+            ]
+        )
 
         // NOTE: manifest is NOT finalized here. `finalizeBundleAfterReview`
         // writes annotations, applies user hero/order selection, then seals
