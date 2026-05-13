@@ -135,7 +135,14 @@ public final class BackgroundScanUploader: NSObject {
     // MARK: - Public API
 
     /// Enqueue an artifact for background upload. Returns immediately.
-    public func upload(_ descriptor: UploadDescriptor) throws {
+    public func upload(_ descriptor: UploadDescriptor) async throws {
+        // Best-effort token refresh before building the request so the bearer
+        // we attach has a fresh TTL. If the user is signed out entirely, the
+        // refresh will fail (typically silently) and `buildRequest` below will
+        // throw `.missingSession` — that error propagates up to
+        // `RoomScanSyncService.uploadArtifactViaBackground` and is recorded
+        // as the artifact's lastError instead of being silently swallowed.
+        try? await SupabaseClientManager.shared.client.auth.refreshSession()
         let request = try buildRequest(for: descriptor)
         let task = session.uploadTask(with: request, fromFile: descriptor.fileURL)
         inflight[task] = Tracker(descriptor)
@@ -156,11 +163,18 @@ public final class BackgroundScanUploader: NSObject {
             throw UploadError.invalidURL
         }
 
-        // Pull a synchronous session token from the Supabase AuthClient. If
-        // none is cached, the request will still be dispatched with an empty
-        // bearer and the server will reject it — the retry path logs the
-        // HTTP error cleanly.
-        let accessToken = SupabaseClientManager.shared.client.auth.currentSession?.accessToken ?? ""
+        // Authenticated user JWT. Without it, Supabase Storage rejects with
+        // 403 (RLS policy `auth.uid()::text = (storage.foldername(name))[2]`
+        // can't match a null subject). Previously this fell back to "" and the
+        // failed PUT was logged but the wider sync flow still marked the scan
+        // complete (2026-05-12 smoke-test bug). Throw instead so the failure
+        // propagates and `mark_scan_upload_complete` is gated.
+        guard
+            let accessToken = SupabaseClientManager.shared.client.auth.currentSession?.accessToken,
+            !accessToken.isEmpty
+        else {
+            throw UploadError.missingSession
+        }
         let anonKey = AppConfiguration.supabaseAnonKey
 
         var request = URLRequest(url: url)
@@ -217,16 +231,34 @@ extension BackgroundScanUploader: URLSessionDelegate, URLSessionTaskDelegate, UR
                 logger.error(
                     "transport error artifact=\(descriptor.artifactKind, privacy: .public) err=\(error.localizedDescription, privacy: .public)"
                 )
+                UploadDiagnosticsLog.shared.log(
+                    event: "bg.transport_error",
+                    scanId: descriptor.scanId,
+                    artifactKind: descriptor.artifactKind,
+                    error: error.localizedDescription
+                )
                 await retryOrFail(tracker: tracker, with: .transport(error))
                 return
             }
             guard let http = responseCopy as? HTTPURLResponse else {
+                UploadDiagnosticsLog.shared.log(
+                    event: "bg.no_http_response",
+                    scanId: descriptor.scanId,
+                    artifactKind: descriptor.artifactKind
+                )
                 await retryOrFail(tracker: tracker, with: .httpStatus(-1))
                 return
             }
             let code = http.statusCode
             guard (200..<300).contains(code) else {
                 logger.error("http \(code, privacy: .public) artifact=\(descriptor.artifactKind, privacy: .public)")
+                UploadDiagnosticsLog.shared.log(
+                    event: "bg.http_error",
+                    scanId: descriptor.scanId,
+                    artifactKind: descriptor.artifactKind,
+                    httpStatus: code,
+                    extra: ["path": descriptor.storagePath]
+                )
                 if code == 401 {
                     // Token expired mid-flight. Refresh once and retry.
                     await refreshSessionAndRetry(tracker: tracker)

@@ -1420,6 +1420,7 @@ extension RoomScanSyncService {
         )
 
         // 5. Upload posed photos + insert room_scan_images rows (with pose).
+        var photoUploadError: Error?
         do {
             try await uploadPosedPhotos(
                 manifest: manifest,
@@ -1430,6 +1431,7 @@ extension RoomScanSyncService {
                 roomId: roomId
             )
         } catch {
+            photoUploadError = error
             print("[RoomScanSync] Posed photos upload partial failure: \(error.localizedDescription)")
         }
 
@@ -1443,7 +1445,28 @@ extension RoomScanSyncService {
             )
         }
 
-        // 6. Final safety PATCH: ensure upload_progress lands at 100.
+        // 6. Gate completion on real success. Previously the per-artifact
+        //    catch in launchArtifactUpload swallowed every failure, and this
+        //    code would unconditionally PATCH upload_progress=100 and call
+        //    mark_scan_upload_complete — leaving a "complete" row with no
+        //    Storage objects behind it (the 2026-05-12 smoke-test bug).
+        if !package.artifactState.allArtifactsDone {
+            let failed = package.artifactState.artifacts
+                .filter { $0.status != .uploaded && $0.status != .skipped }
+                .map { "\($0.kind.rawValue)(\($0.status.rawValue))\($0.lastError.map { ": \($0)" } ?? "")" }
+                .joined(separator: ", ")
+            let err = RoomScanSyncError.uploadFailed("artifacts incomplete: \(failed)")
+            lastError = err
+            package.markFailed(err.localizedDescription)
+            throw err
+        }
+        if let err = photoUploadError {
+            let wrapped = RoomScanSyncError.uploadFailed("posed-photos: \(err.localizedDescription)")
+            lastError = wrapped
+            package.markFailed(wrapped.localizedDescription)
+            throw wrapped
+        }
+
         await patchUploadProgress(scanId: package.scanId, progress: 100)
 
         // 7. Mark scan upload complete via RPC, then invoke the
@@ -1747,6 +1770,13 @@ extension RoomScanSyncService {
                             value: url
                         )
                     }
+                    UploadDiagnosticsLog.shared.log(
+                        event: "artifact.uploaded",
+                        scanId: scanId,
+                        artifactKind: artifact.kind.rawValue,
+                        sha: artifact.sha256,
+                        extra: ["url": url]
+                    )
                 } else {
                     // Sidecar — not uploaded, mark skipped so allArtifactsDone holds.
                     let skipped = ArtifactUploadState(
@@ -1757,6 +1787,11 @@ extension RoomScanSyncService {
                         attempts: capturedState.attempts
                     )
                     await MainActor.run { package.updateArtifact(skipped) }
+                    UploadDiagnosticsLog.shared.log(
+                        event: "artifact.skipped",
+                        scanId: scanId,
+                        artifactKind: artifact.kind.rawValue
+                    )
                 }
 
                 let progress = await uploadedCounter.add(artifact.sizeBytes, total: totalBytes)
@@ -1774,6 +1809,13 @@ extension RoomScanSyncService {
                 )
                 await MainActor.run { package.updateArtifact(failed) }
                 print("[RoomScanSync] Artifact \(artifact.kind) upload failed: \(error.localizedDescription)")
+                UploadDiagnosticsLog.shared.log(
+                    event: "artifact.failed",
+                    scanId: scanId,
+                    artifactKind: artifact.kind.rawValue,
+                    sha: artifact.sha256,
+                    error: error.localizedDescription
+                )
 
                 // Record the error column + progress advance even on
                 // failure so the progress bar doesn't stall.
@@ -1951,24 +1993,26 @@ extension RoomScanSyncService {
             sizeExpected: artifact.sizeBytes
         )
 
+        // Register the continuation FIRST so the uploader's URLSession
+        // completion handler can find it. Then enqueue. If enqueue throws
+        // synchronously (invalid URL, missing session, etc.), resolve the
+        // router entry with the failure so the continuation unwinds.
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             uploadRouter.register(
                 scanId: scanId,
                 kind: artifact.kind.rawValue,
                 continuation: cont
             )
-            do {
-                try BackgroundScanUploader.shared.upload(descriptor)
-            } catch {
-                // Enqueue failed synchronously — pop the router entry and
-                // surface the error to the caller. The register() call a
-                // moment ago is the only entry for this key, so resolving
-                // it here with a failure is race-free.
-                uploadRouter.resolve(
-                    scanId: scanId,
-                    kind: artifact.kind.rawValue,
-                    result: .failure(.transport(error))
-                )
+            Task { @MainActor in
+                do {
+                    try await BackgroundScanUploader.shared.upload(descriptor)
+                } catch {
+                    uploadRouter.resolve(
+                        scanId: scanId,
+                        kind: artifact.kind.rawValue,
+                        result: .failure(.transport(error))
+                    )
+                }
             }
         }
     }
@@ -2290,6 +2334,16 @@ extension RoomScanSyncService {
         try await supabase
             .from("room_scan_images")
             .insert(uploaded)
+            .execute()
+
+        // Keep the denormalized `image_count` column on `room_scans` in sync.
+        // Best-effort — a transient failure here doesn't undo the inserts and
+        // doesn't block the rest of the upload flow. Without this patch, the
+        // column stays at its default (0) forever even when uploads succeed.
+        try? await supabase
+            .from("room_scans")
+            .update(["image_count": uploaded.count])
+            .eq("id", value: scanId.uuidString)
             .execute()
     }
 
