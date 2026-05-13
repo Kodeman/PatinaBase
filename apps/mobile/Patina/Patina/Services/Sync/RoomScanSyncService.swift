@@ -1338,7 +1338,24 @@ extension RoomScanSyncService {
         let manifest: ScanManifest
         do {
             manifest = try ScanBundleWriter.readManifest(at: bundleURL)
+            UploadDiagnosticsLog.shared.log(
+                event: "upload.read_manifest",
+                scanId: package.scanId,
+                extra: [
+                    "bundle_url": bundleURL.path,
+                    "artifact_count": String(manifest.artifacts.count),
+                    "photo_count": String(manifest.photos.count),
+                    "manifest_scan_id": manifest.scanId.uuidString,
+                    "kinds": manifest.artifacts.map { $0.kind.rawValue }.joined(separator: ",")
+                ]
+            )
         } catch {
+            UploadDiagnosticsLog.shared.log(
+                event: "upload.read_manifest.failed",
+                scanId: package.scanId,
+                error: error.localizedDescription,
+                extra: ["bundle_url": bundleURL.path]
+            )
             let err = RoomScanSyncError.encodingError(error)
             lastError = err
             throw err
