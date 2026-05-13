@@ -1450,6 +1450,28 @@ extension RoomScanSyncService {
         //    code would unconditionally PATCH upload_progress=100 and call
         //    mark_scan_upload_complete — leaving a "complete" row with no
         //    Storage objects behind it (the 2026-05-12 smoke-test bug).
+        //
+        //    A second class of failure: manifest.artifacts is empty (e.g.
+        //    RoomCaptureService finalized without writing the USDZ /
+        //    captured_room JSON / world_map / mesh artifacts to the
+        //    manifest). In that case the loop above iterates zero times,
+        //    allArtifactsDone is vacuously true, and we'd happily mark the
+        //    scan complete with literally nothing uploaded. Treat an empty
+        //    artifact list as a producer-side failure and refuse to ship.
+        if manifest.artifacts.isEmpty {
+            let err = RoomScanSyncError.uploadFailed(
+                "manifest has zero artifacts — ScanBundleWriter did not record any (usdz/mesh/world_map/captured_room). Bundle producer bug."
+            )
+            UploadDiagnosticsLog.shared.log(
+                event: "manifest.empty_artifacts",
+                scanId: package.scanId,
+                error: err.localizedDescription,
+                extra: ["photos_in_manifest": String(manifest.photos.count)]
+            )
+            lastError = err
+            package.markFailed(err.localizedDescription)
+            throw err
+        }
         if !package.artifactState.allArtifactsDone {
             let failed = package.artifactState.artifacts
                 .filter { $0.status != .uploaded && $0.status != .skipped }
