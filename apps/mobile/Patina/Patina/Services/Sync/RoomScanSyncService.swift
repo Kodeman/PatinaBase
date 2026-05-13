@@ -758,7 +758,7 @@ public final class RoomScanSyncService: ObservableObject {
     /// session again.
     @discardableResult
     private func uploadUSDZ(_ data: Data, roomId: UUID, userId: UUID) async throws -> String {
-        let path = "usdz/\(userId.uuidString)/\(roomId.uuidString)/scan.usdz"
+        let path = "usdz/\(userId.uuidString.lowercased())/\(roomId.uuidString.lowercased())/scan.usdz"
         do {
             try await supabase.storage
                 .from(usdzBucket)
@@ -785,7 +785,7 @@ public final class RoomScanSyncService: ObservableObject {
 
     /// Get public URL for a USDZ model
     public func getUSDZUrl(userId: UUID, roomId: UUID) throws -> URL {
-        let path = "usdz/\(userId.uuidString)/\(roomId.uuidString)/scan.usdz"
+        let path = "usdz/\(userId.uuidString.lowercased())/\(roomId.uuidString.lowercased())/scan.usdz"
         return try supabase.storage.from(usdzBucket).getPublicURL(path: path)
     }
 
@@ -809,7 +809,7 @@ public final class RoomScanSyncService: ObservableObject {
         }
 
         let fileExtension = contentType == "image/heic" ? "heic" : "jpg"
-        let path = "\(userId.uuidString)/\(roomId.uuidString)/hero.\(fileExtension)"
+        let path = "\(userId.uuidString.lowercased())/\(roomId.uuidString.lowercased())/hero.\(fileExtension)"
 
         do {
             try await supabase.storage
@@ -876,7 +876,7 @@ public final class RoomScanSyncService: ObservableObject {
                 filename = "supporting_\(image.displayOrder - 1)"
             }
 
-            let path = "\(userId.uuidString)/\(roomId.uuidString)/\(filename).heic"
+            let path = "\(userId.uuidString.lowercased())/\(roomId.uuidString.lowercased())/\(filename).heic"
 
             do {
                 try await supabase.storage
@@ -1938,7 +1938,14 @@ extension RoomScanSyncService {
         }
 
         let fileURL = bundleURL.appendingPathComponent(artifact.relativePath)
-        let path = "\(folderPrefix)/\(userId.uuidString)/\(roomId.uuidString)/\(filename)"
+        // Lowercase the UUIDs: Storage RLS policy `auth.uid()::text =
+        // (storage.foldername(name))[2]` compares against the lowercase
+        // canonical UUID string Postgres uses, while iOS Foundation's
+        // `UUID.uuidString` returns the uppercase form. The case mismatch
+        // was the root cause of every artifact upload throwing
+        // "new row violates row-level security policy" in the 2026-05-13
+        // retest (scan 9AD8F978).
+        let path = "\(folderPrefix)/\(userId.uuidString.lowercased())/\(roomId.uuidString.lowercased())/\(filename)"
         let publicUrlString = (try? supabase.storage
             .from(usdzBucket)
             .getPublicURL(path: path).absoluteString) ?? ""
@@ -2283,7 +2290,7 @@ extension RoomScanSyncService {
 
                     let filename = (photo.relativePath.split(separator: "/").last)
                         .map(String.init) ?? "photo.heic"
-                    let storagePath = "photos/\(userId.uuidString)/\(roomId.uuidString)/\(filename)"
+                    let storagePath = "photos/\(userId.uuidString.lowercased())/\(roomId.uuidString.lowercased())/\(filename)"
 
                     do {
                         // Idempotent-by-upsert: re-uploading the same bytes
