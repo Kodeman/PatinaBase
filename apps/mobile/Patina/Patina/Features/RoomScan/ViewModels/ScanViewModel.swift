@@ -359,6 +359,17 @@ public final class ScanViewModel {
         guard !isComplete else { return }
         isComplete = true
 
+        // Stop the capture session so RoomPlan's didEndWith delegate fires,
+        // which is what triggers freezeBundleArtifacts (the producer that
+        // writes usdz/captured_room/world_map/mesh into the bundle). Without
+        // this, the .auto-complete path raced the review screen ahead of the
+        // freeze and the upload read an empty manifest (2026-05-13 race
+        // diagnosis — see upload-diagnostics.log scan AF5527F5: read_manifest
+        // at 09:00:45 with 0 artifacts vs freeze.end at 09:00:47 with 7).
+        // didTapFinishPartial / didChooseFinishIdle already called stopCapture
+        // before completeScan; the .auto path was the only one missing it.
+        captureService.stopCapture()
+
         // Finalize session data from the capture service
         session.completedAt = Date()
         session.scanProgress = max(scanProgress, 0.95)

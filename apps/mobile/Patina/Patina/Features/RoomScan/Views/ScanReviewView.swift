@@ -801,15 +801,34 @@ public struct ScanReviewView: View {
         isLoading = true
         loadError = nil
         let bundleURL = bundleURL(for: scanId)
-        // Try up to 10 times across ~5 seconds before giving up.
-        for attempt in 0..<10 {
+        // Try up to 20 attempts across ~10 seconds. We poll until the manifest
+        // both exists AND has artifacts populated — the captureSession's
+        // freezeBundleArtifacts can race the review screen presentation on
+        // the .auto-complete path, leaving the on-disk manifest with photos
+        // but zero structural artifacts for a brief window. Loading the
+        // half-baked manifest and letting Save fire would push an empty
+        // bundle through the uploader (the 2026-05-13 AF5527F5 race).
+        var lastLoaded: ScanManifest?
+        for attempt in 0..<20 {
             if let loaded = try? ScanBundleWriter.readManifest(at: bundleURL) {
-                applyManifest(loaded)
-                return
+                lastLoaded = loaded
+                if !loaded.artifacts.isEmpty {
+                    applyManifest(loaded)
+                    return
+                }
             }
-            if attempt < 9 {
+            if attempt < 19 {
                 try? await Task.sleep(nanoseconds: 500_000_000)
             }
+        }
+        // Best-effort fall-through: surface whatever we last loaded so the
+        // user at least sees photos. Save will refuse to fire if artifacts
+        // are still empty (the upload gate catches it), and if the freeze
+        // eventually lands, the SwiftData package + resumePendingUploads
+        // picks up the now-populated manifest on next launch.
+        if let loaded = lastLoaded {
+            applyManifest(loaded)
+            return
         }
         isLoading = false
         loadError = "We couldn't find the scan file. If this keeps happening, please start a fresh scan."
