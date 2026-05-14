@@ -252,6 +252,94 @@ If SSO breaks production sign-ins:
 2. If that's insufficient, revert commits `cb32565` (Task 2.1) and `5bf0b21` (Task 2.1 follow-up) and redeploy.
 3. The portal-domain checks (Task 2.3) can be disabled by removing the `SUPABASE_SERVICE_ROLE_KEY` env var from a portal — the middleware fails open without it. Use sparingly; this opens cross-portal access for all signed-in users.
 
-## 4. Google OAuth re-enablement (when ready)
+## 4. Apple Sign In (live since 2026-05-14)
+
+Live on web (all three portals) and iOS native. The native iOS flow uses
+`signInWithIdToken` with the bundle ID as audience; the web flow uses
+the Services ID via `signInWithOAuth` and the PKCE callback.
+
+### Apple Developer Portal artifacts
+
+| Field | Value |
+|-------|-------|
+| Team ID | `VP22LXHT7L` |
+| Primary App ID | `cloud.patina.app` (iOS bundle ID) |
+| Services ID (web client_id) | `cloud.patina.auth` |
+| Sign-in-with-Apple Key ID | `DNKV9K7ARV` |
+| `.p8` private key | `~/Downloads/AuthKey_DNKV9K7ARV.p8` (off-repo) |
+| Services ID return URLs | `https://api.patina.cloud/auth/v1/callback` |
+| Services ID domains | `api.patina.cloud` |
+
+### Coolify env vars on Supabase Stack
+
+```
+ENABLE_APPLE_AUTH=true
+APPLE_CLIENT_ID=cloud.patina.auth,cloud.patina.app
+APPLE_SECRET=<JWT signed with .p8 — see below>
+GOTRUE_EXTERNAL_APPLE_REDIRECT_URI=https://api.patina.cloud/auth/v1/callback
+```
+
+`APPLE_CLIENT_ID` is comma-separated so GoTrue accepts ID tokens for
+both audiences: `cloud.patina.auth` (web Services ID) and
+`cloud.patina.app` (native iOS bundle ID).
+
+### Client-secret JWT rotation
+
+Apple's "client secret" is a short-lived ES256 JWT signed with the .p8
+key. Maximum lifetime is 6 months; we mint at ~180 days.
+
+**Current JWT expires: 2026-11-10 (UTC).** Rotate before then.
+
+To rotate, use a one-off Node script (don't commit):
+
+```js
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const key = fs.readFileSync('/Users/kody/Downloads/AuthKey_DNKV9K7ARV.p8', 'utf8');
+const header = { alg: 'ES256', kid: 'DNKV9K7ARV', typ: 'JWT' };
+const now = Math.floor(Date.now() / 1000);
+const payload = {
+  iss: 'VP22LXHT7L',
+  iat: now,
+  exp: now + 15552000, // 180 days
+  aud: 'https://appleid.apple.com',
+  sub: 'cloud.patina.auth',
+};
+const b = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+const input = `${b(header)}.${b(payload)}`;
+const sig = crypto.createSign('SHA256');
+sig.update(input);
+console.log(`${input}.${sig.sign({ key, dsaEncoding: 'ieee-p1363' }).toString('base64url')}`);
+```
+
+Paste the output into `APPLE_SECRET` in Coolify → Supabase Stack →
+Environment Variables, click Update, then click Restart on the stack.
+
+### Verification
+
+- Web: open `https://app.patina.cloud/auth/signin`, click Apple, complete
+  Apple auth, expect redirect via `/auth/callback?code=...` and a session
+  cookie set on `.patina.cloud`. Note: new users land at `/unauthorized`
+  until a role is assigned in `user_roles` — that's by design (see
+  `apps/designer-portal/src/middleware.ts`).
+- iOS: open Patina app, tap "Sign in with Apple", complete Face ID. The
+  POST to `/auth/v1/token` with `grant_type=id_token` returns 200 and a
+  `user_signedup` audit event with `provider: apple`.
+- Cross-check: `SELECT id, email, raw_app_meta_data->>'provider' FROM
+  auth.users WHERE raw_app_meta_data->>'provider' = 'apple';`
+
+### Known caveats
+
+- GoTrue OAuth state JWT has a hardcoded 5-min lifetime. Apple 2FA via SMS
+  can blow past that — if it does, the callback returns
+  `OAuth state is invalid: token is expired`. Retrying with a faster
+  flow (passkey, or pre-auth Apple in another tab) avoids it.
+- Apple's email relay (Private Email) is **not** configured for
+  `patina.cloud` (SPF status red in Apple Developer Portal → Sign in
+  with Apple for Email Communication). Users picking "Hide my email"
+  will get an apple-relay address we can't email back from. Configure
+  the relay if outbound email to those users matters.
+
+## 5. Google OAuth re-enablement (when ready)
 
 *Currently blocked by `external.google: false` at the Supabase project. Section will be added when Google OAuth is configured.*
