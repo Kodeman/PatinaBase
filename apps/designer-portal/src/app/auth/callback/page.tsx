@@ -23,36 +23,47 @@ function CallbackContent() {
 
     const handleCallback = async () => {
       const supabase = createBrowserClient();
+      const code = searchParams.get('code');
+      const next = searchParams.get('callbackUrl') || searchParams.get('next') || '/';
 
       try {
-        // Check if there's already a session (route handler may have set it)
-        const { data: { session }, error } = await supabase.auth.getSession();
+        // PKCE flow: GoTrue redirected back with `?code=` — exchange it
+        // explicitly. Relying on supabase-js auto-detect alone races the 5s
+        // timeout below, so we drive the exchange here.
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            console.error('[Auth Callback Page] exchangeCodeForSession:', error.message);
+            router.replace('/auth/signin?error=OAuthCallback');
+            return;
+          }
+          router.replace(next);
+          return;
+        }
 
+        // Fragment flow (legacy implicit, or Apple response_mode=fragment):
+        // tokens land in the URL hash; supabase-js parses them on init and
+        // fires SIGNED_IN. We poll briefly via getSession + a state listener.
+        const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
           console.error('[Auth Callback Page] Session error:', error.message);
           router.replace('/auth/signin?error=OAuthCallback');
           return;
         }
-
         if (session) {
-          // Session exists — redirect to intended destination
-          const callbackUrl = searchParams.get('callbackUrl') || searchParams.get('next') || '/';
-          router.replace(callbackUrl);
+          router.replace(next);
           return;
         }
 
-        // No session yet — wait briefly for auth state change (fragment-based flow)
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
           (event, session) => {
             if (event === 'SIGNED_IN' && session) {
               subscription.unsubscribe();
-              const callbackUrl = searchParams.get('callbackUrl') || searchParams.get('next') || '/';
-              router.replace(callbackUrl);
+              router.replace(next);
             }
           }
         );
 
-        // Timeout: if no session after 5 seconds, redirect to sign in
         setTimeout(() => {
           subscription.unsubscribe();
           router.replace('/auth/signin?error=OAuthCallback');

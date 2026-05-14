@@ -16,19 +16,33 @@ function CallbackContent() {
 
     const handleCallback = async () => {
       const supabase = createBrowserClient();
+      const code = searchParams.get('code');
+      const next = searchParams.get('callbackUrl') || searchParams.get('next') || '/';
 
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        // PKCE flow: GoTrue redirected back with `?code=` — exchange it
+        // explicitly. Relying on supabase-js auto-detect alone races the 5s
+        // timeout below, so we drive the exchange here.
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            console.error('[Auth Callback Page] exchangeCodeForSession:', error.message);
+            router.replace('/auth/signin?error=OAuthCallback' as any);
+            return;
+          }
+          router.replace(next as any);
+          return;
+        }
 
+        // Fragment flow (legacy implicit, or Apple response_mode=fragment).
+        const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
           console.error('[Auth Callback Page] Session error:', error.message);
           router.replace('/auth/signin?error=OAuthCallback' as any);
           return;
         }
-
         if (session) {
-          const callbackUrl = searchParams.get('callbackUrl') || searchParams.get('next') || '/';
-          router.replace(callbackUrl as any);
+          router.replace(next as any);
           return;
         }
 
@@ -36,8 +50,7 @@ function CallbackContent() {
           (event, session) => {
             if (event === 'SIGNED_IN' && session) {
               subscription.unsubscribe();
-              const callbackUrl = searchParams.get('callbackUrl') || searchParams.get('next') || '/';
-              router.replace(callbackUrl as any);
+              router.replace(next as any);
             }
           }
         );
