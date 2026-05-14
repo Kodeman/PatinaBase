@@ -63,6 +63,16 @@ public final class DeepLinkHandler {
             return false
         }
 
+        // Queue URLs that arrive during `.launching` (e.g. a magic-link
+        // cold launch tap) — auth state hasn't settled yet, so routing
+        // them now would either no-op or land the user in the wrong
+        // phase. `AppCoordinator.recomputePhase()` drains
+        // `pendingDeepLink` once we reach `.main`.
+        if let coordinator, coordinator.phase == .launching {
+            coordinator.pendingDeepLink = url
+            return true
+        }
+
         // Route based on host/path
         let host = url.host ?? ""
 
@@ -104,8 +114,15 @@ public final class DeepLinkHandler {
             Task {
                 do {
                     try await AuthService.shared.handleMagicLinkURL(url)
+                    // The session was set inside handleMagicLinkURL, so
+                    // the phase observer will move us out of `.auth` on
+                    // its own. We only mark onboarding complete here
+                    // because a magic-link sign-in implies the user
+                    // already went through whatever onboarding the web
+                    // surface required — we don't want to drop them
+                    // back into the carousel + quiz.
                     await MainActor.run {
-                        coordinator?.showingAuth = false
+                        AppSettings.shared.hasCompletedOnboarding = true
                     }
                 } catch {
                     print("Magic link auth failed: \(error)")
@@ -126,8 +143,10 @@ public final class DeepLinkHandler {
             }
 
             guard AuthService.shared.isAuthenticated else {
-                // Navigate to auth first
-                coordinator?.navigate(to: .authentication)
+                // QR approval requires a real session — a guest can't
+                // sign anyone else in. Clear guest mode so the phase
+                // observer routes the user back to the AuthScreenView.
+                coordinator?.guestModeOptIn = false
                 return
             }
 

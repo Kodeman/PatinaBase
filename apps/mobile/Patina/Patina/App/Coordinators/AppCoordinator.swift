@@ -191,7 +191,19 @@ public final class AppCoordinator: Coordinator {
         }
         #endif
 
+        let oldPhase = phase
         if newPhase != phase {
+            // Detect a *forced* sign-out: phase goes directly
+            // `.main → .auth` without passing through `.launching`. A
+            // voluntary sign-out routes through `beginSplashTransition`
+            // which puts us in `.launching` first, so this branch only
+            // fires for token-refresh failures and similar interruptions.
+            // Save the current screen so re-auth can drop the user back
+            // where they were.
+            if oldPhase == .main, newPhase == .auth, pendingReturnRoute == nil {
+                pendingReturnRoute = currentScreen
+            }
+
             withAnimation(.easeInOut(duration: 0.4)) {
                 phase = newPhase
             }
@@ -211,6 +223,13 @@ public final class AppCoordinator: Coordinator {
         if newPhase == .main, let url = pendingDeepLink {
             pendingDeepLink = nil
             DeepLinkHandler.shared.handle(url)
+        }
+
+        // Restore the user's pre-sign-out screen after a forced sign-out
+        // is resolved by re-auth. Drained on entry to `.main`.
+        if newPhase == .main, let route = pendingReturnRoute {
+            pendingReturnRoute = nil
+            navigate(to: route)
         }
     }
 

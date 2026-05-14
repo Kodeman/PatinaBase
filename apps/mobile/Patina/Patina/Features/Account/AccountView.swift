@@ -67,9 +67,15 @@ struct AccountView: View {
         .alert("Sign Out", isPresented: $showingSignOutAlert) {
             Button("Cancel", role: .cancel) {}
             Button("Sign Out") {
-                Task {
-                    try? await authService.signOut()
+                Task { @MainActor in
+                    // Close the settings sheet first so the splash
+                    // transition isn't covered by it, then trigger the
+                    // splash window. The phase observer will pick up
+                    // the `.signedOut` event from `AuthService` and
+                    // land on `.auth` once the splash deadline elapses.
                     coordinator.showingSettings = false
+                    coordinator.beginSplashTransition()
+                    try? await authService.signOut()
                 }
             }
         } message: {
