@@ -175,9 +175,26 @@ public enum AuthState: Equatable {
     case authenticated(userId: String)
 }
 
-/// App lifecycle phases
+/// App lifecycle phases — derived from `AuthService.session`, onboarding
+/// completion, and guest opt-in by `AppCoordinator.recomputePhase()`.
+/// Views render the current phase; they do not imperatively dismiss
+/// themselves or set this directly (except the splash-transition helpers
+/// on `AppCoordinator`).
 public enum AppPhase: Equatable {
+    /// Splash playing or session restore in flight. The minimum splash
+    /// duration (see `AppCoordinator.splashMinimumDeadline`) prevents a
+    /// fast cached-session restore from flashing past the splash.
     case launching
-    case threshold
+    /// No session and the user hasn't opted into guest mode — show the
+    /// full-screen `AuthScreenView`.
+    case auth
+    /// Signed in (or guest) but hasn't completed onboarding — show the
+    /// carousel + style quiz host.
+    case onboarding
+    /// Signed in (or guest) and onboarded — show the main app surface.
     case main
+    /// Legacy threshold phase — folded into `.onboarding` in Commit 2.
+    /// Kept here only so existing navigate(to:) sites compile until
+    /// they're removed alongside `FirstLaunchCoordinator`.
+    case threshold
 }

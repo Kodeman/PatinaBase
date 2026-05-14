@@ -69,6 +69,34 @@ public final class AppCoordinator: Coordinator {
         firstLaunchCoordinator != nil && !(firstLaunchCoordinator?.isComplete ?? true)
     }
 
+    // MARK: - Auth-derived state
+
+    /// Earliest moment the splash is allowed to dismiss. Even with an
+    /// instantly-restored cached session, the splash plays for at least
+    /// `splashMinimumDuration` so the auth-state flicker is hidden.
+    /// Reset by `beginSplashTransition()` when, e.g., the user signs out.
+    public private(set) var splashMinimumDeadline: Date = Date().addingTimeInterval(1.5)
+
+    /// Minimum time the splash should play. Tuned to mask cached-session
+    /// restore on cold launch.
+    public static let splashMinimumDuration: TimeInterval = 1.5
+
+    /// Set when the user taps "Continue as Guest" on the auth screen.
+    /// Replaces today's implicit "skip auth, still let them onboard"
+    /// behavior. Cleared automatically when `AuthService` reports a
+    /// signed-in user, so guest+signed-in doesn't get stuck.
+    public var guestModeOptIn: Bool = false
+
+    /// URL queued during `.launching` (e.g., a magic-link cold launch
+    /// arriving before the auth state stream settles). Drained on entry
+    /// to `.main` by `recomputePhase()`.
+    public var pendingDeepLink: URL?
+
+    /// Route preserved across a forced sign-out (token refresh failure
+    /// mid-session). When re-auth succeeds, the phase observer can
+    /// restore the user to where they were.
+    public var pendingReturnRoute: AppRoute?
+
     // MARK: - Dependencies
 
     private let settings = AppSettings.shared
@@ -80,6 +108,11 @@ public final class AppCoordinator: Coordinator {
         // The Hero Page shows:
         // - Empty state (new users): Engaging welcome with "Start Walk" CTA
         // - Populated state (returning users): Room carousel
+        //
+        // Commit 1 (foundation): we keep this `phase = .main` force so the
+        // existing UI keeps routing through `ContentView`'s `.main` branch
+        // while the phase observer is exercised and logged. Commit 2
+        // removes this line and the switch routes purely on derived phase.
         phase = .main
         currentScreen = .heroFrame
         companionContext.currentScreen = .heroFrame
@@ -91,6 +124,100 @@ public final class AppCoordinator: Coordinator {
         } else {
             firstLaunchCoordinator = nil
         }
+
+        // Start observing AuthService + AppSettings so `phase` derives
+        // from auth state. Logs every recompute so commit 1 can be
+        // verified before flipping routing in commit 2.
+        Task { @MainActor in
+            self.observePhaseInputs()
+        }
+    }
+
+    // MARK: - Phase Derivation
+
+    /// Self-reposting observation of the inputs that determine `phase`.
+    /// `withObservationTracking` is one-shot — after the registered reads
+    /// change, we re-register from a Task on MainActor so the next change
+    /// fires the same closure. Safe to call once from `init()`.
+    ///
+    /// The `onChange` block runs *before* the observed value is committed
+    /// (Swift Observation semantics), which is why the recompute is
+    /// scheduled on a Task — by the time it runs, the new value has
+    /// landed on MainActor.
+    @MainActor
+    private func observePhaseInputs() {
+        withObservationTracking {
+            _ = AuthService.shared.isAuthStateReady
+            _ = AuthService.shared.isAuthenticated
+            _ = AppSettings.shared.hasCompletedOnboarding
+            _ = self.guestModeOptIn
+            self.recomputePhase()
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.observePhaseInputs()
+            }
+        }
+    }
+
+    /// Compute the phase from the current inputs. Pure function of
+    /// (auth ready, authenticated, guest opt-in, onboarding complete,
+    /// splash deadline). Called by the observation loop above and
+    /// directly from `beginSplashTransition()` to force `.launching`.
+    @MainActor
+    public func recomputePhase() {
+        let newPhase = derivePhase()
+
+        #if DEBUG
+        if newPhase != phase {
+            print("[AppCoordinator] phase \(phase) → \(newPhase) (ready=\(AuthService.shared.isAuthStateReady) authed=\(AuthService.shared.isAuthenticated) guest=\(guestModeOptIn) onboarded=\(settings.hasCompletedOnboarding))")
+        }
+        #endif
+
+        // Commit 1: the assignment below stays disabled because `init()`
+        // forces `phase = .main`. Logged transitions verify the deriver
+        // is correct; commit 2 enables the assignment.
+        // phase = newPhase
+
+        // Clear guest opt-in if a real session shows up — guest+signed-in
+        // is meaningless, and we don't want the user stuck in guest mode
+        // after signing in from settings.
+        if AuthService.shared.isAuthenticated, guestModeOptIn {
+            guestModeOptIn = false
+        }
+
+        // Drain any deep link queued during `.launching` once we've
+        // arrived at `.main`. Magic-link cold launch is the canonical
+        // case — the URL arrives before the auth stream emits, so we
+        // can't act on it until the session is established.
+        if newPhase == .main, let url = pendingDeepLink {
+            pendingDeepLink = nil
+            DeepLinkHandler.shared.handle(url)
+        }
+    }
+
+    @MainActor
+    private func derivePhase() -> AppPhase {
+        let splashStillPlaying = Date() < splashMinimumDeadline
+        if !AuthService.shared.isAuthStateReady || splashStillPlaying {
+            return .launching
+        }
+        let signedIn = AuthService.shared.isAuthenticated
+        if !signedIn && !guestModeOptIn {
+            return .auth
+        }
+        if !AppSettings.shared.hasCompletedOnboarding {
+            return .onboarding
+        }
+        return .main
+    }
+
+    /// Force a splash transition — used by sign-out to land back at
+    /// `.auth` via a brief splash instead of leaving the home view
+    /// visible while the session tears down.
+    @MainActor
+    public func beginSplashTransition(duration: TimeInterval = splashMinimumDuration) {
+        splashMinimumDeadline = Date().addingTimeInterval(duration)
+        recomputePhase()
     }
 
     /// Check if user has existing rooms (placeholder - would query SwiftData)
@@ -228,6 +355,18 @@ public final class AppCoordinator: Coordinator {
             navigationPath.append(route)
             updateContext(for: route)
         }
+    }
+
+    /// Update `currentScreen` and companion context WITHOUT touching the
+    /// navigation path. Use this from `.onAppear` when the view is already
+    /// the navigation root (so we don't dirty `navigationPath` and trigger
+    /// a re-render that corrupts SwiftUI's gesture recognizer tree under
+    /// iOS 26's NavigationStack + ScrollView). Routes that imply a push
+    /// must still go through `navigate(to:)`.
+    public func setCurrentScreen(_ route: AppRoute) {
+        currentScreen = route
+        PostHogService.shared.screen(route.displayName)
+        updateContext(for: route)
     }
 
     public func goBack() {

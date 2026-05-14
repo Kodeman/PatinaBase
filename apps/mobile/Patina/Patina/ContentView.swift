@@ -35,11 +35,11 @@ struct ContentView: View {
                     }
                 }
 
-            case .threshold:
-                mainContent
-                    .transition(.opacity)
-
-            case .main:
+            case .threshold, .main, .auth, .onboarding:
+                // Commit 1: `.auth` and `.onboarding` route to `mainContent`
+                // because `AppCoordinator.init()` still forces `phase = .main`.
+                // Commit 2 splits these into dedicated AuthScreenView / OnboardingFlowHost
+                // branches.
                 mainContent
                     .transition(.opacity)
             }
