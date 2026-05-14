@@ -168,13 +168,6 @@ public enum AppRoute: Hashable {
     }
 }
 
-/// Authentication state for the app
-public enum AuthState: Equatable {
-    case unknown
-    case unauthenticated
-    case authenticated(userId: String)
-}
-
 /// App lifecycle phases — derived from `AuthService.session`, onboarding
 /// completion, and guest opt-in by `AppCoordinator.recomputePhase()`.
 /// Views render the current phase; they do not imperatively dismiss
@@ -193,8 +186,4 @@ public enum AppPhase: Equatable {
     case onboarding
     /// Signed in (or guest) and onboarded — show the main app surface.
     case main
-    /// Legacy threshold phase — folded into `.onboarding` in Commit 2.
-    /// Kept here only so existing navigate(to:) sites compile until
-    /// they're removed alongside `FirstLaunchCoordinator`.
-    case threshold
 }

@@ -85,6 +85,7 @@ public struct CompanionOverlay: View {
                     Color.black.opacity(0.3)
                         .background(.ultraThinMaterial.opacity(0.5))
                         .ignoresSafeArea()
+                        .allowsHitTesting(true)
                         .onTapGesture { collapseToButton() }
                 }
 
@@ -180,6 +181,7 @@ public struct CompanionOverlay: View {
     private var restingView: some View {
         companionMark
             .onTapGesture { expandToPanel() }
+            .accessibilityIdentifier("companion.bubble")
     }
 
     // MARK: - State 2: Nudging
@@ -226,6 +228,7 @@ public struct CompanionOverlay: View {
                                     .foregroundColor(PatinaColors.pearl)
                             )
                     }
+                    .accessibilityIdentifier("companion.close")
                 }
                 .padding(.bottom, 16)
 
@@ -260,7 +263,7 @@ public struct CompanionOverlay: View {
                                     case .openSettings:
                                         coordinator.showingSettings = true
                                     case .openAuth:
-                                        coordinator.showingAuth = true
+                                        coordinator.presentAuthentication()
                                     }
                                 }
                             }
@@ -345,6 +348,7 @@ public struct CompanionOverlay: View {
             }
             .patinaShadow(PatinaShadows.md)
         }
+        .accessibilityIdentifier("companion.bubble")
     }
 
     // MARK: - Shared: Companion Mark (Resting circle with strata lines)
@@ -412,6 +416,7 @@ public struct CompanionOverlay: View {
             .background(isSuggested ? PatinaColors.clay.opacity(0.15) : Color.white.opacity(0.06))
             .clipShape(RoundedRectangle(cornerRadius: 14))
         }
+        .accessibilityIdentifier("companion.action.\(icon)")
         .buttonStyle(.plain)
     }
 

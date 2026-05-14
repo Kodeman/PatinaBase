@@ -214,7 +214,7 @@ public struct CompanionAuthPanel: View {
 
     private func showEmailAuth() {
         HapticManager.shared.impact(.light)
-        coordinator.showingAuth = true
+        coordinator.presentAuthentication()
         onDismiss?()
     }
 }

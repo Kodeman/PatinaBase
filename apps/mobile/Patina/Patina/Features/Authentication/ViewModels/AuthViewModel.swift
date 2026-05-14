@@ -100,7 +100,6 @@ public final class AuthViewModel {
     // MARK: - Private
 
     private let authService = AuthService.shared
-    private var coordinator: AppCoordinator?
     private var cooldownTask: Task<Void, Never>?
     private var verificationCooldownTask: Task<Void, Never>?
 
@@ -110,8 +109,7 @@ public final class AuthViewModel {
 
     // MARK: - Initialization
 
-    public init(coordinator: AppCoordinator? = nil, initialMode: AuthMode = .signIn) {
-        self.coordinator = coordinator
+    public init(initialMode: AuthMode = .signIn) {
         self.mode = initialMode
     }
 
@@ -125,12 +123,14 @@ public final class AuthViewModel {
 
     // MARK: - Actions
 
-    /// Sign in with email/password
+    /// Sign in with email/password. The session lands via the auth
+    /// state listener in `AuthService`, which is observed by
+    /// `AppCoordinator.recomputePhase()` — so the view layer transitions
+    /// away from `.auth` without this view model needing to push state.
     @MainActor
     public func signIn() async {
         do {
             try await authService.signIn(email: email, password: password)
-            coordinator?.setAuthState(.authenticated(userId: authService.currentUser?.id.uuidString ?? ""))
         } catch AuthServiceError.emailNotConfirmed(let unverifiedEmail) {
             // Route to the "check your inbox" recovery panel. Clear the
             // generic error banner from authService so it doesn't shadow
@@ -142,12 +142,12 @@ public final class AuthViewModel {
         }
     }
 
-    /// Sign up with email/password
+    /// Sign up with email/password. Session lands via auth state
+    /// listener → phase observer; no coordinator push needed.
     @MainActor
     public func signUp() async {
         do {
             try await authService.signUp(email: email, password: password, displayName: displayName)
-            coordinator?.setAuthState(.authenticated(userId: authService.currentUser?.id.uuidString ?? ""))
         } catch {
             // Error is already set in authService
         }
@@ -201,11 +201,11 @@ public final class AuthViewModel {
     /// Verify the 6-digit OTP code the user pasted from their email.
     ///
     /// Coalesces rapid taps via a stored task handle (Task 1.5 pattern):
-    /// if a verify is already in flight, this is a no-op. On success, the
-    /// auth state listener in `AuthService` drives navigation away from
-    /// the auth screen — no explicit `coordinator?.setAuthState` call is
-    /// needed here. On failure, `authService.errorMessage` is surfaced
-    /// through the same error banner the rest of the form uses.
+    /// if a verify is already in flight, this is a no-op. On success the
+    /// auth state listener in `AuthService` sets the session, and the
+    /// phase observer in `AppCoordinator` transitions away from `.auth`.
+    /// On failure `authService.errorMessage` surfaces through the same
+    /// error banner the rest of the form uses.
     @MainActor
     public func verifyOtp() async {
         guard !isVerifyingOtp else { return }
@@ -220,12 +220,6 @@ public final class AuthViewModel {
             defer { self.isVerifyingOtp = false }
             do {
                 try await self.authService.verifyOtp(email: email, token: token)
-                // Auth state listener handles session + navigation.
-                self.coordinator?.setAuthState(
-                    .authenticated(
-                        userId: self.authService.currentUser?.id.uuidString ?? ""
-                    )
-                )
             } catch {
                 // authService.errorMessage is already set; clear the
                 // entered token so the user can retype without backspacing
@@ -300,18 +294,21 @@ public final class AuthViewModel {
         }
     }
 
-    /// Handle Sign in with Google (OAuth web flow)
+    /// Handle Sign in with Google (OAuth web flow). Session lands via
+    /// auth state listener → phase observer.
     @MainActor
     public func handleGoogleSignIn() async {
         do {
             try await authService.signInWithGoogle()
-            coordinator?.setAuthState(.authenticated(userId: authService.currentUser?.id.uuidString ?? ""))
         } catch {
             // Error is already set in authService
         }
     }
 
-    /// Handle Sign in with Apple credential
+    /// Handle Sign in with Apple credential. Session lands via auth
+    /// state listener → phase observer; this used to imperatively push
+    /// auth state to the coordinator, which is exactly the pattern that
+    /// left the view re-rendering instead of dismissing on success.
     @MainActor
     public func handleAppleSignIn(result: Result<ASAuthorization, Error>) async {
         switch result {
@@ -319,7 +316,6 @@ public final class AuthViewModel {
             if let credential = authorization.credential as? ASAuthorizationAppleIDCredential {
                 do {
                     try await authService.signInWithApple(credential: credential)
-                    coordinator?.setAuthState(.authenticated(userId: authService.currentUser?.id.uuidString ?? ""))
                 } catch {
                     // Error is already set in authService
                 }

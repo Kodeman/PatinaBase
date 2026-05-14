@@ -15,20 +15,17 @@ public final class AppCoordinator: Coordinator {
 
     // MARK: - State
 
-    /// Current app phase
+    /// Current app phase — derived from `AuthService.session`, onboarding
+    /// completion, and `guestModeOptIn`. Use `presentAuthentication()` or
+    /// `beginSplashTransition()` to nudge transitions; do not set this
+    /// directly from outside the recompute path.
     public private(set) var phase: AppPhase = .launching
-
-    /// Current authentication state
-    public private(set) var authState: AuthState = .unknown
 
     /// Navigation path for stack-based navigation
     public var navigationPath = NavigationPath()
 
     /// Whether the companion sheet is expanded
     public var isCompanionExpanded = false
-
-    /// Whether auth sheet is presented
-    public var showingAuth = false
 
     /// Whether settings sheet is presented
     public var showingSettings = false
@@ -58,16 +55,6 @@ public final class AppCoordinator: Coordinator {
 
     /// Current screen being viewed (derived from navigation)
     public private(set) var currentScreen: AppRoute = .threshold
-
-    // MARK: - First Launch
-
-    /// Coordinator for first-time user onboarding
-    public private(set) var firstLaunchCoordinator: FirstLaunchCoordinator?
-
-    /// Whether the app is in first-launch mode
-    public var isFirstLaunch: Bool {
-        firstLaunchCoordinator != nil && !(firstLaunchCoordinator?.isComplete ?? true)
-    }
 
     // MARK: - Auth-derived state
 
@@ -112,24 +99,18 @@ public final class AppCoordinator: Coordinator {
         currentScreen = .heroFrame
         companionContext.currentScreen = .heroFrame
 
-        // `FirstLaunchCoordinator` is no longer the source of truth for
-        // onboarding — `AppSettings.hasCompletedOnboarding` is. Kept here
-        // only because some legacy first-launch routes (walkInvitation,
-        // cameraPermission) still reach for it via `Environment`. Commit 4
-        // removes the property entirely.
-        firstLaunchCoordinator = nil
-
         // Start observing AuthService + AppSettings so `phase` derives
-        // from auth state.
+        // from auth state, and schedule the splash-deadline tick. Both
+        // run on MainActor; init itself isn't MainActor-isolated, so we
+        // hop in via Task.
         Task { @MainActor in
             self.observePhaseInputs()
+            // Fire a recompute when the initial splash window closes —
+            // the observer only wakes for tracked-property changes, and
+            // `Date()` isn't one, so without this tick we'd stay on
+            // `.launching` forever when auth state lands during splash.
+            self.scheduleSplashDeadlineRecompute()
         }
-
-        // Fire a recompute when the initial splash window closes — the
-        // observer only wakes for tracked-property changes, and `Date()`
-        // isn't one, so without this tick we'd stay on `.launching`
-        // forever when auth state lands during the splash.
-        scheduleSplashDeadlineRecompute()
     }
 
     /// Wakes the phase observer when `splashMinimumDeadline` elapses.
@@ -259,6 +240,17 @@ public final class AppCoordinator: Coordinator {
         recomputePhase()
     }
 
+    /// Move a guest user to the AuthScreenView so they can sign in for
+    /// real. Clearing `guestModeOptIn` causes the phase deriver to
+    /// return `.auth` on its next tick because the user has no session.
+    /// No-op for already-authenticated users — they'd need to sign out
+    /// first.
+    @MainActor
+    public func presentAuthentication() {
+        guard !AuthService.shared.isAuthenticated else { return }
+        guestModeOptIn = false
+    }
+
     /// Check if user has existing rooms (placeholder - would query SwiftData)
     private func hasExistingRooms() -> Bool {
         // In a full implementation, this would query SwiftData for RoomModel count
@@ -276,17 +268,17 @@ public final class AppCoordinator: Coordinator {
 
         switch route {
         case .threshold:
-            phase = .threshold
+            // `AppRoute.threshold` is a vestigial route — the threshold
+            // phase no longer exists. Treat it as "go to home" so any
+            // straggling navigate(to: .threshold) callers don't crash.
             navigationPath = NavigationPath()
             updateContext(for: route)
 
         case .heroFrame:
-            phase = .main
             navigationPath = NavigationPath()
             updateContext(for: route)
 
         case .roomList, .yourSpaces:
-            phase = .main
             navigationPath.append(route)
             updateContext(for: route)
 
@@ -315,7 +307,6 @@ public final class AppCoordinator: Coordinator {
             showingMoveItem = true
 
         case .roomDetail(let roomId):
-            phase = .main
             navigationPath.append(AppRoute.roomDetail(roomId: roomId))
             updateContext(for: route)
 
@@ -348,7 +339,11 @@ public final class AppCoordinator: Coordinator {
             updateContext(for: route)
 
         case .authentication:
-            showingAuth = true
+            // The `.auth` phase is now the authentication surface. Routes
+            // that intended "navigate to sign-in" should call
+            // `presentAuthentication()` instead. Kept here as a no-op
+            // so deep links and older companion intents still compile.
+            break
 
         case .settings:
             showingSettings = true
@@ -385,7 +380,6 @@ public final class AppCoordinator: Coordinator {
 
         // MVP v1 expanded routes
         case .designerHome:
-            phase = .main
             navigationPath = NavigationPath()
             updateContext(for: route)
         case .projectList, .projectDetail,
@@ -645,68 +639,13 @@ public final class AppCoordinator: Coordinator {
 
     // MARK: - Phase Transitions
 
-    /// Complete the threshold and enter main experience (legacy - for non-first-launch)
-    public func completeThreshold() {
-        settings.hasSeenThreshold = true
-        withAnimation(.easeInOut(duration: 0.8)) {
-            phase = .main
-        }
-        HapticManager.shared.thresholdCrossed()
-    }
-
-    /// Complete the first-launch flow and transition to main app
-    public func completeFirstLaunch(roomId: UUID? = nil) {
-        guard let coordinator = firstLaunchCoordinator else {
-            completeThreshold()
-            return
-        }
-
-        settings.hasCompletedOnboarding = true
-        settings.hasSeenThreshold = true
-
-        // Increment room count if walk was completed
-        if coordinator.capturedRoomData != nil {
-            settings.roomCount += 1
-        }
-
-        withAnimation(.easeInOut(duration: 0.8)) {
-            phase = .main
-
-            // Go to Hero Frame home screen
-            currentScreen = .heroFrame
-            companionContext.currentScreen = .heroFrame
-            navigationPath = NavigationPath()
-        }
-
-        // Clear the first launch coordinator now that it's complete
-        firstLaunchCoordinator = nil
-
-        HapticManager.shared.thresholdCrossed()
-    }
-
-    /// Reset to threshold (for debugging or re-onboarding)
+    /// Reset onboarding flags and clear navigation. The phase observer
+    /// will recompute and land the user in `.onboarding` (or `.auth` if
+    /// they're signed out) on the next tick.
     public func resetToThreshold() {
         settings.hasSeenThreshold = false
         settings.hasCompletedOnboarding = false
-        phase = .threshold
         navigationPath = NavigationPath()
-        firstLaunchCoordinator = FirstLaunchCoordinator()
-    }
-
-    // MARK: - Authentication
-
-    /// Update authentication state
-    public func setAuthState(_ state: AuthState) {
-        authState = state
-        if case .unauthenticated = state {
-            // Could show auth prompt or handle appropriately
-        }
-    }
-
-    /// Sign out and reset state
-    public func signOut() {
-        authState = .unauthenticated
-        // Additional cleanup as needed
     }
 
     // MARK: - Companion

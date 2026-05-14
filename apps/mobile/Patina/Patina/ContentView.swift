@@ -37,7 +37,7 @@ struct ContentView: View {
                 AuthScreenView(
                     onSignInWithApple: { result in
                         Task {
-                            let viewModel = AuthViewModel(coordinator: coordinator)
+                            let viewModel = AuthViewModel()
                             await viewModel.handleAppleSignIn(result: result)
                         }
                     },
@@ -62,7 +62,7 @@ struct ContentView: View {
                 OnboardingFlowHost()
                     .transition(.opacity)
 
-            case .threshold, .main:
+            case .main:
                 mainContent
                     .transition(.opacity)
             }
