@@ -11,6 +11,7 @@ import SwiftUI
 public struct AuthenticationView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: AuthViewModel
+    @State private var didBootstrapUITestAuth = false
 
     public init(initialMode: AuthMode = .signIn) {
         _viewModel = State(wrappedValue: AuthViewModel(initialMode: initialMode))
@@ -52,7 +53,45 @@ public struct AuthenticationView: View {
                     .foregroundColor(PatinaColors.Text.secondary)
                 }
             }
+            .task {
+                await runUITestAuthBootstrapIfNeeded()
+            }
         }
+    }
+
+    /// Drive the magic-link → OTP flow end-to-end when running under XCUITest
+    /// with `UITEST_AUTH_EMAIL` + `UITEST_AUTH_OTP` set. This is best-effort:
+    /// it requires the backing Supabase project to accept the provided OTP
+    /// for the given email (typically a seeded test account, or a fixed
+    /// dev-mode token). On any failure we leave the form in whatever state
+    /// it lands in so a human running the simulator can take over.
+    ///
+    /// Idempotent — guarded by `didBootstrapUITestAuth` so re-renders don't
+    /// retrigger the verify call.
+    @MainActor
+    private func runUITestAuthBootstrapIfNeeded() async {
+        guard !didBootstrapUITestAuth else { return }
+        guard let email = PatinaApp.uitestingAuthEmail,
+              let otp = PatinaApp.uitestingAuthOtp else {
+            return
+        }
+        didBootstrapUITestAuth = true
+
+        // Switch into magic-link mode (overrides whatever `initialMode` was)
+        // and send the magic link to the seeded test inbox.
+        viewModel.mode = .magicLink
+        viewModel.email = email
+        await viewModel.sendMagicLink()
+
+        // Brief settle so the magic-link-sent panel renders before we flip
+        // into the OTP entry surface; supabase-swift's sendMagicLink
+        // returns synchronously after the request but the UI mutations
+        // happen on the main actor on the next runloop tick.
+        try? await Task.sleep(nanoseconds: 250_000_000)
+
+        viewModel.showOtpEntry = true
+        viewModel.otpToken = otp
+        await viewModel.verifyOtp()
     }
 
     // MARK: - Header
@@ -304,7 +343,9 @@ public struct AuthenticationView: View {
                 }
                 .accessibilityIdentifier("auth.otp.tokenField")
 
-            // Verify button
+            // Verify button. On success the auth state listener sets the
+            // session and the phase observer in AppCoordinator tears down
+            // the sheet automatically — no `dismiss()` needed here.
             Button {
                 Task {
                     await viewModel.verifyOtp()
@@ -479,6 +520,13 @@ public struct AuthenticationView: View {
     }
 
     private func submitForm() async {
+        // The phase observer in `AppCoordinator` drives the transition
+        // away from the `.auth` phase once `AuthService.session` is set,
+        // which tears down the AuthenticationView sheet automatically.
+        // No imperative `dismiss()` is required — and previously, an
+        // unconditional `if isAuthenticated { dismiss() }` could race
+        // a stale session against magic-link send and skip the OTP
+        // entry surface.
         switch viewModel.mode {
         case .signIn:
             await viewModel.signIn()
@@ -488,11 +536,6 @@ public struct AuthenticationView: View {
             await viewModel.sendMagicLink()
         case .resetPassword:
             await viewModel.resetPassword()
-        }
-
-        // Auto-dismiss on successful authentication
-        if AuthService.shared.isAuthenticated {
-            dismiss()
         }
     }
 

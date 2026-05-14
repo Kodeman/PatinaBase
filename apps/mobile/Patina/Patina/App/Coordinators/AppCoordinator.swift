@@ -104,32 +104,50 @@ public final class AppCoordinator: Coordinator {
     // MARK: - Initialization
 
     public init() {
-        // Always start at Hero Page - it handles both empty and populated states
-        // The Hero Page shows:
-        // - Empty state (new users): Engaging welcome with "Start Walk" CTA
-        // - Populated state (returning users): Room carousel
-        //
-        // Commit 1 (foundation): we keep this `phase = .main` force so the
-        // existing UI keeps routing through `ContentView`'s `.main` branch
-        // while the phase observer is exercised and logged. Commit 2
-        // removes this line and the switch routes purely on derived phase.
-        phase = .main
+        // Phase is now derived from `AuthService.session`, onboarding
+        // completion, and guest opt-in by `recomputePhase()`. We start at
+        // `.launching` (the default for the stored property) and let the
+        // observer settle us into `.auth` / `.onboarding` / `.main` once
+        // the splash deadline elapses and `AuthService` reports state.
         currentScreen = .heroFrame
         companionContext.currentScreen = .heroFrame
 
-        // Only create first launch coordinator if user hasn't completed onboarding
-        // and wants to go through the guided first-walk experience
-        if !settings.hasCompletedOnboarding {
-            firstLaunchCoordinator = FirstLaunchCoordinator()
-        } else {
-            firstLaunchCoordinator = nil
-        }
+        // `FirstLaunchCoordinator` is no longer the source of truth for
+        // onboarding — `AppSettings.hasCompletedOnboarding` is. Kept here
+        // only because some legacy first-launch routes (walkInvitation,
+        // cameraPermission) still reach for it via `Environment`. Commit 4
+        // removes the property entirely.
+        firstLaunchCoordinator = nil
 
         // Start observing AuthService + AppSettings so `phase` derives
-        // from auth state. Logs every recompute so commit 1 can be
-        // verified before flipping routing in commit 2.
+        // from auth state.
         Task { @MainActor in
             self.observePhaseInputs()
+        }
+
+        // Fire a recompute when the initial splash window closes — the
+        // observer only wakes for tracked-property changes, and `Date()`
+        // isn't one, so without this tick we'd stay on `.launching`
+        // forever when auth state lands during the splash.
+        scheduleSplashDeadlineRecompute()
+    }
+
+    /// Wakes the phase observer when `splashMinimumDeadline` elapses.
+    /// Re-issued by `beginSplashTransition()` so subsequent splash
+    /// transitions (sign-out) get the same handling.
+    private var splashDeadlineTask: Task<Void, Never>?
+
+    @MainActor
+    private func scheduleSplashDeadlineRecompute() {
+        splashDeadlineTask?.cancel()
+        let deadline = splashMinimumDeadline
+        splashDeadlineTask = Task { @MainActor [weak self] in
+            let interval = deadline.timeIntervalSinceNow
+            if interval > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+            }
+            guard !Task.isCancelled else { return }
+            self?.recomputePhase()
         }
     }
 
@@ -173,10 +191,11 @@ public final class AppCoordinator: Coordinator {
         }
         #endif
 
-        // Commit 1: the assignment below stays disabled because `init()`
-        // forces `phase = .main`. Logged transitions verify the deriver
-        // is correct; commit 2 enables the assignment.
-        // phase = newPhase
+        if newPhase != phase {
+            withAnimation(.easeInOut(duration: 0.4)) {
+                phase = newPhase
+            }
+        }
 
         // Clear guest opt-in if a real session shows up — guest+signed-in
         // is meaningless, and we don't want the user stuck in guest mode
@@ -217,6 +236,7 @@ public final class AppCoordinator: Coordinator {
     @MainActor
     public func beginSplashTransition(duration: TimeInterval = splashMinimumDuration) {
         splashMinimumDeadline = Date().addingTimeInterval(duration)
+        scheduleSplashDeadlineRecompute()
         recomputePhase()
     }
 

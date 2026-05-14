@@ -7,71 +7,67 @@
 
 import SwiftUI
 
-/// Tracks where the user is in the first-launch onboarding journey
-private enum OnboardingStep {
-    case carousel    // 3-page Philosophy/Promise/Permission
-    case auth        // Sign in with Apple / Guest
-    case styleQuiz   // 5-question style quiz
-    case styleResult(StyleProfileResult) // Quiz result screen
-}
-
 /// Main content view that manages navigation based on app state
 struct ContentView: View {
     @Environment(\.appCoordinator) private var coordinator
 
-    /// Current step in the first-launch onboarding flow
-    @State private var onboardingStep: OnboardingStep = .carousel
+    /// Sheet presentation flags for the `.auth` phase's email/sign-up
+    /// affordances. Apple, Google, and Guest all complete in-place; only
+    /// the email paths still open a nested form sheet.
     @State private var showingEmailAuth = false
     @State private var showingEmailSignUp = false
 
     var body: some View {
         ZStack {
-            // Main content based on phase
+            // Root view is selected purely from the derived phase. No
+            // imperative dismiss, no overlay-while-also-routing — the
+            // observer in AppCoordinator drives every transition.
             switch coordinator.phase {
             case .launching:
                 SplashView {
-                    withAnimation(.easeInOut(duration: 0.5)) {
-                        coordinator.completeThreshold()
-                    }
+                    // Splash's intrinsic 2s onComplete fires after the
+                    // animation. The phase observer is what actually
+                    // transitions out of `.launching` (gated on auth
+                    // readiness + `splashMinimumDeadline`); this closure
+                    // is a no-op kept only because SplashView's API
+                    // requires one.
                 }
 
-            case .threshold, .main, .auth, .onboarding:
-                // Commit 1: `.auth` and `.onboarding` route to `mainContent`
-                // because `AppCoordinator.init()` still forces `phase = .main`.
-                // Commit 2 splits these into dedicated AuthScreenView / OnboardingFlowHost
-                // branches.
+            case .auth:
+                AuthScreenView(
+                    onSignInWithApple: { result in
+                        Task {
+                            let viewModel = AuthViewModel(coordinator: coordinator)
+                            await viewModel.handleAppleSignIn(result: result)
+                        }
+                    },
+                    onSignInWithGoogle: {
+                        Task {
+                            try? await AuthService.shared.signInWithGoogle()
+                        }
+                    },
+                    onSignInWithEmail: { showingEmailAuth = true },
+                    onCreateAccount: { showingEmailSignUp = true },
+                    onBrowseAsGuest: { coordinator.guestModeOptIn = true }
+                )
+                .transition(.opacity)
+                .sheet(isPresented: $showingEmailAuth) {
+                    AuthenticationView()
+                }
+                .sheet(isPresented: $showingEmailSignUp) {
+                    AuthenticationView(initialMode: .signUp)
+                }
+
+            case .onboarding:
+                OnboardingFlowHost()
+                    .transition(.opacity)
+
+            case .threshold, .main:
                 mainContent
                     .transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.5), value: coordinator.phase)
-        .sheet(isPresented: Binding(
-            get: { coordinator.showingAuth },
-            set: { coordinator.showingAuth = $0 }
-        )) {
-            AuthScreenView(
-                onSignInWithApple: { result in
-                    Task {
-                        let viewModel = AuthViewModel(coordinator: coordinator)
-                        await viewModel.handleAppleSignIn(result: result)
-                    }
-                },
-                onSignInWithGoogle: {
-                    Task {
-                        try? await AuthService.shared.signInWithGoogle()
-                    }
-                },
-                onSignInWithEmail: { showingEmailAuth = true },
-                onCreateAccount: { showingEmailSignUp = true },
-                onBrowseAsGuest: { coordinator.showingAuth = false }
-            )
-            .sheet(isPresented: $showingEmailAuth) {
-                AuthenticationView()
-            }
-            .sheet(isPresented: $showingEmailSignUp) {
-                AuthenticationView(initialMode: .signUp)
-            }
-        }
         .sheet(isPresented: Binding(
             get: { coordinator.showingDesignServices },
             set: { coordinator.showingDesignServices = $0 }
@@ -137,139 +133,16 @@ struct ContentView: View {
                     }
             }
 
-            // First Launch overlay — multi-step onboarding
-            if coordinator.isFirstLaunch {
-                firstLaunchOverlay
-                    .transition(.opacity)
-            }
-
-            // The Companion — always present (hidden during first launch)
-            if !coordinator.isFirstLaunch {
-                CompanionOverlay()
-            }
-        }
-        .animation(.easeInOut(duration: 0.3), value: coordinator.isFirstLaunch)
-        .onChange(of: coordinator.isFirstLaunch) { old, new in
-            #if DEBUG
-            print("[ContentView] isFirstLaunch \(old) → \(new)")
-            #endif
+            // Companion is always present in the `.main` phase. The
+            // `.auth` and `.onboarding` phases live in their own root
+            // branches above, so this overlay is only reached when the
+            // user is already in the main app.
+            CompanionOverlay()
         }
         .onChange(of: coordinator.phase) { old, new in
             #if DEBUG
             print("[ContentView] phase \(old) → \(new)")
             #endif
-        }
-    }
-
-    // MARK: - First Launch Overlay
-
-    @ViewBuilder
-    private var firstLaunchOverlay: some View {
-        switch onboardingStep {
-        case .carousel:
-            OnboardingFlowView(
-                onComplete: {
-                    withAnimation(.easeInOut(duration: 0.4)) {
-                        onboardingStep = .auth
-                    }
-                },
-                onSkip: {
-                    // Skip goes straight to auth (still need an account)
-                    withAnimation(.easeInOut(duration: 0.4)) {
-                        onboardingStep = .auth
-                    }
-                }
-            )
-            .transition(.asymmetric(
-                insertion: .opacity,
-                removal: .move(edge: .leading).combined(with: .opacity)
-            ))
-
-        case .auth:
-            AuthScreenView(
-                onSignInWithApple: { result in
-                    // Only advance to quiz on successful auth
-                    guard case .success = result else { return }
-                    Task {
-                        let viewModel = AuthViewModel()
-                        await viewModel.handleAppleSignIn(result: result)
-                        await MainActor.run {
-                            withAnimation(.easeInOut(duration: 0.4)) {
-                                onboardingStep = .styleQuiz
-                            }
-                        }
-                    }
-                },
-                onSignInWithGoogle: {
-                    Task {
-                        do {
-                            try await AuthService.shared.signInWithGoogle()
-                            await MainActor.run {
-                                withAnimation(.easeInOut(duration: 0.4)) {
-                                    onboardingStep = .styleQuiz
-                                }
-                            }
-                        } catch {
-                            // Stay on auth screen if Google sign-in fails
-                        }
-                    }
-                },
-                onSignInWithEmail: {
-                    showingEmailAuth = true
-                },
-                onCreateAccount: {
-                    showingEmailSignUp = true
-                },
-                onBrowseAsGuest: {
-                    // Guest users still take the quiz for recommendations
-                    withAnimation(.easeInOut(duration: 0.4)) {
-                        onboardingStep = .styleQuiz
-                    }
-                }
-            )
-            .sheet(isPresented: $showingEmailAuth, onDismiss: {
-                if AuthService.shared.isAuthenticated {
-                    withAnimation(.easeInOut(duration: 0.4)) {
-                        onboardingStep = .styleQuiz
-                    }
-                }
-            }) {
-                AuthenticationView()
-            }
-            .sheet(isPresented: $showingEmailSignUp, onDismiss: {
-                if AuthService.shared.isAuthenticated {
-                    withAnimation(.easeInOut(duration: 0.4)) {
-                        onboardingStep = .styleQuiz
-                    }
-                }
-            }) {
-                AuthenticationView(initialMode: .signUp)
-            }
-            .transition(.asymmetric(
-                insertion: .move(edge: .trailing).combined(with: .opacity),
-                removal: .move(edge: .leading).combined(with: .opacity)
-            ))
-
-        case .styleQuiz:
-            StyleQuizView(onComplete: { result in
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    onboardingStep = .styleResult(result)
-                }
-            })
-            .transition(.asymmetric(
-                insertion: .move(edge: .trailing).combined(with: .opacity),
-                removal: .move(edge: .leading).combined(with: .opacity)
-            ))
-
-        case .styleResult(let result):
-            StyleResultView(result: result, onViewRecommendations: {
-                // Complete onboarding and go to Home
-                coordinator.completeFirstLaunch()
-            })
-            .transition(.asymmetric(
-                insertion: .move(edge: .trailing).combined(with: .opacity),
-                removal: .opacity
-            ))
         }
     }
 
