@@ -11,6 +11,28 @@ type RoleDomain = Database['public']['Enums']['role_domain'];
 // cross-portal access for ops/support.
 const CLIENT_PORTAL_DOMAINS: readonly RoleDomain[] = ['consumer', 'admin'];
 
+// Returns true when the user has at least one role whose domain permits the
+// client portal. Fails open on missing service-role key or transient errors so
+// a misconfigured shell or DB blip doesn't lock users out — the protected
+// branch falls back to the existing behavior. Migration 00126 guarantees every
+// user has ≥1 user_roles row, so an empty result here is a real "no permitted
+// role" state, not a stale-account false negative.
+async function userHasClientPortalRole(userId: string): Promise<boolean> {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceRoleKey) return true;
+  try {
+    const adminClient = createAdminClient(serviceRoleKey);
+    const { data } = await adminClient
+      .from('user_roles')
+      .select('roles!inner(domain)')
+      .eq('user_id', userId)
+      .in('roles.domain', CLIENT_PORTAL_DOMAINS);
+    return (data ?? []).length > 0;
+  } catch {
+    return true;
+  }
+}
+
 export async function middleware(req: NextRequest) {
   const requestHeaders = new Headers(req.headers);
   if (req.nextUrl.pathname.startsWith('/proposals')) {
@@ -65,7 +87,15 @@ export async function middleware(req: NextRequest) {
     return redirect;
   };
 
+  // Authenticated user on an auth page: send them home (or to callbackUrl),
+  // but first verify they belong on this portal. Without this gate, a user
+  // with no consumer/admin role would be redirected to `/`, then bounced back
+  // to `/unauthorized` from a deeper protected route — the round trip causes
+  // the QR signin page to re-render mid-flight and looks like a reload loop.
   if (isAuthenticated && isAuthPage && !isInviteLanding) {
+    if (!(await userHasClientPortalRole(user!.id))) {
+      return redirectWithCookies(new URL('/unauthorized', baseUrl));
+    }
     const callbackUrl = req.nextUrl.searchParams.get('callbackUrl');
     if (callbackUrl) {
       return redirectWithCookies(new URL(callbackUrl, baseUrl));
@@ -84,33 +114,8 @@ export async function middleware(req: NextRequest) {
   // With SSO cookie carry across .patina.cloud, a designer or manufacturer user
   // could otherwise land on the client shell.
   if (isAuthenticated && !isAuthPage && !isPublicPage && !isUnauthorizedPage) {
-    try {
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-      if (serviceRoleKey) {
-        const adminClient = createAdminClient(serviceRoleKey);
-
-        // Push the domain filter to PostgREST so the DB does the work and we
-        // get back only rows that grant client-portal access. Migration
-        // 00126_backfill_user_roles guarantees every user has at least one
-        // user_roles row, so an empty result means "no permitted role" — not
-        // a misconfigured user — and /unauthorized is the correct landing.
-        const { data: roleRows } = await adminClient
-          .from('user_roles')
-          .select('roles!inner(domain)')
-          .eq('user_id', user!.id)
-          .in('roles.domain', CLIENT_PORTAL_DOMAINS);
-
-        const isPermitted = (roleRows ?? []).length > 0;
-
-        if (!isPermitted) {
-          return redirectWithCookies(new URL('/unauthorized', baseUrl));
-        }
-      }
-    } catch {
-      // If the role check itself fails (network, transient DB issue), fail open —
-      // API routes still enforce roles per-endpoint and we'd rather not lock
-      // clients out of the portal on a transient infra blip.
+    if (!(await userHasClientPortalRole(user!.id))) {
+      return redirectWithCookies(new URL('/unauthorized', baseUrl));
     }
   }
 
