@@ -66,50 +66,60 @@ END $$;
 -- 3. Create the client auth user (pre-confirmed bcrypt password).
 --    Mirrors supabase/seed/dev-accounts.sql pattern. The four empty-string
 --    token columns are required: Supabase trips on NULL there.
+--
+--    NOTE: This INSERT lives OUTSIDE a DO block because psql client-side
+--    variables (`:'client_password'`) are substituted by psql before parsing,
+--    and the plpgsql parser does not recognize them inside DO $$ ... $$.
 -- ---------------------------------------------------------------------------
-DO $$
-DECLARE
-  client_uid uuid := '99999999-9999-9999-9999-aaaaaaaaaaa1';
-  pw_hash    text := crypt(:'client_password', gen_salt('bf'));
-  ts         timestamptz := NOW();
-BEGIN
-  INSERT INTO auth.users (
-    instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
-    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
-    confirmation_token, recovery_token, email_change_token_new, email_change
-  ) VALUES (
-    '00000000-0000-0000-0000-000000000000', client_uid, 'authenticated', 'authenticated',
-    'client@middlewest.studio', pw_hash, ts,
-    '{"provider":"email","providers":["email"]}'::jsonb,
-    '{"full_name":"Middlewest Client"}'::jsonb, ts, ts, '', '', '', ''
-  ) ON CONFLICT (id) DO NOTHING;
+INSERT INTO auth.users (
+  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+  confirmation_token, recovery_token, email_change_token_new, email_change
+) VALUES (
+  '00000000-0000-0000-0000-000000000000',
+  '99999999-9999-9999-9999-aaaaaaaaaaa1',
+  'authenticated', 'authenticated',
+  'client@middlewest.studio',
+  crypt(:'client_password', gen_salt('bf')),
+  NOW(),
+  '{"provider":"email","providers":["email"]}'::jsonb,
+  '{"full_name":"Middlewest Client"}'::jsonb,
+  NOW(), NOW(), '', '', '', ''
+) ON CONFLICT (id) DO NOTHING;
 
-  INSERT INTO auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
-  VALUES (
-    gen_random_uuid(), client_uid, client_uid::text,
-    jsonb_build_object('sub', client_uid::text, 'email', 'client@middlewest.studio'),
-    'email', ts, ts, ts
-  ) ON CONFLICT ON CONSTRAINT identities_provider_id_provider_unique DO NOTHING;
+INSERT INTO auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+VALUES (
+  gen_random_uuid(),
+  '99999999-9999-9999-9999-aaaaaaaaaaa1',
+  '99999999-9999-9999-9999-aaaaaaaaaaa1',
+  jsonb_build_object('sub', '99999999-9999-9999-9999-aaaaaaaaaaa1', 'email', 'client@middlewest.studio'),
+  'email', NOW(), NOW(), NOW()
+) ON CONFLICT ON CONSTRAINT identities_provider_id_provider_unique DO NOTHING;
 
-  INSERT INTO public.profiles (id, email, display_name, role, created_at, updated_at)
-  VALUES (client_uid, 'client@middlewest.studio', 'Middlewest Client', 'homeowner', ts, ts)
-  ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.profiles (id, email, display_name, role, created_at, updated_at)
+VALUES (
+  '99999999-9999-9999-9999-aaaaaaaaaaa1',
+  'client@middlewest.studio', 'Middlewest Client', 'homeowner', NOW(), NOW()
+) ON CONFLICT (id) DO NOTHING;
 
-  INSERT INTO public.user_roles (user_id, role_id)
-    SELECT client_uid, id FROM public.roles WHERE name IN ('client', 'app_user')
-    ON CONFLICT (user_id, role_id) DO NOTHING;
-END $$;
+INSERT INTO public.user_roles (user_id, role_id)
+  SELECT '99999999-9999-9999-9999-aaaaaaaaaaa1'::uuid, id FROM public.roles WHERE name IN ('client', 'app_user')
+  ON CONFLICT (user_id, role_id) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
 -- 4. Link designer ↔ client.
+--    Idempotency uses the seeded `id` (primary key) — prod is missing the
+--    UNIQUE(designer_id, client_id) constraint that migration 00014 declares
+--    (verified via pg_constraint), so we can't conflict on that pair.
 -- ---------------------------------------------------------------------------
 INSERT INTO public.designer_clients (id, designer_id, client_id, status, source, nickname)
-SELECT
-  '99999999-9999-9999-9999-bbbbbbbbbbbb'::uuid,
+VALUES (
+  '99999999-9999-9999-9999-bbbbbbbbbbbb',
   (SELECT id FROM auth.users WHERE email = 'kody@middlewest.studio'),
-  '99999999-9999-9999-9999-aaaaaaaaaaa1'::uuid,
+  '99999999-9999-9999-9999-aaaaaaaaaaa1',
   'active', 'direct', 'Middlewest test client'
-ON CONFLICT (designer_id, client_id) DO NOTHING;
+)
+ON CONFLICT (id) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
 -- 5. Vendor + 8 FF&E products.
@@ -145,9 +155,10 @@ ON CONFLICT (id) DO NOTHING;
 --    progress lives on project_phases, but for the dashboard count we only
 --    need rows in `projects` keyed by designer_id + client_id.
 -- ---------------------------------------------------------------------------
-INSERT INTO public.projects (id, name, designer_id, client_id, status, budget_cents, notes)
+INSERT INTO public.projects (id, name, created_by, designer_id, client_id, status, budget_cents, notes)
 SELECT
   proj.id, proj.name,
+  (SELECT id FROM auth.users WHERE email = 'kody@middlewest.studio'),
   (SELECT id FROM auth.users WHERE email = 'kody@middlewest.studio'),
   '99999999-9999-9999-9999-aaaaaaaaaaa1'::uuid,
   proj.status::project_status,
@@ -305,28 +316,28 @@ DECLARE
     'Bridgehampton Cottage',
     'Tribeca Penthouse (archive)'
   ];
-  thread_id    uuid;
+  t_id         uuid;
 BEGIN
   FOR i IN 1..8 LOOP
-    thread_id := ('99999999-9999-9999-9999-11111111000' || to_hex(i))::uuid;
+    t_id := ('99999999-9999-9999-9999-11111111000' || to_hex(i))::uuid;
 
     INSERT INTO public.comms_threads (id, kind, project_id, title, created_by)
-    VALUES (thread_id, 'project', proj_ids[i], proj_names[i] || ' — Conversation', designer_uid)
+    VALUES (t_id, 'project', proj_ids[i], proj_names[i] || ' — Conversation', designer_uid)
     ON CONFLICT (id) DO NOTHING;
 
     INSERT INTO public.comms_thread_participants (thread_id, profile_id, role)
-    VALUES (thread_id, designer_uid, 'designer'), (thread_id, client_uid, 'client')
+    VALUES (t_id, designer_uid, 'designer'), (t_id, client_uid, 'client')
     ON CONFLICT (thread_id, profile_id) DO NOTHING;
   END LOOP;
 
   -- Thread 9: direct (general, no project_id).
-  thread_id := '99999999-9999-9999-9999-111111110009';
+  t_id := '99999999-9999-9999-9999-111111110009';
   INSERT INTO public.comms_threads (id, kind, project_id, title, created_by)
-  VALUES (thread_id, 'direct', NULL, 'Middlewest Studio — General', designer_uid)
+  VALUES (t_id, 'direct', NULL, 'Middlewest Studio — General', designer_uid)
   ON CONFLICT (id) DO NOTHING;
 
   INSERT INTO public.comms_thread_participants (thread_id, profile_id, role)
-  VALUES (thread_id, designer_uid, 'designer'), (thread_id, client_uid, 'client')
+  VALUES (t_id, designer_uid, 'designer'), (t_id, client_uid, 'client')
   ON CONFLICT (thread_id, profile_id) DO NOTHING;
 END $$;
 
@@ -341,8 +352,8 @@ DECLARE
   client_uid   uuid := '99999999-9999-9999-9999-aaaaaaaaaaa1';
   t            integer;
   m            integer;
-  thread_id    uuid;
-  sender_id    uuid;
+  t_id         uuid;
+  s_id         uuid;
   body_text    text;
   designer_lines text[] := ARRAY[
     'Sharing the latest direction for your review.',
@@ -358,17 +369,17 @@ DECLARE
   ];
 BEGIN
   FOR t IN 1..9 LOOP
-    thread_id := CASE WHEN t = 9
-                      THEN '99999999-9999-9999-9999-111111110009'::uuid
-                      ELSE ('99999999-9999-9999-9999-11111111000' || to_hex(t))::uuid
-                 END;
+    t_id := CASE WHEN t = 9
+                 THEN '99999999-9999-9999-9999-111111110009'::uuid
+                 ELSE ('99999999-9999-9999-9999-11111111000' || to_hex(t))::uuid
+            END;
 
     FOR m IN 1..8 LOOP
       IF m % 2 = 1 THEN
-        sender_id := designer_uid;
+        s_id      := designer_uid;
         body_text := designer_lines[((m - 1) / 2 % array_length(designer_lines, 1)) + 1];
       ELSE
-        sender_id := client_uid;
+        s_id      := client_uid;
         body_text := client_lines[((m - 2) / 2 % array_length(client_lines, 1)) + 1];
       END IF;
 
@@ -376,8 +387,8 @@ BEGIN
         id, thread_id, sender_id, body, created_at
       ) VALUES (
         ('99999999-9999-9999-9999-22222222' || lpad(to_hex(t * 16 + m), 4, '0'))::uuid,
-        thread_id,
-        sender_id,
+        t_id,
+        s_id,
         body_text,
         NOW() - ((9 - m) || ' hours')::interval - ((9 - t) || ' days')::interval
       )
