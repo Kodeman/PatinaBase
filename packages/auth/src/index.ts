@@ -1,10 +1,22 @@
 /**
  * @patina/auth — Supabase JWT auth for NestJS services
  *
- * Provides guards and decorators for Supabase JWT validation.
- * JWTs are issued by Supabase GoTrue and verified using SUPABASE_JWT_SECRET.
+ * Verifies Supabase-issued JWTs (HS256) using SUPABASE_JWT_SECRET via the
+ * `jose` library. Exports guards, decorators, and a standalone
+ * `verifyJwtToken` helper that `@patina/api-routes` reuses for defense-in-depth
+ * verification at the portal proxy layer.
+ *
+ * Hard requirement: SUPABASE_JWT_SECRET must be set in the environment.
+ * The guard fails closed if the secret is missing — there is no dev fallback.
  */
-import { SetMetadata, Injectable, CanActivate, ExecutionContext, createParamDecorator, Inject } from '@nestjs/common';
+import {
+  SetMetadata,
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  createParamDecorator,
+} from '@nestjs/common';
+import { jwtVerify } from 'jose';
 
 // Metadata key for public routes
 export const IS_PUBLIC_KEY = 'isPublic';
@@ -29,68 +41,67 @@ export const CurrentUser = createParamDecorator(
  * GoTrue issues JWTs with these standard claims.
  */
 export interface SupabaseJwtPayload {
-  /** User ID (Supabase auth.users.id) */
   sub: string;
-  /** User email */
   email?: string;
-  /** User role (from Supabase) */
   role?: string;
-  /** Audience */
   aud?: string;
-  /** Issued at */
   iat?: number;
-  /** Expiration */
   exp?: number;
-  /** User metadata */
   user_metadata?: Record<string, any>;
-  /** App metadata (roles, permissions) */
   app_metadata?: Record<string, any>;
 }
 
+let cachedSecret: Uint8Array | null = null;
+
+function getJwtSecret(): Uint8Array {
+  if (cachedSecret) return cachedSecret;
+  const secret = process.env.SUPABASE_JWT_SECRET;
+  if (!secret) {
+    throw new Error(
+      '[@patina/auth] SUPABASE_JWT_SECRET is not set. ' +
+        'Local dev: run `supabase status` and copy "JWT secret" into your .env. ' +
+        'Production: configure the env var on your deployment platform. ' +
+        'Refusing to operate without it.',
+    );
+  }
+  cachedSecret = new TextEncoder().encode(secret);
+  return cachedSecret;
+}
+
 /**
- * JWT Auth Guard — verifies Supabase JWT tokens.
- * In development mode (no SUPABASE_JWT_SECRET), passes all requests.
+ * Verify a Supabase JWT and return its payload.
+ * Throws on invalid signature, expired token, malformed token, or wrong algorithm.
+ * Used by JwtAuthGuard below and by @patina/api-routes' proxy layer.
+ */
+export async function verifyJwtToken(token: string): Promise<SupabaseJwtPayload> {
+  const { payload } = await jwtVerify(token, getJwtSecret(), {
+    algorithms: ['HS256'],
+  });
+  return payload as SupabaseJwtPayload;
+}
+
+/**
+ * JWT Auth Guard — verifies Supabase JWT tokens with full signature checking.
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
 
-    // Check for @Public() decorator
     const handler = context.getHandler();
     const classRef = context.getClass();
-    const isPublic = Reflect.getMetadata(IS_PUBLIC_KEY, handler) ||
-                     Reflect.getMetadata(IS_PUBLIC_KEY, classRef);
+    const isPublic =
+      Reflect.getMetadata(IS_PUBLIC_KEY, handler) ||
+      Reflect.getMetadata(IS_PUBLIC_KEY, classRef);
     if (isPublic) return true;
 
-    // Extract and verify JWT
     const authHeader = request.headers?.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-      // In development without JWT secret, allow pass-through
-      if (!process.env.SUPABASE_JWT_SECRET) {
-        request.user = { sub: 'dev-user', email: 'dev@patina.com', role: 'authenticated' };
-        return true;
-      }
-      return false;
-    }
-
+    if (!authHeader?.startsWith('Bearer ')) return false;
     const token = authHeader.substring(7);
 
     try {
-      // Decode JWT payload (base64url)
-      const payloadPart = token.split('.')[1];
-      if (!payloadPart) return false;
+      const payload = await verifyJwtToken(token);
 
-      const payload: SupabaseJwtPayload = JSON.parse(
-        Buffer.from(payloadPart, 'base64url').toString('utf-8')
-      );
-
-      // Check expiration
-      if (payload.exp && payload.exp * 1000 < Date.now()) {
-        return false;
-      }
-
-      // Set user on request
       request.user = {
         sub: payload.sub,
         userId: payload.sub,
@@ -100,7 +111,6 @@ export class JwtAuthGuard implements CanActivate {
         permissions: payload.app_metadata?.permissions || [],
         metadata: payload.user_metadata,
       };
-
       return true;
     } catch {
       return false;
@@ -112,10 +122,13 @@ export class JwtAuthGuard implements CanActivate {
 @Injectable()
 export class HybridAuthGuard extends JwtAuthGuard {}
 
-// Permissions guard stub
+// PermissionsGuard stub — A4 in the architecture review tracks implementing
+// real permission enforcement (read @RequirePermissions metadata, compare
+// against request.user.permissions, default deny). Until then this is a
+// no-op gate.
 @Injectable()
 export class PermissionsGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
+  canActivate(_context: ExecutionContext): boolean {
     return true;
   }
 }
