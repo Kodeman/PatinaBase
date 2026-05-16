@@ -856,6 +856,9 @@ importers:
       '@opentelemetry/api':
         specifier: ^1.9.0
         version: 1.9.0
+      '@patina/auth':
+        specifier: workspace:*
+        version: link:../auth
       '@patina/types':
         specifier: workspace:*
         version: link:../types

@@ -1,14 +1,28 @@
 /**
  * Backend Proxy Middleware
  *
- * Enterprise-grade proxy middleware that routes Next.js API requests to NestJS backend services.
- * Integrates retry logic, circuit breaker pattern, auth forwarding, and comprehensive error handling.
+ * Forwards Next.js API requests to NestJS services. Responsibilities:
+ *   1. Reassemble the auth token from cookies — NextAuth chunks large JWTs
+ *      across `next-auth.session-token.0`, `.1`, ...; Supabase chunks large
+ *      session payloads across `sb-<host>-auth-token.0`, `.1`, ... The
+ *      reassembly is the load-bearing thing this module does that no library
+ *      replaces.
+ *   2. Verify the JWT signature before forwarding (A5 — defense-in-depth on
+ *      top of @patina/auth's service-side verification). Never forward an
+ *      unverifiable token.
+ *   3. Forward the request with the standard header whitelist, retry via
+ *      @patina/api-routes/utils/retry (exponential backoff + Retry-After +
+ *      mutation-aware predicate), and convert errors into standardized
+ *      apiError responses.
  *
- * @module proxy-to-backend
+ * Intentionally no circuit breaker. Per-service failure detection is a
+ * platform concern (Cloudflare retries, container liveness probes). The
+ * in-process per-worker CB was removed in this refactor — it never provided
+ * system-wide protection and added 530 LOC of state-machine to maintain.
  */
-
 import { getToken } from 'next-auth/jwt';
 import { cookies } from 'next/headers';
+import { verifyJwtToken } from '@patina/auth';
 import type { RouteContext } from '../utils/request-context';
 import { getAuthToken } from '../utils/request-context';
 import {
@@ -20,11 +34,6 @@ import {
   type RetryConfig,
   type TimeoutConfig,
 } from '../utils/retry';
-import {
-  getCircuitBreaker,
-  CircuitBreakerOpenError,
-  type CircuitBreakerConfig,
-} from '../utils/circuit-breaker';
 import {
   apiError,
   apiSuccess,
@@ -42,11 +51,8 @@ import {
   logRequestError,
 } from '../utils/logger';
 
-/**
- * Service configuration for backend proxy
- */
 export interface ServiceConfig {
-  /** Service name (used for circuit breaker identification) */
+  /** Service name (used for logging + trace correlation) */
   name: string;
   /** Base URL of the backend service */
   baseUrl: string;
@@ -54,42 +60,17 @@ export interface ServiceConfig {
   path?: string;
 }
 
-/**
- * Custom error code mapping for service-specific errors
- */
 export interface ErrorMapping {
-  [statusCode: number]: {
-    /** Error code to use instead of default */
-    code: string;
-    /** Error message to use instead of default */
-    message: string;
-  };
+  [statusCode: number]: { code: string; message: string };
 }
 
-/**
- * Response transformer for modifying backend responses
- */
 export interface ResponseTransformer {
-  /**
-   * Transform response data before returning
-   * @param data - Response data from backend
-   * @param response - Original Response object
-   * @returns Transformed data
-   */
   transform: (data: unknown, response: Response) => unknown;
 }
 
-/**
- * Complete proxy configuration
- */
 export interface ProxyConfig {
-  /** Backend service configuration */
   service: ServiceConfig;
-  /** Retry configuration (merged with defaults) */
   retry?: Partial<RetryConfig>;
-  /** Circuit breaker configuration (merged with defaults) */
-  circuitBreaker?: Partial<CircuitBreakerConfig>;
-  /** Timeout configuration (merged with defaults) */
   timeout?: Partial<TimeoutConfig>;
   /** Whether authentication is required (default: true) */
   requireAuth?: boolean;
@@ -103,9 +84,6 @@ export interface ProxyConfig {
   cache?: CacheConfig;
 }
 
-/**
- * Default headers to forward from client request to backend
- */
 const DEFAULT_FORWARD_HEADERS = [
   'content-type',
   'accept',
@@ -113,261 +91,188 @@ const DEFAULT_FORWARD_HEADERS = [
   'user-agent',
 ];
 
-/**
- * Headers that should never be forwarded
- */
-const BLOCKED_HEADERS = [
+const BLOCKED_HEADERS = new Set([
   'cookie',
-  'authorization', // Handled separately
+  'authorization', // we set this explicitly with the verified token
   'host',
   'connection',
-  'content-length', // Will be recalculated
+  'content-length', // will be recalculated
   'transfer-encoding',
-];
+]);
 
 /**
- * Build the complete backend URL from request and config
- *
- * @param request - Original client request
- * @param config - Proxy configuration
- * @returns Complete backend URL
+ * Reassemble the auth token from cookies.
+ * Handles NextAuth chunked session tokens and Supabase chunked auth tokens.
+ * Returns null if no token found or extraction throws.
  */
-function buildBackendUrl(request: Request, config: ProxyConfig): string {
-  const { service } = config;
-  const baseUrl = service.baseUrl.replace(/\/$/, ''); // Remove trailing slash
+async function extractAuthToken(request: Request): Promise<string | null> {
+  const cookieStore = await cookies();
 
-  // Use custom path if provided, otherwise extract from request URL
-  if (service.path) {
-    return `${baseUrl}${service.path}`;
+  // ─── NextAuth path ────────────────────────────────────────────────────────
+  // Single cookie first, then check for `.0`, `.1`, ... chunked variants.
+  let sessionToken =
+    cookieStore.get('next-auth.session-token')?.value ??
+    cookieStore.get('__Secure-next-auth.session-token')?.value;
+
+  if (!sessionToken) {
+    const chunks: string[] = [];
+    for (let i = 0; ; i++) {
+      const chunk =
+        cookieStore.get(`next-auth.session-token.${i}`)?.value ??
+        cookieStore.get(`__Secure-next-auth.session-token.${i}`)?.value;
+      if (!chunk) break;
+      chunks.push(chunk);
+    }
+    if (chunks.length > 0) sessionToken = chunks.join('');
   }
 
-  // Extract path and query from request URL
-  const url = new URL(request.url);
-  const pathAndQuery = url.pathname + url.search;
+  if (sessionToken) {
+    try {
+      const mockReq = {
+        headers: request.headers,
+        cookies: {
+          get: (name: string) => {
+            if (
+              name === 'next-auth.session-token' ||
+              name === '__Secure-next-auth.session-token'
+            ) {
+              return { value: sessionToken };
+            }
+            return cookieStore.get(name);
+          },
+          getAll: () => cookieStore.getAll(),
+        },
+      };
+      const jwtToken = await getToken({
+        req: mockReq as any,
+        secret: process.env.NEXTAUTH_SECRET,
+        cookieName: 'next-auth.session-token',
+      });
+      if (jwtToken?.accessToken && typeof jwtToken.accessToken === 'string') {
+        return jwtToken.accessToken;
+      }
+    } catch {
+      // Fall through to Supabase path.
+    }
+  }
 
-  return `${baseUrl}${pathAndQuery}`;
+  // ─── Supabase path ────────────────────────────────────────────────────────
+  // `sb-<host>-auth-token` (or chunked `.0`, `.1`, ...) carries a base64-
+  // encoded JSON session with `access_token`. Used by @supabase/ssr.
+  const supabaseCookies = cookieStore
+    .getAll()
+    .filter((c) => /^sb-.*-auth-token(\.\d+)?$/.test(c.name))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (supabaseCookies.length > 0) {
+    const raw = supabaseCookies.map((c) => c.value).join('');
+    const value = raw.startsWith('base64-')
+      ? Buffer.from(raw.slice(7), 'base64').toString('utf-8')
+      : raw;
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed.access_token === 'string') {
+        return parsed.access_token;
+      }
+    } catch {
+      // Malformed Supabase cookie — return null below.
+    }
+  }
+
+  return null;
 }
 
-/**
- * Build headers for backend request
- *
- * @param request - Original client request
- * @param context - Route context with user info
- * @param config - Proxy configuration
- * @returns Headers object for backend request
- */
+function buildBackendUrl(request: Request, config: ProxyConfig): string {
+  const baseUrl = config.service.baseUrl.replace(/\/$/, '');
+  if (config.service.path) return `${baseUrl}${config.service.path}`;
+  const url = new URL(request.url);
+  return `${baseUrl}${url.pathname}${url.search}`;
+}
+
 function buildHeaders(
   request: Request,
   context: RouteContext,
   config: ProxyConfig,
-  authToken?: string
-): HeadersInit {
+  authToken: string | null,
+): Record<string, string> {
   const headers: Record<string, string> = {};
 
-  // Determine which headers to forward
-  const headersToForward = config.forwardHeaders
+  const toForward = config.forwardHeaders
     ? [...DEFAULT_FORWARD_HEADERS, ...config.forwardHeaders]
     : DEFAULT_FORWARD_HEADERS;
 
-  // Forward allowed headers
-  for (const headerName of headersToForward) {
-    const normalizedName = headerName.toLowerCase();
-    if (BLOCKED_HEADERS.includes(normalizedName)) {
-      continue;
-    }
-
-    const value = request.headers.get(headerName);
-    if (value) {
-      headers[headerName] = value;
-    }
+  for (const name of toForward) {
+    if (BLOCKED_HEADERS.has(name.toLowerCase())) continue;
+    const value = request.headers.get(name);
+    if (value) headers[name] = value;
   }
 
-  // Add authorization header
-  // Token can come from: 1) direct parameter, 2) context (from withAuth middleware)
-  if (config.requireAuth !== false) {
-    const token = authToken || getAuthToken(context);
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
+  if (config.requireAuth !== false && authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`;
   }
 
-  // Add request ID for tracing
   headers['X-Request-Id'] = context.requestId;
-
-  // Add forwarding headers
   headers['X-Forwarded-For'] = context.ip;
-  headers['X-Forwarded-Host'] = new URL(request.url).host;
-  headers['X-Forwarded-Proto'] = new URL(request.url).protocol.replace(':', '');
+  const url = new URL(request.url);
+  headers['X-Forwarded-Host'] = url.host;
+  headers['X-Forwarded-Proto'] = url.protocol.replace(':', '');
 
-  // Add user ID if available (for backend audit logs)
-  if (context.user) {
-    headers['X-User-Id'] = context.user.id;
-  }
+  if (context.user) headers['X-User-Id'] = context.user.id;
 
   return headers;
 }
 
-/**
- * Extract request body based on content type
- *
- * @param request - Client request
- * @returns Request body (string, FormData, or null)
- */
 async function extractRequestBody(request: Request): Promise<BodyInit | null> {
   const method = request.method.toUpperCase();
-
-  // No body for GET, HEAD, OPTIONS
-  if (['GET', 'HEAD', 'OPTIONS'].includes(method)) {
-    return null;
-  }
+  if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return null;
 
   const contentType = request.headers.get('content-type') || '';
-
-  // Handle JSON
-  if (contentType.includes('application/json')) {
-    try {
-      const json = await request.json();
-      return JSON.stringify(json);
-    } catch (error) {
-      throw createApiError(
-        ApiErrorCode.BAD_REQUEST,
-        'Invalid JSON in request body',
-        { originalError: error instanceof Error ? error.message : String(error) }
-      );
-    }
-  }
-
-  // Handle FormData
-  if (contentType.includes('multipart/form-data')) {
-    try {
-      return await request.formData();
-    } catch (error) {
-      throw createApiError(
-        ApiErrorCode.BAD_REQUEST,
-        'Invalid form data in request body',
-        { originalError: error instanceof Error ? error.message : String(error) }
-      );
-    }
-  }
-
-  // Handle URL-encoded
-  if (contentType.includes('application/x-www-form-urlencoded')) {
-    try {
-      return await request.text();
-    } catch (error) {
-      throw createApiError(
-        ApiErrorCode.BAD_REQUEST,
-        'Invalid URL-encoded data in request body',
-        { originalError: error instanceof Error ? error.message : String(error) }
-      );
-    }
-  }
-
-  // Handle plain text
-  if (contentType.includes('text/')) {
-    try {
-      return await request.text();
-    } catch (error) {
-      throw createApiError(
-        ApiErrorCode.BAD_REQUEST,
-        'Invalid text in request body',
-        { originalError: error instanceof Error ? error.message : String(error) }
-      );
-    }
-  }
-
-  // Handle binary data (default)
   try {
+    if (contentType.includes('application/json')) {
+      return JSON.stringify(await request.json());
+    }
+    if (contentType.includes('multipart/form-data')) {
+      return await request.formData();
+    }
+    if (
+      contentType.includes('application/x-www-form-urlencoded') ||
+      contentType.includes('text/')
+    ) {
+      return await request.text();
+    }
     return await request.arrayBuffer();
   } catch (error) {
-    throw createApiError(
-      ApiErrorCode.BAD_REQUEST,
-      'Invalid request body',
-      { originalError: error instanceof Error ? error.message : String(error) }
-    );
+    throw createApiError(ApiErrorCode.BAD_REQUEST, 'Invalid request body', {
+      originalError: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
-/**
- * Determine if a request method should use retry logic
- *
- * @param method - HTTP method
- * @param config - Proxy configuration
- * @returns true if retries are enabled for this method
- */
-function shouldRetryRequest(method: string, config: ProxyConfig): boolean {
-  const upperMethod = method.toUpperCase();
-
-  // GET and HEAD are always safe to retry
-  if (['GET', 'HEAD'].includes(upperMethod)) {
-    return true;
-  }
-
-  // POST, PUT, PATCH, DELETE only if explicitly enabled
-  return config.retry?.shouldRetryMutation ?? false;
-}
-
-/**
- * Map backend error response to custom error code if configured
- *
- * @param status - HTTP status code
- * @param config - Proxy configuration
- * @returns Custom error mapping or null
- */
-function mapBackendError(
-  status: number,
-  config: ProxyConfig
-): { code: string; message: string } | null {
-  if (!config.errorMapping) {
-    return null;
-  }
-
-  return config.errorMapping[status] || null;
-}
-
-/**
- * Process backend response and extract data
- *
- * @param response - Backend response
- * @param config - Proxy configuration
- * @returns Processed response data
- * @throws Error if response is not successful
- */
 async function processBackendResponse(
   response: Response,
-  config: ProxyConfig
+  config: ProxyConfig,
 ): Promise<unknown> {
-  // Check for error responses
+  const contentType = response.headers.get('content-type') || '';
+
   if (!response.ok) {
     let errorData: any;
-    const contentType = response.headers.get('content-type') || '';
-
     try {
-      if (contentType.includes('application/json')) {
-        errorData = await response.json();
-      } else {
-        errorData = { message: await response.text() };
-      }
-    } catch (error) {
-      // Failed to parse error response
+      errorData = contentType.includes('application/json')
+        ? await response.json()
+        : { message: await response.text() };
+    } catch {
       errorData = { message: response.statusText };
     }
 
-    // Check for custom error mapping
-    const customError = mapBackendError(response.status, config);
+    const customError = config.errorMapping?.[response.status];
     if (customError) {
-      throw createApiError(
-        customError.code as ApiErrorCode,
-        customError.message,
-        {
-          status: response.status,
-          statusText: response.statusText,
-          backendError: errorData,
-        }
-      );
+      throw createApiError(customError.code as ApiErrorCode, customError.message, {
+        status: response.status,
+        statusText: response.statusText,
+        backendError: errorData,
+      });
     }
 
-    // Create error with status code
     const error: any = new Error(errorData.message || response.statusText);
     error.status = response.status;
     error.statusText = response.statusText;
@@ -375,56 +280,25 @@ async function processBackendResponse(
     throw error;
   }
 
-  // Parse successful response
-  const contentType = response.headers.get('content-type') || '';
+  const data = contentType.includes('application/json')
+    ? await response.json()
+    : await response.text();
 
-  if (contentType.includes('application/json')) {
-    const data = await response.json();
-
-    // Apply response transformer if provided
-    if (config.responseTransformer) {
-      return config.responseTransformer.transform(data, response);
-    }
-
-    return data;
-  }
-
-  // Non-JSON response (text, binary, etc.)
-  return await response.text();
+  return config.responseTransformer
+    ? config.responseTransformer.transform(data, response)
+    : data;
 }
 
 /**
- * Proxy request to backend service with retry, circuit breaker, and error handling
- *
- * This is the main proxy function that:
- * 1. Validates authentication requirements
- * 2. Checks circuit breaker state
- * 3. Builds backend request (URL, headers, body)
- * 4. Executes request with retry logic
- * 5. Handles errors with standardized format
- * 6. Transforms and returns response
- *
- * @param request - Client request to proxy
- * @param context - Route context with user info and metadata
- * @param config - Proxy configuration
- * @returns Response object with standardized format
+ * Forward a request to a NestJS backend service.
  *
  * @example
  * ```typescript
- * // In Next.js API route
  * export const GET = createRouteHandler(
- *   compose(
- *     withAuth(auth),
- *     async (request, context) => {
- *       return proxyToBackend(request, context, {
- *         service: {
- *           name: 'catalog',
- *           baseUrl: process.env.CATALOG_SERVICE_URL!,
- *         },
- *         retry: { maxRetries: 3 },
- *       });
- *     }
- *   ),
+ *   async (request, context) => proxyToBackend(request, context, {
+ *     service: { name: 'catalog', baseUrl: process.env.CATALOG_SERVICE_URL! },
+ *     retry: { maxRetries: 3 },
+ *   }),
  *   { method: 'GET', path: '/api/catalog/products' }
  * );
  * ```
@@ -432,223 +306,76 @@ async function processBackendResponse(
 export async function proxyToBackend(
   request: Request,
   context: RouteContext,
-  config: ProxyConfig
+  config: ProxyConfig,
 ): Promise<Response> {
   const method = request.method;
   const backendUrl = buildBackendUrl(request, config);
-
-  // Log request start
   logRequestStart(context, method, backendUrl);
 
   try {
-    // Extract auth token if needed and not already in context
-    // This allows routes to use proxyToBackend directly without withAuth middleware
-    let authToken = getAuthToken(context);
-
+    // 1. Extract auth token from context (set by upstream middleware) or cookies.
+    let authToken: string | null = getAuthToken(context) ?? null;
     if (!authToken && config.requireAuth !== false) {
       try {
-        // Build a request-like object with cookies for getToken
-        const cookieStore = await cookies();
-
-        // NextAuth may chunk large JWTs into multiple cookies
-        // Try standard cookie first, then check for chunked cookies
-        let sessionToken = cookieStore.get('next-auth.session-token')?.value ||
-                          cookieStore.get('__Secure-next-auth.session-token')?.value;
-
-        // If no single cookie, check for chunked cookies
-        if (!sessionToken) {
-          const chunks: string[] = [];
-          let i = 0;
-          while (true) {
-            const chunk = cookieStore.get(`next-auth.session-token.${i}`)?.value ||
-                         cookieStore.get(`__Secure-next-auth.session-token.${i}`)?.value;
-            if (!chunk) break;
-            chunks.push(chunk);
-            i++;
-          }
-          if (chunks.length > 0) {
-            sessionToken = chunks.join('');
-          }
-        }
-
-        // Debug logging (uncomment when troubleshooting auth issues)
-        // console.log('[ProxyToBackend] Token extraction:', {
-        //   hasSessionToken: !!sessionToken,
-        //   sessionTokenLength: sessionToken?.length || 0,
-        //   hasNextAuthSecret: !!process.env.NEXTAUTH_SECRET,
-        //   serviceName: config.service.name,
-        // });
-
-        if (sessionToken) {
-          // Create a mock request object with the reconstructed session token
-          // This handles both regular and chunked cookies
-          const mockReq = {
-            headers: request.headers,
-            cookies: {
-              get: (name: string) => {
-                // For session token requests, return our reconstructed token
-                if (name === 'next-auth.session-token' || name === '__Secure-next-auth.session-token') {
-                  return { value: sessionToken };
-                }
-                return cookieStore.get(name);
-              },
-              getAll: () => cookieStore.getAll(),
-            },
-          };
-
-          const jwtToken = await getToken({
-            req: mockReq as any,
-            secret: process.env.NEXTAUTH_SECRET,
-            cookieName: 'next-auth.session-token',
-          });
-
-          // Debug logging (uncomment when troubleshooting auth issues)
-          // console.log('[ProxyToBackend] JWT token result:', {
-          //   hasJwtToken: !!jwtToken,
-          //   hasAccessToken: !!jwtToken?.accessToken,
-          //   tokenEmail: jwtToken?.email,
-          // });
-
-          if (jwtToken?.accessToken) {
-            authToken = jwtToken.accessToken as string;
-          }
-        }
-
-        // Supabase fallback: cookies named `sb-<host>-auth-token` (or chunked
-        // `.0`, `.1`, ...) carry a base64-encoded JSON session payload with
-        // `access_token`. Used by `@supabase/ssr` and the `createBrowserClient`
-        // path in this monorepo.
-        if (!authToken) {
-          const all = cookieStore.getAll();
-          const supabaseCookies = all
-            .filter((c) => /^sb-.*-auth-token(\.\d+)?$/.test(c.name))
-            .sort((a, b) => a.name.localeCompare(b.name));
-          if (supabaseCookies.length > 0) {
-            const raw = supabaseCookies.map((c) => c.value).join('');
-            const value = raw.startsWith('base64-')
-              ? Buffer.from(raw.slice(7), 'base64').toString('utf-8')
-              : raw;
-            try {
-              const parsed = JSON.parse(value);
-              if (parsed && typeof parsed.access_token === 'string') {
-                authToken = parsed.access_token;
-              }
-            } catch {
-              // Ignore — malformed Supabase cookie should not crash auth.
-            }
-          }
-        }
+        authToken = await extractAuthToken(request);
       } catch (err) {
-        // Token extraction failed - will check requirement below
         console.error('[ProxyToBackend] Token extraction error:', err);
       }
     }
 
-    // Check authentication requirement
+    // 2. If auth is required and we don't have a token, reject early.
     if (config.requireAuth === true && !authToken) {
-      logRequestError(context, method, backendUrl, new Error('Authentication required'));
+      logRequestError(
+        context,
+        method,
+        backendUrl,
+        new Error('Authentication required'),
+      );
       return apiUnauthorized('Authentication required to access this resource');
     }
 
-    // Store the token for use in buildHeaders
-    // We use a temporary context extension for this
-    const contextWithToken = authToken
-      ? { ...context, _authToken: authToken }
-      : context;
-
-    // Get circuit breaker for this service
-    const circuitBreaker = getCircuitBreaker(
-      config.service.name,
-      config.circuitBreaker
-    );
-
-    // Build request headers and body
-    const headers = buildHeaders(request, contextWithToken, config, authToken);
-    const body = await extractRequestBody(request);
-
-    // Get timeout for this HTTP method
-    const timeout = getTimeoutForMethod(method, config.timeout);
-
-    // Execute request through circuit breaker with retry logic
-    const data = await circuitBreaker.execute(
-      async () => {
-        // Determine if we should retry this request
-        const useRetry = shouldRetryRequest(method, config);
-
-        if (useRetry) {
-          // Execute with retry logic
-          return await retryRequest(
-            async () => {
-              const response = await fetchWithTimeout(
-                backendUrl,
-                {
-                  method,
-                  headers,
-                  body: body as BodyInit | undefined,
-                },
-                timeout
-              );
-
-              return await processBackendResponse(response, config);
-            },
-            config.retry,
-            {
-              method,
-              url: backendUrl,
-              requestId: context.requestId,
-            }
-          );
-        } else {
-          // Execute without retry (for mutations with retries disabled)
-          const response = await fetchWithTimeout(
-            backendUrl,
-            {
-              method,
-              headers,
-              body: body as BodyInit | undefined,
-            },
-            timeout
-          );
-
-          return await processBackendResponse(response, config);
-        }
-      },
-      {
-        method,
-        url: backendUrl,
-        requestId: context.requestId,
+    // 3. A5: verify JWT signature before forwarding. Defense-in-depth on top
+    //    of @patina/auth's service-side verification — never forward an
+    //    unverifiable token to a downstream service.
+    if (authToken) {
+      try {
+        await verifyJwtToken(authToken);
+      } catch {
+        logRequestError(
+          context,
+          method,
+          backendUrl,
+          new Error('JWT verification failed at proxy'),
+        );
+        return apiUnauthorized('Invalid or expired authentication token');
       }
-    );
-
-    // Log successful completion
-    logRequestComplete(context, method, backendUrl, 200);
-
-    // Return success response
-    return apiSuccess(data, undefined, {
-      status: 200,
-      cache: config.cache,
-    });
-  } catch (error) {
-    // Log error
-    logRequestError(context, method, backendUrl, error);
-
-    // Handle circuit breaker open error
-    if (error instanceof CircuitBreakerOpenError) {
-      return apiError(
-        createApiError(
-          ApiErrorCode.SERVICE_UNAVAILABLE,
-          `Service ${config.service.name} is temporarily unavailable`,
-          {
-            serviceName: error.serviceName,
-            resetTime: error.resetTime,
-            requestId: context.requestId,
-          }
-        ),
-        503
-      );
     }
 
-    // Handle timeout error
+    // 4. Build downstream request.
+    const headers = buildHeaders(request, context, config, authToken);
+    const body = await extractRequestBody(request);
+    const timeout = getTimeoutForMethod(method, config.timeout);
+
+    // 5. Execute with retry. retry.ts handles mutation-aware retry semantics
+    //    (mutations are not retried unless shouldRetryMutation is true).
+    const data = await retryRequest(
+      async () => {
+        const response = await fetchWithTimeout(
+          backendUrl,
+          { method, headers, body: body as BodyInit | undefined },
+          timeout,
+        );
+        return processBackendResponse(response, config);
+      },
+      config.retry,
+      { method, url: backendUrl, requestId: context.requestId },
+    );
+
+    logRequestComplete(context, method, backendUrl, 200);
+    return apiSuccess(data, undefined, { status: 200, cache: config.cache });
+  } catch (error) {
+    logRequestError(context, method, backendUrl, error);
+
     if (error instanceof TimeoutError) {
       return apiError(
         createApiError(
@@ -658,34 +385,28 @@ export async function proxyToBackend(
             timeout: error.timeoutMs,
             serviceName: config.service.name,
             requestId: context.requestId,
-          }
-        ),
-        504
-      );
-    }
-
-    // Handle retry exhausted error
-    if (error instanceof RetryExhaustedError) {
-      // Transform the underlying error
-      const transformed = transformError(error.lastError);
-      return apiError(
-        {
-          ...transformed,
-          message: `Request to ${config.service.name} failed after ${error.attempts} attempts`,
-          details: {
-            ...transformed.details,
-            attempts: error.attempts,
-            serviceName: config.service.name,
-            requestId: context.requestId,
           },
-        }
+        ),
+        504,
       );
     }
 
-    // Handle all other errors
-    const transformed = transformError(error);
+    if (error instanceof RetryExhaustedError) {
+      const transformed = transformError(error.lastError);
+      return apiError({
+        ...transformed,
+        message: `Request to ${config.service.name} failed after ${error.attempts} attempts`,
+        details: {
+          ...transformed.details,
+          attempts: error.attempts,
+          serviceName: config.service.name,
+          requestId: context.requestId,
+        },
+      });
+    }
 
-    // Check if this is a custom mapped error (preserve original status)
+    // Generic error path — preserve mapped-error status if present.
+    const transformed = transformError(error);
     let status: number | undefined;
     if (error && typeof error === 'object' && 'details' in error) {
       const details = (error as any).details;
@@ -694,49 +415,38 @@ export async function proxyToBackend(
       }
     }
 
-    return apiError({
-      ...transformed,
-      details: {
-        ...transformed.details,
-        serviceName: config.service.name,
-        requestId: context.requestId,
+    return apiError(
+      {
+        ...transformed,
+        details: {
+          ...transformed.details,
+          serviceName: config.service.name,
+          requestId: context.requestId,
+        },
       },
-    }, status);
+      status,
+    );
   }
 }
 
 /**
- * Create a proxy handler for a specific backend service
- * Convenience function for common proxy scenarios
- *
- * @param serviceName - Name of the backend service
- * @param baseUrl - Base URL of the backend service
- * @param options - Additional proxy options
- * @returns Proxy handler function
+ * Convenience factory for a proxy handler bound to a specific service.
  *
  * @example
  * ```typescript
  * const catalogProxy = createProxyHandler('catalog', process.env.CATALOG_SERVICE_URL!);
- *
- * export const GET = createRouteHandler(
- *   compose(withAuth(auth), catalogProxy),
- *   { method: 'GET', path: '/api/catalog/products' }
- * );
+ * export const GET = createRouteHandler(catalogProxy, { method: 'GET', path: '/api/catalog/products' });
  * ```
  */
 export function createProxyHandler(
   serviceName: string,
   baseUrl: string,
-  options: Partial<Omit<ProxyConfig, 'service'>> = {}
+  options: Partial<Omit<ProxyConfig, 'service'>> = {},
 ) {
   return async (request: Request, context: RouteContext): Promise<Response> => {
     return proxyToBackend(request, context, {
       ...options,
-      service: {
-        name: serviceName,
-        baseUrl,
-        ...options.service,
-      },
+      service: { name: serviceName, baseUrl, ...options.service },
     });
   };
 }

@@ -24,7 +24,7 @@
   },
   "scripts": {
     "build": "tsup && npm run build:types",
-    "build:types": "node -e \"require('fs').writeFileSync('dist/index.d.ts', 'export interface RouteContext { requestId: string; ip: string; userAgent?: string; user?: any; validatedData: { body?: any; query?: any; params?: any; }; startTime: number; custom?: Record<string, any>; }\\nexport * from \\'./utils/index\\';\\nexport * from \\'./middleware/index\\';\\nexport declare function createRouteHandler(handler: any, config?: any): any;\\nexport declare function compose(...args: any[]): any;\\nexport declare function withAuth(auth?: any): any;\\nexport declare function withValidation(schema: any): any;\\nexport declare function proxyToBackend(request: any, context: any, config: any): Promise<Response>;\\nexport declare function apiSuccess(data: any, options?: any): Response;\\nexport declare function apiError(error: any): Response;')\" && mkdir -p dist/utils dist/middleware && echo 'export declare const RouteContext: any;' > dist/utils/index.d.ts && echo 'export {};' > dist/middleware/index.d.ts",
+    "build:types": "node ./scripts/emit-types.js",
     "dev": "tsup --watch",
     "clean": "rm -rf dist *.tsbuildinfo",
     "type-check": "tsc --noEmit",
@@ -34,6 +34,7 @@
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
+    "@patina/auth": "workspace:*",
     "@patina/types": "workspace:*",
     "next": "^15.0.0",
     "next-auth": "5.0.0-beta.29",
