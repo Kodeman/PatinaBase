@@ -15,25 +15,6 @@ export {
 // Validation schemas
 export * from './validation-schemas';
 
-// Authentication middleware
-export {
-  withAuth,
-  withOptionalAuth,
-  type AuthOptions,
-  type NextAuthFn,
-} from './with-auth';
-
-// Role-based access control
-export {
-  withRole,
-  requireRole,
-  requireAnyRole,
-  requireAllRoles,
-  roleMiddleware,
-  type RoleOptions,
-  type RoleStrategy,
-} from './with-role';
-
 // Backend proxy middleware
 export {
   proxyToBackend,
@@ -43,6 +24,3 @@ export {
   type ErrorMapping,
   type ResponseTransformer,
 } from './proxy-to-backend';
-
-// Metrics endpoint
-export { createMetricsEndpoint } from './with-metrics';

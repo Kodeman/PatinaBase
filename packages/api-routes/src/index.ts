@@ -1,22 +1,24 @@
 /**
  * @patina/api-routes
  *
- * Reusable Next.js 15 API route patterns and middleware for Patina
+ * Reusable Next.js 15 API route patterns and middleware for Patina.
+ *
+ * Primary surface:
+ *   - createRouteHandler — route handler factory with logging/error/context
+ *   - proxyToBackend     — forward request to a NestJS service with retry + auth
+ *   - compose            — chain middleware
+ *   - withValidation     — Zod-based body/query/params validation
+ *   - apiSuccess / apiError / apiValidationError / apiUnauthorized — responses
  *
  * @example
  * ```ts
- * import { createRouteHandler, compose, withAuth, withValidation, apiSuccess } from '@patina/api-routes';
- * import { auth } from '@/lib/auth';
+ * import { createRouteHandler, compose, withValidation, apiSuccess } from '@patina/api-routes';
  * import { z } from 'zod';
  *
- * const bodySchema = z.object({
- *   name: z.string(),
- *   email: z.string().email(),
- * });
+ * const bodySchema = z.object({ name: z.string(), email: z.string().email() });
  *
  * export const POST = createRouteHandler(
  *   compose(
- *     withAuth(auth),
  *     withValidation({ body: bodySchema }),
  *     async (request, context) => {
  *       const { name, email } = context.validatedData.body;

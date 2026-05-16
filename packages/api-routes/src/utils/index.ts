@@ -74,18 +74,6 @@ export {
   type TimeoutConfig,
 } from './retry';
 
-// Circuit breaker
-export {
-  CircuitBreaker,
-  CircuitBreakerRegistry,
-  CircuitBreakerOpenError,
-  getCircuitBreaker,
-  CircuitState,
-  type CircuitBreakerConfig,
-  type CircuitBreakerMetrics,
-  type CircuitBreakerContext,
-} from './circuit-breaker';
-
 // Tracing
 export {
   createTracer,
