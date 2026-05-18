@@ -24,7 +24,10 @@ import {
 import { Mail, User, X, ArrowRight } from 'lucide-react';
 import { useCreateUser } from '@/hooks/use-users';
 import { useRoles } from '@/hooks/use-roles';
-import { useInvalidateWaitlist } from '@/hooks/use-waitlist';
+import {
+  useInvalidateWaitlist,
+  useLogWaitlistActivity,
+} from '@/hooks/use-waitlist';
 import { toast } from 'sonner';
 import type { WaitlistEntry } from '@/services/waitlist';
 import type { Role } from '@/services/roles';
@@ -54,6 +57,7 @@ export function ConvertToUserDialog({ open, onOpenChange, entry }: ConvertToUser
   const createUser = useCreateUser();
   const { data: roles = [] } = useRoles();
   const invalidateWaitlist = useInvalidateWaitlist();
+  const logActivity = useLogWaitlistActivity();
 
   // Pre-select role based on waitlist entry
   useEffect(() => {
@@ -92,7 +96,21 @@ export function ConvertToUserDialog({ open, onOpenChange, entry }: ConvertToUser
         roleIds: selectedRoleIds.length > 0 ? selectedRoleIds : undefined,
       });
 
-      // The handle_new_user() trigger auto-converts the waitlist entry
+      // The handle_new_user() trigger marks the waitlist row converted_at
+      // and the BEFORE UPDATE trigger flips qualification_stage. Log an
+      // activity here so the timeline shows the conversion.
+      try {
+        await logActivity.mutateAsync({
+          id: entry.id,
+          kind: 'converted',
+          metadata: {
+            user_id: result?.user?.id,
+            role_ids: selectedRoleIds,
+          },
+        });
+      } catch {
+        // non-fatal — conversion itself succeeded
+      }
       invalidateWaitlist();
 
       if (result?.invitationSent) {

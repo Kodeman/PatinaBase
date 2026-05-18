@@ -5,9 +5,10 @@ import {
   Search,
   MoreVertical,
   Eye,
-  UserPlus,
   ArrowRight,
   Filter,
+  UserPlus,
+  AlertCircle,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -33,12 +34,51 @@ import {
   Section,
   EmptyState,
   LoadingStrata,
-  StatusDot,
 } from '@/components/portal';
 import { useWaitlistEntries, useWaitlistStats } from '@/hooks/use-waitlist';
 import { ConvertToUserDialog } from '@/components/waitlist/ConvertToUserDialog';
-import { WaitlistDetailDialog } from '@/components/waitlist/WaitlistDetailDialog';
-import type { WaitlistEntry } from '@/services/waitlist';
+import { WaitlistDetailPanel } from '@/components/waitlist/WaitlistDetailPanel';
+import type {
+  QualificationStage,
+  WaitlistEntry,
+} from '@/services/waitlist';
+
+const STAGE_FILTERS: { value: QualificationStage | 'all'; label: string }[] = [
+  { value: 'all', label: 'All stages' },
+  { value: 'new', label: 'New' },
+  { value: 'contacted', label: 'Contacted' },
+  { value: 'qualified', label: 'Qualified' },
+  { value: 'nurture', label: 'Nurture' },
+  { value: 'converted', label: 'Converted' },
+  { value: 'disqualified', label: 'Disqualified' },
+];
+
+const STAGE_BADGE: Record<QualificationStage, { label: string; className: string }> = {
+  new: {
+    label: 'New',
+    className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+  },
+  contacted: {
+    label: 'Contacted',
+    className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+  },
+  qualified: {
+    label: 'Qualified',
+    className: 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
+  },
+  nurture: {
+    label: 'Nurture',
+    className: 'bg-slate-100 text-slate-800 dark:bg-slate-800/60 dark:text-slate-200',
+  },
+  converted: {
+    label: 'Converted',
+    className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
+  },
+  disqualified: {
+    label: 'Disqualified',
+    className: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200',
+  },
+};
 
 export default function WaitlistPage() {
   const [mounted, setMounted] = useState(false);
@@ -53,19 +93,23 @@ export default function WaitlistPage() {
 
 function WaitlistPageContent() {
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [stageFilter, setStageFilter] = useState<QualificationStage | 'all'>('all');
   const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [assignedToMe, setAssignedToMe] = useState(false);
+  const [overdueOnly, setOverdueOnly] = useState(false);
   const [page, setPage] = useState(1);
 
   const [selectedEntry, setSelectedEntry] = useState<WaitlistEntry | null>(null);
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
-  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [detailPanelOpen, setDetailPanelOpen] = useState(false);
 
   const { data: statsData } = useWaitlistStats();
   const { data, isLoading, isError, error } = useWaitlistEntries({
     search: search || undefined,
-    status: statusFilter !== 'all' ? (statusFilter as 'pending' | 'converted') : undefined,
+    stage: stageFilter !== 'all' ? stageFilter : undefined,
     role: roleFilter !== 'all' ? roleFilter : undefined,
+    assignedTo: assignedToMe ? 'me' : undefined,
+    hasOverdueFollowUp: overdueOnly || undefined,
     page,
     pageSize: 20,
   });
@@ -73,10 +117,14 @@ function WaitlistPageContent() {
   const entries = data?.data || [];
   const meta = data?.meta;
 
-  const handleAction = (entry: WaitlistEntry, action: 'convert' | 'detail') => {
+  const openDetail = (entry: WaitlistEntry) => {
     setSelectedEntry(entry);
-    if (action === 'convert') setConvertDialogOpen(true);
-    else setDetailDialogOpen(true);
+    setDetailPanelOpen(true);
+  };
+
+  const openConvert = (entry: WaitlistEntry) => {
+    setSelectedEntry(entry);
+    setConvertDialogOpen(true);
   };
 
   const formatDate = (dateString: string) =>
@@ -85,6 +133,14 @@ function WaitlistPageContent() {
       day: 'numeric',
       year: 'numeric',
     });
+
+  const formatFollowUp = (iso: string) => {
+    const d = new Date(iso);
+    const now = new Date();
+    const overdue = d < now;
+    const text = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return { text, overdue };
+  };
 
   const conversionRate =
     statsData && statsData.total > 0
@@ -95,14 +151,14 @@ function WaitlistPageContent() {
     <div>
       <PageHeader
         title="Waitlist"
-        description="Manage waitlist signups and convert them to Patina users."
+        description="Track prospects from patina.cloud and qualify them into Patina users."
       />
 
       {statsData && (
         <MetricsRow>
-          <MetricBlock label="Total Signups" value={statsData.total} />
-          <MetricBlock label="Designers" value={statsData.byRole['designer'] || 0} />
-          <MetricBlock label="Consumers" value={statsData.byRole['consumer'] || 0} />
+          <MetricBlock label="Total signups" value={statsData.total} />
+          <MetricBlock label="New" value={statsData.byStage?.new ?? 0} />
+          <MetricBlock label="Qualified" value={statsData.byStage?.qualified ?? 0} />
           <MetricBlock
             label="Converted"
             value={statsData.converted}
@@ -114,7 +170,7 @@ function WaitlistPageContent() {
 
       <Section className="mt-10">
         <div className="mb-6 flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[240px]">
+          <div className="relative min-w-[240px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
             <Input
               placeholder="Search by email..."
@@ -127,9 +183,9 @@ function WaitlistPageContent() {
             />
           </div>
           <Select
-            value={statusFilter}
+            value={stageFilter}
             onValueChange={(v) => {
-              setStatusFilter(v);
+              setStageFilter(v as QualificationStage | 'all');
               setPage(1);
             }}
           >
@@ -138,9 +194,11 @@ function WaitlistPageContent() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="converted">Converted</SelectItem>
+              {STAGE_FILTERS.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select
@@ -154,12 +212,40 @@ function WaitlistPageContent() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Roles</SelectItem>
+              <SelectItem value="all">All types</SelectItem>
               <SelectItem value="designer">Designer</SelectItem>
-              <SelectItem value="consumer">Consumer</SelectItem>
+              <SelectItem value="consumer">Client</SelectItem>
+              <SelectItem value="vendor">Vendor</SelectItem>
               <SelectItem value="unknown">Unknown</SelectItem>
             </SelectContent>
           </Select>
+          <Button
+            variant={assignedToMe ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => {
+              setAssignedToMe((v) => !v);
+              setPage(1);
+            }}
+          >
+            <UserPlus className="mr-2 h-4 w-4" />
+            Mine
+          </Button>
+          <Button
+            variant={overdueOnly ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => {
+              setOverdueOnly((v) => !v);
+              setPage(1);
+            }}
+          >
+            <AlertCircle className="mr-2 h-4 w-4" />
+            Overdue
+            {statsData?.overdueFollowUps ? (
+              <Badge variant="secondary" className="ml-2">
+                {statsData.overdueFollowUps}
+              </Badge>
+            ) : null}
+          </Button>
         </div>
 
         {isLoading ? (
@@ -174,39 +260,50 @@ function WaitlistPageContent() {
         ) : (
           <div>
             {entries.map((entry) => {
-              const isConverted = !!entry.convertedAt;
+              const stageMeta = STAGE_BADGE[entry.qualificationStage] ?? STAGE_BADGE.new;
+              const followUp = entry.nextFollowUpAt ? formatFollowUp(entry.nextFollowUpAt) : null;
+              const displayName = entry.fullName || entry.email;
               return (
                 <div
                   key={entry.id}
                   className="group flex items-center justify-between border-b border-[var(--border-subtle)] py-5 transition-colors hover:bg-[var(--bg-hover)]"
                 >
-                  <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => openDetail(entry)}
+                    className="flex flex-1 items-center gap-4 text-left"
+                  >
                     <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[rgba(196,165,123,0.12)] text-[var(--accent-primary)]">
                       <span className="type-label text-[0.7rem]">
                         {entry.email.substring(0, 2).toUpperCase()}
                       </span>
                     </div>
-                    <div>
-                      <button
-                        onClick={() => handleAction(entry, 'detail')}
-                        className="type-item-name text-left hover:text-[var(--accent-primary)]"
-                      >
-                        {entry.email}
-                      </button>
-                      <div className="type-label-secondary mt-0.5">
+                    <div className="min-w-0">
+                      <div className="type-item-name truncate hover:text-[var(--accent-primary)]">
+                        {displayName}
+                      </div>
+                      <div className="type-label-secondary mt-0.5 truncate">
+                        {entry.fullName ? entry.email + ' · ' : ''}
                         Signed up {formatDate(entry.createdAt)}
-                        {entry.utmCampaign && <span className="ml-2">via {entry.utmCampaign}</span>}
+                        {entry.companyName && <span className="ml-2">· {entry.companyName}</span>}
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-4">
+                  </button>
+                  <div className="flex items-center gap-3">
+                    {followUp && (
+                      <span
+                        className={`type-label-secondary text-xs ${followUp.overdue ? 'text-rose-700 dark:text-rose-300' : 'text-muted-foreground'}`}
+                        title="Next follow-up"
+                      >
+                        {followUp.overdue ? 'Overdue · ' : 'Follow-up · '}
+                        {followUp.text}
+                      </span>
+                    )}
                     <Badge variant="outline">{entry.role}</Badge>
-                    <Badge variant="secondary">{entry.source}</Badge>
-                    <StatusDot
-                      variant={isConverted ? 'success' : 'warning'}
-                      label={isConverted ? 'Converted' : 'Pending'}
-                    />
-
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${stageMeta.className}`}
+                    >
+                      {stageMeta.label}
+                    </span>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon">
@@ -215,27 +312,16 @@ function WaitlistPageContent() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleAction(entry, 'detail')}>
+                        <DropdownMenuItem onClick={() => openDetail(entry)}>
                           <Eye className="mr-2 h-4 w-4" />
-                          View Details
+                          Open
                         </DropdownMenuItem>
-                        {!isConverted && (
+                        {!entry.convertedAt && (
                           <>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleAction(entry, 'convert')}>
+                            <DropdownMenuItem onClick={() => openConvert(entry)}>
                               <ArrowRight className="mr-2 h-4 w-4" />
-                              Convert to User
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                        {isConverted && entry.authUserId && (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem asChild>
-                              <a href={`/users/${entry.authUserId}`}>
-                                <UserPlus className="mr-2 h-4 w-4" />
-                                View User Profile
-                              </a>
+                              Convert to user
                             </DropdownMenuItem>
                           </>
                         )}
@@ -276,14 +362,18 @@ function WaitlistPageContent() {
         )}
       </Section>
 
+      <WaitlistDetailPanel
+        open={detailPanelOpen}
+        onOpenChange={setDetailPanelOpen}
+        entryId={selectedEntry?.id ?? null}
+        onRequestConvert={(entry) => {
+          setSelectedEntry(entry);
+          setConvertDialogOpen(true);
+        }}
+      />
       <ConvertToUserDialog
         open={convertDialogOpen}
         onOpenChange={setConvertDialogOpen}
-        entry={selectedEntry}
-      />
-      <WaitlistDetailDialog
-        open={detailDialogOpen}
-        onOpenChange={setDetailDialogOpen}
         entry={selectedEntry}
       />
     </div>
