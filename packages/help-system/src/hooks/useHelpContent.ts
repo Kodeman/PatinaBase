@@ -1,0 +1,126 @@
+import { useQuery, type UseQueryResult } from '@tanstack/react-query'
+import { getSanityClient } from '../sanityClient'
+import type { ContentTypeMap, HelpContentType, Persona } from '../contentTypes'
+
+/**
+ * Lightweight GROQ tagged template literal — avoids pulling in next-sanity or
+ * any extra bundle weight. The Sanity client accepts plain strings; the tag
+ * just returns the interpolated string with no transformation. It exists
+ * purely for editor syntax highlighting and grep-ability.
+ */
+const groq = (strings: TemplateStringsArray, ...values: unknown[]): string =>
+  String.raw({ raw: strings }, ...values)
+
+const HELP_CONTENT_STALE_MS = 5 * 60 * 1000 // 5 minutes per spec §7.3
+
+/**
+ * Fetches help content from Sanity by surface key + content type, with a
+ * four-step persona fallback chain (spec Section 7.3).
+ *
+ * Fallback chain:
+ *   1. Exact match: surfaceKey + contentType + persona
+ *   2. surfaceKey + contentType + persona='all'
+ *   3. Parent surfaceKey + contentType + persona  (one level up — split on last '/')
+ *   4. Parent surfaceKey + contentType + persona='all'
+ *   5. Return null, log a warning to console
+ *
+ * On Sanity downtime: returns null gracefully (spec Section 13.4).
+ *
+ * @param surfaceKey  - A surface key from SurfaceKeys (e.g. "designer-portal/pipeline/project-list")
+ * @param contentType - The content type to fetch (e.g. 'tooltip', 'emptyState')
+ * @param persona     - The current user's persona; defaults to 'all'
+ */
+export function useHelpContent<T extends HelpContentType>(
+  surfaceKey: string,
+  contentType: T,
+  persona: Persona = 'all',
+): UseQueryResult<ContentTypeMap[T] | null> {
+  return useQuery({
+    queryKey: ['help-content', surfaceKey, contentType, persona],
+    queryFn: async () => {
+      const client = getSanityClient()
+      const result = await fetchWithFallback(client, surfaceKey, contentType, persona)
+      return (result ?? null) as ContentTypeMap[T] | null
+    },
+    staleTime: HELP_CONTENT_STALE_MS,
+    gcTime: HELP_CONTENT_STALE_MS * 2,
+    retry: 1, // one quiet retry; help content downtime must not spam error logs
+  })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Internal helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+type SanityClientType = ReturnType<typeof getSanityClient>
+
+/**
+ * Executes the 4-step fallback chain.
+ *
+ * Each step issues one GROQ query. Sanity network errors are caught at the
+ * query level and logged to console; the chain returns null rather than
+ * propagating (spec §13.4 — Sanity downtime must not crash the UI).
+ */
+async function fetchWithFallback(
+  client: SanityClientType,
+  surfaceKey: string,
+  contentType: HelpContentType,
+  persona: Persona,
+): Promise<unknown | null> {
+  // Step 1: exact match
+  const exact = await tryFetch(client, surfaceKey, contentType, persona)
+  if (exact) return exact
+
+  // Step 2: same surface key, persona='all' fallback (skip if we already tried 'all')
+  if (persona !== 'all') {
+    const allPersona = await tryFetch(client, surfaceKey, contentType, 'all')
+    if (allPersona) return allPersona
+  }
+
+  // Steps 3 & 4: parent surface key (one level up)
+  const lastSlash = surfaceKey.lastIndexOf('/')
+  if (lastSlash > 0) {
+    const parentKey = surfaceKey.slice(0, lastSlash)
+
+    // Step 3: parent + original persona
+    const parent = await tryFetch(client, parentKey, contentType, persona)
+    if (parent) return parent
+
+    // Step 4: parent + 'all'
+    if (persona !== 'all') {
+      const parentAll = await tryFetch(client, parentKey, contentType, 'all')
+      if (parentAll) return parentAll
+    }
+  }
+
+  // All fallbacks exhausted
+  if (typeof console !== 'undefined') {
+    console.warn(
+      `[help-system] No content found for surfaceKey="${surfaceKey}" contentType="${contentType}" persona="${persona}"`,
+    )
+  }
+  return null
+}
+
+/**
+ * Executes a single GROQ fetch. Returns null on both "not found" and network
+ * errors — help content absence must never crash the UI (spec §13.4).
+ */
+async function tryFetch(
+  client: SanityClientType,
+  surfaceKey: string,
+  contentType: HelpContentType,
+  persona: Persona,
+): Promise<unknown | null> {
+  const query = groq`*[_type == "helpContent" && surfaceKey == $sk && contentType == $ct && persona == $p][0]`
+  try {
+    const result: unknown = await client.fetch(query, { sk: surfaceKey, ct: contentType, p: persona })
+    return result ?? null
+  } catch (err) {
+    // Sanity unavailable — fail silently per spec §13.4
+    if (typeof console !== 'undefined') {
+      console.warn('[help-system] Sanity fetch failed', err)
+    }
+    return null
+  }
+}

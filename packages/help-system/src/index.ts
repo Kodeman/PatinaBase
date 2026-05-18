@@ -35,3 +35,23 @@ export const HELP_SYSTEM_VERSION = '0.1.0';
 
 export { SurfaceKeys, SURFACE_KEY_REGEX, isSurfaceKey } from './surfaceKeys';
 export type { SurfaceKey } from './surfaceKeys';
+
+// ─── Content types ────────────────────────────────────────────────────────────
+export type {
+  Persona,
+  HelpContentType,
+  HelpContent,
+  TooltipContent,
+  FieldHelperContent,
+  EmptyStateContent,
+  LearnMoreContent,
+  CoachmarkContent,
+  HelpArticleContent,
+  ContentTypeMap,
+} from './contentTypes';
+
+// ─── Sanity client (exported so portals can swap it out in A6) ────────────────
+export { getSanityClient } from './sanityClient';
+
+// ─── Data hooks ───────────────────────────────────────────────────────────────
+export { useHelpContent } from './hooks/useHelpContent';
