@@ -103,6 +103,9 @@ export * from './VideoPlayer'
 export * from './ComparisonSlider'
 export * from './Media'
 
+// Brand Icons
+export * from './StrataMark'
+
 // Utility Components
 export * from './DragDrop'
 
