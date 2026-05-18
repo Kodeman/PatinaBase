@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina · Help & Guidance System</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--sf:#FFFFFF;--fd:'Playfair Display',Georgia,serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace}
+body{font-family:var(--fb);color:var(--ch);line-height:1.6;-webkit-font-smoothing:antialiased;background:var(--ch)}
+.slide{min-height:100vh;display:flex;align-items:center;padding:clamp(2rem,5vw,5rem);position:relative;overflow:hidden}
+.in{width:100%;max-width:1180px;margin:0 auto}
+.num{position:absolute;top:2rem;right:2rem;font-family:var(--fm);font-size:0.55rem;letter-spacing:0.08em;text-transform:uppercase}
+.lg{position:absolute;top:2rem;left:2rem;font-family:var(--fd);font-weight:500;font-size:0.62rem;letter-spacing:0.22em;text-transform:uppercase}
+.lt{background:var(--ow)}.lt .num,.lt .lg{color:var(--ao)}
+.dk{background:var(--ch);color:var(--ow)}.dk .num,.dk .lg{color:rgba(250,247,242,0.25)}
+.wm{background:linear-gradient(155deg,#e8ddd0,#ddd0c0 50%,#ede6dc)}.wm .num,.wm .lg{color:var(--ao)}
+
+.strata{display:flex;flex-direction:column;gap:5px;margin-bottom:2rem}
+.strata div{height:2px;border-radius:1px}
+.strata div:nth-child(1){width:100%;background:var(--cl)}
+.strata div:nth-child(2){width:75%;background:var(--cl);opacity:.5}
+.strata div:nth-child(3){width:50%;background:var(--cl);opacity:.25}
+
+.eyebrow{font-family:var(--fm);font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--cl);margin-bottom:0.75rem}
+h1{font-family:var(--fd);font-weight:400;font-size:clamp(2rem,4.5vw,3.4rem);line-height:1.1;letter-spacing:-0.02em;margin-bottom:0.5rem}
+h1 em,h2 em,h3 em{font-style:italic;color:var(--cl)}
+h2{font-family:var(--fd);font-weight:400;font-size:clamp(1.4rem,3vw,2.1rem);line-height:1.2;letter-spacing:-0.02em;margin-bottom:0.5rem}
+h3{font-family:var(--fd);font-weight:500;font-size:1.05rem;margin-bottom:0.4rem}
+.dk h1,.dk h2,.dk h3{color:var(--ow)}
+.body{font-family:var(--fb);font-size:0.92rem;line-height:1.7;color:var(--mo);max-width:640px}
+.dk .body{color:rgba(250,247,242,0.55)}
+.meta{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--ao)}
+.dk .meta{color:rgba(250,247,242,0.3)}
+
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:2rem}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.25rem}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:0.75rem}
+@media(max-width:768px){.g2,.g3,.g4,.g5{grid-template-columns:1fr}}
+
+.card{padding:1.1rem;border:1px solid var(--pe);border-radius:6px;background:var(--sf)}
+.card-i{font-family:var(--fd);font-size:1.3rem;color:var(--cl);margin-bottom:0.3rem;line-height:1}
+.card-t{font-family:var(--fb);font-weight:500;font-size:0.85rem;color:var(--ch);margin-bottom:0.25rem}
+.card-d{font-family:var(--fb);font-size:0.72rem;color:var(--ao);line-height:1.55}
+.dk .card{background:rgba(250,247,242,0.03);border-color:rgba(250,247,242,0.08)}
+.dk .card-t{color:var(--ow)}.dk .card-d{color:rgba(250,247,242,0.5)}
+
+.layer{display:grid;grid-template-columns:80px 1fr;gap:1.5rem;padding:1.25rem 0;border-bottom:1px solid var(--pe);align-items:start}
+.layer:last-child{border-bottom:none}
+.layer-num{font-family:var(--fd);font-weight:300;font-size:2.5rem;color:var(--cl);line-height:1;font-style:italic}
+.layer-t{font-family:var(--fd);font-weight:500;font-size:1.25rem;color:var(--ch);margin-bottom:0.3rem}
+.layer-d{font-family:var(--fb);font-size:0.85rem;color:var(--mo);line-height:1.7}
+.dk .layer{border-bottom-color:rgba(250,247,242,0.08)}
+.dk .layer-t{color:var(--ow)}.dk .layer-d{color:rgba(250,247,242,0.55)}
+
+.pq{padding:2rem 0;border-top:1px solid var(--pe);border-bottom:1px solid var(--pe);margin:1.5rem 0}
+.pq blockquote{font-family:var(--fd);font-size:clamp(1.1rem,2.3vw,1.5rem);font-style:italic;line-height:1.45;max-width:640px}
+.pq cite{display:block;font-family:var(--fm);font-size:0.55rem;font-style:normal;text-transform:uppercase;letter-spacing:0.06em;color:var(--ao);margin-top:0.6rem}
+
+/* Mockup frame */
+.frame{background:var(--sf);border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04),0 12px 36px rgba(0,0,0,0.08);margin:1rem 0;position:relative}
+.fr-bar{display:flex;align-items:center;padding:0 1rem;height:36px;background:var(--sf);border-bottom:1px solid var(--pe);gap:1rem}
+.fr-bar .ll{font-family:var(--fd);font-weight:500;font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase}
+.fr-bar .nv{display:flex;gap:0.85rem;flex:1}
+.fr-bar .nv span{font-family:var(--fb);font-size:0.62rem;color:var(--ao)}
+.fr-bar .nv span.on{color:var(--ch);border-bottom:2px solid var(--cl);padding-bottom:1px}
+.fr-bar .ut{display:flex;gap:0.4rem;font-size:0.7rem;color:var(--ao);align-items:center}
+.fr-avt{width:20px;height:20px;border-radius:50%;background:var(--pe);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-weight:500;font-size:0.48rem;color:var(--mo)}
+.fr-c{padding:1.25rem;background:var(--ow);min-height:200px;position:relative}
+
+/* Help mechanism mockups */
+.tooltip{position:absolute;background:var(--ch);color:var(--ow);padding:0.55rem 0.75rem;border-radius:5px;font-family:var(--fb);font-size:0.7rem;line-height:1.5;box-shadow:0 8px 24px rgba(0,0,0,0.15);max-width:240px;z-index:5}
+.tooltip::before{content:'';position:absolute;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent}
+.tooltip.bot::before{top:-5px;left:24px;border-bottom:5px solid var(--ch)}
+.tooltip.top::before{bottom:-5px;left:24px;border-top:5px solid var(--ch)}
+.tip-l{display:block;font-family:var(--fm);font-size:0.45rem;color:var(--cl);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.2rem}
+
+.coachmark{padding:1rem;background:var(--sf);border-radius:6px;box-shadow:0 12px 36px rgba(0,0,0,0.18);max-width:280px;border:1.5px solid var(--cl);position:relative;z-index:5}
+.cm-step{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--cl);margin-bottom:0.3rem}
+.cm-t{font-family:var(--fd);font-weight:500;font-size:0.95rem;margin-bottom:0.3rem;color:var(--ch)}
+.cm-d{font-family:var(--fb);font-size:0.7rem;color:var(--mo);line-height:1.55;margin-bottom:0.6rem}
+.cm-dots{display:flex;gap:3px;align-items:center}
+.cm-dot{width:5px;height:5px;border-radius:50%;background:var(--pe)}
+.cm-dot.on{background:var(--cl)}
+.cm-btns{display:flex;justify-content:space-between;align-items:center;margin-top:0.4rem}
+.cm-skip{font-family:var(--fb);font-size:0.65rem;color:var(--ao)}
+.cm-next{font-family:var(--fb);font-size:0.7rem;color:white;background:var(--ch);padding:0.3rem 0.65rem;border-radius:3px;font-weight:500}
+
+.spotlight{position:absolute;border:2px dashed var(--cl);border-radius:6px;animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+.helper{padding:0.85rem 1rem;background:rgba(196,165,123,0.06);border-left:2px solid var(--cl);border-radius:0 4px 4px 0;font-family:var(--fb);font-size:0.72rem;color:var(--mo);line-height:1.6}
+.helper-l{display:block;font-family:var(--fm);font-size:0.45rem;color:var(--cl);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.25rem}
+
+.qpanel{background:var(--sf);border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,0.12);border:1px solid var(--pe);overflow:hidden;max-width:420px}
+.qp-h{padding:0.85rem 1rem;border-bottom:1px solid var(--pe);display:flex;justify-content:space-between;align-items:center}
+.qp-t{font-family:var(--fd);font-weight:500;font-size:0.92rem}
+.qp-c{padding:0.85rem 1rem}
+.qp-i{padding:0.55rem 0;border-bottom:1px solid rgba(229,226,221,0.5);display:flex;gap:0.5rem;align-items:start}
+.qp-i:last-child{border-bottom:none}
+.qp-i-ico{width:18px;height:18px;border-radius:3px;background:rgba(196,165,123,0.1);display:flex;align-items:center;justify-content:center;color:var(--cl);font-size:0.65rem;flex-shrink:0;margin-top:0.1rem}
+.qp-i-t{font-family:var(--fb);font-weight:500;font-size:0.74rem;color:var(--ch);margin-bottom:0.1rem}
+.qp-i-d{font-family:var(--fb);font-size:0.65rem;color:var(--ao);line-height:1.5}
+
+.empty-state{padding:2rem;text-align:center;border:1.5px dashed var(--pe);border-radius:6px;background:rgba(196,165,123,0.02)}
+.es-ico{font-family:var(--fd);font-size:1.8rem;color:var(--cl);margin-bottom:0.4rem;font-style:italic}
+.es-t{font-family:var(--fd);font-weight:500;font-size:1.05rem;margin-bottom:0.3rem}
+.es-d{font-family:var(--fb);font-size:0.78rem;color:var(--ao);line-height:1.55;max-width:380px;margin:0 auto 0.85rem}
+.es-cta{display:inline-block;font-family:var(--fb);font-size:0.72rem;font-weight:500;padding:0.4rem 0.85rem;background:var(--ch);color:white;border-radius:3px}
+
+/* Progress / journey */
+.journey{display:flex;align-items:center;gap:0.3rem;flex-wrap:wrap;padding:1rem 0}
+.jn{padding:0.5rem 0.85rem;border-radius:4px;font-family:var(--fb);font-size:0.65rem;font-weight:500;white-space:nowrap;border:1px solid;display:flex;flex-direction:column;gap:0.15rem}
+.jn-l{font-family:var(--fm);font-size:0.42rem;letter-spacing:0.06em;text-transform:uppercase;opacity:0.7}
+.fa{width:16px;height:1px;background:var(--pe);position:relative;flex-shrink:0}
+.fa::after{content:'';position:absolute;right:0;top:-2px;width:4px;height:4px;border-right:1px solid var(--pe);border-bottom:1px solid var(--pe);transform:rotate(-45deg)}
+
+/* Principle ring */
+.principle{padding:1.5rem;border:1px solid var(--pe);border-radius:6px;background:var(--sf);position:relative}
+.p-num{position:absolute;top:1rem;right:1rem;font-family:var(--fd);font-weight:300;font-size:2.5rem;color:rgba(196,165,123,0.25);line-height:1;font-style:italic}
+.p-eyebrow{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--cl);margin-bottom:0.5rem}
+.p-t{font-family:var(--fd);font-weight:500;font-size:1.05rem;margin-bottom:0.4rem}
+.p-d{font-family:var(--fb);font-size:0.74rem;color:var(--mo);line-height:1.6}
+.dk .principle{background:rgba(250,247,242,0.03);border-color:rgba(250,247,242,0.08)}
+.dk .p-t{color:var(--ow)}.dk .p-d{color:rgba(250,247,242,0.55)}
+
+/* Stat */
+.stat{padding:1rem;border:1px solid var(--pe);border-radius:5px;text-align:center;background:var(--sf)}
+.stat-v{font-family:var(--fd);font-weight:600;font-size:1.6rem;line-height:1;margin-bottom:0.3rem;color:var(--cl)}
+.stat-l{font-family:var(--fm);font-size:0.48rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--ao);margin-bottom:0.2rem}
+.stat-d{font-family:var(--fb);font-size:0.65rem;color:var(--ao);line-height:1.5}
+.dk .stat{background:rgba(250,247,242,0.03);border-color:rgba(250,247,242,0.08)}
+
+.row-list{padding:0.4rem 0;border-bottom:1px solid var(--pe);display:flex;gap:0.6rem;align-items:start}
+.row-list:last-child{border-bottom:none}
+.row-list-tag{font-family:var(--fm);font-size:0.5rem;text-transform:uppercase;letter-spacing:0.04em;padding:2px 6px;border-radius:2px;background:rgba(196,165,123,0.08);color:var(--cl);flex-shrink:0;margin-top:0.15rem;white-space:nowrap}
+.row-list-c{font-family:var(--fb);font-size:0.78rem;color:var(--mo);line-height:1.55}
+.row-list-c strong{color:var(--ch);font-weight:500}
+.dk .row-list{border-bottom-color:rgba(250,247,242,0.08)}
+.dk .row-list-c{color:rgba(250,247,242,0.65)}
+.dk .row-list-c strong{color:var(--ow)}
+
+.fade{opacity:0;transform:translateY(12px);transition:opacity 0.5s ease,transform 0.5s ease}
+.fade.vis{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ===== 01 TITLE ===== -->
+<div class="slide dk">
+  <div class="lg">Patina</div><div class="num">01 / 16</div>
+  <div class="in">
+    <div class="eyebrow">Help & Guidance System · MVP Plan</div>
+    <div class="strata"><div></div><div></div><div></div></div>
+    <h1>The platform <em>teaches itself.</em></h1>
+    <p class="body" style="margin:1rem 0 3rem">Patina is becoming a sophisticated platform — three portals, a marketplace, an ML engine, real procurement workflows. Sophistication is the point. But sophistication only delivers value if users feel confident, never confused. This document presents a help and guidance system designed to make Patina feel approachable from the first click and reliable on the thousandth.</p>
+    <div style="display:flex;gap:3rem;flex-wrap:wrap">
+      <div><div class="meta">Audience</div><div style="font-family:var(--fb);font-size:0.82rem;color:rgba(250,247,242,0.55);margin-top:0.15rem">Leah · Pilot Designers · Dev Team</div></div>
+      <div><div class="meta">Status</div><div style="font-family:var(--fb);font-size:0.82rem;color:rgba(250,247,242,0.55);margin-top:0.15rem">Plan for Review</div></div>
+      <div><div class="meta">Date</div><div style="font-family:var(--fb);font-size:0.82rem;color:rgba(250,247,242,0.55);margin-top:0.15rem">April 2026 · v1.0</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 02 THE PROBLEM ===== -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">02 / 16</div>
+  <div class="in">
+    <div class="eyebrow">The Problem We Must Solve</div>
+    <h1>Powerful tools <em>can scare new users.</em></h1>
+    <p class="body" style="margin-bottom:1.5rem">Every feature we ship makes Patina more capable — and potentially more intimidating. A first-time designer sees the Pipeline, the Aesthete Engine, the FF&E procurement pipeline, the Decisions module, the Change Order flow, and the Financial tracker before they've designed a single room. Without thoughtful guidance, capability becomes anxiety.</p>
+    <div class="g3" style="margin-top:1.5rem">
+      <div class="card">
+        <div class="card-i">◐</div>
+        <div class="card-t">Cognitive load</div>
+        <div class="card-d">Eight new screens in the Designer Portal MVP. Each has 10+ properties. Designers cannot hold all of this in working memory.</div>
+      </div>
+      <div class="card">
+        <div class="card-i">◑</div>
+        <div class="card-t">First-use uncertainty</div>
+        <div class="card-d">"What do I do first?" is the most expensive question we can leave unanswered. Every minute of confusion in the first session predicts churn.</div>
+      </div>
+      <div class="card">
+        <div class="card-i">◒</div>
+        <div class="card-t">Cross-portal complexity</div>
+        <div class="card-d">Designers move between consumer app, Designer Portal, and Manufacturer Portal. Each has its own vocabulary, structure, and rhythm.</div>
+      </div>
+    </div>
+    <p class="body" style="margin-top:2rem">The goal is not a help center. The goal is a platform that feels like it was built with the user in mind at every step — where the right answer is visible at the moment the question forms.</p>
+  </div>
+</div>
+
+<!-- ===== 03 PHILOSOPHY ===== -->
+<div class="slide wm fade">
+  <div class="lg">Patina</div><div class="num">03 / 16</div>
+  <div class="in">
+    <div class="eyebrow">Design Philosophy</div>
+    <h1>Guidance is <em>part of the product.</em></h1>
+    <p class="body" style="margin-bottom:1.5rem">Help isn't an afterthought bolted onto the side of the interface. It's not a help center hidden behind a question mark icon. The help system is woven into the product itself — the empty states teach, the field labels reassure, the first-time experience guides without nagging, and the tooltips appear only when curiosity demands them.</p>
+    <div class="pq">
+      <blockquote>"The best help is invisible. The user gets to the right answer without realizing they needed help at all."</blockquote>
+      <cite>Guidance System Principle</cite>
+    </div>
+    <div class="g2" style="margin-top:1.5rem">
+      <div>
+        <h3>What this is NOT</h3>
+        <div class="row-list"><span class="row-list-tag" style="background:rgba(212,160,144,0.1);color:var(--te)">No</span><span class="row-list-c">A separate help center that requires leaving the workflow</span></div>
+        <div class="row-list"><span class="row-list-tag" style="background:rgba(212,160,144,0.1);color:var(--te)">No</span><span class="row-list-c">Forced video tutorials before the user can do anything</span></div>
+        <div class="row-list"><span class="row-list-tag" style="background:rgba(212,160,144,0.1);color:var(--te)">No</span><span class="row-list-c">Persistent chat bubbles that interrupt focused work</span></div>
+        <div class="row-list"><span class="row-list-tag" style="background:rgba(212,160,144,0.1);color:var(--te)">No</span><span class="row-list-c">Marketing-style "welcome to Patina!" modals</span></div>
+        <div class="row-list"><span class="row-list-tag" style="background:rgba(212,160,144,0.1);color:var(--te)">No</span><span class="row-list-c">Generic FAQs that don't know what screen you're on</span></div>
+      </div>
+      <div>
+        <h3>What this IS</h3>
+        <div class="row-list"><span class="row-list-tag" style="background:rgba(168,181,160,0.1);color:var(--sa)">Yes</span><span class="row-list-c">Help that appears <strong>at the moment</strong> a question would form</span></div>
+        <div class="row-list"><span class="row-list-tag" style="background:rgba(168,181,160,0.1);color:var(--sa)">Yes</span><span class="row-list-c">Empty states that <strong>teach what's possible</strong></span></div>
+        <div class="row-list"><span class="row-list-tag" style="background:rgba(168,181,160,0.1);color:var(--sa)">Yes</span><span class="row-list-c">A guided <strong>first project</strong> that walks the designer through reality, not a tutorial</span></div>
+        <div class="row-list"><span class="row-list-tag" style="background:rgba(168,181,160,0.1);color:var(--sa)">Yes</span><span class="row-list-c">Tooltips that <strong>fade in only on hover</strong>, never demand attention</span></div>
+        <div class="row-list"><span class="row-list-tag" style="background:rgba(168,181,160,0.1);color:var(--sa)">Yes</span><span class="row-list-c">A help panel that <strong>knows what page you're on</strong></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 04 FIVE PRINCIPLES ===== -->
+<div class="slide dk fade">
+  <div class="lg">Patina</div><div class="num">04 / 16</div>
+  <div class="in">
+    <div class="eyebrow">Five Guiding Principles</div>
+    <h1>The rules that shape <em>every help moment.</em></h1>
+    <p class="body" style="margin-bottom:1.25rem">Every guidance decision — every tooltip, every empty state, every coachmark — gets measured against these five principles. They are the same principles that govern the rest of the design system: typography-first, document-metaphor, progressive weight.</p>
+    <div class="g3" style="margin-top:1rem">
+      <div class="principle">
+        <span class="p-num">01</span>
+        <div class="p-eyebrow">Principle One</div>
+        <div class="p-t">Contextual, not central</div>
+        <div class="p-d">Help lives where the question forms. The Aesthete Engine question gets answered on the Aesthete Engine screen — not in a separate documentation site.</div>
+      </div>
+      <div class="principle">
+        <span class="p-num">02</span>
+        <div class="p-eyebrow">Principle Two</div>
+        <div class="p-t">Progressive disclosure</div>
+        <div class="p-d">Show the minimum first. Reveal depth when the user reaches for it. The wizard's "advanced" toggle. The tooltip's "Learn more" link.</div>
+      </div>
+      <div class="principle">
+        <span class="p-num">03</span>
+        <div class="p-eyebrow">Principle Three</div>
+        <div class="p-t">Confidence over completeness</div>
+        <div class="p-d">A user who feels confident takes the next action. We optimize for "I know what to do next," not "I now have all the information."</div>
+      </div>
+      <div class="principle">
+        <span class="p-num">04</span>
+        <div class="p-eyebrow">Principle Four</div>
+        <div class="p-t">Quiet by default</div>
+        <div class="p-d">No animated pop-ups, no badges, no badges-on-badges. Guidance whispers, never shouts. Pearl backgrounds, Clay accents, never Terracotta.</div>
+      </div>
+      <div class="principle">
+        <span class="p-num">05</span>
+        <div class="p-eyebrow">Principle Five</div>
+        <div class="p-t">Earn the user's trust</div>
+        <div class="p-d">Every help moment must prove its worth. If a tooltip isn't useful, it gets removed. We measure what gets read and what gets dismissed.</div>
+      </div>
+      <div class="principle" style="background:linear-gradient(155deg,rgba(196,165,123,0.08),rgba(196,165,123,0.02));border-color:rgba(196,165,123,0.2)">
+        <div class="p-eyebrow">Underlying Goal</div>
+        <div class="p-t" style="color:var(--cl)">Make designers feel like the platform is on their side</div>
+        <div class="p-d">Not a tool that requires expertise to operate. A collaborator that adapts to expertise as it grows.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 05 THE FOUR LAYERS ===== -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">05 / 16</div>
+  <div class="in">
+    <div class="eyebrow">System Architecture</div>
+    <h1>Four layers of <em>woven guidance.</em></h1>
+    <p class="body" style="margin-bottom:1rem">The system has four layers. Each handles a different level of user need, from the casual scan-and-go to the deeply-stuck. Together they form a complete net — most questions never reach the next layer because the previous one caught them.</p>
+    <div class="layer">
+      <div class="layer-num">01</div>
+      <div>
+        <div class="layer-t">Ambient Layer · Always present, never intrusive</div>
+        <div class="layer-d">The interface itself teaches through clear labels, smart defaults, empty states, microcopy, and structural hierarchy. This layer carries 70% of the work. If a user has to think about what a button does, the button is failing.</div>
+      </div>
+    </div>
+    <div class="layer">
+      <div class="layer-num">02</div>
+      <div>
+        <div class="layer-t">Reactive Layer · Appears when summoned</div>
+        <div class="layer-d">Tooltips on hover, inline help text below complex fields, "Learn more" links that expand sections in place. The user pulls help toward them; it never pushes. Triggered by curiosity, not by the system's assumption that you need it.</div>
+      </div>
+    </div>
+    <div class="layer">
+      <div class="layer-num">03</div>
+      <div>
+        <div class="layer-t">Proactive Layer · Triggered by context</div>
+        <div class="layer-d">First-run experience, contextual coachmarks when a new feature ships, gentle nudges when a workflow appears stuck. The system reaches out only when it has high confidence that help is wanted — and always offers a "dismiss forever" option.</div>
+      </div>
+    </div>
+    <div class="layer">
+      <div class="layer-num">04</div>
+      <div>
+        <div class="layer-t">Reference Layer · For deep dives</div>
+        <div class="layer-d">The Help Center, accessible from the utility bar. Searchable articles, video walkthroughs, troubleshooting guides. The last-resort layer — most users should rarely reach it because the first three are doing their job.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 06 LAYER 1 AMBIENT ===== -->
+<div class="slide wm fade">
+  <div class="lg">Patina</div><div class="num">06 / 16</div>
+  <div class="in">
+    <div class="eyebrow">Layer 1 · Ambient</div>
+    <h2>The interface <em>that teaches itself.</em></h2>
+    <p class="body" style="margin-bottom:1.25rem">This layer carries the heaviest load. It is invisible help — guidance baked into the interface so completely that users never think of it as help at all. Strong field labels, sensible defaults, empty states that show what's possible, and microcopy that anticipates the next question.</p>
+    <div class="g2">
+      <div>
+        <h3>Smart defaults</h3>
+        <p class="body" style="font-size:0.78rem;margin-bottom:0.85rem">Every form ships with sensible defaults already in place. The 3% contingency. The six-phase template. The 15% product markup. The user can override any of them — but never has to start from zero.</p>
+        <div class="frame">
+          <div class="fr-c" style="padding:1rem 1.25rem;min-height:0">
+            <div style="font-family:var(--fm);font-size:0.5rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--ao);margin-bottom:0.3rem">Contingency Percent</div>
+            <div style="display:flex;align-items:center;gap:0.75rem">
+              <input type="text" value="3%" style="width:80px;padding:0.5rem 0.6rem;border:1.5px solid var(--pe);border-radius:4px;font-family:var(--fb);font-size:0.78rem;outline:none"/>
+              <div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);font-style:italic">Industry standard. Adjustable.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h3>Empty states as onboarding</h3>
+        <p class="body" style="font-size:0.78rem;margin-bottom:0.85rem">An empty Pipeline is the first thing a new designer sees. Instead of a sad "No projects yet" message, it becomes the entry point — explaining what the screen is, showing where projects come from, and offering the next action.</p>
+        <div class="empty-state">
+          <div class="es-ico">◇</div>
+          <div class="es-t">Your pipeline lives here</div>
+          <div class="es-d">Leads come in from the consumer app. You review, accept, write a proposal, and convert it to an active project — all from this view.</div>
+          <span class="es-cta">+ Create a test project</span>
+        </div>
+      </div>
+    </div>
+    <div class="g2" style="margin-top:1.5rem">
+      <div>
+        <h3>Microcopy that anticipates</h3>
+        <p class="body" style="font-size:0.78rem;margin-bottom:0.85rem">Help text beneath fields answers the unspoken question. "Visible to client" or "Internal only" or "Affects FF&E recommendations." The user doesn't have to wonder what the consequence of a choice is.</p>
+        <div class="frame">
+          <div class="fr-c" style="padding:1rem 1.25rem;min-height:0">
+            <div style="font-family:var(--fm);font-size:0.5rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--ao);margin-bottom:0.3rem">Project Name *</div>
+            <input type="text" value="Chen Residence — Living & Dining" style="width:100%;padding:0.5rem 0.6rem;border:1.5px solid var(--pe);border-radius:4px;font-family:var(--fb);font-size:0.78rem;outline:none"/>
+            <div style="font-family:var(--fb);font-size:0.66rem;color:var(--ao);margin-top:0.35rem;line-height:1.5">Visible to client. Use clear, descriptive language they'll recognize.</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h3>Structural hierarchy</h3>
+        <p class="body" style="font-size:0.78rem;margin-bottom:0.85rem">Typography-first design is itself a guidance system. Where the user looks first is where the most important action is. The Strata Mark guides the eye through stages. Required-versus-optional is visually obvious before reading a single field.</p>
+        <div class="helper">
+          <span class="helper-l">Visual hierarchy at work</span>Section headers use Playfair Display 500. Field labels use DM Mono in Aged Oak. Required markers use Terracotta. Optional fields use italic Inter in Aged Oak. The user reads the form's importance before reading its contents.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 07 LAYER 2 REACTIVE ===== -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">07 / 16</div>
+  <div class="in">
+    <div class="eyebrow">Layer 2 · Reactive</div>
+    <h2>Help on <em>hover, not on push.</em></h2>
+    <p class="body" style="margin-bottom:1.25rem">When a user is curious about something, the answer should be one micro-interaction away. Hover for a tooltip. Click an info icon for a deeper explanation. Expand a "Learn more" link to read the full context. Never demanding attention, always available.</p>
+
+    <div class="g2" style="gap:2rem">
+      <div>
+        <h3>Tooltip · The 2-second answer</h3>
+        <p class="body" style="font-size:0.78rem;margin-bottom:1rem">Hover reveals a 1–2 sentence explanation. Disappears the moment the user moves on. No persistent UI element. The "○" indicator is small and unobtrusive — Pearl color, 12px size.</p>
+        <div class="frame">
+          <div class="fr-c" style="padding:1.5rem 1.25rem;min-height:160px">
+            <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.5rem">
+              <span style="font-family:var(--fm);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--ao)">Aesthete Score</span>
+              <span style="width:14px;height:14px;border-radius:50%;border:1px solid var(--cl);color:var(--cl);font-size:0.55rem;display:inline-flex;align-items:center;justify-content:center;font-family:var(--fb);font-weight:500">?</span>
+            </div>
+            <div style="font-family:var(--fd);font-weight:600;font-size:1.8rem;color:var(--cl)">87</div>
+            <div class="tooltip bot" style="top:55px;left:90px">
+              <span class="tip-l">What this means</span>
+              An 87 means this client's style profile aligns strongly with your design vocabulary. Higher scores indicate easier collaboration and faster decisions.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3>Inline help · The "Learn more" pattern</h3>
+        <p class="body" style="font-size:0.78rem;margin-bottom:1rem">A short hint, with a link to expand. The expansion happens in place — no modal, no navigation away. Returns to collapsed state after reading. Used for concepts that need a paragraph or two to explain.</p>
+        <div class="frame">
+          <div class="fr-c" style="padding:1.25rem;min-height:160px">
+            <div style="font-family:var(--fm);font-size:0.5rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--ao);margin-bottom:0.3rem">FF&E Type</div>
+            <div style="display:flex;gap:0.4rem;margin-bottom:0.6rem">
+              <span style="padding:0.3rem 0.6rem;border:1px solid var(--cl);background:rgba(196,165,123,0.06);border-radius:3px;font-family:var(--fb);font-size:0.7rem;color:var(--cl)">Fixed</span>
+              <span style="padding:0.3rem 0.6rem;border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.7rem;color:var(--ao)">Allowance</span>
+              <span style="padding:0.3rem 0.6rem;border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.7rem;color:var(--ao)">TBD</span>
+            </div>
+            <div style="font-family:var(--fb);font-size:0.7rem;color:var(--mo);line-height:1.6">
+              Fixed items have a specific product and price.
+              <a style="color:var(--cl);text-decoration:none;font-weight:500;cursor:default">↓ Learn about the three types</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="g2" style="gap:2rem;margin-top:2rem">
+      <div>
+        <h3>The Strata Mark info icon</h3>
+        <p class="body" style="font-size:0.78rem;margin-bottom:1rem">Patina-specific concepts (Aesthete Engine, Strata Mark, Founding Circle, the eight FF&E stages) deserve their own visual treatment. A small Strata Mark icon next to the term opens a contextual definition.</p>
+        <div class="helper">
+          <span class="helper-l">Reserved for Patina vocabulary</span>The standard "?" handles general questions. The Strata Mark icon handles "what's a Patina-specific thing." This distinction trains the user to recognize platform concepts immediately.
+        </div>
+      </div>
+
+      <div>
+        <h3>Contextual examples</h3>
+        <p class="body" style="font-size:0.78rem;margin-bottom:1rem">For complex fields, the help text shows an example rather than a definition. "Type a project name" is unhelpful. "Try 'Chen Residence — Living & Dining'" is instantly understandable. Examples teach pattern-matching.</p>
+        <div class="helper">
+          <span class="helper-l">Example over definition</span>"Project Name" gets the helper "Visible to client. Try 'Chen Residence — Living & Dining'." The user now knows: visibility consequence + naming pattern + acceptable format — without ever reading a rule.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 08 LAYER 3 PROACTIVE ===== -->
+<div class="slide dk fade">
+  <div class="lg">Patina</div><div class="num">08 / 16</div>
+  <div class="in">
+    <div class="eyebrow">Layer 3 · Proactive</div>
+    <h1>The first-run <em>experience.</em></h1>
+    <p class="body" style="margin-bottom:1.25rem">The only time the system initiates is when a new user is meeting Patina for the first time, or when a major new feature ships. Even then, every nudge is dismissible, deferred, and limited to two or three moments. This layer earns its place by being rare.</p>
+
+    <div class="g2" style="gap:2rem">
+      <div>
+        <h3 style="margin-bottom:0.85rem">The First Project Walkthrough</h3>
+        <p class="body" style="font-size:0.78rem;margin-bottom:1rem">Instead of a tutorial, designers create a real first project — guided by spotlights and coachmarks that explain what they're seeing as they do it. The output is an actual project they keep. The teaching happens in the doing.</p>
+        <div class="frame" style="background:transparent;box-shadow:none;border:1px solid rgba(250,247,242,0.1)">
+          <div class="fr-c" style="background:rgba(44,41,38,0.4);padding:1.5rem;min-height:240px;position:relative">
+            <div style="opacity:0.4;font-family:var(--fb);font-size:0.7rem;color:rgba(250,247,242,0.5);line-height:1.7">
+              Pipeline subnav · Leads · Proposals · <span style="color:var(--cl)">Active</span> · Completed<br><br>
+              Project · Chen Residence — Living & Dining<br>
+              Client · James & Lin Chen<br>
+              Status · Procurement
+            </div>
+            <div class="spotlight" style="top:30px;left:155px;width:50px;height:18px"></div>
+            <div class="coachmark" style="position:absolute;top:60px;left:155px">
+              <div class="cm-step">Step 2 of 5 · The Pipeline</div>
+              <div class="cm-t">Your projects live here</div>
+              <div class="cm-d">The Active tab shows projects you're currently running. Click any project name to see everything inside.</div>
+              <div class="cm-btns">
+                <span class="cm-skip">Skip tour</span>
+                <span class="cm-next">Next →</span>
+              </div>
+              <div class="cm-dots" style="margin-top:0.4rem"><span class="cm-dot"></span><span class="cm-dot on"></span><span class="cm-dot"></span><span class="cm-dot"></span><span class="cm-dot"></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 style="margin-bottom:0.85rem">Feature announcement coachmarks</h3>
+        <p class="body" style="font-size:0.78rem;margin-bottom:1rem">When we ship something new, returning users see a single, contextual coachmark next to the new feature. Dismissible. Never blocks the interface. Tracks per-user so it shows once and stays gone.</p>
+        <div class="helper" style="background:rgba(196,165,123,0.06);border-left-color:var(--cl)">
+          <span class="helper-l" style="color:var(--cl)">Rules for proactive moments</span>
+          <div style="color:rgba(250,247,242,0.75);font-size:0.74rem;line-height:1.6;margin-top:0.3rem">
+            • Maximum 5 coachmarks per onboarding<br>
+            • Maximum 1 coachmark per new feature release<br>
+            • "Skip tour" always visible<br>
+            • Dismissed = permanently dismissed<br>
+            • Never blocks the underlying interface<br>
+            • Never shown to users who completed the prior tour
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:2rem">
+      <h3>The five moments of the First Project Walkthrough</h3>
+      <div class="journey">
+        <div class="jn" style="border-color:var(--cl);background:rgba(196,165,123,0.08);color:rgba(250,247,242,0.85)"><span class="jn-l">Moment 1</span>Today Dashboard</div>
+        <div class="fa" style="background:rgba(250,247,242,0.15)"></div>
+        <div class="jn" style="border-color:var(--cl);background:rgba(196,165,123,0.08);color:rgba(250,247,242,0.85)"><span class="jn-l">Moment 2</span>Pipeline</div>
+        <div class="fa" style="background:rgba(250,247,242,0.15)"></div>
+        <div class="jn" style="border-color:var(--cl);background:rgba(196,165,123,0.08);color:rgba(250,247,242,0.85)"><span class="jn-l">Moment 3</span>Aesthete Engine</div>
+        <div class="fa" style="background:rgba(250,247,242,0.15)"></div>
+        <div class="jn" style="border-color:var(--cl);background:rgba(196,165,123,0.08);color:rgba(250,247,242,0.85)"><span class="jn-l">Moment 4</span>Products & Capture</div>
+        <div class="fa" style="background:rgba(250,247,242,0.15)"></div>
+        <div class="jn" style="border-color:var(--sa);background:rgba(168,181,160,0.1);color:rgba(250,247,242,0.85)"><span class="jn-l">Moment 5</span>Profile & Studio</div>
+      </div>
+      <p style="font-family:var(--fb);font-size:0.72rem;color:rgba(250,247,242,0.5);font-style:italic;margin-top:0.5rem">Five stops. Skippable at any moment. Resumable from Profile → "Continue tour" if dismissed early.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 09 LAYER 4 REFERENCE ===== -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">09 / 16</div>
+  <div class="in">
+    <div class="eyebrow">Layer 4 · Reference</div>
+    <h2>The Help Center, <em>but quietly.</em></h2>
+    <p class="body" style="margin-bottom:1.25rem">A help center exists. It's accessible from the utility bar via the "?" icon. But by design, most users should rarely visit it — the first three layers should have answered their questions. When users do arrive, the experience must feel like a continuation of the product, not a separate website.</p>
+
+    <div class="g2" style="gap:2rem">
+      <div>
+        <h3>The contextual help panel</h3>
+        <p class="body" style="font-size:0.78rem;margin-bottom:1rem">Click "?" while on the Aesthete Engine and the panel opens to Aesthete Engine help. The panel knows what page you're on. The most likely answers float to the top, with the option to search or browse if needed.</p>
+        <div class="qpanel">
+          <div class="qp-h"><div class="qp-t">Help · Aesthete Engine</div><span style="color:var(--ao);cursor:default">×</span></div>
+          <div class="qp-c">
+            <div style="font-family:var(--fb);font-size:0.7rem;color:var(--ao);margin-bottom:0.4rem;font-style:italic">Likely answers for this screen</div>
+            <div class="qp-i"><div class="qp-i-ico">→</div><div><div class="qp-i-t">What is an Aesthete Score?</div><div class="qp-i-d">How alignment between you and a client is measured</div></div></div>
+            <div class="qp-i"><div class="qp-i-ico">→</div><div><div class="qp-i-t">Teaching the engine new patterns</div><div class="qp-i-d">How your weekly captures train the recommendation system</div></div></div>
+            <div class="qp-i"><div class="qp-i-ico">→</div><div><div class="qp-i-t">Why are some products excluded?</div><div class="qp-i-d">Style profile filters and how to override them</div></div></div>
+            <div class="qp-i" style="border-top:1px solid var(--pe);border-bottom:none;padding-top:0.75rem;margin-top:0.4rem"><div class="qp-i-ico" style="background:transparent;color:var(--ao)">⌕</div><div style="font-family:var(--fb);font-size:0.7rem;color:var(--ao)">Search all help articles...</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3>Article structure</h3>
+        <p class="body" style="font-size:0.78rem;margin-bottom:1rem">Each help article follows the same structure: the question stated plainly, a one-sentence answer, then the depth. Visual examples whenever possible. Links to the screens where the answer applies. Always under 600 words.</p>
+        <div class="frame">
+          <div class="fr-c" style="padding:1.25rem;min-height:0">
+            <div style="font-family:var(--fm);font-size:0.45rem;color:var(--cl);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.3rem">Help · FF&E Procurement</div>
+            <div style="font-family:var(--fd);font-weight:500;font-size:1rem;margin-bottom:0.3rem;color:var(--ch)">What are the eight stages of the FF&E pipeline?</div>
+            <div style="font-family:var(--fb);font-size:0.72rem;color:var(--ao);font-style:italic;line-height:1.5;margin-bottom:0.65rem">Specified → Quoted → Approved → Ordered → Production → Shipped → Delivered → Installed</div>
+            <div style="font-family:var(--fb);font-size:0.72rem;color:var(--mo);line-height:1.7">Every FF&E item moves through eight stages on its way from your spec to your client's room. Each stage represents a real procurement event...</div>
+            <div style="display:flex;gap:0.5rem;margin-top:0.85rem">
+              <span style="font-family:var(--fm);font-size:0.5rem;padding:2px 6px;background:rgba(196,165,123,0.08);color:var(--cl);border-radius:2px;letter-spacing:0.04em;text-transform:uppercase">4 min read</span>
+              <span style="font-family:var(--fm);font-size:0.5rem;padding:2px 6px;background:rgba(168,181,160,0.1);color:var(--sa);border-radius:2px;letter-spacing:0.04em;text-transform:uppercase">Updated Apr 8</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="g3" style="margin-top:1.5rem">
+      <div class="card">
+        <div class="card-i">⌕</div>
+        <div class="card-t">Searchable</div>
+        <div class="card-d">Full-text search across all articles. Natural language ("how do I change a vendor"), not just keywords.</div>
+      </div>
+      <div class="card">
+        <div class="card-i">▶</div>
+        <div class="card-t">Video walkthroughs</div>
+        <div class="card-d">Short, focused videos (under 2 minutes each) for visual learners. Closed captions. Auto-paused by default.</div>
+      </div>
+      <div class="card">
+        <div class="card-i">◈</div>
+        <div class="card-t">Versioned</div>
+        <div class="card-d">When we ship a UI change, articles update. "Updated Apr 8" timestamp builds trust that content is current.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 10 NEW USER JOURNEY ===== -->
+<div class="slide wm fade">
+  <div class="lg">Patina</div><div class="num">10 / 16</div>
+  <div class="in">
+    <div class="eyebrow">The New Designer Journey</div>
+    <h1>Day one to <em>day thirty.</em></h1>
+    <p class="body" style="margin-bottom:1.5rem">Here is the first month with Patina from the perspective of a brand-new designer. Each moment shows which guidance layer is doing the work. Note how proactive nudges fade quickly — by week two, the platform should feel mostly invisible.</p>
+
+    <div style="border:1px solid var(--ao);border-radius:6px;background:rgba(250,247,242,0.4);overflow:hidden">
+      <div style="display:grid;grid-template-columns:80px 1fr 80px;gap:1rem;padding:0.6rem 1rem;background:rgba(139,115,85,0.08);border-bottom:1px solid var(--ao);font-family:var(--fm);font-size:0.5rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--ao);font-weight:600">
+        <span>When</span><span>Moment</span><span>Layer</span>
+      </div>
+      <div style="display:grid;grid-template-columns:80px 1fr 80px;gap:1rem;padding:0.75rem 1rem;border-bottom:1px solid var(--ao);align-items:center">
+        <span style="font-family:var(--fm);font-size:0.6rem;color:var(--cl);font-weight:500">Hour 1</span>
+        <div><div style="font-family:var(--fb);font-weight:500;font-size:0.78rem;color:var(--ch)">First sign-in · Welcome modal</div><div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);margin-top:0.1rem">A single screen: "Welcome to Patina. Take the tour, or jump in." 80-character description. Two buttons.</div></div>
+        <span style="font-family:var(--fm);font-size:0.5rem;background:rgba(196,165,123,0.15);color:var(--cl);padding:2px 6px;border-radius:2px;text-align:center;letter-spacing:0.04em;text-transform:uppercase">Proactive</span>
+      </div>
+      <div style="display:grid;grid-template-columns:80px 1fr 80px;gap:1rem;padding:0.75rem 1rem;border-bottom:1px solid var(--ao);align-items:center">
+        <span style="font-family:var(--fm);font-size:0.6rem;color:var(--cl);font-weight:500">Hour 1</span>
+        <div><div style="font-family:var(--fb);font-weight:500;font-size:0.78rem;color:var(--ch)">First Project Walkthrough · 5 coachmarks</div><div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);margin-top:0.1rem">Optional. Takes 4 minutes. Walks the designer through Today, Pipeline, Aesthete, Products, Profile.</div></div>
+        <span style="font-family:var(--fm);font-size:0.5rem;background:rgba(196,165,123,0.15);color:var(--cl);padding:2px 6px;border-radius:2px;text-align:center;letter-spacing:0.04em;text-transform:uppercase">Proactive</span>
+      </div>
+      <div style="display:grid;grid-template-columns:80px 1fr 80px;gap:1rem;padding:0.75rem 1rem;border-bottom:1px solid var(--ao);align-items:center">
+        <span style="font-family:var(--fm);font-size:0.6rem;color:var(--cl);font-weight:500">Hour 2</span>
+        <div><div style="font-family:var(--fb);font-weight:500;font-size:0.78rem;color:var(--ch)">Empty Pipeline · "Your projects live here"</div><div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);margin-top:0.1rem">The empty state itself explains the screen. No tutorial needed.</div></div>
+        <span style="font-family:var(--fm);font-size:0.5rem;background:rgba(168,181,160,0.15);color:var(--sa);padding:2px 6px;border-radius:2px;text-align:center;letter-spacing:0.04em;text-transform:uppercase">Ambient</span>
+      </div>
+      <div style="display:grid;grid-template-columns:80px 1fr 80px;gap:1rem;padding:0.75rem 1rem;border-bottom:1px solid var(--ao);align-items:center">
+        <span style="font-family:var(--fm);font-size:0.6rem;color:var(--cl);font-weight:500">Day 2</span>
+        <div><div style="font-family:var(--fb);font-weight:500;font-size:0.78rem;color:var(--ch)">First lead arrives · Hover for tooltips</div><div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);margin-top:0.1rem">Designer hovers over "Aesthete Score 87" — tooltip explains the number. No prompts pushed.</div></div>
+        <span style="font-family:var(--fm);font-size:0.5rem;background:rgba(139,156,173,0.15);color:var(--db);padding:2px 6px;border-radius:2px;text-align:center;letter-spacing:0.04em;text-transform:uppercase">Reactive</span>
+      </div>
+      <div style="display:grid;grid-template-columns:80px 1fr 80px;gap:1rem;padding:0.75rem 1rem;border-bottom:1px solid var(--ao);align-items:center">
+        <span style="font-family:var(--fm);font-size:0.6rem;color:var(--cl);font-weight:500">Day 5</span>
+        <div><div style="font-family:var(--fb);font-weight:500;font-size:0.78rem;color:var(--ch)">First proposal · Inline help on every field</div><div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);margin-top:0.1rem">Every field in the proposal builder has helper text. Designer never needs to leave the screen.</div></div>
+        <span style="font-family:var(--fm);font-size:0.5rem;background:rgba(168,181,160,0.15);color:var(--sa);padding:2px 6px;border-radius:2px;text-align:center;letter-spacing:0.04em;text-transform:uppercase">Ambient</span>
+      </div>
+      <div style="display:grid;grid-template-columns:80px 1fr 80px;gap:1rem;padding:0.75rem 1rem;border-bottom:1px solid var(--ao);align-items:center">
+        <span style="font-family:var(--fm);font-size:0.6rem;color:var(--cl);font-weight:500">Day 12</span>
+        <div><div style="font-family:var(--fb);font-weight:500;font-size:0.78rem;color:var(--ch)">First project activation · 7-step wizard</div><div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);margin-top:0.1rem">Wizard pre-fills 80% from signed proposal. Inline help and required-field indicators do the rest.</div></div>
+        <span style="font-family:var(--fm);font-size:0.5rem;background:rgba(168,181,160,0.15);color:var(--sa);padding:2px 6px;border-radius:2px;text-align:center;letter-spacing:0.04em;text-transform:uppercase">Ambient</span>
+      </div>
+      <div style="display:grid;grid-template-columns:80px 1fr 80px;gap:1rem;padding:0.75rem 1rem;border-bottom:1px solid var(--ao);align-items:center">
+        <span style="font-family:var(--fm);font-size:0.6rem;color:var(--cl);font-weight:500">Day 18</span>
+        <div><div style="font-family:var(--fb);font-weight:500;font-size:0.78rem;color:var(--ch)">First change order · "?" panel opened</div><div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);margin-top:0.1rem">Designer is unsure how the impact engine works. Clicks "?" — help panel opens scoped to Change Orders.</div></div>
+        <span style="font-family:var(--fm);font-size:0.5rem;background:rgba(212,160,144,0.15);color:var(--te);padding:2px 6px;border-radius:2px;text-align:center;letter-spacing:0.04em;text-transform:uppercase">Reference</span>
+      </div>
+      <div style="display:grid;grid-template-columns:80px 1fr 80px;gap:1rem;padding:0.75rem 1rem;align-items:center">
+        <span style="font-family:var(--fm);font-size:0.6rem;color:var(--cl);font-weight:500">Day 30</span>
+        <div><div style="font-family:var(--fb);font-weight:500;font-size:0.78rem;color:var(--ch)">Full fluency · Help panel rarely opened</div><div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);margin-top:0.1rem">Designer operates the platform with confidence. Help system has succeeded by becoming invisible.</div></div>
+        <span style="font-family:var(--fm);font-size:0.5rem;background:rgba(168,181,160,0.15);color:var(--sa);padding:2px 6px;border-radius:2px;text-align:center;letter-spacing:0.04em;text-transform:uppercase">Ambient</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 11 BUILDING CONFIDENCE ===== -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">11 / 16</div>
+  <div class="in">
+    <div class="eyebrow">Building Confidence, Not Just Competence</div>
+    <h1>The emotional <em>side of guidance.</em></h1>
+    <p class="body" style="margin-bottom:1.5rem">Knowing how to use Patina is one thing. Feeling good about using it is another. Confidence is what turns a curious designer into a committed one. The system has explicit confidence-building patterns that go beyond just answering "how."</p>
+
+    <div class="g2">
+      <div>
+        <h3>Confirmation moments</h3>
+        <p class="body" style="font-size:0.78rem;margin-bottom:0.85rem">Every major action — activating a project, sending a proposal, approving a change order — has a brief celebratory confirmation. Strata Mark prominent. Sage success indicator. A clear "what just happened" summary. The Confirmation screen from project activation is the template.</p>
+        <div class="helper">
+          <span class="helper-l">Why this matters</span>
+          Confidence comes from receipts. "I did the thing, the system confirmed, here is what now exists." Without that loop, users second-guess themselves.
+        </div>
+      </div>
+      <div>
+        <h3>Progress visibility</h3>
+        <p class="body" style="font-size:0.78rem;margin-bottom:0.85rem">Wizards show step indicators. Projects show phase indicators. The Aesthete Engine shows teaching progress. Wherever a user is making forward motion, that motion is visible. The Strata Mark itself is a progress symbol — bars of decreasing width that show momentum.</p>
+        <div class="helper">
+          <span class="helper-l">Visual progress = emotional progress</span>
+          Designers who can see how far they've come are 4× more likely to finish a workflow than designers who can't. (Industry research on multi-step form completion.)
+        </div>
+      </div>
+      <div style="margin-top:1.5rem">
+        <h3>Reversibility & undo</h3>
+        <p class="body" style="font-size:0.78rem;margin-bottom:0.85rem">Most actions in Patina are reversible — and the system says so explicitly. "You can change this later in Project Detail." "This won't be sent until you click Send." Reducing the consequence of any single action reduces the anxiety of making it.</p>
+        <div class="helper">
+          <span class="helper-l">Confidence pattern</span>
+          When an action <em>is</em> irreversible (activation, sending an invoice, signing a change order), the system says so with equal clarity. Surprises kill trust.
+        </div>
+      </div>
+      <div style="margin-top:1.5rem">
+        <h3>The "save and resume" promise</h3>
+        <p class="body" style="font-size:0.78rem;margin-bottom:0.85rem">Every wizard, every form, every multi-step flow auto-saves. The user can leave at any moment and return without losing work. This single feature, more than any tooltip, makes the platform feel safe to explore.</p>
+        <div class="helper">
+          <span class="helper-l">The safety net</span>
+          "Auto-saved 2 seconds ago" appears subtly in every wizard. Drafts persist 30 days. Resumable from any device. The fear of losing work disappears.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 12 PERSONA EXAMPLES ===== -->
+<div class="slide dk fade">
+  <div class="lg">Patina</div><div class="num">12 / 16</div>
+  <div class="in">
+    <div class="eyebrow">Guidance for Three Personas</div>
+    <h1>The same system, <em>three experiences.</em></h1>
+    <p class="body" style="margin-bottom:1.5rem">Patina serves designers (Leah), makers/manufacturers (Sawkille, Nordic Atelier), and consumers (the iOS app users). Each persona needs the same guidance architecture, but the content and tone differ. The system adapts.</p>
+
+    <div class="g3">
+      <div class="card">
+        <div class="meta" style="color:var(--cl);margin-bottom:0.5rem">Designer · Leah</div>
+        <h3 style="font-size:1rem">Professional partner</h3>
+        <p class="card-d" style="margin-top:0.5rem">Tone: respectful of expertise. Help language assumes industry knowledge but explains Patina-specific concepts. Empty states encourage exploration. Tooltips define Patina vocabulary, not interior-design vocabulary.</p>
+        <p class="card-d" style="margin-top:0.85rem;font-style:italic;color:rgba(250,247,242,0.45)">"The Aesthete Score measures alignment between your design vocabulary and the client's style profile."</p>
+      </div>
+      <div class="card">
+        <div class="meta" style="color:var(--cl);margin-bottom:0.5rem">Maker · Sawkille</div>
+        <h3 style="font-size:1rem">Production-focused</h3>
+        <p class="card-d" style="margin-top:0.5rem">Tone: efficient, no fluff. Makers want to update an order status and move on. Help text is shorter, more action-oriented. Empty states focus on the next operational step, not concept explanation.</p>
+        <p class="card-d" style="margin-top:0.85rem;font-style:italic;color:rgba(250,247,242,0.45)">"Update PO #SK-087 to Shipped. Designer Leah will be notified automatically."</p>
+      </div>
+      <div class="card">
+        <div class="meta" style="color:var(--cl);margin-bottom:0.5rem">Consumer · iOS app</div>
+        <h3 style="font-size:1rem">Warm and inviting</h3>
+        <p class="card-d" style="margin-top:0.5rem">Tone: aspirational, conversational. Consumers are not industry professionals. Empty states tell a story ("Your style is forming"). Tooltips translate industry concepts into everyday language.</p>
+        <p class="card-d" style="margin-top:0.85rem;font-style:italic;color:rgba(250,247,242,0.45)">"As you save pieces you love, we learn what makes you feel at home. That's how we find your designer."</p>
+      </div>
+    </div>
+
+    <div style="margin-top:2rem;padding:1.5rem;background:rgba(196,165,123,0.05);border-radius:6px;border:1px solid rgba(196,165,123,0.15)">
+      <div class="meta" style="color:var(--cl);margin-bottom:0.4rem">Shared System, Different Voice</div>
+      <p style="font-family:var(--fb);font-size:0.82rem;color:rgba(250,247,242,0.7);line-height:1.7;max-width:760px">The four-layer architecture is universal. The visual treatment is consistent — same typography, same Strata Mark, same Pearl-and-Clay palette. What changes is the voice. The system surfaces help in the same places, but writes it differently per persona. This is achieved through a centralized content management layer where copy is scoped to persona context.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 13 MEASURING SUCCESS ===== -->
+<div class="slide wm fade">
+  <div class="lg">Patina</div><div class="num">13 / 16</div>
+  <div class="in">
+    <div class="eyebrow">How We'll Know It's Working</div>
+    <h1>Help should make itself <em>obsolete.</em></h1>
+    <p class="body" style="margin-bottom:1.5rem">A well-designed guidance system improves the underlying product. When users repeatedly hit the same tooltip, that's a sign the interface needs to be clearer — not that the tooltip needs more words. We measure where help is used, not just whether it exists.</p>
+
+    <div class="g4">
+      <div class="stat">
+        <div class="stat-l">Target</div>
+        <div class="stat-v">90%</div>
+        <div class="stat-d">First project activated without help center visit</div>
+      </div>
+      <div class="stat">
+        <div class="stat-l">Target</div>
+        <div class="stat-v">&lt;5%</div>
+        <div class="stat-d">First-run tour skip rate (sign of irrelevance)</div>
+      </div>
+      <div class="stat">
+        <div class="stat-l">Target</div>
+        <div class="stat-v">&gt;4.5</div>
+        <div class="stat-d">"How easy was that?" rating on key flows (5-pt scale)</div>
+      </div>
+      <div class="stat">
+        <div class="stat-l">Target</div>
+        <div class="stat-v">&lt;2%</div>
+        <div class="stat-d">Support tickets per active user per month</div>
+      </div>
+    </div>
+
+    <div style="margin-top:2rem">
+      <h3>The four signals we watch</h3>
+      <div class="row-list"><span class="row-list-tag">Signal 1</span><span class="row-list-c"><strong>Help searches per user.</strong> Climbing? The product has a comprehension problem. Falling? Either guidance is working — or users are giving up. Look at completion rates to disambiguate.</span></div>
+      <div class="row-list"><span class="row-list-tag">Signal 2</span><span class="row-list-c"><strong>Tooltip hover rates.</strong> Tooltips with high hover-and-dismiss rates need to be promoted into the interface itself. Tooltips with low hover rates may be unnecessary.</span></div>
+      <div class="row-list"><span class="row-list-tag">Signal 3</span><span class="row-list-c"><strong>Wizard abandonment per step.</strong> If 40% of designers abandon the Activation Wizard at Step 4, something about Step 4 is broken. Help is a symptom; the wizard is the disease.</span></div>
+      <div class="row-list"><span class="row-list-tag">Signal 4</span><span class="row-list-c"><strong>Direct feedback.</strong> Every help article has thumbs up/down + open comment. Sentiment shifts surface here first. Surveyed at 7-day and 30-day marks.</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 14 CONTENT GOVERNANCE ===== -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">14 / 16</div>
+  <div class="in">
+    <div class="eyebrow">Content Governance</div>
+    <h1>One source of <em>truth.</em></h1>
+    <p class="body" style="margin-bottom:1.25rem">Help content lives in one place — a structured CMS keyed to product surfaces. When the FF&E pipeline gains a ninth stage (someday), every tooltip, every help article, every empty state about that pipeline updates from one edit. No content drift, no outdated screenshots, no broken vocabulary across portals.</p>
+
+    <div class="g2">
+      <div>
+        <h3>The architecture</h3>
+        <div class="row-list"><span class="row-list-tag">Content</span><span class="row-list-c"><strong>Sanity CMS</strong> stores all help content — tooltips, helper text, empty states, articles, video metadata. Versioned. Editorial workflow before publish.</span></div>
+        <div class="row-list"><span class="row-list-tag">Targeting</span><span class="row-list-c"><strong>Surface keys</strong> identify which screen, persona, and component a piece of content belongs to. The frontend fetches by key — content is never hardcoded.</span></div>
+        <div class="row-list"><span class="row-list-tag">Localization</span><span class="row-list-c"><strong>Future-ready for translation.</strong> English at launch. Spanish for Spanish-speaking field workers. Sanity's i18n structure ready from day one.</span></div>
+        <div class="row-list"><span class="row-list-tag">Analytics</span><span class="row-list-c"><strong>Every help moment is tracked.</strong> Which tooltips get hovered, which articles get opened, which empty-state CTAs get clicked. PostHog dashboard for editors.</span></div>
+      </div>
+      <div>
+        <h3>The writing standards</h3>
+        <div class="row-list"><span class="row-list-tag">Voice</span><span class="row-list-c"><strong>Warm but precise.</strong> "Visible to client" not "User-facing." "Send" not "Submit." Match the designer's professional vocabulary.</span></div>
+        <div class="row-list"><span class="row-list-tag">Length</span><span class="row-list-c"><strong>Tooltips: 1–2 sentences. Helper text: under 18 words. Articles: under 600 words.</strong> If a thing can't be explained briefly, the product likely needs simplification.</span></div>
+        <div class="row-list"><span class="row-list-tag">Examples</span><span class="row-list-c"><strong>Show, don't just tell.</strong> Wherever possible, lead with an example. "Try 'Chen Residence — Living & Dining'" beats "Type a project name."</span></div>
+        <div class="row-list"><span class="row-list-tag">Consistency</span><span class="row-list-c"><strong>Capitalized terms only when proper nouns.</strong> "Aesthete Engine" is capitalized. "the pipeline" is not. "Strata Mark" is capitalized. Consistent vocabulary across all surfaces.</span></div>
+      </div>
+    </div>
+
+    <div class="helper" style="margin-top:1.5rem">
+      <span class="helper-l">Editorial responsibility</span>
+      Leah, as the design authority, has final approval on tone and vocabulary. The dev team flags features that need help content. A content designer (eventually) writes and maintains. PostHog data informs what to revise. Quarterly content audit.
+    </div>
+  </div>
+</div>
+
+<!-- ===== 15 ROLLOUT PLAN ===== -->
+<div class="slide dk fade">
+  <div class="lg">Patina</div><div class="num">15 / 16</div>
+  <div class="in">
+    <div class="eyebrow">Rollout Plan</div>
+    <h1>Three phases, <em>twelve weeks.</em></h1>
+    <p class="body" style="margin-bottom:1.5rem">The guidance system rolls out alongside the Designer Portal MVP additions. Each phase delivers usable improvements — we don't ship a guidance system separately from the product it supports. By end of Sprint 3, all four layers are live across all three portals.</p>
+
+    <div class="g3">
+      <div class="card">
+        <div class="meta" style="color:var(--cl)">Phase 1 · Weeks 1–4</div>
+        <h3 style="margin:0.3rem 0;font-size:1rem;color:var(--ow)">Foundation</h3>
+        <div class="card-d">
+          • Ambient Layer audit across existing portal<br>
+          • Smart defaults reviewed and confirmed<br>
+          • Empty states rewritten<br>
+          • Microcopy revised against new voice guide<br>
+          • Sanity CMS schema for help content<br>
+          • Surface key architecture established
+        </div>
+      </div>
+      <div class="card">
+        <div class="meta" style="color:var(--cl)">Phase 2 · Weeks 5–8</div>
+        <h3 style="margin:0.3rem 0;font-size:1rem;color:var(--ow)">Reactive Layer</h3>
+        <div class="card-d">
+          • Tooltip component built and themed<br>
+          • Helper text patterns applied to all forms<br>
+          • Inline "Learn more" expandables<br>
+          • Strata Mark info icon for Patina concepts<br>
+          • First 40 help articles written and indexed<br>
+          • Contextual help panel (utility bar "?")
+        </div>
+      </div>
+      <div class="card">
+        <div class="meta" style="color:var(--cl)">Phase 3 · Weeks 9–12</div>
+        <h3 style="margin:0.3rem 0;font-size:1rem;color:var(--ow)">Proactive & Reference</h3>
+        <div class="card-d">
+          • First Project Walkthrough (5 coachmarks)<br>
+          • Feature announcement coachmark system<br>
+          • Full Help Center launch (search, browse)<br>
+          • Video walkthroughs (first 10)<br>
+          • Analytics dashboard live<br>
+          • Pilot launch with Leah + 2 designers
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:2rem">
+      <h3 style="color:var(--ow);margin-bottom:0.85rem">Post-launch · Continuous</h3>
+      <div class="g2">
+        <div class="helper" style="background:rgba(196,165,123,0.06);border-left-color:var(--cl);color:rgba(250,247,242,0.75)">
+          <span class="helper-l" style="color:var(--cl)">Quarterly content audit</span>
+          Every quarter, review tooltip hover rates, article views, support ticket themes. Retire what's not working. Strengthen what is. Add help for new features at ship-time.
+        </div>
+        <div class="helper" style="background:rgba(196,165,123,0.06);border-left-color:var(--cl);color:rgba(250,247,242,0.75)">
+          <span class="helper-l" style="color:var(--cl)">User feedback loops</span>
+          7-day and 30-day surveys for new designers. Thumbs up/down on every help article. Open comment field on the help panel. Direct feedback channel to the content designer.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 16 CLOSE ===== -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">16 / 16</div>
+  <div class="in">
+    <div class="strata"><div></div><div></div><div></div></div>
+    <div class="pq">
+      <blockquote>"The platform should make designers feel like they hired a smart assistant — not like they were handed a manual. Every screen, every empty state, every helper text is an opportunity to say: 'I've got you. Here's what to do next.'"</blockquote>
+      <cite>Help & Guidance System · North Star</cite>
+    </div>
+
+    <h1 style="margin-top:2.5rem">Confidence by <em>design.</em></h1>
+    <p class="body" style="margin-top:1rem;margin-bottom:2rem">Patina is becoming a sophisticated platform. Sophistication, handled well, becomes <em>elegance</em> — the user feels capable, supported, and trusted. Handled poorly, sophistication becomes <em>friction</em> — the user feels confused, slow, and small. This system exists to make sure we land on the right side of that line, every screen, every interaction, every day.</p>
+
+    <div class="g3">
+      <div>
+        <div class="meta" style="margin-bottom:0.4rem">For Review</div>
+        <div style="font-family:var(--fb);font-size:0.82rem;color:var(--mo);line-height:1.6">Principles, layers, mechanisms, and rollout. Your feedback shapes implementation priorities.</div>
+      </div>
+      <div>
+        <div class="meta" style="margin-bottom:0.4rem">Next Step</div>
+        <div style="font-family:var(--fb);font-size:0.82rem;color:var(--mo);line-height:1.6">Approve principles → kick off Phase 1 in alignment with Designer Portal MVP Sprint 1.</div>
+      </div>
+      <div>
+        <div class="meta" style="margin-bottom:0.4rem">Companion Doc</div>
+        <div style="font-family:var(--fb);font-size:0.82rem;color:var(--mo);line-height:1.6">Detailed component spec (tooltip behavior, coachmark trigger logic, CMS schema) to follow approval.</div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:3rem;flex-wrap:wrap;gap:1rem;padding-top:2rem;border-top:1px solid var(--pe)">
+      <div>
+        <div style="font-family:var(--fd);font-weight:400;font-size:1rem">Patina</div>
+        <div style="font-family:var(--fd);font-style:italic;font-size:0.78rem;color:var(--ao)">Where Time Adds Value</div>
+      </div>
+      <div class="meta">Help & Guidance System · v1.0 · April 2026</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const f=document.querySelectorAll('.fade');
+const o=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('vis')})},{threshold:0.08,rootMargin:'0px 0px -40px 0px'});
+f.forEach(s=>o.observe(s));
+</script>
+</body>
+</html>
