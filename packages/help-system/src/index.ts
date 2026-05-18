@@ -32,3 +32,6 @@
  */
 
 export const HELP_SYSTEM_VERSION = '0.1.0';
+
+export { SurfaceKeys, SURFACE_KEY_REGEX, isSurfaceKey } from './surfaceKeys';
+export type { SurfaceKey } from './surfaceKeys';
