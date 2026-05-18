@@ -5,6 +5,8 @@ export const fontFamilies = {
   heading: '"Playfair Display", serif',
   body: '"Inter", system-ui, -apple-system, sans-serif',
   mono: '"JetBrains Mono", "Fira Code", Consolas, monospace',
+  /** Help System: DM Mono promoted to primary mono for eyebrow labels and field labels. PLACEHOLDER — pending Leah review. */
+  monoDisplay: '"DM Mono", "JetBrains Mono", "Fira Code", Consolas, monospace',
 } as const
 
 /**
@@ -143,6 +145,26 @@ export const textStyles = {
     lineHeight: lineHeights.normal,
   },
 } as const
+
+/**
+ * Help System Font Size Scale
+ * Added 2026-05-18 for the Help & Guidance System (spec Section 5.2).
+ * Values are PLACEHOLDERS — needs Leah's design review before final approval.
+ * See Risk R5 in /Users/kody/.claude/plans/review-the-documenation-for-compressed-shore.md
+ */
+export const helpSystemSizes = {
+  tooltipLabel:   '0.45rem',  // DM Mono uppercase eyebrow
+  tooltipBody:    '0.70rem',  // Inter 400
+  fieldLabel:     '0.50rem',  // DM Mono uppercase
+  fieldHelper:    '0.65rem',  // Inter 400
+  helperText:     '0.72rem',  // Inter 400 in helper callouts
+  emptyHeading:   '1.05rem',  // Playfair 500
+  emptyDesc:      '0.78rem',  // Inter 400
+  articleTitle:   '1.40rem',  // Playfair 500
+  articleBody:    '0.85rem',  // Inter 400, line-height 1.7
+} as const
+
+export type HelpSystemSizes = typeof helpSystemSizes
 
 /**
  * All typography tokens
