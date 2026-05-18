@@ -1059,9 +1059,6 @@ importers:
       '@sanity/client':
         specifier: ^6.0.0
         version: 6.29.1
-      '@tanstack/react-query':
-        specifier: ^5.0.0
-        version: 5.90.21(react@19.2.4)
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.1
@@ -1075,6 +1072,9 @@ importers:
         specifier: ^2.2.1
         version: 2.6.1
     devDependencies:
+      '@tanstack/react-query':
+        specifier: ^5.17.19
+        version: 5.90.21(react@19.2.4)
       '@testing-library/jest-dom':
         specifier: ^6.4.2
         version: 6.9.1
