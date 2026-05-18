@@ -55,3 +55,7 @@ export { getSanityClient } from './sanityClient';
 
 // ─── Data hooks ───────────────────────────────────────────────────────────────
 export { useHelpContent } from './hooks/useHelpContent';
+
+// ─── Providers ────────────────────────────────────────────────────────────────
+export { SurfaceKeyProvider, useSurfaceKey, useSetSurfaceKey } from './providers';
+export type { SurfaceKeyProviderProps } from './providers';
