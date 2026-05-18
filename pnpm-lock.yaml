@@ -2135,6 +2135,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.1.5
         version: 19.2.3(@types/react@19.2.14)
+      esbuild:
+        specifier: 0.21.5
+        version: 0.21.5
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
@@ -27815,8 +27818,8 @@ snapshots:
       '@storybook/theming': 8.6.18(storybook@8.6.18(prettier@3.8.1))
       better-opn: 3.0.2
       browser-assert: 1.2.1
-      esbuild: 0.25.12
-      esbuild-register: 3.6.0(esbuild@0.25.12)
+      esbuild: 0.21.5
+      esbuild-register: 3.6.0(esbuild@0.21.5)
       jsdoc-type-pratt-parser: 4.8.0
       process: 0.11.10
       recast: 0.23.11
@@ -31571,10 +31574,10 @@ snapshots:
 
   es6-promise@4.2.6: {}
 
-  esbuild-register@3.6.0(esbuild@0.25.12):
+  esbuild-register@3.6.0(esbuild@0.21.5):
     dependencies:
       debug: 4.4.3(supports-color@8.1.1)
-      esbuild: 0.25.12
+      esbuild: 0.21.5
     transitivePeerDependencies:
       - supports-color
 
