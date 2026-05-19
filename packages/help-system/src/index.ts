@@ -61,7 +61,13 @@ export { SurfaceKeyProvider, useSurfaceKey, useSetSurfaceKey } from './providers
 export type { SurfaceKeyProviderProps } from './providers';
 
 // ─── Layer 1 · Ambient components ─────────────────────────────────────────────
+export { FieldLabel } from './ambient/FieldLabel';
+export type { FieldLabelProps } from './ambient/FieldLabel';
+export { FieldHelper } from './ambient/FieldHelper';
+export type { FieldHelperProps } from './ambient/FieldHelper';
 export { EmptyState } from './ambient/EmptyState';
 export type { EmptyStateProps, EmptyStateSize } from './ambient/EmptyState';
 export { SmartDefault } from './ambient/SmartDefault';
 export type { SmartDefaultAPI, SmartDefaultProps } from './ambient/SmartDefault';
+export { SectionIntro } from './ambient/SectionIntro';
+export type { SectionIntroProps } from './ambient/SectionIntro';
