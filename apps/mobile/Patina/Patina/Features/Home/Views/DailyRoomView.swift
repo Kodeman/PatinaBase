@@ -14,6 +14,9 @@ struct DailyRoomView: View {
     @State private var viewModel = DailyRoomViewModel()
     @State private var expandedStory: DailyStory?
     @State private var expandedRecommendation: DailyRecommendation?
+    /// Drives the contextual help-panel sheet attached to the Home surface.
+    /// Set true by the `?` affordance in `DailyGreetingHeader`.
+    @State private var isHelpPanelPresented: Bool = false
     @Namespace private var cardNamespace
 
     var body: some View {
@@ -104,12 +107,23 @@ struct DailyRoomView: View {
                 }
             )
         }
+        // Contextual help panel — surfaces every Sanity article whose
+        // surfaceKey is `ios-app/home` or a child of it. Empty state is
+        // displayed when content hasn't shipped yet (Sprint 2 default).
+        .helpPanel(
+            isPresented: $isHelpPanelPresented,
+            surfaceKey: SurfaceKeys.IOSApp.Home.root
+        )
     }
 
     private var content: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
-                DailyGreetingHeader(dateString: viewModel.greetingDate.uppercased(), monogram: "K")
+                DailyGreetingHeader(
+                    dateString: viewModel.greetingDate.uppercased(),
+                    monogram: "K",
+                    onHelpTap: { isHelpPanelPresented = true }
+                )
 
                 if let story = viewModel.todayStory {
                     Button {

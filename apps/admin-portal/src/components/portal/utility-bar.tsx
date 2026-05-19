@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { ChevronDown, LogOut } from 'lucide-react';
+import { useState, useCallback, useMemo } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import { ChevronDown, HelpCircle, LogOut } from 'lucide-react';
+import { ContextualHelpPanel } from '@patina/help-system';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/hooks/use-auth';
 import { PROFILE_MENU_ITEMS } from '@/config/navigation';
+import { pathnameToSurfaceKey } from '@/lib/help-system/pathname-to-surface-key';
 
 function initialsFor(source: string) {
   const s = source.trim();
@@ -24,7 +26,18 @@ function initialsFor(source: string) {
 export function UtilityBar() {
   const { user, signOut } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+
+  // Derive the active surface key from the current pathname. Recomputed on
+  // navigation so the panel always asks for articles tied to the page the
+  // user actually has open. Sprint 3 will replace this with `useSurfaceKey()`
+  // sourced from page-level providers; see pathnameToSurfaceKey for context.
+  const surfaceKey = useMemo(
+    () => pathnameToSurfaceKey(pathname ?? '/dashboard'),
+    [pathname],
+  );
 
   const handleSignOut = useCallback(async () => {
     setIsSigningOut(true);
@@ -45,12 +58,35 @@ export function UtilityBar() {
   const items = PROFILE_MENU_ITEMS.filter((i) => i.action !== 'sign-out');
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          className="group flex items-center gap-2.5 rounded-sm px-2 py-1.5 transition-colors hover:bg-[var(--bg-hover)]"
-          aria-label="Open profile menu"
-        >
+    <div className="flex items-center gap-1">
+      {/* Help (Sprint 2 · C6.admin — opens ContextualHelpPanel for the current surface) */}
+      <button
+        type="button"
+        onClick={() => setIsHelpOpen(true)}
+        aria-label="Help"
+        aria-haspopup="dialog"
+        aria-expanded={isHelpOpen}
+        title="Help"
+        className="flex h-7 w-7 items-center justify-center rounded-sm text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)]"
+      >
+        <HelpCircle className="h-4 w-4" aria-hidden="true" />
+      </button>
+
+      {/* Contextual help panel (renders in its own portal; mounted here so it
+          inherits portal-tree theming + auth context). The panel itself fires
+          help.panel.opened / help.panel.closed analytics — no extra wiring. */}
+      <ContextualHelpPanel
+        open={isHelpOpen}
+        onOpenChange={setIsHelpOpen}
+        surfaceKey={surfaceKey}
+      />
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="group flex items-center gap-2.5 rounded-sm px-2 py-1.5 transition-colors hover:bg-[var(--bg-hover)]"
+            aria-label="Open profile menu"
+          >
           <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] font-mono text-[0.55rem] tracking-[0.08em] text-[var(--accent-primary)]">
             {initials}
           </span>
@@ -127,6 +163,7 @@ export function UtilityBar() {
           </span>
         </DropdownMenuItem>
       </DropdownMenuContent>
-    </DropdownMenu>
+      </DropdownMenu>
+    </div>
   );
 }

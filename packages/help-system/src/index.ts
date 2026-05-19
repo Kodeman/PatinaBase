@@ -71,3 +71,15 @@ export { SmartDefault } from './ambient/SmartDefault';
 export type { SmartDefaultAPI, SmartDefaultProps } from './ambient/SmartDefault';
 export { SectionIntro } from './ambient/SectionIntro';
 export type { SectionIntroProps } from './ambient/SectionIntro';
+
+// ─── Layer 2 · Reactive components ────────────────────────────────────────────
+export { Tooltip } from './reactive/Tooltip';
+export type { TooltipProps } from './reactive/Tooltip';
+export { InfoIcon } from './reactive/InfoIcon';
+export type { InfoIconProps } from './reactive/InfoIcon';
+export { StrataInfoIcon } from './reactive/StrataInfoIcon';
+export type { StrataInfoIconProps } from './reactive/StrataInfoIcon';
+export { LearnMore } from './reactive/LearnMore';
+export type { LearnMoreProps } from './reactive/LearnMore';
+export { ContextualHelpPanel } from './reactive/ContextualHelpPanel';
+export type { ContextualHelpPanelProps } from './reactive/ContextualHelpPanel';

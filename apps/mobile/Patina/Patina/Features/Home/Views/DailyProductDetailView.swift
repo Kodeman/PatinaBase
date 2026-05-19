@@ -104,10 +104,25 @@ struct DailyProductDetailView: View {
                     .opacity(chromeVisible ? 1 : 0)
             }
 
+            // Tier + Match pills are Patina vocabulary — wrap each in a
+            // HelpTooltip so a tap on the pill reveals a one-paragraph
+            // explanation pulled from Sanity (fallback inline when CMS
+            // hasn't shipped yet). Same surface keys are referenced by
+            // the help panel attached to the parent `DailyRoomView`.
             HStack(alignment: .top) {
-                TierPill(tier: recommendation.tier)
+                HelpTooltip(
+                    surfaceKey: SurfaceKeys.IOSApp.Home.tierPill,
+                    fallback: "Tier signals how this piece reached Patina — Maker Piece (designer + maker collaboration), Designer's Pick, or Sourced from a vetted catalog."
+                ) {
+                    TierPill(tier: recommendation.tier)
+                }
                 Spacer()
-                MatchPill(score: recommendation.matchScore)
+                HelpTooltip(
+                    surfaceKey: SurfaceKeys.IOSApp.Home.matchPill,
+                    fallback: "Match score blends your room's dimensions, style cues, and palette against this piece. Higher means a better fit for the room you're viewing."
+                ) {
+                    MatchPill(score: recommendation.matchScore)
+                }
             }
             .padding(.top, 64)
             .padding(.horizontal, 18)
@@ -230,7 +245,12 @@ struct DailyProductDetailView: View {
                 alignment: .leading,
                 spacing: 12
             ) {
-                specCell(label: "Material", value: product.materialTags.first?.capitalized ?? "Solid wood")
+                specCell(
+                    label: "Material",
+                    value: product.materialTags.first?.capitalized ?? "Solid wood",
+                    helpSurfaceKey: SurfaceKeys.IOSApp.ProductDetail.materials,
+                    helpFallback: "Material is what the piece is made of — surfaced from the maker's spec sheet and any third-party certifications we've verified."
+                )
                 specCell(label: "Style", value: product.styleTags.first?.capitalized ?? "Warm minimal")
                 specCell(label: "Lead time", value: "4–6 weeks")
                 specCell(label: "Origin", value: product.makerLocation ?? "USA")
@@ -238,13 +258,31 @@ struct DailyProductDetailView: View {
         }
     }
 
-    private func specCell(label: String, value: String) -> some View {
+    /// Renders one cell in the specs grid. When `helpSurfaceKey` is
+    /// non-nil and the label is non-obvious (e.g. "Lead time"), a small
+    /// HelpInfoIcon is rendered next to the label so the user can learn
+    /// what the value means.
+    private func specCell(
+        label: String,
+        value: String,
+        helpSurfaceKey: SurfaceKey? = nil,
+        helpFallback: String? = nil
+    ) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(label)
-                .font(.custom("DMMono-Regular", size: 8))
-                .tracking(0.5)
-                .textCase(.uppercase)
-                .foregroundColor(PatinaColors.agedOak)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(label)
+                    .font(.custom("DMMono-Regular", size: 8))
+                    .tracking(0.5)
+                    .textCase(.uppercase)
+                    .foregroundColor(PatinaColors.agedOak)
+                if let helpSurfaceKey {
+                    HelpInfoIcon(
+                        surfaceKey: helpSurfaceKey,
+                        fallback: helpFallback,
+                        size: 10
+                    )
+                }
+            }
             Text(value)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(PatinaColors.charcoal)

@@ -1,13 +1,16 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { Search, Bell, MessageSquare } from 'lucide-react';
+import { useState, useCallback, useMemo } from 'react';
+import { usePathname } from 'next/navigation';
+import { Search, Bell, MessageSquare, HelpCircle } from 'lucide-react';
 import { UserStatusMenu, type UserPresenceStatus } from '@patina/design-system';
+import { ContextualHelpPanel } from '@patina/help-system';
 import { useAuth } from '@/hooks/use-auth';
 import { useUnreadCounts } from '@/hooks/use-unread-counts';
 import { useCommandPalette } from '@/contexts/command-palette-context';
 import { useMessagesPanel } from '@/contexts/messages-panel-context';
 import { PROFILE_MENU_ITEMS } from '@/config/navigation';
+import { pathnameToSurfaceKey } from '@/lib/help-system/pathname-to-surface-key';
 import { NotificationDropdown } from './notification-dropdown';
 
 export function UtilityBar() {
@@ -15,9 +18,20 @@ export function UtilityBar() {
   const { notifications, messages } = useUnreadCounts();
   const commandPalette = useCommandPalette();
   const messagesPanel = useMessagesPanel();
+  const pathname = usePathname();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [status, setStatus] = useState<UserPresenceStatus>('online');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+
+  // Derive the active surface key from the current pathname. Recomputed on
+  // navigation so the panel always asks for articles tied to the page the
+  // user actually has open. Sprint 3 will replace this with `useSurfaceKey()`
+  // sourced from page-level providers; see pathnameToSurfaceKey for context.
+  const surfaceKey = useMemo(
+    () => pathnameToSurfaceKey(pathname ?? '/portal'),
+    [pathname],
+  );
 
   const handleSignOut = useCallback(async () => {
     setIsSigningOut(true);
@@ -55,6 +69,28 @@ export function UtilityBar() {
         count={notifications}
         open={notificationsOpen}
         onOpenChange={setNotificationsOpen}
+      />
+
+      {/* Help (Sprint 2 · C6 — opens ContextualHelpPanel for the current surface) */}
+      <button
+        type="button"
+        onClick={() => setIsHelpOpen(true)}
+        aria-label="Help"
+        aria-haspopup="dialog"
+        aria-expanded={isHelpOpen}
+        className="relative flex h-9 w-9 items-center justify-center rounded-md text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg,rgba(196,165,123,0.06))] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring,#C4A57B)]"
+        title="Help"
+      >
+        <HelpCircle className="h-4 w-4" aria-hidden="true" />
+      </button>
+
+      {/* Contextual help panel (renders in its own portal; mounted here so it
+          inherits portal-tree theming + auth context). The panel itself fires
+          help.panel.opened / help.panel.closed analytics — no extra wiring. */}
+      <ContextualHelpPanel
+        open={isHelpOpen}
+        onOpenChange={setIsHelpOpen}
+        surfaceKey={surfaceKey}
       />
 
       {/* Messages */}

@@ -14,6 +14,10 @@ struct ProductDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = ProductDetailViewModel()
 
+    /// Drives the contextual help-panel sheet for the Product Detail surface.
+    /// Triggered by the `?` floating button in the top bar.
+    @State private var isHelpPanelPresented: Bool = false
+
     /// Product ID to load (from navigation)
     var productId: String?
 
@@ -41,6 +45,13 @@ struct ProductDetailView: View {
         }
         .background(PatinaColors.offWhite)
         .navigationBarHidden(true)
+        // Contextual help panel — `?` floating button in the top bar
+        // toggles `isHelpPanelPresented`. Empty state ships until Sanity
+        // authoring catches up (Sprint 2 expectation).
+        .helpPanel(
+            isPresented: $isHelpPanelPresented,
+            surfaceKey: SurfaceKeys.IOSApp.ProductDetail.root
+        )
         .task {
             viewModel.attachRoomContext(
                 localId: roomLocalId,
@@ -75,21 +86,44 @@ struct ProductDetailView: View {
                                 .frame(height: 340)
                         }
 
-                        // Top bar
-                        HStack {
+                        // Top bar — back, help, share, and save actions.
+                        HStack(spacing: 8) {
                             Button { dismiss() } label: {
                                 floatingCircleButton(icon: "chevron.left")
                             }
+                            .accessibilityLabel("Back")
 
                             Spacer()
 
-                            Button {} label: {
+                            // Contextual help panel — tap the `?` chip to open
+                            // a sheet listing every help article for this
+                            // surface (`ios-app/product-detail`).
+                            Button {
+                                isHelpPanelPresented = true
+                            } label: {
+                                floatingCircleButton(icon: "questionmark")
+                            }
+                            .accessibilityLabel("Help")
+                            .accessibilityHint("Opens the help panel for this product.")
+                            .accessibilityIdentifier("ProductDetailView.HelpButton")
+
+                            // Share button — icon-only action. Wrapped in
+                            // HelpTooltip so a tap reveals a brief, CMS-
+                            // backed explanation. Share routing is a
+                            // follow-up task; until then the tooltip is
+                            // the entire interaction.
+                            HelpTooltip(
+                                surfaceKey: SurfaceKeys.IOSApp.ProductDetail.shareAction,
+                                fallback: "Share this piece — copy a link or send it to a collaborator. Sharing keeps your room context intact for the recipient."
+                            ) {
                                 floatingCircleButton(icon: "square.and.arrow.up")
+                                    .accessibilityLabel("Share")
                             }
 
                             Button { viewModel.toggleSave(context: modelContext) } label: {
                                 floatingCircleButton(icon: viewModel.isSaved ? "heart.fill" : "heart")
                             }
+                            .accessibilityLabel(viewModel.isSaved ? "Remove from saved" : "Save")
                         }
                         .padding(.top, 56)
                         .padding(.horizontal, 16)
@@ -118,29 +152,49 @@ struct ProductDetailView: View {
                                 .padding(.bottom, 16)
                         }
 
-                        // Price row
+                        // Price row — full price + room-aware match label.
+                        // The match pill is wrapped in HelpTooltip because
+                        // the percentage is a Patina concept (computed
+                        // against the active room's dimensions, style
+                        // cues, and palette).
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
                             Text(product.fullFormattedPrice)
                                 .font(.custom("PlayfairDisplay-Medium", size: 28))
                                 .foregroundColor(PatinaColors.charcoal)
 
-                            Text(product.matchLabel)
-                                .font(PatinaTypography.mono)
-                                .foregroundColor(PatinaColors.success)
-                                .tracking(0.3)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(PatinaColors.success.opacity(0.12))
-                                .clipShape(Capsule())
+                            HelpTooltip(
+                                surfaceKey: SurfaceKeys.IOSApp.Home.matchPill,
+                                fallback: "Match score blends your room's dimensions, style cues, and palette against this piece. Higher means a better fit for the room you're viewing."
+                            ) {
+                                Text(product.matchLabel)
+                                    .font(PatinaTypography.mono)
+                                    .foregroundColor(PatinaColors.success)
+                                    .tracking(0.3)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 4)
+                                    .background(PatinaColors.success.opacity(0.12))
+                                    .clipShape(Capsule())
+                            }
                         }
                         .padding(.bottom, 16)
 
-                        // Room-aware "Place in your room" header + spatial pills
+                        // Room-aware "Place in your room" header + spatial pills.
+                        // Patina-specific concept — the pills explain why
+                        // the piece fits this specific room. A HelpInfoIcon
+                        // surfaces the deeper "what is spatial context"
+                        // explanation without taking screen space.
                         if viewModel.roomContextRemoteId != nil {
-                            Text("Place in your room")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(PatinaColors.mocha)
-                                .padding(.bottom, 6)
+                            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                Text("Place in your room")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(PatinaColors.mocha)
+                                HelpInfoIcon(
+                                    surfaceKey: SurfaceKeys.IOSApp.ProductDetail.spatialContext,
+                                    fallback: "Spatial cues compare the piece against your room's scale, lighting, and existing palette. Pills below summarize what fits and what to watch for.",
+                                    size: 12
+                                )
+                            }
+                            .padding(.bottom, 6)
                         }
                         if !viewModel.spatialContext.isEmpty {
                             ScrollView(.horizontal, showsIndicators: false) {
@@ -163,8 +217,26 @@ struct ProductDetailView: View {
                             .padding(.bottom, 16)
                         }
 
-                        // Material badges
+                        // Material badges — sustainability + origin claims
+                        // (FSC, handcrafted, Made in USA, etc.). HelpInfoIcon
+                        // lets the user dig into what each claim means and
+                        // how Patina verifies them.
                         if !product.badges.isEmpty {
+                            HStack(alignment: .center, spacing: 6) {
+                                Text("Provenance")
+                                    .font(PatinaTypography.monoSmall)
+                                    .tracking(0.5)
+                                    .textCase(.uppercase)
+                                    .foregroundColor(PatinaColors.agedOak)
+                                HelpInfoIcon(
+                                    surfaceKey: SurfaceKeys.IOSApp.ProductDetail.materials,
+                                    fallback: "Provenance badges signal verified claims about materials, craft, and origin. Tap a badge family to read how Patina vets each one.",
+                                    size: 12
+                                )
+                                Spacer()
+                            }
+                            .padding(.bottom, 6)
+
                             FlowLayout(spacing: 8) {
                                 ForEach(product.badges, id: \.self) { badge in
                                     materialBadge(text: badge.badgeDisplayName)
@@ -251,7 +323,12 @@ struct ProductDetailView: View {
 
     private func bottomBar(product: Product) -> some View {
         HStack(spacing: 12) {
-            // AR button
+            // AR placement button — icon-only action. Real navigation
+            // action lives in `simultaneousGesture`-friendly Button, and
+            // an explicit `accessibilityLabel` keeps VoiceOver clear.
+            // Contextual copy ships through the help panel (`?` button
+            // in the top bar) rather than tooltip-wrapping the Button
+            // (which would conflict with the Button's tap gesture).
             if product.hasARModel {
                 Button {
                     coordinator.navigate(
@@ -270,6 +347,9 @@ struct ProductDetailView: View {
                                 .foregroundColor(PatinaColors.charcoal)
                         )
                 }
+                .accessibilityLabel("Place in AR")
+                .accessibilityHint("Preview this piece in your room with augmented reality.")
+                .accessibilityIdentifier("ProductDetailView.ARButton")
             }
 
             // Add to room button
