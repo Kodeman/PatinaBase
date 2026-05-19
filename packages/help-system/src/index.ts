@@ -79,3 +79,5 @@ export { InfoIcon } from './reactive/InfoIcon';
 export type { InfoIconProps } from './reactive/InfoIcon';
 export { StrataInfoIcon } from './reactive/StrataInfoIcon';
 export type { StrataInfoIconProps } from './reactive/StrataInfoIcon';
+export { LearnMore } from './reactive/LearnMore';
+export type { LearnMoreProps } from './reactive/LearnMore';
