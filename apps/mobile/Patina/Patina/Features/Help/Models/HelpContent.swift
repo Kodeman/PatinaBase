@@ -42,6 +42,8 @@ public enum HelpContentType: String, Codable, CaseIterable, Sendable {
     case emptyState = "emptyState"
     case sectionIntro = "sectionIntro"
     case helpArticle = "helpArticle"
+    case coachmark = "coachmark"
+    case welcomeModal = "welcomeModal"
 }
 
 // MARK: - Payloads
@@ -126,6 +128,53 @@ public struct HelpArticleContent: Codable, Equatable, Sendable {
     }
 }
 
+/// Payload for a `coachmark` Sanity document — Layer 3 (Proactive)
+/// foundational component (spec §4.7). Mirrors the web
+/// `CoachmarkContent` interface in
+/// `packages/help-system/src/contentTypes.ts`.
+public struct CoachmarkContent: Codable, Equatable, Sendable {
+    /// Card heading — required, rendered as the popover title.
+    public let heading: String
+    /// Card body — required, capped at ~120 chars in CMS authoring (spec §8).
+    public let body: String
+    /// Optional CTA label override. When omitted, callers may render their
+    /// default ("Next") label.
+    public let ctaLabel: String?
+
+    public init(heading: String, body: String, ctaLabel: String? = nil) {
+        self.heading = heading
+        self.body = body
+        self.ctaLabel = ctaLabel
+    }
+}
+
+/// Payload for a `welcomeModal` Sanity document — Layer 3 (Proactive)
+/// first-signin orientation dialog (spec §4.8). Mirrors the web
+/// `WelcomeModalContent` interface.
+public struct WelcomeModalContent: Codable, Equatable, Sendable {
+    /// Modal title — required.
+    public let title: String
+    /// Modal body — required.
+    public let body: String
+    /// Primary CTA label (e.g. "Take the tour"). Required by the schema.
+    public let primaryCtaLabel: String
+    /// Secondary CTA label (e.g. "Jump in"). Optional — when omitted, callers
+    /// may render their default ("Skip for now").
+    public let secondaryCtaLabel: String?
+
+    public init(
+        title: String,
+        body: String,
+        primaryCtaLabel: String,
+        secondaryCtaLabel: String? = nil
+    ) {
+        self.title = title
+        self.body = body
+        self.primaryCtaLabel = primaryCtaLabel
+        self.secondaryCtaLabel = secondaryCtaLabel
+    }
+}
+
 // MARK: - Discriminated Union
 
 /// All help-content variants the iOS module supports.
@@ -140,6 +189,8 @@ public enum HelpContent: Equatable, Sendable {
     case emptyState(EmptyStateContent)
     case sectionIntro(SectionIntroContent)
     case helpArticle(HelpArticleContent)
+    case coachmark(CoachmarkContent)
+    case welcomeModal(WelcomeModalContent)
 
     /// The discriminator string for this variant, matching the Sanity
     /// `contentType` enum.
@@ -150,6 +201,8 @@ public enum HelpContent: Equatable, Sendable {
         case .emptyState: return .emptyState
         case .sectionIntro: return .sectionIntro
         case .helpArticle: return .helpArticle
+        case .coachmark: return .coachmark
+        case .welcomeModal: return .welcomeModal
         }
     }
 }
@@ -164,6 +217,8 @@ extension HelpContent: Codable {
         case emptyStateContent
         case sectionIntroContent
         case helpArticleContent
+        case coachmarkContent
+        case welcomeModalContent
     }
 
     public init(from decoder: Decoder) throws {
@@ -204,6 +259,31 @@ extension HelpContent: Codable {
         case .helpArticle:
             let payload = try container.decode(HelpArticleContent.self, forKey: .helpArticleContent)
             self = .helpArticle(payload)
+
+        case .coachmark:
+            // Per the Sanity helpContent schema (and the web `<Coachmark />`
+            // implementation), coachmark documents share the `tooltipContent`
+            // payload block — the schema reuses the tooltip body/eyebrow
+            // structure but the web component reads `heading` + `body` off the
+            // resolved record. Accept either shape: a dedicated
+            // `coachmarkContent` block (canonical), or fall back to the
+            // tooltip block remapped via `eyebrow` → heading + `body` → body.
+            let payload: CoachmarkContent
+            if let direct = try container.decodeIfPresent(CoachmarkContent.self, forKey: .coachmarkContent) {
+                payload = direct
+            } else {
+                let shared = try container.decode(TooltipContent.self, forKey: .tooltipContent)
+                payload = CoachmarkContent(
+                    heading: shared.eyebrow ?? "",
+                    body: shared.body,
+                    ctaLabel: nil
+                )
+            }
+            self = .coachmark(payload)
+
+        case .welcomeModal:
+            let payload = try container.decode(WelcomeModalContent.self, forKey: .welcomeModalContent)
+            self = .welcomeModal(payload)
         }
     }
 
@@ -222,6 +302,10 @@ extension HelpContent: Codable {
             try container.encode(payload, forKey: .sectionIntroContent)
         case .helpArticle(let payload):
             try container.encode(payload, forKey: .helpArticleContent)
+        case .coachmark(let payload):
+            try container.encode(payload, forKey: .coachmarkContent)
+        case .welcomeModal(let payload):
+            try container.encode(payload, forKey: .welcomeModalContent)
         }
     }
 }
