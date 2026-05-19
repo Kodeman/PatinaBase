@@ -1,7 +1,9 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Bell, Box, MessageSquare } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { Bell, Box, HelpCircle, MessageSquare } from 'lucide-react';
 
 import {
   useProfile,
@@ -9,6 +11,7 @@ import {
   useMyPendingReviewRequests,
   useMySubmittedReviews,
 } from '@patina/supabase';
+import { ContextualHelpPanel } from '@patina/help-system';
 import { NotificationBell } from '../notifications/notification-bell';
 import { InboxBell } from '../notifications/inbox-bell';
 import {
@@ -24,6 +27,7 @@ import {
 import type { ProjectListItem } from '../../types/project';
 import { useAuth } from '../../hooks/use-auth';
 import { formatRelativeTime } from '../../lib/utils/format';
+import { pathnameToSurfaceKey } from '../../lib/help-system/pathname-to-surface-key';
 import { ProjectSwitcher } from './project-switcher';
 
 interface ClientHeaderProps {
@@ -82,6 +86,7 @@ export function ClientHeader({
           <ReviewsLink />
           <InboxBell />
           <NotificationBell />
+          <HelpButton />
           {lastUpdated ? (
             <span className="type-meta hidden md:inline">
               Updated {formatRelativeTime(lastUpdated) ?? 'recently'}
@@ -128,6 +133,57 @@ function ReviewsLink() {
         </span>
       ) : null}
     </Link>
+  );
+}
+
+/**
+ * HelpButton — Sprint 2 · C6 (client).
+ *
+ * Renders the `?` trigger that opens the <ContextualHelpPanel /> for the
+ * surface the homeowner currently has open. The surface key is derived from
+ * `usePathname()` (see ./lib/help-system/pathname-to-surface-key) and
+ * memoised so the panel only refetches on navigation. The panel itself fires
+ * `help.panel.opened` / `help.panel.closed` analytics — no extra wiring.
+ *
+ * The client-portal voice is consumer-facing (homeowner viewing their
+ * design project), so authors will write distinct copy against the
+ * `client-portal/*` keys; the pattern matches designer-portal C6 exactly.
+ */
+function HelpButton() {
+  const pathname = usePathname();
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+
+  // Recompute the surface key on navigation so the panel always asks for
+  // articles tied to the page the homeowner actually has open. Sprint 3
+  // will replace this with `useSurfaceKey()` sourced from page-level
+  // providers; see pathnameToSurfaceKey for context.
+  const surfaceKey = useMemo(
+    () => pathnameToSurfaceKey(pathname ?? '/'),
+    [pathname],
+  );
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setIsHelpOpen(true)}
+        aria-label="Help"
+        aria-haspopup="dialog"
+        aria-expanded={isHelpOpen}
+        title="Help"
+        data-testid="header-help-trigger"
+        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-[var(--text-primary)] transition-opacity hover:opacity-70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)]"
+      >
+        <HelpCircle className="h-3.5 w-3.5 text-[var(--accent-primary)]" aria-hidden />
+      </button>
+      {/* Contextual help panel (renders in its own portal; mounted here so it
+          inherits portal-tree theming + auth context). */}
+      <ContextualHelpPanel
+        open={isHelpOpen}
+        onOpenChange={setIsHelpOpen}
+        surfaceKey={surfaceKey}
+      />
+    </>
   );
 }
 

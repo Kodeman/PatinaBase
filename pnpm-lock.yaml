@@ -330,6 +330,9 @@ importers:
       '@patina/design-system':
         specifier: workspace:*
         version: link:../../packages/patina-design-system
+      '@patina/help-system':
+        specifier: workspace:*
+        version: link:../../packages/help-system
       '@patina/notifications':
         specifier: workspace:*
         version: link:../../packages/notifications

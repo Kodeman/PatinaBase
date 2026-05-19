@@ -32,6 +32,7 @@
     "@patina/api-routes": "workspace:*",
     "@patina/auth": "workspace:*",
     "@patina/design-system": "workspace:*",
+    "@patina/help-system": "workspace:*",
     "@patina/notifications": "workspace:*",
     "@patina/shared": "workspace:*",
     "@patina/supabase": "workspace:*",
