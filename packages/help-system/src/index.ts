@@ -48,6 +48,7 @@ export type {
   CoachmarkContent,
   HelpArticleContent,
   WelcomeModalContent,
+  VideoContent,
   ContentTypeMap,
 } from './contentTypes';
 
@@ -117,3 +118,5 @@ export { HelpArticle, portableTextComponents } from './reference/HelpArticle';
 export type { HelpArticleProps, RelatedArticleId } from './reference/HelpArticle';
 export { HelpSearch } from './reference/HelpSearch';
 export type { HelpSearchProps, HelpSearchResult } from './reference/HelpSearch';
+export { VideoPlayer } from './reference/VideoPlayer';
+export type { VideoPlayerProps } from './reference/VideoPlayer';

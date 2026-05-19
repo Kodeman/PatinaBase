@@ -16,6 +16,7 @@ export type HelpContentType =
   | 'coachmark'
   | 'helpArticle'
   | 'welcomeModal'
+  | 'video'
 
 /** Discriminated union by contentType — payload shape per spec Section 7.2.x */
 export type HelpContent =
@@ -26,6 +27,7 @@ export type HelpContent =
   | CoachmarkContent
   | HelpArticleContent
   | WelcomeModalContent
+  | VideoContent
 
 export interface TooltipContent {
   surfaceKey: string
@@ -102,6 +104,31 @@ export interface WelcomeModalContent {
   secondaryCtaLabel?: string
 }
 
+/**
+ * Layer 4 (Reference) — video walkthrough payload (spec §4 — Reference).
+ *
+ * Open question §16: hosting choice (Sanity CDN vs Mux vs YouTube) deferred.
+ * For Sprint 3 we treat `src` as an opaque URL — typically a Sanity asset CDN
+ * URL but the component does not care. Captions are a separate `.vtt` track
+ * URL; transcript is rendered as a string (consumer may also pass a React
+ * node directly via the component prop, bypassing CMS).
+ */
+export interface VideoContent {
+  surfaceKey: string
+  persona: Persona
+  contentType: 'video'
+  /** Direct media URL (Sanity CDN, Mux playback URL, or YouTube embed). */
+  src: string
+  /** Optional poster image displayed before play. */
+  posterUrl?: string
+  /** Optional WebVTT captions URL. */
+  captionsUrl?: string
+  /** Optional transcript text. */
+  transcript?: string
+  /** Optional human-readable title (for analytics + a11y label fallback). */
+  title?: string
+}
+
 /** Type-narrowing map from contentType discriminator to its content shape */
 export type ContentTypeMap = {
   tooltip: TooltipContent
@@ -111,4 +138,5 @@ export type ContentTypeMap = {
   coachmark: CoachmarkContent
   helpArticle: HelpArticleContent
   welcomeModal: WelcomeModalContent
+  video: VideoContent
 }
