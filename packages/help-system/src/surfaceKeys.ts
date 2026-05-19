@@ -24,6 +24,20 @@ export const SurfaceKeys = {
     Today: {
       Dashboard: 'designer-portal/today/dashboard',
       EmptyState: 'designer-portal/today/empty-state',
+      // Per-section intros rendered beneath each section header on /portal.
+      // Added in F1.1 (designer-portal Today migration). See spec §9.2.
+      Intro: {
+        OverdueDecisions: 'designer-portal/today/intro/overdue-decisions',
+        Leads:            'designer-portal/today/intro/leads',
+        ActiveWork:       'designer-portal/today/intro/active-work',
+      },
+      // Per-section empty states — distinct surfaces so authors can write
+      // bespoke copy per zero-state rather than reusing one bucket.
+      Empty: {
+        OverdueDecisions: 'designer-portal/today/empty/overdue-decisions',
+        Leads:            'designer-portal/today/empty/leads',
+        ActiveWork:       'designer-portal/today/empty/active-work',
+      },
     },
     Pipeline: {
       ProjectList: 'designer-portal/pipeline/project-list',
