@@ -48,6 +48,7 @@ export type {
   CoachmarkContent,
   HelpArticleContent,
   WelcomeModalContent,
+  VideoContent,
   ContentTypeMap,
 } from './contentTypes';
 
@@ -111,3 +112,7 @@ export {
   clearFeatureAnnouncementState,
 } from './proactive/FeatureAnnouncementCoachmark';
 export type { FeatureAnnouncementState } from './proactive/FeatureAnnouncementCoachmark';
+
+// ─── Layer 4 · Reference components ──────────────────────────────────────────
+export { VideoPlayer } from './reference/VideoPlayer';
+export type { VideoPlayerProps } from './reference/VideoPlayer';
