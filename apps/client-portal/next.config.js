@@ -212,7 +212,16 @@ const nextConfig = {
     scrollRestoration: true,
   },
 
-  transpilePackages: ['@patina/api-client', '@patina/design-system', '@patina/types', '@patina/utils'],
+  // F3 — `@patina/help-system` joins the transpilePackages list so Next can
+  // process the workspace package's TS sources directly (no dist build step).
+  // Mirrors the designer-portal + admin-portal wiring from Sprint 2 C6/F1.
+  transpilePackages: [
+    '@patina/api-client',
+    '@patina/design-system',
+    '@patina/help-system',
+    '@patina/types',
+    '@patina/utils',
+  ],
 };
 
 module.exports = withPWA(nextConfig);

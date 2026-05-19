@@ -7,6 +7,12 @@ import { useRoomScans } from '@patina/supabase';
 import type { RoomScan } from '@patina/supabase';
 
 import { useConsumerSharedScans } from '@patina/supabase';
+// F3 — Rooms list empty state migrated to ambient help-system per spec §9.2.
+// Consumer voice: explain that capture happens on the phone (iOS app), warm
+// and second-person. EmptyState is CMS-backed; the local fallback ships
+// until Sanity content for `client-portal/scans/empty/no-scans` lands.
+import { EmptyState, SurfaceKeys, useHelpContent } from '@patina/help-system';
+import { Box } from 'lucide-react';
 
 interface RoomScanListProps {
   userId: string;
@@ -67,16 +73,7 @@ export function RoomScanList({ userId }: RoomScanListProps) {
   }
 
   if (scans.length === 0) {
-    return (
-      <section className="mt-8 rounded-lg border border-[var(--border-default)] bg-white p-8 text-center">
-        <h2 className="font-heading text-lg text-[var(--text-primary)]">
-          No rooms captured yet
-        </h2>
-        <p className="type-body-small mt-2 text-[var(--text-muted)]">
-          Capture your first room with the Patina iOS app to start collaborating with a designer in 3D.
-        </p>
-      </section>
-    );
+    return <RoomScansEmptyState />;
   }
 
   return (
@@ -136,6 +133,53 @@ export function RoomScanList({ userId }: RoomScanListProps) {
           </Link>
         );
       })}
+    </section>
+  );
+}
+
+/**
+ * RoomScansEmptyState — consumer-voice empty state for the homeowner's rooms
+ * list (F3). Same probe pattern as F1.2/F1.6 designer migrations: CMS hit
+ * defers to the canonical EmptyState wrapper, CMS miss renders local
+ * hospitality-voiced fallback so newly invited homeowners aren't stranded.
+ */
+function RoomScansEmptyState() {
+  const { data, isLoading } = useHelpContent(
+    SurfaceKeys.ClientPortal.Scans.Empty.NoScans,
+    'emptyState',
+    'consumer',
+  );
+
+  if (isLoading) {
+    return (
+      <section className="mt-8 rounded-lg border border-[var(--border-default)] bg-white p-8 text-center">
+        <p className="type-body-small italic text-[var(--text-muted)]">…</p>
+      </section>
+    );
+  }
+
+  if (data) {
+    return (
+      <section className="mt-8 rounded-lg border border-[var(--border-default)] bg-white p-8">
+        <EmptyState
+          surfaceKey={SurfaceKeys.ClientPortal.Scans.Empty.NoScans}
+          persona="consumer"
+          icon={<Box className="h-10 w-10" />}
+        />
+      </section>
+    );
+  }
+
+  return (
+    <section className="mt-8 rounded-lg border border-[var(--border-default)] bg-white p-8 text-center">
+      <Box className="mx-auto h-10 w-10 text-[var(--text-muted)]" aria-hidden />
+      <h2 className="mt-4 font-heading text-lg text-[var(--text-primary)]">
+        No rooms captured yet
+      </h2>
+      <p className="type-body-small mt-2 mx-auto max-w-md text-[var(--text-muted)]">
+        Open the Patina app on your phone to capture your first room — it takes
+        a minute and unlocks 3D collaboration with your designer.
+      </p>
     </section>
   );
 }

@@ -1,6 +1,12 @@
 import { redirect } from 'next/navigation';
 
 import { getUser } from '@patina/supabase/server';
+// F3 — client-portal /today migrated to ambient help-system per spec §9.2.
+// The SectionIntro below the page hero is CMS-backed with a consumer-voice
+// fallback ("A daily story from the Patina editors...") that ships until the
+// homeowner-targeted Sanity content lands. Voice: warm, second-person, no
+// designer jargon. Analytics fire automatically on first CMS hit.
+import { SectionIntro, SurfaceKeys } from '@patina/help-system';
 
 import { ClientHeader } from '@/components/layout/client-header';
 import { StrataMark } from '@/components/strata-mark';
@@ -20,9 +26,11 @@ export default async function Page() {
         <section>
           <p className="type-meta">Today</p>
           <h1 className="type-page-title mt-4">Curated for you.</h1>
-          <p className="type-body mt-4">
-            A daily story from the Patina editors and fresh recommendations for each of your rooms.
-          </p>
+          <SectionIntro
+            surfaceKey={SurfaceKeys.ClientPortal.Home.GreetingIntro}
+            fallback="A daily story from the Patina editors and fresh recommendations for each of your rooms."
+            className="mt-4 type-body max-w-prose"
+          />
         </section>
 
         <StrataMark variant="mini" />

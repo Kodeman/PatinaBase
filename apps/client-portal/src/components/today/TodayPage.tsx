@@ -3,6 +3,10 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { useRooms } from '@patina/supabase';
+// F3 — client-portal Today migrated to ambient help-system per spec §9.2.
+// SectionIntro on "For your rooms" + a no-rooms empty state copy fallback.
+// Voice: hospitality-oriented, second-person ("your phone", "snap").
+import { SectionIntro, SurfaceKeys } from '@patina/help-system';
 
 import { StoryCard, type DailyStory } from './StoryCard';
 import { RoomFeedSection } from './RoomFeedSection';
@@ -47,11 +51,18 @@ export function TodayPage({ userId }: TodayPageProps) {
 
       <section>
         <h2 className="font-heading text-base text-[var(--text-primary)]">For your rooms</h2>
+        <SectionIntro
+          surfaceKey={SurfaceKeys.ClientPortal.Home.RoomsFeedIntro}
+          fallback="Picks tailored to each room you’ve captured."
+          className="mt-1 type-body-small max-w-prose"
+        />
         {roomsLoading ? (
           <p className="mt-3 type-body-small text-[var(--text-muted)]">Loading rooms…</p>
         ) : rooms.length === 0 ? (
+          // Consumer voice: explain how to fix the empty state warmly, no
+          // jargon. The "Capture" path lives in the Patina iOS app.
           <p className="mt-3 type-body-small text-[var(--text-muted)]">
-            Capture a room to see tailored recommendations here.
+            Capture a room with the Patina iOS app and tailored picks will show up here.
           </p>
         ) : (
           <div className="mt-4 space-y-4">

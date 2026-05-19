@@ -27,7 +27,8 @@
       "@/lib/*": ["./src/lib/*"],
       "@/hooks/*": ["./src/hooks/*"],
       "@/types/*": ["./src/types/*"],
-      "@/styles/*": ["./src/styles/*"]
+      "@/styles/*": ["./src/styles/*"],
+      "@patina/help-system": ["../../packages/help-system/src"]
     }
   },
   "include": [
@@ -36,7 +37,9 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "../../packages/patina-design-system/src/**/*.ts",
-    "../../packages/patina-design-system/src/**/*.tsx"
+    "../../packages/patina-design-system/src/**/*.tsx",
+    "../../packages/help-system/src/**/*.ts",
+    "../../packages/help-system/src/**/*.tsx"
   ],
   "exclude": [
     "node_modules",
@@ -45,6 +48,8 @@
     "**/*.spec.ts",
     "**/*.spec.tsx",
     "../../packages/patina-design-system/src/**/*.test.ts",
-    "../../packages/patina-design-system/src/**/*.test.tsx"
+    "../../packages/patina-design-system/src/**/*.test.tsx",
+    "../../packages/help-system/src/**/*.test.ts",
+    "../../packages/help-system/src/**/*.test.tsx"
   ]
 }
