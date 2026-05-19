@@ -42,10 +42,15 @@ export const SurfaceKeys = {
     Pipeline: {
       ProjectList: 'designer-portal/pipeline/project-list',
       ProjectListEmpty: {
-        Leads:     'designer-portal/pipeline/project-list/empty-leads',
-        Proposals: 'designer-portal/pipeline/project-list/empty-proposals',
-        Active:    'designer-portal/pipeline/project-list/empty-active',
-        Completed: 'designer-portal/pipeline/project-list/empty-completed',
+        Leads:      'designer-portal/pipeline/project-list/empty-leads',
+        Proposals:  'designer-portal/pipeline/project-list/empty-proposals',
+        Active:     'designer-portal/pipeline/project-list/empty-active',
+        Completed:  'designer-portal/pipeline/project-list/empty-completed',
+        // Unfiltered: shown when the Pipeline page renders with no `stage` filter
+        // applied and no items in any stage. The 4 stage-scoped keys above remain
+        // the spec-mandated variants per §6; this 5th key covers the all-stages
+        // empty surface so a first-time designer doesn't see a silent blank list.
+        Unfiltered: 'designer-portal/pipeline/project-list/empty-unfiltered',
       },
       StageDefinitions: {
         Leads:     'designer-portal/pipeline/stage/leads',
