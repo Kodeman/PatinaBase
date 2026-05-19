@@ -4,6 +4,12 @@ import { useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useLeads, useProposals, useProjects } from '@patina/supabase';
+import {
+  EmptyState,
+  SectionIntro,
+  SurfaceKeys,
+  useHelpContent,
+} from '@patina/help-system';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 
 type PipelineStage = 'leads' | 'proposals' | 'active' | 'completed';
@@ -32,6 +38,57 @@ const STAGE_LABELS: Record<PipelineStage, string> = {
   completed: 'Completed',
 };
 
+// ─── Help-system surface-key + fallback wiring per pipeline stage ─────────────
+//
+// The 4 stage-scoped empty-state keys are the spec-mandated variants
+// (per packages/help-system/src/surfaceKeys.ts → Pipeline.ProjectListEmpty).
+// The unfiltered key covers the all-stages-empty case so a first-time designer
+// arriving at /portal/pipeline never sees a silent blank list.
+//
+// `fallback` strings are placeholder copy rendered until Sanity content lands.
+// Once the CMS is populated the EmptyState wrapper takes over and the local
+// fallback is no longer shown.
+
+interface StageEmptyCopy {
+  surfaceKey: string;
+  fallbackHeading: string;
+  fallbackDescription: string;
+}
+
+const STAGE_EMPTY_COPY: Record<PipelineStage, StageEmptyCopy> = {
+  leads: {
+    surfaceKey: SurfaceKeys.DesignerPortal.Pipeline.ProjectListEmpty.Leads,
+    fallbackHeading: 'No leads in your pipeline',
+    fallbackDescription:
+      'New leads come in from the consumer app. They will land here when a homeowner reaches out.',
+  },
+  proposals: {
+    surfaceKey: SurfaceKeys.DesignerPortal.Pipeline.ProjectListEmpty.Proposals,
+    fallbackHeading: 'No proposals in flight',
+    fallbackDescription:
+      'Convert a lead into a proposal to start shaping the engagement.',
+  },
+  active: {
+    surfaceKey: SurfaceKeys.DesignerPortal.Pipeline.ProjectListEmpty.Active,
+    fallbackHeading: 'No active projects',
+    fallbackDescription:
+      'Once a proposal is signed, the project moves here so you can track its progress.',
+  },
+  completed: {
+    surfaceKey: SurfaceKeys.DesignerPortal.Pipeline.ProjectListEmpty.Completed,
+    fallbackHeading: 'No completed projects yet',
+    fallbackDescription:
+      'Finished projects archive here. Use them as references when scoping new work.',
+  },
+};
+
+const UNFILTERED_EMPTY_COPY: StageEmptyCopy = {
+  surfaceKey: SurfaceKeys.DesignerPortal.Pipeline.ProjectListEmpty.Unfiltered,
+  fallbackHeading: 'Your pipeline is empty',
+  fallbackDescription:
+    'Leads, proposals, active projects, and completed work all surface here as you build your practice.',
+};
+
 function formatValue(cents?: number): string {
   if (!cents) return '';
   const dollars = cents / 100;
@@ -44,6 +101,61 @@ function formatDate(dateStr: string): string {
     month: 'short',
     day: 'numeric',
   });
+}
+
+/**
+ * Renders a CMS-backed `<EmptyState>` if Sanity has content for the surface key,
+ * otherwise renders a local fallback so the surface is never literally blank
+ * during Sprint 1 (Sanity content is still being authored — see spec §13.4
+ * "Graceful Sanity downtime").
+ *
+ * Why not just `<EmptyState>` alone? The Layer-1 EmptyState wrapper returns
+ * null on a CMS miss without a hard fetch error, which is the right behavior
+ * for an established surface but leaves first-time designers staring at an
+ * empty pipeline border. Probing `useHelpContent` here lets us swap between
+ * CMS-backed and local copy without ever double-rendering both, while keeping
+ * the analytics / icon resolution / styling that EmptyState owns.
+ */
+function PipelineEmptyState({
+  copy,
+}: {
+  copy: StageEmptyCopy;
+}) {
+  // Cheap CMS probe — react-query dedupes this with the fetch inside <EmptyState>,
+  // so there is no extra network call.
+  const { data, isLoading } = useHelpContent(copy.surfaceKey, 'emptyState');
+
+  if (isLoading) {
+    // Mirror the loading skeleton used elsewhere on the page; keep the surface
+    // shape so layout does not jump.
+    return (
+      <div className="rounded-lg border border-[var(--border-default)] px-6 py-12 text-center">
+        <p className="text-sm text-[var(--text-muted)]">…</p>
+      </div>
+    );
+  }
+
+  // CMS hit — defer to the canonical wrapper for icon/heading/description/cta.
+  if (data) {
+    return (
+      <div className="rounded-lg border border-[var(--border-default)]">
+        <EmptyState surfaceKey={copy.surfaceKey} />
+      </div>
+    );
+  }
+
+  // CMS miss (Sprint 1 default) — render the local fallback copy so the surface
+  // is informative even before Sanity is populated.
+  return (
+    <div className="rounded-lg border border-[var(--border-default)] px-6 py-12 text-center">
+      <p className="text-sm font-medium text-[var(--text-primary)]">
+        {copy.fallbackHeading}
+      </p>
+      <p className="mt-1 text-[0.8rem] text-[var(--text-muted)]">
+        {copy.fallbackDescription}
+      </p>
+    </div>
+  );
 }
 
 function PipelineContent() {
@@ -119,20 +231,30 @@ function PipelineContent() {
 
   if (isLoading) return <LoadingStrata />;
 
+  // Pick the surface-key + fallback for the active empty-state variant.
+  // Mapping (per surfaceKeys.ts):
+  //   stageFilter='leads'      → Pipeline.ProjectListEmpty.Leads
+  //   stageFilter='proposals'  → Pipeline.ProjectListEmpty.Proposals
+  //   stageFilter='active'     → Pipeline.ProjectListEmpty.Active
+  //   stageFilter='completed'  → Pipeline.ProjectListEmpty.Completed
+  //   stageFilter=null         → Pipeline.ProjectListEmpty.Unfiltered
+  const emptyCopy: StageEmptyCopy = stageFilter
+    ? STAGE_EMPTY_COPY[stageFilter]
+    : UNFILTERED_EMPTY_COPY;
+
   return (
     <div className="pt-8">
-      <h1 className="type-section-head mb-6">
+      <h1 className="type-section-head mb-2">
         {stageFilter ? STAGE_LABELS[stageFilter] : 'Pipeline'}
       </h1>
+      <SectionIntro
+        surfaceKey={SurfaceKeys.DesignerPortal.Pipeline.ProjectList}
+        fallback="Track every project from first inquiry to handoff in one chronological view."
+        className="mb-6 max-w-prose"
+      />
 
       {items.length === 0 ? (
-        <div className="rounded-lg border border-[var(--border-default)] px-6 py-12 text-center">
-          <p className="text-sm text-[var(--text-muted)]">
-            {stageFilter
-              ? `No ${STAGE_LABELS[stageFilter].toLowerCase()} items`
-              : 'No pipeline items yet'}
-          </p>
-        </div>
+        <PipelineEmptyState copy={emptyCopy} />
       ) : (
         <div className="flex flex-col gap-1">
           {items.map((item) => (
