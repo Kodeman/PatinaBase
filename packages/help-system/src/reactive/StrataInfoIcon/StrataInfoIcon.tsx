@@ -23,23 +23,12 @@
  *    `trigger: 'strata_info_icon'` to differentiate from the generic
  *    InfoIcon trigger.
  *
- * NOTE on inlined StrataMark SVG:
- *  The canonical glyph lives at
- *  `packages/patina-design-system/src/components/StrataMark/StrataMark.tsx`,
- *  but `@patina/design-system`'s built dist does not currently export it
- *  (verified 2026-05-19 against
- *  `packages/patina-design-system/dist/index.d.ts`). To avoid coupling our
- *  test/build cycle to a downstream dts build fix, we clone the SVG shape
- *  inline here. The shape MUST stay in sync with the canonical glyph.
- *
- * TODO: Swap inlined SVG back to `import { StrataMark } from '@patina/design-system'`
- *  once the design-system dts ships with StrataMark in its public exports.
- *
  * Spec reference: docs/prds/Guide/patina-help-guidance-engineering-handoff.md §4.2
  */
 
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import { StrataMark } from '@patina/design-system'
 import { Tooltip } from '../Tooltip'
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -63,57 +52,6 @@ export interface StrataInfoIconProps {
 // build-time dependency on the design-system dist output.
 function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs))
-}
-
-/**
- * Inlined StrataMark — clone of
- * packages/patina-design-system/src/components/StrataMark/StrataMark.tsx.
- *
- * Three descending horizontal lines: top is widest (full width), middle is
- * three-quarters, bottom is half. Cascade reads left-to-right top-to-bottom.
- */
-function StrataMarkInline({ size = 14 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 14 14"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-      // `currentColor` lets the parent button drive tone (Clay/terracotta on
-      // hover, Aged Oak at rest). The trigger button owns the color via
-      // Tailwind classes.
-    >
-      <line
-        x1="1"
-        y1="3.5"
-        x2="13"
-        y2="3.5"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <line
-        x1="1"
-        y1="7"
-        x2="10"
-        y2="7"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <line
-        x1="1"
-        y1="10.5"
-        x2="7"
-        y2="10.5"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -154,7 +92,7 @@ export function StrataInfoIcon({
           className,
         )}
       >
-        <StrataMarkInline size={size} />
+        <StrataMark size={size} />
       </button>
     </Tooltip>
   )
