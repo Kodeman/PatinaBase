@@ -21,15 +21,19 @@
 //  └─────────────────────────────────────────────────────────────────────────┘
 //
 //  ┌─────────────────────────────────────────────────────────────────────────┐
-//  │  v2 backend (Sprint 4 — DEFERRED, see plan §15 cleanup item):            │
+//  │  v2 backend (Sprint 4 / S4-1 — SHIPPED):                                  │
 //  ├─────────────────────────────────────────────────────────────────────────┤
-//  │  Swap UserDefaults for Supabase `user_profiles.help_state` JSONB:        │
-//  │    { [tourKey]: FirstLaunchTourState }                                   │
+//  │  Supabase `profiles.help_state` JSONB. Implemented in                    │
+//  │  `Services/SupabaseHelpStateAdapter.swift`. UserDefaults remains as the  │
+//  │  anon / offline fallback, and as a mirror of the Supabase state for      │
+//  │  pre-hydration reads. The `FirstLaunchTourModel.enableSupabaseSync(_:)`  │
+//  │  hook installs the adapter once the user is authenticated; every         │
+//  │  subsequent `setFirstLaunchTourState` write is also pushed to Supabase   │
+//  │  via the adapter so a tour resolved on one device never re-appears on    │
+//  │  another.                                                                 │
 //  │                                                                          │
-//  │  Spec §4.7 rule 1 explicitly calls out: "State persisted in user        │
-//  │  profile, not localStorage (so it survives device changes)". This        │
-//  │  module exists so the swap is a one-file change — `FirstLaunchTour`     │
-//  │  itself never touches UserDefaults.                                       │
+//  │  Spec §4.7 rule 1: "State persisted in user profile, not localStorage    │
+//  │  (so it survives device changes)" — satisfied by the Supabase backing.   │
 //  └─────────────────────────────────────────────────────────────────────────┘
 //
 //  Public API: `getFirstLaunchTourState(_:)`, `setFirstLaunchTourState(_:_:)`,

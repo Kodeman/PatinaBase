@@ -34,8 +34,13 @@
 //  │  bound to the orchestrator's active step.                                │
 //  └─────────────────────────────────────────────────────────────────────────┘
 //
-//  Persistence (see `firstLaunchTourState.swift`):
-//   • UserDefaults backing, key `help-system.tour.<tourKey>`
+//  Persistence (see `firstLaunchTourState.swift` + `SupabaseHelpStateAdapter`):
+//   • UserDefaults backing (anon / offline fallback), key
+//     `help-system.tour.<tourKey>`
+//   • Supabase `profiles.help_state` (S4-1) — authoritative for signed-in
+//     users. The orchestrator installs the adapter on `enableSupabaseSync`
+//     and writes through to both backings so a tour dismissed on one device
+//     never re-appears on another.
 //   • `completed` OR `abandoned` → tour never auto-starts again
 //   • `launched: true` is written on the very first auto-start attempt so the
 //     UserDefaults entry doubles as "this device has been opened once"
@@ -53,7 +58,9 @@
 //  the tour is marked resolved.
 //
 
+import Auth
 import Combine
+import Supabase
 import SwiftUI
 
 // MARK: - Anchor identifiers
@@ -127,6 +134,14 @@ public final class FirstLaunchTourModel: ObservableObject {
     /// Cached analytics facade so tests can swap in a stub.
     private let analytics: HelpAnalytics
 
+    /// Optional Supabase-backed help-state adapter (S4-1). When non-nil the
+    /// model consults the adapter's cached entry before UserDefaults during
+    /// first-launch detection, and mirrors every persistence write to
+    /// Supabase via `Task { … }`. Set via `enableSupabaseSync(_:)` once the
+    /// user is authenticated; anonymous + pre-hydration callers fall back to
+    /// UserDefaults only (same behaviour as v1 / Sprint 3).
+    private var supabaseAdapter: SupabaseHelpStateAdapter?
+
     public init(
         tourKey: String = FirstLaunchTourModel.defaultTourKey,
         steps: [FirstLaunchTourStep] = FirstLaunchTourModel.defaultSteps,
@@ -135,6 +150,20 @@ public final class FirstLaunchTourModel: ObservableObject {
         self.tourKey = tourKey
         self.steps = steps
         self.analytics = analytics
+    }
+
+    /// Install the Supabase-backed help-state adapter. Caller is responsible
+    /// for calling `loadState()` on the adapter prior to this — the model
+    /// expects the cache to already reflect cross-device state.
+    public func enableSupabaseSync(adapter: SupabaseHelpStateAdapter) {
+        self.supabaseAdapter = adapter
+    }
+
+    /// Remove the Supabase adapter (on sign-out, for example). Subsequent
+    /// writes go to UserDefaults only — the next signed-in session installs
+    /// a fresh adapter scoped to the new user.
+    public func disableSupabaseSync() {
+        self.supabaseAdapter = nil
     }
 
     /// Canonical default tour key. Matches the value referenced by the
@@ -177,11 +206,37 @@ public final class FirstLaunchTourModel: ObservableObject {
     /// `.task` modifiers. The first call to fire the auto-start path writes
     /// `launched: true` so subsequent app launches DO NOT re-trigger the tour
     /// even if the user closed the app before completing it.
+    ///
+    /// When the Supabase adapter is installed (S4-1), the cross-device cache
+    /// is consulted first — a tour resolved on another device skips
+    /// auto-start here even if local UserDefaults says fresh user.
     public func checkFirstLaunch() {
-        let state = getFirstLaunchTourState(tourKey)
-        if state.isResolved {
+        // 1. Supabase cache (cross-device authoritative when present).
+        if let adapter = supabaseAdapter {
+            // Task spin-up — we read the actor's cached state synchronously
+            // via an `await`-bridge to the @MainActor model.
+            Task { [weak self] in
+                guard let self else { return }
+                let entry = await adapter.cachedTourEntry(self.tourKey)
+                if entry?.isResolved == true {
+                    return
+                }
+                if entry?.launched == true {
+                    return
+                }
+                self.checkLocalAndStart()
+            }
             return
         }
+        // 2. UserDefaults only — anon / pre-hydration path.
+        checkLocalAndStart()
+    }
+
+    /// Local-state branch of the first-launch detector. Pulled out so the
+    /// Supabase-cache branch can re-use it after its async check.
+    private func checkLocalAndStart() {
+        let state = getFirstLaunchTourState(tourKey)
+        if state.isResolved { return }
         if state.launched == true {
             // Already shown once but the user closed the app mid-tour. Per
             // spec §4.7 rule 1 ("One-shot per user"), do NOT re-auto-start.
@@ -192,12 +247,20 @@ public final class FirstLaunchTourModel: ObservableObject {
 
     // MARK: - Imperative actions
 
-    /// Begin the tour from step 0. Writes `launched: true` to UserDefaults so
-    /// subsequent launches DO NOT trigger again. Also fires
-    /// `help.tour.started`.
+    /// Begin the tour from step 0. Writes `launched: true` to UserDefaults
+    /// (and Supabase, when sync is enabled) so subsequent launches DO NOT
+    /// trigger again. Also fires `help.tour.started`.
     public func startTour(triggerSource: String) {
         guard !isActive else { return }
         setFirstLaunchTourState(tourKey, FirstLaunchTourState(launched: true))
+        if let adapter = supabaseAdapter {
+            Task { [tourKey] in
+                await adapter.setTourEntry(
+                    tourKey,
+                    patch: HelpStateBlob.TourEntry(launched: true)
+                )
+            }
+        }
         startedAt = Date()
         viewedSteps = [0]
         currentStep = 0
@@ -240,14 +303,27 @@ public final class FirstLaunchTourModel: ObservableObject {
             durationMs: durationMs,
             stepsViewed: viewedSteps.count
         )
+        let completedAt = ISO8601DateFormatter().string(from: Date())
         setFirstLaunchTourState(
             tourKey,
             FirstLaunchTourState(
                 completed: true,
                 launched: true,
-                completedAt: ISO8601DateFormatter().string(from: Date())
+                completedAt: completedAt
             )
         )
+        if let adapter = supabaseAdapter {
+            Task { [tourKey] in
+                await adapter.setTourEntry(
+                    tourKey,
+                    patch: HelpStateBlob.TourEntry(
+                        completed: true,
+                        launched: true,
+                        completedAt: completedAt
+                    )
+                )
+            }
+        }
         isActive = false
     }
 
@@ -260,15 +336,30 @@ public final class FirstLaunchTourModel: ObservableObject {
             atStep: currentStep,
             totalSteps: steps.count
         )
+        let abandonedAt = ISO8601DateFormatter().string(from: Date())
+        let atStep = currentStep
         setFirstLaunchTourState(
             tourKey,
             FirstLaunchTourState(
                 abandoned: true,
                 launched: true,
-                atStep: currentStep,
-                abandonedAt: ISO8601DateFormatter().string(from: Date())
+                atStep: atStep,
+                abandonedAt: abandonedAt
             )
         )
+        if let adapter = supabaseAdapter {
+            Task { [tourKey] in
+                await adapter.setTourEntry(
+                    tourKey,
+                    patch: HelpStateBlob.TourEntry(
+                        abandoned: true,
+                        launched: true,
+                        atStep: atStep,
+                        abandonedAt: abandonedAt
+                    )
+                )
+            }
+        }
         isActive = false
     }
 
@@ -347,8 +438,40 @@ public struct FirstLaunchTour<Content: View>: View {
             .environment(\.firstLaunchTourModel, model)
             .environmentObject(model)
             .task {
+                // S4-1 — install the Supabase adapter when the user is
+                // authenticated. Read once at task spin-up; on sign-in the
+                // host view re-mounts because of the auth coordinator's
+                // identity-tied root view, which means a fresh `.task`
+                // fires and we re-bind to the new user's adapter.
+                await Self.installSupabaseAdapterIfAuthenticated(model: model)
                 model.checkFirstLaunch()
             }
+    }
+
+    /// Helper: read the current Supabase user id and, if present, build +
+    /// install the cross-device help-state adapter on `model`. Idempotent —
+    /// re-installing for the same user is harmless. Failures (no session,
+    /// network blip during hydrate) keep the model on the UserDefaults-only
+    /// path, matching the v1 / Sprint 3 behaviour.
+    @MainActor
+    private static func installSupabaseAdapterIfAuthenticated(
+        model: FirstLaunchTourModel
+    ) async {
+        // `auth.session` throws when there's no signed-in user — that's the
+        // "anon" path. We leave the model on UserDefaults-only and bail.
+        guard let session = try? await SupabaseClientManager.shared.client.auth.session else {
+            return
+        }
+        let userId = session.user.id.uuidString.lowercased()
+        let adapter = SupabaseHelpStateAdapter.withSharedClient(userId: userId)
+        await adapter.loadState()
+        // Sweep any pre-S4-1 UserDefaults entries up to Supabase so the next
+        // launch reads cleanly. Returns 0 when there's nothing to migrate.
+        _ = await migrateUserDefaultsHelpStateToSupabase(
+            adapter: adapter,
+            knownTourKeys: [model.tourKey]
+        )
+        model.enableSupabaseSync(adapter: adapter)
     }
 }
 
