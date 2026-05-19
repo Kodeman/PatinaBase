@@ -356,9 +356,109 @@ export const SurfaceKeys = {
     // Sprint 1: only the minimum to prove the namespace works. Migrations in Sprint 3.
     Dashboard: 'admin-portal/dashboard',
   },
+  /**
+   * Client Portal — the homeowner / consumer web surface (Sprint 3 Stream F3).
+   *
+   * Persona context: `'consumer'`. The voice is conversational and hospitality-
+   * oriented, not designer-jargon. Per spec §8 (Writing Standards), Patina-
+   * internal terms (FF&E, Aesthete, Founding Circle, etc.) MUST be either
+   * avoided or explained in consumer terms here. The CMS-side persona variants
+   * carry the voice difference; the keys themselves are voice-agnostic and
+   * mirror the structure designers use so authoring tooling stays consistent.
+   *
+   * Spec refs:
+   *   - §6.2 — surface-key shape (portal/section/component[/state])
+   *   - §8   — Writing Standards (consumer voice characteristics)
+   *   - §9.2 — F3 client-portal full pass
+   *   - §12.4 — QA acceptance checklist
+   *
+   * Note on backwards compatibility: Sprint 1 shipped a single literal
+   *   ClientPortal.Home = 'client-portal/home'
+   * which the C6 client-header HelpButton still references via the pathname
+   * mapper. The new shape preserves that literal as `Home.Root` so any seeded
+   * Sanity content keyed on `client-portal/home` keeps resolving; downstream
+   * code paths use the nested form going forward.
+   */
   ClientPortal: {
-    // Sprint 1: only the minimum.
-    Home: 'client-portal/home',
+    Home: {
+      // Page root — what the C6 HelpButton + pathname mapper resolve to.
+      Root: 'client-portal/home',
+      // Section intro beneath the "Today" / "Curated for you" hero on /today.
+      GreetingIntro: 'client-portal/home/greeting-intro',
+      // Section heading for the "For your rooms" daily feed.
+      RoomsFeedIntro: 'client-portal/home/rooms-feed-intro',
+      Empty: {
+        // No daily story available yet.
+        NoStory:  'client-portal/home/empty/no-story',
+        // No rooms captured (homeowner hasn't run the iOS app).
+        NoRooms:  'client-portal/home/empty/no-rooms',
+      },
+    },
+    // ─── Projects — the homeowner's project list + per-project view ───────
+    //
+    // The list at /projects is the homeowner's primary landing surface (the
+    // bare `/` redirects to /projects). Each card opens the project view at
+    // /projects/[projectId]. Per spec §8 the voice is hospitality-oriented
+    // ("Your projects" / "your designer"), not pro lingo ("the pipeline").
+    Projects: {
+      Root:      'client-portal/projects/root',
+      ListIntro: 'client-portal/projects/list-intro',
+      Empty: {
+        // First-time homeowner — no active projects yet. Most common landing
+        // state for a freshly-invited client.
+        NoProjects: 'client-portal/projects/empty/no-projects',
+      },
+      Detail: {
+        // Page-level intro for /projects/[projectId].
+        Root:           'client-portal/projects/detail/root',
+        // Section intro for the project timeline view.
+        TimelineIntro:  'client-portal/projects/detail/timeline-intro',
+        // Section intro for the budget summary (when shown to homeowner).
+        BudgetIntro:    'client-portal/projects/detail/budget-intro',
+        // Section intro for the approvals list (decisions awaiting client).
+        ApprovalsIntro: 'client-portal/projects/detail/approvals-intro',
+      },
+    },
+    // ─── Rooms (the homeowner's term for "scans") ──────────────────────────
+    //
+    // Internally we call them room scans; in consumer copy we say "rooms" or
+    // "captured rooms" — the iOS app is the capture surface. Empty state is
+    // hospitality-framed (you haven't captured one yet; here's the warm path
+    // to do it from your phone).
+    Scans: {
+      Root:      'client-portal/scans/root',
+      ListIntro: 'client-portal/scans/list-intro',
+      Empty: {
+        NoScans: 'client-portal/scans/empty/no-scans',
+      },
+    },
+    // ─── Reviews — homeowner shares experience after a project wraps ──────
+    //
+    // The voice here is "share your experience" — never "rate" or "submit
+    // feedback." Pending requests carry an explicit ask from the designer.
+    Reviews: {
+      Root:      'client-portal/reviews/root',
+      ListIntro: 'client-portal/reviews/list-intro',
+      Empty: {
+        // No reviews requested yet (first-time / nothing pending).
+        NoReviews: 'client-portal/reviews/empty/no-reviews',
+      },
+      PendingIntro: 'client-portal/reviews/pending-intro',
+    },
+    // ─── Messages — conversations with the designer team ──────────────────
+    //
+    // Consumer voice: "your designer" / "your design team" — never "users"
+    // or "counterparts." The empty state is reassuring, not technical.
+    Messages: {
+      Root:      'client-portal/messages/root',
+      ListIntro: 'client-portal/messages/list-intro',
+      Empty: {
+        // No conversations yet.
+        NoConversations: 'client-portal/messages/empty/no-conversations',
+        // A thread is open but has no messages yet.
+        NoMessages:      'client-portal/messages/empty/no-messages',
+      },
+    },
   },
   /**
    * iOS consumer app surfaces — Sprint 2 Stream G7 first migration.

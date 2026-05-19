@@ -23,6 +23,10 @@ import {
   type CommsMessage,
   type ThreadSummary,
 } from '@patina/supabase';
+// F3 — Messages page migrated to ambient help-system per spec §9.2.
+// Consumer voice: "your designer", "your design team" — never "users" /
+// "counterparts" / "DM". Empty-state copy is reassuring, not technical.
+import { SectionIntro, SurfaceKeys } from '@patina/help-system';
 import { formatRelativeTime, getInitials } from '@/lib/utils/format';
 import { ReadReceipt } from '@/components/messages/ReadReceipt';
 import { ThreadSettingsMenu } from '@/components/messages/ThreadSettingsMenu';
@@ -206,7 +210,11 @@ export default function MessagesPage() {
       <div className="mx-auto max-w-6xl">
         <div className="mb-6">
           <h1 className="type-page-title">Messages</h1>
-          <p className="type-body mt-1">Communicate with your design team</p>
+          <SectionIntro
+            surfaceKey={SurfaceKeys.ClientPortal.Messages.ListIntro}
+            fallback="Stay in touch with your design team."
+            className="mt-1 type-body max-w-prose"
+          />
         </div>
 
         <div className="grid gap-0 lg:grid-cols-[320px,1fr]">

@@ -1,6 +1,10 @@
 import { redirect } from 'next/navigation';
 
 import { getUser } from '@patina/supabase/server';
+// F3 — client-portal /scans migrated to ambient help-system per spec §9.2.
+// Consumer voice: we call them "rooms" externally (not "scans") since that's
+// the homeowner's mental model. The iOS app is the capture surface.
+import { SectionIntro, SurfaceKeys } from '@patina/help-system';
 
 import { ClientHeader } from '@/components/layout/client-header';
 import { RoomScanList } from '@/components/scans/RoomScanList';
@@ -28,9 +32,11 @@ export default async function ScansPage() {
           <h1 className="type-page-title mt-4">
             Captured rooms from the Patina iOS app.
           </h1>
-          <p className="type-body mt-4">
-            Open a room to view its 3D model, manage who you&rsquo;ve shared it with, or get design help.
-          </p>
+          <SectionIntro
+            surfaceKey={SurfaceKeys.ClientPortal.Scans.ListIntro}
+            fallback="Open a room to view its 3D model, manage who you’ve shared it with, or get design help."
+            className="mt-4 type-body max-w-prose"
+          />
         </section>
 
         <StrataMark variant="mini" />

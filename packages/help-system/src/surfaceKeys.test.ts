@@ -153,8 +153,12 @@ describe('SurfaceKeys — spot-check constant values', () => {
     expect(SurfaceKeys.AdminPortal.Dashboard).toBe('admin-portal/dashboard')
   })
 
-  it('ClientPortal.Home is the correct literal', () => {
-    expect(SurfaceKeys.ClientPortal.Home).toBe('client-portal/home')
+  it('ClientPortal.Home.Root is the correct literal', () => {
+    // Sprint 1 shipped `ClientPortal.Home = 'client-portal/home'` as a leaf
+    // string. F3 (Sprint 3) restructured Home into a namespace; the original
+    // literal lives on as `Home.Root` to preserve any seeded Sanity docs
+    // keyed on `client-portal/home` and the C6 pathname mapper.
+    expect(SurfaceKeys.ClientPortal.Home.Root).toBe('client-portal/home')
   })
 
   // IOSApp parity spot-checks — these literals MUST match the Swift
