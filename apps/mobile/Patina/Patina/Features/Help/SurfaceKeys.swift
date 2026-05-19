@@ -134,6 +134,26 @@ public enum SurfaceKeys {
             public static let materials: SurfaceKey = "ios-app/product-detail/materials"
         }
 
+        /// First-launch coachmark tour — Sprint 3 Stream G9.
+        ///
+        /// A 3-step orchestrated coachmark sequence shown to consumer-persona
+        /// users on the very first launch of the iOS app. Mirrors the web's
+        /// `designer-portal/tours/first-project-walkthrough` namespace pattern.
+        ///
+        /// State persists via `UserDefaults` (`help-system.tour.<tourKey>`) —
+        /// once `completed` or `abandoned`, the tour never auto-starts again.
+        public enum FirstLaunchTour {
+            /// Tour root — used by analytics events
+            /// (`help.tour.started`/`.completed`/`.abandoned`) per spec §10.1.
+            public static let root: SurfaceKey = "ios-app/first-launch-tour"
+            /// Step 1 — anchored to the Daily Room greeting header.
+            public static let step1Home: SurfaceKey = "ios-app/first-launch-tour/step-1-home"
+            /// Step 2 — anchored to the "save" affordance on a daily product card.
+            public static let step2Saved: SurfaceKey = "ios-app/first-launch-tour/step-2-saved"
+            /// Step 3 — anchored to the profile/account entry point in the header.
+            public static let step3Profile: SurfaceKey = "ios-app/first-launch-tour/step-3-profile"
+        }
+
         // MARK: - Designer (G10)
         //
         // The iOS Designer-mode home surfaces a designer's studio today —
@@ -277,6 +297,11 @@ public enum SurfaceKeys {
         IOSApp.ProductDetail.arAction,
         IOSApp.ProductDetail.spatialContext,
         IOSApp.ProductDetail.materials,
+        // IOSApp/FirstLaunchTour (G9 — Sprint 3 iOS first-launch coachmark tour)
+        IOSApp.FirstLaunchTour.root,
+        IOSApp.FirstLaunchTour.step1Home,
+        IOSApp.FirstLaunchTour.step2Saved,
+        IOSApp.FirstLaunchTour.step3Profile,
         // IOSApp/Designer (G10)
         IOSApp.Designer.root,
         IOSApp.Designer.studioToday,

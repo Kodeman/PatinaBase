@@ -837,6 +837,21 @@ export const SurfaceKeys = {
       Materials:       'ios-app/product-detail/materials',
     },
     /**
+     * First-launch coachmark tour — Sprint 3 Stream G9.
+     *
+     * 3 steps shown to a consumer on the very first launch of the iOS app.
+     * Persistence + orchestration live in Swift (`FirstLaunchTour.swift` +
+     * `firstLaunchTourState.swift`); these keys mirror the Sanity surface
+     * keys so authors can write copy in the shared CMS and so the parity
+     * test pins the contract across platforms.
+     */
+    FirstLaunchTour: {
+      Root:         'ios-app/first-launch-tour',
+      Step1Home:    'ios-app/first-launch-tour/step-1-home',
+      Step2Saved:   'ios-app/first-launch-tour/step-2-saved',
+      Step3Profile: 'ios-app/first-launch-tour/step-3-profile',
+    },
+    /**
      * G10 — iOS Features sweep (Sprint 3). Migrations beyond G7's Home +
      * ProductDetail: the Designer-mode dashboard, the QR sign-in flow, the
      * Companion's expanded panel, the rooms gallery, and the profile screen.

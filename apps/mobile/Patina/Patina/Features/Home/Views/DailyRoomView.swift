@@ -20,6 +20,17 @@ struct DailyRoomView: View {
     @Namespace private var cardNamespace
 
     var body: some View {
+        // First-launch tour wraps the entire screen so the three coachmark
+        // anchors (greeting header / saved heart / profile monogram) all
+        // receive the orchestrator via SwiftUI environment. The orchestrator
+        // auto-starts the 3-step sequence on the first launch and persists
+        // resolution state so subsequent launches DO NOT re-trigger.
+        FirstLaunchTour {
+            screenBody
+        }
+    }
+
+    private var screenBody: some View {
         ZStack(alignment: .bottom) {
             PatinaColors.offWhite.ignoresSafeArea()
 
@@ -154,8 +165,8 @@ struct DailyRoomView: View {
                 )
 
                 LazyVStack(spacing: 0) {
-                    ForEach(viewModel.recommendations) { rec in
-                        DailyProductCard(
+                    ForEach(Array(viewModel.recommendations.enumerated()), id: \.element.id) { index, rec in
+                        let card = DailyProductCard(
                             recommendation: rec,
                             namespace: cardNamespace,
                             isExpanded: expandedRecommendation?.id == rec.id,
@@ -169,6 +180,17 @@ struct DailyRoomView: View {
                             },
                             spatialContext: viewModel.spatialContext[rec.product.id] ?? [:]
                         )
+                        if index == 0 {
+                            // First-launch tour anchor — Step 2's popover
+                            // attaches to the topmost daily product card, the
+                            // surface that carries the heart/save affordance
+                            // the step describes. Only the first card carries
+                            // the anchor so the popover doesn't render
+                            // multiple times for users with a long feed.
+                            card.firstLaunchTourAnchor(.savedHeart)
+                        } else {
+                            card
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
