@@ -1,3 +1,16 @@
+/**
+ * Help content fetch hook.
+ *
+ * CANONICAL CONTRACT — see
+ * `packages/help-system/src/persistence/helpContentQuery.md`.
+ *
+ * The same 4-step persona fallback chain is implemented on iOS at
+ * `apps/mobile/Patina/Patina/Features/Help/Services/SanityHelpClient.swift`.
+ * The same (surfaceKey, contentType, persona) triple must resolve to the
+ * same Sanity `_id` on both platforms. If you change anything below,
+ * update the Swift client, the shared doc, and both test suites in the
+ * same commit — drift here re-opens risk R3.
+ */
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { getSanityClient } from '../sanityClient'
 import type { ContentTypeMap, HelpContentType, Persona } from '../contentTypes'
@@ -14,15 +27,16 @@ const groq = (strings: TemplateStringsArray, ...values: unknown[]): string =>
 const HELP_CONTENT_STALE_MS = 5 * 60 * 1000 // 5 minutes per spec §7.3
 
 /**
- * Fetches help content from Sanity by surface key + content type, with a
- * four-step persona fallback chain (spec Section 7.3).
+ * Fetches help content from Sanity by surface key + content type, applying
+ * the canonical 4-step persona fallback chain (spec §7.3, full contract in
+ * `packages/help-system/src/persistence/helpContentQuery.md`):
  *
- * Fallback chain:
- *   1. Exact match: surfaceKey + contentType + persona
- *   2. surfaceKey + contentType + persona='all'
- *   3. Parent surfaceKey + contentType + persona  (one level up — split on last '/')
- *   4. Parent surfaceKey + contentType + persona='all'
- *   5. Return null, log a warning to console
+ *   1. Exact match — surfaceKey + contentType + persona
+ *   2. surfaceKey + contentType + persona='all'       (skip if persona==='all')
+ *   3. Parent surfaceKey + contentType + persona      (one level up — split
+ *                                                       on last `/`)
+ *   4. Parent surfaceKey + contentType + persona='all' (skip if persona==='all')
+ *   5. Return null and log a single warning.
  *
  * On Sanity downtime: returns null gracefully (spec Section 13.4).
  *
@@ -55,7 +69,9 @@ export function useHelpContent<T extends HelpContentType>(
 type SanityClientType = ReturnType<typeof getSanityClient>
 
 /**
- * Executes the 4-step fallback chain.
+ * Executes the canonical 4-step fallback chain. The plan is documented in
+ * `packages/help-system/src/persistence/helpContentQuery.md` and mirrored
+ * in `SanityHelpClient.fallbackPlan` on iOS.
  *
  * Each step issues one GROQ query. Sanity network errors are caught at the
  * query level and logged to console; the chain returns null rather than

@@ -2,13 +2,19 @@
 //  SanityHelpClientTests.swift
 //  PatinaTests
 //
-//  Swift Testing coverage for `SanityHelpClient` — the Sprint 1 Stream G2
-//  task. Verifies:
+//  Swift Testing coverage for `SanityHelpClient`. Verifies:
 //
 //   * URL construction round-trips the project ID, dataset, API version,
 //     and the parameterized GROQ query.
-//   * Persona fallback chain mirrors spec §7.3: exact → designer (for
-//     consumer/maker only) → all → nil.
+//   * Canonical fallback chain mirrors the web `useHelpContent` hook and
+//     spec §7.3:
+//       1. exact key + exact persona
+//       2. exact key + "all"             (skipped iff persona is nil/"all")
+//       3. parent key + exact persona    (skipped iff no parent)
+//       4. parent key + "all"            (skipped iff persona is nil/"all"
+//                                          OR no parent)
+//     Documented in
+//     `packages/help-system/src/persistence/helpContentQuery.md`.
 //   * The in-memory cache returns the same value within TTL without a
 //     second network call.
 //   * Network errors collapse to `nil` rather than throwing.
@@ -101,22 +107,7 @@ private let tooltipPayload = """
 }
 """
 
-private let designerFallbackPayload = """
-{
-  "result": {
-    "_type": "helpContent",
-    "surfaceKey": "designer-portal/today/welcome",
-    "persona": "designer",
-    "contentType": "tooltip",
-    "tooltipContent": {
-      "eyebrow": "Designer copy",
-      "body": "Canonical authored variant for designer / consumer / maker."
-    }
-  }
-}
-"""
-
-private let allFallbackPayload = """
+private let allLeafPayload = """
 {
   "result": {
     "_type": "helpContent",
@@ -124,7 +115,36 @@ private let allFallbackPayload = """
     "persona": "all",
     "contentType": "tooltip",
     "tooltipContent": {
-      "body": "Persona-agnostic copy."
+      "body": "Persona-agnostic copy at the leaf surface."
+    }
+  }
+}
+"""
+
+private let parentDesignerPayload = """
+{
+  "result": {
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/today",
+    "persona": "designer",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "eyebrow": "Parent designer",
+      "body": "Authored at the parent surface for designers."
+    }
+  }
+}
+"""
+
+private let parentAllPayload = """
+{
+  "result": {
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/today",
+    "persona": "all",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "body": "Persona-agnostic copy at the parent surface."
     }
   }
 }
@@ -184,41 +204,76 @@ struct SanityHelpClientTests {
         #expect(raw.contains("%3D%3D"))
     }
 
-    // MARK: Persona fallback chain (pure)
+    // MARK: Canonical fallback plan (pure)
 
     @Test
-    func personaFallbackChain_designerYieldsDesignerThenAll() async {
-        let client = SanityHelpClient(session: StubURLSession())
-        let chain = await client.personaFallbackChain(for: .designer)
-        #expect(chain == ["designer", "all"])
+    func fallbackPlan_designerYieldsFourSteps() {
+        let plan = SanityHelpClient.fallbackPlan(
+            surfaceKey: "designer-portal/today/welcome",
+            persona: .designer
+        )
+        #expect(plan == [
+            .init(surfaceKey: "designer-portal/today/welcome", persona: "designer"),
+            .init(surfaceKey: "designer-portal/today/welcome", persona: "all"),
+            .init(surfaceKey: "designer-portal/today", persona: "designer"),
+            .init(surfaceKey: "designer-portal/today", persona: "all"),
+        ])
     }
 
     @Test
-    func personaFallbackChain_adminYieldsAdminThenAll() async {
-        let client = SanityHelpClient(session: StubURLSession())
-        let chain = await client.personaFallbackChain(for: .admin)
-        #expect(chain == ["admin", "all"])
+    func fallbackPlan_consumerYieldsFourSteps() {
+        // Consumer no longer falls back through "designer" — the canonical
+        // chain only uses the persona-agnostic "all" sentinel (matches web).
+        let plan = SanityHelpClient.fallbackPlan(
+            surfaceKey: "designer-portal/today/welcome",
+            persona: .consumer
+        )
+        #expect(plan == [
+            .init(surfaceKey: "designer-portal/today/welcome", persona: "consumer"),
+            .init(surfaceKey: "designer-portal/today/welcome", persona: "all"),
+            .init(surfaceKey: "designer-portal/today", persona: "consumer"),
+            .init(surfaceKey: "designer-portal/today", persona: "all"),
+        ])
     }
 
     @Test
-    func personaFallbackChain_consumerFallsBackToDesignerThenAll() async {
-        let client = SanityHelpClient(session: StubURLSession())
-        let chain = await client.personaFallbackChain(for: .consumer)
-        #expect(chain == ["consumer", "designer", "all"])
+    func fallbackPlan_nilCallerSkipsRedundantAllSteps() {
+        // A nil/persona-agnostic caller maps to wire "all". Steps 2 and 4
+        // would re-issue identical requests and are therefore skipped.
+        let plan = SanityHelpClient.fallbackPlan(
+            surfaceKey: "designer-portal/today/welcome",
+            persona: nil
+        )
+        #expect(plan == [
+            .init(surfaceKey: "designer-portal/today/welcome", persona: "all"),
+            .init(surfaceKey: "designer-portal/today", persona: "all"),
+        ])
     }
 
     @Test
-    func personaFallbackChain_makerFallsBackToDesignerThenAll() async {
-        let client = SanityHelpClient(session: StubURLSession())
-        let chain = await client.personaFallbackChain(for: .maker)
-        #expect(chain == ["maker", "designer", "all"])
+    func fallbackPlan_noParentDropsSteps3And4() {
+        // A surface key without a `/` has no parent — only the two
+        // exact-key steps remain.
+        let plan = SanityHelpClient.fallbackPlan(
+            surfaceKey: "rootless",
+            persona: .designer
+        )
+        #expect(plan == [
+            .init(surfaceKey: "rootless", persona: "designer"),
+            .init(surfaceKey: "rootless", persona: "all"),
+        ])
     }
 
     @Test
-    func personaFallbackChain_nilSkipsToAll() async {
-        let client = SanityHelpClient(session: StubURLSession())
-        let chain = await client.personaFallbackChain(for: nil)
-        #expect(chain == ["all"])
+    func parentSurfaceKey_dropsLastSegment() {
+        #expect(
+            SanityHelpClient.parentSurfaceKey("designer-portal/today/welcome")
+                == "designer-portal/today"
+        )
+        #expect(
+            SanityHelpClient.parentSurfaceKey("designer-portal/today") == "designer-portal"
+        )
+        #expect(SanityHelpClient.parentSurfaceKey("rootless") == nil)
     }
 
     // MARK: Network behaviour
@@ -245,11 +300,11 @@ struct SanityHelpClientTests {
     }
 
     @Test
-    func fetchContent_consumerFallsBackThroughDesignerToAll() async throws {
+    func fetchContent_consumerFallsBackToLeafAllThenStops() async throws {
+        // Canonical chain step 1 (consumer at leaf) misses; step 2
+        // (leaf + "all") hits, so the parent steps are NOT issued.
         let session = StubURLSession()
-        // Step 1 ("consumer"): miss
-        // Step 2 ("designer"): hit — should stop here
-        session.enqueue([.nullResult, .ok(designerFallbackPayload)])
+        session.enqueue([.nullResult, .ok(allLeafPayload)])
         let client = SanityHelpClient(session: session)
 
         let result = try await client.fetchContent(
@@ -262,55 +317,113 @@ struct SanityHelpClientTests {
             Issue.record("Expected tooltip result")
             return
         }
-        #expect(payload.eyebrow == "Designer copy")
-        // Two requests issued — consumer miss, then designer hit. We do NOT
-        // continue to the `"all"` step once we have a hit.
+        #expect(payload.body == "Persona-agnostic copy at the leaf surface.")
         #expect(session.requestCount == 2)
 
-        // Verify persona ordering in the requested URLs.
-        let personaParams = session.requestedURLs.compactMap(personaParam(of:))
-        #expect(personaParams == ["consumer", "designer"])
+        let trace = session.requestedURLs.compactMap { stepTrace(of: $0) }
+        #expect(trace == [
+            StepTrace(surfaceKey: "designer-portal/today/welcome", persona: "consumer"),
+            StepTrace(surfaceKey: "designer-portal/today/welcome", persona: "all"),
+        ])
     }
 
     @Test
-    func fetchContent_consumerFallsAllTheWayToAll() async throws {
+    func fetchContent_walksToParentSurfaceWhenLeafBothMiss() async throws {
+        // Steps 1+2 miss at the leaf; step 3 (parent + designer) hits.
+        // Step 4 (parent + "all") is therefore not issued.
         let session = StubURLSession()
-        // consumer → designer → all
-        session.enqueue([.nullResult, .nullResult, .ok(allFallbackPayload)])
+        session.enqueue([.nullResult, .nullResult, .ok(parentDesignerPayload)])
         let client = SanityHelpClient(session: session)
 
         let result = try await client.fetchContent(
             surfaceKey: "designer-portal/today/welcome",
             contentType: "tooltip",
-            persona: .consumer
+            persona: .designer
         )
 
         guard case .tooltip(let payload) = try #require(result) else {
             Issue.record("Expected tooltip result")
             return
         }
-        #expect(payload.body == "Persona-agnostic copy.")
+        #expect(payload.eyebrow == "Parent designer")
         #expect(session.requestCount == 3)
 
-        let personaParams = session.requestedURLs.compactMap(personaParam(of:))
-        #expect(personaParams == ["consumer", "designer", "all"])
+        let trace = session.requestedURLs.compactMap { stepTrace(of: $0) }
+        #expect(trace == [
+            StepTrace(surfaceKey: "designer-portal/today/welcome", persona: "designer"),
+            StepTrace(surfaceKey: "designer-portal/today/welcome", persona: "all"),
+            StepTrace(surfaceKey: "designer-portal/today", persona: "designer"),
+        ])
+    }
+
+    @Test
+    func fetchContent_walksAllFourStepsBeforeStoppingAtParentAll() async throws {
+        // Steps 1–3 miss; step 4 (parent + "all") finally hits.
+        let session = StubURLSession()
+        session.enqueue([.nullResult, .nullResult, .nullResult, .ok(parentAllPayload)])
+        let client = SanityHelpClient(session: session)
+
+        let result = try await client.fetchContent(
+            surfaceKey: "designer-portal/today/welcome",
+            contentType: "tooltip",
+            persona: .designer
+        )
+
+        guard case .tooltip(let payload) = try #require(result) else {
+            Issue.record("Expected tooltip result")
+            return
+        }
+        #expect(payload.body == "Persona-agnostic copy at the parent surface.")
+        #expect(session.requestCount == 4)
+
+        let trace = session.requestedURLs.compactMap { stepTrace(of: $0) }
+        #expect(trace == [
+            StepTrace(surfaceKey: "designer-portal/today/welcome", persona: "designer"),
+            StepTrace(surfaceKey: "designer-portal/today/welcome", persona: "all"),
+            StepTrace(surfaceKey: "designer-portal/today", persona: "designer"),
+            StepTrace(surfaceKey: "designer-portal/today", persona: "all"),
+        ])
+    }
+
+    @Test
+    func fetchContent_nilPersonaSkipsRedundantAllSteps() async throws {
+        // A nil/persona-agnostic caller maps to wire "all". Only the leaf+all
+        // and parent+all queries are issued (2 wire calls, not 4).
+        let session = StubURLSession()
+        session.enqueue([.nullResult, .nullResult])
+        let client = SanityHelpClient(session: session)
+
+        let result = try await client.fetchContent(
+            surfaceKey: "designer-portal/today/welcome",
+            contentType: "tooltip",
+            persona: nil
+        )
+
+        #expect(result == nil)
+        #expect(session.requestCount == 2)
+
+        let trace = session.requestedURLs.compactMap { stepTrace(of: $0) }
+        #expect(trace == [
+            StepTrace(surfaceKey: "designer-portal/today/welcome", persona: "all"),
+            StepTrace(surfaceKey: "designer-portal/today", persona: "all"),
+        ])
     }
 
     @Test
     func fetchContent_returnsNilWhenAllFallbacksMiss() async throws {
         let session = StubURLSession()
-        // consumer → designer → all, all three miss.
-        session.enqueue([.nullResult, .nullResult, .nullResult])
+        // All four canonical steps miss.
+        session.enqueue([.nullResult, .nullResult, .nullResult, .nullResult])
         let client = SanityHelpClient(session: session)
 
         let result = try await client.fetchContent(
             surfaceKey: "designer-portal/today/welcome",
             contentType: "tooltip",
-            persona: .consumer
+            persona: .designer
         )
 
         #expect(result == nil)
-        #expect(session.requestCount == 3)
+        #expect(session.requestCount == 4)
     }
 
     @Test
@@ -328,9 +441,9 @@ struct SanityHelpClientTests {
         )
 
         #expect(result == nil)
-        // Each of the two fallback steps (designer, all) attempted exactly one
-        // request — the error didn't short-circuit the chain to zero requests.
-        #expect(session.requestCount == 2)
+        // All four canonical steps attempted exactly one request — the error
+        // for one step does NOT short-circuit the rest of the chain.
+        #expect(session.requestCount == 4)
     }
 
     @Test
@@ -377,8 +490,9 @@ struct SanityHelpClientTests {
     @Test
     func fetchContent_cachesMissesWithinTTL() async throws {
         let session = StubURLSession()
-        // designer + all both miss.
-        session.enqueue([.nullResult, .nullResult])
+        // All four canonical steps miss on the first call; the second call
+        // is served from the negative cache and issues zero new requests.
+        session.enqueue([.nullResult, .nullResult, .nullResult, .nullResult])
         let frozen = Date(timeIntervalSince1970: 1_000_000)
         let client = SanityHelpClient(session: session, now: { frozen })
 
@@ -395,8 +509,7 @@ struct SanityHelpClientTests {
 
         #expect(first == nil)
         #expect(second == nil)
-        // Two requests for the first call (designer + all), zero for the second.
-        #expect(session.requestCount == 2)
+        #expect(session.requestCount == 4)
     }
 
     @Test
@@ -447,16 +560,30 @@ struct SanityHelpClientTests {
 
     // MARK: Helpers
 
-    /// Extracts the persona param (`$p`) from a Sanity GROQ query URL — used
-    /// to assert request ordering in fallback-chain tests.
-    private func personaParam(of url: URL) -> String? {
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+    /// Per-step record extracted from a Sanity GROQ query URL — used to
+    /// assert that the chain hits each (surfaceKey, persona) pair in the
+    /// canonical order.
+    struct StepTrace: Equatable {
+        let surfaceKey: String
+        let persona: String
+    }
+
+    /// Extracts the surfaceKey + persona pair from a Sanity GROQ query URL.
+    private func stepTrace(of url: URL) -> StepTrace? {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let items = components.queryItems
+        else {
             return nil
         }
-        guard let raw = components.queryItems?.first(where: { $0.name == "$p" })?.value else {
-            return nil
-        }
-        // The value is a JSON literal like `"designer"`. Strip quotes.
+        let lookup = Dictionary(uniqueKeysWithValues: items.map { ($0.name, $0.value ?? "") })
+        guard let rawSK = lookup["$sk"], let rawP = lookup["$p"] else { return nil }
+        return StepTrace(surfaceKey: stripJSONQuotes(rawSK), persona: stripJSONQuotes(rawP))
+    }
+
+    /// Strips the leading/trailing double-quotes from a JSON string literal
+    /// (Sanity GROQ params are JSON-encoded query values). Returns the input
+    /// unchanged if it isn't a quoted literal.
+    private func stripJSONQuotes(_ raw: String) -> String {
         guard raw.count >= 2, raw.hasPrefix("\""), raw.hasSuffix("\"") else { return raw }
         return String(raw.dropFirst().dropLast())
     }
