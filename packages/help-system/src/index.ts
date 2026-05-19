@@ -59,3 +59,7 @@ export { useHelpContent } from './hooks/useHelpContent';
 // ─── Providers ────────────────────────────────────────────────────────────────
 export { SurfaceKeyProvider, useSurfaceKey, useSetSurfaceKey } from './providers';
 export type { SurfaceKeyProviderProps } from './providers';
+
+// ─── Ambient layer components ────────────────────────────────────────────────
+export { SmartDefault } from './ambient/SmartDefault';
+export type { SmartDefaultAPI, SmartDefaultProps } from './ambient/SmartDefault';
