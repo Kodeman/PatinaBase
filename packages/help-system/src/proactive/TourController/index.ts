@@ -11,11 +11,13 @@ export type {
 } from './TourController'
 
 // Persistence — exported separately so future "Show me around again"
-// affordances can `clearTourState(tourId)` from a Profile menu.
+// affordances can `clearTourState(tourId)` from a Profile menu, and so
+// portals can install a Supabase-backed backend via `setTourStateBackend`.
 export {
   getTourState,
   setTourState,
   clearTourState,
+  setTourStateBackend,
   TOUR_STATE_STORAGE_PREFIX,
 } from './tourState'
-export type { TourState } from './tourState'
+export type { TourState, TourStateBackend } from './tourState'

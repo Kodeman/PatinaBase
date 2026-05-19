@@ -77,38 +77,40 @@ export interface TourControllerProps {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Persistence — wrapped in an injectable module-level binding so tests can
-// stub it without intercepting localStorage. The default is the real
-// implementation; the test file overrides via `setTourStateAdapter`.
+// Persistence — the TourController calls through the module-level `tourState`
+// accessors, which dispatch through the currently-installed backend (default:
+// localStorage; production for signed-in users: Supabase — see
+// `setTourStateBackend` in tourState.ts).
+//
+// For testing, this file also exposes the legacy `__setTourStateAdapterForTests`
+// API. Internally it delegates to `setTourStateBackend(...)` so the test
+// behaviour is identical whether the test uses the legacy adapter API or the
+// new backend API.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import {
-  getTourState as defaultGetTourState,
-  setTourState as defaultSetTourState,
+  getTourState,
+  setTourState,
+  setTourStateBackend,
+  _resetTourStateBackendForTests,
   type TourState,
+  type TourStateBackend,
 } from './tourState'
 
-type TourStateAdapter = {
-  getTourState: (tourKey: string) => TourState
-  setTourState: (tourKey: string, patch: TourState) => void
-}
-
-let adapter: TourStateAdapter = {
-  getTourState: defaultGetTourState,
-  setTourState: defaultSetTourState,
-}
-
 /** Test-only injection point. Production callers should never invoke this. */
-export function __setTourStateAdapterForTests(next: Partial<TourStateAdapter>): void {
-  adapter = { ...adapter, ...next }
+export function __setTourStateAdapterForTests(next: Partial<TourStateBackend>): void {
+  // Build a full backend by composing the requested overrides on top of the
+  // localStorage defaults (the prior shape accepted `Partial<...>` so tests
+  // could override only one method).
+  setTourStateBackend({
+    getTourState: next.getTourState ?? getTourState,
+    setTourState: next.setTourState ?? setTourState,
+  })
 }
 
 /** Test-only reset. */
 export function __resetTourStateAdapterForTests(): void {
-  adapter = {
-    getTourState: defaultGetTourState,
-    setTourState: defaultSetTourState,
-  }
+  _resetTourStateBackendForTests()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -148,14 +150,17 @@ function prefersReducedMotion(): boolean {
  * (spec §4.7). Drives the first-project walkthrough and any other tour we
  * ship in Sprint 3+.
  *
- * Persistence model — Sprint 3 v1:
- *   • State lives in localStorage via the `tourState` module.
+ * Persistence model — Sprint 4 (S4-1):
+ *   • State lives in the `tourState` module, which dispatches through a
+ *     backend installed via `setTourStateBackend(...)`. Default backend:
+ *     `localStorage` (anon + offline + pre-hydration fallback). Signed-in
+ *     portals install the Supabase backend so dismissals propagate across
+ *     devices.
  *   • Once `completed === true` OR `abandoned === true`, the tour will
  *     NEVER auto-start again (spec §4.7 rule 1 — "One-shot per user").
- *   • The Sprint 4 cleanup item is to swap the persistence backend to a
- *     Supabase `user_profiles.help_state` JSONB column. See tourState.ts
- *     for the full migration plan. The TourController itself NEVER reads
- *     localStorage directly — all I/O goes through the adapter.
+ *   • The TourController itself NEVER reads localStorage directly — all
+ *     I/O goes through the module-level `getTourState` / `setTourState`
+ *     entry points.
  *
  * Coachmark rendering — Sprint 3 v1:
  *   • This component renders an inline Radix Popover for the current step's
@@ -199,7 +204,7 @@ export function TourController({
   // auto-start again. Pulling from the adapter in the lazy initializer means
   // the component renders with the correct state on first paint (no flash of
   // an active tour for users who already saw it).
-  const [persistedState] = useState<TourState>(() => adapter.getTourState(tourId))
+  const [persistedState] = useState<TourState>(() => getTourState(tourId))
   const alreadyResolved = Boolean(
     persistedState.completed === true || persistedState.abandoned === true,
   )
@@ -316,7 +321,7 @@ export function TourController({
       at_step: atStep,
       total_steps: steps.length,
     })
-    adapter.setTourState(tourId, {
+    setTourState(tourId, {
       abandoned: true,
       atStep,
       abandonedAt: new Date().toISOString(),
@@ -337,7 +342,7 @@ export function TourController({
       duration_ms: durationMs,
       steps_viewed: viewedStepsRef.current.size,
     })
-    adapter.setTourState(tourId, {
+    setTourState(tourId, {
       completed: true,
       completedAt: new Date().toISOString(),
     })
