@@ -76,6 +76,12 @@ struct SurfaceKeysParityTests {
         "ios-app/product-detail/spatial-context",
         "ios-app/product-detail/materials",
 
+        // IOSApp/FirstLaunchTour (G9 — Sprint 3 iOS first-launch tour)
+        "ios-app/first-launch-tour",
+        "ios-app/first-launch-tour/step-1-home",
+        "ios-app/first-launch-tour/step-2-saved",
+        "ios-app/first-launch-tour/step-3-profile",
+
         // IOSApp/Designer (G10 — Sprint 3 iOS Features sweep)
         "ios-app/designer",
         "ios-app/designer/studio-today",
@@ -113,8 +119,8 @@ struct SurfaceKeysParityTests {
 
     @Test
     func surfaceKeyCountMatchesWebSpec() {
-        #expect(SurfaceKeys.allKnown.count == 53)
-        #expect(Self.expectedSurfaceKeys.count == 53)
+        #expect(SurfaceKeys.allKnown.count == 57)
+        #expect(Self.expectedSurfaceKeys.count == 57)
     }
 
     @Test
@@ -202,6 +208,14 @@ struct SurfaceKeysParityTests {
         #expect(SurfaceKeys.IOSApp.ProductDetail.arAction == "ios-app/product-detail/ar-action")
         #expect(SurfaceKeys.IOSApp.ProductDetail.spatialContext == "ios-app/product-detail/spatial-context")
         #expect(SurfaceKeys.IOSApp.ProductDetail.materials == "ios-app/product-detail/materials")
+    }
+
+    @Test
+    func iosAppFirstLaunchTourAccessors() {
+        #expect(SurfaceKeys.IOSApp.FirstLaunchTour.root == "ios-app/first-launch-tour")
+        #expect(SurfaceKeys.IOSApp.FirstLaunchTour.step1Home == "ios-app/first-launch-tour/step-1-home")
+        #expect(SurfaceKeys.IOSApp.FirstLaunchTour.step2Saved == "ios-app/first-launch-tour/step-2-saved")
+        #expect(SurfaceKeys.IOSApp.FirstLaunchTour.step3Profile == "ios-app/first-launch-tour/step-3-profile")
     }
 
     @Test
