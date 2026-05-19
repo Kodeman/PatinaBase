@@ -68,6 +68,9 @@ importers:
       '@patina/email':
         specifier: workspace:*
         version: link:../../packages/email
+      '@patina/help-system':
+        specifier: workspace:*
+        version: link:../../packages/help-system
       '@patina/notifications':
         specifier: workspace:*
         version: link:../../packages/notifications
