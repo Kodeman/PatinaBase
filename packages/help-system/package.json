@@ -37,6 +37,7 @@
     "@patina/design-system": "workspace:*",
     "@patina/types": "workspace:*",
     "@radix-ui/react-collapsible": "^1.0.3",
+    "@radix-ui/react-dialog": "^1.0.5",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@sanity/client": "^6.0.0",
     "class-variance-authority": "^0.7.0",

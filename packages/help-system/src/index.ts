@@ -81,3 +81,5 @@ export { StrataInfoIcon } from './reactive/StrataInfoIcon';
 export type { StrataInfoIconProps } from './reactive/StrataInfoIcon';
 export { LearnMore } from './reactive/LearnMore';
 export type { LearnMoreProps } from './reactive/LearnMore';
+export { ContextualHelpPanel } from './reactive/ContextualHelpPanel';
+export type { ContextualHelpPanelProps } from './reactive/ContextualHelpPanel';
