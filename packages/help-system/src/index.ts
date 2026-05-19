@@ -47,6 +47,7 @@ export type {
   LearnMoreContent,
   CoachmarkContent,
   HelpArticleContent,
+  WelcomeModalContent,
   ContentTypeMap,
 } from './contentTypes';
 
@@ -83,3 +84,7 @@ export { LearnMore } from './reactive/LearnMore';
 export type { LearnMoreProps } from './reactive/LearnMore';
 export { ContextualHelpPanel } from './reactive/ContextualHelpPanel';
 export type { ContextualHelpPanelProps } from './reactive/ContextualHelpPanel';
+
+// ─── Layer 3 · Proactive components ───────────────────────────────────────────
+export { WelcomeModal } from './proactive/WelcomeModal';
+export type { WelcomeModalProps } from './proactive/WelcomeModal';
