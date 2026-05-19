@@ -351,6 +351,204 @@ export const SurfaceKeys = {
         RelationshipJourney: 'designer-portal/clients/concept/relationship-journey',
       },
     },
+    // ─── Decisions (F1.7 — Sprint 3 closeout migration) ────────────────────────
+    //
+    // The Decisions section has a top-level dashboard at /portal/decisions that
+    // lists every open / overdue / due-this-week / resolved decision across all
+    // projects. Per spec §9.2 the screen exposes Patina vocabulary around
+    // *decision categories*, *blocking status*, and *response SLA* — each gets
+    // a tooltip-eligible surface. Per-filter empty states share copy keys with
+    // the metric tooltips so authors can write one canonical "what does this
+    // measure" entry per concept.
+    Decisions: {
+      Root:      'designer-portal/decisions/root',
+      ListIntro: 'designer-portal/decisions/list-intro',
+      // Per-filter empty states. The list view tabs through 4 status buckets
+      // and each one deserves its own zero-state copy. A first-time designer
+      // arriving with no decisions at all hits the All-Open variant.
+      Empty: {
+        AllOpen:    'designer-portal/decisions/empty/all-open',
+        Overdue:    'designer-portal/decisions/empty/overdue',
+        DueWeek:    'designer-portal/decisions/empty/due-this-week',
+        Resolved:   'designer-portal/decisions/empty/resolved',
+      },
+      // Patina-concept tooltips on the metrics row (StrataInfoIcon) —
+      // "Avg Response" and "Resolution Rate" are Patina-defined measurements,
+      // not common-knowledge metrics.
+      Metric: {
+        OpenDecisions:   'designer-portal/decisions/metric/open-decisions',
+        Overdue:         'designer-portal/decisions/metric/overdue',
+        AvgResponse:     'designer-portal/decisions/metric/avg-response',
+        ResolutionRate:  'designer-portal/decisions/metric/resolution-rate',
+      },
+    },
+    // ─── FF&E Pipeline (F1.7) ───────────────────────────────────────────────────
+    //
+    // /portal/projects/[id]/ffe is the per-project Kanban board of FF&E items
+    // through 8 procurement stages. Per spec §9.2, FF&E itself is Patina
+    // vocabulary (Furniture, Fixtures & Equipment) and every stage label is a
+    // procurement-concept that benefits from a tooltip. The detail drawer
+    // exposes the same item fields as the catalog (Vendor, PO, ETA, Line Total)
+    // and reuses field labels — we register stage definitions here so authors
+    // can author one canonical "what does Specified mean?" entry.
+    Ffe: {
+      Root:      'designer-portal/ffe/root',
+      ListIntro: 'designer-portal/ffe/list-intro',
+      // Zero-state when the project has no FF&E items yet (pre-spec) and the
+      // filter variant when filters return nothing.
+      Empty: {
+        NoItems:         'designer-portal/ffe/empty/no-items',
+        NoFilterResults: 'designer-portal/ffe/empty/no-filter-results',
+      },
+      // Procurement stages — Patina-defined progression. Each stage is a
+      // StrataInfoIcon target on the Kanban column header.
+      Stage: {
+        Specified:  'designer-portal/ffe/stage/specified',
+        Quoted:     'designer-portal/ffe/stage/quoted',
+        Approved:   'designer-portal/ffe/stage/approved',
+        Ordered:    'designer-portal/ffe/stage/ordered',
+        Production: 'designer-portal/ffe/stage/production',
+        Shipped:    'designer-portal/ffe/stage/shipped',
+        Delivered:  'designer-portal/ffe/stage/delivered',
+        Installed:  'designer-portal/ffe/stage/installed',
+      },
+      // Item-drawer fields — FieldLabel + FieldHelper opportunities for the
+      // procurement-side concepts (PO number, line total, ETA, blocked-reason).
+      Detail: {
+        Root:        'designer-portal/ffe/detail/root',
+        PoNumber:    'designer-portal/ffe/detail/po-number',
+        LineTotal:   'designer-portal/ffe/detail/line-total',
+        Eta:         'designer-portal/ffe/detail/eta',
+        BlockedReason: 'designer-portal/ffe/detail/blocked-reason',
+      },
+      // Patina concept itself — what does FF&E mean? Renders next to the
+      // page header via StrataInfoIcon.
+      Concept: {
+        Ffe: 'designer-portal/ffe/concept/ffe',
+      },
+    },
+    // ─── Project Financials (F1.7) ─────────────────────────────────────────────
+    //
+    // The Financials page (/portal/projects/[id]/financials) is the most
+    // information-dense surface in the designer portal: budget vs committed
+    // vs actual variance per category, payment milestones, and lead-designer
+    // earnings. Per spec §9.2 + §12.4, every Patina-coined concept here
+    // (committed-vs-actual, variance bands, commission rate, milestone
+    // triggers) earns a StrataInfoIcon, and the complex flows (e.g. how
+    // variance bands are computed) get a LearnMore explainer.
+    Financials: {
+      Root:        'designer-portal/financials/root',
+      Intro:       'designer-portal/financials/intro',
+      // Top-line metric tooltips (StrataInfoIcon).
+      Metric: {
+        Budget:    'designer-portal/financials/metric/budget',
+        Committed: 'designer-portal/financials/metric/committed',
+        Actual:    'designer-portal/financials/metric/actual',
+        Variance:  'designer-portal/financials/metric/variance',
+      },
+      // Patina concepts — earn the Strata icon (spec §4.2).
+      Concept: {
+        VarianceBands:   'designer-portal/financials/concept/variance-bands',
+        CommissionRate:  'designer-portal/financials/concept/commission-rate',
+        MilestoneTrigger:'designer-portal/financials/concept/milestone-trigger',
+      },
+      // LearnMore — "How are variance bands computed?" deep-dive collapsible.
+      LearnMore: {
+        VarianceCalc: 'designer-portal/financials/learn-more/variance-calc',
+      },
+      // Section intros for the milestones + earnings columns.
+      Section: {
+        Milestones: 'designer-portal/financials/section/milestones',
+        Earnings:   'designer-portal/financials/section/earnings',
+      },
+      // Empty states for milestones and the drill-down.
+      Empty: {
+        NoMilestones: 'designer-portal/financials/empty/no-milestones',
+        NoLineItems:  'designer-portal/financials/empty/no-line-items',
+      },
+    },
+    // ─── Team (F1.7) ───────────────────────────────────────────────────────────
+    //
+    // /portal/team is the lightweight studio-level team page. Help surfaces
+    // here are limited but high-value: the section intro framing what a Studio
+    // is (Patina concept), and the zero-state for designers who haven't yet
+    // created a studio organization.
+    Team: {
+      Root:      'designer-portal/team/root',
+      ListIntro: 'designer-portal/team/list-intro',
+      Empty: {
+        NoStudio:    'designer-portal/team/empty/no-studio',
+        NoProjects:  'designer-portal/team/empty/no-projects',
+      },
+      // Patina concept — the Studio entity (the studio = the multi-user
+      // organization that hosts designers, bookkeepers, etc.).
+      Concept: {
+        Studio: 'designer-portal/team/concept/studio',
+      },
+    },
+    // ─── Settings (F1.7) ───────────────────────────────────────────────────────
+    //
+    // /portal/settings — Profile, Account, Security, Notifications, and
+    // Organization sections. Per spec §12.4 every form field gets a
+    // FieldLabel + FieldHelper so authors can explain *why* each preference
+    // exists (e.g. "Display name appears on every proposal you send").
+    Settings: {
+      Root:      'designer-portal/settings/root',
+      Intro:     'designer-portal/settings/intro',
+      // Profile section (display name, bio).
+      Profile: {
+        Section:     'designer-portal/settings/profile/section',
+        DisplayName: 'designer-portal/settings/profile/display-name',
+        Bio:         'designer-portal/settings/profile/bio',
+        Email:       'designer-portal/settings/profile/email',
+      },
+      // Account section (password reset).
+      Account: {
+        Section:     'designer-portal/settings/account/section',
+        NewPassword: 'designer-portal/settings/account/new-password',
+      },
+      // Security section (2FA, roles).
+      Security: {
+        Section: 'designer-portal/settings/security/section',
+        Tfa:     'designer-portal/settings/security/tfa',
+        Roles:   'designer-portal/settings/security/roles',
+      },
+      // Notification preferences — each toggle gets a per-preference helper.
+      Notifications: {
+        Section:        'designer-portal/settings/notifications/section',
+        NewLeads:       'designer-portal/settings/notifications/new-leads',
+        ProjectUpdates: 'designer-portal/settings/notifications/project-updates',
+        ClientMessages: 'designer-portal/settings/notifications/client-messages',
+        Earnings:       'designer-portal/settings/notifications/earnings',
+      },
+      // Organization membership (read-only for now).
+      Organization: {
+        Section: 'designer-portal/settings/organization/section',
+        Empty:   'designer-portal/settings/organization/empty',
+      },
+    },
+    // ─── Inbox (F1.7) ──────────────────────────────────────────────────────────
+    //
+    // /portal/inbox combines notifications + message threads behind a tabbed
+    // surface. Migration covers the page intro, the per-tab empty states,
+    // and the Patina-concept tooltip for the notification channel pill
+    // (in-app vs email vs push — the channel concept is Patina-defined).
+    Inbox: {
+      Root:  'designer-portal/inbox/root',
+      Intro: 'designer-portal/inbox/intro',
+      Tab: {
+        Notifications: 'designer-portal/inbox/tab/notifications',
+        Messages:      'designer-portal/inbox/tab/messages',
+      },
+      Empty: {
+        Notifications: 'designer-portal/inbox/empty/notifications',
+        Messages:      'designer-portal/inbox/empty/messages',
+      },
+      // Patina concept — what the channel / status pills mean.
+      Concept: {
+        Channel: 'designer-portal/inbox/concept/channel',
+      },
+    },
   },
   AdminPortal: {
     // Sprint 1: only the minimum to prove the namespace works. Migrations in Sprint 3.

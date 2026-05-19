@@ -8,6 +8,20 @@ import { PaymentMilestoneCard } from '@/components/portal/payment-milestone-card
 import { DetailRow } from '@/components/portal/detail-row';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+// F1.7 — Financials is the most information-dense designer-portal surface.
+// Every Patina-coined concept (committed vs actual, variance bands, commission
+// rate, milestone triggers) earns a StrataInfoIcon. The variance-band
+// computation deserves a LearnMore so designers can understand the color
+// thresholds without leaving the page. Empty states for missing milestones
+// and the drill-down route to dedicated CMS surfaces.
+import {
+  EmptyState,
+  LearnMore,
+  SectionIntro,
+  StrataInfoIcon,
+  SurfaceKeys,
+  useHelpContent,
+} from '@patina/help-system';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyData = any;
@@ -150,9 +164,15 @@ export default function ProjectFinancialsPage({
       />
 
       <div className="mb-8 flex flex-wrap items-baseline justify-between gap-4">
-        <h1 className="type-section-head" style={{ fontSize: '1.5rem' }}>
-          Financials
-        </h1>
+        <div>
+          <h1 className="type-section-head" style={{ fontSize: '1.5rem' }}>
+            Financials
+          </h1>
+          <SectionIntro
+            surfaceKey={SurfaceKeys.DesignerPortal.Financials.Intro}
+            fallback="Track budget against committed and actual spend. Variance updates in real time as POs are issued and invoices are paid."
+          />
+        </div>
         <div className="flex gap-2">
           <button
             className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
@@ -165,41 +185,92 @@ export default function ProjectFinancialsPage({
         </div>
       </div>
 
-      {/* High-level metrics row */}
+      {/* High-level metrics row — every label is a Patina-defined measurement
+          (especially Committed vs Actual, which mean different things in
+          Patina's procurement model than in general accounting). */}
       <div className="mb-8 flex flex-wrap gap-0 border-b pb-6" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="pr-8"><MetricBlock label="Budget" value={formatCurrencyCompact(totalBudget)} /></div>
-        <div className="border-l px-8" style={{ borderColor: 'var(--border-default)' }}>
-          <MetricBlock label="Committed" value={formatCurrencyCompact(totalCommitted)} change={`${formatCurrency(totalBudget - totalCommitted)} remaining`} trend="neutral" />
+        <div className="pr-8">
+          <div className="flex items-baseline gap-1">
+            <MetricBlock label="Budget" value={formatCurrencyCompact(totalBudget)} />
+            <StrataInfoIcon
+              surfaceKey={SurfaceKeys.DesignerPortal.Financials.Metric.Budget}
+              ariaLabel="What does Budget include?"
+            />
+          </div>
         </div>
         <div className="border-l px-8" style={{ borderColor: 'var(--border-default)' }}>
-          <MetricBlock label="Actual" value={formatCurrencyCompact(totalActual)} change={`${Math.round(((totalActual / Math.max(totalBudget, 1)) * 100))}% of budget`} trend="neutral" />
+          <div className="flex items-baseline gap-1">
+            <MetricBlock label="Committed" value={formatCurrencyCompact(totalCommitted)} change={`${formatCurrency(totalBudget - totalCommitted)} remaining`} trend="neutral" />
+            <StrataInfoIcon
+              surfaceKey={SurfaceKeys.DesignerPortal.Financials.Metric.Committed}
+              ariaLabel="What counts as committed spend?"
+            />
+          </div>
+        </div>
+        <div className="border-l px-8" style={{ borderColor: 'var(--border-default)' }}>
+          <div className="flex items-baseline gap-1">
+            <MetricBlock label="Actual" value={formatCurrencyCompact(totalActual)} change={`${Math.round(((totalActual / Math.max(totalBudget, 1)) * 100))}% of budget`} trend="neutral" />
+            <StrataInfoIcon
+              surfaceKey={SurfaceKeys.DesignerPortal.Financials.Metric.Actual}
+              ariaLabel="When does spend become actual?"
+            />
+          </div>
         </div>
         <div className="border-l pl-8" style={{ borderColor: 'var(--border-default)' }}>
-          <MetricBlock
-            label="Variance"
-            value={formatCurrencyCompact(totalsRow.variance)}
-            change={`${totalsRow.variancePct.toFixed(1)}%`}
-            trend={totalsRow.variance >= 0 ? 'down' : 'up'}
-          />
+          <div className="flex items-baseline gap-1">
+            <MetricBlock
+              label="Variance"
+              value={formatCurrencyCompact(totalsRow.variance)}
+              change={`${totalsRow.variancePct.toFixed(1)}%`}
+              trend={totalsRow.variance >= 0 ? 'down' : 'up'}
+            />
+            <StrataInfoIcon
+              surfaceKey={SurfaceKeys.DesignerPortal.Financials.Metric.Variance}
+              ariaLabel="How is variance computed?"
+            />
+          </div>
         </div>
       </div>
 
       {/* 4-column variance table */}
       <div className="mb-8">
-        <h3 className="type-section-head mb-4 border-b pb-2" style={{ fontSize: '1.25rem', borderColor: 'var(--border-default)' }}>
-          Budget vs. Committed vs. Actual vs. Variance
-        </h3>
+        <div className="mb-4 border-b pb-2 flex items-baseline justify-between gap-3" style={{ borderColor: 'var(--border-default)' }}>
+          <h3 className="type-section-head inline-flex items-baseline gap-1.5" style={{ fontSize: '1.25rem' }}>
+            Budget vs. Committed vs. Actual vs. Variance
+            {/* Variance-band thresholds are Patina-defined (sage / clay /
+                gold / terracotta map to specific overspend ranges). */}
+            <StrataInfoIcon
+              surfaceKey={SurfaceKeys.DesignerPortal.Financials.Concept.VarianceBands}
+              ariaLabel="What do the variance colors mean?"
+              fallback="Sage = under budget. Clay = on budget (0–5% over). Gold = caution (5–10% over). Terracotta = action needed (>10% over)."
+            />
+          </h3>
+          <LearnMore
+            surfaceKey={SurfaceKeys.DesignerPortal.Financials.LearnMore.VarianceCalc}
+            label="How is variance computed?"
+            fallback="Variance = actual − budget per category. Committed counts approved POs plus design-fee deposits. Actual counts paid invoices and reconciled charges."
+          />
+        </div>
         <VarianceTable rows={variances} totals={totalsRow} onDrill={setDrillCategory} />
       </div>
 
       {/* Two-column: Milestones + Earnings */}
       <div className="grid gap-10 md:grid-cols-2">
         <div>
-          <h3 className="type-section-head mb-4 border-b pb-2" style={{ fontSize: '1.25rem', borderColor: 'var(--border-default)' }}>
+          <h3 className="type-section-head mb-2 inline-flex items-baseline gap-1.5" style={{ fontSize: '1.25rem' }}>
             Payment Milestones
+            <StrataInfoIcon
+              surfaceKey={SurfaceKeys.DesignerPortal.Financials.Concept.MilestoneTrigger}
+              ariaLabel="How are milestone triggers configured?"
+            />
           </h3>
+          <SectionIntro
+            surfaceKey={SurfaceKeys.DesignerPortal.Financials.Section.Milestones}
+            fallback="Each milestone invoices automatically when its trigger condition is met (e.g. proposal signed, phase complete)."
+            className="mb-3 border-b pb-2"
+          />
           {typedMilestones.length === 0 ? (
-            <p className="type-body py-6 italic text-[var(--text-muted)]">No milestones configured.</p>
+            <MilestonesEmpty />
           ) : (
             typedMilestones.map((milestone) => (
               <PaymentMilestoneCard key={milestone.id} milestone={milestone} />
@@ -215,18 +286,27 @@ export default function ProjectFinancialsPage({
         {isLeadDesigner && (
           <div>
             <StrataMark variant="mini" />
-            <h3 className="type-section-head mb-3 border-b pb-2" style={{ fontSize: '1.25rem', borderColor: 'var(--border-default)' }}>
+            <h3 className="type-section-head mb-2 inline-flex items-baseline gap-1.5" style={{ fontSize: '1.25rem' }}>
               Your Earnings
+              {/* Commission rate is Patina-defined — the 12% is a platform
+                  default that the studio agreement can adjust. */}
+              <StrataInfoIcon
+                surfaceKey={SurfaceKeys.DesignerPortal.Financials.Concept.CommissionRate}
+                ariaLabel="How is the commission rate set?"
+                fallback="Patina pays the lead designer 12% commission on product spend by default. Studio agreements can adjust this rate."
+              />
             </h3>
+            <SectionIntro
+              surfaceKey={SurfaceKeys.DesignerPortal.Financials.Section.Earnings}
+              fallback="Visible only to the project lead designer. Updates in real time as POs are issued."
+              className="mb-3 border-b pb-2"
+            />
             <DetailRow label="Design Fee" value={formatCurrency(designFee)} />
             <DetailRow
               label="Commissions"
               value={`${formatCurrency(commissions)} (${Math.round(commissionRate * 100)}% on ${formatCurrency(Math.max(productSpend, 0))})`}
             />
             <DetailRow label="Total Earned" value={formatCurrency(designFee + commissions)} />
-            <p className="mt-3 type-meta-small text-[var(--text-muted)]">
-              Visible only to the project lead designer. Updates in real time as POs are issued.
-            </p>
           </div>
         )}
       </div>
@@ -240,6 +320,34 @@ export default function ProjectFinancialsPage({
         />
       )}
     </div>
+  );
+}
+
+// ─── Empty-state wrappers (F1.7) ─────────────────────────────────────────────
+// Probe the CMS first, fall back to inline copy so first-time designers never
+// see a silent blank. Same pattern as F1.6 Clients.
+
+function MilestonesEmpty() {
+  const surfaceKey = SurfaceKeys.DesignerPortal.Financials.Empty.NoMilestones;
+  const { data, isLoading } = useHelpContent(surfaceKey, 'emptyState');
+  if (isLoading) return null;
+  if (data) return <EmptyState surfaceKey={surfaceKey} />;
+  return (
+    <p className="type-body py-6 italic text-[var(--text-muted)]">
+      No milestones configured. Add milestones during project activation so invoices fire on the right triggers.
+    </p>
+  );
+}
+
+function LineItemsEmpty() {
+  const surfaceKey = SurfaceKeys.DesignerPortal.Financials.Empty.NoLineItems;
+  const { data, isLoading } = useHelpContent(surfaceKey, 'emptyState');
+  if (isLoading) return null;
+  if (data) return <EmptyState surfaceKey={surfaceKey} />;
+  return (
+    <p className="type-body py-6 italic text-[var(--text-muted)]">
+      No line items in this category yet.
+    </p>
   );
 }
 
@@ -350,9 +458,7 @@ function DrillDownModal({
           </button>
         </div>
         {items.length === 0 ? (
-          <p className="type-body py-6 italic text-[var(--text-muted)]">
-            No line items in this category yet.
-          </p>
+          <LineItemsEmpty />
         ) : (
           <div role="table">
             <div

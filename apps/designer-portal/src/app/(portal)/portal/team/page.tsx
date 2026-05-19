@@ -5,7 +5,35 @@ import { useOrganizations, useSession } from '@patina/supabase';
 import { useProjects } from '@/hooks/use-projects';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { LoadingStrata } from '@/components/portal/loading-strata';
-import { EmptyState } from '@/components/portal/empty-state';
+// F1.7 — Team migrated to ambient + reactive help-system layers per spec
+// §12.4. Studio is Patina vocabulary (multi-user org); StrataInfoIcon
+// explains the concept inline. Aliased the local EmptyState helper to
+// `LocalEmptyState` to avoid collision with the canonical
+// `<EmptyState surfaceKey>` wrapper from @patina/help-system.
+import { EmptyState as LocalEmptyState } from '@/components/portal/empty-state';
+import {
+  EmptyState,
+  SectionIntro,
+  StrataInfoIcon,
+  SurfaceKeys,
+  useHelpContent,
+} from '@patina/help-system';
+
+// CMS-probe + local fallback for the "no studio yet" zero-state. Matches the
+// F1.6 Clients pattern so the first-time designer sees onboarding copy
+// before Sanity is populated.
+function NoStudioEmpty() {
+  const surfaceKey = SurfaceKeys.DesignerPortal.Team.Empty.NoStudio;
+  const { data, isLoading } = useHelpContent(surfaceKey, 'emptyState');
+  if (isLoading) return null;
+  if (data) return <EmptyState surfaceKey={surfaceKey} />;
+  return (
+    <LocalEmptyState
+      title="No studio yet"
+      description="Create a studio to add support designers, bookkeepers, and assign roles per project."
+    />
+  );
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyData = any;
@@ -27,9 +55,15 @@ export default function TeamPage() {
       <Breadcrumb items={[{ label: 'Team' }]} />
 
       <div className="mb-6 flex flex-wrap items-baseline justify-between gap-4">
-        <h1 className="type-section-head" style={{ fontSize: '1.5rem' }}>
-          Team
-        </h1>
+        <div>
+          <h1 className="type-section-head" style={{ fontSize: '1.5rem' }}>
+            Team
+          </h1>
+          <SectionIntro
+            surfaceKey={SurfaceKeys.DesignerPortal.Team.ListIntro}
+            fallback="Members of your studio and their assignments across active projects."
+          />
+        </div>
         <button
           type="button"
           onClick={() => alert('Invite — coming soon')}
@@ -40,14 +74,21 @@ export default function TeamPage() {
       </div>
 
       {!studio ? (
-        <EmptyState
-          title="No studio yet"
-          description="Create a studio to add support designers, bookkeepers, and assign roles per project."
-        />
+        <NoStudioEmpty />
       ) : (
         <>
           <div className="mb-6 rounded-md border p-4" style={{ borderColor: 'var(--border-default)' }}>
-            <div className="type-meta-small uppercase tracking-wider mb-1">Studio</div>
+            <div className="type-meta-small uppercase tracking-wider mb-1 inline-flex items-center gap-1">
+              Studio
+              {/* Studio is a Patina-defined entity — the multi-user org that
+                  holds designers, bookkeepers, etc. */}
+              <StrataInfoIcon
+                surfaceKey={SurfaceKeys.DesignerPortal.Team.Concept.Studio}
+                size={11}
+                ariaLabel="What is a Studio?"
+                fallback="A Studio is your multi-user organization on Patina — it holds designers, bookkeepers, and external collaborators and lets you assign roles per project."
+              />
+            </div>
             <div className="type-section-head" style={{ fontSize: '1.15rem' }}>
               {studio.name}
             </div>

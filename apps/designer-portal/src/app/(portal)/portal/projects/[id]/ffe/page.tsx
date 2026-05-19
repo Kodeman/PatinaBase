@@ -14,20 +14,60 @@ import {
   type FacetSelections,
 } from '@/components/portal/faceted-filter-popover';
 import { BulkActionBar, BulkActionButton } from '@/components/portal/bulk-action-bar';
+// F1.7 — FF&E migrated to ambient + reactive help-system layers per spec §12.4.
+// FF&E itself is Patina vocabulary (Furniture, Fixtures & Equipment), and each
+// procurement stage is a Patina-defined step. The page-level intro frames the
+// Kanban; per-stage StrataInfoIcons let designers learn what each status
+// signals. Item-drawer fields use FieldLabel for the procurement concepts
+// (PO Number, Line Total, ETA, Blocked Reason).
+import {
+  EmptyState,
+  SectionIntro,
+  StrataInfoIcon,
+  SurfaceKeys,
+  useHelpContent,
+} from '@patina/help-system';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyItem = any;
 
+// FF&E procurement stages — each is a Patina-defined step in the lifecycle.
+// `surfaceKey` is the StrataInfoIcon target for the column header, so authors
+// can explain what each stage means without cluttering the column UI.
 const STAGES = [
-  { key: 'specified',  label: 'Specified',   color: 'var(--text-muted)' },
-  { key: 'quoted',     label: 'Quoted',      color: 'var(--color-dusty-blue, #8B9CAD)' },
-  { key: 'approved',   label: 'Approved',    color: 'var(--color-clay, #C4A57B)' },
-  { key: 'ordered',    label: 'Ordered',     color: 'var(--color-dusty-blue, #8B9CAD)' },
-  { key: 'production', label: 'Production',  color: 'var(--color-golden-hour, #E8C547)' },
-  { key: 'shipped',    label: 'Shipped',     color: 'var(--color-golden-hour, #E8C547)' },
-  { key: 'delivered',  label: 'Delivered',   color: 'var(--color-sage, #A8B5A0)' },
-  { key: 'installed',  label: 'Installed',   color: 'var(--color-sage, #A8B5A0)' },
+  { key: 'specified',  label: 'Specified',   color: 'var(--text-muted)',                       surfaceKey: SurfaceKeys.DesignerPortal.Ffe.Stage.Specified },
+  { key: 'quoted',     label: 'Quoted',      color: 'var(--color-dusty-blue, #8B9CAD)',        surfaceKey: SurfaceKeys.DesignerPortal.Ffe.Stage.Quoted },
+  { key: 'approved',   label: 'Approved',    color: 'var(--color-clay, #C4A57B)',              surfaceKey: SurfaceKeys.DesignerPortal.Ffe.Stage.Approved },
+  { key: 'ordered',    label: 'Ordered',     color: 'var(--color-dusty-blue, #8B9CAD)',        surfaceKey: SurfaceKeys.DesignerPortal.Ffe.Stage.Ordered },
+  { key: 'production', label: 'Production',  color: 'var(--color-golden-hour, #E8C547)',       surfaceKey: SurfaceKeys.DesignerPortal.Ffe.Stage.Production },
+  { key: 'shipped',    label: 'Shipped',     color: 'var(--color-golden-hour, #E8C547)',       surfaceKey: SurfaceKeys.DesignerPortal.Ffe.Stage.Shipped },
+  { key: 'delivered',  label: 'Delivered',   color: 'var(--color-sage, #A8B5A0)',              surfaceKey: SurfaceKeys.DesignerPortal.Ffe.Stage.Delivered },
+  { key: 'installed',  label: 'Installed',   color: 'var(--color-sage, #A8B5A0)',              surfaceKey: SurfaceKeys.DesignerPortal.Ffe.Stage.Installed },
 ];
+
+// CMS-probe-then-fallback wrapper for the page-level zero-state when a
+// project has no FF&E items at all. Mirrors the F1.6 Clients empty-state
+// pattern so first-time designers see helpful copy instead of a blank board.
+function FfeBoardEmpty({ isFiltered }: { isFiltered: boolean }) {
+  const surfaceKey = isFiltered
+    ? SurfaceKeys.DesignerPortal.Ffe.Empty.NoFilterResults
+    : SurfaceKeys.DesignerPortal.Ffe.Empty.NoItems;
+  const { data, isLoading } = useHelpContent(surfaceKey, 'emptyState');
+
+  if (isLoading) return null;
+
+  if (data) {
+    return <EmptyState surfaceKey={surfaceKey} />;
+  }
+
+  return (
+    <div className="py-12 text-center type-body italic text-[var(--text-muted)]">
+      {isFiltered
+        ? 'No items match these filters. Adjust the search or clear filters.'
+        : 'No FF&E items yet — items appear here once specifications are added to project rooms.'}
+    </div>
+  );
+}
 
 function formatDollars(cents: number): string {
   return `$${((cents || 0) / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
@@ -147,9 +187,24 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
       />
 
       <div className="mb-6 flex flex-wrap items-baseline justify-between gap-4">
-        <h1 className="type-section-head" style={{ fontSize: '1.5rem' }}>
-          FF&amp;E Pipeline
-        </h1>
+        <div>
+          <div className="flex items-baseline gap-1.5">
+            <h1 className="type-section-head" style={{ fontSize: '1.5rem' }}>
+              FF&amp;E Pipeline
+            </h1>
+            {/* FF&E itself is Patina vocabulary; StrataInfoIcon explains the
+                acronym + the procurement-board model. */}
+            <StrataInfoIcon
+              surfaceKey={SurfaceKeys.DesignerPortal.Ffe.Concept.Ffe}
+              ariaLabel="What does FF&E mean?"
+              fallback="FF&E stands for Furniture, Fixtures & Equipment — every specified product that moves through procurement on the way to install."
+            />
+          </div>
+          <SectionIntro
+            surfaceKey={SurfaceKeys.DesignerPortal.Ffe.ListIntro}
+            fallback="Track each item from specification through install. Move items between stages to keep your client and vendors aligned."
+          />
+        </div>
         <div className="type-meta-small text-[var(--text-muted)]">
           {filtered.length} of {items.length} items
         </div>
@@ -159,6 +214,13 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
         <SearchInput value={search} onChange={setSearch} placeholder="Search items, vendors, PO numbers" />
         <FacetedFilterPopover facets={facets} value={filters} onChange={setFilters} />
       </div>
+
+      {/* Board-level empty state. Per spec §12.4 — first-time designers and
+          filter-no-match cases route to dedicated CMS surfaces so authors can
+          write distinct copy. */}
+      {filtered.length === 0 && (
+        <FfeBoardEmpty isFiltered={items.length > 0} />
+      )}
 
       {/* Kanban */}
       <div className="overflow-x-auto pb-4">
@@ -187,6 +249,13 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
                     >
                       {stage.label}
                     </span>
+                    {/* Per-stage StrataInfoIcon — Patina-defined procurement
+                        step. Tooltip body authored in Sanity per stage key. */}
+                    <StrataInfoIcon
+                      surfaceKey={stage.surfaceKey}
+                      size={11}
+                      ariaLabel={`What does the ${stage.label} stage mean?`}
+                    />
                   </span>
                   <span className="type-meta-small text-[var(--text-muted)]">
                     {stageItems.length}
@@ -334,11 +403,25 @@ function ItemDrawer({
 
         <Field label="Room" value={room?.name || '—'} />
         <Field label="Vendor" value={item.vendor_name || '—'} />
-        <Field label="PO Number" value={item.po_number || '—'} />
+        {/* Procurement-side concepts get StrataInfoIcons so designers can
+            learn what each label measures without leaving the drawer. */}
+        <Field
+          label="PO Number"
+          value={item.po_number || '—'}
+          surfaceKey={SurfaceKeys.DesignerPortal.Ffe.Detail.PoNumber}
+        />
         <Field label="Quantity" value={String(item.quantity ?? 1)} />
         <Field label="Unit Price" value={formatDollars(item.unit_price_cents || 0)} />
-        <Field label="Line Total" value={formatDollars(item.line_total_cents || 0)} />
-        <Field label="ETA" value={formatDate(item.eta)} />
+        <Field
+          label="Line Total"
+          value={formatDollars(item.line_total_cents || 0)}
+          surfaceKey={SurfaceKeys.DesignerPortal.Ffe.Detail.LineTotal}
+        />
+        <Field
+          label="ETA"
+          value={formatDate(item.eta)}
+          surfaceKey={SurfaceKeys.DesignerPortal.Ffe.Detail.Eta}
+        />
         <Field label="Last Updated" value={formatDate(item.last_status_change_at || item.updated_at)} />
 
         {item.blocked && (
@@ -346,8 +429,19 @@ function ItemDrawer({
             className="my-3 rounded-md border-2 p-3"
             style={{ borderColor: 'var(--color-terracotta, #D4A090)' }}
           >
-            <div className="type-meta-small uppercase tracking-wider mb-1" style={{ color: 'var(--color-terracotta)' }}>
+            <div
+              className="type-meta-small uppercase tracking-wider mb-1 inline-flex items-baseline gap-1"
+              style={{ color: 'var(--color-terracotta)' }}
+            >
               ⚠ Blocked
+              {/* Blocked-reason is a Patina-defined procurement status —
+                  StrataInfoIcon explains what triggers a block and how to
+                  unblock. */}
+              <StrataInfoIcon
+                surfaceKey={SurfaceKeys.DesignerPortal.Ffe.Detail.BlockedReason}
+                size={11}
+                ariaLabel="What does a Blocked item mean?"
+              />
             </div>
             <p className="type-body text-[0.82rem]">
               {item.blocked_reason || 'Pending decision blocks this item.'}
@@ -383,10 +477,29 @@ function ItemDrawer({
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({
+  label,
+  value,
+  surfaceKey,
+}: {
+  label: string;
+  value: string;
+  surfaceKey?: string;
+}) {
   return (
     <div className="flex items-baseline justify-between border-b py-1.5 last:border-b-0" style={{ borderColor: 'var(--border-subtle)' }}>
-      <span className="type-meta-small text-[var(--text-muted)]">{label}</span>
+      <span className="type-meta-small text-[var(--text-muted)] inline-flex items-baseline gap-1">
+        {label}
+        {/* Optional StrataInfoIcon — surfaces Patina-vocab definitions inline
+            without bloating the row. Hidden when no surfaceKey is provided. */}
+        {surfaceKey ? (
+          <StrataInfoIcon
+            surfaceKey={surfaceKey}
+            size={11}
+            ariaLabel={`What does ${label} mean?`}
+          />
+        ) : null}
+      </span>
       <span className="type-body text-[0.85rem] text-[var(--text-primary)]">{value}</span>
     </div>
   );

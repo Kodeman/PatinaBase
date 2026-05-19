@@ -13,8 +13,73 @@ import { FilterRow } from '@/components/portal/filter-row';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { DecisionCard } from '@/components/portal/decision-card';
 import { PortalButton } from '@/components/portal/button';
+// F1.7 — Designer Decisions screen migrated to ambient + reactive help-system
+// layers per spec §12.4. SectionIntro renders the inline `fallback` until
+// Sanity content lands; per-filter empty states route to dedicated CMS
+// surfaces so authors can write distinct copy for "no overdue decisions"
+// vs "no resolved decisions" vs "all open". Metric tooltips (StrataInfoIcon)
+// explain Patina-specific computations (Avg Response, Resolution Rate).
+import {
+  EmptyState,
+  SectionIntro,
+  StrataInfoIcon,
+  SurfaceKeys,
+  useHelpContent,
+} from '@patina/help-system';
 
 type FilterKey = 'open' | 'overdue' | 'due_this_week' | 'resolved';
+
+// Per-filter empty-state copy — mirrors the F1.2 Pipeline pattern. The CMS
+// probe + local fallback ensures first-time designers never see a silent
+// blank list while Sanity content is still being authored.
+interface FilterEmptyCopy {
+  surfaceKey: string;
+  fallbackHeading: string;
+}
+
+const FILTER_EMPTY_COPY: Record<FilterKey, FilterEmptyCopy> = {
+  open: {
+    surfaceKey: SurfaceKeys.DesignerPortal.Decisions.Empty.AllOpen,
+    fallbackHeading:
+      'No open decisions. Use the projects list to surface choices that need client input.',
+  },
+  overdue: {
+    surfaceKey: SurfaceKeys.DesignerPortal.Decisions.Empty.Overdue,
+    fallbackHeading:
+      'Nothing overdue — every pending decision is still within its response window.',
+  },
+  due_this_week: {
+    surfaceKey: SurfaceKeys.DesignerPortal.Decisions.Empty.DueWeek,
+    fallbackHeading: 'No decisions due this week.',
+  },
+  resolved: {
+    surfaceKey: SurfaceKeys.DesignerPortal.Decisions.Empty.Resolved,
+    fallbackHeading: 'No resolved decisions yet.',
+  },
+};
+
+function DecisionsEmptyState({ filter }: { filter: FilterKey }) {
+  const copy = FILTER_EMPTY_COPY[filter];
+  const { data, isLoading } = useHelpContent(copy.surfaceKey, 'emptyState');
+
+  if (isLoading) {
+    return (
+      <p className="py-16 text-center type-body italic text-[var(--text-muted)]">
+        …
+      </p>
+    );
+  }
+
+  if (data) {
+    return <EmptyState surfaceKey={copy.surfaceKey} />;
+  }
+
+  return (
+    <p className="py-16 text-center type-body text-[var(--text-muted)]">
+      {copy.fallbackHeading}
+    </p>
+  );
+}
 
 function isOverdue(dueDate: string | null, status: string): boolean {
   if (!dueDate || status !== 'pending') return false;
@@ -96,7 +161,10 @@ export default function DecisionsDashboardPage() {
       <div className="mb-6 flex flex-wrap items-baseline justify-between gap-4">
         <div>
           <h1 className="type-page-title mb-1">Decisions</h1>
-          <p className="type-label-secondary">Open choices awaiting client response</p>
+          <SectionIntro
+            surfaceKey={SurfaceKeys.DesignerPortal.Decisions.ListIntro}
+            fallback="Open choices awaiting client response — overdue items block procurement and ETA promises."
+          />
         </div>
         <PortalButton variant="primary">+ New Decision</PortalButton>
       </div>
@@ -111,43 +179,65 @@ export default function DecisionsDashboardPage() {
       {/* Metrics Row */}
       <div className="mb-8 grid grid-cols-2 gap-6 border-b border-[var(--border-default)] pb-8 md:grid-cols-4 md:gap-0">
         <div className="pr-0 md:pr-8">
-          <MetricBlock
-            label="Open Decisions"
-            value={metrics?.open ?? 0}
-            change={`across ${new Set(decisions.map((d) => d.project_id).filter(Boolean)).size} projects`}
-            trend="neutral"
-          />
+          <div className="flex items-baseline gap-1">
+            <MetricBlock
+              label="Open Decisions"
+              value={metrics?.open ?? 0}
+              change={`across ${new Set(decisions.map((d) => d.project_id).filter(Boolean)).size} projects`}
+              trend="neutral"
+            />
+            <StrataInfoIcon
+              surfaceKey={SurfaceKeys.DesignerPortal.Decisions.Metric.OpenDecisions}
+              ariaLabel="What counts as an open decision?"
+            />
+          </div>
         </div>
         <div className="border-0 pl-0 pr-0 md:border-l md:border-[var(--border-default)] md:pl-8 md:pr-8">
-          <MetricBlock
-            label="Overdue"
-            value={metrics?.overdue ?? 0}
-            change={metrics?.overdue ? 'blocking procurement' : undefined}
-            trend={metrics?.overdue ? 'down' : 'neutral'}
-          />
+          <div className="flex items-baseline gap-1">
+            <MetricBlock
+              label="Overdue"
+              value={metrics?.overdue ?? 0}
+              change={metrics?.overdue ? 'blocking procurement' : undefined}
+              trend={metrics?.overdue ? 'down' : 'neutral'}
+            />
+            <StrataInfoIcon
+              surfaceKey={SurfaceKeys.DesignerPortal.Decisions.Metric.Overdue}
+              ariaLabel="When does a decision become overdue?"
+            />
+          </div>
         </div>
         <div className="border-0 pl-0 pr-0 md:border-l md:border-[var(--border-default)] md:pl-8 md:pr-8">
-          <MetricBlock
-            label="Avg Response"
-            value={`${metrics?.avgResponseDays ?? 0} days`}
-            trend="neutral"
-          />
+          <div className="flex items-baseline gap-1">
+            <MetricBlock
+              label="Avg Response"
+              value={`${metrics?.avgResponseDays ?? 0} days`}
+              trend="neutral"
+            />
+            <StrataInfoIcon
+              surfaceKey={SurfaceKeys.DesignerPortal.Decisions.Metric.AvgResponse}
+              ariaLabel="How is average response calculated?"
+            />
+          </div>
         </div>
         <div className="border-0 pl-0 md:border-l md:border-[var(--border-default)] md:pl-8">
-          <MetricBlock
-            label="Resolution Rate"
-            value={`${metrics?.onTimeRate ?? 0}%`}
-            change="on time this quarter"
-            trend="up"
-          />
+          <div className="flex items-baseline gap-1">
+            <MetricBlock
+              label="Resolution Rate"
+              value={`${metrics?.onTimeRate ?? 0}%`}
+              change="on time this quarter"
+              trend="up"
+            />
+            <StrataInfoIcon
+              surfaceKey={SurfaceKeys.DesignerPortal.Decisions.Metric.ResolutionRate}
+              ariaLabel="How is resolution rate calculated?"
+            />
+          </div>
         </div>
       </div>
 
       {/* Decision List */}
       {decisions.length === 0 ? (
-        <p className="py-16 text-center type-body text-[var(--text-muted)]">
-          No decisions match this filter.
-        </p>
+        <DecisionsEmptyState filter={filter} />
       ) : (
         <div>
           {decisions.map((decision) => (
