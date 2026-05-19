@@ -68,12 +68,19 @@ struct DailyProductCard: View {
                 }
             }
 
-            // Tier pill
+            // Tier and Match pills are Patina concepts but live INSIDE the
+            // outer card Button, which would swallow any `.onTapGesture` we
+            // attach via HelpTooltip. The full explanations are surfaced
+            // via the contextual help panel (`?` button in the greeting
+            // header) instead, keyed on the same surface keys
+            // (`SurfaceKeys.IOSApp.Home.tierPill`, `…/match-pill`). The
+            // detail view (`DailyProductDetailView` / `ProductDetailView`)
+            // can attach HelpTooltip directly to the pills because those
+            // screens render pills outside an outer Button.
             TierPill(tier: recommendation.tier)
                 .padding(.top, 9)
                 .padding(.leading, 9)
 
-            // Match pill
             MatchPill(score: recommendation.matchScore)
                 .padding(.top, 9)
                 .padding(.trailing, 9)

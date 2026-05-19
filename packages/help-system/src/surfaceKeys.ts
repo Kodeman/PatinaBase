@@ -10,13 +10,13 @@
  * - MUST be added to the Sanity CMS schema enum when a new key is created
  * - Every new key MUST be defined here BEFORE being referenced in a component
  *
- * iOS surface keys live in a parallel Swift registry under apps/mobile/Patina/Features/Help/.
- * Web and iOS keys are intentionally separate namespaces — content for shared concepts
- * is stored in Sanity once but referenced by either web or iOS key.
+ * iOS surface keys live in a parallel Swift registry under apps/mobile/Patina/Features/Help/
+ * AND are mirrored here under `IOSApp` so the parity test, Sanity authoring tools, and any
+ * cross-platform tooling can reason about both platforms with one source. Every iOS-app
+ * surface declared here MUST have an identical Swift constant in `SurfaceKeys.swift`.
  *
  * Out-of-scope portals (not included here):
  * - manufacturer-portal — out of scope per 2026-05-18 decision
- * - consumer-app (iOS) — handled by a separate Swift registry in Stream G
  */
 
 export const SurfaceKeys = {
@@ -334,6 +334,38 @@ export const SurfaceKeys = {
   ClientPortal: {
     // Sprint 1: only the minimum.
     Home: 'client-portal/home',
+  },
+  /**
+   * iOS consumer app surfaces — Sprint 2 Stream G7 first migration.
+   *
+   * Mirrors `SurfaceKeys.IOSApp.*` in
+   * `apps/mobile/Patina/Patina/Features/Help/SurfaceKeys.swift`. Every key
+   * here MUST be byte-for-byte identical to the Swift constant; the iOS
+   * parity test pins the contract.
+   *
+   * The Home screen is the "Daily Room" editorial feed. ProductDetail is
+   * the full-screen product view with maker story, spatial context, and
+   * AR placement. Both lean on Patina vocabulary (tier, match score, why-
+   * it-fits) that benefits from contextual help affordances.
+   */
+  IOSApp: {
+    Home: {
+      Root:             'ios-app/home',
+      DailyGreeting:    'ios-app/home/daily-greeting',
+      DailyStoryCard:   'ios-app/home/daily-story-card',
+      DailyProductCard: 'ios-app/home/daily-product-card',
+      TierPill:         'ios-app/home/tier-pill',
+      MatchPill:        'ios-app/home/match-pill',
+      AddToRoom:        'ios-app/home/add-to-room',
+    },
+    ProductDetail: {
+      Root:            'ios-app/product-detail',
+      SavedStatus:     'ios-app/product-detail/saved-status',
+      ShareAction:     'ios-app/product-detail/share-action',
+      ArAction:        'ios-app/product-detail/ar-action',
+      SpatialContext:  'ios-app/product-detail/spatial-context',
+      Materials:       'ios-app/product-detail/materials',
+    },
   },
 } as const
 
