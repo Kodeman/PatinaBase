@@ -11,9 +11,16 @@ import {
   PortalButton,
   ProductCard,
   ProductListItem,
-  EmptyState,
+  EmptyState as LocalEmptyState,
   CatalogRefineBar,
 } from '@/components/portal';
+import {
+  EmptyState as HelpEmptyState,
+  InfoIcon,
+  SectionIntro,
+  SurfaceKeys,
+  useHelpContent,
+} from '@patina/help-system';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyProduct = any;
@@ -38,6 +45,85 @@ const categoryFilters = [
   'Décor',
   'Outdoor',
 ];
+
+// ─── Help-system surface-key + fallback wiring for the Products list ────────────
+//
+// Two empty-state variants are surfaced for the Products page (spec §12.4):
+//
+//   1. "no-products"        — designer hasn't captured anything yet.
+//   2. "no-filter-results"  — designer has products but the active filters
+//                              (search / tier / style / category) hide them.
+//
+// Each variant lives at its own surface key so authors can write bespoke
+// copy in Sanity. Until the CMS is populated (Sprint 1 baseline) the local
+// `fallback*` strings are rendered so first-time designers never see a
+// silent blank list — same pattern adopted by F1.1 (Today) and F1.2
+// (Pipeline). See spec §13.4 "Graceful Sanity downtime".
+
+interface ProductsEmptyCopy {
+  surfaceKey: string;
+  fallbackHeading: string;
+  fallbackDescription: string;
+  fallbackActionLabel?: string;
+}
+
+const EMPTY_NO_PRODUCTS: ProductsEmptyCopy = {
+  surfaceKey: SurfaceKeys.DesignerPortal.Products.Empty.NoProducts,
+  fallbackHeading: 'Your catalog is empty',
+  fallbackDescription:
+    'Add your first product to start building your curated catalog.',
+  fallbackActionLabel: 'Add Product',
+};
+
+const EMPTY_NO_FILTER_RESULTS: ProductsEmptyCopy = {
+  surfaceKey: SurfaceKeys.DesignerPortal.Products.Empty.NoFilterResults,
+  fallbackHeading: 'No products found',
+  fallbackDescription: 'Try adjusting your search or filters.',
+};
+
+/**
+ * Renders a CMS-backed `<HelpEmptyState>` when Sanity has copy for the surface
+ * key, otherwise falls back to the existing local `<LocalEmptyState>` from
+ * `@patina/catalog-ui` so the surface stays informative pre-Sanity-deploy.
+ *
+ * The cheap `useHelpContent` probe is deduped with the fetch inside
+ * `<HelpEmptyState>` by react-query, so there is no extra network call.
+ * Pattern matches the `PipelineEmptyState` helper added in F1.2.
+ */
+function ProductsEmptyState({
+  copy,
+  onAction,
+}: {
+  copy: ProductsEmptyCopy;
+  onAction?: () => void;
+}) {
+  const { data, isLoading } = useHelpContent(copy.surfaceKey, 'emptyState');
+
+  if (isLoading) {
+    return (
+      <div className="px-8 py-12 text-center">
+        <p className="type-body-small text-[var(--text-muted)]">…</p>
+      </div>
+    );
+  }
+
+  // CMS hit — defer to the canonical help-system wrapper for icon/heading/
+  // description/cta resolution and analytics emission.
+  if (data) {
+    return <HelpEmptyState surfaceKey={copy.surfaceKey} onAction={onAction} />;
+  }
+
+  // CMS miss — render the local `LocalEmptyState` with the fallback copy so
+  // the list never looks broken before Sanity content lands.
+  return (
+    <LocalEmptyState
+      title={copy.fallbackHeading}
+      description={copy.fallbackDescription}
+      actionLabel={onAction ? copy.fallbackActionLabel : undefined}
+      onAction={onAction}
+    />
+  );
+}
 
 export default function CatalogPage() {
   const router = useRouter();
@@ -102,11 +188,29 @@ export default function CatalogPage() {
   const handleTeach = (id: string) => router.push(`/portal/teaching/product/${id}`);
   const handleEdit = (id: string) => router.push(`/portal/catalog/${id}/edit`);
 
+  // Pick which empty-state surface to show. When `search` is set OR the user
+  // has narrowed by tier/style/category, the "no filter results" copy is
+  // surfaced. Otherwise the "no products" copy invites the designer to add
+  // their first item. Tracks the same filter signal the API call uses.
+  const hasActiveFilter =
+    !!search ||
+    tierFilter !== 'all' ||
+    styleFilter !== 'All Styles' ||
+    categoryFilter !== 'All';
+  const emptyCopy = hasActiveFilter ? EMPTY_NO_FILTER_RESULTS : EMPTY_NO_PRODUCTS;
+
   return (
     <div className="pt-6">
       {/* Band 1: Title + Search + View Toggle + Add */}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="type-section-head">Products</h1>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-4">
+        <h1 className="type-section-head flex items-center gap-1.5">
+          Products
+          <InfoIcon
+            surfaceKey={SurfaceKeys.DesignerPortal.Products.Root}
+            fallback="Every product you've captured — vendor pieces, custom maker work, and sourced selections. Curate, teach, and pull from here when building proposals."
+            ariaLabel="About the Products workspace"
+          />
+        </h1>
         <div className="flex items-center gap-3">
           <SearchInput
             value={search}
@@ -165,19 +269,44 @@ export default function CatalogPage() {
         </div>
       </div>
 
-      {/* Band 2: Tier Filters */}
-      <FilterRow
-        options={[
-          { key: 'all', label: 'All Products', count: products.length },
-          { key: 'maker_piece', label: '★ Maker Pieces' },
-          { key: 'designers_pick', label: '✓ Designer Picks' },
-          { key: 'sourced', label: '○ Sourced' },
-          { key: 'needs_teaching', label: 'Needs Teaching' },
-          { key: 'drafts', label: 'Drafts' },
-        ]}
-        active={tierFilter}
-        onChange={setTierFilter}
+      {/* Layer 1 · Ambient section intro — 1–2 sentences below the page header.
+          Renders Sanity copy when present, else the inline fallback. */}
+      <SectionIntro
+        surfaceKey={SurfaceKeys.DesignerPortal.Products.ListIntro}
+        fallback="Browse your captured products — vendor catalogues, custom maker pieces, and sourced selections in one place."
+        className="mb-5 max-w-prose"
       />
+
+      {/* Band 2: Tier Filters
+          The chips use icon prefixes (★ ✓ ○) for the three product tiers,
+          and "Needs Teaching" / "Drafts" are workflow surfaces. A single
+          trailing <InfoIcon /> on the row explains what the symbols mean
+          and where workflow buckets come from — cheaper than wrapping each
+          chip and keeps the shared FilterRow component free of help-system
+          concerns (it's also used by admin-portal).
+          Layout note: FilterRow already owns `mb-6`; the wrapper keeps the
+          icon vertically aligned with the row without compounding spacing. */}
+      <div className="flex items-start gap-2">
+        <div className="grow">
+          <FilterRow
+            options={[
+              { key: 'all', label: 'All Products', count: products.length },
+              { key: 'maker_piece', label: '★ Maker Pieces' },
+              { key: 'designers_pick', label: '✓ Designer Picks' },
+              { key: 'sourced', label: '○ Sourced' },
+              { key: 'needs_teaching', label: 'Needs Teaching' },
+              { key: 'drafts', label: 'Drafts' },
+            ]}
+            active={tierFilter}
+            onChange={setTierFilter}
+          />
+        </div>
+        <InfoIcon
+          surfaceKey={SurfaceKeys.DesignerPortal.Products.Filter.AllProducts}
+          fallback="Filter by product tier — Maker Pieces are commissioned work, Designer Picks are vetted vendor items, Sourced are off-the-shelf finds. Teaching and Drafts surface workflow state."
+          ariaLabel="About product tier filters"
+        />
+      </div>
 
       {/* Band 3: Refine (collapsed by default) */}
       <CatalogRefineBar
@@ -250,15 +379,16 @@ export default function CatalogPage() {
           </div>
         )
       ) : (
-        <EmptyState
-          title={search ? 'No products found' : 'Your catalog is empty'}
-          description={
-            search
-              ? 'Try adjusting your search or filters.'
-              : 'Add your first product to start building your curated catalog.'
+        <ProductsEmptyState
+          copy={emptyCopy}
+          // Only the "no products" variant gets the "Add Product" CTA — the
+          // "no filter results" variant intentionally omits it so the action
+          // doesn't push the user away from refining their query.
+          onAction={
+            !hasActiveFilter && canCreate
+              ? () => router.push('/portal/catalog/new')
+              : undefined
           }
-          actionLabel={!search && canCreate ? 'Add Product' : undefined}
-          onAction={!search && canCreate ? () => router.push('/portal/catalog/new') : undefined}
         />
       )}
     </div>

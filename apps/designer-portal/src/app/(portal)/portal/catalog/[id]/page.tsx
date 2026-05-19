@@ -21,6 +21,7 @@ import {
 } from '@/components/product-detail';
 import { PairsWith } from '@/components/product-detail/pairs-with';
 import { DesignerIntelligence } from '@/components/product-detail/designer-intelligence';
+import { SectionIntro, SurfaceKeys } from '@patina/help-system';
 
 // ── Keyboard Shortcuts ─────────────────────────────────────────────────
 
@@ -61,6 +62,15 @@ function ProductDetailContent() {
             { label: 'Products', href: '/portal/catalog' },
             { label: draft.name || 'Product' },
           ]}
+        />
+
+        {/* Layer 1 · Ambient page-level intro. Only rendered when the CMS has
+            authored copy for this surface (no fallback) — the product hero
+            already establishes context, so a redundant fallback would be noise.
+            See spec §13.4 "silent absence" pattern. */}
+        <SectionIntro
+          surfaceKey={SurfaceKeys.DesignerPortal.Products.Detail.Intro}
+          className="mb-2 max-w-prose"
         />
 
         {mode === 'present' && (

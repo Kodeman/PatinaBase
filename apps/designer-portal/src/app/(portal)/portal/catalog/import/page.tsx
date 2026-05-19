@@ -7,8 +7,23 @@ import {
   UploadZone,
   PortalButton,
 } from '@/components/portal';
+import { SectionIntro, SurfaceKeys } from '@patina/help-system';
 
 type ImportStep = 1 | 2 | 3;
+
+// Per-step intro keys live under DesignerPortal.Products.Capture.Import.*.
+// Mapping is local so an empty step doesn't trigger a redundant render.
+const STEP_INTRO_SURFACE_KEYS: Record<ImportStep, string> = {
+  1: SurfaceKeys.DesignerPortal.Products.Capture.Import.Upload,
+  2: SurfaceKeys.DesignerPortal.Products.Capture.Import.Mapping,
+  3: SurfaceKeys.DesignerPortal.Products.Capture.Import.Preview,
+};
+
+const STEP_INTRO_FALLBACKS: Record<ImportStep, string> = {
+  1: 'Drop a CSV or Excel export from your vendor. We map up to 5,000 products per import.',
+  2: 'Confirm we read your columns correctly. Anything we can\'t map will land as a draft for teaching.',
+  3: 'Review what will be imported. Products land as drafts and queue for teaching automatically.',
+};
 
 export default function BulkImportPage() {
   const router = useRouter();
@@ -37,9 +52,18 @@ export default function BulkImportPage() {
         ]}
       />
 
-      <h1 className="type-page-title mb-6" style={{ fontSize: '1.5rem' }}>
+      <h1 className="type-page-title mb-2" style={{ fontSize: '1.5rem' }}>
         Import Products
       </h1>
+
+      {/* Layer 1 · Ambient page intro — sits beneath the page title and gives
+          the designer a sense of what the bulk-import flow does before they
+          start. */}
+      <SectionIntro
+        surfaceKey={SurfaceKeys.DesignerPortal.Products.Capture.Import.Root}
+        fallback="Bring an existing vendor catalogue into Patina in one go. CSV, TSV, and Excel are supported."
+        className="mb-6 max-w-prose"
+      />
 
       {/* Step Indicator */}
       <div className="mb-8 flex gap-0">
@@ -62,6 +86,15 @@ export default function BulkImportPage() {
           </div>
         ))}
       </div>
+
+      {/* Per-step intro — surface key changes with the active step so authors
+          can write step-specific copy in Sanity. Falls back to inline strings
+          until the CMS is populated. */}
+      <SectionIntro
+        surfaceKey={STEP_INTRO_SURFACE_KEYS[step]}
+        fallback={STEP_INTRO_FALLBACKS[step]}
+        className="mb-6 max-w-prose"
+      />
 
       {/* Step 1: Upload */}
       {step === 1 && (
