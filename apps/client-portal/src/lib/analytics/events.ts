@@ -39,9 +39,12 @@ export const navEvents = {
 /** Layer 1 · Ambient */
 const helpEmptyState = {
   shown: (surfaceKey: string, persona: string) =>
-    track('help.empty_state.shown', { surfaceKey, persona }),
+    track('help.empty_state.shown', { surface_key: surfaceKey, persona }),
   ctaClicked: (surfaceKey: string, ctaLabel: string) =>
-    track('help.empty_state.cta_clicked', { surfaceKey, ctaLabel }),
+    track('help.empty_state.cta_clicked', {
+      surface_key: surfaceKey,
+      cta_label: ctaLabel,
+    }),
 };
 
 const helpFieldHelper = {
@@ -51,7 +54,7 @@ const helpFieldHelper = {
    * follow-up task without changing the event name.
    */
   rendered: (surfaceKey: string) =>
-    track('help.field_helper.rendered', { surfaceKey }),
+    track('help.field_helper.rendered', { surface_key: surfaceKey }),
 };
 
 /** Layer 2 · Reactive */
@@ -60,47 +63,83 @@ const helpTooltip = {
     surfaceKey: string,
     position: 'top' | 'bottom' | 'left' | 'right' | 'auto',
     triggerType: 'hover' | 'focus' | 'click',
-  ) => track('help.tooltip.shown', { surfaceKey, position, triggerType }),
+  ) =>
+    track('help.tooltip.shown', {
+      surface_key: surfaceKey,
+      position,
+      trigger_type: triggerType,
+    }),
   dismissed: (surfaceKey: string, durationMs: number) =>
-    track('help.tooltip.dismissed', { surfaceKey, durationMs }),
+    track('help.tooltip.dismissed', {
+      surface_key: surfaceKey,
+      duration_ms: durationMs,
+    }),
 };
 
 const helpLearnmore = {
   expanded: (surfaceKey: string) =>
-    track('help.learnmore.expanded', { surfaceKey }),
+    track('help.learnmore.expanded', { surface_key: surfaceKey }),
   collapsed: (surfaceKey: string, viewedMs: number) =>
-    track('help.learnmore.collapsed', { surfaceKey, viewedMs }),
+    track('help.learnmore.collapsed', {
+      surface_key: surfaceKey,
+      viewed_ms: viewedMs,
+    }),
 };
 
 const helpPanel = {
   opened: (fromSurfaceKey: string, triggerType: 'utility_bar' | 'keyboard_shortcut') =>
-    track('help.panel.opened', { fromSurfaceKey, triggerType }),
+    track('help.panel.opened', {
+      from_surface_key: fromSurfaceKey,
+      trigger_type: triggerType,
+    }),
   closed: (fromSurfaceKey: string, durationMs: number, articleOpened: boolean) =>
-    track('help.panel.closed', { fromSurfaceKey, durationMs, articleOpened }),
+    track('help.panel.closed', {
+      from_surface_key: fromSurfaceKey,
+      duration_ms: durationMs,
+      article_opened: articleOpened,
+    }),
 };
 
 /** Layer 3 · Proactive */
 const helpTour = {
   started: (tourKey: string, triggerSource: string) =>
-    track('help.tour.started', { tourKey, triggerSource }),
+    track('help.tour.started', {
+      tour_key: tourKey,
+      trigger_source: triggerSource,
+    }),
   stepAdvanced: (tourKey: string, stepNumber: number, stepSurfaceKey: string) =>
-    track('help.tour.step_advanced', { tourKey, stepNumber, stepSurfaceKey }),
+    track('help.tour.step_advanced', {
+      tour_key: tourKey,
+      step_number: stepNumber,
+      step_surface_key: stepSurfaceKey,
+    }),
   completed: (tourKey: string, durationMs: number, stepsViewed: number) =>
-    track('help.tour.completed', { tourKey, durationMs, stepsViewed }),
+    track('help.tour.completed', {
+      tour_key: tourKey,
+      duration_ms: durationMs,
+      steps_viewed: stepsViewed,
+    }),
   abandoned: (tourKey: string, atStep: number, totalSteps: number) =>
-    track('help.tour.abandoned', { tourKey, atStep, totalSteps }),
+    track('help.tour.abandoned', {
+      tour_key: tourKey,
+      at_step: atStep,
+      total_steps: totalSteps,
+    }),
 };
 
 const helpCoachmark = {
   shown: (surfaceKey: string) =>
-    track('help.coachmark.shown', { surfaceKey }),
+    track('help.coachmark.shown', { surface_key: surfaceKey }),
   dismissed: (surfaceKey: string, viewedMs: number) =>
-    track('help.coachmark.dismissed', { surfaceKey, viewedMs }),
+    track('help.coachmark.dismissed', {
+      surface_key: surfaceKey,
+      viewed_ms: viewedMs,
+    }),
 };
 
 const helpWelcomeModal = {
   shown: (firstSignin: boolean) =>
-    track('help.welcome_modal.shown', { firstSignin }),
+    track('help.welcome_modal.shown', { first_signin: firstSignin }),
   action: (action: 'take_tour' | 'jump_in') =>
     track('help.welcome_modal.action', { action }),
 };
@@ -108,21 +147,41 @@ const helpWelcomeModal = {
 /** Layer 4 · Reference */
 const helpArticle = {
   opened: (articleKey: string, fromSurfaceKey: string, fromSearch: boolean) =>
-    track('help.article.opened', { articleKey, fromSurfaceKey, fromSearch }),
+    track('help.article.opened', {
+      article_key: articleKey,
+      from_surface_key: fromSurfaceKey,
+      from_search: fromSearch,
+    }),
   scrolledToEnd: (articleKey: string, durationMs: number) =>
-    track('help.article.scrolled_to_end', { articleKey, durationMs }),
+    track('help.article.scrolled_to_end', {
+      article_key: articleKey,
+      duration_ms: durationMs,
+    }),
   feedbackGiven: (
     articleKey: string,
     sentiment: 'positive' | 'negative',
     hasComment: boolean,
-  ) => track('help.article.feedback_given', { articleKey, sentiment, hasComment }),
+  ) =>
+    track('help.article.feedback_given', {
+      article_key: articleKey,
+      sentiment,
+      has_comment: hasComment,
+    }),
 };
 
 const helpSearch = {
   performed: (query: string, resultCount: number, fromSurfaceKey: string) =>
-    track('help.search.performed', { query, resultCount, fromSurfaceKey }),
+    track('help.search.performed', {
+      query,
+      result_count: resultCount,
+      from_surface_key: fromSurfaceKey,
+    }),
   resultClicked: (query: string, articleKey: string, position: number) =>
-    track('help.search.result_clicked', { query, articleKey, position }),
+    track('help.search.result_clicked', {
+      query,
+      article_key: articleKey,
+      position,
+    }),
 };
 
 export const helpEvents = {

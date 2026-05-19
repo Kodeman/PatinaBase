@@ -55,7 +55,7 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.emptyStateShown.rawValue,
             properties: [
-                "surfaceKey": surfaceKey,
+                "surface_key": surfaceKey,
                 "persona": persona,
             ]
         )
@@ -66,8 +66,8 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.emptyStateCtaClicked.rawValue,
             properties: [
-                "surfaceKey": surfaceKey,
-                "ctaLabel": ctaLabel,
+                "surface_key": surfaceKey,
+                "cta_label": ctaLabel,
             ]
         )
     }
@@ -81,7 +81,7 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.fieldHelperRendered.rawValue,
             properties: [
-                "surfaceKey": surfaceKey,
+                "surface_key": surfaceKey,
             ]
         )
     }
@@ -115,9 +115,9 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.tooltipShown.rawValue,
             properties: [
-                "surfaceKey": surfaceKey,
+                "surface_key": surfaceKey,
                 "position": position.rawValue,
-                "triggerType": triggerType.rawValue,
+                "trigger_type": triggerType.rawValue,
             ]
         )
     }
@@ -127,8 +127,8 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.tooltipDismissed.rawValue,
             properties: [
-                "surfaceKey": surfaceKey,
-                "durationMs": durationMs,
+                "surface_key": surfaceKey,
+                "duration_ms": durationMs,
             ]
         )
     }
@@ -140,7 +140,7 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.learnmoreExpanded.rawValue,
             properties: [
-                "surfaceKey": surfaceKey,
+                "surface_key": surfaceKey,
             ]
         )
     }
@@ -150,8 +150,8 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.learnmoreCollapsed.rawValue,
             properties: [
-                "surfaceKey": surfaceKey,
-                "viewedMs": viewedMs,
+                "surface_key": surfaceKey,
+                "viewed_ms": viewedMs,
             ]
         )
     }
@@ -169,8 +169,8 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.panelOpened.rawValue,
             properties: [
-                "fromSurfaceKey": fromSurfaceKey,
-                "triggerType": triggerType.rawValue,
+                "from_surface_key": fromSurfaceKey,
+                "trigger_type": triggerType.rawValue,
             ]
         )
     }
@@ -184,9 +184,9 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.panelClosed.rawValue,
             properties: [
-                "fromSurfaceKey": fromSurfaceKey,
-                "durationMs": durationMs,
-                "articleOpened": articleOpened,
+                "from_surface_key": fromSurfaceKey,
+                "duration_ms": durationMs,
+                "article_opened": articleOpened,
             ]
         )
     }
@@ -200,8 +200,8 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.tourStarted.rawValue,
             properties: [
-                "tourKey": tourKey,
-                "triggerSource": triggerSource,
+                "tour_key": tourKey,
+                "trigger_source": triggerSource,
             ]
         )
     }
@@ -215,9 +215,9 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.tourStepAdvanced.rawValue,
             properties: [
-                "tourKey": tourKey,
-                "stepNumber": stepNumber,
-                "stepSurfaceKey": stepSurfaceKey,
+                "tour_key": tourKey,
+                "step_number": stepNumber,
+                "step_surface_key": stepSurfaceKey,
             ]
         )
     }
@@ -231,9 +231,9 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.tourCompleted.rawValue,
             properties: [
-                "tourKey": tourKey,
-                "durationMs": durationMs,
-                "stepsViewed": stepsViewed,
+                "tour_key": tourKey,
+                "duration_ms": durationMs,
+                "steps_viewed": stepsViewed,
             ]
         )
     }
@@ -247,9 +247,9 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.tourAbandoned.rawValue,
             properties: [
-                "tourKey": tourKey,
-                "atStep": atStep,
-                "totalSteps": totalSteps,
+                "tour_key": tourKey,
+                "at_step": atStep,
+                "total_steps": totalSteps,
             ]
         )
     }
@@ -261,7 +261,7 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.coachmarkShown.rawValue,
             properties: [
-                "surfaceKey": surfaceKey,
+                "surface_key": surfaceKey,
             ]
         )
     }
@@ -271,8 +271,8 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.coachmarkDismissed.rawValue,
             properties: [
-                "surfaceKey": surfaceKey,
-                "viewedMs": viewedMs,
+                "surface_key": surfaceKey,
+                "viewed_ms": viewedMs,
             ]
         )
     }
@@ -290,7 +290,7 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.welcomeModalShown.rawValue,
             properties: [
-                "firstSignin": firstSignin,
+                "first_signin": firstSignin,
             ]
         )
     }
@@ -318,9 +318,9 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.articleOpened.rawValue,
             properties: [
-                "articleKey": articleKey,
-                "fromSurfaceKey": fromSurfaceKey,
-                "fromSearch": fromSearch,
+                "article_key": articleKey,
+                "from_surface_key": fromSurfaceKey,
+                "from_search": fromSearch,
             ]
         )
     }
@@ -330,8 +330,8 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.articleScrolledToEnd.rawValue,
             properties: [
-                "articleKey": articleKey,
-                "durationMs": durationMs,
+                "article_key": articleKey,
+                "duration_ms": durationMs,
             ]
         )
     }
@@ -351,9 +351,9 @@ public final class HelpAnalytics {
         postHog.capture(
             HelpEvent.articleFeedbackGiven.rawValue,
             properties: [
-                "articleKey": articleKey,
+                "article_key": articleKey,
                 "sentiment": sentiment.rawValue,
-                "hasComment": hasComment,
+                "has_comment": hasComment,
             ]
         )
     }
@@ -370,8 +370,8 @@ public final class HelpAnalytics {
             HelpEvent.searchPerformed.rawValue,
             properties: [
                 "query": query,
-                "resultCount": resultCount,
-                "fromSurfaceKey": fromSurfaceKey,
+                "result_count": resultCount,
+                "from_surface_key": fromSurfaceKey,
             ]
         )
     }
@@ -386,7 +386,7 @@ public final class HelpAnalytics {
             HelpEvent.searchResultClicked.rawValue,
             properties: [
                 "query": query,
-                "articleKey": articleKey,
+                "article_key": articleKey,
                 "position": position,
             ]
         )
