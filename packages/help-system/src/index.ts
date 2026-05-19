@@ -63,3 +63,5 @@ export type { SurfaceKeyProviderProps } from './providers';
 // ─── Layer 1 · Ambient components ─────────────────────────────────────────────
 export { EmptyState } from './ambient/EmptyState';
 export type { EmptyStateProps, EmptyStateSize } from './ambient/EmptyState';
+export { SmartDefault } from './ambient/SmartDefault';
+export type { SmartDefaultAPI, SmartDefaultProps } from './ambient/SmartDefault';
