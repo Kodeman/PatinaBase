@@ -71,3 +71,7 @@ export { SmartDefault } from './ambient/SmartDefault';
 export type { SmartDefaultAPI, SmartDefaultProps } from './ambient/SmartDefault';
 export { SectionIntro } from './ambient/SectionIntro';
 export type { SectionIntroProps } from './ambient/SectionIntro';
+
+// ─── Layer 2 · Reactive components ────────────────────────────────────────────
+export { ContextualHelpPanel } from './reactive/ContextualHelpPanel';
+export type { ContextualHelpPanelProps } from './reactive/ContextualHelpPanel';
