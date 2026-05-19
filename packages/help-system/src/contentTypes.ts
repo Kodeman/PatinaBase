@@ -15,6 +15,7 @@ export type HelpContentType =
   | 'learnMore'
   | 'coachmark'
   | 'helpArticle'
+  | 'welcomeModal'
 
 /** Discriminated union by contentType — payload shape per spec Section 7.2.x */
 export type HelpContent =
@@ -24,6 +25,7 @@ export type HelpContent =
   | LearnMoreContent
   | CoachmarkContent
   | HelpArticleContent
+  | WelcomeModalContent
 
 export interface TooltipContent {
   surfaceKey: string
@@ -84,6 +86,22 @@ export interface HelpArticleContent {
   videoUrl?: string
 }
 
+/**
+ * Layer 3 (Proactive) — first-signin welcome modal copy.
+ * Spec §4.8: title + body + exactly two CTAs ("Take the tour" / "Jump in").
+ * The CTA labels are content-driven so each persona variant can phrase its own
+ * orientation copy, but the action wiring (start tour / skip) is fixed.
+ */
+export interface WelcomeModalContent {
+  surfaceKey: string
+  persona: Persona
+  contentType: 'welcomeModal'
+  title: string
+  body: string
+  primaryCtaLabel: string
+  secondaryCtaLabel?: string
+}
+
 /** Type-narrowing map from contentType discriminator to its content shape */
 export type ContentTypeMap = {
   tooltip: TooltipContent
@@ -92,4 +110,5 @@ export type ContentTypeMap = {
   learnMore: LearnMoreContent
   coachmark: CoachmarkContent
   helpArticle: HelpArticleContent
+  welcomeModal: WelcomeModalContent
 }
