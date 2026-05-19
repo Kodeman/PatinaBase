@@ -21,6 +21,18 @@
 
 export const SurfaceKeys = {
   DesignerPortal: {
+    // ─── Onboarding surfaces ────────────────────────────────────────────────
+    //
+    // The Welcome Modal (Sprint 3 W1) is the one-time first-signin orientation
+    // dialog. It shows the persona-aware "Welcome to Patina" copy authored in
+    // Sanity for the `welcomeModal` content type. Per spec §4.8 the modal is
+    // strictly orientation — never feature announcements or upsells.
+    //
+    // A future "Show me around again" affordance under the profile menu would
+    // re-trigger orientation via a separate surface key (e.g.
+    // `designer-portal/welcome/replay`) so PostHog can distinguish first-signin
+    // vs replay cohorts.
+    WelcomeModal: 'designer-portal/welcome',
     Today: {
       Dashboard: 'designer-portal/today/dashboard',
       EmptyState: 'designer-portal/today/empty-state',
