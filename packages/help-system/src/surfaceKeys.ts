@@ -67,6 +67,74 @@ export const SurfaceKeys = {
       Score:          'designer-portal/aesthete/score-meaning',
       EngineOverview: 'designer-portal/aesthete/engine-overview',
     },
+    // ─── Clients (F1.6 — Stream F.1.6 in Sprint 2) ────────────────────────────
+    //
+    // The Designer Portal Clients screen has two surfaces: a list/directory at
+    // /portal/clients and a per-client profile at /portal/clients/[id]. Help
+    // moments here cover:
+    //
+    //   • Section intros — what the page is for at a glance (Root, ListIntro).
+    //   • Empty states  — two distinct CMS-authored variants so the first-time
+    //     designer sees onboarding copy ("Add your first client") while a
+    //     search-with-no-matches gets a different "Try a different search" message.
+    //   • Field labels / helpers — every Add-Client form field plus the
+    //     contact rows on the profile page.
+    //   • Metric tooltips — Patina concepts on the profile page (lifetime
+    //     value, project count, first project) get explanatory tooltips so the
+    //     designer knows what each measures and how it's computed.
+    //   • StrataInfoIcon — Patina-specific concepts on the profile (Style DNA,
+    //     Aesthete Profile, Relationship Journey) get the Strata icon per
+    //     spec §4.2.
+    //
+    // Keys follow the portal/section/component[/state] convention from
+    // surfaceKeys.ts header. The `contact/*` and `metric/*` and `empty/*`
+    // subspaces let authors organize the Sanity workspace by surface family.
+    Clients: {
+      // Root surface key for the Clients section (used by the list page intro
+      // wrapper + as the parent in any analytics breakdowns by route).
+      Root:      'designer-portal/clients/root',
+      // SectionIntro slot below the "Clients" heading on the list page.
+      ListIntro: 'designer-portal/clients/list-intro',
+      Empty: {
+        // Zero clients in the workspace at all (first-time designer).
+        NoClients:        'designer-portal/clients/empty/no-clients',
+        // Search query returned no matches (different copy from above).
+        NoSearchResults:  'designer-portal/clients/empty/no-search-results',
+      },
+      // Add-Client form field helpers — one per input. Keys are stable per
+      // field name (not per dialog instance) so renaming a field requires
+      // touching this file first.
+      Contact: {
+        // Profile-page Contact section heading (the whole rows-of-contact
+        // block, not any individual row). Distinct from the per-field
+        // helpers below so authors can write section-level vs. field-level
+        // copy independently per spec §8.
+        Section: 'designer-portal/clients/contact/section',
+        Name:    'designer-portal/clients/contact/name',
+        Email:   'designer-portal/clients/contact/email',
+        Source:  'designer-portal/clients/contact/source',
+        Notes:   'designer-portal/clients/contact/notes',
+        Invite:  'designer-portal/clients/contact/invite',
+        // Profile-page contact rows (display fields, not inputs). FieldHelper
+        // explains the provenance / privacy of each piece of contact info.
+        Phone:             'designer-portal/clients/contact/phone',
+        Location:          'designer-portal/clients/contact/location',
+        PreferredContact:  'designer-portal/clients/contact/preferred-contact',
+      },
+      // Relationship metrics on the profile page. Tooltips explain "what this
+      // measures" so the designer doesn't have to guess whether the number
+      // includes proposals, refunds, etc.
+      Metric: {
+        LifetimeValue:  'designer-portal/clients/metric/lifetime-value',
+        ProjectCount:   'designer-portal/clients/metric/project-count',
+        FirstProject:   'designer-portal/clients/metric/first-project',
+      },
+      // Patina-specific concepts that earn the Strata icon (spec §4.2).
+      Concept: {
+        StyleDna:            'designer-portal/clients/concept/style-dna',
+        RelationshipJourney: 'designer-portal/clients/concept/relationship-journey',
+      },
+    },
   },
   AdminPortal: {
     // Sprint 1: only the minimum to prove the namespace works. Migrations in Sprint 3.

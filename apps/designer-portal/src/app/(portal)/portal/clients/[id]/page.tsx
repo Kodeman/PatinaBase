@@ -22,6 +22,19 @@ import { LoadingStrata } from '@/components/portal/loading-strata';
 import { PortalButton } from '@/components/portal/button';
 import { ProjectCard } from '@/components/portal/project-card';
 import { ScanCard } from '@/components/portal/scan-card';
+// F1.6 — Client profile screen layered with help-system. Tooltip wraps each
+// Relationship-metric value so the designer sees "what this measures" on
+// hover. StrataInfoIcon marks Patina-specific concepts (Style DNA,
+// Relationship Journey). FieldHelper provides at-a-glance context next to the
+// Contact section heading. Per spec §4.1 / §4.2 / §4.4. All copy lives in
+// Sanity once authored; inline `fallback` props keep the surface meaningful
+// pre-deploy.
+import {
+  FieldHelper,
+  StrataInfoIcon,
+  SurfaceKeys,
+  Tooltip,
+} from '@patina/help-system';
 
 function getInitials(name: string): string {
   return name
@@ -218,8 +231,18 @@ export default function ClientProfilePage({
       <div className="grid gap-12 md:grid-cols-2">
         {/* Left column */}
         <div>
-          {/* Contact */}
+          {/* Contact — section helper renders below the heading via FieldHelper.
+              The DetailRow rows are display-only; we don't convert each row
+              into a separate FieldLabel/FieldHelper because that would
+              over-emphasize a passive lookup. Instead, one Sanity-authored
+              helper sets context for the whole section per spec §8 ("one
+              question, one answer"). */}
           <FieldGroup label="Contact">
+            <FieldHelper
+              surfaceKey={SurfaceKeys.DesignerPortal.Clients.Contact.Section}
+              fallback="How the client prefers to reach you and be reached."
+              className="mb-2"
+            />
             {email && <DetailRow label="Email" value={email} />}
             {phone && <DetailRow label="Phone" value={phone} />}
             {client.location && <DetailRow label="Location" value={client.location} />}
@@ -230,8 +253,22 @@ export default function ClientProfilePage({
 
           <StrataMark variant="micro" />
 
-          {/* Style DNA */}
-          <FieldGroup label="Style DNA">
+          {/* Style DNA — Patina concept (the system's read on this client's
+              aesthetic preferences). StrataInfoIcon sits next to the heading
+              per spec §4.2 so the designer can hover to read what "Style DNA"
+              actually represents. We inline the heading instead of using
+              `<FieldGroup label="...">` because the design-system primitive
+              only accepts a string label — composing the icon into the label
+              requires a JSX heading. */}
+          <div className="mb-8">
+            <span className="type-meta mb-2 flex items-center gap-1.5">
+              Style DNA
+              <StrataInfoIcon
+                surfaceKey={SurfaceKeys.DesignerPortal.Clients.Concept.StyleDna}
+                fallback="The aesthetic profile we've learned for this client — primary styles, material and color preferences, and lifestyle cues."
+                ariaLabel="About Style DNA"
+              />
+            </span>
             {client.style_tags && client.style_tags.length > 0 && (
               <div className="mb-4">
                 <div
@@ -302,7 +339,7 @@ export default function ClientProfilePage({
                 </p>
               </div>
             )}
-          </FieldGroup>
+          </div>
 
           <StrataMark variant="micro" />
 
@@ -349,40 +386,88 @@ export default function ClientProfilePage({
 
           <StrataMark variant="micro" />
 
-          {/* Financial Summary */}
+          {/* Financial Summary — each metric row is wrapped in a Tooltip so
+              hovering over the value reveals "what this measures." Tooltip
+              uses `asChild` semantics under the hood (Radix), so the row
+              renders as a focusable button. Per spec §4.1 the body should
+              stay under 160 chars; the inline fallbacks comply pre-Sanity
+              deploy, and Sanity authors are guided by the same cap. */}
           <FieldGroup label="Financial Summary">
-            <DetailRow
-              label="Project Value"
-              value={
-                client.total_revenue > 0
-                  ? `$${(client.total_revenue / 100).toLocaleString()}`
-                  : '—'
-              }
-            />
-            <DetailRow
-              label="Projects"
-              value={String(client.total_projects || 0)}
-            />
+            <Tooltip
+              surfaceKey={SurfaceKeys.DesignerPortal.Clients.Metric.LifetimeValue}
+              fallback="Total revenue from completed and active Patina projects for this client (not including unsigned proposals)."
+            >
+              <button
+                type="button"
+                className="grid w-full cursor-help grid-cols-[110px_1fr] gap-3 py-[0.35rem] text-left"
+                aria-label="Lifetime project value — what does this measure?"
+              >
+                <span className="type-meta">Project Value</span>
+                <span className="type-body-small">
+                  {client.total_revenue > 0
+                    ? `$${(client.total_revenue / 100).toLocaleString()}`
+                    : '—'}
+                </span>
+              </button>
+            </Tooltip>
+            <Tooltip
+              surfaceKey={SurfaceKeys.DesignerPortal.Clients.Metric.ProjectCount}
+              fallback="Number of Patina projects this client has signed — counts active and completed engagements together."
+            >
+              <button
+                type="button"
+                className="grid w-full cursor-help grid-cols-[110px_1fr] gap-3 py-[0.35rem] text-left"
+                aria-label="Project count — what does this measure?"
+              >
+                <span className="type-meta">Projects</span>
+                <span className="type-body-small">
+                  {String(client.total_projects || 0)}
+                </span>
+              </button>
+            </Tooltip>
             {(client as DesignerClient & { first_project_at?: string }).first_project_at && (
-              <DetailRow
-                label="First Project"
-                value={new Date(
-                  (client as DesignerClient & { first_project_at: string }).first_project_at
-                ).toLocaleDateString('en-US', {
-                  month: 'short',
-                  year: 'numeric',
-                })}
-              />
+              <Tooltip
+                surfaceKey={SurfaceKeys.DesignerPortal.Clients.Metric.FirstProject}
+                fallback="The month and year this client first signed with you on Patina."
+              >
+                <button
+                  type="button"
+                  className="grid w-full cursor-help grid-cols-[110px_1fr] gap-3 py-[0.35rem] text-left"
+                  aria-label="First project — what does this measure?"
+                >
+                  <span className="type-meta">First Project</span>
+                  <span className="type-body-small">
+                    {new Date(
+                      (client as DesignerClient & { first_project_at: string }).first_project_at
+                    ).toLocaleDateString('en-US', {
+                      month: 'short',
+                      year: 'numeric',
+                    })}
+                  </span>
+                </button>
+              </Tooltip>
             )}
           </FieldGroup>
         </div>
 
         {/* Right column */}
         <div>
-          {/* Relationship Journey */}
-          <FieldGroup label="Relationship Journey">
+          {/* Relationship Journey — Patina concept (chronological log of how
+              the engagement has progressed). StrataInfoIcon per spec §4.2;
+              same inline-heading pattern as Style DNA above. */}
+          <div className="mb-8">
+            <span className="type-meta mb-2 flex items-center gap-1.5">
+              Relationship Journey
+              <StrataInfoIcon
+                surfaceKey={
+                  SurfaceKeys.DesignerPortal.Clients.Concept.RelationshipJourney
+                }
+                fallback="The arc of this engagement on Patina — milestones, status changes, and key project events in chronological order."
+                ariaLabel="About Relationship Journey"
+              />
+            </span>
             <ClientTimeline entries={timelineEntries} />
-          </FieldGroup>
+          </div>
 
           <StrataMark variant="micro" />
 

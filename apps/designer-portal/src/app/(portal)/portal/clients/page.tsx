@@ -11,6 +11,21 @@ import { ClientListItem } from '@/components/portal/client-list-item';
 import { AddClientDialog } from '@/components/portal/add-client-dialog';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { PortalButton } from '@/components/portal/button';
+// F1.6 — Designer Clients migrated to ambient + reactive help-system layers
+// per spec §12.4. SectionIntro renders the inline `fallback` until Sanity
+// content ships. EmptyState renders nothing on a clean CMS miss (spec §13.4
+// graceful absence), so the page would go blank for first-time designers.
+// To avoid that, we keep the local fallback copy in a small wrapper, same
+// pattern as F1.2 Pipeline (see pipeline/page.tsx → PipelineEmptyState).
+// Analytics events `help.section_intro.shown` and `help.empty_state.shown`
+// fire automatically via window.posthog on first CMS hit.
+import {
+  EmptyState,
+  SectionIntro,
+  SurfaceKeys,
+  useHelpContent,
+} from '@patina/help-system';
+import { Users, Search } from 'lucide-react';
 
 function getInitials(name: string): string {
   return name
@@ -23,6 +38,49 @@ function getInitials(name: string): string {
 
 function formatCurrency(cents: number): string {
   return `$${Math.round(cents / 100).toLocaleString()}k`;
+}
+
+// ─── Empty-state fallback wiring (F1.6) ───────────────────────────────────────
+//
+// `EmptyState` returns null on a CMS miss without error, which would leave the
+// list silently blank during Sprint 2 while Sanity is still being authored.
+// To avoid the silent-blank pitfall, probe `useHelpContent` first — if it
+// misses, render local fallback copy; if it hits, defer to the CMS-backed
+// EmptyState wrapper which handles icon/heading/description/CTA. Same pattern
+// as F1.2 Pipeline (PipelineEmptyState).
+
+interface ClientsEmptyCopy {
+  surfaceKey: string;
+  icon: React.ReactNode;
+  fallbackHeading: string;
+  fallbackDescription: string;
+}
+
+function ClientsEmptyState({ copy }: { copy: ClientsEmptyCopy }) {
+  // Cheap CMS probe — react-query dedupes with the fetch inside <EmptyState>,
+  // so this is not an extra network call.
+  const { data, isLoading } = useHelpContent(copy.surfaceKey, 'emptyState');
+
+  if (isLoading) {
+    return (
+      <p className="type-body py-16 text-center italic text-[var(--text-muted)]">
+        …
+      </p>
+    );
+  }
+
+  if (data) {
+    // CMS hit — let the canonical wrapper own the layout.
+    return <EmptyState surfaceKey={copy.surfaceKey} icon={copy.icon} />;
+  }
+
+  // CMS miss (Sprint 2 default) — render the local fallback so first-time
+  // designers see helpful copy instead of a blank page.
+  return (
+    <p className="type-body py-16 text-center italic text-[var(--text-muted)]">
+      {copy.fallbackHeading}
+    </p>
+  );
 }
 
 const stageFilters: { key: string; label: string }[] = [
@@ -102,7 +160,7 @@ function ClientDirectoryContent() {
 
   return (
     <div className="pt-8">
-      <div className="mb-6 flex flex-wrap items-baseline justify-between gap-4">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-4">
         <h1 className="type-section-head">
           Clients
         </h1>
@@ -110,6 +168,13 @@ function ClientDirectoryContent() {
           + Add Client
         </PortalButton>
       </div>
+
+      {/* Section intro — CMS-authored, with inline fallback until Sanity ships */}
+      <SectionIntro
+        surfaceKey={SurfaceKeys.DesignerPortal.Clients.ListIntro}
+        fallback="Your active and past clients."
+        className="mb-6 max-w-prose"
+      />
 
       {/* Search */}
       <div className="mb-4" style={{ maxWidth: '360px' }}>
@@ -183,9 +248,31 @@ function ClientDirectoryContent() {
           })}
         </div>
       ) : (
-        <p className="type-body py-16 text-center italic text-[var(--text-muted)]">
-          {search ? 'No clients match your search.' : 'No clients yet.'}
-        </p>
+        // Two distinct empty-state surfaces — different copy for "no clients
+        // yet at all" vs. "your search returned nothing." Per spec §6.2 these
+        // are tracked as separate surface keys so authors can iterate
+        // independently in Sanity.
+        <ClientsEmptyState
+          copy={
+            search
+              ? {
+                  surfaceKey:
+                    SurfaceKeys.DesignerPortal.Clients.Empty.NoSearchResults,
+                  icon: <Search className="h-12 w-12" />,
+                  fallbackHeading: 'No clients match your search.',
+                  fallbackDescription:
+                    'Try a different name or email, or clear the search to see everyone.',
+                }
+              : {
+                  surfaceKey:
+                    SurfaceKeys.DesignerPortal.Clients.Empty.NoClients,
+                  icon: <Users className="h-12 w-12" />,
+                  fallbackHeading: 'No clients yet.',
+                  fallbackDescription:
+                    'Add your first client to start tracking the relationship.',
+                }
+          }
+        />
       )}
 
     </div>
