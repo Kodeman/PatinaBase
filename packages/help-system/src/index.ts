@@ -111,3 +111,7 @@ export {
   clearFeatureAnnouncementState,
 } from './proactive/FeatureAnnouncementCoachmark';
 export type { FeatureAnnouncementState } from './proactive/FeatureAnnouncementCoachmark';
+
+// ─── Layer 4 · Reference components ──────────────────────────────────────────
+export { RelatedArticles } from './reference/RelatedArticles';
+export type { RelatedArticlesProps } from './reference/RelatedArticles';
