@@ -59,3 +59,7 @@ export { useHelpContent } from './hooks/useHelpContent';
 // ─── Providers ────────────────────────────────────────────────────────────────
 export { SurfaceKeyProvider, useSurfaceKey, useSetSurfaceKey } from './providers';
 export type { SurfaceKeyProviderProps } from './providers';
+
+// ─── Layer 1 · Ambient components ─────────────────────────────────────────────
+export { SectionIntro } from './ambient/SectionIntro';
+export type { SectionIntroProps } from './ambient/SectionIntro';
