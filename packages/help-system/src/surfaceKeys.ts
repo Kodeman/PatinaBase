@@ -58,9 +58,98 @@ export const SurfaceKeys = {
         Active:    'designer-portal/pipeline/stage/active',
         Completed: 'designer-portal/pipeline/stage/completed',
       },
-      // The Activation Wizard, Project Detail zones, FF&E, Decisions, etc. land in Sprint 2
-      // A4 amendments — do NOT pre-populate them in this task to keep the file scoped to
-      // Sprint 1 surfaces.
+    },
+    /**
+     * Activation Wizard — the 7-step new-project flow (Sprint 2 F1.3).
+     *
+     * Per spec §9.2 ("Designer Portal · Project Activation Wizard — the
+     * priority surface"), every step gets a step-level surface key, every
+     * field gets a FieldHelper, Patina-specific concepts (Aesthete, FF&E,
+     * Strata Mark, visibility tiers, contingency, milestone triggers) use
+     * <StrataInfoIcon>, general "what does this mean?" questions use
+     * <InfoIcon>, and the smart defaults (default phase set, contingency 10%,
+     * visibility = milestone) advertise themselves via SmartDefault.
+     *
+     * Key shape mirrors the spec example (`designer-portal/wizard/step-1-basics`)
+     * but is namespaced under `activation-wizard/` so the registry leaves
+     * room for the future Aesthete Onboarding / Studio Setup wizards without
+     * collision.
+     */
+    ActivationWizard: {
+      Root: 'designer-portal/activation-wizard',
+      // Step intros — copy under each step header
+      StepIntro: {
+        Basics:     'designer-portal/activation-wizard/step-1-basics/intro',
+        Scope:      'designer-portal/activation-wizard/step-2-scope/intro',
+        Schedule:   'designer-portal/activation-wizard/step-3-schedule/intro',
+        Financials: 'designer-portal/activation-wizard/step-4-financials/intro',
+        Team:       'designer-portal/activation-wizard/step-5-team/intro',
+        Access:     'designer-portal/activation-wizard/step-6-access/intro',
+        Review:     'designer-portal/activation-wizard/step-7-review/intro',
+      },
+      // Step 1 — Basics (4 fields)
+      Step1Basics: {
+        Root:               'designer-portal/activation-wizard/step-1-basics',
+        ProjectName:        'designer-portal/activation-wizard/step-1-basics/project-name',
+        ProjectAddress:     'designer-portal/activation-wizard/step-1-basics/project-address',
+        Client:             'designer-portal/activation-wizard/step-1-basics/client',
+        LeadDesigner:       'designer-portal/activation-wizard/step-1-basics/lead-designer',
+      },
+      // Step 2 — Scope & rooms (5 fields + empty + section concepts)
+      Step2Scope: {
+        Root:           'designer-portal/activation-wizard/step-2-scope',
+        Empty:          'designer-portal/activation-wizard/step-2-scope/empty-rooms',
+        RoomName:       'designer-portal/activation-wizard/step-2-scope/room-name',
+        RoomType:       'designer-portal/activation-wizard/step-2-scope/room-type',
+        RoomDimensions: 'designer-portal/activation-wizard/step-2-scope/room-dimensions',
+        RoomBudget:     'designer-portal/activation-wizard/step-2-scope/room-budget',
+        // Patina concept: FF&E categories
+        FfeCategories:  'designer-portal/activation-wizard/step-2-scope/ffe-categories',
+      },
+      // Step 3 — Schedule & phases (6 default phases + kickoff)
+      Step3Schedule: {
+        Root:             'designer-portal/activation-wizard/step-3-schedule',
+        KickoffDate:      'designer-portal/activation-wizard/step-3-schedule/kickoff-date',
+        ExpectedEnd:      'designer-portal/activation-wizard/step-3-schedule/expected-completion',
+        Phases:           'designer-portal/activation-wizard/step-3-schedule/phases',
+        PhaseName:        'designer-portal/activation-wizard/step-3-schedule/phase-name',
+        PhaseDuration:    'designer-portal/activation-wizard/step-3-schedule/phase-duration',
+        PhaseGate:        'designer-portal/activation-wizard/step-3-schedule/phase-gate-condition',
+      },
+      // Step 4 — Financials (7 concepts)
+      Step4Financials: {
+        Root:                 'designer-portal/activation-wizard/step-4-financials',
+        BudgetTotal:          'designer-portal/activation-wizard/step-4-financials/budget-total',
+        DesignFee:            'designer-portal/activation-wizard/step-4-financials/design-fee',
+        Contingency:          'designer-portal/activation-wizard/step-4-financials/contingency',
+        Milestones:           'designer-portal/activation-wizard/step-4-financials/milestones',
+        MilestoneLabel:       'designer-portal/activation-wizard/step-4-financials/milestone-label',
+        MilestonePercentage:  'designer-portal/activation-wizard/step-4-financials/milestone-percentage',
+        MilestoneAmount:      'designer-portal/activation-wizard/step-4-financials/milestone-amount',
+        MilestoneTrigger:     'designer-portal/activation-wizard/step-4-financials/milestone-trigger',
+        EmptyMilestones:      'designer-portal/activation-wizard/step-4-financials/empty-milestones',
+      },
+      // Step 5 — Team & vendors (currently scaffolded)
+      Step5Team: {
+        Root:               'designer-portal/activation-wizard/step-5-team',
+        SupportDesigners:   'designer-portal/activation-wizard/step-5-team/support-designers',
+        VendorAssignments:  'designer-portal/activation-wizard/step-5-team/vendor-assignments',
+        EmptyTeam:          'designer-portal/activation-wizard/step-5-team/empty-team',
+        EmptyVendors:       'designer-portal/activation-wizard/step-5-team/empty-vendors',
+      },
+      // Step 6 — Client access (3 visibility tiers — all Patina concepts)
+      Step6Access: {
+        Root:               'designer-portal/activation-wizard/step-6-access',
+        VisibilityTier:     'designer-portal/activation-wizard/step-6-access/visibility-tier',
+        TierFull:           'designer-portal/activation-wizard/step-6-access/tier-full',
+        TierMilestone:      'designer-portal/activation-wizard/step-6-access/tier-milestone',
+        TierCurated:        'designer-portal/activation-wizard/step-6-access/tier-curated',
+      },
+      // Step 7 — Review and activate (final summary surface)
+      Step7Review: {
+        Root:               'designer-portal/activation-wizard/step-7-review',
+        ActivationOutcome:  'designer-portal/activation-wizard/step-7-review/activation-outcome',
+      },
     },
     Aesthete: {
       Overview:       'designer-portal/aesthete/overview',

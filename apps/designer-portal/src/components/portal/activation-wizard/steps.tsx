@@ -3,6 +3,14 @@
 import { useMemo } from 'react';
 import { useClients } from '@patina/supabase';
 import {
+  EmptyState,
+  InfoIcon,
+  SectionIntro,
+  SmartDefault,
+  StrataInfoIcon,
+  SurfaceKeys,
+} from '@patina/help-system';
+import {
   useActivationWizard,
   type ClientVisibilityTier,
   type WizardRoom,
@@ -14,7 +22,6 @@ import {
   FieldRow,
   NumberInput,
   Select,
-  TextArea,
   TextInput,
 } from './field-primitives';
 
@@ -29,10 +36,18 @@ const VISIBILITY_OPTIONS: { value: ClientVisibilityTier; label: string; desc: st
   { value: 'curated', label: 'Curated Reveals', desc: 'Designer publishes specific updates. Final reveal at completion.' },
 ];
 
+// F1.3 — Activation Wizard migration. Surface keys flow through the typed
+// registry (spec §6.3, single source of truth); copy lives in Sanity by
+// surfaceKey and falls back to inline strings (spec §13.4) until the CMS
+// publishes. All Patina-specific concepts (FF&E, Aesthete, visibility tiers,
+// contingency, milestone triggers) use <StrataInfoIcon>; general
+// "what does this mean?" questions use <InfoIcon> (spec §4.2).
+const SK = SurfaceKeys.DesignerPortal.ActivationWizard;
+
 // ── Step 01 — Basics ─────────────────────────────────────────────────────────
 
 export function Step01Basics() {
-  const { name, address, clientId, clientName, leadDesignerId, leadDesignerName, setField } =
+  const { name, address, clientId, leadDesignerName, setField } =
     useActivationWizard();
   const { data: clients } = useClients();
 
@@ -47,36 +62,91 @@ export function Step01Basics() {
   );
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <div className="md:col-span-2">
-        <FieldRow label="Project name" hint="Often the residence name (e.g. 'Chen Residence')">
-          <TextInput value={name} onChange={(v) => setField('name', v)} placeholder="Chen Residence" />
+    <div>
+      <SectionIntro
+        className="mb-6"
+        surfaceKey={SK.StepIntro.Basics}
+        fallback="Identify the project and the people. Auto-saves as you type."
+      />
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="md:col-span-2">
+          <FieldRow
+            label="Project name"
+            htmlFor="aw-project-name"
+            required
+            helperSurfaceKey={SK.Step1Basics.ProjectName}
+            hint="Often the residence name (e.g. 'Chen Residence')."
+            trailing={<InfoIcon surfaceKey={SK.Step1Basics.ProjectName} />}
+          >
+            <TextInput
+              id="aw-project-name"
+              value={name}
+              onChange={(v) => setField('name', v)}
+              placeholder="Chen Residence"
+            />
+          </FieldRow>
+        </div>
+        <div className="md:col-span-2">
+          <FieldRow
+            label="Project address"
+            htmlFor="aw-project-address"
+            helperSurfaceKey={SK.Step1Basics.ProjectAddress}
+            hint="Where the work happens. Used for shipping, taxes, and site visits."
+          >
+            <TextInput
+              id="aw-project-address"
+              value={address}
+              onChange={(v) => setField('address', v)}
+              placeholder="123 Maple Lane, Portland, OR"
+            />
+          </FieldRow>
+        </div>
+        <FieldRow
+          label="Client"
+          htmlFor="aw-client"
+          helperSurfaceKey={SK.Step1Basics.Client}
+          hint="Pick from your client directory."
+          trailing={<InfoIcon surfaceKey={SK.Step1Basics.Client} />}
+        >
+          <Select
+            id="aw-client"
+            value={clientId ?? ''}
+            onChange={(v) => {
+              const opt = clientOptions.find((o) => o.value === v);
+              setField('clientId', v || null);
+              setField('clientName', opt?.label ?? '');
+            }}
+            options={clientOptions}
+            placeholder="Select a client…"
+          />
         </FieldRow>
+        <SmartDefault<string>
+          fieldName="lead_designer_name"
+          defaultValue={leadDesignerName || 'You'}
+          reason="Defaults to you — the designer activating this project."
+          surfaceKey={SK.Step1Basics.LeadDesigner}
+        >
+          {({ defaultValue, onChange, hintNode }) => (
+            <FieldRow
+              label="Lead designer"
+              htmlFor="aw-lead-designer"
+              helperSurfaceKey={SK.Step1Basics.LeadDesigner}
+              hint="Defaults to you. Reassign anytime from project settings."
+              trailing={hintNode}
+            >
+              <TextInput
+                id="aw-lead-designer"
+                value={leadDesignerName || defaultValue}
+                onChange={(v) => {
+                  setField('leadDesignerName', v);
+                  onChange(v);
+                }}
+                placeholder="You"
+              />
+            </FieldRow>
+          )}
+        </SmartDefault>
       </div>
-      <div className="md:col-span-2">
-        <FieldRow label="Project address">
-          <TextInput value={address} onChange={(v) => setField('address', v)} placeholder="123 Maple Lane, Portland, OR" />
-        </FieldRow>
-      </div>
-      <FieldRow label="Client" hint="Pick from your client directory">
-        <Select
-          value={clientId ?? ''}
-          onChange={(v) => {
-            const opt = clientOptions.find((o) => o.value === v);
-            setField('clientId', v || null);
-            setField('clientName', opt?.label ?? '');
-          }}
-          options={clientOptions}
-          placeholder="Select a client…"
-        />
-      </FieldRow>
-      <FieldRow label="Lead designer" hint="Defaults to you. Reassign anytime.">
-        <TextInput
-          value={leadDesignerName}
-          onChange={(v) => setField('leadDesignerName', v)}
-          placeholder="You"
-        />
-      </FieldRow>
     </div>
   );
 }
@@ -113,23 +183,23 @@ export function Step02Scope() {
 
   return (
     <div>
+      <SectionIntro
+        className="mb-6"
+        surfaceKey={SK.StepIntro.Scope}
+        fallback="Add the rooms you're designing. FF&E categories and per-room budgets keep procurement honest."
+      />
       {rooms.length === 0 ? (
-        <div className="rounded-md border-2 border-dashed py-12 text-center" style={{ borderColor: 'var(--border-default)' }}>
-          <p className="type-body mb-3 text-[var(--text-muted)]">No rooms yet</p>
-          <button
-            type="button"
-            onClick={addRoom}
-            className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
-            style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)' }}
-          >
-            + Add first room
-          </button>
-        </div>
+        <EmptyState
+          surfaceKey={SK.Step2Scope.Empty}
+          size="md"
+          onAction={addRoom}
+        />
       ) : (
         <>
           <div className="mb-3 flex items-center justify-between">
-            <span className="type-meta-small uppercase tracking-wider">
+            <span className="type-meta-small inline-flex items-center gap-1.5 uppercase tracking-wider">
               {rooms.length} {rooms.length === 1 ? 'room' : 'rooms'} · ${(totalBudget / 100).toLocaleString()} allocated
+              <StrataInfoIcon surfaceKey={SK.Step2Scope.FfeCategories} />
             </span>
             <button
               type="button"
@@ -149,23 +219,42 @@ export function Step02Scope() {
               >
                 <div className="mb-3 flex items-start justify-between">
                   <div className="grid flex-1 gap-3 md:grid-cols-3">
-                    <FieldRow label="Room name">
+                    <FieldRow
+                      label="Room name"
+                      htmlFor={`aw-room-name-${room.id}`}
+                      helperSurfaceKey={SK.Step2Scope.RoomName}
+                      hint="Friendly name your team uses for this space."
+                    >
                       <TextInput
+                        id={`aw-room-name-${room.id}`}
                         value={room.name}
                         onChange={(v) => updateRoom(room.id, { name: v })}
                         placeholder="Living Room"
                       />
                     </FieldRow>
-                    <FieldRow label="Room type">
+                    <FieldRow
+                      label="Room type"
+                      htmlFor={`aw-room-type-${room.id}`}
+                      helperSurfaceKey={SK.Step2Scope.RoomType}
+                      hint="Drives default FF&E categories and templates."
+                    >
                       <Select
+                        id={`aw-room-type-${room.id}`}
                         value={room.roomType}
                         onChange={(v) => updateRoom(room.id, { roomType: v })}
                         options={ROOM_TYPES.map((t) => ({ value: t, label: t }))}
                         placeholder="Select…"
                       />
                     </FieldRow>
-                    <FieldRow label="Dimensions">
+                    <FieldRow
+                      label="Dimensions"
+                      htmlFor={`aw-room-dim-${room.id}`}
+                      helperSurfaceKey={SK.Step2Scope.RoomDimensions}
+                      hint="Free-form. Used for scope sanity checks."
+                      trailing={<InfoIcon surfaceKey={SK.Step2Scope.RoomDimensions} />}
+                    >
                       <TextInput
+                        id={`aw-room-dim-${room.id}`}
                         value={room.dimensions}
                         onChange={(v) => updateRoom(room.id, { dimensions: v })}
                         placeholder='14 x 18 ft'
@@ -181,8 +270,14 @@ export function Step02Scope() {
                     ✕
                   </button>
                 </div>
-                <FieldRow label="Budget allocation">
+                <FieldRow
+                  label="Budget allocation"
+                  htmlFor={`aw-room-budget-${room.id}`}
+                  helperSurfaceKey={SK.Step2Scope.RoomBudget}
+                  hint="Slice of the total project budget reserved for this room."
+                >
                   <CurrencyInput
+                    id={`aw-room-budget-${room.id}`}
                     cents={room.budgetCents}
                     onChange={(c) => updateRoom(room.id, { budgetCents: c })}
                   />
@@ -213,16 +308,35 @@ export function Step03Schedule() {
 
   return (
     <div>
+      <SectionIntro
+        className="mb-6"
+        surfaceKey={SK.StepIntro.Schedule}
+        fallback="Set the kickoff date. The default phase set covers typical residential interiors — adjust durations and gates as needed."
+      />
       <div className="mb-6 grid gap-4 md:grid-cols-2">
-        <FieldRow label="Kickoff date">
+        <FieldRow
+          label="Kickoff date"
+          htmlFor="aw-kickoff-date"
+          required
+          helperSurfaceKey={SK.Step3Schedule.KickoffDate}
+          hint="When billable work begins. Drives the phase timeline."
+        >
           <TextInput
+            id="aw-kickoff-date"
             type="date"
             value={kickoffDate}
             onChange={(v) => setField('kickoffDate', v)}
           />
         </FieldRow>
-        <FieldRow label="Expected completion" hint={`Auto-calculated: ${totalWeeks} weeks total`}>
+        <FieldRow
+          label="Expected completion"
+          htmlFor="aw-expected-end"
+          helperSurfaceKey={SK.Step3Schedule.ExpectedEnd}
+          hint={`Auto-calculated: ${totalWeeks} weeks total. Editable once activated.`}
+          trailing={<InfoIcon surfaceKey={SK.Step3Schedule.ExpectedEnd} />}
+        >
           <TextInput
+            id="aw-expected-end"
             type="text"
             value={expectedEnd ? expectedEnd.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'}
             onChange={() => {}}
@@ -230,7 +344,10 @@ export function Step03Schedule() {
         </FieldRow>
       </div>
 
-      <div className="type-meta-small mb-2 uppercase tracking-wider">Phases</div>
+      <div className="mb-2 inline-flex items-center gap-1.5 type-meta-small uppercase tracking-wider">
+        <span>Phases</span>
+        <StrataInfoIcon surfaceKey={SK.Step3Schedule.Phases} />
+      </div>
       <div className="flex flex-col gap-2">
         {phases.map((phase, idx) => (
           <div
@@ -242,18 +359,24 @@ export function Step03Schedule() {
               {String(idx + 1).padStart(2, '0')}
             </span>
             <TextInput
+              id={`aw-phase-name-${phase.id}`}
               value={phase.name}
               onChange={(v) => updatePhase(phase.id, { name: v })}
+              ariaLabel={`Phase ${idx + 1} name`}
             />
             <NumberInput
+              id={`aw-phase-weeks-${phase.id}`}
               value={phase.durationWeeks}
               onChange={(v) => updatePhase(phase.id, { durationWeeks: v })}
               placeholder="weeks"
+              ariaLabel={`Phase ${idx + 1} duration in weeks`}
             />
             <TextInput
+              id={`aw-phase-gate-${phase.id}`}
               value={phase.gateCondition}
               onChange={(v) => updatePhase(phase.id, { gateCondition: v })}
               placeholder="Gate condition (e.g. Design package signed)"
+              ariaLabel={`Phase ${idx + 1} gate condition`}
             />
           </div>
         ))}
@@ -293,30 +416,75 @@ export function Step04Financials() {
 
   return (
     <div>
+      <SectionIntro
+        className="mb-6"
+        surfaceKey={SK.StepIntro.Financials}
+        fallback="Lock in the total budget, your design fee, contingency, and payment milestones. These flow into invoicing on activation."
+      />
       <div className="mb-6 grid gap-4 md:grid-cols-3">
-        <FieldRow label="Total project budget">
+        <FieldRow
+          label="Total project budget"
+          htmlFor="aw-budget-total"
+          required
+          helperSurfaceKey={SK.Step4Financials.BudgetTotal}
+          hint="All-in number the client signed off on. Includes design fee."
+          trailing={<InfoIcon surfaceKey={SK.Step4Financials.BudgetTotal} />}
+        >
           <CurrencyInput
+            id="aw-budget-total"
             cents={budgetTotalCents}
             onChange={(c) => setField('budgetTotalCents', c)}
           />
         </FieldRow>
-        <FieldRow label="Design fee">
+        <FieldRow
+          label="Design fee"
+          htmlFor="aw-design-fee"
+          helperSurfaceKey={SK.Step4Financials.DesignFee}
+          hint="Your fee for the engagement, separate from FF&E and trades."
+          trailing={<StrataInfoIcon surfaceKey={SK.Step4Financials.DesignFee} />}
+        >
           <CurrencyInput
+            id="aw-design-fee"
             cents={designFeeCents}
             onChange={(c) => setField('designFeeCents', c)}
           />
         </FieldRow>
-        <FieldRow label="Contingency %">
-          <NumberInput
-            value={contingencyPercent}
-            onChange={(v) => setField('contingencyPercent', v)}
-          />
-        </FieldRow>
+        <SmartDefault<number>
+          fieldName="contingency_percent"
+          defaultValue={10}
+          reason="Industry standard 10% buffer for residential interiors."
+          surfaceKey={SK.Step4Financials.Contingency}
+        >
+          {({ defaultValue, onChange, hintNode }) => (
+            <FieldRow
+              label="Contingency %"
+              htmlFor="aw-contingency"
+              helperSurfaceKey={SK.Step4Financials.Contingency}
+              hint="Buffer for change orders and surprises. Default 10%."
+              trailing={
+                <>
+                  <StrataInfoIcon surfaceKey={SK.Step4Financials.Contingency} />
+                  {hintNode}
+                </>
+              }
+            >
+              <NumberInput
+                id="aw-contingency"
+                value={contingencyPercent || defaultValue}
+                onChange={(v) => {
+                  setField('contingencyPercent', v);
+                  onChange(v);
+                }}
+              />
+            </FieldRow>
+          )}
+        </SmartDefault>
       </div>
 
       <div className="mb-2 flex items-center justify-between">
-        <span className="type-meta-small uppercase tracking-wider">
+        <span className="type-meta-small inline-flex items-center gap-1.5 uppercase tracking-wider">
           Payment milestones · {milestoneTotalPct}% allocated
+          <StrataInfoIcon surfaceKey={SK.Step4Financials.Milestones} />
         </span>
         <button
           type="button"
@@ -329,23 +497,38 @@ export function Step04Financials() {
       </div>
 
       <div className="flex flex-col gap-2">
-        {milestones.map((ms) => (
+        {milestones.map((ms, idx) => (
           <div
             key={ms.id}
             className="grid items-center gap-3 rounded-md border p-3"
             style={{ borderColor: 'var(--border-default)', gridTemplateColumns: '2fr 80px 140px 2fr 24px' }}
           >
             <TextInput
+              id={`aw-ms-label-${ms.id}`}
               value={ms.label}
               onChange={(v) => updateMs(ms.id, { label: v })}
               placeholder="e.g. Design Approval"
+              ariaLabel={`Milestone ${idx + 1} label`}
             />
-            <NumberInput value={ms.percentage} onChange={(v) => updateMs(ms.id, { percentage: v })} placeholder="%" />
-            <CurrencyInput cents={ms.amountCents} onChange={(c) => updateMs(ms.id, { amountCents: c })} />
+            <NumberInput
+              id={`aw-ms-pct-${ms.id}`}
+              value={ms.percentage}
+              onChange={(v) => updateMs(ms.id, { percentage: v })}
+              placeholder="%"
+              ariaLabel={`Milestone ${idx + 1} percentage`}
+            />
+            <CurrencyInput
+              id={`aw-ms-amount-${ms.id}`}
+              cents={ms.amountCents}
+              onChange={(c) => updateMs(ms.id, { amountCents: c })}
+              ariaLabel={`Milestone ${idx + 1} amount`}
+            />
             <TextInput
+              id={`aw-ms-trigger-${ms.id}`}
               value={ms.triggerCondition}
               onChange={(v) => updateMs(ms.id, { triggerCondition: v })}
               placeholder="Trigger (e.g. Phase 2 sign-off)"
+              ariaLabel={`Milestone ${idx + 1} trigger condition`}
             />
             <button
               type="button"
@@ -358,9 +541,11 @@ export function Step04Financials() {
           </div>
         ))}
         {milestones.length === 0 && (
-          <p className="type-body py-6 text-center italic text-[var(--text-muted)]">
-            No milestones yet. Common pattern: 25% kickoff · 25% design approval · 25% procurement · 25% installation.
-          </p>
+          <EmptyState
+            surfaceKey={SK.Step4Financials.EmptyMilestones}
+            size="sm"
+            onAction={addMilestone}
+          />
         )}
       </div>
     </div>
@@ -374,31 +559,40 @@ export function Step05Team() {
 
   return (
     <div>
+      <SectionIntro
+        className="mb-6"
+        surfaceKey={SK.StepIntro.Team}
+        fallback="Optional. Pull in support designers and pre-assign vendors. Both can be added after activation."
+      />
       <div className="mb-6">
-        <div className="mb-2 type-meta-small uppercase tracking-wider">Support designers</div>
+        <div className="mb-2 inline-flex items-center gap-1.5 type-meta-small uppercase tracking-wider">
+          <span>Support designers</span>
+          <InfoIcon surfaceKey={SK.Step5Team.SupportDesigners} />
+        </div>
         <p className="type-body mb-3 text-[var(--text-muted)] text-[0.82rem]">
           Add additional designers from your studio who will work on this project. They&rsquo;ll
           be able to log hours, update tasks, and upload photos. Financial editing and change
           order signing remain with the lead designer.
         </p>
-        <div className="rounded-md border-2 border-dashed py-8 text-center" style={{ borderColor: 'var(--border-default)' }}>
-          <p className="type-body text-[var(--text-muted)] text-[0.82rem]">
-            Studio team management ships in Sprint 3. For MVP, support designers can be added from the project detail page after activation.
-          </p>
-        </div>
+        <EmptyState
+          surfaceKey={SK.Step5Team.EmptyTeam}
+          size="sm"
+        />
       </div>
 
       <div>
-        <div className="mb-2 type-meta-small uppercase tracking-wider">Vendor pre-assignments</div>
+        <div className="mb-2 inline-flex items-center gap-1.5 type-meta-small uppercase tracking-wider">
+          <span>Vendor pre-assignments</span>
+          <StrataInfoIcon surfaceKey={SK.Step5Team.VendorAssignments} />
+        </div>
         <p className="type-body mb-3 text-[var(--text-muted)] text-[0.82rem]">
           Optional. Pre-assign vendors to FF&E categories for items where you have standing
           relationships. Other items can be assigned during procurement.
         </p>
-        <div className="rounded-md border-2 border-dashed py-8 text-center" style={{ borderColor: 'var(--border-default)' }}>
-          <p className="type-body text-[var(--text-muted)] text-[0.82rem]">
-            Skip for now and assign vendors per-item from the FF&E pipeline.
-          </p>
-        </div>
+        <EmptyState
+          surfaceKey={SK.Step5Team.EmptyVendors}
+          size="sm"
+        />
       </div>
 
       {/* Suppress unused warnings while these features are scaffolded */}
@@ -412,41 +606,70 @@ export function Step05Team() {
 export function Step06Access() {
   const { visibilityTier, setField } = useActivationWizard();
 
+  // Each visibility tier maps to a Patina-specific surface key so concept
+  // copy (rendered via <StrataInfoIcon>) can be authored per-tier in Sanity.
+  const TIER_KEY_MAP: Record<ClientVisibilityTier, string> = {
+    full: SK.Step6Access.TierFull,
+    milestone: SK.Step6Access.TierMilestone,
+    curated: SK.Step6Access.TierCurated,
+  };
+
   return (
-    <div>
-      <p className="type-body mb-4 text-[0.85rem] text-[var(--text-body)]">
-        Choose how much detail your client sees. You can change this later.
-      </p>
-      <div className="flex flex-col gap-3">
-        {VISIBILITY_OPTIONS.map((opt) => {
-          const active = opt.value === visibilityTier;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setField('visibilityTier', opt.value)}
-              className="rounded-md border p-4 text-left transition-colors"
-              style={{
-                borderColor: active ? 'var(--text-primary)' : 'var(--border-default)',
-                background: active ? 'var(--bg-hover)' : 'transparent',
-              }}
-            >
-              <div className="mb-1 flex items-center gap-2">
-                <span
-                  className="h-3 w-3 rounded-full border"
+    <SmartDefault<ClientVisibilityTier>
+      fieldName="visibility_tier"
+      defaultValue="milestone"
+      reason="Milestone updates is the most common choice — full visibility can be enabled later."
+      surfaceKey={SK.Step6Access.VisibilityTier}
+    >
+      {({ onChange }) => (
+        <div>
+          <SectionIntro
+            className="mb-4"
+            surfaceKey={SK.StepIntro.Access}
+            fallback="Choose how much detail your client sees. You can change this later from project settings."
+          />
+          <div className="mb-3 inline-flex items-center gap-1.5 type-meta-small uppercase tracking-wider">
+            <span>Client visibility tier</span>
+            <StrataInfoIcon surfaceKey={SK.Step6Access.VisibilityTier} />
+          </div>
+          <div className="flex flex-col gap-3">
+            {VISIBILITY_OPTIONS.map((opt) => {
+              const active = opt.value === visibilityTier;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    setField('visibilityTier', opt.value);
+                    onChange(opt.value);
+                  }}
+                  className="rounded-md border p-4 text-left transition-colors"
                   style={{
                     borderColor: active ? 'var(--text-primary)' : 'var(--border-default)',
-                    background: active ? 'var(--text-primary)' : 'transparent',
+                    background: active ? 'var(--bg-hover)' : 'transparent',
                   }}
-                />
-                <span className="type-label">{opt.label}</span>
-              </div>
-              <p className="type-body text-[0.78rem] text-[var(--text-muted)]">{opt.desc}</p>
-            </button>
-          );
-        })}
-      </div>
-    </div>
+                >
+                  <div className="mb-1 flex items-center gap-2">
+                    <span
+                      className="h-3 w-3 rounded-full border"
+                      style={{
+                        borderColor: active ? 'var(--text-primary)' : 'var(--border-default)',
+                        background: active ? 'var(--text-primary)' : 'transparent',
+                      }}
+                    />
+                    <span className="type-label inline-flex items-center gap-1.5">
+                      {opt.label}
+                      <StrataInfoIcon surfaceKey={TIER_KEY_MAP[opt.value]} />
+                    </span>
+                  </div>
+                  <p className="type-body text-[0.78rem] text-[var(--text-muted)]">{opt.desc}</p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </SmartDefault>
   );
 }
 
@@ -460,42 +683,51 @@ export function Step07Review() {
   const milestonePct = w.milestones.reduce((s, m) => s + m.percentage, 0);
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <ReviewBlock title="Basics">
-        <ReviewRow label="Name" value={w.name || '—'} />
-        <ReviewRow label="Address" value={w.address || '—'} />
-        <ReviewRow label="Client" value={w.clientName || '—'} />
-        <ReviewRow label="Lead designer" value={w.leadDesignerName || '—'} />
-      </ReviewBlock>
+    <div>
+      <SectionIntro
+        className="mb-4"
+        surfaceKey={SK.StepIntro.Review}
+        fallback="One last look. Everything is editable after activation — this confirms what gets created on the live project."
+      />
+      <div className="grid gap-4 md:grid-cols-2">
+        <ReviewBlock title="Basics">
+          <ReviewRow label="Name" value={w.name || '—'} />
+          <ReviewRow label="Address" value={w.address || '—'} />
+          <ReviewRow label="Client" value={w.clientName || '—'} />
+          <ReviewRow label="Lead designer" value={w.leadDesignerName || '—'} />
+        </ReviewBlock>
 
-      <ReviewBlock title="Scope">
-        <ReviewRow label="Rooms" value={`${w.rooms.length}`} />
-        <ReviewRow label="Total room budget" value={`$${(totalRoomsBudget / 100).toLocaleString()}`} />
-      </ReviewBlock>
+        <ReviewBlock title="Scope">
+          <ReviewRow label="Rooms" value={`${w.rooms.length}`} />
+          <ReviewRow label="Total room budget" value={`$${(totalRoomsBudget / 100).toLocaleString()}`} />
+        </ReviewBlock>
 
-      <ReviewBlock title="Schedule">
-        <ReviewRow label="Kickoff" value={w.kickoffDate ? new Date(w.kickoffDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'} />
-        <ReviewRow label="Phases" value={`${w.phases.length}`} />
-        <ReviewRow label="Total duration" value={`${totalWeeks} weeks`} />
-      </ReviewBlock>
+        <ReviewBlock title="Schedule">
+          <ReviewRow label="Kickoff" value={w.kickoffDate ? new Date(w.kickoffDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'} />
+          <ReviewRow label="Phases" value={`${w.phases.length}`} />
+          <ReviewRow label="Total duration" value={`${totalWeeks} weeks`} />
+        </ReviewBlock>
 
-      <ReviewBlock title="Financials">
-        <ReviewRow label="Project budget" value={`$${(w.budgetTotalCents / 100).toLocaleString()}`} />
-        <ReviewRow label="Design fee" value={`$${(w.designFeeCents / 100).toLocaleString()}`} />
-        <ReviewRow label="Contingency" value={`${w.contingencyPercent}%`} />
-        <ReviewRow label="Payment milestones" value={`${w.milestones.length} (${milestonePct}% allocated)`} />
-      </ReviewBlock>
+        <ReviewBlock title="Financials">
+          <ReviewRow label="Project budget" value={`$${(w.budgetTotalCents / 100).toLocaleString()}`} />
+          <ReviewRow label="Design fee" value={`$${(w.designFeeCents / 100).toLocaleString()}`} />
+          <ReviewRow label="Contingency" value={`${w.contingencyPercent}%`} />
+          <ReviewRow label="Payment milestones" value={`${w.milestones.length} (${milestonePct}% allocated)`} />
+        </ReviewBlock>
 
-      <ReviewBlock title="Access">
-        <ReviewRow label="Client visibility" value={w.visibilityTier} />
-      </ReviewBlock>
+        <ReviewBlock title="Access">
+          <ReviewRow label="Client visibility" value={w.visibilityTier} />
+        </ReviewBlock>
 
-      <div className="md:col-span-2 rounded-md border-2 p-4" style={{ borderColor: 'var(--color-sage, #A8B5A0)', background: 'rgba(168, 181, 160, 0.06)' }}>
-        <p className="type-body text-[0.85rem]">
-          Activating will create the project workspace, generate room cards and FF&E pipeline,
-          assign payment milestones, and notify the client. You&rsquo;ll be able to edit any
-          field afterward from the Project Detail page.
-        </p>
+        <div
+          className="md:col-span-2 rounded-md border-2 p-4"
+          style={{ borderColor: 'var(--color-sage, #A8B5A0)', background: 'rgba(168, 181, 160, 0.06)' }}
+        >
+          <SectionIntro
+            surfaceKey={SK.Step7Review.ActivationOutcome}
+            fallback="Activating will create the project workspace, generate room cards and the FF&E pipeline, assign payment milestones, and notify the client. You can edit any field afterward from the Project Detail page."
+          />
+        </div>
       </div>
     </div>
   );
