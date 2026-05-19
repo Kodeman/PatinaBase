@@ -14,6 +14,9 @@ interface Tab {
   icon: LucideIcon;
   /** If true, opens overlay instead of navigating */
   isOverlay?: boolean;
+  /** First Project Walkthrough tour anchor (Sprint 3 W1) — matches the
+      desktop TopBar so the tour fires on either layout. */
+  tourAnchor?: string;
 }
 
 const tabs: Tab[] = [
@@ -22,18 +25,21 @@ const tabs: Tab[] = [
     href: '/portal',
     paths: ['/portal'],
     icon: CalendarDays,
+    tourAnchor: 'today',
   },
   {
     label: 'Pipeline',
     href: '/portal/pipeline',
     paths: ['/portal/pipeline', '/portal/leads', '/portal/projects', '/portal/proposals'],
     icon: TrendingUp,
+    tourAnchor: 'pipeline',
   },
   {
     label: 'Products',
     href: '/portal/catalog',
     paths: ['/portal/catalog', '/portal/teaching', '/portal/companion'],
     icon: Package,
+    tourAnchor: 'products',
   },
   {
     label: 'Clients',
@@ -88,6 +94,7 @@ export function MobileTabBar() {
             <Link
               key={tab.label}
               href={tab.href}
+              data-tour-anchor={tab.tourAnchor}
               className={`relative flex flex-col items-center gap-[3px] no-underline ${
                 isActive
                   ? 'text-[var(--accent-primary)]'
@@ -96,6 +103,16 @@ export function MobileTabBar() {
             >
               <tab.icon className="h-5 w-5" strokeWidth={1.5} />
               <span className="type-meta-small">{tab.label}</span>
+              {/* Aesthete tour anchor (step 3) — invisible sibling on the
+                  Products tab on mobile, mirroring the desktop TopBar. The
+                  Aesthete Engine is accessed via the Products subnav. */}
+              {tab.tourAnchor === 'products' && (
+                <span
+                  aria-hidden="true"
+                  data-tour-anchor="aesthete"
+                  className="pointer-events-none absolute inset-0"
+                />
+              )}
             </Link>
           );
         })}

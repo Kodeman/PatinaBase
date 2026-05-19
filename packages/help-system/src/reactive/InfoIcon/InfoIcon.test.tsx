@@ -4,18 +4,22 @@
  * Reactive-layer component (spec §4.2). Renders a 14px "?" glyph trigger
  * that opens a Sanity-backed tooltip on hover or focus.
  *
+ * Post R13 refactor: InfoIcon delegates to the canonical <Tooltip /> wrapper
+ * (C1), which owns CMS fetch, fallback resolution, portal rendering, and
+ * analytics emission. We assert public behavior (rendered DOM + analytics
+ * payload shape) rather than Radix internals.
+ *
  * All Sanity client + posthog calls are mocked. No live network I/O.
  *
  * NOTE: Radix Tooltip's hover detection in JSDOM is unreliable (pointer-events
  * + popper measurements that don't run without a real layout engine). We use
- * focus/blur to exercise the tooltip lifecycle and a controlled-open render
- * path for content assertions — same code paths, deterministic in JSDOM.
+ * focus/blur to exercise the tooltip lifecycle — same code path Radix wires
+ * for keyboard a11y, deterministic in JSDOM.
  */
 import React from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import * as RadixTooltip from '@radix-ui/react-tooltip'
 import { InfoIcon } from './InfoIcon'
 import type { TooltipContent } from '../../contentTypes'
 
@@ -39,12 +43,10 @@ function makeWrapper() {
       },
     },
   })
+  // The canonical <Tooltip /> wires its own Radix Provider internally, so
+  // tests only need the React Query provider here.
   const Wrapper = ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={queryClient}>
-      <RadixTooltip.Provider delayDuration={0} skipDelayDuration={0}>
-        {children}
-      </RadixTooltip.Provider>
-    </QueryClientProvider>
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
   return { Wrapper, queryClient }
 }
@@ -222,10 +224,13 @@ describe('<InfoIcon />', () => {
     // findByRole confirms the tooltip mounted (= onOpenChange fired)
     await screen.findByRole('tooltip')
 
-    expect(captureSpy).toHaveBeenCalledWith('help.tooltip.shown', {
-      surface_key: SURFACE_KEY,
-      trigger: 'info_icon',
-    })
+    expect(captureSpy).toHaveBeenCalledWith(
+      'help.tooltip.shown',
+      expect.objectContaining({
+        surface_key: SURFACE_KEY,
+        trigger: 'info_icon',
+      }),
+    )
   })
 
   it('fires help.tooltip.dismissed with duration_ms (snake_case) on close', async () => {
@@ -333,26 +338,9 @@ describe('<InfoIcon />', () => {
     expect(tip).toHaveTextContent('Fallback explainer copy.')
   })
 
-  // ── 6. Reduced motion: no fade animation class applied ──────────────────────
+  // ── 6. Reduced motion: animation classes are motion-safe-gated ─────────────
 
-  it('omits the fade-in animation class when prefers-reduced-motion is set', async () => {
-    // Re-mock matchMedia to report reduced-motion = true
-    const originalMM = window.matchMedia
-    Object.defineProperty(window, 'matchMedia', {
-      configurable: true,
-      writable: true,
-      value: vi.fn().mockImplementation((query: string) => ({
-        matches: query.includes('prefers-reduced-motion'),
-        media: query,
-        onchange: null,
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        addListener: vi.fn(),
-        removeListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-      })),
-    })
-
+  it('guards fade-in animation behind motion-safe: variant (CSS-level reduced-motion respect)', async () => {
     mockFetch.mockResolvedValueOnce(tooltipFixture)
 
     const { Wrapper } = makeWrapper()
@@ -370,11 +358,29 @@ describe('<InfoIcon />', () => {
       await flushQueries()
     })
 
-    const tip = await screen.findByRole('tooltip')
-    expect(tip.className).not.toMatch(/animate-in|fade-in/)
-
-    // Restore
-    Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: originalMM })
+    // The canonical Tooltip delegates reduced-motion to Tailwind's
+    // `motion-safe:` variant — the animate-in / fade-in / zoom-in classes are
+    // always present in the className but their CSS only applies when
+    // (prefers-reduced-motion: no-preference) matches. Verify any animation
+    // class is paired with the motion-safe: gate so the OS preference is
+    // honored at the CSS layer (no naked `animate-in` slipping through).
+    //
+    // Query the popper-wrapped Content node which carries the animation
+    // classes; the role="tooltip" element is the SR-only announcer.
+    const styledContent = document.querySelector(
+      '[data-radix-popper-content-wrapper] [data-state]',
+    )
+    expect(styledContent).not.toBeNull()
+    const classes = styledContent?.className ?? ''
+    // Every animation token must be prefixed with `motion-safe:` — i.e. there
+    // is no bare `animate-in` / `fade-in` / `zoom-in` without the guard.
+    const animationTokens = classes
+      .split(/\s+/)
+      .filter((c) => /animate-in|fade-in|zoom-in|animate-out|fade-out|zoom-out/.test(c))
+    expect(animationTokens.length).toBeGreaterThan(0)
+    for (const token of animationTokens) {
+      expect(token.startsWith('motion-safe:')).toBe(true)
+    }
   })
 
   // ── 7. PostHog absent: never throws ─────────────────────────────────────────

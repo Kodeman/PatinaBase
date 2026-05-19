@@ -39,6 +39,10 @@ struct DailyGreetingHeader: View {
                     )
                 }
             }
+            // First-launch tour anchor — Step 1 popover attaches to the title
+            // row of the greeting header. Wrapping the inner VStack rather
+            // than the whole HStack so the popover arrow lands on the title.
+            .firstLaunchTourAnchor(.homeGreeting)
             Spacer()
             // Optional `?` help-panel trigger. The parent screen owns the
             // sheet state and binds via the closure so this view stays a
@@ -64,6 +68,11 @@ struct DailyGreetingHeader: View {
                     .font(.custom("PlayfairDisplay-Medium", size: 14))
                     .foregroundColor(PatinaColors.offWhite)
             }
+            // First-launch tour anchor — Step 3 popover attaches to the
+            // profile monogram avatar. Once the iOS app gets a dedicated
+            // Profile entry point this anchor can move there; for now the
+            // monogram is the closest stand-in.
+            .firstLaunchTourAnchor(.profileMonogram)
         }
         .padding(.top, 56)
         .padding(.horizontal, 20)

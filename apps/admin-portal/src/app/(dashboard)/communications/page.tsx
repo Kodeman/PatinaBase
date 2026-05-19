@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCommsDashboard } from '@patina/supabase/hooks';
-import { Plus, ShieldCheck, Calendar, Clock } from 'lucide-react';
+import { Plus, ShieldCheck, Calendar, Clock, Mail } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,11 +12,23 @@ import {
   MetricsRow,
   Section,
   FilterTabs,
-  EmptyState,
   LoadingStrata,
   StatusDot,
   type StatusVariant,
 } from '@/components/portal';
+// F2 admin-portal help-system migration. Communications dashboard surfaces
+// industry-standard email metrics (open rate, click rate, delivery health)
+// that benefit from per-metric tooltips so an unfamiliar operator can
+// understand the source. The "Command Center" name itself is a Patina-coined
+// label so it earns a StrataInfoIcon on the page-level intro.
+import {
+  EmptyState,
+  InfoIcon,
+  SectionIntro,
+  StrataInfoIcon,
+  SurfaceKeys,
+  useHelpContent,
+} from '@patina/help-system';
 
 type TimeRange = '24h' | '7d' | '30d' | '90d';
 
@@ -66,6 +78,21 @@ export default function CommunicationsPage() {
         }
       />
 
+      {/* Section-level intro under the header. "Command Center" is a Patina
+          coined label so the StrataInfoIcon (not InfoIcon) marks the
+          concept per spec §4.2. Renders inline next to the intro copy. */}
+      <SectionIntro
+        surfaceKey={SurfaceKeys.AdminPortal.Communications.ListIntro}
+        fallback="Live email send volume, delivery health, and scheduled campaigns."
+        className="-mt-4 mb-2 max-w-prose"
+      />
+      <div className="mb-6 flex items-center gap-1.5 text-[var(--text-muted)]">
+        <span className="type-meta-small">What is Command Center?</span>
+        <StrataInfoIcon
+          surfaceKey={SurfaceKeys.AdminPortal.Communications.Concept.CommandCenter}
+          fallback="Patina's internal name for the multi-channel comms hub. All email, in-app, and webhook deliveries route through it."
+        /></div>
+
       {stats?.deliveryHealth === 'critical' && (
         <div className="mt-6 flex items-center gap-3 rounded-sm border border-[var(--color-error)] bg-[rgba(199,123,110,0.08)] p-4">
           <ShieldCheck className="h-5 w-5 shrink-0 text-[var(--color-error)]" />
@@ -79,22 +106,50 @@ export default function CommunicationsPage() {
       )}
 
       <MetricsRow>
+        {/* InfoIcon (not Strata) on each metric — open rate, click rate, and
+            delivery-health are industry-standard email metrics, not Patina
+            vocabulary. Hover gives the operator the source-of-truth
+            definition (which deliveries count, freshness window, etc.). */}
         <MetricBlock
           label="Emails Sent"
+          labelExtra={
+            <InfoIcon
+              surfaceKey={SurfaceKeys.AdminPortal.Communications.Metric.EmailsSent}
+              fallback="Total emails dispatched in the selected window."
+            />
+          }
           value={isLoading ? 0 : (stats?.totalSent ?? 0)}
         />
         <MetricBlock
           label="Open Rate"
+          labelExtra={
+            <InfoIcon
+              surfaceKey={SurfaceKeys.AdminPortal.Communications.Metric.OpenRate}
+              fallback="Share of delivered emails that triggered an open pixel."
+            />
+          }
           value={isLoading ? '0%' : `${stats?.openRate ?? 0}%`}
           trend="up"
         />
         <MetricBlock
           label="Click Rate"
+          labelExtra={
+            <InfoIcon
+              surfaceKey={SurfaceKeys.AdminPortal.Communications.Metric.ClickRate}
+              fallback="Share of delivered emails with at least one tracked link click."
+            />
+          }
           value={isLoading ? '0%' : `${stats?.clickRate ?? 0}%`}
           trend="up"
         />
         <MetricBlock
           label="Delivery Health"
+          labelExtra={
+            <InfoIcon
+              surfaceKey={SurfaceKeys.AdminPortal.Communications.Metric.DeliveryHealth}
+              fallback="Bounce-rate signal: green under 2%, warning 2-5%, critical above 5%."
+            />
+          }
           value={isLoading ? '—' : healthLabel}
           trend={
             stats?.deliveryHealth === 'critical'
@@ -131,7 +186,10 @@ export default function CommunicationsPage() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <EmptyState message="No send data for this period." />
+            <CommsEmptyState
+              surfaceKey={SurfaceKeys.AdminPortal.Communications.Empty.NoSendData}
+              fallback="No send data for this period."
+            />
           )}
         </Section>
 
@@ -155,7 +213,10 @@ export default function CommunicationsPage() {
               ))}
             </div>
           ) : (
-            <EmptyState message="No recent activity." />
+            <CommsEmptyState
+              surfaceKey={SurfaceKeys.AdminPortal.Communications.Empty.NoRecentActivity}
+              fallback="No recent activity."
+            />
           )}
         </Section>
       </div>
@@ -190,10 +251,46 @@ export default function CommunicationsPage() {
             ))}
           </div>
         ) : (
-          <EmptyState message="No scheduled campaigns." />
+          <CommsEmptyState
+            surfaceKey={SurfaceKeys.AdminPortal.Communications.Empty.NoScheduledSends}
+            fallback="No scheduled campaigns."
+          />
         )}
       </Section>
     </div>
+  );
+}
+
+// ─── Empty-state wrapper (F2 admin-portal communications) ────────────────────
+//
+// Three distinct CMS surfaces — different copy for "no send data", "no recent
+// activity", and "no scheduled sends." Each falls back to inline copy until
+// Sanity content lands. The shared wrapper avoids three near-duplicate
+// blocks while still giving each surface key its own authoring track.
+
+interface CommsEmptyStateProps {
+  surfaceKey: string;
+  fallback: string;
+}
+
+function CommsEmptyState({ surfaceKey, fallback }: CommsEmptyStateProps) {
+  const { data, isLoading } = useHelpContent(surfaceKey, 'emptyState');
+
+  if (isLoading) {
+    return <p className="type-body py-8 text-center italic text-[var(--text-muted)]">…</p>;
+  }
+
+  if (data) {
+    return (
+      <EmptyState
+        surfaceKey={surfaceKey}
+        icon={<Mail className="h-8 w-8 text-[var(--text-muted)]" strokeWidth={1.5} />}
+      />
+    );
+  }
+
+  return (
+    <p className="type-body py-8 text-center text-[var(--text-muted)]">{fallback}</p>
   );
 }
 

@@ -9,6 +9,7 @@ import { LoadingStrata } from '@/components/portal/loading-strata';
 import { ToastProvider } from '@/components/portal/toast-provider';
 import { MessagesPanel } from '@/components/portal/messages-panel';
 import { CommandPalette } from '@/components/portal/command-palette';
+import { FirstSigninTour } from '@/components/help/first-signin-tour';
 import { CommandPaletteProvider } from '@/contexts/command-palette-context';
 import { MessagesPanelProvider } from '@/contexts/messages-panel-context';
 
@@ -38,6 +39,11 @@ export default function PortalLayout({
             <MobileTabBar />
             <MessagesPanel />
             <CommandPalette />
+
+            {/* W1 — First-signin welcome modal + First Project Walkthrough
+                coachmark tour. Mounted once at the portal layout level so it
+                follows the user across navigation while the tour is active. */}
+            <FirstSigninTour />
           </div>
         </ToastProvider>
       </MessagesPanelProvider>

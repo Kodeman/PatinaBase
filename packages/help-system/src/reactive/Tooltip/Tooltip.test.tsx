@@ -441,6 +441,84 @@ describe('<Tooltip />', () => {
     await screen.findByRole('tooltip', undefined, { timeout: 1500 })
   })
 
+  // ── 8a. Passes through optional `trigger` discriminator ─────────────────────
+
+  it('includes trigger in the analytics payload when the prop is provided', async () => {
+    mockFetch.mockResolvedValueOnce(tooltipFixture)
+
+    const user = userEvent.setup()
+    const { Wrapper } = makeWrapper()
+    render(
+      <Wrapper>
+        <Tooltip
+          surfaceKey="designer-portal/aesthete/score-meaning"
+          delayMs={0}
+          trigger="info_icon"
+        >
+          <button type="button">More info</button>
+        </Tooltip>
+      </Wrapper>,
+    )
+
+    await flushQueries()
+
+    await user.hover(screen.getByRole('button', { name: 'More info' }))
+    await screen.findByRole('tooltip')
+
+    expect(captureSpy).toHaveBeenCalledWith(
+      'help.tooltip.shown',
+      expect.objectContaining({
+        surface_key: 'designer-portal/aesthete/score-meaning',
+        trigger: 'info_icon',
+      }),
+    )
+
+    // Close — dismissed event should also carry the trigger discriminator.
+    await user.keyboard('{Escape}')
+
+    await vi.waitFor(() => {
+      expect(
+        captureSpy.mock.calls.some(([event]) => event === 'help.tooltip.dismissed'),
+      ).toBe(true)
+    })
+
+    const dismissedCall = captureSpy.mock.calls.find(
+      ([event]) => event === 'help.tooltip.dismissed',
+    )
+    expect(dismissedCall).toBeDefined()
+    const [, props] = dismissedCall as [string, Record<string, unknown>]
+    expect(props.trigger).toBe('info_icon')
+  })
+
+  it('omits trigger from the analytics payload when the prop is not provided', async () => {
+    mockFetch.mockResolvedValueOnce(tooltipFixture)
+
+    const user = userEvent.setup()
+    const { Wrapper } = makeWrapper()
+    render(
+      <Wrapper>
+        <Tooltip
+          surfaceKey="designer-portal/aesthete/score-meaning"
+          delayMs={0}
+        >
+          <button type="button">More info</button>
+        </Tooltip>
+      </Wrapper>,
+    )
+
+    await flushQueries()
+
+    await user.hover(screen.getByRole('button', { name: 'More info' }))
+    await screen.findByRole('tooltip')
+
+    const shownCall = captureSpy.mock.calls.find(
+      ([event]) => event === 'help.tooltip.shown',
+    )
+    expect(shownCall).toBeDefined()
+    const [, props] = shownCall as [string, Record<string, unknown>]
+    expect(props).not.toHaveProperty('trigger')
+  })
+
   // ── 8. Passes through Radix side / align props ──────────────────────────────
 
   it('passes through side and align props to the tooltip content', async () => {

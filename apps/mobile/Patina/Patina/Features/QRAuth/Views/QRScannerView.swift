@@ -14,6 +14,9 @@ public struct QRScannerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel = QRScannerViewModel()
+    /// Drives the contextual help-panel sheet attached to the QR-auth surface.
+    /// Toggled by the `?` button in the top bar.
+    @State private var isHelpPanelPresented: Bool = false
 
     public init() {}
 
@@ -50,9 +53,26 @@ public struct QRScannerView: View {
                 errorOverlay
             }
 
-            // Close button
+            // Top bar — help button on the left, close on the right.
             VStack {
                 HStack {
+                    // `?` help-panel trigger — surfaces the QR sign-in
+                    // articles (what is QR sign-in, security model, etc.).
+                    Button {
+                        isHelpPanelPresented = true
+                    } label: {
+                        Image(systemName: "questionmark")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(PatinaColors.Text.primary)
+                            .frame(width: 36, height: 36)
+                            .background(
+                                Circle()
+                                    .fill(PatinaColors.Background.secondary.opacity(0.8))
+                            )
+                    }
+                    .accessibilityLabel("Help")
+                    .accessibilityHint("Opens the help panel for QR sign-in.")
+                    .accessibilityIdentifier("QRScannerView.HelpButton")
                     Spacer()
                     closeButton
                 }
@@ -75,6 +95,12 @@ public struct QRScannerView: View {
                 coordinator.showingQRScanner = false
             }
         }
+        // Contextual help panel — surfaces every Sanity article whose
+        // surfaceKey is `ios-app/qr-auth` or a child of it.
+        .helpPanel(
+            isPresented: $isHelpPanelPresented,
+            surfaceKey: SurfaceKeys.IOSApp.QRAuth.root
+        )
     }
 
     // MARK: - Viewfinder Overlay
@@ -121,9 +147,19 @@ public struct QRScannerView: View {
                 .font(.system(size: 28))
                 .foregroundColor(PatinaColors.clayBeige)
 
-            Text("Scan the QR code")
-                .font(PatinaTypography.h3)
-                .foregroundColor(PatinaColors.Text.primary)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("Scan the QR code")
+                    .font(PatinaTypography.h3)
+                    .foregroundColor(PatinaColors.Text.primary)
+                // Contextual help: explains the cross-device sign-in
+                // handshake — the phone proves the human at the browser
+                // is the same human holding the device.
+                HelpInfoIcon(
+                    surfaceKey: SurfaceKeys.IOSApp.QRAuth.scanIntro,
+                    fallback: "Scan the QR code shown in your browser to start a sign-in. Your phone is the second factor — biometric approval finishes the handshake.",
+                    size: 13
+                )
+            }
 
             Text("Point your camera at the QR code on the Patina website")
                 .font(PatinaTypography.body)

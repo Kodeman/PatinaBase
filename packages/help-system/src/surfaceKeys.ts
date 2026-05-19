@@ -21,6 +21,18 @@
 
 export const SurfaceKeys = {
   DesignerPortal: {
+    // ─── Onboarding surfaces ────────────────────────────────────────────────
+    //
+    // The Welcome Modal (Sprint 3 W1) is the one-time first-signin orientation
+    // dialog. It shows the persona-aware "Welcome to Patina" copy authored in
+    // Sanity for the `welcomeModal` content type. Per spec §4.8 the modal is
+    // strictly orientation — never feature announcements or upsells.
+    //
+    // A future "Show me around again" affordance under the profile menu would
+    // re-trigger orientation via a separate surface key (e.g.
+    // `designer-portal/welcome/replay`) so PostHog can distinguish first-signin
+    // vs replay cohorts.
+    WelcomeModal: 'designer-portal/welcome',
     Today: {
       Dashboard: 'designer-portal/today/dashboard',
       EmptyState: 'designer-portal/today/empty-state',
@@ -351,14 +363,459 @@ export const SurfaceKeys = {
         RelationshipJourney: 'designer-portal/clients/concept/relationship-journey',
       },
     },
+    // ─── Decisions (F1.7 — Sprint 3 closeout migration) ────────────────────────
+    //
+    // The Decisions section has a top-level dashboard at /portal/decisions that
+    // lists every open / overdue / due-this-week / resolved decision across all
+    // projects. Per spec §9.2 the screen exposes Patina vocabulary around
+    // *decision categories*, *blocking status*, and *response SLA* — each gets
+    // a tooltip-eligible surface. Per-filter empty states share copy keys with
+    // the metric tooltips so authors can write one canonical "what does this
+    // measure" entry per concept.
+    Decisions: {
+      Root:      'designer-portal/decisions/root',
+      ListIntro: 'designer-portal/decisions/list-intro',
+      // Per-filter empty states. The list view tabs through 4 status buckets
+      // and each one deserves its own zero-state copy. A first-time designer
+      // arriving with no decisions at all hits the All-Open variant.
+      Empty: {
+        AllOpen:    'designer-portal/decisions/empty/all-open',
+        Overdue:    'designer-portal/decisions/empty/overdue',
+        DueWeek:    'designer-portal/decisions/empty/due-this-week',
+        Resolved:   'designer-portal/decisions/empty/resolved',
+      },
+      // Patina-concept tooltips on the metrics row (StrataInfoIcon) —
+      // "Avg Response" and "Resolution Rate" are Patina-defined measurements,
+      // not common-knowledge metrics.
+      Metric: {
+        OpenDecisions:   'designer-portal/decisions/metric/open-decisions',
+        Overdue:         'designer-portal/decisions/metric/overdue',
+        AvgResponse:     'designer-portal/decisions/metric/avg-response',
+        ResolutionRate:  'designer-portal/decisions/metric/resolution-rate',
+      },
+    },
+    // ─── FF&E Pipeline (F1.7) ───────────────────────────────────────────────────
+    //
+    // /portal/projects/[id]/ffe is the per-project Kanban board of FF&E items
+    // through 8 procurement stages. Per spec §9.2, FF&E itself is Patina
+    // vocabulary (Furniture, Fixtures & Equipment) and every stage label is a
+    // procurement-concept that benefits from a tooltip. The detail drawer
+    // exposes the same item fields as the catalog (Vendor, PO, ETA, Line Total)
+    // and reuses field labels — we register stage definitions here so authors
+    // can author one canonical "what does Specified mean?" entry.
+    Ffe: {
+      Root:      'designer-portal/ffe/root',
+      ListIntro: 'designer-portal/ffe/list-intro',
+      // Zero-state when the project has no FF&E items yet (pre-spec) and the
+      // filter variant when filters return nothing.
+      Empty: {
+        NoItems:         'designer-portal/ffe/empty/no-items',
+        NoFilterResults: 'designer-portal/ffe/empty/no-filter-results',
+      },
+      // Procurement stages — Patina-defined progression. Each stage is a
+      // StrataInfoIcon target on the Kanban column header.
+      Stage: {
+        Specified:  'designer-portal/ffe/stage/specified',
+        Quoted:     'designer-portal/ffe/stage/quoted',
+        Approved:   'designer-portal/ffe/stage/approved',
+        Ordered:    'designer-portal/ffe/stage/ordered',
+        Production: 'designer-portal/ffe/stage/production',
+        Shipped:    'designer-portal/ffe/stage/shipped',
+        Delivered:  'designer-portal/ffe/stage/delivered',
+        Installed:  'designer-portal/ffe/stage/installed',
+      },
+      // Item-drawer fields — FieldLabel + FieldHelper opportunities for the
+      // procurement-side concepts (PO number, line total, ETA, blocked-reason).
+      Detail: {
+        Root:        'designer-portal/ffe/detail/root',
+        PoNumber:    'designer-portal/ffe/detail/po-number',
+        LineTotal:   'designer-portal/ffe/detail/line-total',
+        Eta:         'designer-portal/ffe/detail/eta',
+        BlockedReason: 'designer-portal/ffe/detail/blocked-reason',
+      },
+      // Patina concept itself — what does FF&E mean? Renders next to the
+      // page header via StrataInfoIcon.
+      Concept: {
+        Ffe: 'designer-portal/ffe/concept/ffe',
+      },
+    },
+    // ─── Project Financials (F1.7) ─────────────────────────────────────────────
+    //
+    // The Financials page (/portal/projects/[id]/financials) is the most
+    // information-dense surface in the designer portal: budget vs committed
+    // vs actual variance per category, payment milestones, and lead-designer
+    // earnings. Per spec §9.2 + §12.4, every Patina-coined concept here
+    // (committed-vs-actual, variance bands, commission rate, milestone
+    // triggers) earns a StrataInfoIcon, and the complex flows (e.g. how
+    // variance bands are computed) get a LearnMore explainer.
+    Financials: {
+      Root:        'designer-portal/financials/root',
+      Intro:       'designer-portal/financials/intro',
+      // Top-line metric tooltips (StrataInfoIcon).
+      Metric: {
+        Budget:    'designer-portal/financials/metric/budget',
+        Committed: 'designer-portal/financials/metric/committed',
+        Actual:    'designer-portal/financials/metric/actual',
+        Variance:  'designer-portal/financials/metric/variance',
+      },
+      // Patina concepts — earn the Strata icon (spec §4.2).
+      Concept: {
+        VarianceBands:   'designer-portal/financials/concept/variance-bands',
+        CommissionRate:  'designer-portal/financials/concept/commission-rate',
+        MilestoneTrigger:'designer-portal/financials/concept/milestone-trigger',
+      },
+      // LearnMore — "How are variance bands computed?" deep-dive collapsible.
+      LearnMore: {
+        VarianceCalc: 'designer-portal/financials/learn-more/variance-calc',
+      },
+      // Section intros for the milestones + earnings columns.
+      Section: {
+        Milestones: 'designer-portal/financials/section/milestones',
+        Earnings:   'designer-portal/financials/section/earnings',
+      },
+      // Empty states for milestones and the drill-down.
+      Empty: {
+        NoMilestones: 'designer-portal/financials/empty/no-milestones',
+        NoLineItems:  'designer-portal/financials/empty/no-line-items',
+      },
+    },
+    // ─── Team (F1.7) ───────────────────────────────────────────────────────────
+    //
+    // /portal/team is the lightweight studio-level team page. Help surfaces
+    // here are limited but high-value: the section intro framing what a Studio
+    // is (Patina concept), and the zero-state for designers who haven't yet
+    // created a studio organization.
+    Team: {
+      Root:      'designer-portal/team/root',
+      ListIntro: 'designer-portal/team/list-intro',
+      Empty: {
+        NoStudio:    'designer-portal/team/empty/no-studio',
+        NoProjects:  'designer-portal/team/empty/no-projects',
+      },
+      // Patina concept — the Studio entity (the studio = the multi-user
+      // organization that hosts designers, bookkeepers, etc.).
+      Concept: {
+        Studio: 'designer-portal/team/concept/studio',
+      },
+    },
+    // ─── Settings (F1.7) ───────────────────────────────────────────────────────
+    //
+    // /portal/settings — Profile, Account, Security, Notifications, and
+    // Organization sections. Per spec §12.4 every form field gets a
+    // FieldLabel + FieldHelper so authors can explain *why* each preference
+    // exists (e.g. "Display name appears on every proposal you send").
+    Settings: {
+      Root:      'designer-portal/settings/root',
+      Intro:     'designer-portal/settings/intro',
+      // Profile section (display name, bio).
+      Profile: {
+        Section:     'designer-portal/settings/profile/section',
+        DisplayName: 'designer-portal/settings/profile/display-name',
+        Bio:         'designer-portal/settings/profile/bio',
+        Email:       'designer-portal/settings/profile/email',
+      },
+      // Account section (password reset).
+      Account: {
+        Section:     'designer-portal/settings/account/section',
+        NewPassword: 'designer-portal/settings/account/new-password',
+      },
+      // Security section (2FA, roles).
+      Security: {
+        Section: 'designer-portal/settings/security/section',
+        Tfa:     'designer-portal/settings/security/tfa',
+        Roles:   'designer-portal/settings/security/roles',
+      },
+      // Notification preferences — each toggle gets a per-preference helper.
+      Notifications: {
+        Section:        'designer-portal/settings/notifications/section',
+        NewLeads:       'designer-portal/settings/notifications/new-leads',
+        ProjectUpdates: 'designer-portal/settings/notifications/project-updates',
+        ClientMessages: 'designer-portal/settings/notifications/client-messages',
+        Earnings:       'designer-portal/settings/notifications/earnings',
+      },
+      // Organization membership (read-only for now).
+      Organization: {
+        Section: 'designer-portal/settings/organization/section',
+        Empty:   'designer-portal/settings/organization/empty',
+      },
+    },
+    // ─── Inbox (F1.7) ──────────────────────────────────────────────────────────
+    //
+    // /portal/inbox combines notifications + message threads behind a tabbed
+    // surface. Migration covers the page intro, the per-tab empty states,
+    // and the Patina-concept tooltip for the notification channel pill
+    // (in-app vs email vs push — the channel concept is Patina-defined).
+    Inbox: {
+      Root:  'designer-portal/inbox/root',
+      Intro: 'designer-portal/inbox/intro',
+      Tab: {
+        Notifications: 'designer-portal/inbox/tab/notifications',
+        Messages:      'designer-portal/inbox/tab/messages',
+      },
+      Empty: {
+        Notifications: 'designer-portal/inbox/empty/notifications',
+        Messages:      'designer-portal/inbox/empty/messages',
+      },
+      // Patina concept — what the channel / status pills mean.
+      Concept: {
+        Channel: 'designer-portal/inbox/concept/channel',
+      },
+    },
   },
+  /**
+   * Admin Portal — operator workspace surfaces (Sprint 3 Stream F2).
+   *
+   * The admin portal is utility-first: most surfaces here help an operator
+   * understand what data they're looking at, what an action will do, and what
+   * a privileged operation costs. Voice is direct ("Pick a role for this user.")
+   * not designer-poetic ("Choose how this person collaborates with you").
+   *
+   * Spec references:
+   *   §6.2  — surface-key shape (portal/section/component[/state])
+   *   §9.2  — F2 admin pass coverage
+   *   §12.4 — manual QA checklist (this migration's acceptance criteria)
+   *   §4.2  — InfoIcon vs StrataInfoIcon (Patina concepts get the Strata
+   *           glyph; everything else uses the generic ? glyph)
+   *
+   * The 5 admin screens migrated in F2 are:
+   *   • Dashboard          (/dashboard)          — overview metrics + health
+   *   • Users              (/users)              — user list + CreateUser form
+   *   • Applications       (/applications)       — designer + maker queue
+   *   • Communications     (/communications)     — email comms dashboard
+   *   • Audit              (/audit)              — immutable privileged-action log
+   *
+   * Keys not consumed today (e.g. RoleField, MfaEnforcement) are registered
+   * up-front so authors can begin drafting Sanity copy ahead of the next
+   * admin migration wave.
+   */
   AdminPortal: {
-    // Sprint 1: only the minimum to prove the namespace works. Migrations in Sprint 3.
+    // Sprint 1 root — already wired into pathnameToSurfaceKey for the `?`
+    // utility-bar trigger; kept as a string-leaf so the path
+    // `admin-portal/dashboard` continues to act as a parent prefix for any
+    // sub-surface added later (`admin-portal/dashboard/metrics`, etc.).
     Dashboard: 'admin-portal/dashboard',
+    // Sprint 3 F2 — dedicated dashboard help moments under a Root constant.
+    // The string-leaf `Dashboard` above is retained for backwards compat with
+    // the Sprint 2 utility-bar wiring. New code uses `Overview.*`.
+    Overview: {
+      Root:             'admin-portal/dashboard/overview',
+      Intro:            'admin-portal/dashboard/overview/intro',
+      // Each headline metric block earns a tooltip via InfoIcon so an operator
+      // unfamiliar with the metric definition can hover for the source-of-truth.
+      Metric: {
+        PendingApplications: 'admin-portal/dashboard/overview/metric/pending-applications',
+        VendorPipeline:      'admin-portal/dashboard/overview/metric/vendor-pipeline',
+        CommsSent:           'admin-portal/dashboard/overview/metric/comms-sent',
+        TotalOrders:         'admin-portal/dashboard/overview/metric/total-orders',
+      },
+      // Side-by-side sections under the metrics — section-intro copy ships
+      // alongside the heading so the operator knows what the panel surfaces.
+      Section: {
+        RecentActivity: 'admin-portal/dashboard/overview/section/recent-activity',
+        SystemHealth:   'admin-portal/dashboard/overview/section/system-health',
+      },
+    },
+    Users: {
+      Root:        'admin-portal/users',
+      ListIntro:   'admin-portal/users/list-intro',
+      Empty: {
+        // Operator's workspace has zero users at all (fresh install).
+        NoUsers:        'admin-portal/users/empty/no-users',
+        // Filter / search returned no matches.
+        NoFilterResults: 'admin-portal/users/empty/no-filter-results',
+      },
+      // CreateUserDialog fields. FieldHelper for each input.
+      Create: {
+        Root:        'admin-portal/users/create',
+        Intro:       'admin-portal/users/create/intro',
+        EmailField:  'admin-portal/users/create/email',
+        DisplayName: 'admin-portal/users/create/display-name',
+        RoleField:   'admin-portal/users/create/role-field',
+        Invitation:  'admin-portal/users/create/invitation',
+      },
+      // Per-status column copy — informs the operator what a status means and
+      // when to use the corresponding action. Patina-coined terms (Founding
+      // Circle workspace, Designer tier) earn StrataInfoIcon elsewhere; user
+      // lifecycle states are generic so they use InfoIcon.
+      Status: {
+        Active:    'admin-portal/users/status/active',
+        Pending:   'admin-portal/users/status/pending',
+        Suspended: 'admin-portal/users/status/suspended',
+        Banned:    'admin-portal/users/status/banned',
+      },
+    },
+    Applications: {
+      Root:      'admin-portal/applications',
+      ListIntro: 'admin-portal/applications/list-intro',
+      Empty: {
+        // No applications in the currently-filtered status bucket.
+        NoApplications:  'admin-portal/applications/empty/no-applications',
+      },
+      // Patina-vocab moments — the founding-circle / aesthete / triage
+      // concepts on the application detail drawer earn the Strata glyph.
+      Concept: {
+        DesignerApplication: 'admin-portal/applications/concept/designer-application',
+        MakerApplication:    'admin-portal/applications/concept/maker-application',
+        FoundingCircle:      'admin-portal/applications/concept/founding-circle',
+      },
+      // Per-status helpers — explain to the operator what each lifecycle
+      // state means and which action transitions out of it.
+      Status: {
+        Pending:    'admin-portal/applications/status/pending',
+        InReview:   'admin-portal/applications/status/in-review',
+        Approved:   'admin-portal/applications/status/approved',
+        Waitlisted: 'admin-portal/applications/status/waitlisted',
+        Rejected:   'admin-portal/applications/status/rejected',
+        Onboarding: 'admin-portal/applications/status/onboarding',
+      },
+    },
+    Communications: {
+      Root:      'admin-portal/communications',
+      ListIntro: 'admin-portal/communications/list-intro',
+      Empty: {
+        NoSendData:       'admin-portal/communications/empty/no-send-data',
+        NoRecentActivity: 'admin-portal/communications/empty/no-recent-activity',
+        NoScheduledSends: 'admin-portal/communications/empty/no-scheduled-sends',
+      },
+      // Metric tooltips on the comms dashboard. InfoIcon (not Strata) — these
+      // are industry-standard email metrics, not Patina-coined vocabulary.
+      Metric: {
+        EmailsSent:      'admin-portal/communications/metric/emails-sent',
+        OpenRate:        'admin-portal/communications/metric/open-rate',
+        ClickRate:       'admin-portal/communications/metric/click-rate',
+        DeliveryHealth:  'admin-portal/communications/metric/delivery-health',
+      },
+      // Patina-coined concept — Command Center is our internal name for the
+      // multi-channel comms hub. Earns StrataInfoIcon per spec §4.2.
+      Concept: {
+        CommandCenter: 'admin-portal/communications/concept/command-center',
+      },
+    },
+    Audit: {
+      Root:      'admin-portal/audit',
+      ListIntro: 'admin-portal/audit/list-intro',
+      Empty: {
+        NoEvents: 'admin-portal/audit/empty/no-events',
+      },
+      // Per-column tooltips on the audit table. Patina concept "Privileged
+      // action" earns the Strata glyph; generic columns (timestamp, actor)
+      // use InfoIcon.
+      Column: {
+        Action:    'admin-portal/audit/column/action',
+        Resource:  'admin-portal/audit/column/resource',
+        Actor:     'admin-portal/audit/column/actor',
+        Timestamp: 'admin-portal/audit/column/timestamp',
+        Result:    'admin-portal/audit/column/result',
+      },
+      Concept: {
+        PrivilegedAction: 'admin-portal/audit/concept/privileged-action',
+        ImmutableLog:     'admin-portal/audit/concept/immutable-log',
+      },
+    },
   },
+  /**
+   * Client Portal — the homeowner / consumer web surface (Sprint 3 Stream F3).
+   *
+   * Persona context: `'consumer'`. The voice is conversational and hospitality-
+   * oriented, not designer-jargon. Per spec §8 (Writing Standards), Patina-
+   * internal terms (FF&E, Aesthete, Founding Circle, etc.) MUST be either
+   * avoided or explained in consumer terms here. The CMS-side persona variants
+   * carry the voice difference; the keys themselves are voice-agnostic and
+   * mirror the structure designers use so authoring tooling stays consistent.
+   *
+   * Spec refs:
+   *   - §6.2 — surface-key shape (portal/section/component[/state])
+   *   - §8   — Writing Standards (consumer voice characteristics)
+   *   - §9.2 — F3 client-portal full pass
+   *   - §12.4 — QA acceptance checklist
+   *
+   * Note on backwards compatibility: Sprint 1 shipped a single literal
+   *   ClientPortal.Home = 'client-portal/home'
+   * which the C6 client-header HelpButton still references via the pathname
+   * mapper. The new shape preserves that literal as `Home.Root` so any seeded
+   * Sanity content keyed on `client-portal/home` keeps resolving; downstream
+   * code paths use the nested form going forward.
+   */
   ClientPortal: {
-    // Sprint 1: only the minimum.
-    Home: 'client-portal/home',
+    Home: {
+      // Page root — what the C6 HelpButton + pathname mapper resolve to.
+      Root: 'client-portal/home',
+      // Section intro beneath the "Today" / "Curated for you" hero on /today.
+      GreetingIntro: 'client-portal/home/greeting-intro',
+      // Section heading for the "For your rooms" daily feed.
+      RoomsFeedIntro: 'client-portal/home/rooms-feed-intro',
+      Empty: {
+        // No daily story available yet.
+        NoStory:  'client-portal/home/empty/no-story',
+        // No rooms captured (homeowner hasn't run the iOS app).
+        NoRooms:  'client-portal/home/empty/no-rooms',
+      },
+    },
+    // ─── Projects — the homeowner's project list + per-project view ───────
+    //
+    // The list at /projects is the homeowner's primary landing surface (the
+    // bare `/` redirects to /projects). Each card opens the project view at
+    // /projects/[projectId]. Per spec §8 the voice is hospitality-oriented
+    // ("Your projects" / "your designer"), not pro lingo ("the pipeline").
+    Projects: {
+      Root:      'client-portal/projects/root',
+      ListIntro: 'client-portal/projects/list-intro',
+      Empty: {
+        // First-time homeowner — no active projects yet. Most common landing
+        // state for a freshly-invited client.
+        NoProjects: 'client-portal/projects/empty/no-projects',
+      },
+      Detail: {
+        // Page-level intro for /projects/[projectId].
+        Root:           'client-portal/projects/detail/root',
+        // Section intro for the project timeline view.
+        TimelineIntro:  'client-portal/projects/detail/timeline-intro',
+        // Section intro for the budget summary (when shown to homeowner).
+        BudgetIntro:    'client-portal/projects/detail/budget-intro',
+        // Section intro for the approvals list (decisions awaiting client).
+        ApprovalsIntro: 'client-portal/projects/detail/approvals-intro',
+      },
+    },
+    // ─── Rooms (the homeowner's term for "scans") ──────────────────────────
+    //
+    // Internally we call them room scans; in consumer copy we say "rooms" or
+    // "captured rooms" — the iOS app is the capture surface. Empty state is
+    // hospitality-framed (you haven't captured one yet; here's the warm path
+    // to do it from your phone).
+    Scans: {
+      Root:      'client-portal/scans/root',
+      ListIntro: 'client-portal/scans/list-intro',
+      Empty: {
+        NoScans: 'client-portal/scans/empty/no-scans',
+      },
+    },
+    // ─── Reviews — homeowner shares experience after a project wraps ──────
+    //
+    // The voice here is "share your experience" — never "rate" or "submit
+    // feedback." Pending requests carry an explicit ask from the designer.
+    Reviews: {
+      Root:      'client-portal/reviews/root',
+      ListIntro: 'client-portal/reviews/list-intro',
+      Empty: {
+        // No reviews requested yet (first-time / nothing pending).
+        NoReviews: 'client-portal/reviews/empty/no-reviews',
+      },
+      PendingIntro: 'client-portal/reviews/pending-intro',
+    },
+    // ─── Messages — conversations with the designer team ──────────────────
+    //
+    // Consumer voice: "your designer" / "your design team" — never "users"
+    // or "counterparts." The empty state is reassuring, not technical.
+    Messages: {
+      Root:      'client-portal/messages/root',
+      ListIntro: 'client-portal/messages/list-intro',
+      Empty: {
+        // No conversations yet.
+        NoConversations: 'client-portal/messages/empty/no-conversations',
+        // A thread is open but has no messages yet.
+        NoMessages:      'client-portal/messages/empty/no-messages',
+      },
+    },
   },
   /**
    * iOS consumer app surfaces — Sprint 2 Stream G7 first migration.
@@ -390,6 +847,65 @@ export const SurfaceKeys = {
       ArAction:        'ios-app/product-detail/ar-action',
       SpatialContext:  'ios-app/product-detail/spatial-context',
       Materials:       'ios-app/product-detail/materials',
+    },
+    /**
+     * First-launch coachmark tour — Sprint 3 Stream G9.
+     *
+     * 3 steps shown to a consumer on the very first launch of the iOS app.
+     * Persistence + orchestration live in Swift (`FirstLaunchTour.swift` +
+     * `firstLaunchTourState.swift`); these keys mirror the Sanity surface
+     * keys so authors can write copy in the shared CMS and so the parity
+     * test pins the contract across platforms.
+     */
+    FirstLaunchTour: {
+      Root:         'ios-app/first-launch-tour',
+      Step1Home:    'ios-app/first-launch-tour/step-1-home',
+      Step2Saved:   'ios-app/first-launch-tour/step-2-saved',
+      Step3Profile: 'ios-app/first-launch-tour/step-3-profile',
+    },
+    /**
+     * G10 — iOS Features sweep (Sprint 3). Migrations beyond G7's Home +
+     * ProductDetail: the Designer-mode dashboard, the QR sign-in flow, the
+     * Companion's expanded panel, the rooms gallery, and the profile screen.
+     *
+     * Every key here MUST have a matching Swift constant under
+     * `SurfaceKeys.IOSApp.*` in
+     * `apps/mobile/Patina/Patina/Features/Help/SurfaceKeys.swift`. The iOS
+     * parity test (`SurfaceKeysParityTests`) pins the contract.
+     */
+    Designer: {
+      Root:             'ios-app/designer',
+      StudioToday:      'ios-app/designer/studio-today',
+      PendingDecision:  'ios-app/designer/pending-decision',
+      OpenLead:         'ios-app/designer/open-lead',
+      Consultation:    'ios-app/designer/consultation',
+    },
+    QRAuth: {
+      Root:           'ios-app/qr-auth',
+      ScanIntro:      'ios-app/qr-auth/scan-intro',
+      Approval:       'ios-app/qr-auth/approval',
+      Biometric:      'ios-app/qr-auth/biometric',
+      SuccessState:   'ios-app/qr-auth/success-state',
+    },
+    Companion: {
+      Root:             'ios-app/companion',
+      WhatNext:         'ios-app/companion/what-next',
+      ContextSummary:   'ios-app/companion/context-summary',
+      QuickAction:      'ios-app/companion/quick-action',
+    },
+    Rooms: {
+      Root:           'ios-app/rooms',
+      YourSpaces:     'ios-app/rooms/your-spaces',
+      EmptyNoRooms:   'ios-app/rooms/empty-no-rooms',
+      WholeHome:      'ios-app/rooms/whole-home',
+      NewRoom:        'ios-app/rooms/new-room',
+    },
+    Profile: {
+      Root:             'ios-app/profile',
+      DesignJournal:    'ios-app/profile/design-journal',
+      StyleBadge:       'ios-app/profile/style-badge',
+      MatchPercentage:  'ios-app/profile/match-percentage',
+      SavedItems:       'ios-app/profile/saved-items',
     },
   },
 } as const

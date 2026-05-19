@@ -109,9 +109,19 @@ public struct QRApprovalView: View {
                     .foregroundColor(PatinaColors.clayBeige)
             }
 
-            Text("Sign In Request")
-                .font(PatinaTypography.h2)
-                .foregroundColor(PatinaColors.Text.primary)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("Sign In Request")
+                    .font(PatinaTypography.h2)
+                    .foregroundColor(PatinaColors.Text.primary)
+                // Contextual help: explains the cross-device sign-in.
+                // The browser session is gated on this approval — without
+                // a tap on the phone, the browser session never starts.
+                HelpInfoIcon(
+                    surfaceKey: SurfaceKeys.IOSApp.QRAuth.approval,
+                    fallback: "A browser is asking your phone to confirm this is you. Approving signs you in there; denying ends the request. The browser session never starts without your tap.",
+                    size: 14
+                )
+            }
 
             Text("Confirm this sign-in with your iPhone")
                 .font(PatinaTypography.body)
@@ -202,13 +212,22 @@ public struct QRApprovalView: View {
     // MARK: - Biometric Notice
 
     private var biometricNotice: some View {
-        HStack(spacing: PatinaSpacing.sm) {
-            Image(systemName: viewModel.biometricType.iconName)
-                .foregroundColor(PatinaColors.Text.secondary)
+        // Wrapped in HelpTooltip so a tap explains why biometric approval is
+        // required for QR sign-in — it's the second-factor proof that the
+        // person at the browser is the same person holding the device.
+        HelpTooltip(
+            surfaceKey: SurfaceKeys.IOSApp.QRAuth.biometric,
+            fallback: "Face ID or Touch ID acts as the second factor for QR sign-in: the browser proves it's a Patina session, your phone proves it's you. Both are required to finish the handshake."
+        ) {
+            HStack(spacing: PatinaSpacing.sm) {
+                Image(systemName: viewModel.biometricType.iconName)
+                    .foregroundColor(PatinaColors.Text.secondary)
 
-            Text(viewModel.biometricType.actionVerb + " to approve")
-                .font(PatinaTypography.caption)
-                .foregroundColor(PatinaColors.Text.secondary)
+                Text(viewModel.biometricType.actionVerb + " to approve")
+                    .font(PatinaTypography.caption)
+                    .foregroundColor(PatinaColors.Text.secondary)
+            }
+            .accessibilityLabel("\(viewModel.biometricType.actionVerb) to approve. More information available.")
         }
     }
 
@@ -261,9 +280,17 @@ public struct QRApprovalView: View {
                     .font(.system(size: 72))
                     .foregroundColor(PatinaColors.Success.primary)
 
-                Text("Signed In")
-                    .font(PatinaTypography.h2)
-                    .foregroundColor(.white)
+                // Wrapped in HelpTooltip so a tap surfaces "what happens next"
+                // — the browser session is live, the phone is paired, and
+                // the user can close this overlay and return to the browser.
+                HelpTooltip(
+                    surfaceKey: SurfaceKeys.IOSApp.QRAuth.successState,
+                    fallback: "Your browser session is live. You can close this overlay and return to the browser to continue. The phone stays signed in too."
+                ) {
+                    Text("Signed In")
+                        .font(PatinaTypography.h2)
+                        .foregroundColor(.white)
+                }
 
                 Text("You can now use Patina on your browser")
                     .font(PatinaTypography.body)

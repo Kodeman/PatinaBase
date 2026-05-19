@@ -7,6 +7,10 @@ import {
   useMySubmittedReviews,
 } from '@patina/supabase';
 import type { ClientPendingReview } from '@patina/supabase';
+// F3 — Reviews list zero-state + pending section intro migrated to help-system.
+// Consumer voice: hospitality framing, never "rate" / "submit feedback."
+import { EmptyState, SectionIntro, SurfaceKeys, useHelpContent } from '@patina/help-system';
+import { Star } from 'lucide-react';
 
 import { PastReviewCard } from './PastReviewCard';
 import { SubmitReviewDialog } from './SubmitReviewDialog';
@@ -29,14 +33,7 @@ export function ReviewsIndex({ userId }: ReviewsIndexProps) {
   }
 
   if (pending.length === 0 && past.length === 0) {
-    return (
-      <section className="mt-8 rounded-lg border border-[var(--border-default)] bg-white p-8 text-center">
-        <h2 className="font-heading text-lg text-[var(--text-primary)]">No reviews yet</h2>
-        <p className="type-body-small mt-2 text-[var(--text-muted)]">
-          Once your designer wraps a project, you&rsquo;ll see a request to share your experience here.
-        </p>
-      </section>
-    );
+    return <ReviewsEmptyState />;
   }
 
   return (
@@ -46,6 +43,11 @@ export function ReviewsIndex({ userId }: ReviewsIndexProps) {
           <h2 className="font-heading text-base text-[var(--text-primary)]">
             Pending requests
           </h2>
+          <SectionIntro
+            surfaceKey={SurfaceKeys.ClientPortal.Reviews.PendingIntro}
+            fallback="Your designer asked for a few words about working together. Take a minute when you’re ready."
+            className="mt-1 type-body-small max-w-prose"
+          />
           <ul className="mt-4 space-y-3">
             {pending.map((req) => {
               const designerName =
@@ -115,5 +117,52 @@ export function ReviewsIndex({ userId }: ReviewsIndexProps) {
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * ReviewsEmptyState — consumer-voice zero-state for the homeowner who has no
+ * pending or past reviews. Same probe-then-fallback pattern used across F1.x
+ * designer migrations and now F3 client migrations. Voice: hospitality —
+ * "share your experience" instead of "rate" or "submit feedback."
+ */
+function ReviewsEmptyState() {
+  const { data, isLoading } = useHelpContent(
+    SurfaceKeys.ClientPortal.Reviews.Empty.NoReviews,
+    'emptyState',
+    'consumer',
+  );
+
+  if (isLoading) {
+    return (
+      <section className="mt-8 rounded-lg border border-[var(--border-default)] bg-white p-8 text-center">
+        <p className="type-body-small italic text-[var(--text-muted)]">…</p>
+      </section>
+    );
+  }
+
+  if (data) {
+    return (
+      <section className="mt-8 rounded-lg border border-[var(--border-default)] bg-white p-8">
+        <EmptyState
+          surfaceKey={SurfaceKeys.ClientPortal.Reviews.Empty.NoReviews}
+          persona="consumer"
+          icon={<Star className="h-10 w-10" />}
+        />
+      </section>
+    );
+  }
+
+  return (
+    <section className="mt-8 rounded-lg border border-[var(--border-default)] bg-white p-8 text-center">
+      <Star className="mx-auto h-10 w-10 text-[var(--text-muted)]" aria-hidden />
+      <h2 className="mt-4 font-heading text-lg text-[var(--text-primary)]">
+        No reviews yet
+      </h2>
+      <p className="type-body-small mt-2 mx-auto max-w-md text-[var(--text-muted)]">
+        Once your designer wraps a project, you’ll see a request to share your
+        experience here.
+      </p>
+    </section>
   );
 }

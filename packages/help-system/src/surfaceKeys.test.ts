@@ -153,8 +153,12 @@ describe('SurfaceKeys — spot-check constant values', () => {
     expect(SurfaceKeys.AdminPortal.Dashboard).toBe('admin-portal/dashboard')
   })
 
-  it('ClientPortal.Home is the correct literal', () => {
-    expect(SurfaceKeys.ClientPortal.Home).toBe('client-portal/home')
+  it('ClientPortal.Home.Root is the correct literal', () => {
+    // Sprint 1 shipped `ClientPortal.Home = 'client-portal/home'` as a leaf
+    // string. F3 (Sprint 3) restructured Home into a namespace; the original
+    // literal lives on as `Home.Root` to preserve any seeded Sanity docs
+    // keyed on `client-portal/home` and the C6 pathname mapper.
+    expect(SurfaceKeys.ClientPortal.Home.Root).toBe('client-portal/home')
   })
 
   // IOSApp parity spot-checks — these literals MUST match the Swift
@@ -174,5 +178,36 @@ describe('SurfaceKeys — spot-check constant values', () => {
 
   it('IOSApp.ProductDetail.ArAction is the correct literal', () => {
     expect(SurfaceKeys.IOSApp.ProductDetail.ArAction).toBe('ios-app/product-detail/ar-action')
+  })
+
+  // G10 spot-checks — Sprint 3 iOS Features sweep. Same parity contract as
+  // the Home + ProductDetail keys above: every literal here MUST match the
+  // Swift constant under `SurfaceKeys.IOSApp.*` in iOS.
+  it('IOSApp.Designer.Root is the correct literal', () => {
+    expect(SurfaceKeys.IOSApp.Designer.Root).toBe('ios-app/designer')
+  })
+
+  it('IOSApp.Designer.StudioToday is the correct literal', () => {
+    expect(SurfaceKeys.IOSApp.Designer.StudioToday).toBe('ios-app/designer/studio-today')
+  })
+
+  it('IOSApp.QRAuth.Root is the correct literal', () => {
+    expect(SurfaceKeys.IOSApp.QRAuth.Root).toBe('ios-app/qr-auth')
+  })
+
+  it('IOSApp.QRAuth.Biometric is the correct literal', () => {
+    expect(SurfaceKeys.IOSApp.QRAuth.Biometric).toBe('ios-app/qr-auth/biometric')
+  })
+
+  it('IOSApp.Companion.WhatNext is the correct literal', () => {
+    expect(SurfaceKeys.IOSApp.Companion.WhatNext).toBe('ios-app/companion/what-next')
+  })
+
+  it('IOSApp.Rooms.WholeHome is the correct literal', () => {
+    expect(SurfaceKeys.IOSApp.Rooms.WholeHome).toBe('ios-app/rooms/whole-home')
+  })
+
+  it('IOSApp.Profile.MatchPercentage is the correct literal', () => {
+    expect(SurfaceKeys.IOSApp.Profile.MatchPercentage).toBe('ios-app/profile/match-percentage')
   })
 })
