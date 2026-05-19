@@ -12,6 +12,9 @@ import SwiftUI
 struct DesignerHomeView: View {
     @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel = DesignerHomeViewModel()
+    /// Drives the contextual help-panel sheet attached to the Designer surface.
+    /// Toggled by the `?` button in the dashboard header.
+    @State private var isHelpPanelPresented: Bool = false
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -44,6 +47,12 @@ struct DesignerHomeView: View {
                 coordinator.navigate(to: .designerHome)
             }
         }
+        // Contextual help panel — surfaces every Sanity article whose
+        // surfaceKey is `ios-app/designer` or a child of it.
+        .helpPanel(
+            isPresented: $isHelpPanelPresented,
+            surfaceKey: SurfaceKeys.IOSApp.Designer.root
+        )
     }
 
     private var allEmpty: Bool {
@@ -56,15 +65,43 @@ struct DesignerHomeView: View {
     // MARK: - Header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            MonoLabel(text: "DESIGNER")
-                .tracking(2)
-            Text("Your studio today")
-                .font(PatinaTypography.h2)
-                .foregroundColor(PatinaColors.charcoal)
-            Text("\(viewModel.activeProjects.count) active · \(viewModel.leads.count) open lead\(viewModel.leads.count == 1 ? "" : "s") · \(viewModel.pendingDecisions.count) decision\(viewModel.pendingDecisions.count == 1 ? "" : "s")")
-                .font(PatinaTypography.caption)
-                .foregroundColor(PatinaColors.agedOak)
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 6) {
+                MonoLabel(text: "DESIGNER")
+                    .tracking(2)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("Your studio today")
+                        .font(PatinaTypography.h2)
+                        .foregroundColor(PatinaColors.charcoal)
+                    // Contextual help: explains what the "studio today"
+                    // dashboard shows — the morning brief of designer state
+                    // across projects, leads, decisions, and conversations.
+                    HelpInfoIcon(
+                        surfaceKey: SurfaceKeys.IOSApp.Designer.studioToday,
+                        fallback: "Your studio today is a morning brief: active projects, open leads, decisions awaiting the client, and the conversations you owe a reply.",
+                        size: 14
+                    )
+                }
+                Text("\(viewModel.activeProjects.count) active · \(viewModel.leads.count) open lead\(viewModel.leads.count == 1 ? "" : "s") · \(viewModel.pendingDecisions.count) decision\(viewModel.pendingDecisions.count == 1 ? "" : "s")")
+                    .font(PatinaTypography.caption)
+                    .foregroundColor(PatinaColors.agedOak)
+            }
+            Spacer()
+            // `?` help-panel trigger — surfaces every help article for the
+            // Designer-mode home surface in a sheet.
+            Button {
+                isHelpPanelPresented = true
+            } label: {
+                Image(systemName: "questionmark.circle")
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundStyle(PatinaColors.mocha)
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Help")
+            .accessibilityHint("Opens the help panel for the designer dashboard.")
+            .accessibilityIdentifier("DesignerHomeView.HelpButton")
         }
         .padding(.top, 56)
         .padding(.horizontal, 24)
@@ -126,7 +163,11 @@ struct DesignerHomeView: View {
     }
 
     private var leadsSection: some View {
-        Section(title: "Open leads") {
+        Section(
+            title: "Open leads",
+            helpSurfaceKey: SurfaceKeys.IOSApp.Designer.openLead,
+            helpFallback: "Open leads are clients who've reached out but haven't been booked into a project yet — your funnel into a new engagement."
+        ) {
             if viewModel.leads.isEmpty {
                 emptyRow("No open leads")
             } else {
@@ -138,7 +179,12 @@ struct DesignerHomeView: View {
     }
 
     private var decisionsSection: some View {
-        Section(title: "Awaiting decision", showAllAction: viewModel.pendingDecisions.isEmpty ? nil : { coordinator.navigate(to: .decisionList) }) {
+        Section(
+            title: "Awaiting decision",
+            helpSurfaceKey: SurfaceKeys.IOSApp.Designer.pendingDecision,
+            helpFallback: "A decision is a moment where work is blocked on client approval — sign-offs, selection between options, change orders. Patina tracks who owes whom what.",
+            showAllAction: viewModel.pendingDecisions.isEmpty ? nil : { coordinator.navigate(to: .decisionList) }
+        ) {
             if viewModel.pendingDecisions.isEmpty {
                 emptyRow("No decisions waiting on the client")
             } else {
@@ -288,13 +334,26 @@ struct DesignerHomeView: View {
 
 private struct Section<Content: View>: View {
     let title: String
+    /// Optional surface key for a `HelpInfoIcon` next to the section title.
+    /// When non-nil, a small "?" glyph is rendered after the title and tapping
+    /// it opens a Sanity-backed tooltip explaining the section's Patina concept.
+    var helpSurfaceKey: SurfaceKey? = nil
+    /// Inline fallback body used when Sanity has no content for `helpSurfaceKey`.
+    var helpFallback: String? = nil
     var showAllAction: (() -> Void)? = nil
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
+            HStack(alignment: .firstTextBaseline) {
                 MonoLabel(text: title)
+                if let helpSurfaceKey {
+                    HelpInfoIcon(
+                        surfaceKey: helpSurfaceKey,
+                        fallback: helpFallback,
+                        size: 11
+                    )
+                }
                 Spacer()
                 if let action = showAllAction {
                     Button("See all", action: action)

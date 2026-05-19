@@ -33,6 +33,9 @@ public struct CompanionOverlay: View {
     @State private var showingAuthPanel = false
     @State private var isAuthenticated = AuthService.shared.isAuthenticated
     @State private var panelOpenTime: Date?
+    /// Drives the contextual help-panel sheet attached to the Companion
+    /// surface. Toggled by the `?` button in the expanded panel header.
+    @State private var isHelpPanelPresented: Bool = false
 
     /// Computed display mode based on current screen context
     private var displayMode: CompanionDisplayMode {
@@ -150,6 +153,13 @@ public struct CompanionOverlay: View {
                 }
             }
         }
+        // Contextual help panel — surfaces every Sanity article whose
+        // surfaceKey is `ios-app/companion` or a child of it. Reachable from
+        // the `?` button in the expanded panel header.
+        .helpPanel(
+            isPresented: $isHelpPanelPresented,
+            surfaceKey: SurfaceKeys.IOSApp.Companion.root
+        )
     }
 
     // MARK: - Dock Zone Gradient
@@ -211,12 +221,46 @@ public struct CompanionOverlay: View {
             // Panel
             VStack(spacing: 0) {
                 // Header
-                HStack {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("What next?")
                         .font(.custom("PlayfairDisplay-Italic", size: 16))
                         .foregroundColor(PatinaColors.offWhite)
 
+                    // Contextual help: explains the Companion concept —
+                    // a context-aware action menu that replaces the
+                    // tab bar with whatever you're most likely to want next.
+                    HelpInfoIcon(
+                        surfaceKey: SurfaceKeys.IOSApp.Companion.whatNext,
+                        fallback: "The Companion shows the actions Patina thinks you'll want next based on the screen you're on. It replaces the tab bar — your next step is always one tap away.",
+                        size: 12
+                    )
+
                     Spacer()
+
+                    // `?` help-panel trigger — opens a sheet listing all
+                    // Companion-related articles. Placed before close so the
+                    // user can read up before dismissing.
+                    Button {
+                        // Collapse the panel first so the sheet has the
+                        // foreground; deferring the sheet ensures the
+                        // animation doesn't fight the dismissal.
+                        collapseToButton()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            isHelpPanelPresented = true
+                        }
+                    } label: {
+                        Circle()
+                            .fill(Color.white.opacity(0.1))
+                            .frame(width: 28, height: 28)
+                            .overlay(
+                                Image(systemName: "questionmark")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(PatinaColors.pearl)
+                            )
+                    }
+                    .accessibilityLabel("Help")
+                    .accessibilityHint("Opens the help panel for the Companion.")
+                    .accessibilityIdentifier("companion.help")
 
                     Button { collapseToButton() } label: {
                         Circle()

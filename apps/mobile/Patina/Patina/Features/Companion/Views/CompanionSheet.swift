@@ -36,20 +36,29 @@ public struct CompanionSheet: View {
     // MARK: - Context Header
 
     private var contextHeader: some View {
-        HStack(spacing: PatinaSpacing.sm) {
-            Image(systemName: viewModel.context.contextIcon)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(PatinaColors.clayBeige)
-                .accessibilityHidden(true)
+        // Wrapped in HelpTooltip — tapping reveals a Sanity-backed
+        // explanation of what the context bar means (it shows what the
+        // Companion sees right now: the room you're in, the product you're
+        // viewing, etc.).
+        HelpTooltip(
+            surfaceKey: SurfaceKeys.IOSApp.Companion.contextSummary,
+            fallback: "This is what the Companion sees right now: the screen you're on, the room or product in view. The action list below changes based on this context."
+        ) {
+            HStack(spacing: PatinaSpacing.sm) {
+                Image(systemName: viewModel.context.contextIcon)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(PatinaColors.clayBeige)
+                    .accessibilityHidden(true)
 
-            Text(viewModel.context.contextSummary)
-                .font(PatinaTypography.caption)
-                .foregroundColor(PatinaColors.mochaBrown)
-                .dynamicTypeSize(...DynamicTypeSize.accessibility2) // Cap at 150% per spec
+                Text(viewModel.context.contextSummary)
+                    .font(PatinaTypography.caption)
+                    .foregroundColor(PatinaColors.mochaBrown)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility2) // Cap at 150% per spec
+            }
+            .padding(.horizontal, PatinaSpacing.lg)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Context: \(viewModel.context.contextSummary). More information available.")
         }
-        .padding(.horizontal, PatinaSpacing.lg)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Context: \(viewModel.context.contextSummary)")
     }
 
     // MARK: - Quick Actions

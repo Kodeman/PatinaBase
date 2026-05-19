@@ -391,6 +391,50 @@ export const SurfaceKeys = {
       SpatialContext:  'ios-app/product-detail/spatial-context',
       Materials:       'ios-app/product-detail/materials',
     },
+    /**
+     * G10 — iOS Features sweep (Sprint 3). Migrations beyond G7's Home +
+     * ProductDetail: the Designer-mode dashboard, the QR sign-in flow, the
+     * Companion's expanded panel, the rooms gallery, and the profile screen.
+     *
+     * Every key here MUST have a matching Swift constant under
+     * `SurfaceKeys.IOSApp.*` in
+     * `apps/mobile/Patina/Patina/Features/Help/SurfaceKeys.swift`. The iOS
+     * parity test (`SurfaceKeysParityTests`) pins the contract.
+     */
+    Designer: {
+      Root:             'ios-app/designer',
+      StudioToday:      'ios-app/designer/studio-today',
+      PendingDecision:  'ios-app/designer/pending-decision',
+      OpenLead:         'ios-app/designer/open-lead',
+      Consultation:    'ios-app/designer/consultation',
+    },
+    QRAuth: {
+      Root:           'ios-app/qr-auth',
+      ScanIntro:      'ios-app/qr-auth/scan-intro',
+      Approval:       'ios-app/qr-auth/approval',
+      Biometric:      'ios-app/qr-auth/biometric',
+      SuccessState:   'ios-app/qr-auth/success-state',
+    },
+    Companion: {
+      Root:             'ios-app/companion',
+      WhatNext:         'ios-app/companion/what-next',
+      ContextSummary:   'ios-app/companion/context-summary',
+      QuickAction:      'ios-app/companion/quick-action',
+    },
+    Rooms: {
+      Root:           'ios-app/rooms',
+      YourSpaces:     'ios-app/rooms/your-spaces',
+      EmptyNoRooms:   'ios-app/rooms/empty-no-rooms',
+      WholeHome:      'ios-app/rooms/whole-home',
+      NewRoom:        'ios-app/rooms/new-room',
+    },
+    Profile: {
+      Root:             'ios-app/profile',
+      DesignJournal:    'ios-app/profile/design-journal',
+      StyleBadge:       'ios-app/profile/style-badge',
+      MatchPercentage:  'ios-app/profile/match-percentage',
+      SavedItems:       'ios-app/profile/saved-items',
+    },
   },
 } as const
 

@@ -75,12 +75,46 @@ struct SurfaceKeysParityTests {
         "ios-app/product-detail/ar-action",
         "ios-app/product-detail/spatial-context",
         "ios-app/product-detail/materials",
+
+        // IOSApp/Designer (G10 — Sprint 3 iOS Features sweep)
+        "ios-app/designer",
+        "ios-app/designer/studio-today",
+        "ios-app/designer/pending-decision",
+        "ios-app/designer/open-lead",
+        "ios-app/designer/consultation",
+
+        // IOSApp/QRAuth (G10)
+        "ios-app/qr-auth",
+        "ios-app/qr-auth/scan-intro",
+        "ios-app/qr-auth/approval",
+        "ios-app/qr-auth/biometric",
+        "ios-app/qr-auth/success-state",
+
+        // IOSApp/Companion (G10)
+        "ios-app/companion",
+        "ios-app/companion/what-next",
+        "ios-app/companion/context-summary",
+        "ios-app/companion/quick-action",
+
+        // IOSApp/Rooms (G10)
+        "ios-app/rooms",
+        "ios-app/rooms/your-spaces",
+        "ios-app/rooms/empty-no-rooms",
+        "ios-app/rooms/whole-home",
+        "ios-app/rooms/new-room",
+
+        // IOSApp/Profile (G10)
+        "ios-app/profile",
+        "ios-app/profile/design-journal",
+        "ios-app/profile/style-badge",
+        "ios-app/profile/match-percentage",
+        "ios-app/profile/saved-items",
     ]
 
     @Test
     func surfaceKeyCountMatchesWebSpec() {
-        #expect(SurfaceKeys.allKnown.count == 29)
-        #expect(Self.expectedSurfaceKeys.count == 29)
+        #expect(SurfaceKeys.allKnown.count == 53)
+        #expect(Self.expectedSurfaceKeys.count == 53)
     }
 
     @Test
@@ -168,5 +202,49 @@ struct SurfaceKeysParityTests {
         #expect(SurfaceKeys.IOSApp.ProductDetail.arAction == "ios-app/product-detail/ar-action")
         #expect(SurfaceKeys.IOSApp.ProductDetail.spatialContext == "ios-app/product-detail/spatial-context")
         #expect(SurfaceKeys.IOSApp.ProductDetail.materials == "ios-app/product-detail/materials")
+    }
+
+    @Test
+    func iosAppDesignerAccessors() {
+        #expect(SurfaceKeys.IOSApp.Designer.root == "ios-app/designer")
+        #expect(SurfaceKeys.IOSApp.Designer.studioToday == "ios-app/designer/studio-today")
+        #expect(SurfaceKeys.IOSApp.Designer.pendingDecision == "ios-app/designer/pending-decision")
+        #expect(SurfaceKeys.IOSApp.Designer.openLead == "ios-app/designer/open-lead")
+        #expect(SurfaceKeys.IOSApp.Designer.consultation == "ios-app/designer/consultation")
+    }
+
+    @Test
+    func iosAppQRAuthAccessors() {
+        #expect(SurfaceKeys.IOSApp.QRAuth.root == "ios-app/qr-auth")
+        #expect(SurfaceKeys.IOSApp.QRAuth.scanIntro == "ios-app/qr-auth/scan-intro")
+        #expect(SurfaceKeys.IOSApp.QRAuth.approval == "ios-app/qr-auth/approval")
+        #expect(SurfaceKeys.IOSApp.QRAuth.biometric == "ios-app/qr-auth/biometric")
+        #expect(SurfaceKeys.IOSApp.QRAuth.successState == "ios-app/qr-auth/success-state")
+    }
+
+    @Test
+    func iosAppCompanionAccessors() {
+        #expect(SurfaceKeys.IOSApp.Companion.root == "ios-app/companion")
+        #expect(SurfaceKeys.IOSApp.Companion.whatNext == "ios-app/companion/what-next")
+        #expect(SurfaceKeys.IOSApp.Companion.contextSummary == "ios-app/companion/context-summary")
+        #expect(SurfaceKeys.IOSApp.Companion.quickAction == "ios-app/companion/quick-action")
+    }
+
+    @Test
+    func iosAppRoomsAccessors() {
+        #expect(SurfaceKeys.IOSApp.Rooms.root == "ios-app/rooms")
+        #expect(SurfaceKeys.IOSApp.Rooms.yourSpaces == "ios-app/rooms/your-spaces")
+        #expect(SurfaceKeys.IOSApp.Rooms.emptyNoRooms == "ios-app/rooms/empty-no-rooms")
+        #expect(SurfaceKeys.IOSApp.Rooms.wholeHome == "ios-app/rooms/whole-home")
+        #expect(SurfaceKeys.IOSApp.Rooms.newRoom == "ios-app/rooms/new-room")
+    }
+
+    @Test
+    func iosAppProfileAccessors() {
+        #expect(SurfaceKeys.IOSApp.Profile.root == "ios-app/profile")
+        #expect(SurfaceKeys.IOSApp.Profile.designJournal == "ios-app/profile/design-journal")
+        #expect(SurfaceKeys.IOSApp.Profile.styleBadge == "ios-app/profile/style-badge")
+        #expect(SurfaceKeys.IOSApp.Profile.matchPercentage == "ios-app/profile/match-percentage")
+        #expect(SurfaceKeys.IOSApp.Profile.savedItems == "ios-app/profile/saved-items")
     }
 }

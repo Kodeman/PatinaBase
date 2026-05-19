@@ -98,6 +98,7 @@ public enum SurfaceKeys {
     // match score, why-it-fits) that benefits from contextual help.
     //
     // Sprint 2 · Stream G7 — first user-facing iOS migration.
+    // Sprint 3 · Stream G10 — Features sweep (Designer, QRAuth, Companion, Rooms, Profile).
     public enum IOSApp {
         public enum Home {
             /// Root surface — used by the `?` toolbar button to populate
@@ -131,6 +132,104 @@ public enum SurfaceKeys {
             public static let spatialContext: SurfaceKey = "ios-app/product-detail/spatial-context"
             /// Material badges row — sustainability / origin claims.
             public static let materials: SurfaceKey = "ios-app/product-detail/materials"
+        }
+
+        // MARK: - Designer (G10)
+        //
+        // The iOS Designer-mode home surfaces a designer's studio today —
+        // active projects, leads, pending decisions, and unread conversations.
+        // Help affordances cover the dashboard concept, the studio quick-action
+        // cards, and the leads / decisions / consultation flows.
+
+        public enum Designer {
+            /// Root surface — used by the `?` toolbar button to populate
+            /// the contextual help panel.
+            public static let root: SurfaceKey = "ios-app/designer"
+            /// "Your studio today" dashboard header + stat counters.
+            public static let studioToday: SurfaceKey = "ios-app/designer/studio-today"
+            /// "Awaiting decision" — Patina concept (client-gated decision).
+            public static let pendingDecision: SurfaceKey = "ios-app/designer/pending-decision"
+            /// Open leads — the lead-funnel entry into a consultation.
+            public static let openLead: SurfaceKey = "ios-app/designer/open-lead"
+            /// Designer consultation booking surface.
+            public static let consultation: SurfaceKey = "ios-app/designer/consultation"
+        }
+
+        // MARK: - QRAuth (G10)
+        //
+        // The iOS QR sign-in flow — scan the QR code shown on a web browser,
+        // then approve the session on the phone (biometric prompt). Two main
+        // surfaces: the scanner (camera + viewfinder) and the approval sheet
+        // (session info + Approve/Deny buttons).
+
+        public enum QRAuth {
+            /// Root surface — scanner screen contextual help panel.
+            public static let root: SurfaceKey = "ios-app/qr-auth"
+            /// Camera scanner + viewfinder intro / instructions card.
+            public static let scanIntro: SurfaceKey = "ios-app/qr-auth/scan-intro"
+            /// Browser sign-in approval sheet — the cross-device handshake.
+            public static let approval: SurfaceKey = "ios-app/qr-auth/approval"
+            /// Biometric (Face ID / Touch ID) approval notice.
+            public static let biometric: SurfaceKey = "ios-app/qr-auth/biometric"
+            /// Approved state — successful sign-in confirmation.
+            public static let successState: SurfaceKey = "ios-app/qr-auth/success-state"
+        }
+
+        // MARK: - Companion (G10)
+        //
+        // The Companion is the always-on Strata Mark that replaces the iOS
+        // tab bar (spec §4.x). Its expanded "What next?" panel exposes a list
+        // of context-aware quick actions. Help affordances explain what the
+        // Companion *is*, what each context means, and the quick-action model.
+
+        public enum Companion {
+            /// Root surface — the Companion's expanded panel + sheet.
+            public static let root: SurfaceKey = "ios-app/companion"
+            /// "What next?" panel header — the entire Companion concept.
+            public static let whatNext: SurfaceKey = "ios-app/companion/what-next"
+            /// Context bar — what the Companion sees right now.
+            public static let contextSummary: SurfaceKey = "ios-app/companion/context-summary"
+            /// Individual quick-action row — context-aware navigation hub.
+            public static let quickAction: SurfaceKey = "ios-app/companion/quick-action"
+        }
+
+        // MARK: - Rooms (G10)
+        //
+        // "Your Spaces" — the room gallery + cross-room summary. This is the
+        // iOS counterpart to the designer-portal Rooms section: every captured
+        // room as a gallery card, the Whole Home cross-room bar for aggregate
+        // budget, and a first-room empty state.
+
+        public enum Rooms {
+            /// Root surface — used by the `?` toolbar button on Your Spaces.
+            public static let root: SurfaceKey = "ios-app/rooms"
+            /// "Your Spaces" header + gallery intro.
+            public static let yourSpaces: SurfaceKey = "ios-app/rooms/your-spaces"
+            /// Empty state — no rooms scanned yet.
+            public static let emptyNoRooms: SurfaceKey = "ios-app/rooms/empty-no-rooms"
+            /// "Whole Home" cross-room aggregate bar — Patina concept.
+            public static let wholeHome: SurfaceKey = "ios-app/rooms/whole-home"
+            /// New room sheet — scan vs manual entry choice.
+            public static let newRoom: SurfaceKey = "ios-app/rooms/new-room"
+        }
+
+        // MARK: - Profile (G10)
+        //
+        // The Profile / Design Journal — avatar, member-since label, style
+        // badge, rooms / saved / match stats, and per-row action shortcuts.
+        // Most concepts here are Patina-specific (Style DNA, Match %).
+
+        public enum Profile {
+            /// Root surface — used by the `?` toolbar button on Profile.
+            public static let root: SurfaceKey = "ios-app/profile"
+            /// "Member since…" + style badge — the journal greeting.
+            public static let designJournal: SurfaceKey = "ios-app/profile/design-journal"
+            /// Style badge pill — Patina concept (resolved style signature).
+            public static let styleBadge: SurfaceKey = "ios-app/profile/style-badge"
+            /// Match percentage stat — what the score blends + why it matters.
+            public static let matchPercentage: SurfaceKey = "ios-app/profile/match-percentage"
+            /// Saved-items stat — what "saved" includes across the app.
+            public static let savedItems: SurfaceKey = "ios-app/profile/saved-items"
         }
     }
 
@@ -178,5 +277,34 @@ public enum SurfaceKeys {
         IOSApp.ProductDetail.arAction,
         IOSApp.ProductDetail.spatialContext,
         IOSApp.ProductDetail.materials,
+        // IOSApp/Designer (G10)
+        IOSApp.Designer.root,
+        IOSApp.Designer.studioToday,
+        IOSApp.Designer.pendingDecision,
+        IOSApp.Designer.openLead,
+        IOSApp.Designer.consultation,
+        // IOSApp/QRAuth (G10)
+        IOSApp.QRAuth.root,
+        IOSApp.QRAuth.scanIntro,
+        IOSApp.QRAuth.approval,
+        IOSApp.QRAuth.biometric,
+        IOSApp.QRAuth.successState,
+        // IOSApp/Companion (G10)
+        IOSApp.Companion.root,
+        IOSApp.Companion.whatNext,
+        IOSApp.Companion.contextSummary,
+        IOSApp.Companion.quickAction,
+        // IOSApp/Rooms (G10)
+        IOSApp.Rooms.root,
+        IOSApp.Rooms.yourSpaces,
+        IOSApp.Rooms.emptyNoRooms,
+        IOSApp.Rooms.wholeHome,
+        IOSApp.Rooms.newRoom,
+        // IOSApp/Profile (G10)
+        IOSApp.Profile.root,
+        IOSApp.Profile.designJournal,
+        IOSApp.Profile.styleBadge,
+        IOSApp.Profile.matchPercentage,
+        IOSApp.Profile.savedItems,
     ]
 }

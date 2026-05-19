@@ -12,12 +12,36 @@ struct ProfileView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel = ProfileViewModel()
+    /// Drives the contextual help-panel sheet attached to the Profile surface.
+    /// Toggled by the `?` button in the top-right corner of the header.
+    @State private var isHelpPanelPresented: Bool = false
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
                 // Header
                 VStack(spacing: 0) {
+                    // Top-right `?` help-panel trigger. Placed in a leading-
+                    // edge HStack so it lives in the corner of the profile
+                    // header without disturbing the centered avatar layout.
+                    HStack {
+                        Spacer()
+                        Button {
+                            isHelpPanelPresented = true
+                        } label: {
+                            Image(systemName: "questionmark.circle")
+                                .font(.system(size: 17, weight: .regular))
+                                .foregroundStyle(PatinaColors.mocha)
+                                .frame(width: 36, height: 36)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Help")
+                        .accessibilityHint("Opens the help panel for your profile.")
+                        .accessibilityIdentifier("ProfileView.HelpButton")
+                    }
+                    .padding(.horizontal, 24)
+
                     // Avatar
                     Circle()
                         .fill(PatinaGradients.earth)
@@ -34,31 +58,63 @@ struct ProfileView: View {
                         .foregroundColor(PatinaColors.charcoal)
                         .padding(.bottom, 4)
 
-                    MonoLabel(text: viewModel.memberSince)
-
-                    // Style badge
-                    HStack(spacing: 6) {
-                        Text("✦")
-                        Text(viewModel.styleBadge)
-                            .font(PatinaTypography.uiSmall)
-                            .foregroundColor(PatinaColors.mocha)
+                    // "Member since…" — wrapped in HelpTooltip because the
+                    // Design Journal concept (Patina's name for the profile
+                    // as a record of personal taste evolution) is worth
+                    // explaining to a curious user.
+                    HelpTooltip(
+                        surfaceKey: SurfaceKeys.IOSApp.Profile.designJournal,
+                        fallback: "Your profile is a Design Journal — Patina tracks the style you've taught it, the rooms you've captured, and the pieces you've saved. Everything here informs your recommendations."
+                    ) {
+                        MonoLabel(text: viewModel.memberSince)
+                            .accessibilityLabel("Member since \(viewModel.memberSince). More information available.")
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 6)
-                    .background(PatinaColors.softCream)
-                    .clipShape(Capsule())
-                    .padding(.top, 12)
+
+                    // Style badge — wrapped in HelpTooltip because the
+                    // style signature is a Patina-specific resolved concept
+                    // (it blends the quiz, teaching turns, and saved items).
+                    HelpTooltip(
+                        surfaceKey: SurfaceKeys.IOSApp.Profile.styleBadge,
+                        fallback: "Your style signature is the label Patina has resolved for your taste — it blends the style quiz, every teaching turn, and the pieces you've saved into a single descriptor."
+                    ) {
+                        HStack(spacing: 6) {
+                            Text("✦")
+                            Text(viewModel.styleBadge)
+                                .font(PatinaTypography.uiSmall)
+                                .foregroundColor(PatinaColors.mocha)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                        .background(PatinaColors.softCream)
+                        .clipShape(Capsule())
+                        .padding(.top, 12)
+                        .accessibilityLabel("Style: \(viewModel.styleBadge). More information available.")
+                    }
                 }
                 .padding(.top, 56)
                 .padding(.bottom, 24)
 
-                // Stats row
+                // Stats row — Saved and Match are Patina-specific concepts,
+                // so each is wrapped in HelpTooltip. Rooms is self-explanatory
+                // and gets no affordance to keep the row uncluttered.
                 HStack(spacing: 0) {
                     statItem(value: "\(viewModel.roomCount)", label: "Rooms")
                     statDivider
-                    statItem(value: "\(viewModel.savedItemCount)", label: "Saved")
+                    HelpTooltip(
+                        surfaceKey: SurfaceKeys.IOSApp.Profile.savedItems,
+                        fallback: "Saved counts every piece you've hearted across the app — from the daily feed, room views, and product details. They flow into your style signature."
+                    ) {
+                        statItem(value: "\(viewModel.savedItemCount)", label: "Saved")
+                            .accessibilityLabel("Saved items: \(viewModel.savedItemCount). More information available.")
+                    }
                     statDivider
-                    statItem(value: viewModel.matchPercentage, label: "Match")
+                    HelpTooltip(
+                        surfaceKey: SurfaceKeys.IOSApp.Profile.matchPercentage,
+                        fallback: "Match is the average score Patina has computed for the pieces you've seen — it goes up as the app learns your taste and the room context tightens."
+                    ) {
+                        statItem(value: viewModel.matchPercentage, label: "Match")
+                            .accessibilityLabel("Match: \(viewModel.matchPercentage). More information available.")
+                    }
                 }
                 .padding(.vertical, 20)
                 .padding(.horizontal, 24)
@@ -114,6 +170,12 @@ struct ProfileView: View {
         .onAppear {
             viewModel.loadData(context: modelContext)
         }
+        // Contextual help panel — surfaces every Sanity article whose
+        // surfaceKey is `ios-app/profile` or a child of it.
+        .helpPanel(
+            isPresented: $isHelpPanelPresented,
+            surfaceKey: SurfaceKeys.IOSApp.Profile.root
+        )
     }
 
     // MARK: - Components
