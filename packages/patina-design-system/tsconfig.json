@@ -16,7 +16,7 @@
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "..",
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
@@ -25,7 +25,9 @@
     "incremental": false,
     "composite": false,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@patina/types": ["../types/src/index.ts"],
+      "@patina/types/media": ["../types/src/media.ts"]
     }
   },
   "include": ["src/**/*"],

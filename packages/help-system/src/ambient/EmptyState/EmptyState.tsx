@@ -27,7 +27,7 @@
  *   4. Otherwise → no icon
  */
 import * as React from 'react'
-import { EmptyState as DSEmptyStateRaw } from '@patina/design-system'
+import { EmptyState as DSEmptyState, type EmptyStateProps as DSEmptyStateProps } from '@patina/design-system'
 import {
   FileText,
   Folder,
@@ -43,25 +43,6 @@ import {
 import { useHelpContent } from '../../hooks/useHelpContent'
 import type { Persona } from '../../contentTypes'
 
-/**
- * Local structural type mirroring the relevant subset of @patina/design-system's
- * EmptyStateProps. We don't import the type directly because the design-system
- * package currently ships without .d.ts files (its dts build chokes on an
- * unrelated @patina/types/media import — tracked elsewhere). Once that's fixed,
- * switch to `import type { EmptyStateProps } from '@patina/design-system'`.
- */
-interface DSEmptyStateProps {
-  size?: 'sm' | 'md' | 'lg'
-  icon?: React.ReactNode
-  title?: string
-  description?: React.ReactNode
-  action?: React.ReactNode
-  secondaryAction?: React.ReactNode
-  className?: string
-  children?: React.ReactNode
-}
-
-const DSEmptyState = DSEmptyStateRaw as unknown as React.ComponentType<DSEmptyStateProps>
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
