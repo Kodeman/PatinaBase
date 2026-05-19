@@ -7,13 +7,17 @@
  * Strata Mark, Founding Circle, Patina vocabulary). General "what does this
  * number mean?" questions use <InfoIcon /> (C2) instead.
  *
+ * Post R13 refactor: StrataInfoIcon delegates to the canonical <Tooltip />
+ * wrapper (C1), which owns CMS fetch, fallback resolution, portal rendering,
+ * and analytics emission. Tests assert public behavior (rendered DOM +
+ * analytics payload shape) rather than Radix internals.
+ *
  * All Sanity client + posthog calls are mocked. No live network I/O.
  */
 import React from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import * as Tooltip from '@radix-ui/react-tooltip'
 import { StrataInfoIcon } from './StrataInfoIcon'
 import type { TooltipContent } from '../../contentTypes'
 
@@ -28,7 +32,7 @@ vi.mock('../../sanityClient', () => ({
 
 // ─── Test wrapper ─────────────────────────────────────────────────────────────
 
-function makeWrapper(reducedMotion = false) {
+function makeWrapper() {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -38,30 +42,11 @@ function makeWrapper(reducedMotion = false) {
     },
   })
 
-  // Provide a Tooltip.Provider so multiple StrataInfoIcons share open state
-  // semantics; mirrors how portals will wrap their root layout.
+  // The canonical <Tooltip /> wires its own Radix Provider internally, so
+  // tests only need the React Query provider here.
   const Wrapper = ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={queryClient}>
-      <Tooltip.Provider delayDuration={0} skipDelayDuration={0}>
-        {children}
-      </Tooltip.Provider>
-    </QueryClientProvider>
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
-
-  // Stub matchMedia for the (prefers-reduced-motion) check.
-  Object.defineProperty(window, 'matchMedia', {
-    writable: true,
-    value: vi.fn().mockImplementation((query: string) => ({
-      matches: reducedMotion && query.includes('reduce'),
-      media: query,
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })),
-  })
 
   return { Wrapper, queryClient }
 }
@@ -237,10 +222,13 @@ describe('<StrataInfoIcon />', () => {
       await new Promise((r) => setTimeout(r, 0))
     })
 
-    expect(captureSpy).toHaveBeenCalledWith('help.tooltip.shown', {
-      surface_key: 'designer-portal/aesthete/engine-overview',
-      trigger: 'strata_info_icon',
-    })
+    expect(captureSpy).toHaveBeenCalledWith(
+      'help.tooltip.shown',
+      expect.objectContaining({
+        surface_key: 'designer-portal/aesthete/engine-overview',
+        trigger: 'strata_info_icon',
+      }),
+    )
   })
 
   // ── 6. Analytics on dismiss — duration_ms + trigger ─────────────────────────
@@ -295,12 +283,24 @@ describe('<StrataInfoIcon />', () => {
 
     await flushQueries()
 
-    // Icon is rendered
+    // Icon is rendered — the trigger button still exists as a stable visual
+    // affordance (spec §13.4: silent absence keeps layouts from reflowing),
+    // but it has no aria-describedby pointing at a tooltip and the canonical
+    // Tooltip wrapper does NOT inject a Radix Trigger around it.
     const svg = container.querySelector('svg')
     expect(svg).not.toBeNull()
-    // No tooltip trigger button — when nothing to show, the icon is a plain
-    // decorative element (no aria-describedby, no role=button).
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+
+    const button = screen.getByRole('button', { name: 'Patina concept' })
+    expect(button).toBeInTheDocument()
+    expect(button).not.toHaveAttribute('aria-describedby')
+
+    // And no tooltip should be mounted — focusing the trigger must not open
+    // a popover, because there is no body to render.
+    await act(async () => {
+      button.focus()
+      await new Promise((r) => setTimeout(r, 0))
+    })
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
   })
 
   // ── 8. No CMS content + fallback string → renders fallback in tooltip ──────
@@ -332,14 +332,13 @@ describe('<StrataInfoIcon />', () => {
     expect(matches.length).toBeGreaterThanOrEqual(1)
   })
 
-  // ── 9. Reduced motion (prefers-reduced-motion) — data attr or class ────────
+  // ── 9. Reduced motion — animation classes are motion-safe-gated ────────────
 
-  it('marks the tooltip with data-reduced-motion when prefers-reduced-motion is set', async () => {
+  it('guards tooltip animations behind motion-safe: variant (CSS-level reduced-motion respect)', async () => {
     mockFetch.mockResolvedValueOnce(STRATA_FIXTURE)
 
-    const { Wrapper, queryClient: _qc } = makeWrapper(true) // reducedMotion = true
-    void _qc
-    const { container } = render(
+    const { Wrapper } = makeWrapper()
+    render(
       <Wrapper>
         <StrataInfoIcon surfaceKey="designer-portal/aesthete/engine-overview" />
       </Wrapper>,
@@ -353,13 +352,24 @@ describe('<StrataInfoIcon />', () => {
       await new Promise((r) => setTimeout(r, 0))
     })
 
-    // Radix uses role="tooltip" on the SR announcer (a visually-hidden span);
-    // the positioned content element is the one that should carry the
-    // data-reduced-motion attribute. Query it via the data attr directly.
-    const tooltipWithAttr =
-      document.querySelector('[data-reduced-motion="true"]') ??
-      container.querySelector('[data-reduced-motion="true"]')
-    expect(tooltipWithAttr).not.toBeNull()
+    // Canonical <Tooltip /> delegates reduced-motion to Tailwind's
+    // `motion-safe:` variant — the animate-in / fade-in / zoom-in classes are
+    // always present in the className but their CSS only applies when
+    // (prefers-reduced-motion: no-preference) matches. Verify any animation
+    // class is paired with the motion-safe: gate so the OS preference is
+    // honored at the CSS layer.
+    const styledContent = document.querySelector(
+      '[data-radix-popper-content-wrapper] [data-state]',
+    )
+    expect(styledContent).not.toBeNull()
+    const classes = styledContent?.className ?? ''
+    const animationTokens = classes
+      .split(/\s+/)
+      .filter((c) => /animate-in|fade-in|zoom-in|animate-out|fade-out|zoom-out/.test(c))
+    expect(animationTokens.length).toBeGreaterThan(0)
+    for (const token of animationTokens) {
+      expect(token.startsWith('motion-safe:')).toBe(true)
+    }
   })
 
   // ── 10. Tooltip closes on Escape ────────────────────────────────────────────
