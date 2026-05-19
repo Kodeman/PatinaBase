@@ -32,8 +32,12 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { useSession } from '@patina/supabase';
+import { createBrowserClient, useSession } from '@patina/supabase';
 import {
+  createSupabaseHelpStateBackends,
+  migrateLocalToSupabase,
+  setFeatureAnnouncementStateBackend,
+  setTourStateBackend,
   SurfaceKeys,
   TourController,
   type TourControllerAPI,
@@ -95,6 +99,11 @@ export function FirstSigninTour() {
 
   const [showWelcome, setShowWelcome] = useState(false);
 
+  // Whether the Supabase persistence backend has finished hydrating. Until it
+  // resolves we hold the welcome-modal gate so we don't show a tour the user
+  // already completed on another device.
+  const [helpStateReady, setHelpStateReady] = useState(false);
+
   // Ref to the TourController's render-prop API. We call `start()` after the
   // welcome modal closes (rather than passing `active={true}`) so the
   // controller fires its `help.tour.started` event and initializes its
@@ -106,8 +115,58 @@ export function FirstSigninTour() {
   // calls if the component re-renders for unrelated reasons.
   const [tourStartRequested, setTourStartRequested] = useState(false);
 
+  // Sprint 4 / S4-1 — install the Supabase-backed help-state backend once we
+  // have an authenticated user, then sweep any localStorage state into
+  // Supabase. After the sweep the local keys are cleared so the next mount
+  // reads cleanly from Supabase. Anonymous users keep the localStorage
+  // default — we never install the Supabase backend without a user id.
+  useEffect(() => {
+    if (!supabaseUser?.id) return;
+    const supabaseClient = createBrowserClient();
+    const backends = createSupabaseHelpStateBackends(
+      supabaseClient,
+      supabaseUser.id,
+    );
+    setTourStateBackend(backends.tourBackend);
+    setFeatureAnnouncementStateBackend(backends.featureBackend);
+
+    let cancelled = false;
+    const setup = async () => {
+      try {
+        await backends.hydrate();
+        await migrateLocalToSupabase(backends);
+      } catch (err) {
+        // Hydration failure must not crash the host — the backends fall back
+        // to empty in-memory state and the next mount will retry. Log only.
+        if (typeof console !== 'undefined') {
+          console.warn(
+            '[help-system] FirstSigninTour: Supabase help-state hydration failed',
+            err,
+          );
+        }
+      }
+      if (!cancelled) {
+        setHelpStateReady(true);
+      }
+    };
+    void setup();
+
+    return () => {
+      cancelled = true;
+      // On sign-out (component unmount with no new user id), restore the
+      // localStorage default so anon sessions get isolated one-shot
+      // semantics. The Supabase write queue's tail patch will fire-and-forget
+      // through the closed-over client; we don't await it here.
+      setTourStateBackend(null);
+      setFeatureAnnouncementStateBackend(null);
+    };
+  }, [supabaseUser?.id]);
+
   useEffect(() => {
     if (!supabaseUser?.created_at) return;
+    // Block until the Supabase backend is hydrated so cross-device dismissals
+    // are reflected before we make the show / skip decision.
+    if (!helpStateReady) return;
 
     const createdAtMs = Date.parse(supabaseUser.created_at);
     if (Number.isNaN(createdAtMs)) return;
@@ -124,7 +183,7 @@ export function FirstSigninTour() {
     if (readWelcomeShown()) return;
 
     setShowWelcome(true);
-  }, [supabaseUser]);
+  }, [supabaseUser, helpStateReady]);
 
   // After the welcome modal closes with "Start tour", flush a start() call
   // through the TourController's imperative API.

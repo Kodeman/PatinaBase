@@ -101,17 +101,38 @@ export {
   getTourState,
   setTourState,
   clearTourState,
+  setTourStateBackend,
   TOUR_STATE_STORAGE_PREFIX,
 } from './proactive/TourController';
-export type { TourState } from './proactive/TourController';
+export type { TourState, TourStateBackend } from './proactive/TourController';
 export { FeatureAnnouncementCoachmark } from './proactive/FeatureAnnouncementCoachmark';
 export type { FeatureAnnouncementCoachmarkProps } from './proactive/FeatureAnnouncementCoachmark';
 export {
   getFeatureAnnouncementState,
   setFeatureAnnouncementState,
   clearFeatureAnnouncementState,
+  setFeatureAnnouncementStateBackend,
 } from './proactive/FeatureAnnouncementCoachmark';
-export type { FeatureAnnouncementState } from './proactive/FeatureAnnouncementCoachmark';
+export type {
+  FeatureAnnouncementState,
+  FeatureAnnouncementStateBackend,
+} from './proactive/FeatureAnnouncementCoachmark';
+
+// ─── Persistence — Supabase adapter for cross-device help state (S4-1) ───────
+export {
+  loadHelpState,
+  saveHelpState,
+  createSupabaseTourStateBackend,
+  createSupabaseFeatureAnnouncementBackend,
+  createSupabaseHelpStateBackends,
+  migrateLocalToSupabase,
+} from './persistence';
+export type {
+  CreateSupabaseBackendsResult,
+  MigrationResult,
+  HelpStateBlob,
+  HelpStateSupabaseClient,
+} from './persistence';
 
 // ─── Layer 4 · Reference components ──────────────────────────────────────────
 export { HelpArticle, portableTextComponents } from './reference/HelpArticle';

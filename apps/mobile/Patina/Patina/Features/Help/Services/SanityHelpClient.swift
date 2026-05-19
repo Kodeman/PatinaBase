@@ -3,9 +3,18 @@
 //  Patina
 //
 //  Lightweight Swift client for the Sanity public read API, scoped to the
-//  Help & Guidance System. Mirrors the persona-fallback semantics of the
-//  web `useHelpContent` hook in `packages/help-system/src/hooks/useHelpContent.ts`,
-//  with the iOS-specific persona chain defined in spec §7.3.
+//  Help & Guidance System. Byte-for-byte parity with the web
+//  `useHelpContent` hook in `packages/help-system/src/hooks/useHelpContent.ts`.
+//
+//  CANONICAL CONTRACT
+//  ------------------
+//  Both this Swift client AND the web hook implement the same 4-step
+//  persona fallback chain documented in
+//  `packages/help-system/src/persistence/helpContentQuery.md`. The same
+//  (surfaceKey, contentType, persona) triple must resolve to the same
+//  Sanity `_id` on both platforms. Drift between the two implementations
+//  is risk R3 from the help-system plan; if you change the chain here,
+//  update the web hook, the shared doc, and the parity fixtures together.
 //
 //  Why not pull in a Sanity SDK?
 //  -----------------------------
@@ -117,14 +126,26 @@ public actor SanityHelpClient {
     // MARK: - Public API
 
     /// Fetches a single `HelpContent` document for the given surface key and
-    /// content type, applying the iOS persona fallback chain:
+    /// content type, applying the **canonical 4-step persona fallback chain**
+    /// (see `packages/help-system/src/persistence/helpContentQuery.md` for
+    /// the full contract):
     ///
-    ///   1. Exact persona match
-    ///   2. If `persona` is `.consumer` or `.maker`, fall back to `.designer`
-    ///      (designer copy is the canonical authored variant per spec)
-    ///   3. Persona-agnostic content (Sanity's `persona == "all"` sentinel,
-    ///      which the iOS module models as `nil` on the call side)
-    ///   4. Return `nil`
+    ///   1. Exact match — `surfaceKey + contentType + persona`
+    ///   2. Persona-agnostic at exact key — `surfaceKey + contentType + "all"`
+    ///      (skipped iff the caller passed `nil`/`"all"` — same wire request)
+    ///   3. Parent key + exact persona —
+    ///      `parent(surfaceKey) + contentType + persona`
+    ///   4. Parent key + `"all"`
+    ///      (skipped iff persona is `nil`/`"all"`)
+    ///   5. Return `nil` and log one warning.
+    ///
+    /// `parent(surfaceKey)` is everything before the last `/`. If the key
+    /// has no `/`, steps 3 and 4 are skipped (the surface-key regex enforces
+    /// at least two segments, so in practice steps 3/4 always run).
+    ///
+    /// The `Persona?` parameter is a Swift ergonomics shim — `nil` maps to
+    /// the wire-level sentinel `"all"` so Sanity always sees a non-null
+    /// persona param.
     ///
     /// Network errors and decoding errors collapse to `nil` so the UI can
     /// remain functional during Sanity downtime (spec §13.4).
@@ -136,8 +157,8 @@ public actor SanityHelpClient {
     ///                 `InvalidSurfaceKeyError`.
     ///   - contentType: The `contentType` discriminator from the Sanity
     ///                  schema (e.g. `"tooltip"`, `"emptyState"`).
-    ///   - persona:    The current user's persona, or `nil` to skip
-    ///                  directly to the persona-agnostic step.
+    ///   - persona:    The current user's persona, or `nil` for the
+    ///                 persona-agnostic path (wire value `"all"`).
     /// - Returns: The first matching `HelpContent`, or `nil` if all fallback
     ///            steps miss.
     /// - Throws: `InvalidSurfaceKeyError` when `surfaceKey` fails the
@@ -155,12 +176,12 @@ public actor SanityHelpClient {
             return cached
         }
 
-        let chain = personaFallbackChain(for: persona)
-        for candidate in chain {
+        let plan = Self.fallbackPlan(surfaceKey: surfaceKey, persona: persona)
+        for step in plan {
             if let hit = await tryFetch(
-                surfaceKey: surfaceKey,
+                surfaceKey: step.surfaceKey,
                 contentType: contentType,
-                persona: candidate
+                persona: step.persona
             ) {
                 cache[cacheKey] = CacheEntry(value: hit, storedAt: now())
                 return hit
@@ -173,7 +194,7 @@ public actor SanityHelpClient {
         cache[cacheKey] = CacheEntry(value: nil, storedAt: now())
         print(
             "[SanityHelpClient] No content found surfaceKey=\(surfaceKey)" +
-            " contentType=\(contentType) persona=\(persona?.rawValue ?? "nil")"
+            " contentType=\(contentType) persona=\(persona?.rawValue ?? "all")"
         )
         return nil
     }
@@ -314,22 +335,67 @@ public actor SanityHelpClient {
 
     // MARK: - Internals (also exposed for tests via @testable)
 
-    /// Computes the ordered persona-candidate list for the fallback chain.
-    /// Each candidate is a wire-level persona token to query Sanity with.
+    /// One step in the canonical fallback chain — the exact pair of
+    /// `(surfaceKey, persona)` values we'll send to Sanity for this attempt.
+    /// Wire-level persona is always a non-null string (the `"all"` sentinel
+    /// stands in for a `nil`/persona-agnostic caller).
+    internal struct FallbackStep: Equatable, Sendable {
+        let surfaceKey: SurfaceKey
+        let persona: String
+    }
+
+    /// Computes the ordered fallback plan for a given (surfaceKey, persona).
+    /// Implements the canonical 4-step chain documented in
+    /// `packages/help-system/src/persistence/helpContentQuery.md`:
     ///
-    /// - `.designer` → `["designer", "all"]`
-    /// - `.admin`    → `["admin", "all"]`
-    /// - `.consumer` → `["consumer", "designer", "all"]`
-    /// - `.maker`    → `["maker", "designer", "all"]`
-    /// - `nil`        → `["all"]`
-    internal func personaFallbackChain(for persona: Persona?) -> [String] {
-        guard let persona else { return ["all"] }
-        switch persona {
-        case .designer, .admin:
-            return [persona.rawValue, "all"]
-        case .consumer, .maker:
-            return [persona.rawValue, Persona.designer.rawValue, "all"]
+    ///   1. surfaceKey + persona
+    ///   2. surfaceKey + "all"                (skipped iff persona is "all")
+    ///   3. parent(surfaceKey) + persona      (skipped iff no parent)
+    ///   4. parent(surfaceKey) + "all"        (skipped iff persona is "all"
+    ///                                          OR no parent)
+    ///
+    /// "Parent" is everything before the last `/` in `surfaceKey`. A surface
+    /// key without a `/` has no parent — steps 3 and 4 are dropped. The
+    /// surface-key regex enforces at least two segments, so in production
+    /// the parent always exists.
+    ///
+    /// A `nil` persona at the call site maps to the wire string `"all"` so
+    /// step 1 already targets the persona-agnostic document; step 2 is then
+    /// skipped to avoid an identical second request.
+    ///
+    /// Static + free of side effects so tests can pin the plan without
+    /// instantiating the actor or stubbing the network.
+    internal static func fallbackPlan(
+        surfaceKey: SurfaceKey,
+        persona: Persona?
+    ) -> [FallbackStep] {
+        let wirePersona = persona?.rawValue ?? "all"
+        let parent = parentSurfaceKey(surfaceKey)
+
+        var steps: [FallbackStep] = []
+        // Step 1 — exact key + exact persona (or "all" when persona is nil).
+        steps.append(FallbackStep(surfaceKey: surfaceKey, persona: wirePersona))
+        // Step 2 — exact key + "all", iff that's not already step 1.
+        if wirePersona != "all" {
+            steps.append(FallbackStep(surfaceKey: surfaceKey, persona: "all"))
         }
+        // Steps 3 & 4 — parent key fallbacks, iff a parent exists.
+        if let parent {
+            steps.append(FallbackStep(surfaceKey: parent, persona: wirePersona))
+            if wirePersona != "all" {
+                steps.append(FallbackStep(surfaceKey: parent, persona: "all"))
+            }
+        }
+        return steps
+    }
+
+    /// Returns the parent surface key (everything before the last `/`), or
+    /// `nil` if `surfaceKey` has no `/`. Mirrors the `lastIndexOf('/')`
+    /// derivation in `packages/help-system/src/hooks/useHelpContent.ts`.
+    internal static func parentSurfaceKey(_ surfaceKey: SurfaceKey) -> SurfaceKey? {
+        guard let lastSlash = surfaceKey.lastIndex(of: "/") else { return nil }
+        let parent = surfaceKey[..<lastSlash]
+        return parent.isEmpty ? nil : String(parent)
     }
 
     /// Builds the GROQ URL for a single fallback step.

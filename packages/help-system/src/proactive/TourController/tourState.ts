@@ -1,45 +1,37 @@
 /**
- * Tour state persistence — Sprint 3 / Task D2.
+ * Tour state persistence — Sprint 3 / Task D2, Sprint 4 / Task S4-1.
  *
  * Stores the per-user, per-tour lifecycle markers that the TourController and
  * any future "show me around again" affordance read on mount.
  *
  * ┌─────────────────────────────────────────────────────────────────────────┐
- * │  v1 backend: localStorage                                                │
+ * │  Backends                                                                │
  * ├─────────────────────────────────────────────────────────────────────────┤
- * │  Each tour writes to a single, namespaced key:                           │
- * │    help-system.tour.<tourKey>                                            │
- * │  with a JSON-encoded TourState payload. We intentionally namespace with  │
- * │  a "help-system." prefix so a future global clear or migration loop can  │
- * │  scan the keyspace without grepping for tour IDs.                        │
+ * │  • localStorage (default — anon + offline + pre-hydration fallback)      │
+ * │    Each tour writes to a single, namespaced key:                         │
+ * │      help-system.tour.<tourKey>                                          │
+ * │    with a JSON-encoded TourState payload. We intentionally namespace     │
+ * │    with a "help-system." prefix so a future global clear or migration    │
+ * │    scanner can walk the keyspace without grepping for tour IDs.          │
+ * │                                                                          │
+ * │  • Supabase (S4-1 — authoritative for signed-in users)                   │
+ * │    Lives under `profiles.help_state` JSONB, sub-key `tours`. Wired in    │
+ * │    the portal layer via `setTourStateBackend(supabaseTourStateBackend)`. │
+ * │    See `../../persistence/supabaseAdapter.ts` for the adapter, and       │
+ * │    `apps/designer-portal/src/components/help/first-signin-tour.tsx` for  │
+ * │    the wiring pattern.                                                   │
  * └─────────────────────────────────────────────────────────────────────────┘
  *
- * ┌─────────────────────────────────────────────────────────────────────────┐
- * │  v2 backend (Sprint 4 — DEFERRED, see plan §15 cleanup item):            │
- * ├─────────────────────────────────────────────────────────────────────────┤
- * │  Swap localStorage for a Supabase column:                                │
- * │    user_profiles.help_state JSONB  // shape: { [tourKey]: TourState }    │
- * │                                                                          │
- * │  Spec §4.7 rule 1 ("One-shot per user per surface") explicitly calls    │
- * │  out: "State persisted in user profile, not localStorage (so it          │
- * │  survives device changes)". This module exists so the swap is a         │
- * │  one-file change — the TourController itself never imports localStorage. │
- * │                                                                          │
- * │  Migration plan when v2 lands:                                          │
- * │    1. Add a `useTourState` hook that wraps `useQuery` against the        │
- * │       user_profiles row + a debounced `useMutation` for writes.          │
- * │    2. Re-implement `getTourState` and `setTourState` here to read/write  │
- * │       through that hook's cache snapshot (or accept an injected client). │
- * │    3. Keep this localStorage path as the offline / unauthenticated      │
- * │       fallback so anonymous users still get one-shot semantics.          │
- * │    4. On first authenticated mount, scan localStorage for existing      │
- * │       help-system.tour.* keys and upsert them into Supabase, then       │
- * │       delete the localStorage entries (one-time migration).              │
- * └─────────────────────────────────────────────────────────────────────────┘
+ * Spec §4.7 rule 1 ("One-shot per user per surface") calls out: "State
+ * persisted in user profile, not localStorage (so it survives device
+ * changes)". The Supabase backend delivers that cross-device guarantee; the
+ * localStorage backend keeps anonymous and offline sessions one-shot too.
  *
  * The public contract — `getTourState` / `setTourState` / `clearTourState`
- * and the `TourState` type — is what the component code is allowed to use.
- * Nothing else in @patina/help-system should read localStorage directly.
+ * and the `TourState` type — stays synchronous so the TourController's lazy
+ * `useState` initializer keeps working. The Supabase backend hydrates an
+ * in-memory cache before consumers mount; until hydration completes, reads
+ * return empty (safe default — equivalent to a fresh user).
  */
 
 /**
@@ -60,8 +52,22 @@ export interface TourState {
   abandonedAt?: string
 }
 
-/** Storage key prefix — shared with the future v2 migration scanner. */
+/** Storage key prefix — shared with the migration scanner. */
 export const TOUR_STATE_STORAGE_PREFIX = 'help-system.tour.'
+
+/**
+ * Backend contract — the injection point for switching between localStorage
+ * (default) and Supabase. Both `get` and `set` must be synchronous; backends
+ * that need network I/O cache locally and write through asynchronously.
+ *
+ * Re-exported as a name-stable type from `../../persistence/types.ts` —
+ * keeping a copy here keeps the proactive layer importable in isolation from
+ * the persistence layer for tests that don't need the Supabase machinery.
+ */
+export interface TourStateBackend {
+  getTourState: (tourKey: string) => TourState
+  setTourState: (tourKey: string, patch: TourState) => void
+}
 
 /** Build the full storage key for a given tour. */
 function storageKey(tourKey: string): string {
@@ -84,12 +90,8 @@ function hasLocalStorage(): boolean {
   }
 }
 
-/**
- * Read the persisted state for `tourKey`. Returns an empty object when no
- * state exists OR when the stored JSON is malformed — the reader treats
- * "no record" identically to "fresh user". Never throws.
- */
-export function getTourState(tourKey: string): TourState {
+/** Default localStorage-backed read. Never throws. */
+function localStorageGetTourState(tourKey: string): TourState {
   if (!hasLocalStorage()) return {}
   try {
     const raw = window.localStorage.getItem(storageKey(tourKey))
@@ -98,9 +100,49 @@ export function getTourState(tourKey: string): TourState {
     if (typeof parsed !== 'object' || parsed === null) return {}
     return parsed as TourState
   } catch {
-    // Malformed JSON, storage quota, etc. — fall back to clean slate.
     return {}
   }
+}
+
+/** Default localStorage-backed merge-write. Never throws. */
+function localStorageSetTourState(tourKey: string, patch: TourState): void {
+  if (!hasLocalStorage()) return
+  try {
+    const previous = localStorageGetTourState(tourKey)
+    const next: TourState = { ...previous, ...patch }
+    window.localStorage.setItem(storageKey(tourKey), JSON.stringify(next))
+  } catch {
+    // Storage quota exceeded or other write failures — silent per spec §13.4
+    // (help-system surfaces must never crash the host app).
+  }
+}
+
+const defaultBackend: TourStateBackend = {
+  getTourState: localStorageGetTourState,
+  setTourState: localStorageSetTourState,
+}
+
+let activeBackend: TourStateBackend = defaultBackend
+
+/**
+ * Install a backend for tour state. Portals call this on authenticated mount
+ * with a Supabase-backed backend; the call is idempotent and re-installable
+ * across sign-in / sign-out boundaries.
+ *
+ * Passing `null` reinstates the localStorage default — used when the user
+ * signs out so subsequent anon sessions get isolated one-shot semantics.
+ */
+export function setTourStateBackend(backend: TourStateBackend | null): void {
+  activeBackend = backend ?? defaultBackend
+}
+
+/**
+ * Read the persisted state for `tourKey`. Returns an empty object when no
+ * state exists OR when the stored payload is malformed — the reader treats
+ * "no record" identically to "fresh user". Never throws.
+ */
+export function getTourState(tourKey: string): TourState {
+  return activeBackend.getTourState(tourKey)
 }
 
 /**
@@ -110,27 +152,30 @@ export function getTourState(tourKey: string): TourState {
  * storage is unavailable. Never throws.
  */
 export function setTourState(tourKey: string, patch: TourState): void {
-  if (!hasLocalStorage()) return
-  try {
-    const previous = getTourState(tourKey)
-    const next: TourState = { ...previous, ...patch }
-    window.localStorage.setItem(storageKey(tourKey), JSON.stringify(next))
-  } catch {
-    // Storage quota exceeded or other write failures — silent per spec §13.4
-    // (help-system surfaces must never crash the host app).
+  activeBackend.setTourState(tourKey, patch)
+}
+
+/**
+ * Hard-clear persisted state for a tour. Intended for the "Show me around
+ * again" Profile affordance (spec §4.7 rule 5), for tests, and for the
+ * localStorage → Supabase migration sweep that runs on first authenticated
+ * mount. The local key is always cleared (the migration sweep wants to drop
+ * its source even when the active backend is Supabase). Never throws.
+ */
+export function clearTourState(tourKey: string): void {
+  if (hasLocalStorage()) {
+    try {
+      window.localStorage.removeItem(storageKey(tourKey))
+    } catch {
+      // Ignore — see setTourState.
+    }
   }
 }
 
 /**
- * Hard-clear persisted state for a tour. Intended for the future "Show me
- * around again" Profile affordance (spec §4.7 rule 5) and for tests. Never
- * throws.
+ * Test-only: reset the active backend to the localStorage default. Used by
+ * vitest setup hooks so each test starts from a known state.
  */
-export function clearTourState(tourKey: string): void {
-  if (!hasLocalStorage()) return
-  try {
-    window.localStorage.removeItem(storageKey(tourKey))
-  } catch {
-    // Ignore — see setTourState.
-  }
+export function _resetTourStateBackendForTests(): void {
+  activeBackend = defaultBackend
 }

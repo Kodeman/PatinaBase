@@ -61,17 +61,24 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
 
-    // ── Tooltip fields (shown when contentType === 'tooltip' or 'fieldHelper' or 'learnMore' or 'coachmark') ──
-    // Tooltip, fieldHelper, learnMore, and coachmark all share the same
-    // lightweight copy structure (eyebrow + body). The consuming hook
-    // distinguishes rendering; the schema does not need separate sub-types
-    // for these very similar variants.
+    // ── Tooltip fields (shown when contentType === 'tooltip' or 'fieldHelper' or 'learnMore') ──
+    // Tooltip, fieldHelper, and learnMore all share the same lightweight
+    // copy structure (eyebrow + body). The consuming hook distinguishes
+    // rendering; the schema does not need separate sub-types for these
+    // very similar variants.
+    //
+    // Coachmark was previously included in this shared block (Sprint 3 D5),
+    // but Sprint 4 S4-4 moved it to its own `coachmarkContent` object so
+    // authors can express the richer `heading + body + ctaLabel` shape that
+    // the iOS + web `CoachmarkContent` types model. The block remains
+    // visible for legacy unmigrated docs by keeping `coachmark` out of the
+    // `hidden` list would create ambiguity, so it's been removed.
     defineField({
       name: 'tooltipContent',
-      title: 'Tooltip / Field Helper / Coachmark Content',
+      title: 'Tooltip / Field Helper Content',
       type: 'object',
       hidden: ({ document }) =>
-        !['tooltip', 'fieldHelper', 'learnMore', 'coachmark'].includes(
+        !['tooltip', 'fieldHelper', 'learnMore'].includes(
           (document?.contentType as string) ?? ''
         ),
       fields: [
@@ -87,6 +94,56 @@ export default defineType({
           type: 'text',
           rows: 3,
           validation: (Rule) => Rule.required().max(160),
+        }),
+      ],
+    }),
+
+    // ── Coachmark fields (shown when contentType === 'coachmark') ──
+    // Spec §8 caps: heading ≤ 60 chars, body ≤ 120 chars, ctaLabel ≤ 20 chars.
+    // See studios/help-system/schemas/coachmarkContent.ts for the top-level
+    // standalone document equivalent.
+    defineField({
+      name: 'coachmarkContent',
+      title: 'Coachmark Content',
+      type: 'object',
+      hidden: ({ document }) => (document?.contentType as string) !== 'coachmark',
+      fields: [
+        defineField({
+          name: 'heading',
+          title: 'Heading',
+          type: 'string',
+          description: 'Card heading — short, sentence case (≤ 60 chars).',
+          validation: (Rule) =>
+            Rule.required()
+              .max(60)
+              .warning(
+                'Coachmark headings should be short — under 60 characters.',
+              ),
+        }),
+        defineField({
+          name: 'body',
+          title: 'Body',
+          type: 'text',
+          rows: 2,
+          description:
+            'One or two short sentences (spec §8 caps at 120 chars).',
+          validation: (Rule) =>
+            Rule.required()
+              .max(120)
+              .warning(
+                'Coachmark bodies should be brief — under 120 characters per spec §8.',
+              ),
+        }),
+        defineField({
+          name: 'ctaLabel',
+          title: 'CTA Button Label',
+          type: 'string',
+          description:
+            'Optional CTA label override, e.g. "Next", "Got it", "Start tour". When omitted the component falls back to "Next".',
+          validation: (Rule) =>
+            Rule.max(20).warning(
+              'CTA labels should be terse — under 20 characters.',
+            ),
         }),
       ],
     }),
