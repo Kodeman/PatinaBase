@@ -37,10 +37,13 @@ const TOOLTIP_HIDE_GRACE_MS = 100
  *   3. CMS miss + no fallback → render trigger directly (NO tooltip wrapper)
  *
  * Analytics:
- *   - `help.tooltip.shown`   on open (with surface_key, side, trigger_type)
- *   - `help.tooltip.dismissed` on close (with surface_key, duration_ms)
+ *   - `help.tooltip.shown`   on open (with surface_key, side, optional trigger)
+ *   - `help.tooltip.dismissed` on close (with surface_key, duration_ms, optional trigger)
  *
- * Property keys use snake_case per Sprint 2 R11 decision.
+ * Property keys use snake_case per Sprint 2 R11 decision. Callers wrapping
+ * higher-level affordances (e.g. <InfoIcon />, <StrataInfoIcon />) can pass a
+ * `trigger` discriminator so PostHog dashboards can separate generic Tooltip
+ * usage from named affordance opens for the same surface key.
  */
 export interface TooltipProps {
   /** Surface key from the help-system registry (must match SURFACE_KEY_REGEX). */
@@ -57,6 +60,13 @@ export interface TooltipProps {
   fallback?: string
   /** Additional Tailwind classes merged onto the rendered tooltip content. */
   className?: string
+  /**
+   * Optional analytics discriminator. When provided, flows into
+   * `help.tooltip.shown` and `help.tooltip.dismissed` payloads as `trigger`
+   * so callers like <InfoIcon /> (`'info_icon'`) and <StrataInfoIcon />
+   * (`'strata_info_icon'`) can be distinguished from generic Tooltip usage.
+   */
+  trigger?: string
 }
 
 /** Type guard: discriminate tooltip-shaped CMS docs (has body: string). */
@@ -101,6 +111,7 @@ export function Tooltip({
   delayMs = DEFAULT_HOVER_DELAY_MS,
   fallback,
   className,
+  trigger,
 }: TooltipProps) {
   // Dev-mode surface-key sanity check. Never throws.
   useEffect(() => {
@@ -153,6 +164,7 @@ export function Tooltip({
         captureEvent('help.tooltip.shown', {
           surface_key: surfaceKey,
           side,
+          ...(trigger ? { trigger } : {}),
         })
       } else if (openedAtRef.current !== null) {
         const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
@@ -161,10 +173,11 @@ export function Tooltip({
         captureEvent('help.tooltip.dismissed', {
           surface_key: surfaceKey,
           duration_ms,
+          ...(trigger ? { trigger } : {}),
         })
       }
     },
-    [surfaceKey, side],
+    [surfaceKey, side, trigger],
   )
 
   // 1. Loading: render trigger transparently — no tooltip yet, no flash of fallback.
