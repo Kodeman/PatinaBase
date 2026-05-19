@@ -90,3 +90,16 @@ export { Coachmark } from './proactive/Coachmark';
 export type { CoachmarkProps } from './proactive/Coachmark';
 export { WelcomeModal } from './proactive/WelcomeModal';
 export type { WelcomeModalProps } from './proactive/WelcomeModal';
+export { TourController } from './proactive/TourController';
+export type {
+  TourControllerProps,
+  TourControllerAPI,
+  CoachmarkStep,
+} from './proactive/TourController';
+export {
+  getTourState,
+  setTourState,
+  clearTourState,
+  TOUR_STATE_STORAGE_PREFIX,
+} from './proactive/TourController';
+export type { TourState } from './proactive/TourController';
