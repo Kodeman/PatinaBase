@@ -83,3 +83,18 @@ export { LearnMore } from './reactive/LearnMore';
 export type { LearnMoreProps } from './reactive/LearnMore';
 export { ContextualHelpPanel } from './reactive/ContextualHelpPanel';
 export type { ContextualHelpPanelProps } from './reactive/ContextualHelpPanel';
+
+// ─── Layer 3 · Proactive components ───────────────────────────────────────────
+export { TourController } from './proactive/TourController';
+export type {
+  TourControllerProps,
+  TourControllerAPI,
+  CoachmarkStep,
+} from './proactive/TourController';
+export {
+  getTourState,
+  setTourState,
+  clearTourState,
+  TOUR_STATE_STORAGE_PREFIX,
+} from './proactive/TourController';
+export type { TourState } from './proactive/TourController';
