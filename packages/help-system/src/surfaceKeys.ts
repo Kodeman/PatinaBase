@@ -179,6 +179,85 @@ export const SurfaceKeys = {
       // specific copy (spec §9.2 Phase-2 "Empty teaching session state").
       EmptyTeaching: 'designer-portal/aesthete/empty-teaching',
     },
+    // Products surface — the Designer Portal renders products under the
+    // `/portal/catalog` route, but the page itself is titled "Products" and
+    // is the designer's primary product workspace. We use the user-facing
+    // name in the registry so authors writing Sanity copy aren't confused
+    // by the internal route slug. Added in F1.5.
+    //
+    // Spec references:
+    //   §6.2 — surface-key shape (portal/section/component[/state])
+    //   §9.2 — Designer Portal section coverage
+    //   §12.4 — QA checklist (this migration's acceptance criteria)
+    Products: {
+      // Page root — used by SurfaceKeyProvider for the products list page
+      // and any analytics that need a stable identifier for the surface.
+      Root:      'designer-portal/products/root',
+      // Section intro rendered beneath the "Products" page header.
+      ListIntro: 'designer-portal/products/list-intro',
+      Empty: {
+        // Designer hasn't captured any products yet.
+        NoProducts:      'designer-portal/products/empty/no-products',
+        // Designer has products but no rows match the current filters.
+        NoFilterResults: 'designer-portal/products/empty/no-filter-results',
+      },
+      // Per-filter tooltips on the tier + refine bars. Surfaced by the
+      // Tooltip + InfoIcon components — copy explains what each tier means
+      // and where each filter is sourced.
+      Filter: {
+        AllProducts:    'designer-portal/products/filter/all-products',
+        MakerPiece:     'designer-portal/products/filter/maker-piece',
+        DesignersPick:  'designer-portal/products/filter/designers-pick',
+        Sourced:        'designer-portal/products/filter/sourced',
+        NeedsTeaching:  'designer-portal/products/filter/needs-teaching',
+        Drafts:         'designer-portal/products/filter/drafts',
+        Style:          'designer-portal/products/filter/style',
+        Category:       'designer-portal/products/filter/category',
+      },
+      // Detail-page surfaces — page-level intro and per-section intros.
+      // FieldHelper-on-spec-row migrations are deferred (catalog-ui is a
+      // shared package consumed by admin-portal too; deeper threading is
+      // tracked separately).
+      Detail: {
+        Root:   'designer-portal/products/detail/root',
+        Intro:  'designer-portal/products/detail/intro',
+        Specs: {
+          // Placeholder for spec field helpers once catalog-ui exposes the
+          // surfaceKey prop for individual fields. Pre-registered so authors
+          // can begin drafting copy before the component-level migration.
+          Dimensions: 'designer-portal/products/detail/specs/dimensions',
+          Materials:  'designer-portal/products/detail/specs/materials',
+          Finish:     'designer-portal/products/detail/specs/finish',
+          Assembly:   'designer-portal/products/detail/specs/assembly',
+          LeadTime:   'designer-portal/products/detail/specs/lead-time',
+          TradePrice: 'designer-portal/products/detail/specs/trade-price',
+        },
+        // Patina-specific concepts on the detail page — surfaced via
+        // <StrataInfoIcon /> per spec §4.2 (Patina-coined vocabulary).
+        Concepts: {
+          Tier:               'designer-portal/products/detail/concept/tier',
+          FoundingCircle:     'designer-portal/products/detail/concept/founding-circle',
+          Provenance:         'designer-portal/products/detail/concept/provenance',
+        },
+      },
+      // Capture flow — the Designer Portal exposes two capture entry points:
+      // `/portal/catalog/new` (manual single product) and `/portal/catalog/import`
+      // (bulk CSV). Each step gets its own surface so authors can write
+      // step-specific copy.
+      Capture: {
+        New: {
+          Root:    'designer-portal/products/capture/new/root',
+          Intro:   'designer-portal/products/capture/new/intro',
+          Photos:  'designer-portal/products/capture/new/photos',
+        },
+        Import: {
+          Root:    'designer-portal/products/capture/import/root',
+          Upload:  'designer-portal/products/capture/import/upload',
+          Mapping: 'designer-portal/products/capture/import/mapping',
+          Preview: 'designer-portal/products/capture/import/preview',
+        },
+      },
+    },
   },
   AdminPortal: {
     // Sprint 1: only the minimum to prove the namespace works. Migrations in Sprint 3.
