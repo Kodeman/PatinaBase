@@ -83,3 +83,13 @@ export { LearnMore } from './reactive/LearnMore';
 export type { LearnMoreProps } from './reactive/LearnMore';
 export { ContextualHelpPanel } from './reactive/ContextualHelpPanel';
 export type { ContextualHelpPanelProps } from './reactive/ContextualHelpPanel';
+
+// ─── Layer 3 · Proactive components ───────────────────────────────────────────
+export { FeatureAnnouncementCoachmark } from './proactive/FeatureAnnouncementCoachmark';
+export type { FeatureAnnouncementCoachmarkProps } from './proactive/FeatureAnnouncementCoachmark';
+export {
+  getFeatureAnnouncementState,
+  setFeatureAnnouncementState,
+  clearFeatureAnnouncementState,
+} from './proactive/FeatureAnnouncementCoachmark';
+export type { FeatureAnnouncementState } from './proactive/FeatureAnnouncementCoachmark';
