@@ -90,6 +90,17 @@ public actor SanityHelpClient {
 
     private var cache: [CacheKey: CacheEntry] = [:]
 
+    /// Cache entry for `fetchArticles(forSurfaceKey:)`. Keyed by surface key
+    /// only — persona-agnostic by design, because the article-list is a
+    /// surface-level navigation aid, not persona-targeted content. The shared
+    /// `cacheTTL` keeps semantics aligned with single-document fetches.
+    private struct ArticleListCacheEntry: Sendable {
+        let value: [HelpArticleSummary]
+        let storedAt: Date
+    }
+
+    private var articleListCache: [SurfaceKey: ArticleListCacheEntry] = [:]
+
     // MARK: Init
 
     /// Designated initializer. The shared singleton uses `URLSession.shared`
@@ -171,6 +182,134 @@ public actor SanityHelpClient {
     /// (persona may change) or when the app receives a CMS-invalidation push.
     public func clearCache() {
         cache.removeAll(keepingCapacity: true)
+        articleListCache.removeAll(keepingCapacity: true)
+    }
+
+    // MARK: - Article List (G6)
+
+    /// Fetches the list of `helpArticle` documents relevant to the given
+    /// surface. Mirrors the web `ContextualHelpPanel` GROQ query in
+    /// `packages/help-system/src/reactive/ContextualHelpPanel/ContextualHelpPanel.tsx`:
+    /// a doc matches when its `surfaceKey` is either an exact match of, OR a
+    /// prefix path of, the active surface key. The match-by-prefix uses GROQ
+    /// `string::startsWith` so an article authored against
+    /// `designer-portal/pipeline` surfaces on every nested
+    /// `designer-portal/pipeline/...` screen.
+    ///
+    /// Result count is capped at 20 — the panel never needs more in a single
+    /// scroll session, and a hard cap protects the UI when a misconfigured
+    /// surface key accidentally claims half the article catalogue. Results are
+    /// ordered by `surfaceKey` length descending so the most-specific articles
+    /// appear first.
+    ///
+    /// Failure mode: network/HTTP/decoding errors and an empty result set are
+    /// both modelled as an empty array — the panel renders the
+    /// "no articles for this surface yet" empty state in either case so help
+    /// downtime never crashes the UI (spec §13.4).
+    ///
+    /// - Parameter surfaceKey: A valid surface key from
+    ///   `Features/Help/SurfaceKeys.swift`.
+    /// - Returns: Up to 20 `HelpArticleSummary` entries, ordered by
+    ///   surface-key specificity.
+    /// - Throws: `InvalidSurfaceKeyError` when `surfaceKey` is malformed.
+    ///   All other failures collapse to an empty array.
+    public func fetchArticles(
+        forSurfaceKey surfaceKey: SurfaceKey
+    ) async throws -> [HelpArticleSummary] {
+        try validateSurfaceKey(surfaceKey)
+
+        if let cached = cachedArticleList(for: surfaceKey) {
+            return cached
+        }
+
+        guard let url = Self.buildArticleListURL(surfaceKey: surfaceKey) else {
+            print("[SanityHelpClient] Failed to build article-list URL surfaceKey=\(surfaceKey)")
+            articleListCache[surfaceKey] = ArticleListCacheEntry(value: [], storedAt: now())
+            return []
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = Self.requestTimeout
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                print(
+                    "[SanityHelpClient] Article-list non-2xx status=\(http.statusCode)" +
+                    " url=\(url.absoluteString)"
+                )
+                articleListCache[surfaceKey] = ArticleListCacheEntry(value: [], storedAt: now())
+                return []
+            }
+            let summaries = try decodeArticleList(data: data)
+            articleListCache[surfaceKey] = ArticleListCacheEntry(value: summaries, storedAt: now())
+            return summaries
+        } catch {
+            print("[SanityHelpClient] Article-list fetch failed: \(error)")
+            // Cache the miss briefly so a transient blip doesn't hammer Sanity.
+            articleListCache[surfaceKey] = ArticleListCacheEntry(value: [], storedAt: now())
+            return []
+        }
+    }
+
+    /// Builds the article-list GROQ URL for a given surface key.
+    ///
+    /// The GROQ query mirrors the web `ContextualHelpPanel` ARTICLES_QUERY:
+    ///
+    ///   *[_type == "helpContent" && contentType == "helpArticle"
+    ///     && (surfaceKey == $sk || string::startsWith($sk, surfaceKey + "/"))]
+    ///   | order(length(surfaceKey) desc) [0...20] {
+    ///     "_id": _id,
+    ///     surfaceKey,
+    ///     "title": helpArticleContent.title,
+    ///     "summary": helpArticleContent.oneSentenceAnswer
+    ///   }
+    ///
+    /// The projection pulls `title` and `oneSentenceAnswer` out of the nested
+    /// `helpArticleContent` object — the Sanity schema stores all article
+    /// fields under that object on the parent `helpContent` document
+    /// (see `studios/help-system/schemas/helpContent.ts`).
+    internal static func buildArticleListURL(surfaceKey: SurfaceKey) -> URL? {
+        let query = """
+        *[_type == "helpContent" && contentType == "helpArticle" \
+        && (surfaceKey == $sk || string::startsWith($sk, surfaceKey + "/"))]\
+         | order(length(surfaceKey) desc) [0...20] {\
+        "_id": _id, surfaceKey, \
+        "title": helpArticleContent.title, \
+        "summary": helpArticleContent.oneSentenceAnswer\
+        }
+        """
+
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "\(projectId).api.sanity.io"
+        components.path = "/\(apiVersion)/data/query/\(dataset)"
+        components.queryItems = [
+            URLQueryItem(name: "query", value: query),
+            URLQueryItem(name: "$sk", value: jsonStringLiteral(surfaceKey)),
+        ]
+        return components.url
+    }
+
+    /// Returns a cached article list if the entry is still fresh; otherwise `nil`.
+    private func cachedArticleList(for surfaceKey: SurfaceKey) -> [HelpArticleSummary]? {
+        guard let entry = articleListCache[surfaceKey] else { return nil }
+        if now().timeIntervalSince(entry.storedAt) > Self.cacheTTL {
+            articleListCache.removeValue(forKey: surfaceKey)
+            return nil
+        }
+        return entry.value
+    }
+
+    /// Decodes a Sanity `{ "result": [...] }` envelope into typed summaries.
+    /// Returns an empty array if the envelope's `result` is missing, null, or
+    /// not a JSON array.
+    private func decodeArticleList(data: Data) throws -> [HelpArticleSummary] {
+        let decoder = JSONDecoder()
+        let envelope = try decoder.decode(SanityArticleListEnvelope.self, from: data)
+        return envelope.result ?? []
     }
 
     // MARK: - Internals (also exposed for tests via @testable)
@@ -376,5 +515,94 @@ private enum SanityResultBox: Decodable {
             let payload = try encoder.encode(first)
             return try decoder.decode(HelpContent.self, from: payload)
         }
+    }
+}
+
+// MARK: - HelpArticleSummary
+
+/// Lightweight projection of a `helpContent` document for list rendering in
+/// the iOS Help Panel. Mirrors the web `PanelArticle` shape in
+/// `ContextualHelpPanel.tsx`, minus the inline-excerpt field (the iOS panel
+/// renders the one-sentence answer as the row summary; full-article body
+/// rendering is deferred to Sprint 3 Stream E).
+///
+/// `id` corresponds to the Sanity document `_id`, which doubles as the
+/// article key used in `HelpAnalytics.articleOpened`. We expose it as a
+/// `String` rather than wrapping it because Sanity IDs are opaque strings
+/// and consumers don't need a stronger type.
+public struct HelpArticleSummary: Identifiable, Equatable, Sendable, Decodable {
+    public let id: String
+    public let surfaceKey: String
+    public let title: String
+    public let summary: String
+
+    private enum CodingKeys: String, CodingKey {
+        case id = "_id"
+        case surfaceKey
+        case title
+        case summary
+    }
+
+    public init(
+        id: String,
+        surfaceKey: String,
+        title: String,
+        summary: String
+    ) {
+        self.id = id
+        self.surfaceKey = surfaceKey
+        self.title = title
+        self.summary = summary
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedId = try container.decode(String.self, forKey: .id)
+        let decodedSurfaceKey = try container.decode(String.self, forKey: .surfaceKey)
+        self.id = decodedId
+        self.surfaceKey = decodedSurfaceKey
+        // The projection in `buildArticleListURL` aliases
+        // `helpArticleContent.title` and `helpArticleContent.oneSentenceAnswer`
+        // as top-level `title` / `summary`. Defensive fallbacks: a missing
+        // title falls back to the surface key; a missing summary is empty.
+        self.title = (try? container.decode(String.self, forKey: .title)) ?? decodedSurfaceKey
+        self.summary = (try? container.decode(String.self, forKey: .summary)) ?? ""
+    }
+}
+
+// MARK: - Article list envelope
+
+/// Wire-level wrapper for the article-list GROQ response. The query returns
+/// `{"result": [ ...summaries ]}`; we accept a missing or null `result` as an
+/// empty list so callers always get a usable array.
+private struct SanityArticleListEnvelope: Decodable {
+    let result: [HelpArticleSummary]?
+
+    enum CodingKeys: String, CodingKey { case result }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if (try? container.decodeNil(forKey: .result)) == true {
+            self.result = []
+            return
+        }
+        // Defensive: skip rows that fail to decode rather than blowing up the
+        // whole list. CMS authors may publish partial documents during
+        // schema-migration windows.
+        if let rows = try? container.decode([FailableArticleSummary].self, forKey: .result) {
+            self.result = rows.compactMap { $0.value }
+        } else {
+            self.result = []
+        }
+    }
+}
+
+/// Wrapper that lets us decode an array of `HelpArticleSummary` and tolerate
+/// individual row failures without failing the entire response.
+private struct FailableArticleSummary: Decodable {
+    let value: HelpArticleSummary?
+
+    init(from decoder: Decoder) throws {
+        self.value = try? HelpArticleSummary(from: decoder)
     }
 }
