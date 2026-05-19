@@ -156,4 +156,23 @@ describe('SurfaceKeys — spot-check constant values', () => {
   it('ClientPortal.Home is the correct literal', () => {
     expect(SurfaceKeys.ClientPortal.Home).toBe('client-portal/home')
   })
+
+  // IOSApp parity spot-checks — these literals MUST match the Swift
+  // constants in `apps/mobile/Patina/Patina/Features/Help/SurfaceKeys.swift`.
+  // See the iOS `SurfaceKeysParityTests` for the full reciprocal pinning.
+  it('IOSApp.Home.Root is the correct literal', () => {
+    expect(SurfaceKeys.IOSApp.Home.Root).toBe('ios-app/home')
+  })
+
+  it('IOSApp.Home.DailyProductCard is the correct literal', () => {
+    expect(SurfaceKeys.IOSApp.Home.DailyProductCard).toBe('ios-app/home/daily-product-card')
+  })
+
+  it('IOSApp.ProductDetail.Root is the correct literal', () => {
+    expect(SurfaceKeys.IOSApp.ProductDetail.Root).toBe('ios-app/product-detail')
+  })
+
+  it('IOSApp.ProductDetail.ArAction is the correct literal', () => {
+    expect(SurfaceKeys.IOSApp.ProductDetail.ArAction).toBe('ios-app/product-detail/ar-action')
+  })
 })
