@@ -258,6 +258,31 @@ export const SurfaceKeys = {
         },
       },
     },
+    /**
+     * Tours — onboarding coachmark sequences (Sprint 3 D5).
+     *
+     * Per spec §1 ("First Project Walkthrough is optional and skippable on
+     * every step") and the glossary entry for "Tour" (line 1398), the Designer
+     * Portal ships a single canonical tour today: First Project Walkthrough.
+     *
+     * Each step is a coachmark surface authored in Sanity. Step keys live
+     * under `tours/first-project-walkthrough/` so the registry can grow to
+     * cover follow-up tours (e.g. an Aesthete deep-dive, a Capture refresher)
+     * without renaming the active one. The `Root` key represents the tour
+     * as a whole and is the surface used by analytics events (tour_start /
+     * tour_complete / tour_skip) per spec line 1142.
+     */
+    Tours: {
+      Root: 'designer-portal/tours',
+      FirstProjectWalkthrough: {
+        Root:                'designer-portal/tours/first-project-walkthrough',
+        Step1Today:          'designer-portal/tours/first-project-walkthrough/step-1-today',
+        Step2Pipeline:       'designer-portal/tours/first-project-walkthrough/step-2-pipeline',
+        Step3Aesthete:       'designer-portal/tours/first-project-walkthrough/step-3-aesthete',
+        Step4ProductsCapture:'designer-portal/tours/first-project-walkthrough/step-4-products-capture',
+        Step5Profile:        'designer-portal/tours/first-project-walkthrough/step-5-profile',
+      },
+    },
     // ─── Clients (F1.6 — Stream F.1.6 in Sprint 2) ────────────────────────────
     //
     // The Designer Portal Clients screen has two surfaces: a list/directory at
