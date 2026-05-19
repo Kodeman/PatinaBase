@@ -50,6 +50,7 @@ COPY packages/supabase/package.json ./packages/supabase/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/email/package.json ./packages/email/
 COPY packages/notifications/package.json ./packages/notifications/
+COPY packages/help-system/package.json ./packages/help-system/
 
 ARG APP_NAME
 COPY apps/${APP_NAME}/package.json ./apps/${APP_NAME}/
@@ -99,6 +100,7 @@ RUN pnpm --filter @patina/auth build 2>/dev/null || true
 RUN pnpm --filter @patina/api-routes build 2>/dev/null || true
 RUN pnpm --filter @patina/api-client build 2>/dev/null || true
 RUN pnpm --filter @patina/design-system build 2>/dev/null || true
+RUN pnpm --filter @patina/help-system build 2>/dev/null || true
 
 # Build the app
 RUN pnpm --filter @patina/${APP_NAME} build
