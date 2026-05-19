@@ -107,23 +107,29 @@ export function UtilityBar() {
         )}
       </button>
 
-      {/* Profile */}
+      {/* Profile — wrapped so the First Project Walkthrough tour (Sprint 3 W1)
+          can anchor its step 5 coachmark on the avatar trigger. The
+          UserStatusMenu primitive ships from @patina/design-system and does
+          not expose a trigger-level data-attribute hook, so the wrapper
+          carries the anchor instead. */}
       {user && (
-        <UserStatusMenu
-          user={{
-            name: user.name,
-            email: user.email,
-            image: null,
-            roles: user.roles,
-          }}
-          status={status}
-          onStatusChange={setStatus}
-          onSignOut={handleSignOut}
-          isSigningOut={isSigningOut}
-          menuItems={menuItems}
-          basePath="/portal"
-          avatarSize="sm"
-        />
+        <div data-tour-anchor="profile" className="flex items-center">
+          <UserStatusMenu
+            user={{
+              name: user.name,
+              email: user.email,
+              image: null,
+              roles: user.roles,
+            }}
+            status={status}
+            onStatusChange={setStatus}
+            onSignOut={handleSignOut}
+            isSigningOut={isSigningOut}
+            menuItems={menuItems}
+            basePath="/portal"
+            avatarSize="sm"
+          />
+        </div>
       )}
     </div>
   );
