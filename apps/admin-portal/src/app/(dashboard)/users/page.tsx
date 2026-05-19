@@ -32,11 +32,12 @@ import {
   Mail,
   CheckCircle2,
   AlertCircle,
+  Users as UsersIcon,
 } from 'lucide-react';
 import {
   PageHeader,
   Section,
-  EmptyState,
+  EmptyState as PortalEmptyState,
   LoadingStrata,
   StatusDot,
   type StatusVariant,
@@ -49,6 +50,20 @@ import { ActivateUserDialog } from '@/components/users/ActivateUserDialog';
 import { VerifyEmailDialog } from '@/components/users/VerifyEmailDialog';
 import { CreateUserDialog } from '@/components/users/CreateUserDialog';
 import type { User } from '@/types';
+// F2 admin-portal help-system migration — Sprint 3.
+// `EmptyState` from `@/components/portal` is the legacy local primitive
+// (label + message). We alias it as `PortalEmptyState` so the canonical
+// CMS-backed `EmptyState` from `@patina/help-system` can sit alongside it
+// for the empty-no-users and no-filter-results surfaces. The portal
+// primitive remains in use for error states (which surface a label like
+// "Error" plus a transient message — not a CMS authoring concern).
+import {
+  EmptyState,
+  InfoIcon,
+  SectionIntro,
+  SurfaceKeys,
+  useHelpContent,
+} from '@patina/help-system';
 
 export default function UsersPage() {
   const [mounted, setMounted] = useState(false);
@@ -59,6 +74,50 @@ export default function UsersPage() {
   if (!mounted) return <LoadingStrata />;
 
   return <UsersPageContent />;
+}
+
+// ─── Empty-state wrapper (F2 admin-portal users) ─────────────────────────────
+//
+// Mirrors the designer-portal Clients pattern: probe `useHelpContent` first
+// so a clean CMS miss can fall back to local copy instead of leaving the
+// list silently blank. Two distinct surfaces — different copy for "no users
+// at all" vs. "your filter returned nothing." Each surface is tracked
+// independently in Sanity per spec §6.2.
+
+interface UsersEmptyStateProps {
+  isFiltered: boolean;
+}
+
+function UsersEmptyState({ isFiltered }: UsersEmptyStateProps) {
+  const surfaceKey = isFiltered
+    ? SurfaceKeys.AdminPortal.Users.Empty.NoFilterResults
+    : SurfaceKeys.AdminPortal.Users.Empty.NoUsers;
+  const fallback = isFiltered
+    ? 'No users match these filters. Adjust your search or status filter.'
+    : 'No users yet. Use Create User to invite a team member.';
+
+  const { data, isLoading } = useHelpContent(surfaceKey, 'emptyState');
+
+  if (isLoading) {
+    return (
+      <p className="type-body py-16 text-center italic text-[var(--text-muted)]">…</p>
+    );
+  }
+
+  if (data) {
+    return (
+      <EmptyState
+        surfaceKey={surfaceKey}
+        icon={<UsersIcon className="h-8 w-8 text-[var(--text-muted)]" strokeWidth={1.5} />}
+      />
+    );
+  }
+
+  // CMS miss — render the local fallback so first-time operators see helpful
+  // copy instead of a blank section.
+  return (
+    <p className="type-body py-16 text-center text-[var(--text-muted)]">{fallback}</p>
+  );
 }
 
 function UsersPageContent() {
@@ -138,6 +197,15 @@ function UsersPageContent() {
         }
       />
 
+      {/* Page-level intro under the header. Voice is utility: tells the
+          operator what they can do on this page. CMS-authored fallback
+          keeps first-time operators from seeing a blank prompt. */}
+      <SectionIntro
+        surfaceKey={SurfaceKeys.AdminPortal.Users.ListIntro}
+        fallback="All user accounts. Suspend, ban, or reactivate from the row menu."
+        className="-mt-4 mb-6 max-w-prose"
+      />
+
       <Section className="mt-10">
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <div className="relative min-w-[280px] flex-1">
@@ -167,12 +235,21 @@ function UsersPageContent() {
         {isLoading ? (
           <LoadingStrata />
         ) : isError ? (
-          <EmptyState
+          // Error state stays on the local portal primitive — it's a
+          // transient label + dynamic message, not a CMS authoring concern.
+          <PortalEmptyState
             label="Error"
             message={error instanceof Error ? error.message : 'Failed to load users.'}
           />
         ) : users.length === 0 ? (
-          <EmptyState message="No users found." />
+          // Two distinct CMS-backed empties so authors can write bespoke
+          // copy per zero-state (no users at all vs. no filter matches).
+          // The query-or-filter distinction is the same one used by the
+          // designer-portal Clients screen (F1.6). Falls back to inline
+          // copy until Sanity content lands.
+          <UsersEmptyState
+            isFiltered={Boolean(query.trim()) || statusFilter !== 'all'}
+          />
         ) : (
           <div>
             {users.map((user: User) => (

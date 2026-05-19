@@ -550,9 +550,156 @@ export const SurfaceKeys = {
       },
     },
   },
+  /**
+   * Admin Portal — operator workspace surfaces (Sprint 3 Stream F2).
+   *
+   * The admin portal is utility-first: most surfaces here help an operator
+   * understand what data they're looking at, what an action will do, and what
+   * a privileged operation costs. Voice is direct ("Pick a role for this user.")
+   * not designer-poetic ("Choose how this person collaborates with you").
+   *
+   * Spec references:
+   *   §6.2  — surface-key shape (portal/section/component[/state])
+   *   §9.2  — F2 admin pass coverage
+   *   §12.4 — manual QA checklist (this migration's acceptance criteria)
+   *   §4.2  — InfoIcon vs StrataInfoIcon (Patina concepts get the Strata
+   *           glyph; everything else uses the generic ? glyph)
+   *
+   * The 5 admin screens migrated in F2 are:
+   *   • Dashboard          (/dashboard)          — overview metrics + health
+   *   • Users              (/users)              — user list + CreateUser form
+   *   • Applications       (/applications)       — designer + maker queue
+   *   • Communications     (/communications)     — email comms dashboard
+   *   • Audit              (/audit)              — immutable privileged-action log
+   *
+   * Keys not consumed today (e.g. RoleField, MfaEnforcement) are registered
+   * up-front so authors can begin drafting Sanity copy ahead of the next
+   * admin migration wave.
+   */
   AdminPortal: {
-    // Sprint 1: only the minimum to prove the namespace works. Migrations in Sprint 3.
+    // Sprint 1 root — already wired into pathnameToSurfaceKey for the `?`
+    // utility-bar trigger; kept as a string-leaf so the path
+    // `admin-portal/dashboard` continues to act as a parent prefix for any
+    // sub-surface added later (`admin-portal/dashboard/metrics`, etc.).
     Dashboard: 'admin-portal/dashboard',
+    // Sprint 3 F2 — dedicated dashboard help moments under a Root constant.
+    // The string-leaf `Dashboard` above is retained for backwards compat with
+    // the Sprint 2 utility-bar wiring. New code uses `Overview.*`.
+    Overview: {
+      Root:             'admin-portal/dashboard/overview',
+      Intro:            'admin-portal/dashboard/overview/intro',
+      // Each headline metric block earns a tooltip via InfoIcon so an operator
+      // unfamiliar with the metric definition can hover for the source-of-truth.
+      Metric: {
+        PendingApplications: 'admin-portal/dashboard/overview/metric/pending-applications',
+        VendorPipeline:      'admin-portal/dashboard/overview/metric/vendor-pipeline',
+        CommsSent:           'admin-portal/dashboard/overview/metric/comms-sent',
+        TotalOrders:         'admin-portal/dashboard/overview/metric/total-orders',
+      },
+      // Side-by-side sections under the metrics — section-intro copy ships
+      // alongside the heading so the operator knows what the panel surfaces.
+      Section: {
+        RecentActivity: 'admin-portal/dashboard/overview/section/recent-activity',
+        SystemHealth:   'admin-portal/dashboard/overview/section/system-health',
+      },
+    },
+    Users: {
+      Root:        'admin-portal/users',
+      ListIntro:   'admin-portal/users/list-intro',
+      Empty: {
+        // Operator's workspace has zero users at all (fresh install).
+        NoUsers:        'admin-portal/users/empty/no-users',
+        // Filter / search returned no matches.
+        NoFilterResults: 'admin-portal/users/empty/no-filter-results',
+      },
+      // CreateUserDialog fields. FieldHelper for each input.
+      Create: {
+        Root:        'admin-portal/users/create',
+        Intro:       'admin-portal/users/create/intro',
+        EmailField:  'admin-portal/users/create/email',
+        DisplayName: 'admin-portal/users/create/display-name',
+        RoleField:   'admin-portal/users/create/role-field',
+        Invitation:  'admin-portal/users/create/invitation',
+      },
+      // Per-status column copy — informs the operator what a status means and
+      // when to use the corresponding action. Patina-coined terms (Founding
+      // Circle workspace, Designer tier) earn StrataInfoIcon elsewhere; user
+      // lifecycle states are generic so they use InfoIcon.
+      Status: {
+        Active:    'admin-portal/users/status/active',
+        Pending:   'admin-portal/users/status/pending',
+        Suspended: 'admin-portal/users/status/suspended',
+        Banned:    'admin-portal/users/status/banned',
+      },
+    },
+    Applications: {
+      Root:      'admin-portal/applications',
+      ListIntro: 'admin-portal/applications/list-intro',
+      Empty: {
+        // No applications in the currently-filtered status bucket.
+        NoApplications:  'admin-portal/applications/empty/no-applications',
+      },
+      // Patina-vocab moments — the founding-circle / aesthete / triage
+      // concepts on the application detail drawer earn the Strata glyph.
+      Concept: {
+        DesignerApplication: 'admin-portal/applications/concept/designer-application',
+        MakerApplication:    'admin-portal/applications/concept/maker-application',
+        FoundingCircle:      'admin-portal/applications/concept/founding-circle',
+      },
+      // Per-status helpers — explain to the operator what each lifecycle
+      // state means and which action transitions out of it.
+      Status: {
+        Pending:    'admin-portal/applications/status/pending',
+        InReview:   'admin-portal/applications/status/in-review',
+        Approved:   'admin-portal/applications/status/approved',
+        Waitlisted: 'admin-portal/applications/status/waitlisted',
+        Rejected:   'admin-portal/applications/status/rejected',
+        Onboarding: 'admin-portal/applications/status/onboarding',
+      },
+    },
+    Communications: {
+      Root:      'admin-portal/communications',
+      ListIntro: 'admin-portal/communications/list-intro',
+      Empty: {
+        NoSendData:       'admin-portal/communications/empty/no-send-data',
+        NoRecentActivity: 'admin-portal/communications/empty/no-recent-activity',
+        NoScheduledSends: 'admin-portal/communications/empty/no-scheduled-sends',
+      },
+      // Metric tooltips on the comms dashboard. InfoIcon (not Strata) — these
+      // are industry-standard email metrics, not Patina-coined vocabulary.
+      Metric: {
+        EmailsSent:      'admin-portal/communications/metric/emails-sent',
+        OpenRate:        'admin-portal/communications/metric/open-rate',
+        ClickRate:       'admin-portal/communications/metric/click-rate',
+        DeliveryHealth:  'admin-portal/communications/metric/delivery-health',
+      },
+      // Patina-coined concept — Command Center is our internal name for the
+      // multi-channel comms hub. Earns StrataInfoIcon per spec §4.2.
+      Concept: {
+        CommandCenter: 'admin-portal/communications/concept/command-center',
+      },
+    },
+    Audit: {
+      Root:      'admin-portal/audit',
+      ListIntro: 'admin-portal/audit/list-intro',
+      Empty: {
+        NoEvents: 'admin-portal/audit/empty/no-events',
+      },
+      // Per-column tooltips on the audit table. Patina concept "Privileged
+      // action" earns the Strata glyph; generic columns (timestamp, actor)
+      // use InfoIcon.
+      Column: {
+        Action:    'admin-portal/audit/column/action',
+        Resource:  'admin-portal/audit/column/resource',
+        Actor:     'admin-portal/audit/column/actor',
+        Timestamp: 'admin-portal/audit/column/timestamp',
+        Result:    'admin-portal/audit/column/result',
+      },
+      Concept: {
+        PrivilegedAction: 'admin-portal/audit/concept/privileged-action',
+        ImmutableLog:     'admin-portal/audit/concept/immutable-log',
+      },
+    },
   },
   ClientPortal: {
     // Sprint 1: only the minimum.

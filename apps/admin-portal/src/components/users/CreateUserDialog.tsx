@@ -21,11 +21,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Mail, User, X, Plus } from 'lucide-react';
+import { Mail, User, X } from 'lucide-react';
 import { useCreateUser } from '@/hooks/use-users';
 import { useRoles } from '@/hooks/use-roles';
 import { toast } from 'sonner';
 import type { Role } from '@/services/roles';
+// F2 admin-portal help-system migration.
+// Every form field gets a FieldHelper anchored to a Sanity surface key, with
+// inline fallback copy so the form stays useful before content ships.
+// Voice is utility-first: short, direct, what-to-enter rather than the
+// designer-portal "Choose how this person collaborates with you" register.
+import { FieldHelper, SurfaceKeys } from '@patina/help-system';
 
 interface CreateUserDialogProps {
   open: boolean;
@@ -144,6 +150,10 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
                 className={`pl-10 ${errors.email ? 'border-destructive' : ''}`}
               />
             </div>
+            <FieldHelper
+              surfaceKey={SurfaceKeys.AdminPortal.Users.Create.EmailField}
+              fallback="Where the invitation email goes. Must be unique."
+            />
             {errors.email && (
               <p className="text-sm text-destructive">{errors.email}</p>
             )}
@@ -165,6 +175,10 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
                 className={`pl-10 ${errors.displayName ? 'border-destructive' : ''}`}
               />
             </div>
+            <FieldHelper
+              surfaceKey={SurfaceKeys.AdminPortal.Users.Create.DisplayName}
+              fallback="What this user is called in the UI. The user can change it later."
+            />
             {errors.displayName && (
               <p className="text-sm text-destructive">{errors.displayName}</p>
             )}
@@ -205,16 +219,20 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
                 </SelectContent>
               </Select>
             )}
-            <p className="text-xs text-muted-foreground">
-              Roles can also be assigned after the user is created.
-            </p>
+            <FieldHelper
+              surfaceKey={SurfaceKeys.AdminPortal.Users.Create.RoleField}
+              fallback="Pick a role for this user. You can change it later."
+            />
           </div>
 
           <Alert>
             <Mail className="h-4 w-4" />
             <AlertDescription>
-              The user will receive an email invitation with a link to set their password. The
-              invitation expires after 7 days.
+              <FieldHelper
+                surfaceKey={SurfaceKeys.AdminPortal.Users.Create.Invitation}
+                fallback="The user will receive an email invitation with a link to set their password. The invitation expires after 7 days."
+                className="!text-sm !text-foreground"
+              />
             </AlertDescription>
           </Alert>
         </div>
