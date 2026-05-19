@@ -1,10 +1,19 @@
 'use client';
 
+import type { ReactNode } from 'react';
+
 interface MetricBlockProps {
   label: string;
   value: string | number;
   change?: string;
   trend?: 'up' | 'down' | 'neutral';
+  /**
+   * Optional trailing node rendered after the label — typically a
+   * `<InfoIcon surfaceKey={...} />` from `@patina/help-system` so an
+   * operator can hover for the metric's source-of-truth definition.
+   * Added in Sprint 3 F2 admin-portal help-system migration.
+   */
+  labelExtra?: ReactNode;
 }
 
 function formatValue(value: string | number): string {
@@ -17,7 +26,7 @@ function formatValue(value: string | number): string {
   return value;
 }
 
-export function MetricBlock({ label, value, change, trend }: MetricBlockProps) {
+export function MetricBlock({ label, value, change, trend, labelExtra }: MetricBlockProps) {
   const trendColor =
     trend === 'up'
       ? 'text-[var(--color-sage)]'
@@ -27,7 +36,10 @@ export function MetricBlock({ label, value, change, trend }: MetricBlockProps) {
 
   return (
     <div className="flex flex-col">
-      <span className="type-meta mb-2">{label}</span>
+      <span className="type-meta mb-2 inline-flex items-center gap-1.5">
+        {label}
+        {labelExtra}
+      </span>
       <span className="type-data-large mb-1">{formatValue(value)}</span>
       {change && <span className={`type-body-small ${trendColor}`}>{change}</span>}
     </div>

@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, Inbox } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   PageHeader,
   FilterTabs,
   ListRow,
   Section,
-  EmptyState,
+  EmptyState as PortalEmptyState,
   StatusDot,
   LoadingStrata,
   type StatusVariant,
@@ -25,6 +25,12 @@ import type {
   MakerApplication,
 } from '@/services/applications';
 import { ApplicationDetailDrawer } from '@/components/applications/ApplicationDetailDrawer';
+// F2 admin-portal help-system migration. The portal-local `EmptyState`
+// primitive is aliased as `PortalEmptyState` so it remains in use for the
+// error path (label + transient message) while CMS-backed `EmptyState`
+// owns the "no applications match this status" surface. Voice is utility:
+// "No applications waiting" not "Your applicant pool is quiet."
+import { EmptyState, SectionIntro, SurfaceKeys, useHelpContent } from '@patina/help-system';
 
 const STATUS_TABS: Array<{ value: ApplicationStatus | 'all'; label: string }> = [
   { value: 'pending', label: 'New' },
@@ -74,6 +80,15 @@ export default function ApplicationsPage() {
         description="Review, respond to, and onboard designer and maker applicants from patina.cloud."
       />
 
+      {/* Page-level intro. CMS-authored; explains the queue mechanics so
+          an operator knows what "Pending" / "In Review" / "Approved"
+          actually transition between. */}
+      <SectionIntro
+        surfaceKey={SurfaceKeys.AdminPortal.Applications.ListIntro}
+        fallback="The applicant queue. Filter by status, then open a row to act."
+        className="-mt-4 mb-6 max-w-prose"
+      />
+
       <div className="mt-8">
         <FilterTabs items={TYPE_TABS} value={type} onChange={setType} />
       </div>
@@ -117,6 +132,39 @@ export default function ApplicationsPage() {
   );
 }
 
+// ─── Empty-state wrapper (F2 admin-portal applications) ──────────────────────
+//
+// Single CMS surface (no-applications-in-this-status) — falls back to inline
+// copy until Sanity content lands. Both the Designer and Maker list paths
+// route through this wrapper so the operator sees the same authored copy
+// regardless of which application type they're filtered to.
+
+function ApplicationsEmptyState() {
+  const surfaceKey = SurfaceKeys.AdminPortal.Applications.Empty.NoApplications;
+  const { data, isLoading } = useHelpContent(surfaceKey, 'emptyState');
+
+  if (isLoading) {
+    return (
+      <p className="type-body py-16 text-center italic text-[var(--text-muted)]">…</p>
+    );
+  }
+
+  if (data) {
+    return (
+      <EmptyState
+        surfaceKey={surfaceKey}
+        icon={<Inbox className="h-8 w-8 text-[var(--text-muted)]" strokeWidth={1.5} />}
+      />
+    );
+  }
+
+  return (
+    <p className="type-body py-16 text-center text-[var(--text-muted)]">
+      No applications in this status.
+    </p>
+  );
+}
+
 function DesignerList({
   status,
   search,
@@ -136,14 +184,14 @@ function DesignerList({
   if (isLoading) return <LoadingStrata />;
   if (isError)
     return (
-      <EmptyState
+      <PortalEmptyState
         label="Error"
         message={error instanceof Error ? error.message : 'Failed to load applications.'}
       />
     );
 
   const rows = data?.data ?? [];
-  if (rows.length === 0) return <EmptyState message="No applications in this status." />;
+  if (rows.length === 0) return <ApplicationsEmptyState />;
 
   return (
     <div>
@@ -191,14 +239,14 @@ function MakerList({
   if (isLoading) return <LoadingStrata />;
   if (isError)
     return (
-      <EmptyState
+      <PortalEmptyState
         label="Error"
         message={error instanceof Error ? error.message : 'Failed to load applications.'}
       />
     );
 
   const rows = data?.data ?? [];
-  if (rows.length === 0) return <EmptyState message="No applications in this status." />;
+  if (rows.length === 0) return <ApplicationsEmptyState />;
 
   return (
     <div>

@@ -14,6 +14,14 @@ import {
 import { useDashboardMetrics } from '@/hooks/use-dashboard-metrics';
 import { useSystemHealth } from '@/hooks/use-system-health';
 import type { ServiceStatus } from '@/app/api/admin/health/route';
+// F2 admin-portal help-system migration — Sprint 3 Stream F2.
+// Voice is utility-first: tooltips on every headline metric (what does this
+// number measure? where is it sourced from?), section-intro copy on the two
+// side panels (so the operator understands what "Recent activity" surfaces
+// and what "System health" gates). InfoIcon is used throughout because none
+// of the dashboard's surfaces are Patina-coined vocabulary — they are
+// industry-standard operator concepts. Spec §4.2, §9.2, §12.4.
+import { InfoIcon, SectionIntro, SurfaceKeys } from '@patina/help-system';
 
 const STATUS_VARIANT: Record<ServiceStatus, StatusVariant> = {
   healthy: 'success',
@@ -56,9 +64,28 @@ export default function DashboardPage() {
         description="Overview of platform activity and key metrics."
       />
 
+      {/* Section-level intro under the page header — gives the operator a
+          one-sentence orientation for what the dashboard surfaces and how
+          stale the data is. CMS-authored; renders nothing on a clean miss. */}
+      <SectionIntro
+        surfaceKey={SurfaceKeys.AdminPortal.Overview.Intro}
+        fallback="Live platform overview. Metrics refresh on page load."
+        className="-mt-4 mb-8 max-w-prose"
+      />
+
       <MetricsRow>
+        {/* Each headline metric gets an InfoIcon so an operator unfamiliar
+            with the metric definition can hover for the source-of-truth.
+            InfoIcon (not Strata) because these are generic operator concepts,
+            not Patina-coined vocabulary — spec §4.2. */}
         <MetricBlock
           label="Pending applications"
+          labelExtra={
+            <InfoIcon
+              surfaceKey={SurfaceKeys.AdminPortal.Overview.Metric.PendingApplications}
+              fallback="Designer and maker applications awaiting review."
+            />
+          }
           value={dash(pendingApps)}
           change={
             pendingApps && pendingApps > 0
@@ -69,12 +96,24 @@ export default function DashboardPage() {
         />
         <MetricBlock
           label="Vendor pipeline (live)"
+          labelExtra={
+            <InfoIcon
+              surfaceKey={SurfaceKeys.AdminPortal.Overview.Metric.VendorPipeline}
+              fallback="Vendors currently in active onboarding or live status."
+            />
+          }
           value={dash(livePartners)}
           change={`${greenTriage} green · ${awaitingLeah} awaiting Leah`}
           trend="neutral"
         />
         <MetricBlock
           label="Comms sent (24h)"
+          labelExtra={
+            <InfoIcon
+              surfaceKey={SurfaceKeys.AdminPortal.Overview.Metric.CommsSent}
+              fallback="Emails dispatched via the Communications service in the last 24 hours."
+            />
+          }
           value={dash(sent24h)}
           change={
             openRate !== undefined && openRate !== null
@@ -85,6 +124,12 @@ export default function DashboardPage() {
         />
         <MetricBlock
           label="Total orders"
+          labelExtra={
+            <InfoIcon
+              surfaceKey={SurfaceKeys.AdminPortal.Overview.Metric.TotalOrders}
+              fallback="All-time order count across every status."
+            />
+          }
           value={dash(ordersTotal)}
           change="All-time"
           trend="neutral"
@@ -111,6 +156,14 @@ export default function DashboardPage() {
             </Link>
           }
         >
+          {/* Section-level intro — utility voice, explains what events end up
+              here. The existing inline copy below stays as fallback context
+              for first-time operators until Sanity content lands. */}
+          <SectionIntro
+            surfaceKey={SurfaceKeys.AdminPortal.Overview.Section.RecentActivity}
+            fallback="Privileged actions stream into the audit log in real time."
+            className="mb-2"
+          />
           <p className="type-body-small text-[var(--text-muted)]">
             Audit events stream live to <Link href={'/audit' as any} className="underline">/audit</Link>.
             Each privileged action — role change, application decision, user suspension — is recorded with
@@ -129,6 +182,13 @@ export default function DashboardPage() {
             </Link>
           }
         >
+          {/* Service-status panel — section intro tells the operator how
+              freshness and "healthy" are defined. */}
+          <SectionIntro
+            surfaceKey={SurfaceKeys.AdminPortal.Overview.Section.SystemHealth}
+            fallback="Live readiness of each backend service."
+            className="mb-3"
+          />
           <div>
             {health.data?.services.map((service) => (
               <div
