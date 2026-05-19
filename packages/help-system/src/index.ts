@@ -59,3 +59,7 @@ export { useHelpContent } from './hooks/useHelpContent';
 // ─── Providers ────────────────────────────────────────────────────────────────
 export { SurfaceKeyProvider, useSurfaceKey, useSetSurfaceKey } from './providers';
 export type { SurfaceKeyProviderProps } from './providers';
+
+// ─── Layer 1 · Ambient components ─────────────────────────────────────────────
+export { EmptyState } from './ambient/EmptyState';
+export type { EmptyStateProps, EmptyStateSize } from './ambient/EmptyState';
