@@ -66,6 +66,29 @@ export const SurfaceKeys = {
       Overview:       'designer-portal/aesthete/overview',
       Score:          'designer-portal/aesthete/score-meaning',
       EngineOverview: 'designer-portal/aesthete/engine-overview',
+      // F1.4 additions — Aesthete Engine surface (route: /portal/companion).
+      // The Aesthete Engine ships as a Companion-style conversational surface
+      // where designers refine the ML model that powers personalized matches.
+      // Per spec §4.2 + §9.2 Phase-2, every Aesthete concept on this screen
+      // gets a StrataInfoIcon and the deep "how it works" story collapses
+      // behind a LearnMore. See SurfaceKeys.DesignerPortal.Aesthete.* below.
+      Engine: {
+        // Page-level intro rendered under the H1.
+        Intro:       'designer-portal/aesthete/engine/intro',
+        // Deep dive — collapsible LearnMore explaining how the engine learns
+        // from teaching sessions and the data-use story (spec §9.2 line 982).
+        HowItWorks:  'designer-portal/aesthete/engine/how-it-works',
+      },
+      // Per-suggestion category prompts surfaced on the empty Companion canvas.
+      // Each is a Patina-vocab moment (style profile, vocabulary, match) so
+      // they're tooltip-eligible surfaces even though we render them as chips.
+      QuickActions: {
+        Intro:       'designer-portal/aesthete/quick-actions/intro',
+      },
+      // Empty state shown before a designer has run a single teaching turn.
+      // Distinct from generic Companion empties so authors can write Aesthete-
+      // specific copy (spec §9.2 Phase-2 "Empty teaching session state").
+      EmptyTeaching: 'designer-portal/aesthete/empty-teaching',
     },
   },
   AdminPortal: {
