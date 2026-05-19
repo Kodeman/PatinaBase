@@ -73,5 +73,9 @@ export { SectionIntro } from './ambient/SectionIntro';
 export type { SectionIntroProps } from './ambient/SectionIntro';
 
 // ─── Layer 2 · Reactive components ────────────────────────────────────────────
+export { Tooltip } from './reactive/Tooltip';
+export type { TooltipProps } from './reactive/Tooltip';
 export { InfoIcon } from './reactive/InfoIcon';
 export type { InfoIconProps } from './reactive/InfoIcon';
+export { StrataInfoIcon } from './reactive/StrataInfoIcon';
+export type { StrataInfoIconProps } from './reactive/StrataInfoIcon';
