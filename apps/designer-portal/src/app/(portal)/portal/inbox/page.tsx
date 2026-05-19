@@ -14,8 +14,49 @@ import {
 } from '@patina/supabase';
 import { useQueryClient } from '@tanstack/react-query';
 import { StrataMark } from '@/components/portal/strata-mark';
+// F1.7 — Inbox migrated to ambient + reactive help-system layers per spec
+// §12.4. SectionIntro frames the page; per-tab EmptyState surfaces hold
+// the zero-state copy. Renamed the local `EmptyState` helper to
+// `InboxEmptyPlaceholder` to avoid a name collision with the canonical
+// `<EmptyState surfaceKey>` wrapper exported from @patina/help-system.
+import {
+  EmptyState,
+  SectionIntro,
+  StrataInfoIcon,
+  SurfaceKeys,
+  useHelpContent,
+} from '@patina/help-system';
 
 type Tab = 'notifications' | 'messages';
+
+// CMS-probe-then-fallback variant of the empty state, same pattern as F1.2
+// Pipeline. Keeps first-time users from staring at a silent blank list while
+// Sanity content is being authored.
+function InboxEmpty({
+  surfaceKey,
+  fallbackIcon,
+  fallbackText,
+  fallbackHint,
+}: {
+  surfaceKey: string;
+  fallbackIcon: React.ReactNode;
+  fallbackText: string;
+  fallbackHint?: string;
+}) {
+  const { data, isLoading } = useHelpContent(surfaceKey, 'emptyState');
+
+  if (isLoading) {
+    return <InboxEmptyPlaceholder text="…" />;
+  }
+
+  if (data) {
+    return <EmptyState surfaceKey={surfaceKey} icon={fallbackIcon} />;
+  }
+
+  return (
+    <InboxEmptyPlaceholder icon={fallbackIcon} text={fallbackText} hint={fallbackHint} />
+  );
+}
 
 function relTime(value: string): string {
   const then = new Date(value).getTime();
@@ -121,11 +162,14 @@ export default function InboxPage() {
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="type-section-head">Inbox</h1>
-          <p className="type-body-small mt-1">
-            {tab === 'notifications'
-              ? `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}`
-              : `${unreadMessageThreads} unread message thread${unreadMessageThreads === 1 ? '' : 's'}`}
-          </p>
+          <SectionIntro
+            surfaceKey={SurfaceKeys.DesignerPortal.Inbox.Intro}
+            fallback={
+              tab === 'notifications'
+                ? `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}`
+                : `${unreadMessageThreads} unread message thread${unreadMessageThreads === 1 ? '' : 's'}`
+            }
+          />
         </div>
         {tab === 'notifications' && unreadIds.length > 0 && (
           <button
@@ -161,12 +205,13 @@ export default function InboxPage() {
       {tab === 'notifications' ? (
         <div>
           {loadingN ? (
-            <EmptyState text="Loading notifications…" />
+            <InboxEmptyPlaceholder text="Loading notifications…" />
           ) : notifications.length === 0 ? (
-            <EmptyState
-              icon={<InboxIcon className="h-8 w-8 opacity-40" />}
-              text="You’re all caught up"
-              hint="Decisions, deliveries, and updates will appear here."
+            <InboxEmpty
+              surfaceKey={SurfaceKeys.DesignerPortal.Inbox.Empty.Notifications}
+              fallbackIcon={<InboxIcon className="h-8 w-8 opacity-40" />}
+              fallbackText="You’re all caught up"
+              fallbackHint="Decisions, deliveries, and updates will appear here."
             />
           ) : (
             <ul className="divide-y divide-[var(--border-subtle)]">
@@ -183,12 +228,13 @@ export default function InboxPage() {
       ) : (
         <div>
           {loadingM ? (
-            <EmptyState text="Loading messages…" />
+            <InboxEmptyPlaceholder text="Loading messages…" />
           ) : messagesByThread.length === 0 ? (
-            <EmptyState
-              icon={<MessageSquare className="h-8 w-8 opacity-40" />}
-              text="No messages yet"
-              hint="Direct messages and project threads will appear here."
+            <InboxEmpty
+              surfaceKey={SurfaceKeys.DesignerPortal.Inbox.Empty.Messages}
+              fallbackIcon={<MessageSquare className="h-8 w-8 opacity-40" />}
+              fallbackText="No messages yet"
+              fallbackHint="Direct messages and project threads will appear here."
             />
           ) : (
             <ul className="divide-y divide-[var(--border-subtle)]">
@@ -340,7 +386,7 @@ function MessageRow({ message }: { message: InboxMessage }) {
   );
 }
 
-function EmptyState({
+function InboxEmptyPlaceholder({
   icon,
   text,
   hint,
