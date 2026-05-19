@@ -15,6 +15,15 @@ import { LoadingStrata } from '@/components/portal/loading-strata';
 import { AnimatedText } from '@/components/portal/animated-text';
 import { StaggerChildren } from '@/components/portal/stagger-children';
 import { DecisionCard } from '@/components/portal/decision-card';
+// F1.1 — Designer Today migrated to ambient help-system per spec §9.2.
+// EmptyState + SectionIntro are CMS-backed; copy lives in Sanity once content
+// is published. Until then, SectionIntro renders the inline `fallback`, and
+// EmptyState renders nothing on a clean (no-error) CMS miss per spec §13.4
+// (graceful absence). Analytics events `help.empty_state.shown` and
+// `help.section_intro.shown` fire automatically via window.posthog on first
+// render of a CMS hit (no portal-side wiring needed).
+import { EmptyState, SectionIntro, SurfaceKeys } from '@patina/help-system';
+import { CheckCircle2, Inbox, Folder } from 'lucide-react';
 
 function getClientName(decision: {
   designer_client?: {
@@ -143,13 +152,20 @@ export default function DashboardPage() {
         className="mt-10 animate-section-enter"
         style={{ animationDelay: '350ms' }}
       >
-        <h2 className="type-section-head mb-6 border-b border-[var(--border-default)] pb-3">
+        <h2 className="type-section-head mb-2 border-b border-[var(--border-default)] pb-3">
           Overdue decisions
         </h2>
+        <SectionIntro
+          className="mb-6"
+          surfaceKey={SurfaceKeys.DesignerPortal.Today.Intro.OverdueDecisions}
+          fallback="Decisions waiting on your call — sorted by how long they've been blocked."
+        />
         {overdueDecisions.length === 0 ? (
-          <p className="type-meta-small text-[var(--text-muted)]">
-            No overdue decisions
-          </p>
+          <EmptyState
+            size="sm"
+            icon={<CheckCircle2 className="h-12 w-12" />}
+            surfaceKey={SurfaceKeys.DesignerPortal.Today.Empty.OverdueDecisions}
+          />
         ) : (
           <div>
             {overdueDecisions.map((d) => (
@@ -185,11 +201,16 @@ export default function DashboardPage() {
         >
           <AnimatedText
             as="h2"
-            className="type-section-head mb-6 border-b border-[var(--border-default)] pb-3"
+            className="type-section-head mb-2 border-b border-[var(--border-default)] pb-3"
             delay={450}
           >
             Leads waiting for you
           </AnimatedText>
+          <SectionIntro
+            className="mb-6"
+            surfaceKey={SurfaceKeys.DesignerPortal.Today.Intro.Leads}
+            fallback="New leads matched to your style — respond before the timer runs out."
+          />
           {leads && leads.length > 0 ? (
             <StaggerChildren interval={60} baseDelay={500}>
               {leads.slice(0, 5).map((lead) => (
@@ -216,10 +237,10 @@ export default function DashboardPage() {
               ))}
             </StaggerChildren>
           ) : (
-            <p className="type-body py-12 text-center italic text-[var(--text-muted)]">
-              No new leads right now. They&apos;ll appear here when clients
-              match your style.
-            </p>
+            <EmptyState
+              icon={<Inbox className="h-12 w-12" />}
+              surfaceKey={SurfaceKeys.DesignerPortal.Today.Empty.Leads}
+            />
           )}
         </div>
 
@@ -230,11 +251,16 @@ export default function DashboardPage() {
         >
           <AnimatedText
             as="h2"
-            className="type-section-head mb-6 border-b border-[var(--border-default)] pb-3"
+            className="type-section-head mb-2 border-b border-[var(--border-default)] pb-3"
             delay={500}
           >
             Active work
           </AnimatedText>
+          <SectionIntro
+            className="mb-6"
+            surfaceKey={SurfaceKeys.DesignerPortal.Today.Intro.ActiveWork}
+            fallback="Your active projects — phase, progress, and what's next at a glance."
+          />
           {projects.length > 0 ? (
             <StaggerChildren interval={60} baseDelay={550}>
               {projects.map((project: AnyProject) => (
@@ -250,9 +276,11 @@ export default function DashboardPage() {
               ))}
             </StaggerChildren>
           ) : (
-            <p className="type-body py-8 text-center italic text-[var(--text-muted)]">
-              No active projects yet.
-            </p>
+            <EmptyState
+              size="sm"
+              icon={<Folder className="h-12 w-12" />}
+              surfaceKey={SurfaceKeys.DesignerPortal.Today.Empty.ActiveWork}
+            />
           )}
         </div>
       </div>

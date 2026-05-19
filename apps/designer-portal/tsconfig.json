@@ -25,7 +25,8 @@
       "@patina/design-system": ["../../packages/patina-design-system/src"],
       "@patina/types": ["../../packages/types/src"],
       "@patina/api-client": ["../../packages/api-client/src"],
-      "@patina/utils": ["../../packages/utils/src"]
+      "@patina/utils": ["../../packages/utils/src"],
+      "@patina/help-system": ["../../packages/help-system/src"]
     }
   },
   "include": [
@@ -36,7 +37,9 @@
     "../../packages/types/src/**/*.ts",
     "../../packages/utils/src/**/*.ts",
     "../../packages/patina-design-system/src/**/*.ts",
-    "../../packages/patina-design-system/src/**/*.tsx"
+    "../../packages/patina-design-system/src/**/*.tsx",
+    "../../packages/help-system/src/**/*.ts",
+    "../../packages/help-system/src/**/*.tsx"
   ],
   "exclude": [
     "node_modules",
@@ -45,6 +48,10 @@
     "**/*.spec.ts",
     "**/*.spec.tsx",
     "../../packages/patina-design-system/src/**/*.test.ts",
-    "../../packages/patina-design-system/src/**/*.test.tsx"
+    "../../packages/patina-design-system/src/**/*.test.tsx",
+    "../../packages/help-system/src/**/*.test.ts",
+    "../../packages/help-system/src/**/*.test.tsx",
+    "../../packages/help-system/src/**/*.stories.ts",
+    "../../packages/help-system/src/**/*.stories.tsx"
   ]
 }

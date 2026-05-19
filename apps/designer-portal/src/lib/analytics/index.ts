@@ -9,4 +9,5 @@ export {
   teachingEvents,
   navEvents,
   proposalEvents,
+  helpEvents,
 } from './events';

@@ -1,9 +1,9 @@
-import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeAll, afterAll, expect, vi } from 'vitest'
+import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import * as axeMatchers from 'vitest-axe/matchers'
 
-// Add axe matchers
+expect.extend(jestDomMatchers)
 expect.extend(axeMatchers)
 
 // Cleanup after each test

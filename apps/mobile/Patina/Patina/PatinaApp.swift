@@ -29,6 +29,25 @@ struct PatinaApp: App {
         ProcessInfo.processInfo.arguments.contains("--resetonboarding")
     }
 
+    /// Pre-seeded email for the magic-link UI-test bootstrap in
+    /// `AuthenticationView`. Set the `UITEST_AUTH_EMAIL` environment variable
+    /// on the simulator (XCUITest scheme) to drive an end-to-end auth flow.
+    /// Returns `nil` outside of UI testing.
+    static var uitestingAuthEmail: String? {
+        guard isUITesting else { return nil }
+        let value = ProcessInfo.processInfo.environment["UITEST_AUTH_EMAIL"]
+        return (value?.isEmpty == false) ? value : nil
+    }
+
+    /// Pre-seeded OTP token paired with `uitestingAuthEmail`. Set
+    /// `UITEST_AUTH_OTP` on the simulator environment to drive verification.
+    /// Returns `nil` outside of UI testing.
+    static var uitestingAuthOtp: String? {
+        guard isUITesting else { return nil }
+        let value = ProcessInfo.processInfo.environment["UITEST_AUTH_OTP"]
+        return (value?.isEmpty == false) ? value : nil
+    }
+
     init() {
         // Reset onboarding state if requested (for UI testing)
         if Self.shouldResetOnboarding {

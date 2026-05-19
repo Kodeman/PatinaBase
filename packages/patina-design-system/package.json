@@ -46,6 +46,11 @@
       "import": "./dist/components/Media/index.js",
       "require": "./dist/components/Media/index.cjs"
     },
+    "./StrataMark": {
+      "types": "./dist/components/StrataMark/index.d.ts",
+      "import": "./dist/components/StrataMark/index.js",
+      "require": "./dist/components/StrataMark/index.cjs"
+    },
     "./*": {
       "types": "./dist/components/*/index.d.ts",
       "import": "./dist/components/*/index.js",
