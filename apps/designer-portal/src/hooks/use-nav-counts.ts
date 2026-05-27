@@ -53,6 +53,11 @@ export function useNavCounts(zone: ZoneKey | null): Record<string, number | unde
       counts['Decisions'] = decisions?.length;
     }
 
+    if (zone === 'procurement') {
+      // Sprint 1: counts not shown on procurement sub-nav.
+      // Wave 1.4 can add: counts['By Vendor'] = purchaseOrders?.length;
+    }
+
     return counts;
   }, [zone, leads, proposals, projects, products, teachingQueue, clients, reviews, nurture, decisions]);
 }
