@@ -9,6 +9,21 @@ export { RowItem, type RowItemProps } from './components/row-item';
 export { ProductCard, type ProductCardProps } from './components/product-card';
 export { ProductListItem, type ProductListItemProps } from './components/product-list-item';
 export { TierBadge } from './components/tier-badge';
+
+// Three-layer catalog primitives (PRD §5.1, §5.6)
+export {
+  LayerIcon,
+  type Layer,
+  type LayerIconProps,
+  type LayerIconSize,
+} from './components/layer-icon';
+export { LayerChip, type LayerChipProps } from './components/layer-chip';
+export {
+  PrefilledInput,
+  type PrefilledInputProps,
+} from './components/prefilled-input';
+export { PrefilledChip, type PrefilledChipProps } from './components/prefilled-chip';
+
 export { SearchInput } from './components/search-input';
 export { FilterRow } from './components/filter-row';
 export { EmptyState } from './components/empty-state';
