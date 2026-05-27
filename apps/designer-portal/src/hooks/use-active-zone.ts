@@ -125,6 +125,7 @@ function detectDeepPage(pathname: string, zoneKey: ZoneKey): boolean {
       /^\/portal\/leads\/[^/]+/,        // /portal/leads/[id]
       /^\/portal\/pipeline\/[^/]+/,     // /portal/pipeline/[id]
     ],
+    procurement: [],                    // Sprint 1: no deep sub-routes
     products: [
       /^\/portal\/catalog\/[^/]+/,      // /portal/catalog/[id] (but not /catalog/import, /catalog/new, /catalog/collections, /catalog/categories)
       /^\/portal\/teaching\/product/,   // /portal/teaching/product/[id]
@@ -133,6 +134,7 @@ function detectDeepPage(pathname: string, zoneKey: ZoneKey): boolean {
       /^\/portal\/clients\/[^/]+/,      // /portal/clients/[id]
       /^\/portal\/decisions\/[^/]+/,    // /portal/decisions/[id]
     ],
+    messages: [],
   };
 
   // Exclude known non-deep sub-routes

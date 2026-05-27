@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarDays, TrendingUp, Package, Users, MessageSquare } from 'lucide-react';
+import { CalendarDays, TrendingUp, ShoppingBag, Package, Users, MessageSquare } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useMessagesPanel } from '@/contexts/messages-panel-context';
 import { useUnreadCounts } from '@/hooks/use-unread-counts';
@@ -33,6 +33,12 @@ const tabs: Tab[] = [
     paths: ['/portal/pipeline', '/portal/leads', '/portal/projects', '/portal/proposals'],
     icon: TrendingUp,
     tourAnchor: 'pipeline',
+  },
+  {
+    label: 'Procurement',
+    href: '/portal/procurement',
+    paths: ['/portal/procurement'],
+    icon: ShoppingBag,
   },
   {
     label: 'Products',
