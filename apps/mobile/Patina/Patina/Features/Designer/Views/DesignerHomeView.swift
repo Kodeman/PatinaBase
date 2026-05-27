@@ -110,16 +110,48 @@ struct DesignerHomeView: View {
     // MARK: - Quick actions
 
     private var quickActions: some View {
-        HStack(spacing: 12) {
-            statCard(title: "Projects", value: viewModel.activeProjects.count, icon: "rectangle.stack", color: PatinaColors.clay) {
-                coordinator.navigate(to: .projectList)
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                statCard(title: "Projects", value: viewModel.activeProjects.count, icon: "rectangle.stack", color: PatinaColors.clay) {
+                    coordinator.navigate(to: .projectList)
+                }
+                statCard(title: "Decisions", value: viewModel.pendingDecisions.count, icon: "checkmark.seal", color: PatinaColors.sage) {
+                    coordinator.navigate(to: .decisionList)
+                }
+                statCard(title: "Messages", value: viewModel.threads.count, icon: "bubble.left.and.bubble.right", color: PatinaColors.dustyBlue) {
+                    coordinator.navigate(to: .threadList)
+                }
             }
-            statCard(title: "Decisions", value: viewModel.pendingDecisions.count, icon: "checkmark.seal", color: PatinaColors.sage) {
-                coordinator.navigate(to: .decisionList)
+            // Receiving entry — designer-on-site flow added in W2.4. Full-
+            // width row rather than a 4th stat card so the existing card
+            // layout stays balanced; tapping pushes ReceiveDeliveryView.
+            Button {
+                coordinator.navigate(to: .receiveDelivery)
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "shippingbox")
+                        .font(.system(size: 16))
+                        .foregroundColor(PatinaColors.mocha)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Receive delivery")
+                            .font(PatinaTypography.bodySmallMedium)
+                            .foregroundColor(PatinaColors.charcoal)
+                        Text("Inspect arriving POs on-site")
+                            .font(PatinaTypography.caption)
+                            .foregroundColor(PatinaColors.agedOak)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12))
+                        .foregroundColor(PatinaColors.agedOak)
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(PatinaColors.softCream)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
             }
-            statCard(title: "Messages", value: viewModel.threads.count, icon: "bubble.left.and.bubble.right", color: PatinaColors.dustyBlue) {
-                coordinator.navigate(to: .threadList)
-            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("DesignerHomeView.ReceiveDeliveryButton")
         }
         .padding(.horizontal, 24)
     }

@@ -205,6 +205,8 @@ public struct CompanionContext: Equatable {
             return "Conversations"
         case .threadDetail:
             return "In conversation"
+        case .receiveDelivery:
+            return "Receiving a delivery"
         }
     }
 
@@ -292,6 +294,8 @@ public struct CompanionContext: Equatable {
             return "checkmark.seal"
         case .threadList, .threadDetail:
             return "bubble.left.and.bubble.right"
+        case .receiveDelivery:
+            return "shippingbox"
         }
     }
 }

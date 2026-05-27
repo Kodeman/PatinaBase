@@ -18,11 +18,14 @@
  *
  * What's intentionally stubbed (Wave 2 / later):
  *   - Project filter and Payment status filter (visible but inert)
- *   - Manual ETA quick-edit (Wave 2.4)
  *   - Calendar / Receiving cross-links
+ *
+ * Wave 2.4 (shipped): manual ETA quick-edit via the inline pencil icon on
+ *   each PO row — opens EtaQuickEditDrawer for that PO.
  */
 
 import { Suspense, useMemo, useState } from 'react';
+import { Pencil } from 'lucide-react';
 import {
   usePurchaseOrders,
   type POStatus,
@@ -34,6 +37,7 @@ import {
   PaymentPill,
   type PaymentPillState,
 } from '@/components/portal/procurement/payment-pill';
+import { EtaQuickEditDrawer } from '@/components/portal/procurement/eta-quick-edit-drawer';
 
 // ─── Stage display ──────────────────────────────────────────────────────────
 
@@ -239,7 +243,13 @@ function FlowChart({
   );
 }
 
-function POStatusRow({ po }: { po: PurchaseOrder }) {
+function POStatusRow({
+  po,
+  onEditEta,
+}: {
+  po: PurchaseOrder;
+  onEditEta: (po: PurchaseOrder) => void;
+}) {
   const payment = pickHeadlinePayment(po);
   const badge = timeLeftBadge(po.confirmed_eta);
 
@@ -307,8 +317,8 @@ function POStatusRow({ po }: { po: PurchaseOrder }) {
         )}
       </div>
 
-      {/* Col 5 — time-left badge */}
-      <div className="flex justify-end">
+      {/* Col 5 — time-left badge + ETA edit trigger */}
+      <div className="flex items-center justify-end gap-1.5">
         {badge ? (
           <span
             className="inline-flex items-center rounded-[3px] px-2 py-0.5"
@@ -327,12 +337,27 @@ function POStatusRow({ po }: { po: PurchaseOrder }) {
         ) : (
           <span className="text-[0.6rem] text-[var(--text-muted)]">—</span>
         )}
+        <button
+          type="button"
+          onClick={() => onEditEta(po)}
+          className="cursor-pointer rounded border-0 bg-transparent p-0.5 text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
+          aria-label={`Update ETA for ${po.vendor_po_number ? `PO ${po.vendor_po_number}` : (po.vendor?.name ?? 'purchase order')}`}
+          title="Update ETA"
+        >
+          <Pencil size={12} />
+        </button>
       </div>
     </div>
   );
 }
 
-function StageSection({ bucket }: { bucket: StageBucket }) {
+function StageSection({
+  bucket,
+  onEditEta,
+}: {
+  bucket: StageBucket;
+  onEditEta: (po: PurchaseOrder) => void;
+}) {
   const cfg = STAGE_DISPLAY[bucket.stage];
 
   // Money summary: total paid (sum of paid po_payments) vs coming-due
@@ -417,7 +442,9 @@ function StageSection({ bucket }: { bucket: StageBucket }) {
             No {cfg.label.toLowerCase()} purchase orders.
           </div>
         ) : (
-          bucket.orders.map((po) => <POStatusRow key={po.id} po={po} />)
+          bucket.orders.map((po) => (
+            <POStatusRow key={po.id} po={po} onEditEta={onEditEta} />
+          ))
         )}
       </div>
     </div>
@@ -430,6 +457,10 @@ function ByStatusContent() {
   const { data: orders, isLoading, isError, error } = usePurchaseOrders();
   // Production is the default-open stage per PRD §7.
   const [activeStage, setActiveStage] = useState<FFEStageKey>('production');
+  // W2.4 — selected PO for the ETA quick-edit drawer. The drawer is mounted
+  // unconditionally below so its slide-in/out animation works smoothly; the
+  // `open` prop is derived from this state.
+  const [etaEditPO, setEtaEditPO] = useState<PurchaseOrder | null>(null);
 
   const allOrders = (orders ?? []) as PurchaseOrder[];
 
@@ -524,8 +555,21 @@ function ByStatusContent() {
           />
 
           {/* Active stage section */}
-          <StageSection bucket={activeBucket} />
+          <StageSection bucket={activeBucket} onEditEta={setEtaEditPO} />
         </>
+      )}
+
+      {/* W2.4 — ETA quick-edit drawer. Mounted once, scoped to the most
+          recently selected PO. The drawer resets its internal form whenever
+          `open` flips from false → true. */}
+      {etaEditPO && (
+        <EtaQuickEditDrawer
+          open={!!etaEditPO}
+          onOpenChange={(o) => {
+            if (!o) setEtaEditPO(null);
+          }}
+          purchaseOrder={etaEditPO}
+        />
       )}
     </div>
   );
