@@ -847,3 +847,26 @@ export type {
 } from './use-palettes';
 export { useSearchPaintColors, usePaintColor } from './use-paint-colors';
 export type { PaintColor, PaintColorBrand } from './use-paint-colors';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Procurement Workspace v1 (Wave 1.2 — see migration 00148)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  usePurchaseOrders,
+  usePOPayments,
+  useVendorPaymentTerms,
+  useUpdateVendorPaymentTerms,
+  useCreatePurchaseOrder,
+  useLogPaymentPaid,
+  useAdvancePaymentToDue,
+} from './use-procurement';
+export type {
+  PaymentPattern,
+  POPaymentKind,
+  POPaymentState,
+  POStatus,
+  PurchaseOrder,
+  POPayment,
+  POFilters,
+  CreatePurchaseOrderInput,
+} from './use-procurement';
