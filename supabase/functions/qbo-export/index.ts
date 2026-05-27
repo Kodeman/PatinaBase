@@ -260,11 +260,23 @@ function parseParams(raw: Record<string, unknown>): ExportParams | { error: stri
 // ─────────────────────────────────────────────────────────────────────────────
 // Data fetch
 //
-// We pull every payment row whose parent PO belongs to the caller, with the
-// vendor + project joined, then apply the three include-bucket filters in
-// TypeScript. This keeps the query simple and avoids a new RPC migration.
-// The result set is small in v1 (single-designer scope; bookkeeper exports
-// run weekly to monthly).
+// Two-step query so the scope check happens at the DB, not in TypeScript:
+//
+//   Step 1: SELECT id FROM purchase_orders WHERE designer_id = caller [+ filters]
+//           — small, indexed, and the result set is bounded by the caller's
+//             own POs (single-designer in v1, never more than ~hundreds).
+//   Step 2: SELECT * FROM po_payments WHERE purchase_order_id IN (<step-1 ids>)
+//           — joined to purchase_orders for vendor/project names. PostgREST
+//             does NOT filter the parent rows when you use a nested .eq() on
+//             an embedded resource — that only filters which embedded record
+//             is returned, leaving every parent row visible. The PO-id IN()
+//             list is the only way to scope the parent query at the DB.
+//
+// Result set is small in v1 (single-designer scope; bookkeeper exports run
+// weekly to monthly). The previous shape (single nested-eq query + a TS
+// `.filter` post-hoc) was a full-table scan of po_payments across all
+// designers per call — caught before responding, but a real overreach.
+// (W3.5.5 CRITICAL-2.)
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function fetchExportRows(
@@ -272,13 +284,34 @@ async function fetchExportRows(
   callerId: string,
   params: ExportParams
 ): Promise<ExportRow[]> {
-  // Pre-filter payments by their parent PO designer_id at the DB level via
-  // a nested filter on the joined `purchase_order.designer_id`. PostgREST
-  // supports filtering by joined columns via the `purchase_order.<col>` path.
-  //
-  // We fetch a wide window: any payment whose PO was created on or before
-  // dateEnd. The TypeScript filter below applies the three include-buckets.
-  let query = svc
+  // Step 1: scope at the PO level. Pull only the caller's PO ids, with any
+  // optional project/vendor filters applied here so the IN() list passed to
+  // step 2 is already narrowed.
+  let poIdsQuery = svc
+    .from("purchase_orders")
+    .select("id")
+    .eq("designer_id", callerId);
+
+  if (params.projectIds.length > 0) {
+    poIdsQuery = poIdsQuery.in("project_id", params.projectIds);
+  }
+  if (params.vendorIds.length > 0) {
+    poIdsQuery = poIdsQuery.in("vendor_id", params.vendorIds);
+  }
+
+  const { data: ownedPoIds, error: poErr } = await poIdsQuery;
+  if (poErr) {
+    throw new Error(`Query failed (po_ids): ${poErr.message}`);
+  }
+  const poIdList = (ownedPoIds ?? []).map((p) => (p as { id: string }).id);
+
+  // No POs → no payments. Skip the second round-trip entirely.
+  if (poIdList.length === 0) {
+    return [];
+  }
+
+  // Step 2: now scope po_payments by the caller's PO ids at the DB.
+  const { data, error } = await svc
     .from("po_payments")
     .select(
       `
@@ -304,28 +337,34 @@ async function fetchExportRows(
       )
     `
     )
-    .eq("purchase_order.designer_id", callerId);
+    .in("purchase_order_id", poIdList);
 
-  if (params.projectIds.length > 0) {
-    query = query.in("purchase_order.project_id", params.projectIds);
-  }
-  if (params.vendorIds.length > 0) {
-    query = query.in("purchase_order.vendor_id", params.vendorIds);
-  }
-
-  const { data, error } = await query;
   if (error) {
     throw new Error(`Query failed: ${error.message}`);
   }
 
   const rows = (data ?? []) as unknown as PaymentRow[];
 
-  // Drop any rows where the inner join didn't materialize (e.g. PO scoped
-  // out by RLS or designer_id mismatch). PostgREST returns null for missing
-  // joined rows when using nested resource embedding.
-  const owned = rows.filter(
-    (r) => r.purchase_order && r.purchase_order.designer_id === callerId
-  );
+  // Defense-in-depth: every row returned was scoped by purchase_order_id IN
+  // the caller's PO ids at step 1, so the embedded `purchase_order` should
+  // always be present and owned. Assert + log if anything slips through.
+  const owned = rows.filter((r) => {
+    if (!r.purchase_order) {
+      console.warn(
+        `qbo-export: row ${r.id} missing embedded purchase_order despite IN-list scope`
+      );
+      return false;
+    }
+    if (r.purchase_order.designer_id !== callerId) {
+      console.error(
+        `qbo-export: ownership invariant violated — row ${r.id} PO ` +
+          `${r.purchase_order.id} designer_id=${r.purchase_order.designer_id} ` +
+          `but caller=${callerId}`
+      );
+      return false;
+    }
+    return true;
+  });
 
   // Apply the three include-buckets per §1 of the dossier.
   const start = params.dateStart;

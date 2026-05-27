@@ -22,7 +22,9 @@ export default function ProcurementLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const pilotEnabled = useFeatureFlag('procurement-workspace-pilot');
+  const { value: pilotEnabled, isLoading: flagLoading } = useFeatureFlag(
+    'procurement-workspace-pilot',
+  );
   const pathname = usePathname();
 
   useEffect(() => {
@@ -34,6 +36,15 @@ export default function ProcurementLayout({
     const subView = pathname?.match(/\/portal\/procurement\/([^/?]+)/)?.[1];
     procurementEvents.zoneVisited(subView ? { sub_view: subView } : {});
   }, [pathname, pilotEnabled]);
+
+  // W3.5.5 HIGH-2: while PostHog is resolving the flag, render nothing
+  // instead of the fail-closed "Coming soon" placeholder. Pilot designers
+  // deep-linking to /portal/procurement/by-vendor previously saw a brief
+  // "Coming soon" flash before the flag resolved — now they see a clean
+  // empty zone for a few hundred ms instead.
+  if (flagLoading) {
+    return null;
+  }
 
   if (!pilotEnabled) {
     return <ProcurementComingSoon />;
