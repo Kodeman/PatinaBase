@@ -23,20 +23,24 @@ import {
 type BuilderResult = { data: unknown; error: unknown };
 
 interface MockBuilder {
-  // chainable calls (recorded in `chain`)
-  select: ReturnType<typeof vi.fn>;
-  insert: ReturnType<typeof vi.fn>;
-  update: ReturnType<typeof vi.fn>;
-  delete: ReturnType<typeof vi.fn>;
-  eq: ReturnType<typeof vi.fn>;
-  neq: ReturnType<typeof vi.fn>;
-  in: ReturnType<typeof vi.fn>;
-  is: ReturnType<typeof vi.fn>;
-  lt: ReturnType<typeof vi.fn>;
-  ilike: ReturnType<typeof vi.fn>;
-  order: ReturnType<typeof vi.fn>;
+  // chainable calls (recorded in `chain`) — typed as `any` to side-step
+  // vitest's `Mock<any[], unknown>` declaration which doesn't accept the
+  // narrower `Mock<unknown[], MockBuilder>` produced by our `record()` helper.
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  select: any;
+  insert: any;
+  update: any;
+  delete: any;
+  eq: any;
+  neq: any;
+  in: any;
+  is: any;
+  lt: any;
+  ilike: any;
+  order: any;
   // terminal calls — return Promise of result
-  single: ReturnType<typeof vi.fn>;
+  single: any;
+  /* eslint-enable @typescript-eslint/no-explicit-any */
   // thenable so awaiting the chain itself resolves to result
   then: (resolve: (value: BuilderResult) => unknown) => Promise<unknown>;
   __chain: Array<{ method: string; args: unknown[] }>;
@@ -138,6 +142,14 @@ beforeEach(() => {
   // Wipe builders + mock state.
   for (const k of Object.keys(builders)) delete builders[k];
   supabaseClient.auth.getUser.mockReset();
+  // Default: authenticated test user. `useDecisionMetrics` and several other
+  // hooks call `auth.getUser()` to hydrate the session before SELECTs; tests
+  // that specifically exercise the "no user" branch override this with their
+  // own `mockResolvedValue({ data: { user: null } })`.
+  supabaseClient.auth.getUser.mockResolvedValue({
+    data: { user: { id: 'test-user' } },
+    error: null,
+  });
   supabaseClient.from.mockClear();
   supabaseClient.rpc.mockReset();
   supabaseClient.rpc.mockResolvedValue({ data: null, error: null });
@@ -174,7 +186,7 @@ describe('useDecisionMetrics', () => {
 
     setTableResult('client_decisions', { data: decisions, error: null });
 
-    const config = useDecisionMetrics() as { queryFn: () => Promise<unknown> };
+    const config = useDecisionMetrics() as unknown as { queryFn: () => Promise<unknown> };
     const result = await config.queryFn();
 
     expect(result).toEqual({
@@ -197,7 +209,7 @@ describe('useDecisionMetrics', () => {
 
   it('returns 100% on-time-rate and 0 avg when no responded decisions exist', async () => {
     setTableResult('client_decisions', { data: [], error: null });
-    const config = useDecisionMetrics() as { queryFn: () => Promise<unknown> };
+    const config = useDecisionMetrics() as unknown as { queryFn: () => Promise<unknown> };
     const result = await config.queryFn();
     expect(result).toEqual({
       open: 0,
@@ -216,7 +228,7 @@ describe('useCreateDecision', () => {
       error: null,
     });
 
-    const config = useCreateDecision() as {
+    const config = useCreateDecision() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
     await config.mutationFn({
@@ -248,7 +260,7 @@ describe('useCreateDecision', () => {
       error: null,
     });
 
-    const config = useCreateDecision() as {
+    const config = useCreateDecision() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
     await config.mutationFn({
@@ -275,7 +287,7 @@ describe('useSelectDecisionOption', () => {
       error: null,
     });
 
-    const config = useSelectDecisionOption() as {
+    const config = useSelectDecisionOption() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
     await config.mutationFn({
@@ -298,7 +310,7 @@ describe('useSelectDecisionOption', () => {
       error: null,
     });
 
-    const config = useSelectDecisionOption() as {
+    const config = useSelectDecisionOption() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
     await config.mutationFn({ optionId: 'opt-7', decisionId: 'dec-1' });
@@ -320,7 +332,7 @@ describe('useSelectDecisionOption', () => {
       error: null,
     });
 
-    const config = useSelectDecisionOption() as {
+    const config = useSelectDecisionOption() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
     await config.mutationFn({
@@ -363,7 +375,7 @@ describe('useApplyDecisionOverride', () => {
     setTableResult('client_decisions', lookupResult);
     setTableResult('decision_overrides', { data: null, error: null });
 
-    const config = useApplyDecisionOverride() as {
+    const config = useApplyDecisionOverride() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
     await config.mutationFn({
@@ -404,7 +416,7 @@ describe('useApplyDecisionOverride', () => {
     });
     setTableResult('decision_overrides', { data: null, error: null });
 
-    const config = useApplyDecisionOverride() as {
+    const config = useApplyDecisionOverride() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
     await config.mutationFn({
@@ -422,7 +434,7 @@ describe('useApplyDecisionOverride', () => {
 
   it('throws if the user is not authenticated', async () => {
     supabaseClient.auth.getUser.mockResolvedValue({ data: { user: null } });
-    const config = useApplyDecisionOverride() as {
+    const config = useApplyDecisionOverride() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
     await expect(
@@ -443,7 +455,7 @@ describe('useMarkDecisionViewed', () => {
       error: { code: 'PGRST116', message: 'No rows' },
     });
 
-    const config = useMarkDecisionViewed() as {
+    const config = useMarkDecisionViewed() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
     // Should NOT throw despite the error — the hook treats PGRST116 as a no-op
@@ -458,7 +470,7 @@ describe('useMarkDecisionViewed', () => {
       data: null,
       error: { code: '42501', message: 'permission denied' },
     });
-    const config = useMarkDecisionViewed() as {
+    const config = useMarkDecisionViewed() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
     await expect(
@@ -471,7 +483,7 @@ describe('useAllDecisions filters', () => {
   it('applies ilike on title when q filter is non-empty', async () => {
     setTableResult('client_decisions', { data: [], error: null });
 
-    const config = useAllDecisions({ q: 'sofa' }) as { queryFn: () => Promise<unknown> };
+    const config = useAllDecisions({ q: 'sofa' }) as unknown as { queryFn: () => Promise<unknown> };
     await config.queryFn();
 
     const builder = builders['client_decisions'];
@@ -483,7 +495,7 @@ describe('useAllDecisions filters', () => {
 
   it('escapes % and _ in the q filter (preventing wildcard injection)', async () => {
     setTableResult('client_decisions', { data: [], error: null });
-    const config = useAllDecisions({ q: '50% off_now' }) as {
+    const config = useAllDecisions({ q: '50% off_now' }) as unknown as {
       queryFn: () => Promise<unknown>;
     };
     await config.queryFn();
@@ -494,7 +506,7 @@ describe('useAllDecisions filters', () => {
 
   it('skips ilike when q is whitespace-only', async () => {
     setTableResult('client_decisions', { data: [], error: null });
-    const config = useAllDecisions({ q: '   ' }) as { queryFn: () => Promise<unknown> };
+    const config = useAllDecisions({ q: '   ' }) as unknown as { queryFn: () => Promise<unknown> };
     await config.queryFn();
     const builder = builders['client_decisions'];
     expect(callsTo(builder, 'ilike')).toHaveLength(0);
@@ -502,7 +514,7 @@ describe('useAllDecisions filters', () => {
 
   it('applies isOverdue filter as status=pending + due_date<now', async () => {
     setTableResult('client_decisions', { data: [], error: null });
-    const config = useAllDecisions({ isOverdue: true }) as {
+    const config = useAllDecisions({ isOverdue: true }) as unknown as {
       queryFn: () => Promise<unknown>;
     };
     await config.queryFn();
@@ -516,7 +528,7 @@ describe('useAllDecisions filters', () => {
 
   it('uses .in() when status filter is an array', async () => {
     setTableResult('client_decisions', { data: [], error: null });
-    const config = useAllDecisions({ status: ['pending', 'responded'] }) as {
+    const config = useAllDecisions({ status: ['pending', 'responded'] }) as unknown as {
       queryFn: () => Promise<unknown>;
     };
     await config.queryFn();
