@@ -108,6 +108,7 @@ export const ZONE_SUB_ITEMS: Record<ZoneKey, SubNavItem[]> = {
   ],
   content: [
     { label: 'Catalog', href: '/catalog' },
+    { label: 'Promotions', href: '/catalog/promotions' },
     { label: 'Media', href: '/media' },
     { label: 'Communications', href: '/communications' },
     { label: 'Feeds', href: '/feeds' },
