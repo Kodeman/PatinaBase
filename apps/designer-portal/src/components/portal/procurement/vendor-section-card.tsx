@@ -1,13 +1,9 @@
 'use client';
 
-// TODO(merge): Builder 3 owns the shared PaymentPill at
-//   `@/components/portal/procurement/payment-pill`. At merge time, replace
-//   the inline `PaymentPill` + `PatinaHandledPill` below with imports from
-//   that shared module. The inline versions here mirror dossier §D.5 / §D.7.
-
 import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { POPayment, PurchaseOrder } from '@patina/supabase';
+import { PaymentPill } from './payment-pill';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
 
@@ -51,87 +47,19 @@ function formatPaymentTerms(terms: string | null): string {
   return PAYMENT_PATTERN_LABELS[terms] ?? terms;
 }
 
-// ─── PaymentPill (inline placeholder) ──────────────────────────────────────
-//
-// TODO: replace at merge with Builder 3's shared PaymentPill from
-//   `@/components/portal/procurement/payment-pill`. The shape and color
-//   mappings here mirror dossier §D.5 / §D.7 so swapping should be a 1-line
-//   import change.
-
-interface PaymentPillProps {
-  payment: POPayment;
-}
-
-const STATE_STYLES: Record<
-  string,
-  { bg: string; text: string; stateLabel: string }
-> = {
-  pending: {
-    bg: 'rgba(229, 226, 221, 0.5)',
-    text: 'var(--color-aged-oak)',
-    stateLabel: 'Pending',
-  },
-  due: {
-    bg: 'rgba(212, 165, 116, 0.18)',
-    text: 'var(--color-warning)',
-    stateLabel: 'Due',
-  },
-  paid: {
-    bg: 'rgba(122, 155, 118, 0.15)',
-    text: 'var(--color-success)',
-    stateLabel: 'Paid',
-  },
-};
-
-function PaymentPill({ payment }: PaymentPillProps) {
-  const styles = STATE_STYLES[payment.state] ?? STATE_STYLES.pending;
-
-  const kindLabel =
+function poPaymentToPillProps(payment: POPayment) {
+  const kind =
     payment.kind === 'deposit'
       ? 'Deposit'
       : payment.kind === 'balance'
         ? 'Balance'
         : (payment.label ?? 'Milestone');
-
-  const dateLabel =
-    payment.state === 'due' && payment.due_date
-      ? ` ${formatDate(payment.due_date)}`
-      : '';
-
-  return (
-    <span
-      className="inline-flex items-center rounded-[3px] px-2 py-0.5"
-      style={{
-        backgroundColor: styles.bg,
-        color: styles.text,
-        fontFamily: 'var(--font-meta)',
-        fontSize: '0.58rem',
-        textTransform: 'uppercase',
-        letterSpacing: '0.05em',
-      }}
-    >
-      {kindLabel} · {styles.stateLabel}
-      {dateLabel}
-    </span>
-  );
-}
-
-function PatinaHandledPill() {
-  return (
-    <span
-      className="inline-flex items-center rounded-[3px] px-2 py-0.5"
-      style={{
-        backgroundColor: 'rgba(196, 165, 123, 0.15)',
-        color: 'var(--color-clay)',
-        fontFamily: 'var(--font-meta)',
-        fontSize: '0.58rem',
-        textTransform: 'uppercase',
-        letterSpacing: '0.05em',
-      }}
-    >
-      Patina handled
-    </span>
-  );
+  return {
+    state: payment.state,
+    kind,
+    amount: payment.amount_cents,
+    dueDate: payment.state === 'paid' ? payment.paid_date : payment.due_date,
+  };
 }
 
 // ─── PO Status label ───────────────────────────────────────────────────────
@@ -290,13 +218,13 @@ export function VendorSectionCard({
                 </span>
                 <div className="flex flex-wrap justify-end gap-1">
                   {po.is_patina_catalog ? (
-                    <PatinaHandledPill />
+                    <PaymentPill state="patina_handled" />
                   ) : (
                     (po.payments ?? [])
                       .slice()
                       .sort((a, b) => a.sort_order - b.sort_order)
                       .map((payment) => (
-                        <PaymentPill key={payment.id} payment={payment} />
+                        <PaymentPill key={payment.id} {...poPaymentToPillProps(payment)} />
                       ))
                   )}
                 </div>
