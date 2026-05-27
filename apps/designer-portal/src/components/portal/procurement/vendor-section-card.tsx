@@ -220,10 +220,28 @@ export function VendorSectionCard({
             // PRD §5 — Catalog vendors get the gold/champagne pill-shaped CTA.
             // Matches .btn-c (background:var(--cl);color:white) from the PRD
             // mock, executed via the --color-clay design token.
+            //
+            // v1 scope: the underlying Catalog ordering flow is not yet wired
+            // (the "ready items" feed lands in a follow-up wave). We keep the
+            // gold styling for visual continuity with the PRD mock but render
+            // the button as disabled with an explanatory tooltip when no
+            // handler is supplied. This avoids opening an OrderViaPatina
+            // dialog that would show "Order 0 items totalling $0" with a
+            // disabled Confirm button (dead UI).
             <button
               type="button"
               onClick={onOrderViaPatina}
               disabled={!onOrderViaPatina}
+              title={
+                !onOrderViaPatina
+                  ? 'Catalog ordering ships in a follow-up — see workspace for status.'
+                  : undefined
+              }
+              aria-label={
+                !onOrderViaPatina
+                  ? 'Order via Patina (Catalog ordering ships in a follow-up — see workspace for status.)'
+                  : undefined
+              }
               className="rounded-full px-4 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               style={{ backgroundColor: 'var(--color-clay)' }}
             >
