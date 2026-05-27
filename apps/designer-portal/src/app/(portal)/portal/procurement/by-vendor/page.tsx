@@ -2,13 +2,23 @@
 
 import { useMemo, useState } from 'react';
 import { ArrowUpDown, Filter } from 'lucide-react';
-import { usePurchaseOrders, type PurchaseOrder } from '@patina/supabase';
+import {
+  usePurchaseOrders,
+  type PaymentPattern,
+  type PurchaseOrder,
+} from '@patina/supabase';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { SearchInput } from '@/components/portal/search-input';
 import {
   VendorSectionCard,
   type VendorGroup,
 } from '@/components/portal/procurement/vendor-section-card';
+import {
+  OrderAssistant,
+  type OrderAssistantFFEItem,
+  type OrderAssistantProject,
+  type OrderAssistantVendor,
+} from '@/components/portal/procurement/order-assistant';
 
 // ─── Grouping helper ─────────────────────────────────────────────────────────
 
@@ -80,6 +90,16 @@ function FilterStubRow() {
 
 function ByVendorContent() {
   const [search, setSearch] = useState('');
+  // State for the Order Assistant side panel (Wave 1.4). Opens scoped to a
+  // single vendor + project pair; the synthetic ffeItems list mirrors the
+  // vendor's draft POs against that project. See `handleOrderAll`.
+  const [orderAssistant, setOrderAssistant] = useState<{
+    vendor: OrderAssistantVendor;
+    project: OrderAssistantProject;
+    ffeItems: OrderAssistantFFEItem[];
+    scopeDisclaimer?: string;
+  } | null>(null);
+
   const { data: orders, isLoading, isError, error } = usePurchaseOrders();
 
   const allOrders = useMemo<PurchaseOrder[]>(
@@ -180,10 +200,90 @@ function ByVendorContent() {
       {/* Vendor cards */}
       {groups.length > 0 && (
         <div className="flex flex-col gap-4">
-          {groups.map((group) => (
-            <VendorSectionCard key={group.vendorId} group={group} />
-          ))}
+          {groups.map((group) => {
+            // ── "Order all N" wiring (Wave 1.4) ──────────────────────────
+            // A draft PO is one whose vendor confirmation + payment pattern
+            // hasn't been logged yet. Each draft PO is treated as one "item"
+            // in the assistant's UI list. The assistant's `useCreatePurchaseOrder`
+            // call writes a NEW PO header + po_payments rows — the synthetic
+            // ffeItem ids here are NOT real project_ffe_items ids, so the
+            // hook's FFE-relink step is a no-op (the proper per-project FFE
+            // selection flow lives outside the By Vendor view's data shape).
+            const draftOrders = group.orders.filter((po) => po.status === 'draft');
+            const draftCount = draftOrders.length;
+            const draftProjectIds = new Set(
+              draftOrders.map((po) => po.project_id),
+            );
+            const firstDraft = draftOrders[0];
+            const canOrderAll = draftCount > 0 && !!firstDraft?.project;
+
+            const handleOrderAll = () => {
+              if (!firstDraft?.project) return;
+              const scopedDrafts = draftOrders.filter(
+                (po) => po.project_id === firstDraft.project_id,
+              );
+              const ffeItems: OrderAssistantFFEItem[] = scopedDrafts.map(
+                (po) => ({
+                  id: po.id,
+                  name: po.vendor_po_number
+                    ? `${group.vendorName} · ${po.vendor_po_number}`
+                    : `${group.vendorName} order`,
+                  room: po.project?.name,
+                  line_total_cents: po.total_cents,
+                }),
+              );
+              const disclaimer =
+                draftProjectIds.size > 1
+                  ? `Showing ${scopedDrafts.length} of ${draftCount} items for ${firstDraft.project!.name}; remaining items will need separate orders.`
+                  : undefined;
+              setOrderAssistant({
+                vendor: {
+                  id: group.vendorId,
+                  name: group.vendorName,
+                  default_payment_terms:
+                    (group.defaultPaymentTerms as PaymentPattern | null) ?? null,
+                  // PRD §6 surfaces the trade portal URL + account email here.
+                  // The current `vendors` query projection in
+                  // `usePurchaseOrders` only joins id/name/default_payment_terms,
+                  // so the panel renders the "No trade portal on file" fallback
+                  // until the join is widened. Out of lane for W1.4.
+                  trade_portal_url: undefined,
+                  trade_account_email: undefined,
+                },
+                project: {
+                  id: firstDraft.project!.id,
+                  name: firstDraft.project!.name,
+                },
+                ffeItems,
+                scopeDisclaimer: disclaimer,
+              });
+            };
+
+            return (
+              <VendorSectionCard
+                key={group.vendorId}
+                group={group}
+                onOrderAllClick={canOrderAll ? handleOrderAll : undefined}
+                orderAllLabel={
+                  canOrderAll ? `Order all ${draftCount}` : undefined
+                }
+              />
+            );
+          })}
         </div>
+      )}
+
+      {orderAssistant && (
+        <OrderAssistant
+          open={!!orderAssistant}
+          onOpenChange={(open) => {
+            if (!open) setOrderAssistant(null);
+          }}
+          vendor={orderAssistant.vendor}
+          project={orderAssistant.project}
+          ffeItems={orderAssistant.ffeItems}
+          scopeDisclaimer={orderAssistant.scopeDisclaimer}
+        />
       )}
     </div>
   );

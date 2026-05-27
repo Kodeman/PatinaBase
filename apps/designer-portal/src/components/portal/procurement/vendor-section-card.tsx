@@ -107,16 +107,26 @@ interface VendorSectionCardProps {
   group: VendorGroup;
   /**
    * Primary action label rendered in the card header. Defaults to "View orders".
-   * Click handler is a no-op in Sprint 1 — Wave 1.4 wires the side-panel flow.
    */
   ctaLabel?: string;
   onCtaClick?: () => void;
+  /**
+   * Click handler for the secondary "Order all N" CTA. Rendered to the left
+   * of the primary "View orders" button for vendors that have at least one
+   * item waiting to be placed (Wave 1.4). Launches the Order Assistant side
+   * panel. When `undefined`, the button is not rendered.
+   */
+  onOrderAllClick?: () => void;
+  /** Label for the "Order all N" CTA (e.g. "Order all 3"). */
+  orderAllLabel?: string;
 }
 
 export function VendorSectionCard({
   group,
   ctaLabel = 'View orders',
   onCtaClick,
+  onOrderAllClick,
+  orderAllLabel,
 }: VendorSectionCardProps) {
   const [expanded, setExpanded] = useState(true);
 
@@ -169,14 +179,26 @@ export function VendorSectionCard({
               {projectCount} project{projectCount !== 1 ? 's' : ''}
             </span>
           </div>
-          <button
-            type="button"
-            onClick={onCtaClick}
-            className="rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-[var(--text-primary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]"
-            disabled={!onCtaClick}
-          >
-            {ctaLabel}
-          </button>
+          <div className="flex items-center gap-2">
+            {onOrderAllClick && (
+              <button
+                type="button"
+                onClick={onOrderAllClick}
+                className="rounded-[3px] px-3 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-white transition-opacity hover:opacity-90"
+                style={{ backgroundColor: 'var(--color-clay)' }}
+              >
+                {orderAllLabel ?? 'Order all'}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onCtaClick}
+              className="rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-[var(--text-primary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]"
+              disabled={!onCtaClick}
+            >
+              {ctaLabel}
+            </button>
+          </div>
         </div>
       </header>
 
