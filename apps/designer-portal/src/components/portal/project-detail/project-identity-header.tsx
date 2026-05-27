@@ -9,6 +9,8 @@ interface ProjectIdentityHeaderProps {
     client_location?: string;
     site_address?: string | null;
     startDate: string;
+    client_id?: string | null;
+    proposal?: { id: string } | null;
   };
   phase: ProjectPhase;
   projectId: string;
@@ -110,14 +112,18 @@ export function ProjectIdentityHeader({ project, phase, projectId }: ProjectIden
       {/* Quick actions */}
       <div className="flex flex-col gap-1.5">
         <Link
-          href={`/portal/proposals`}
+          href={
+            project.proposal?.id
+              ? `/portal/proposals/${project.proposal.id}`
+              : `/portal/proposals/new?projectId=${projectId}`
+          }
           className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-center text-[var(--text-primary)] no-underline"
           style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 500 }}
         >
           Proposal
         </Link>
         <Link
-          href={`/portal/clients`}
+          href={project.client_id ? `/portal/clients/${project.client_id}` : `/portal/clients`}
           className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-center text-[var(--text-primary)] no-underline"
           style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 500 }}
         >
