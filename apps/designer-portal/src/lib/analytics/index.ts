@@ -11,3 +11,4 @@ export {
   proposalEvents,
   helpEvents,
 } from './events';
+export { procurementEvents } from './procurement-events';

@@ -370,6 +370,8 @@ export {
   useIsManufacturer,
   useIsAdmin,
   useIsSuperAdmin,
+  useIsStudioOwner,
+  isStudioOwnerFromRoles,
   hasPermission,
   hasAnyPermission,
   hasAllPermissions,
@@ -851,6 +853,7 @@ export type { PaintColor, PaintColorBrand } from './use-paint-colors';
 // ═══════════════════════════════════════════════════════════════════════════
 // Procurement Workspace v1 (Wave 1.2 — see migration 00148)
 // + Sprint 2 / Wave 2.2 (Receiving, damage claims, calendar — migration 00150)
+// + Sprint 3 / Wave 3.2 (QBO Bookkeeper Export — supabase/functions/qbo-export)
 // ═══════════════════════════════════════════════════════════════════════════
 export {
   usePurchaseOrders,
@@ -869,6 +872,15 @@ export {
   useCreateReceivingInspection,
   useUpdateDamageClaim,
   autoDraftDamageClaimDescription,
+  // Sprint 3 / Wave 3.2 — QBO Bookkeeper Export
+  useQboExport,
+  useQboExportPreview,
+  // Sprint 3 / Wave 3.2 — Procurement notifications (migration 00151)
+  useProcurementNotifications,
+  useProcurementUnreadCount,
+  useMarkProcurementNotificationRead,
+  // Sprint 3 / Wave 3.3 — Capture-to-slot integration
+  useAssignProductToFfeSlot,
 } from './use-procurement';
 export type {
   PaymentPattern,
@@ -890,4 +902,10 @@ export type {
   CreateReceivingInspectionInput,
   UpdateDamageClaimInput,
   TodayProcurementCounts,
+  // Sprint 3 / Wave 3.2 — QBO Bookkeeper Export
+  QboExportInput,
+  QboExportPreview,
+  // Sprint 3 / Wave 3.2 — Procurement notifications (migration 00151)
+  ProcurementNotificationKind,
+  ProcurementNotification,
 } from './use-procurement';

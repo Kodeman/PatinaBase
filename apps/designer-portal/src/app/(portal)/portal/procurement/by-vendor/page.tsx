@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import { ArrowUpDown, Filter } from 'lucide-react';
-import { usePurchaseOrders, type PurchaseOrder } from '@patina/supabase';
+import { usePurchaseOrders, useIsStudioOwner, type PurchaseOrder } from '@patina/supabase';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { SearchInput } from '@/components/portal/search-input';
+import { QboExportModal } from '@/components/portal/procurement/qbo-export-modal';
 import {
   VendorSectionCard,
   type VendorGroup,
@@ -112,6 +113,12 @@ function ByVendorContent() {
     scopeDisclaimer?: string;
   } | null>(null);
 
+  // Bookkeeper Export modal (Wave 3.2). The CTA is gated by studio-owner role
+  // per PRD §11 + W3.1 dossier §4 — hidden, not disabled, for non-owners. The
+  // role hook backs onto useUserRoles() so it never makes an extra network call.
+  const [qboExportOpen, setQboExportOpen] = useState(false);
+  const { isStudioOwner, isLoading: studioOwnerLoading } = useIsStudioOwner();
+
   const { data: orders, isLoading, isError, error } = usePurchaseOrders();
 
   const allOrders = useMemo<PurchaseOrder[]>(
@@ -177,9 +184,28 @@ function ByVendorContent() {
             Purchase orders grouped by vendor across all your projects.
           </p>
         </div>
-        <span className="type-meta-small text-[var(--text-muted)]">
-          {allOrders.length} order{allOrders.length !== 1 ? 's' : ''}
-        </span>
+        <div className="flex items-baseline gap-4">
+          {/*
+            Export to QBO CTA — studio-owner only per PRD §11 + W3.1 dossier §4.
+            Hidden, not disabled, for regular designers (no permissions matrix
+            should be visible — "Studio owner only. No bookkeeper login.").
+            v1 placement: By Vendor header. Promoting this to the procurement
+            zone subnav is a follow-up once SubNav supports button-type actions
+            (the current ZONE_ACTIONS contract is link-only).
+          */}
+          {!studioOwnerLoading && isStudioOwner && (
+            <button
+              type="button"
+              onClick={() => setQboExportOpen(true)}
+              className="rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-[var(--text-primary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]"
+            >
+              Export to QBO ↓
+            </button>
+          )}
+          <span className="type-meta-small text-[var(--text-muted)]">
+            {allOrders.length} order{allOrders.length !== 1 ? 's' : ''}
+          </span>
+        </div>
       </div>
 
       {/* Filter / sort row */}
@@ -315,6 +341,10 @@ function ByVendorContent() {
           scopeDisclaimer={orderAssistant.scopeDisclaimer}
         />
       )}
+
+      {/* Bookkeeper Export modal — mount unconditionally so the open/close
+          transition is preserved. The trigger button is studio-owner gated. */}
+      <QboExportModal open={qboExportOpen} onOpenChange={setQboExportOpen} />
     </div>
   );
 }

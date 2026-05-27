@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mocks
@@ -36,6 +36,8 @@ interface MockBuilder {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   not: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  is: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   single: any;
   then: (resolve: (value: BuilderResult) => unknown) => Promise<unknown>;
   __chain: Array<{ method: string; args: unknown[] }>;
@@ -67,6 +69,7 @@ function makeBuilder(initial: BuilderResult = { data: null, error: null }): Mock
   builder.lte = record('lte');
   builder.in = record('in');
   builder.not = record('not');
+  builder.is = record('is');
 
   const takeResult = (): BuilderResult =>
     builder.__resultQueue.length > 0
@@ -103,7 +106,7 @@ function setTableDefault(table: string, result: BuilderResult): MockBuilder {
 }
 
 const supabaseClient = {
-  auth: { getUser: vi.fn() },
+  auth: { getUser: vi.fn(), getSession: vi.fn() },
   from: vi.fn((table: string) => getBuilder(table)),
 };
 
@@ -130,12 +133,23 @@ import {
   useCreateReceivingInspection,
   useUpdateDamageClaim,
   useUpdatePurchaseOrderETA,
+  // Sprint 3 — QBO export
+  useQboExport,
+  useQboExportPreview,
+  // Sprint 3 / Wave 3.2 — Procurement notifications
+  useProcurementNotifications,
+  useProcurementUnreadCount,
+  useMarkProcurementNotificationRead,
+  // Sprint 3 / Wave 3.3 — Capture-to-slot integration
+  useAssignProductToFfeSlot,
 } from '../use-procurement';
+import type { QboExportInput } from '../use-procurement';
 
 beforeEach(() => {
   Object.keys(builders).forEach((k) => delete builders[k]);
   invalidateQueries.mockReset();
   supabaseClient.auth.getUser.mockReset();
+  supabaseClient.auth.getSession.mockReset();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -752,10 +766,14 @@ describe('useCreateReceivingInspection', () => {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
 
-    await config.mutationFn({
+    const result = (await config.mutationFn({
       purchaseOrderId: 'po-1',
       outcome: 'clean',
-    });
+    })) as { inspection: { id: string }; damageClaimCreated: boolean };
+
+    // W3.5.5 HIGH-1: clean outcome → no damage_claim INSERT → false.
+    expect(result.damageClaimCreated).toBe(false);
+    expect(result.inspection.id).toBe('insp-clean');
 
     // 1. INSERT into receiving_inspections.
     const inspBuilder = builders.receiving_inspections;
@@ -821,11 +839,17 @@ describe('useCreateReceivingInspection', () => {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
 
-    await config.mutationFn({
+    const result = (await config.mutationFn({
       purchaseOrderId: 'po-ap',
       outcome: 'damaged',
       notes: 'Chip on canopy of pendant cluster.',
-    });
+    })) as { inspection: { id: string }; damageClaimCreated: boolean };
+
+    // W3.5.5 HIGH-1: the resolved value must expose damageClaimCreated=true
+    // when step 4 succeeded, so callers can gate the
+    // procurement_damage_claim_created analytics event accurately.
+    expect(result.damageClaimCreated).toBe(true);
+    expect(result.inspection.id).toBe('insp-damaged');
 
     // 1. Inspection INSERT.
     const inspBuilder = builders.receiving_inspections;
@@ -1371,5 +1395,501 @@ describe('useUpdatePurchaseOrderETA', () => {
     expect(payload.notes).toMatch(/\[\d{4}-\d{2}-\d{2} ETA update\]: Vendor pushed by 2 weeks/);
     // The existing notes must be preserved (no destructive overwrite).
     expect(payload.notes).toContain('Vendor said L8W ETA');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 3 / Wave 3.2 — useQboExport / useQboExportPreview
+//
+// These tests stub the global fetch + supabase.auth.getSession to verify the
+// hook composes the right POST shape against the qbo-export edge function.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useQboExport', () => {
+  const ORIGINAL_FETCH = globalThis.fetch;
+  const ORIGINAL_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ORIGINAL_URL = (globalThis as any).URL;
+
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://localhost:54321';
+    // jsdom / node doesn't always expose URL.createObjectURL/revokeObjectURL;
+    // patch them so triggerCsvDownload doesn't throw. The mutation runs in
+    // a non-window/document environment by default (vitest node pool), so
+    // triggerCsvDownload is a no-op anyway — but we patch for safety.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).URL = {
+      ...ORIGINAL_URL,
+      createObjectURL: vi.fn(() => 'blob:mock'),
+      revokeObjectURL: vi.fn(),
+    };
+  });
+
+  afterEach(() => {
+    globalThis.fetch = ORIGINAL_FETCH;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = ORIGINAL_SUPABASE_URL;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).URL = ORIGINAL_URL;
+  });
+
+  it('POSTs to /functions/v1/qbo-export with bearer JWT + correct body, then returns parsed preview headers', async () => {
+    supabaseClient.auth.getSession.mockResolvedValue({
+      data: { session: { access_token: 'jwt-token-abc' } },
+      error: null,
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('Vendor,Bill Date\n"Woodward & Sons","2026-04-08"\n', {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition':
+            'attachment; filename="patina-vendor-bills-2026-04-01.csv"',
+          'X-Patina-Transaction-Count': '23',
+          'X-Patina-Vendor-Count': '8',
+          'X-Patina-Total-Cents': '4280000',
+          'X-Patina-Paid-Count': '10',
+          'X-Patina-Paid-Cents': '2000000',
+          'X-Patina-Outstanding-Count': '13',
+          'X-Patina-Outstanding-Cents': '2280000',
+        },
+      })
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const input: QboExportInput = {
+      dateStart: '2026-04-01',
+      dateEnd: '2026-04-30',
+      includePaid: true,
+      includeOutstanding: true,
+      includePatinaCatalog: false,
+      projectIds: ['proj-1'],
+      vendorIds: ['vendor-1'],
+    };
+
+    const config = useQboExport() as unknown as {
+      mutationFn: (input: QboExportInput) => Promise<unknown>;
+    };
+
+    const stats = await config.mutationFn(input);
+
+    // 1. fetch called with the right URL.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [calledUrl, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toBe('http://localhost:54321/functions/v1/qbo-export');
+    expect(init.method).toBe('POST');
+
+    // 2. Authorization header carries the Supabase JWT.
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer jwt-token-abc');
+    expect(headers['Content-Type']).toBe('application/json');
+
+    // 3. Body contains all the input flags, preview:false.
+    const sentBody = JSON.parse(init.body as string);
+    expect(sentBody).toMatchObject({
+      dateStart: '2026-04-01',
+      dateEnd: '2026-04-30',
+      includePaid: true,
+      includeOutstanding: true,
+      includePatinaCatalog: false,
+      projectIds: ['proj-1'],
+      vendorIds: ['vendor-1'],
+      preview: false,
+    });
+
+    // 4. The returned preview stats are parsed from the X-Patina-* headers.
+    expect(stats).toEqual({
+      transactionCount: 23,
+      vendorCount: 8,
+      totalCents: 4280000,
+      paidCount: 10,
+      paidCents: 2000000,
+      outstandingCount: 13,
+      outstandingCents: 2280000,
+    });
+  });
+
+  it('throws when the user is not authenticated (no session)', async () => {
+    supabaseClient.auth.getSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const config = useQboExport() as unknown as {
+      mutationFn: (input: QboExportInput) => Promise<unknown>;
+    };
+
+    await expect(
+      config.mutationFn({
+        dateStart: '2026-04-01',
+        dateEnd: '2026-04-30',
+        includePaid: true,
+        includeOutstanding: true,
+        includePatinaCatalog: false,
+      }),
+    ).rejects.toThrow(/not authenticated/i);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('preview hook is disabled until both dates are valid and at least one include-flag is true', () => {
+    const config = useQboExportPreview({
+      dateStart: '',
+      dateEnd: '',
+      includePaid: false,
+      includeOutstanding: false,
+      includePatinaCatalog: false,
+    }) as unknown as { enabled: boolean; queryKey: unknown[] };
+
+    expect(config.enabled).toBe(false);
+    expect(config.queryKey[0]).toBe('qbo-export-preview');
+
+    const ready = useQboExportPreview({
+      dateStart: '2026-04-01',
+      dateEnd: '2026-04-30',
+      includePaid: true,
+      includeOutstanding: false,
+      includePatinaCatalog: false,
+    }) as unknown as { enabled: boolean };
+
+    expect(ready.enabled).toBe(true);
+  });
+});
+
+// useProcurementNotifications  (Sprint 3 / Wave 3.2 — migration 00151)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useProcurementNotifications', () => {
+  it('queries procurement_notifications scoped to auth.uid() and DOES NOT apply .is(read_at, null) by default', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+    setTableDefault('procurement_notifications', {
+      data: [
+        {
+          id: 'n1',
+          user_id: 'user-1',
+          kind: 'balance_due',
+          subject_payment_id: 'p1',
+          subject_purchase_order_id: 'po1',
+          subject_inspection_id: null,
+          read_at: null,
+          created_at: '2026-05-27T00:00:00Z',
+        },
+        {
+          id: 'n2',
+          user_id: 'user-1',
+          kind: 'damage_claim_drafted',
+          subject_payment_id: null,
+          subject_purchase_order_id: 'po2',
+          subject_inspection_id: 'i2',
+          read_at: '2026-05-26T18:00:00Z',
+          created_at: '2026-05-26T17:55:00Z',
+        },
+      ],
+      error: null,
+    });
+
+    const config = useProcurementNotifications() as unknown as {
+      queryKey: unknown[];
+      queryFn: () => Promise<unknown[]>;
+      staleTime: number;
+    };
+
+    expect(config.queryKey).toEqual(['procurement-notifications', { unreadOnly: false }]);
+    expect(config.staleTime).toBe(60 * 1000);
+
+    const rows = await config.queryFn();
+    expect(rows).toHaveLength(2);
+
+    const builder = builders.procurement_notifications;
+    // Must scope to the authenticated user via .eq('user_id', ...).
+    const eqCalls = builder.__chain.filter((c) => c.method === 'eq');
+    expect(eqCalls).toContainEqual({ method: 'eq', args: ['user_id', 'user-1'] });
+    // Order by created_at DESC.
+    const orderCalls = builder.__chain.filter((c) => c.method === 'order');
+    expect(orderCalls).toContainEqual({
+      method: 'order',
+      args: ['created_at', { ascending: false }],
+    });
+    // unreadOnly default is false → no .is('read_at', null) filter.
+    const isCalls = builder.__chain.filter((c) => c.method === 'is');
+    expect(isCalls).toEqual([]);
+    // Select must request the joined purchase_order/vendor/project.
+    const selectCalls = builder.__chain.filter((c) => c.method === 'select');
+    expect(selectCalls).toHaveLength(1);
+    const selectStr = String(selectCalls[0].args[0]);
+    expect(selectStr).toContain('purchase_order:purchase_orders');
+    expect(selectStr).toContain('vendor:vendors');
+    expect(selectStr).toContain('project:projects');
+  });
+
+  it('applies .is(read_at, null) when unreadOnly: true and embeds the filter in the queryKey', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+    setTableDefault('procurement_notifications', { data: [], error: null });
+
+    const config = useProcurementNotifications({ unreadOnly: true }) as unknown as {
+      queryKey: unknown[];
+      queryFn: () => Promise<unknown[]>;
+    };
+
+    expect(config.queryKey).toEqual(['procurement-notifications', { unreadOnly: true }]);
+
+    await config.queryFn();
+
+    const builder = builders.procurement_notifications;
+    const isCalls = builder.__chain.filter((c) => c.method === 'is');
+    expect(isCalls).toEqual([{ method: 'is', args: ['read_at', null] }]);
+  });
+
+  it('throws when not authenticated', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({ data: { user: null } });
+    const config = useProcurementNotifications() as unknown as {
+      queryFn: () => Promise<unknown>;
+    };
+    await expect(config.queryFn()).rejects.toThrow('Not authenticated');
+  });
+
+  it('throws when supabase returns an error', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+    setTableDefault('procurement_notifications', {
+      data: null,
+      error: new Error('rls denied'),
+    });
+    const config = useProcurementNotifications() as unknown as {
+      queryFn: () => Promise<unknown>;
+    };
+    await expect(config.queryFn()).rejects.toThrow('rls denied');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useProcurementUnreadCount  (Sprint 3 / Wave 3.2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useProcurementUnreadCount', () => {
+  it('queries with head:true count and .is(read_at, null), scoped to auth.uid()', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+    setTableDefault('procurement_notifications', {
+      data: null,
+      error: null,
+      count: 7,
+    } as unknown as { data: unknown; error: unknown });
+
+    const config = useProcurementUnreadCount() as unknown as {
+      queryKey: unknown[];
+      queryFn: () => Promise<number>;
+      staleTime: number;
+    };
+
+    expect(config.queryKey).toEqual(['procurement-unread-count']);
+    expect(config.staleTime).toBe(30 * 1000);
+
+    const count = await config.queryFn();
+    expect(count).toBe(7);
+
+    const builder = builders.procurement_notifications;
+    // Select with head/count options.
+    const selectCalls = builder.__chain.filter((c) => c.method === 'select');
+    expect(selectCalls).toHaveLength(1);
+    expect(selectCalls[0].args[0]).toBe('id');
+    expect(selectCalls[0].args[1]).toEqual({ count: 'exact', head: true });
+    // Scoped by user_id.
+    const eqCalls = builder.__chain.filter((c) => c.method === 'eq');
+    expect(eqCalls).toContainEqual({ method: 'eq', args: ['user_id', 'user-1'] });
+    // .is('read_at', null) — only unread rows count.
+    const isCalls = builder.__chain.filter((c) => c.method === 'is');
+    expect(isCalls).toEqual([{ method: 'is', args: ['read_at', null] }]);
+  });
+
+  it('returns 0 when supabase returns an error (never throws — nav badge must not break shell)', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+    setTableDefault('procurement_notifications', {
+      data: null,
+      error: { message: 'boom' },
+      count: null,
+    } as unknown as { data: unknown; error: unknown });
+
+    const config = useProcurementUnreadCount() as unknown as {
+      queryFn: () => Promise<number>;
+    };
+    await expect(config.queryFn()).resolves.toBe(0);
+  });
+
+  it('returns 0 when the caller is not authenticated', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({ data: { user: null } });
+    const config = useProcurementUnreadCount() as unknown as {
+      queryFn: () => Promise<number>;
+    };
+    await expect(config.queryFn()).resolves.toBe(0);
+  });
+
+  it('returns 0 when getUser throws (catch-all fail-soft)', async () => {
+    supabaseClient.auth.getUser.mockRejectedValueOnce(new Error('network down'));
+    const config = useProcurementUnreadCount() as unknown as {
+      queryFn: () => Promise<number>;
+    };
+    await expect(config.queryFn()).resolves.toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useMarkProcurementNotificationRead  (Sprint 3 / Wave 3.2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useMarkProcurementNotificationRead', () => {
+  it('UPDATEs procurement_notifications with read_at = now(), scoped by id + user_id, and invalidates the right query keys', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+    queueTableResults('procurement_notifications', {
+      data: {
+        id: 'n-1',
+        user_id: 'user-1',
+        kind: 'balance_due',
+        read_at: '2026-05-27T12:00:00.000Z',
+        created_at: '2026-05-27T11:00:00.000Z',
+      },
+      error: null,
+    });
+
+    const config = useMarkProcurementNotificationRead() as unknown as {
+      mutationFn: (input: { notificationId: string }) => Promise<unknown>;
+      onSuccess: () => void;
+    };
+
+    const result = await config.mutationFn({ notificationId: 'n-1' });
+    expect((result as { id: string }).id).toBe('n-1');
+
+    const builder = builders.procurement_notifications;
+    const update = builder.__chain.find((c) => c.method === 'update');
+    expect(update).toBeDefined();
+    const payload = update?.args[0] as { read_at: string };
+    expect(payload.read_at).toBeDefined();
+    // ISO 8601 string for read_at = now()
+    expect(payload.read_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+
+    // Scope: by id AND by user_id (defense in depth on top of RLS).
+    const eqArgs = builder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
+    expect(eqArgs).toContainEqual(['id', 'n-1']);
+    expect(eqArgs).toContainEqual(['user_id', 'user-1']);
+
+    // Trigger onSuccess and verify the right invalidations fire.
+    config.onSuccess();
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['procurement-notifications']);
+    expect(invalidatedKeys).toContainEqual(['procurement-unread-count']);
+  });
+
+  it('throws when not authenticated', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({ data: { user: null } });
+
+    const config = useMarkProcurementNotificationRead() as unknown as {
+      mutationFn: (input: { notificationId: string }) => Promise<unknown>;
+    };
+    await expect(config.mutationFn({ notificationId: 'n-1' })).rejects.toThrow(
+      'Not authenticated'
+    );
+  });
+
+  it('throws when supabase returns an error', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+    queueTableResults('procurement_notifications', {
+      data: null,
+      error: new Error('rls denied'),
+    });
+
+    const config = useMarkProcurementNotificationRead() as unknown as {
+      mutationFn: (input: { notificationId: string }) => Promise<unknown>;
+    };
+    await expect(config.mutationFn({ notificationId: 'n-1' })).rejects.toThrow('rls denied');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useAssignProductToFfeSlot  (Sprint 3 / Wave 3.3 — capture-to-slot)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useAssignProductToFfeSlot', () => {
+  it('UPDATEs project_ffe_items.product_id scoped by both id and project_id, then invalidates the slot + PO query keys', async () => {
+    queueTableResults('project_ffe_items', {
+      data: { id: 'ffe-1', product_id: 'prod-1' },
+      error: null,
+    });
+
+    const config = useAssignProductToFfeSlot() as unknown as {
+      mutationFn: (input: {
+        productId: string;
+        ffeItemId: string;
+        projectId: string;
+      }) => Promise<{ id: string; product_id: string }>;
+      onSuccess: (
+        result: unknown,
+        input: { productId: string; ffeItemId: string; projectId: string }
+      ) => void;
+    };
+
+    const result = await config.mutationFn({
+      productId: 'prod-1',
+      ffeItemId: 'ffe-1',
+      projectId: 'proj-1',
+    });
+    expect(result.id).toBe('ffe-1');
+    expect(result.product_id).toBe('prod-1');
+
+    const builder = builders.project_ffe_items;
+    // Update payload sets product_id
+    const update = builder.__chain.find((c) => c.method === 'update');
+    expect(update?.args[0]).toEqual({ product_id: 'prod-1' });
+
+    // Both filters are present — defense in depth on RLS + W1.2.6 pattern.
+    const eqArgs = builder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
+    expect(eqArgs).toContainEqual(['id', 'ffe-1']);
+    expect(eqArgs).toContainEqual(['project_id', 'proj-1']);
+
+    // Trigger onSuccess and verify cache invalidations.
+    config.onSuccess(result, {
+      productId: 'prod-1',
+      ffeItemId: 'ffe-1',
+      projectId: 'proj-1',
+    });
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['project-ffe-items', 'proj-1']);
+    expect(invalidatedKeys).toContainEqual(['purchase-orders']);
+  });
+
+  it('throws when supabase returns an error (e.g. RLS denies cross-designer FFE update)', async () => {
+    queueTableResults('project_ffe_items', {
+      data: null,
+      error: new Error('row level security policy denied'),
+    });
+
+    const config = useAssignProductToFfeSlot() as unknown as {
+      mutationFn: (input: {
+        productId: string;
+        ffeItemId: string;
+        projectId: string;
+      }) => Promise<unknown>;
+    };
+
+    await expect(
+      config.mutationFn({
+        productId: 'prod-1',
+        ffeItemId: 'ffe-1',
+        projectId: 'proj-other',
+      })
+    ).rejects.toThrow('row level security policy denied');
   });
 });

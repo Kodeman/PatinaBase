@@ -36,7 +36,7 @@
  * (out of scope per dispatch).
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   useDeliveryCalendar,
   type DeliveryEvent,
@@ -47,6 +47,7 @@ import {
   type ConflictType,
   type DeliveryConflict,
 } from '@/lib/procurement/delivery-conflicts';
+import { procurementEvents } from '@/lib/analytics/procurement-events';
 
 // ─── Date helpers ───────────────────────────────────────────────────────────
 
@@ -309,6 +310,21 @@ function CalendarContent() {
     () => detectDeliveryConflicts(events),
     [events],
   );
+
+  // Refine the `procurement_zone_visited` event with the calendar-specific
+  // `conflicts_shown` count once `events` resolves. The parent layout fires
+  // a base `zoneVisited` on route entry (without conflict context); this
+  // augmented re-fire feeds metric 5 ("Calendar conflicts prevented") per
+  // dossier §6. Fires once per events identity (i.e. when the calendar data
+  // resolves or refreshes) to avoid double-counting on every render.
+  useEffect(() => {
+    if (isLoading || isError) return;
+    procurementEvents.zoneVisited({
+      sub_view: 'calendar',
+      conflicts_shown: conflicts.length,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, isError, conflicts.length]);
 
   // ─── Loading state ──────────────────────────────────────────────────────
   if (isLoading) {

@@ -36,6 +36,7 @@ import {
 } from '@patina/design-system';
 import { useCreatePurchaseOrder } from '@patina/supabase';
 import { useToast } from '@/components/portal/toast-provider';
+import { procurementEvents } from '@/lib/analytics/procurement-events';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
@@ -98,6 +99,13 @@ export function OrderViaPatina({
       },
       {
         onSuccess: () => {
+          procurementEvents.poCreated({
+            payment_pattern: 'full_upfront',
+            total_cents: totalCents,
+            is_patina_catalog: true,
+            vendor_id: vendor.id,
+            project_id: project.id,
+          });
           toast(
             `Ordered ${itemCount} item${itemCount === 1 ? '' : 's'} via Patina. We'll handle the deposit and balance.`,
             'success',

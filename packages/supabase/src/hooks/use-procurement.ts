@@ -1093,6 +1093,24 @@ export function useTodayProcurementCounts() {
 // ─── MUTATION HOOKS ────────────────────────────────────────────────────────
 
 /**
+ * Resolved value for `useCreateReceivingInspection.mutateAsync(...)`.
+ *
+ * `damageClaimCreated` reflects whether step 4 actually succeeded — callers
+ * (e.g. `LogInspectionDrawer`) need this to decide whether to fire the
+ * `procurement_damage_claim_created` analytics event. The compensating-delete
+ * path throws before returning, so a successful resolve with
+ * `damageClaimCreated: false` means either outcome was 'clean' or step 4 was
+ * not attempted. Set to `true` only after the damage_claims INSERT returned
+ * without error.
+ *
+ * (W3.5.5 HIGH-1.)
+ */
+export interface CreateReceivingInspectionResult {
+  inspection: ReceivingInspection;
+  damageClaimCreated: boolean;
+}
+
+/**
  * Mutation: logs a physical receiving inspection. Side effects, sequential,
  * with compensating delete on critical-path failure (dossier Section 4):
  *   1. INSERT receiving_inspections (critical path).
@@ -1112,6 +1130,13 @@ export function useTodayProcurementCounts() {
  * the PO was removed — it stamped the same value across all items, which is
  * wrong for multi-item POs. Per-item tracking deferred to Sprint 3+.
  *
+ * Returns `{ inspection, damageClaimCreated }`. Callers should use
+ * `damageClaimCreated` (not `outcome !== 'clean'`) to gate analytics events
+ * tied to the damage_claim row — when step 4 fails, the inspection is
+ * compensated away and this mutation rejects, so any spurious event from a
+ * caller previously triggered by outcome alone is now impossible
+ * (W3.5.5 HIGH-1).
+ *
  * Invalidates: ['receiving-inspections'], ['damage-claims'],
  *              ['purchase-orders'], ['purchase-order', poId],
  *              ['today-procurement-counts']
@@ -1121,7 +1146,7 @@ export function useCreateReceivingInspection() {
   return useMutation({
     mutationFn: async (
       input: CreateReceivingInspectionInput,
-    ): Promise<ReceivingInspection> => {
+    ): Promise<CreateReceivingInspectionResult> => {
       const supabase = getSupabase() as any;
 
       const {
@@ -1244,6 +1269,10 @@ export function useCreateReceivingInspection() {
       }
 
       // Step 4: IF outcome != 'clean', INSERT damage_claims (critical path).
+      // Tracks whether the row was actually written so the resolved value
+      // exposes ground truth to callers — analytics events keyed on
+      // damageClaimCreated stay accurate even if step 4 throws (W3.5.5 HIGH-1).
+      let damageClaimCreated = false;
       if (input.outcome !== 'clean') {
         const vendorName = poRow?.vendor?.name ?? 'vendor';
         const poNumber = poRow?.vendor_po_number ?? null;
@@ -1268,6 +1297,8 @@ export function useCreateReceivingInspection() {
             }. ${cleanupStatus}.`,
           );
         }
+        // INSERT returned without error → the damage_claim row exists.
+        damageClaimCreated = true;
       }
 
       // Step 5: IF net_30 + delivered_date just transitioned from NULL,
@@ -1301,14 +1332,14 @@ export function useCreateReceivingInspection() {
         }
       }
 
-      return inspectionRow;
+      return { inspection: inspectionRow, damageClaimCreated };
     },
-    onSuccess: (inspection) => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['receiving-inspections'] });
       queryClient.invalidateQueries({ queryKey: ['damage-claims'] });
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
       queryClient.invalidateQueries({
-        queryKey: ['purchase-order', inspection.purchase_order_id],
+        queryKey: ['purchase-order', result.inspection.purchase_order_id],
       });
       queryClient.invalidateQueries({ queryKey: ['today-procurement-counts'] });
     },
@@ -1401,6 +1432,463 @@ export function useUpdateDamageClaim() {
       queryClient.invalidateQueries({ queryKey: ['damage-claims'] });
       queryClient.invalidateQueries({ queryKey: ['receiving-inspections'] });
       queryClient.invalidateQueries({ queryKey: ['today-procurement-counts'] });
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Sprint 3 / Wave 3.2 — QBO Bookkeeper Export
+//
+// Hooks for the `qbo-export` Deno edge function at
+// `supabase/functions/qbo-export/index.ts`. The mutation downloads a CSV; the
+// query returns preview stats (same endpoint with `preview: true`).
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface QboExportInput {
+  /** Inclusive start date, ISO YYYY-MM-DD. */
+  dateStart: string;
+  /** Inclusive end date, ISO YYYY-MM-DD. */
+  dateEnd: string;
+  /** Include `po_payments.state = 'paid'` rows (deposits + balances/milestones). */
+  includePaid: boolean;
+  /** Include `po_payments.state IN ('due','pending')` rows. */
+  includeOutstanding: boolean;
+  /** When false, `purchase_orders.is_patina_catalog = true` rows are excluded. */
+  includePatinaCatalog: boolean;
+  /** Optional list of `purchase_orders.project_id` UUIDs; empty = all projects. */
+  projectIds?: string[];
+  /** Optional list of `purchase_orders.vendor_id` UUIDs; empty = all vendors. */
+  vendorIds?: string[];
+}
+
+export interface QboExportPreview {
+  /** Total rows in the CSV (one per po_payments event). */
+  transactionCount: number;
+  /** Distinct vendor count across the result set. */
+  vendorCount: number;
+  /** Sum of `po_payments.amount_cents`. */
+  totalCents: number;
+  /** Number of rows with `state = 'paid'`. */
+  paidCount: number;
+  /** Sum of cents on paid rows. */
+  paidCents: number;
+  /** Number of rows with `state IN ('due','pending')`. */
+  outstandingCount: number;
+  /** Sum of cents on outstanding rows. */
+  outstandingCents: number;
+}
+
+/**
+ * Resolve the qbo-export edge function URL from the configured Supabase URL.
+ * Self-hosted: `${SUPABASE_URL}/functions/v1/qbo-export`. The browser hits
+ * Kong on `:54321` locally and `https://api.patina.cloud` in prod.
+ */
+function qboExportUrl(): string {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set');
+  }
+  return `${base.replace(/\/$/, '')}/functions/v1/qbo-export`;
+}
+
+/**
+ * Extract the preview-stat custom headers (X-Patina-*) from the CSV response.
+ * The edge function emits these alongside the CSV download so the modal can
+ * show the post-download stat summary without a second request.
+ */
+function parsePreviewHeaders(headers: Headers): QboExportPreview {
+  const num = (h: string): number => {
+    const v = headers.get(h);
+    return v ? Number(v) : 0;
+  };
+  return {
+    transactionCount: num('X-Patina-Transaction-Count'),
+    vendorCount: num('X-Patina-Vendor-Count'),
+    totalCents: num('X-Patina-Total-Cents'),
+    paidCount: num('X-Patina-Paid-Count'),
+    paidCents: num('X-Patina-Paid-Cents'),
+    outstandingCount: num('X-Patina-Outstanding-Count'),
+    outstandingCents: num('X-Patina-Outstanding-Cents'),
+  };
+}
+
+/**
+ * Parse the `filename` value from a Content-Disposition header.
+ * Falls back to a sensible default if the header is missing or malformed.
+ */
+function parseFilename(headers: Headers, dateStart: string): string {
+  const disposition = headers.get('Content-Disposition') ?? '';
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  if (match) return match[1];
+  return `patina-vendor-bills-${dateStart}.csv`;
+}
+
+/**
+ * Trigger a browser download of a Blob with the given filename. Uses the
+ * createObjectURL + anchor click pattern. No-op when `window` is undefined
+ * (so server-rendered code paths don't blow up).
+ */
+function triggerCsvDownload(blob: Blob, filename: string): void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Defer revoke so the browser has a chance to actually open the file dialog.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * POST to the qbo-export edge function with the caller's access_token bearer
+ * and the export params. Throws on non-200 or when the user has no session.
+ *
+ * Common helper for both the mutation (download mode) and the query
+ * (preview mode). The `preview` flag toggles JSON-vs-CSV response shape.
+ */
+async function callQboExport(
+  input: QboExportInput,
+  preview: boolean
+): Promise<Response> {
+  const supabase = getSupabase();
+  const { data: sessionResult, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  const accessToken = sessionResult?.session?.access_token;
+  if (!accessToken) {
+    throw new Error('Not authenticated — sign in to export to QBO');
+  }
+
+  const body = {
+    dateStart: input.dateStart,
+    dateEnd: input.dateEnd,
+    includePaid: input.includePaid,
+    includeOutstanding: input.includeOutstanding,
+    includePatinaCatalog: input.includePatinaCatalog,
+    projectIds: input.projectIds ?? [],
+    vendorIds: input.vendorIds ?? [],
+    preview,
+  };
+
+  const response = await fetch(qboExportUrl(), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    let message = `QBO export failed: ${response.status} ${response.statusText}`;
+    try {
+      const errBody = await response.json();
+      if (errBody?.error) message = errBody.error;
+    } catch {
+      /* response was not JSON — keep status-based message */
+    }
+    throw new Error(message);
+  }
+
+  return response;
+}
+
+/**
+ * Mutation: POST to `qbo-export`, download the CSV in the browser, and
+ * return the preview stats parsed from the response's X-Patina-* headers.
+ *
+ * Studio-owner-only on the server side — the edge function returns 403
+ * to callers without the `studio_owner` role.
+ *
+ * Use from the BookkeeperExportModal's "Export" button onClick.
+ */
+export function useQboExport() {
+  return useMutation({
+    mutationFn: async (input: QboExportInput): Promise<QboExportPreview> => {
+      const response = await callQboExport(input, false);
+
+      const blob = await response.blob();
+      const filename = parseFilename(response.headers, input.dateStart);
+      triggerCsvDownload(blob, filename);
+
+      return parsePreviewHeaders(response.headers);
+    },
+  });
+}
+
+/**
+ * Query: POST to `qbo-export` with `preview: true`, returning preview stats
+ * without downloading the CSV. Drives the "23 transactions · 8 vendors ·
+ * $42,800 total" preview shown in the modal before the user confirms the
+ * download.
+ *
+ * Disabled until both date fields are valid YYYY-MM-DD strings AND at least
+ * one include-flag is true. Re-runs whenever any input field changes.
+ *
+ * staleTime: 30 seconds — preview stats are cheap to recompute and the user
+ * is likely to tweak filters in quick succession.
+ */
+export function useQboExportPreview(input: QboExportInput) {
+  const ready = isValidExportInput(input);
+  return useQuery({
+    queryKey: ['qbo-export-preview', input],
+    queryFn: async (): Promise<QboExportPreview> => {
+      const response = await callQboExport(input, true);
+      return (await response.json()) as QboExportPreview;
+    },
+    enabled: ready,
+    staleTime: 30_000,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SPRINT 3 / WAVE 3.2 — PROCUREMENT NOTIFICATIONS (migration 00151)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// In-app-only notification feed. SECURITY DEFINER triggers create rows on:
+//   * po_payments.state → due transition (deposit_due / balance_due / milestone_due)
+//   * damage_claims INSERT with state = 'drafted' (damage_claim_drafted)
+//
+// delivery_this_week is reserved in the enum but has no v1 trigger
+// (see dossier §7 risk 8 — pg_cron preload gotcha defers the weekly cron).
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type ProcurementNotificationKind =
+  | 'deposit_due'
+  | 'balance_due'
+  | 'milestone_due'
+  | 'delivery_this_week'
+  | 'damage_claim_drafted';
+
+export interface ProcurementNotification {
+  id: string;
+  user_id: string;
+  kind: ProcurementNotificationKind;
+  subject_purchase_order_id: string | null;
+  subject_payment_id: string | null;
+  subject_inspection_id: string | null;
+  read_at: string | null;
+  created_at: string;
+  updated_at?: string;
+  /**
+   * Optionally joined PO for display in the notification feed.
+   * Selected via PostgREST nested resource:
+   *   purchase_order:purchase_orders(id, vendor_id, project_id,
+   *     vendor:vendors(id, name), project:projects(id, name))
+   */
+  purchase_order?: {
+    id: string;
+    vendor_id: string;
+    project_id: string;
+    vendor?: { id: string; name: string };
+    project?: { id: string; name: string };
+  } | null;
+}
+
+/**
+ * Returns procurement notifications for the authenticated user.
+ *
+ * Query key:  ['procurement-notifications', { unreadOnly }]
+ * staleTime:  60 seconds (realtime subscription is a v2 enhancement).
+ *
+ * RLS handles ownership scoping (the "Users read their own procurement
+ * notifications" policy filters to user_id = auth.uid()), but we additionally
+ * apply .eq('user_id', user.id) for query-cache key stability and explicitness.
+ *
+ * When opts.unreadOnly is true, applies .is('read_at', null).
+ */
+export function useProcurementNotifications(opts?: {
+  unreadOnly?: boolean;
+  limit?: number;
+}) {
+  const unreadOnly = opts?.unreadOnly ?? false;
+  const limit = opts?.limit;
+  return useQuery({
+    queryKey: ['procurement-notifications', { unreadOnly }],
+    queryFn: async (): Promise<ProcurementNotification[]> => {
+      const supabase = getSupabase() as any;
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      let query = supabase
+        .from('procurement_notifications')
+        .select(
+          `
+          *,
+          purchase_order:purchase_orders!procurement_notifications_subject_purchase_order_id_fkey(
+            id,
+            vendor_id,
+            project_id,
+            vendor:vendors(id, name),
+            project:projects(id, name)
+          )
+        `
+        )
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (unreadOnly) {
+        query = query.is('read_at', null);
+      }
+      if (limit !== undefined) {
+        query = query.limit(limit);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []) as ProcurementNotification[];
+    },
+    staleTime: 60 * 1000,
+  });
+}
+
+/**
+ * Returns true when the input has both dates AND at least one include-flag
+ * set — the minimum required to produce a non-empty result.
+ */
+function isValidExportInput(input: QboExportInput): boolean {
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRe.test(input.dateStart ?? '')) return false;
+  if (!dateRe.test(input.dateEnd ?? '')) return false;
+  if (input.dateStart > input.dateEnd) return false;
+  return input.includePaid || input.includeOutstanding;
+}
+
+/**
+ * Returns the count of unread procurement notifications for the current user.
+ * Used by the procurement nav badge.
+ *
+ * Query key:  ['procurement-unread-count']
+ * staleTime:  30 seconds.
+ *
+ * Never throws — returns 0 on any error (network, RLS, missing auth). The
+ * nav badge is non-critical UX and must never break the shell render.
+ */
+export function useProcurementUnreadCount() {
+  return useQuery({
+    queryKey: ['procurement-unread-count'],
+    queryFn: async (): Promise<number> => {
+      try {
+        const supabase = getSupabase() as any;
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) return 0;
+
+        const { count, error } = await supabase
+          .from('procurement_notifications')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .is('read_at', null);
+
+        if (error) return 0;
+        return count ?? 0;
+      } catch {
+        return 0;
+      }
+    },
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Mutation: marks a single notification as read. Sets read_at = now().
+ *
+ * Invalidates: ['procurement-notifications'], ['procurement-unread-count']
+ *
+ * Input: { notificationId: string }
+ */
+export function useMarkProcurementNotificationRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      notificationId,
+    }: {
+      notificationId: string;
+    }): Promise<ProcurementNotification> => {
+      const supabase = getSupabase() as any;
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase
+        .from('procurement_notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('id', notificationId)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as ProcurementNotification;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['procurement-notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['procurement-unread-count'] });
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CAPTURE-TO-SLOT — Sprint 3 / Wave 3.3 (PRD §12 Phase 3)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Assigns a captured product (Layer 1: products.captured_by populated by the
+// Chrome extension) to a specific FFE slot on a project. This is the
+// post-activation analogue of the proposal_captures → consume_capture() flow
+// (which targets pre-activation proposals). For active projects, the slot
+// already exists in project_ffe_items; we just stamp product_id onto it.
+//
+// Schema: project_ffe_items.product_id is a nullable FK to products(id) —
+// already in place via migration 00066 line 261, NOT added by this wave.
+// No new migration is needed.
+//
+// RLS: scoping is enforced by the existing project_ffe_items policy
+// (designer_id = auth.uid() through the projects join). We additionally
+// .eq('project_id', projectId) for defense-in-depth and to match the
+// W1.2.6 ownership-scoping pattern used by useUpdateFFEItemStatus.
+//
+// Invalidations:
+//   ['project-ffe-items', projectId]  — refreshes the slot in By Vendor /
+//                                       By Status / Calendar views.
+//   ['purchase-orders']               — if the slot is later POed, the PO
+//                                       lists need to pick up the new
+//                                       product linkage (no-op when no PO
+//                                       exists yet, but cheap to invalidate).
+// ═══════════════════════════════════════════════════════════════════════════
+
+export function useAssignProductToFfeSlot() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      productId,
+      ffeItemId,
+      projectId,
+    }: {
+      productId: string;
+      ffeItemId: string;
+      projectId: string;
+    }): Promise<{ id: string; product_id: string }> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      const { data, error } = await supabase
+        .from('project_ffe_items')
+        .update({ product_id: productId })
+        .eq('id', ffeItemId)
+        .eq('project_id', projectId)
+        .select('id, product_id')
+        .single();
+
+      if (error) throw error;
+      return data as { id: string; product_id: string };
+    },
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
     },
   });
 }

@@ -27,6 +27,7 @@ import {
   type ReceivingInspectionOutcome,
 } from '@patina/supabase';
 import { useToast } from '@/components/portal/toast-provider';
+import { procurementEvents } from '@/lib/analytics/procurement-events';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -92,12 +93,29 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
   const handleSubmit = async () => {
     setSubmitError(null);
     try {
-      await createInspection.mutateAsync({
+      const photoAssetIds: string[] = [];
+      const result = await createInspection.mutateAsync({
         purchaseOrderId,
         outcome,
         notes: notes.trim() ? notes.trim() : undefined,
-        photoAssetIds: [],
+        photoAssetIds,
       });
+
+      procurementEvents.inspectionLogged({
+        outcome,
+        has_photos: photoAssetIds.length > 0,
+      });
+      // Fire procurement_damage_claim_created only when the damage_claim
+      // INSERT actually succeeded. Previously this fired on `outcome !== 'clean'`,
+      // which double-counted in the compensating-delete path: when step 4
+      // failed, the hook deleted the inspection AND threw, but the event
+      // had already fired purely on outcome. Now the hook's resolved value
+      // carries `damageClaimCreated`, which is `true` only after a clean
+      // damage_claims INSERT (W3.5.5 HIGH-1).
+      if (result.damageClaimCreated) {
+        procurementEvents.damageClaimCreated({ outcome });
+      }
+
       const successMsg =
         outcome === 'clean'
           ? `Inspection logged — ${poLabel} cleared.`
