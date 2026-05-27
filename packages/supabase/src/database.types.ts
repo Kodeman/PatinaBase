@@ -2643,6 +2643,80 @@ export type Database = {
         }
         Relationships: []
       }
+      editorial_stories: {
+        Row: {
+          audience_tags: string[]
+          body_md: string | null
+          created_at: string
+          expires_at: string | null
+          featured_product_id: string | null
+          hero_gradient_key: string | null
+          hero_image_url: string | null
+          id: string
+          maker_avatar_gradient_key: string | null
+          maker_avatar_url: string | null
+          maker_location: string | null
+          maker_name: string | null
+          published_at: string | null
+          read_minutes: number
+          sort_order: number
+          subtitle: string | null
+          tag: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          audience_tags?: string[]
+          body_md?: string | null
+          created_at?: string
+          expires_at?: string | null
+          featured_product_id?: string | null
+          hero_gradient_key?: string | null
+          hero_image_url?: string | null
+          id?: string
+          maker_avatar_gradient_key?: string | null
+          maker_avatar_url?: string | null
+          maker_location?: string | null
+          maker_name?: string | null
+          published_at?: string | null
+          read_minutes?: number
+          sort_order?: number
+          subtitle?: string | null
+          tag: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          audience_tags?: string[]
+          body_md?: string | null
+          created_at?: string
+          expires_at?: string | null
+          featured_product_id?: string | null
+          hero_gradient_key?: string | null
+          hero_image_url?: string | null
+          id?: string
+          maker_avatar_gradient_key?: string | null
+          maker_avatar_url?: string | null
+          maker_location?: string | null
+          maker_name?: string | null
+          published_at?: string | null
+          read_minutes?: number
+          sort_order?: number
+          subtitle?: string | null
+          tag?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "editorial_stories_featured_product_id_fkey"
+            columns: ["featured_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_template_versions: {
         Row: {
           content_blocks: Json | null
@@ -3994,6 +4068,59 @@ export type Database = {
         }
         Relationships: []
       }
+      po_payments: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          due_date: string | null
+          id: string
+          kind: Database["public"]["Enums"]["po_payment_kind"]
+          label: string | null
+          notes: string | null
+          paid_date: string | null
+          purchase_order_id: string
+          sort_order: number
+          state: Database["public"]["Enums"]["po_payment_state"]
+          updated_at: string
+        }
+        Insert: {
+          amount_cents?: number
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["po_payment_kind"]
+          label?: string | null
+          notes?: string | null
+          paid_date?: string | null
+          purchase_order_id: string
+          sort_order?: number
+          state?: Database["public"]["Enums"]["po_payment_state"]
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["po_payment_kind"]
+          label?: string | null
+          notes?: string | null
+          paid_date?: string | null
+          purchase_order_id?: string
+          sort_order?: number
+          state?: Database["public"]["Enums"]["po_payment_state"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_payments_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_appeal_signals: {
         Row: {
           appeal_signal_id: string
@@ -4531,6 +4658,7 @@ export type Database = {
           email_suppressed_at: string | null
           extension_user_id: string | null
           full_name: string | null
+          help_state: Json
           id: string
           ios_device_id: string | null
           is_designer: boolean | null
@@ -4564,6 +4692,7 @@ export type Database = {
           email_suppressed_at?: string | null
           extension_user_id?: string | null
           full_name?: string | null
+          help_state?: Json
           id: string
           ios_device_id?: string | null
           is_designer?: boolean | null
@@ -4597,6 +4726,7 @@ export type Database = {
           email_suppressed_at?: string | null
           extension_user_id?: string | null
           full_name?: string | null
+          help_state?: Json
           id?: string
           ios_device_id?: string | null
           is_designer?: boolean | null
@@ -4702,6 +4832,7 @@ export type Database = {
           product_id: string | null
           project_id: string
           project_room_id: string | null
+          purchase_order_id: string | null
           quantity: number
           sort_order: number
           source_proposal_item_id: string | null
@@ -4730,6 +4861,7 @@ export type Database = {
           product_id?: string | null
           project_id: string
           project_room_id?: string | null
+          purchase_order_id?: string | null
           quantity?: number
           sort_order?: number
           source_proposal_item_id?: string | null
@@ -4758,6 +4890,7 @@ export type Database = {
           product_id?: string | null
           project_id?: string
           project_room_id?: string | null
+          purchase_order_id?: string | null
           quantity?: number
           sort_order?: number
           source_proposal_item_id?: string | null
@@ -4768,6 +4901,13 @@ export type Database = {
           vendor_name?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_ffe_items_purchase_order"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_ffe_items_blocked_by_decision_id_fkey"
             columns: ["blocked_by_decision_id"]
@@ -6494,6 +6634,69 @@ export type Database = {
           },
         ]
       }
+      purchase_orders: {
+        Row: {
+          confirmed_eta: string | null
+          created_at: string
+          designer_id: string
+          id: string
+          is_patina_catalog: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          project_id: string
+          status: string
+          total_cents: number
+          updated_at: string
+          vendor_id: string
+          vendor_po_number: string | null
+        }
+        Insert: {
+          confirmed_eta?: string | null
+          created_at?: string
+          designer_id: string
+          id?: string
+          is_patina_catalog?: boolean
+          notes?: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          project_id: string
+          status?: string
+          total_cents?: number
+          updated_at?: string
+          vendor_id: string
+          vendor_po_number?: string | null
+        }
+        Update: {
+          confirmed_eta?: string | null
+          created_at?: string
+          designer_id?: string
+          id?: string
+          is_patina_catalog?: boolean
+          notes?: string | null
+          payment_pattern?: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          project_id?: string
+          status?: string
+          total_cents?: number
+          updated_at?: string
+          vendor_id?: string
+          vendor_po_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       qr_auth_sessions: {
         Row: {
           approved_at: string | null
@@ -7999,6 +8202,7 @@ export type Database = {
           email_notifications: boolean | null
           email_proposals: boolean | null
           lead_response_hours: number | null
+          preferred_home_mode: string | null
           profile_visible: boolean | null
           push_leads: boolean | null
           push_messages: boolean | null
@@ -8021,6 +8225,7 @@ export type Database = {
           email_notifications?: boolean | null
           email_proposals?: boolean | null
           lead_response_hours?: number | null
+          preferred_home_mode?: string | null
           profile_visible?: boolean | null
           push_leads?: boolean | null
           push_messages?: boolean | null
@@ -8043,6 +8248,7 @@ export type Database = {
           email_notifications?: boolean | null
           email_proposals?: boolean | null
           lead_response_hours?: number | null
+          preferred_home_mode?: string | null
           profile_visible?: boolean | null
           push_leads?: boolean | null
           push_messages?: boolean | null
@@ -8461,6 +8667,9 @@ export type Database = {
           brand_story: Json | null
           contact_info: Json | null
           created_at: string | null
+          default_payment_terms:
+            | Database["public"]["Enums"]["purchase_order_payment_pattern"]
+            | null
           designer_rating_avg: number | null
           founded_year: number | null
           headquarters_city: string | null
@@ -8490,6 +8699,9 @@ export type Database = {
           brand_story?: Json | null
           contact_info?: Json | null
           created_at?: string | null
+          default_payment_terms?:
+            | Database["public"]["Enums"]["purchase_order_payment_pattern"]
+            | null
           designer_rating_avg?: number | null
           founded_year?: number | null
           headquarters_city?: string | null
@@ -8521,6 +8733,9 @@ export type Database = {
           brand_story?: Json | null
           contact_info?: Json | null
           created_at?: string | null
+          default_payment_terms?:
+            | Database["public"]["Enums"]["purchase_order_payment_pattern"]
+            | null
           designer_rating_avg?: number | null
           founded_year?: number | null
           headquarters_city?: string | null
@@ -8560,16 +8775,25 @@ export type Database = {
       }
       waitlist: {
         Row: {
+          assigned_admin_id: string | null
           auth_user_id: string | null
+          company_name: string | null
           converted_at: string | null
           created_at: string
           cta_text: string | null
+          disqualified_reason: string | null
           email: string
           first_touch_attribution: Json | null
+          full_name: string | null
           id: string
           ip_address: unknown
+          last_contacted_at: string | null
           last_touch_attribution: Json | null
+          next_follow_up_at: string | null
+          notes: string | null
+          phone: string | null
           posthog_distinct_id: string | null
+          qualification_stage: string
           referrer: string | null
           role: string | null
           signup_page: string | null
@@ -8583,16 +8807,25 @@ export type Database = {
           utm_term: string | null
         }
         Insert: {
+          assigned_admin_id?: string | null
           auth_user_id?: string | null
+          company_name?: string | null
           converted_at?: string | null
           created_at?: string
           cta_text?: string | null
+          disqualified_reason?: string | null
           email: string
           first_touch_attribution?: Json | null
+          full_name?: string | null
           id?: string
           ip_address?: unknown
+          last_contacted_at?: string | null
           last_touch_attribution?: Json | null
+          next_follow_up_at?: string | null
+          notes?: string | null
+          phone?: string | null
           posthog_distinct_id?: string | null
+          qualification_stage?: string
           referrer?: string | null
           role?: string | null
           signup_page?: string | null
@@ -8606,16 +8839,25 @@ export type Database = {
           utm_term?: string | null
         }
         Update: {
+          assigned_admin_id?: string | null
           auth_user_id?: string | null
+          company_name?: string | null
           converted_at?: string | null
           created_at?: string
           cta_text?: string | null
+          disqualified_reason?: string | null
           email?: string
           first_touch_attribution?: Json | null
+          full_name?: string | null
           id?: string
           ip_address?: unknown
+          last_contacted_at?: string | null
           last_touch_attribution?: Json | null
+          next_follow_up_at?: string | null
+          notes?: string | null
+          phone?: string | null
           posthog_distinct_id?: string | null
+          qualification_stage?: string
           referrer?: string | null
           role?: string | null
           signup_page?: string | null
@@ -8629,6 +8871,88 @@ export type Database = {
           utm_term?: string | null
         }
         Relationships: []
+      }
+      waitlist_activities: {
+        Row: {
+          actor_admin_id: string | null
+          body: string | null
+          created_at: string
+          id: string
+          kind: string
+          metadata: Json | null
+          waitlist_id: string
+        }
+        Insert: {
+          actor_admin_id?: string | null
+          body?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          metadata?: Json | null
+          waitlist_id: string
+        }
+        Update: {
+          actor_admin_id?: string | null
+          body?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          metadata?: Json | null
+          waitlist_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "waitlist_activities_waitlist_id_fkey"
+            columns: ["waitlist_id"]
+            isOneToOne: false
+            referencedRelation: "waitlist"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      waitlist_tasks: {
+        Row: {
+          assigned_admin_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          due_date: string | null
+          id: string
+          title: string
+          updated_at: string
+          waitlist_id: string
+        }
+        Insert: {
+          assigned_admin_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          due_date?: string | null
+          id?: string
+          title: string
+          updated_at?: string
+          waitlist_id: string
+        }
+        Update: {
+          assigned_admin_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          due_date?: string | null
+          id?: string
+          title?: string
+          updated_at?: string
+          waitlist_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "waitlist_tasks_waitlist_id_fkey"
+            columns: ["waitlist_id"]
+            isOneToOne: false
+            referencedRelation: "waitlist"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -9366,8 +9690,16 @@ export type Database = {
         | "contractor"
         | "admin_team"
       ownership_type: "family" | "private" | "pe-backed" | "public"
+      po_payment_kind: "deposit" | "balance" | "milestone"
+      po_payment_state: "pending" | "due" | "paid"
       production_model: "stock" | "mto" | "custom" | "mixed"
       project_status: "active" | "completed" | "archived" | "on_hold" | "draft"
+      purchase_order_payment_pattern:
+        | "fifty_fifty"
+        | "thirty_seventy"
+        | "full_upfront"
+        | "net_30"
+        | "custom_milestones"
       relation_type: "pairs_with" | "alternative" | "never_with"
       role_domain: "consumer" | "designer" | "manufacturer" | "admin"
       sequence_status: "draft" | "active" | "paused" | "archived"
@@ -9587,8 +9919,17 @@ export const Constants = {
         "admin_team",
       ],
       ownership_type: ["family", "private", "pe-backed", "public"],
+      po_payment_kind: ["deposit", "balance", "milestone"],
+      po_payment_state: ["pending", "due", "paid"],
       production_model: ["stock", "mto", "custom", "mixed"],
       project_status: ["active", "completed", "archived", "on_hold", "draft"],
+      purchase_order_payment_pattern: [
+        "fifty_fifty",
+        "thirty_seventy",
+        "full_upfront",
+        "net_30",
+        "custom_milestones",
+      ],
       relation_type: ["pairs_with", "alternative", "never_with"],
       role_domain: ["consumer", "designer", "manufacturer", "admin"],
       sequence_status: ["draft", "active", "paused", "archived"],
