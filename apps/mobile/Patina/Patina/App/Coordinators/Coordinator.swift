@@ -80,6 +80,9 @@ public enum AppRoute: Hashable {
     case threadList                                   // messaging inbox
     case threadDetail(threadId: String)               // messaging conversation
 
+    // Procurement (Sprint 2 W2.4)
+    case receiveDelivery                              // designer-on-site receiving
+
     // First Launch routes
     case walkInvitation
     case cameraPermission
@@ -138,6 +141,7 @@ public enum AppRoute: Hashable {
         case .firstEmergence: return "First Emergence"
         case .roomNaming: return "Room Naming"
         case .designerHome: return "Designer Home"
+        case .receiveDelivery: return "Receive Delivery"
         case .projectList: return "Projects"
         case .projectDetail: return "Project"
         case .decisionList: return "Decisions"

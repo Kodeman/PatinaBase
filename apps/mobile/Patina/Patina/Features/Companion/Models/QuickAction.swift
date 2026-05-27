@@ -152,7 +152,8 @@ public enum QuickActionFactory {
         case .designerHome,
              .projectList, .projectDetail,
              .decisionList, .decisionDetail,
-             .threadList, .threadDetail:
+             .threadList, .threadDetail,
+             .receiveDelivery:
             // B2B surfaces have their own navigation — keep the Companion quiet.
             return []
         }
