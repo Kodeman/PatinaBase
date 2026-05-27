@@ -162,15 +162,13 @@ final class ReceiveDeliveryViewModel {
     /// Submit the inspection. Mirrors the web `useCreateReceivingInspection`
     /// flow from packages/supabase/src/hooks/use-procurement.ts:
     ///
+    ///   0. Upload each captured photo via `MediaUploadClient` and collect
+    ///      the returned MediaAsset UUIDs (W2.4 — sequential, fail-fast).
     ///   1. INSERT receiving_inspections (critical)
     ///   2. UPDATE purchase_orders.delivered_date / status (best-effort)
     ///   3. IF outcome != 'clean': INSERT damage_claims with auto-drafted
     ///      description (critical). On failure, compensating-delete the
     ///      inspection row.
-    ///
-    /// Photo upload is OUT OF SCOPE for v1 — `photo_asset_ids` is written
-    /// as an empty array. The eventual production path uses the media
-    /// service upload-session flow; tracked as a W2.4 follow-up.
     func submit() async {
         guard let po = selectedPO, let outcome else {
             error = "Pick an outcome before submitting"
@@ -192,10 +190,33 @@ final class ReceiveDeliveryViewModel {
             return
         }
 
-        // TODO: integrate media upload-session client (W2.4 follow-up).
-        // For v1, photo_asset_ids is always [] — captured images stay on
-        // device and the desktop dashboard sees empty thumbnails.
-        let photoAssetIds: [String] = []
+        // Upload each captured photo through the media service's
+        // upload-session flow (W2.4). Sequential uploads — 3 photos max,
+        // no benefit to parallelism. Any single failure aborts the whole
+        // submit; we DON'T persist a partial inspection. The compensating-
+        // delete pattern in step 3 only protects against post-DB-write
+        // failures, not pre-write ones.
+        let photoAssetIds: [String]
+        if photos.isEmpty {
+            photoAssetIds = []
+        } else {
+            let uploader = MediaUploadClient()
+            var ids: [String] = []
+            ids.reserveCapacity(photos.count)
+            for image in photos {
+                do {
+                    let assetId = try await uploader.upload(image)
+                    ids.append(assetId.uuidString)
+                } catch {
+                    self.error = "Couldn't upload inspection photo"
+                    #if DEBUG
+                    print("[Receiving] photo upload failed: \(error.localizedDescription)")
+                    #endif
+                    return
+                }
+            }
+            photoAssetIds = ids
+        }
 
         let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         let notesPayload: String? = trimmedNotes.isEmpty ? nil : trimmedNotes
