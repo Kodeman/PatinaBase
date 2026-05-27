@@ -9,7 +9,12 @@ import {
   VendorSectionCard,
   type VendorGroup,
 } from '@/components/portal/procurement/vendor-section-card';
-import { OrderViaPatina } from '@/components/portal/procurement/order-via-patina';
+// NOTE(W1.5.5): `OrderViaPatina` is intentionally NOT imported here.
+// In v1 the Catalog ordering flow has no source of "ready items" yet, so
+// opening the dialog produced dead UI ("Order 0 items totalling $0" with a
+// disabled Confirm button). We now render the gold CTA on the vendor card as
+// disabled with a tooltip — see `vendor-section-card.tsx`. The component file
+// stays on disk for the follow-up wave that introduces the ready-items feed.
 import {
   OrderAssistant,
   type OrderAssistantFFEItem,
@@ -92,13 +97,11 @@ function FilterStubRow() {
 
 function ByVendorContent() {
   const [search, setSearch] = useState('');
-  // State for the Order-via-Patina confirmation dialog. The dialog opens
-  // scoped to a single vendor + project pair. Sprint 1 wiring: the first
-  // project the vendor has POs against — see comment on `openOrderForVendor`.
-  const [orderDialog, setOrderDialog] = useState<{
-    vendor: { id: string; name: string };
-    project: { id: string; name: string };
-  } | null>(null);
+  // NOTE(W1.5.5): the Order-via-Patina dialog state was removed. In v1 the
+  // Catalog dialog had no ffeItems to display (the source feed lands later),
+  // so the dialog only ever rendered "Order 0 items totalling $0" with a
+  // disabled Confirm button. The gold CTA on the vendor card now renders as
+  // disabled with an explanatory tooltip instead — see `vendor-section-card`.
   // State for the Order Assistant side panel (Wave 1.4). Opens scoped to a
   // single vendor + project pair; the synthetic ffeItems list mirrors the
   // vendor's draft POs against that project. See `openOrderAssistantFor`.
@@ -289,48 +292,15 @@ function ByVendorContent() {
                 orderAllLabel={
                   canOrderAll ? `Order all ${draftCount}` : undefined
                 }
-                onOrderViaPatina={
-                  group.isPatinaCatalog
-                    ? () => {
-                        // Sprint 1 wiring: open the OrderViaPatina dialog
-                        // scoped to the first PO's project. The dialog
-                        // accepts an `ffeItems` list — Sprint 1 passes an
-                        // empty list (the dialog renders a "No items to
-                        // order" guard). The full FF&E-item selection flow is
-                        // plumbed in a follow-up wave from the per-project
-                        // FF&E board, not from the cross-project By Vendor
-                        // view.
-                        const first = group.orders[0];
-                        if (!first?.project) return;
-                        setOrderDialog({
-                          vendor: {
-                            id: group.vendorId,
-                            name: group.vendorName,
-                          },
-                          project: {
-                            id: first.project.id,
-                            name: first.project.name,
-                          },
-                        });
-                      }
-                    : undefined
-                }
+                // W1.5.5: `onOrderViaPatina` is intentionally not passed.
+                // For Catalog vendors the gold CTA renders as disabled with
+                // a tooltip ("Catalog ordering ships in a follow-up — see
+                // workspace for status."). The wiring will be reinstated
+                // once a ready-items feed exists to populate the dialog.
               />
             );
           })}
         </div>
-      )}
-
-      {orderDialog && (
-        <OrderViaPatina
-          open={!!orderDialog}
-          onOpenChange={(open) => {
-            if (!open) setOrderDialog(null);
-          }}
-          vendor={orderDialog.vendor}
-          project={orderDialog.project}
-          ffeItems={[]}
-        />
       )}
 
       {orderAssistant && (

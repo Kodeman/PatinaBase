@@ -179,6 +179,20 @@ CREATE POLICY "Studio owners can read payments in their projects"
     )
   );
 
+-- W1.5.5: explicitly annotate the studio_owner read policies as inert in v1.
+-- Both policies join through `projects.designer_id = auth.uid()`, which can
+-- only match when the studio_owner is also the lead designer on the project.
+-- Full multi-designer studio support requires a studio_members membership
+-- table (Sprint 2+). Keeping the policy rows in place so the predicate shape
+-- and policy names survive the v2 migration as a no-op rename target.
+COMMENT ON POLICY "Studio owners can read purchase orders in their projects"
+  ON purchase_orders IS
+  'INERT in v1: p.designer_id = auth.uid() only matches when the studio_owner is also the project lead designer. Full multi-designer studio support is deferred to a Sprint 2+ migration that introduces a studio membership table.';
+
+COMMENT ON POLICY "Studio owners can read payments in their projects"
+  ON po_payments IS
+  'INERT in v1: see comment on the parallel purchase_orders policy.';
+
 -- ============================================================================
 -- PART 8: COMMENTS
 -- ============================================================================
