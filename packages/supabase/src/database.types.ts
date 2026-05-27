@@ -4165,6 +4165,64 @@ export type Database = {
           },
         ]
       }
+      procurement_notifications: {
+        Row: {
+          created_at: string
+          id: string
+          kind: Database["public"]["Enums"]["procurement_notification_kind"]
+          read_at: string | null
+          subject_inspection_id: string | null
+          subject_payment_id: string | null
+          subject_purchase_order_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: Database["public"]["Enums"]["procurement_notification_kind"]
+          read_at?: string | null
+          subject_inspection_id?: string | null
+          subject_payment_id?: string | null
+          subject_purchase_order_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["procurement_notification_kind"]
+          read_at?: string | null
+          subject_inspection_id?: string | null
+          subject_payment_id?: string | null
+          subject_purchase_order_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "procurement_notifications_subject_inspection_id_fkey"
+            columns: ["subject_inspection_id"]
+            isOneToOne: false
+            referencedRelation: "receiving_inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_notifications_subject_payment_id_fkey"
+            columns: ["subject_payment_id"]
+            isOneToOne: false
+            referencedRelation: "po_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_notifications_subject_purchase_order_id_fkey"
+            columns: ["subject_purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_appeal_signals: {
         Row: {
           appeal_signal_id: string
@@ -4565,13 +4623,17 @@ export type Database = {
       }
       products: {
         Row: {
+          aesthete_vector: string | null
           available_colors: string[] | null
           brand: string | null
           captured_at: string
           captured_by: string | null
+          catalog_equivalent_id: string | null
           category: string | null
           colors: string[] | null
+          commission_rate: number | null
           created_at: string | null
+          deleted_at: string | null
           description: string | null
           dimensions: Json | null
           embedding: string | null
@@ -4579,10 +4641,22 @@ export type Database = {
           finish: string | null
           id: string
           images: string[] | null
+          layer: string
+          lead_time_weeks: number | null
+          material_tags: string[] | null
           materials: string[] | null
+          merged_into_id: string | null
           name: string
+          owner_user_id: string | null
+          patina_managed: boolean
+          payment_terms:
+            | Database["public"]["Enums"]["purchase_order_payment_pattern"]
+            | null
           price_retail: number | null
           price_trade: number | null
+          promoted_at: string | null
+          promoted_by: string | null
+          promoted_from_id: string | null
           published_at: string | null
           quality_score: number | null
           retailer_id: string | null
@@ -4594,19 +4668,27 @@ export type Database = {
           slug: string | null
           source_url: string | null
           status: string
+          studio_id: string | null
           style_tags: string[] | null
+          subcategory: string | null
           tags: string[] | null
           updated_at: string | null
+          usage_notes: string | null
+          vendor_contact: Json | null
           vendor_id: string | null
         }
         Insert: {
+          aesthete_vector?: string | null
           available_colors?: string[] | null
           brand?: string | null
           captured_at: string
           captured_by?: string | null
+          catalog_equivalent_id?: string | null
           category?: string | null
           colors?: string[] | null
+          commission_rate?: number | null
           created_at?: string | null
+          deleted_at?: string | null
           description?: string | null
           dimensions?: Json | null
           embedding?: string | null
@@ -4614,10 +4696,22 @@ export type Database = {
           finish?: string | null
           id?: string
           images?: string[] | null
+          layer: string
+          lead_time_weeks?: number | null
+          material_tags?: string[] | null
           materials?: string[] | null
+          merged_into_id?: string | null
           name: string
+          owner_user_id?: string | null
+          patina_managed?: boolean
+          payment_terms?:
+            | Database["public"]["Enums"]["purchase_order_payment_pattern"]
+            | null
           price_retail?: number | null
           price_trade?: number | null
+          promoted_at?: string | null
+          promoted_by?: string | null
+          promoted_from_id?: string | null
           published_at?: string | null
           quality_score?: number | null
           retailer_id?: string | null
@@ -4629,19 +4723,27 @@ export type Database = {
           slug?: string | null
           source_url?: string | null
           status?: string
+          studio_id?: string | null
           style_tags?: string[] | null
+          subcategory?: string | null
           tags?: string[] | null
           updated_at?: string | null
+          usage_notes?: string | null
+          vendor_contact?: Json | null
           vendor_id?: string | null
         }
         Update: {
+          aesthete_vector?: string | null
           available_colors?: string[] | null
           brand?: string | null
           captured_at?: string
           captured_by?: string | null
+          catalog_equivalent_id?: string | null
           category?: string | null
           colors?: string[] | null
+          commission_rate?: number | null
           created_at?: string | null
+          deleted_at?: string | null
           description?: string | null
           dimensions?: Json | null
           embedding?: string | null
@@ -4649,10 +4751,22 @@ export type Database = {
           finish?: string | null
           id?: string
           images?: string[] | null
+          layer?: string
+          lead_time_weeks?: number | null
+          material_tags?: string[] | null
           materials?: string[] | null
+          merged_into_id?: string | null
           name?: string
+          owner_user_id?: string | null
+          patina_managed?: boolean
+          payment_terms?:
+            | Database["public"]["Enums"]["purchase_order_payment_pattern"]
+            | null
           price_retail?: number | null
           price_trade?: number | null
+          promoted_at?: string | null
+          promoted_by?: string | null
+          promoted_from_id?: string | null
           published_at?: string | null
           quality_score?: number | null
           retailer_id?: string | null
@@ -4664,17 +4778,84 @@ export type Database = {
           slug?: string | null
           source_url?: string | null
           status?: string
+          studio_id?: string | null
           style_tags?: string[] | null
+          subcategory?: string | null
           tags?: string[] | null
           updated_at?: string | null
+          usage_notes?: string | null
+          vendor_contact?: Json | null
           vendor_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "products_catalog_equivalent_id_fkey"
+            columns: ["catalog_equivalent_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_owner_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_owner_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_promoted_by_fkey"
+            columns: ["promoted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_promoted_by_fkey"
+            columns: ["promoted_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_promoted_from_id_fkey"
+            columns: ["promoted_from_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "products_retailer_id_fkey"
             columns: ["retailer_id"]
             isOneToOne: false
             referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
             referencedColumns: ["id"]
           },
           {
@@ -5672,6 +5853,71 @@ export type Database = {
             columns: ["studio_id"]
             isOneToOne: false
             referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      promotion_audit_log: {
+        Row: {
+          action_type: string
+          actor_user_id: string | null
+          created_at: string
+          field_snapshot: Json | null
+          from_layer: string
+          id: string
+          merged_into_id: string | null
+          product_id: string
+          to_layer: string
+        }
+        Insert: {
+          action_type: string
+          actor_user_id?: string | null
+          created_at?: string
+          field_snapshot?: Json | null
+          from_layer: string
+          id?: string
+          merged_into_id?: string | null
+          product_id: string
+          to_layer: string
+        }
+        Update: {
+          action_type?: string
+          actor_user_id?: string | null
+          created_at?: string
+          field_snapshot?: Json | null
+          from_layer?: string
+          id?: string
+          merged_into_id?: string | null
+          product_id?: string
+          to_layer?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotion_audit_log_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_audit_log_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_audit_log_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_audit_log_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -8545,6 +8791,126 @@ export type Database = {
           },
         ]
       }
+      vendor_nominations: {
+        Row: {
+          catalog_live_at: string | null
+          created_at: string
+          decline_reason: string | null
+          fit_signals: string[] | null
+          id: string
+          manufacturer_contact: Json
+          manufacturer_responded_at: string | null
+          nominated_by_user_id: string
+          patina_outreach_sent_at: string | null
+          patina_outreach_summary: string | null
+          previous_nomination_id: string | null
+          recommendation_note: string
+          status: string
+          status_updated_at: string
+          status_updated_by: string | null
+          studio_id: string
+          updated_at: string
+          vendor_id: string
+        }
+        Insert: {
+          catalog_live_at?: string | null
+          created_at?: string
+          decline_reason?: string | null
+          fit_signals?: string[] | null
+          id?: string
+          manufacturer_contact: Json
+          manufacturer_responded_at?: string | null
+          nominated_by_user_id: string
+          patina_outreach_sent_at?: string | null
+          patina_outreach_summary?: string | null
+          previous_nomination_id?: string | null
+          recommendation_note: string
+          status?: string
+          status_updated_at?: string
+          status_updated_by?: string | null
+          studio_id: string
+          updated_at?: string
+          vendor_id: string
+        }
+        Update: {
+          catalog_live_at?: string | null
+          created_at?: string
+          decline_reason?: string | null
+          fit_signals?: string[] | null
+          id?: string
+          manufacturer_contact?: Json
+          manufacturer_responded_at?: string | null
+          nominated_by_user_id?: string
+          patina_outreach_sent_at?: string | null
+          patina_outreach_summary?: string | null
+          previous_nomination_id?: string | null
+          recommendation_note?: string
+          status?: string
+          status_updated_at?: string
+          status_updated_by?: string | null
+          studio_id?: string
+          updated_at?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_nominations_nominated_by_user_id_fkey"
+            columns: ["nominated_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_nominations_nominated_by_user_id_fkey"
+            columns: ["nominated_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_nominations_previous_nomination_id_fkey"
+            columns: ["previous_nomination_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_nominations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_nominations_status_updated_by_fkey"
+            columns: ["status_updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_nominations_status_updated_by_fkey"
+            columns: ["status_updated_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_nominations_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_nominations_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_nominations_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendor_reviews: {
         Row: {
           created_at: string | null
@@ -8776,9 +9142,13 @@ export type Database = {
           made_in: string | null
           market_position: Database["public"]["Enums"]["market_position"] | null
           name: string
+          nominated_at: string | null
+          nominated_by: string | null
+          nomination_status: string | null
           notes: string | null
           ownership: Database["public"]["Enums"]["ownership_type"] | null
           parent_company_id: string | null
+          preferred_contact: Json | null
           primary_category: string | null
           production_model:
             | Database["public"]["Enums"]["production_model"]
@@ -8786,6 +9156,7 @@ export type Database = {
           review_count: number | null
           secondary_categories: string[] | null
           social_links: Json | null
+          trade_account_established_at: string | null
           trade_terms: string | null
           updated_at: string | null
           website: string | null
@@ -8811,9 +9182,13 @@ export type Database = {
             | Database["public"]["Enums"]["market_position"]
             | null
           name: string
+          nominated_at?: string | null
+          nominated_by?: string | null
+          nomination_status?: string | null
           notes?: string | null
           ownership?: Database["public"]["Enums"]["ownership_type"] | null
           parent_company_id?: string | null
+          preferred_contact?: Json | null
           primary_category?: string | null
           production_model?:
             | Database["public"]["Enums"]["production_model"]
@@ -8821,6 +9196,7 @@ export type Database = {
           review_count?: number | null
           secondary_categories?: string[] | null
           social_links?: Json | null
+          trade_account_established_at?: string | null
           trade_terms?: string | null
           updated_at?: string | null
           website?: string | null
@@ -8846,9 +9222,13 @@ export type Database = {
             | Database["public"]["Enums"]["market_position"]
             | null
           name?: string
+          nominated_at?: string | null
+          nominated_by?: string | null
+          nomination_status?: string | null
           notes?: string | null
           ownership?: Database["public"]["Enums"]["ownership_type"] | null
           parent_company_id?: string | null
+          preferred_contact?: Json | null
           primary_category?: string | null
           production_model?:
             | Database["public"]["Enums"]["production_model"]
@@ -8856,11 +9236,26 @@ export type Database = {
           review_count?: number | null
           secondary_categories?: string[] | null
           social_links?: Json | null
+          trade_account_established_at?: string | null
           trade_terms?: string | null
           updated_at?: string | null
           website?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "vendors_nominated_by_fkey"
+            columns: ["nominated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendors_nominated_by_fkey"
+            columns: ["nominated_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "vendors_parent_company_id_fkey"
             columns: ["parent_company_id"]
@@ -9812,6 +10207,12 @@ export type Database = {
       ownership_type: "family" | "private" | "pe-backed" | "public"
       po_payment_kind: "deposit" | "balance" | "milestone"
       po_payment_state: "pending" | "due" | "paid"
+      procurement_notification_kind:
+        | "deposit_due"
+        | "balance_due"
+        | "milestone_due"
+        | "delivery_this_week"
+        | "damage_claim_drafted"
       production_model: "stock" | "mto" | "custom" | "mixed"
       project_status: "active" | "completed" | "archived" | "on_hold" | "draft"
       purchase_order_payment_pattern:
@@ -10043,6 +10444,13 @@ export const Constants = {
       ownership_type: ["family", "private", "pe-backed", "public"],
       po_payment_kind: ["deposit", "balance", "milestone"],
       po_payment_state: ["pending", "due", "paid"],
+      procurement_notification_kind: [
+        "deposit_due",
+        "balance_due",
+        "milestone_due",
+        "delivery_this_week",
+        "damage_claim_drafted",
+      ],
       production_model: ["stock", "mto", "custom", "mixed"],
       project_status: ["active", "completed", "archived", "on_hold", "draft"],
       purchase_order_payment_pattern: [
