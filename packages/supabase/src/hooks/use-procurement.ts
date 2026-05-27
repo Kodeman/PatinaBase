@@ -1611,6 +1611,109 @@ export function useQboExportPreview(input: QboExportInput) {
   });
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SPRINT 3 / WAVE 3.2 — PROCUREMENT NOTIFICATIONS (migration 00151)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// In-app-only notification feed. SECURITY DEFINER triggers create rows on:
+//   * po_payments.state → due transition (deposit_due / balance_due / milestone_due)
+//   * damage_claims INSERT with state = 'drafted' (damage_claim_drafted)
+//
+// delivery_this_week is reserved in the enum but has no v1 trigger
+// (see dossier §7 risk 8 — pg_cron preload gotcha defers the weekly cron).
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type ProcurementNotificationKind =
+  | 'deposit_due'
+  | 'balance_due'
+  | 'milestone_due'
+  | 'delivery_this_week'
+  | 'damage_claim_drafted';
+
+export interface ProcurementNotification {
+  id: string;
+  user_id: string;
+  kind: ProcurementNotificationKind;
+  subject_purchase_order_id: string | null;
+  subject_payment_id: string | null;
+  subject_inspection_id: string | null;
+  read_at: string | null;
+  created_at: string;
+  updated_at?: string;
+  /**
+   * Optionally joined PO for display in the notification feed.
+   * Selected via PostgREST nested resource:
+   *   purchase_order:purchase_orders(id, vendor_id, project_id,
+   *     vendor:vendors(id, name), project:projects(id, name))
+   */
+  purchase_order?: {
+    id: string;
+    vendor_id: string;
+    project_id: string;
+    vendor?: { id: string; name: string };
+    project?: { id: string; name: string };
+  } | null;
+}
+
+/**
+ * Returns procurement notifications for the authenticated user.
+ *
+ * Query key:  ['procurement-notifications', { unreadOnly }]
+ * staleTime:  60 seconds (realtime subscription is a v2 enhancement).
+ *
+ * RLS handles ownership scoping (the "Users read their own procurement
+ * notifications" policy filters to user_id = auth.uid()), but we additionally
+ * apply .eq('user_id', user.id) for query-cache key stability and explicitness.
+ *
+ * When opts.unreadOnly is true, applies .is('read_at', null).
+ */
+export function useProcurementNotifications(opts?: {
+  unreadOnly?: boolean;
+  limit?: number;
+}) {
+  const unreadOnly = opts?.unreadOnly ?? false;
+  const limit = opts?.limit;
+  return useQuery({
+    queryKey: ['procurement-notifications', { unreadOnly }],
+    queryFn: async (): Promise<ProcurementNotification[]> => {
+      const supabase = getSupabase() as any;
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      let query = supabase
+        .from('procurement_notifications')
+        .select(
+          `
+          *,
+          purchase_order:purchase_orders!procurement_notifications_subject_purchase_order_id_fkey(
+            id,
+            vendor_id,
+            project_id,
+            vendor:vendors(id, name),
+            project:projects(id, name)
+          )
+        `
+        )
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (unreadOnly) {
+        query = query.is('read_at', null);
+      }
+      if (limit !== undefined) {
+        query = query.limit(limit);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []) as ProcurementNotification[];
+    },
+    staleTime: 60 * 1000,
+  });
+}
+
 /**
  * Returns true when the input has both dates AND at least one include-flag
  * set — the minimum required to produce a non-empty result.
@@ -1621,4 +1724,79 @@ function isValidExportInput(input: QboExportInput): boolean {
   if (!dateRe.test(input.dateEnd ?? '')) return false;
   if (input.dateStart > input.dateEnd) return false;
   return input.includePaid || input.includeOutstanding;
+}
+
+/**
+ * Returns the count of unread procurement notifications for the current user.
+ * Used by the procurement nav badge.
+ *
+ * Query key:  ['procurement-unread-count']
+ * staleTime:  30 seconds.
+ *
+ * Never throws — returns 0 on any error (network, RLS, missing auth). The
+ * nav badge is non-critical UX and must never break the shell render.
+ */
+export function useProcurementUnreadCount() {
+  return useQuery({
+    queryKey: ['procurement-unread-count'],
+    queryFn: async (): Promise<number> => {
+      try {
+        const supabase = getSupabase() as any;
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) return 0;
+
+        const { count, error } = await supabase
+          .from('procurement_notifications')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .is('read_at', null);
+
+        if (error) return 0;
+        return count ?? 0;
+      } catch {
+        return 0;
+      }
+    },
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Mutation: marks a single notification as read. Sets read_at = now().
+ *
+ * Invalidates: ['procurement-notifications'], ['procurement-unread-count']
+ *
+ * Input: { notificationId: string }
+ */
+export function useMarkProcurementNotificationRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      notificationId,
+    }: {
+      notificationId: string;
+    }): Promise<ProcurementNotification> => {
+      const supabase = getSupabase() as any;
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase
+        .from('procurement_notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('id', notificationId)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as ProcurementNotification;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['procurement-notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['procurement-unread-count'] });
+    },
+  });
 }

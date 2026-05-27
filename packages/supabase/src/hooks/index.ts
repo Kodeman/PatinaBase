@@ -873,6 +873,10 @@ export {
   // Sprint 3 / Wave 3.2 — QBO Bookkeeper Export
   useQboExport,
   useQboExportPreview,
+  // Sprint 3 / Wave 3.2 — Procurement notifications (migration 00151)
+  useProcurementNotifications,
+  useProcurementUnreadCount,
+  useMarkProcurementNotificationRead,
 } from './use-procurement';
 export type {
   PaymentPattern,
@@ -897,4 +901,7 @@ export type {
   // Sprint 3 / Wave 3.2 — QBO Bookkeeper Export
   QboExportInput,
   QboExportPreview,
+  // Sprint 3 / Wave 3.2 — Procurement notifications (migration 00151)
+  ProcurementNotificationKind,
+  ProcurementNotification,
 } from './use-procurement';
