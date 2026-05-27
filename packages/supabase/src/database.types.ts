@@ -1984,6 +1984,50 @@ export type Database = {
         }
         Relationships: []
       }
+      damage_claims: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          receiving_inspection_id: string
+          resolution_notes: string | null
+          resolved_at: string | null
+          state: Database["public"]["Enums"]["damage_claim_state"]
+          updated_at: string
+          vendor_notified_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          receiving_inspection_id: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          state?: Database["public"]["Enums"]["damage_claim_state"]
+          updated_at?: string
+          vendor_notified_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          receiving_inspection_id?: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          state?: Database["public"]["Enums"]["damage_claim_state"]
+          updated_at?: string
+          vendor_notified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "damage_claims_receiving_inspection_id_fkey"
+            columns: ["receiving_inspection_id"]
+            isOneToOne: false
+            referencedRelation: "receiving_inspections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       data_erasure_log: {
         Row: {
           completed: boolean
@@ -4834,6 +4878,7 @@ export type Database = {
           project_room_id: string | null
           purchase_order_id: string | null
           quantity: number
+          received_quantity: number | null
           sort_order: number
           source_proposal_item_id: string | null
           status: string
@@ -4863,6 +4908,7 @@ export type Database = {
           project_room_id?: string | null
           purchase_order_id?: string | null
           quantity?: number
+          received_quantity?: number | null
           sort_order?: number
           source_proposal_item_id?: string | null
           status?: string
@@ -4892,6 +4938,7 @@ export type Database = {
           project_room_id?: string | null
           purchase_order_id?: string | null
           quantity?: number
+          received_quantity?: number | null
           sort_order?: number
           source_proposal_item_id?: string | null
           status?: string
@@ -6638,6 +6685,7 @@ export type Database = {
         Row: {
           confirmed_eta: string | null
           created_at: string
+          delivered_date: string | null
           designer_id: string
           id: string
           is_patina_catalog: boolean
@@ -6653,6 +6701,7 @@ export type Database = {
         Insert: {
           confirmed_eta?: string | null
           created_at?: string
+          delivered_date?: string | null
           designer_id: string
           id?: string
           is_patina_catalog?: boolean
@@ -6668,6 +6717,7 @@ export type Database = {
         Update: {
           confirmed_eta?: string | null
           created_at?: string
+          delivered_date?: string | null
           designer_id?: string
           id?: string
           is_patina_catalog?: boolean
@@ -6774,6 +6824,50 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      receiving_inspections: {
+        Row: {
+          created_at: string
+          id: string
+          inspected_at: string
+          inspected_by: string
+          notes: string | null
+          outcome: Database["public"]["Enums"]["receiving_inspection_outcome"]
+          photo_asset_ids: string[]
+          purchase_order_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          inspected_at?: string
+          inspected_by: string
+          notes?: string | null
+          outcome: Database["public"]["Enums"]["receiving_inspection_outcome"]
+          photo_asset_ids?: string[]
+          purchase_order_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          inspected_at?: string
+          inspected_by?: string
+          notes?: string | null
+          outcome?: Database["public"]["Enums"]["receiving_inspection_outcome"]
+          photo_asset_ids?: string[]
+          purchase_order_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receiving_inspections_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       role_permissions: {
         Row: {
@@ -8676,6 +8770,7 @@ export type Database = {
           headquarters_state: string | null
           hero_image_url: string | null
           id: string
+          is_patina_catalog: boolean
           lead_times: Json | null
           logo_url: string | null
           made_in: string | null
@@ -8708,6 +8803,7 @@ export type Database = {
           headquarters_state?: string | null
           hero_image_url?: string | null
           id?: string
+          is_patina_catalog?: boolean
           lead_times?: Json | null
           logo_url?: string | null
           made_in?: string | null
@@ -8742,6 +8838,7 @@ export type Database = {
           headquarters_state?: string | null
           hero_image_url?: string | null
           id?: string
+          is_patina_catalog?: boolean
           lead_times?: Json | null
           logo_url?: string | null
           made_in?: string | null
@@ -8971,6 +9068,28 @@ export type Database = {
           step_order: number | null
           users_at_previous_step: number | null
           users_at_step: number | null
+        }
+        Relationships: []
+      }
+      delivery_events: {
+        Row: {
+          delivered_date: string | null
+          event_date: string | null
+          event_id: string | null
+          event_type: string | null
+          ffe_item_count: number | null
+          inspection_id: string | null
+          inspection_outcome:
+            | Database["public"]["Enums"]["receiving_inspection_outcome"]
+            | null
+          line_total_cents: number | null
+          phase_key: string | null
+          po_status: string | null
+          project_id: string | null
+          project_name: string | null
+          purchase_order_id: string | null
+          vendor_id: string | null
+          vendor_name: string | null
         }
         Relationships: []
       }
@@ -9648,6 +9767,7 @@ export type Database = {
         | "cancelled"
         | "archived"
       companion_message_role: "user" | "companion"
+      damage_claim_state: "drafted" | "vendor_notified" | "resolved"
       data_export_status:
         | "pending"
         | "processing"
@@ -9700,6 +9820,7 @@ export type Database = {
         | "full_upfront"
         | "net_30"
         | "custom_milestones"
+      receiving_inspection_outcome: "clean" | "damaged" | "partial"
       relation_type: "pairs_with" | "alternative" | "never_with"
       role_domain: "consumer" | "designer" | "manufacturer" | "admin"
       sequence_status: "draft" | "active" | "paused" | "archived"
@@ -9871,6 +9992,7 @@ export const Constants = {
         "archived",
       ],
       companion_message_role: ["user", "companion"],
+      damage_claim_state: ["drafted", "vendor_notified", "resolved"],
       data_export_status: [
         "pending",
         "processing",
@@ -9930,6 +10052,7 @@ export const Constants = {
         "net_30",
         "custom_milestones",
       ],
+      receiving_inspection_outcome: ["clean", "damaged", "partial"],
       relation_type: ["pairs_with", "alternative", "never_with"],
       role_domain: ["consumer", "designer", "manufacturer", "admin"],
       sequence_status: ["draft", "active", "paused", "archived"],
