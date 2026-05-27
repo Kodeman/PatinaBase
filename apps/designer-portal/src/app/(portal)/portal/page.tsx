@@ -15,6 +15,7 @@ import { LoadingStrata } from '@/components/portal/loading-strata';
 import { AnimatedText } from '@/components/portal/animated-text';
 import { StaggerChildren } from '@/components/portal/stagger-children';
 import { DecisionCard } from '@/components/portal/decision-card';
+import { ProcurementTodayCard } from '@/components/portal/today/procurement-today-card';
 // F1.1 — Designer Today migrated to ambient help-system per spec §9.2.
 // EmptyState + SectionIntro are CMS-backed; copy lives in Sanity once content
 // is published. Until then, SectionIntro renders the inline `fallback`, and
@@ -190,6 +191,14 @@ export default function DashboardPage() {
             ))}
           </div>
         )}
+      </section>
+
+      {/* Procurement (Today rollup) */}
+      <section
+        className="mt-10 animate-section-enter"
+        style={{ animationDelay: '375ms' }}
+      >
+        <ProcurementTodayCard />
       </section>
 
       {/* Two-Column Content */}
