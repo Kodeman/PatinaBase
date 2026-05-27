@@ -4,6 +4,7 @@ export { KeyMetricsRow } from './key-metrics-row';
 export { RoomScopeGrid } from './room-scope-grid';
 export { PhaseTimelineV2 } from './phase-timeline-v2';
 export { FFEScheduleTable } from './ffe-schedule-table';
+export { FFESummaryTile } from './ffe-summary-tile';
 export { FinancialsPanel } from './financials-panel';
 export { DocumentGrid } from './document-grid';
 export { TimeTrackingPanel } from './time-tracking-panel';

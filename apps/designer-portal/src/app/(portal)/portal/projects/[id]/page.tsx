@@ -27,7 +27,7 @@ import {
   ProjectBriefPanel,
   RoomScopeGrid,
   PhaseTimelineV2,
-  FFEScheduleTable,
+  FFESummaryTile,
   FinancialsPanel,
   DocumentGrid,
   TimeTrackingPanel,
@@ -124,8 +124,6 @@ export default function ProjectDetailPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedRooms = (Array.isArray(rooms) ? rooms : []) as any[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const typedFFEItems = (Array.isArray(ffeItems) ? ffeItems : []) as any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedFinancials = (Array.isArray(financials) ? financials : []) as any[];
 
   // Designer earnings (derived from project data)
@@ -219,13 +217,9 @@ export default function ProjectDetailPage({
         />
         <StrataMark variant="mini" />
 
-        {/* Zone 5: FF&E Schedule */}
-        {typedFFEItems.length > 0 && (
-          <>
-            <FFEScheduleTable items={typedFFEItems} />
-            <StrataMark variant="mini" />
-          </>
-        )}
+        {/* Zone 5: Procurement summary (collapsed from full FF&E table — Sprint 1 W1.4) */}
+        <FFESummaryTile projectId={id} />
+        <StrataMark variant="mini" />
 
         {/* Zone 6: Financials */}
         {typedFinancials.length > 0 && (
