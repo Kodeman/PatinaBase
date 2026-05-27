@@ -3,6 +3,8 @@
 import type { ReactNode } from 'react';
 import type { ProductTier } from '@patina/types';
 import { TierBadge } from './tier-badge';
+import { LayerChip } from './layer-chip';
+import type { Layer } from './layer-icon';
 
 export interface ProductCardProps {
   id: string;
@@ -21,6 +23,34 @@ export interface ProductCardProps {
   trailingSlot?: ReactNode;
   /** Optional slot rendered under the meta row (e.g. admin inline actions). */
   footerSlot?: ReactNode;
+
+  // ─── Three-layer catalog props (PRD §5.2) ────────────────────────────────
+  /**
+   * Catalog layer this product belongs to. When set, drives a `LayerChip`
+   * overlay in the top-right of the image unless `showLayer={false}`.
+   */
+  layer?: Layer;
+  /** Show the `LayerChip` when `layer` is set. Defaults to true. */
+  showLayer?: boolean;
+  /**
+   * Free-form project tag rendered below the image (e.g. "Maple St").
+   * Surfaced when `showProjectTags` is true.
+   */
+  projectTag?: string;
+  /** Show `projectTag` chip — default for Personal LayerView only. */
+  showProjectTags?: boolean;
+  /**
+   * Usage count (number of projects this Studio Library item is in). Surfaced
+   * when `showUsageCount` is true — default for Studio LayerView only.
+   */
+  usageCount?: number;
+  showUsageCount?: boolean;
+  /**
+   * Aesthete match percentage (0–100). Surfaced when `showAestheteMatch` is
+   * true — default for Catalog LayerView only.
+   */
+  aestheteMatch?: number;
+  showAestheteMatch?: boolean;
 }
 
 export function ProductCard({
@@ -37,6 +67,14 @@ export function ProductCard({
   leadingSlot,
   trailingSlot,
   footerSlot,
+  layer,
+  showLayer = true,
+  projectTag,
+  showProjectTags = false,
+  usageCount,
+  showUsageCount = false,
+  aestheteMatch,
+  showAestheteMatch = false,
 }: ProductCardProps) {
   const statusLabel =
     status === 'published'
@@ -66,6 +104,18 @@ export function ProductCard({
             {leadingSlot}
           </div>
         )}
+        {layer && showLayer && !trailingSlot && (
+          <div
+            className="absolute right-2 top-2 z-10 rounded-[2px]"
+            style={{
+              // Light wash so the chip stays legible over varied product photos
+              background: 'rgba(250, 247, 242, 0.9)',
+              padding: '1px 1px',
+            }}
+          >
+            <LayerChip layer={layer} showLabel={false} size="sm" />
+          </div>
+        )}
         {trailingSlot && (
           <div className="absolute right-2 top-2 z-10" onClick={(e) => e.stopPropagation()}>
             {trailingSlot}
@@ -93,6 +143,21 @@ export function ProductCard({
         )}
         {aiScore !== undefined && (
           <span className="type-meta-small text-[var(--accent-primary)]">AI {aiScore}%</span>
+        )}
+        {showProjectTags && projectTag && (
+          <span className="type-meta-small text-[var(--color-dusty-blue,#8B9CAD)]">
+            · {projectTag}
+          </span>
+        )}
+        {showUsageCount && typeof usageCount === 'number' && (
+          <span className="type-meta-small text-[var(--color-sage,#A8B5A0)]">
+            · {usageCount} {usageCount === 1 ? 'project' : 'projects'}
+          </span>
+        )}
+        {showAestheteMatch && typeof aestheteMatch === 'number' && (
+          <span className="type-meta-small text-[var(--color-clay,#C4A57B)]">
+            · {aestheteMatch}% match
+          </span>
         )}
       </div>
 

@@ -59,6 +59,7 @@ export const ZONES: ZoneConfig[] = [
     href: '/portal/catalog',
     paths: [
       '/portal/catalog',
+      '/portal/library', // three-layer catalog (S1.3) — co-exists with /portal/catalog through pilot
       '/portal/teaching',
       '/portal/companion',
     ],

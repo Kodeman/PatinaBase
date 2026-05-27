@@ -7,6 +7,13 @@ export {
   useUpdateProduct,
   useCreateDraftProduct,
 } from './use-products';
+export {
+  useLayerProducts,
+  useLayerCounts,
+  type LayerProductLayer,
+  type LayerProductRow,
+  type UseLayerProductsOptions,
+} from './use-layer-products';
 export type {
   ProductWithVendorPricing,
   VendorPricingInfo,
