@@ -33,7 +33,11 @@ export function TopBar() {
   // never see a tab they can't use. Route-level gating lives in
   // `/portal/procurement/layout.tsx` so deep-links land on a Coming Soon
   // placeholder rather than 404ing through the nav filter.
-  const procurementPilotEnabled = useFeatureFlag('procurement-workspace-pilot');
+  // (W3.5.5 HIGH-2 — useFeatureFlag now returns { value, isLoading }; the
+  // nav filter just consumes value, fail-closed while loading.)
+  const { value: procurementPilotEnabled } = useFeatureFlag(
+    'procurement-workspace-pilot',
+  );
   const visibleZones = ZONES.filter((zone) => {
     if (zone.key === 'procurement') return procurementPilotEnabled;
     return true;

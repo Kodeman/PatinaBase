@@ -68,8 +68,11 @@ export default function ProjectDetailPage({
 
   // FFESummaryTile surfaces procurement KPIs + a CTA into /portal/procurement/*.
   // Pilot-gate it the same way the Today card and procurement zone are gated
-  // so the pilot stays invisible to non-pilot designers (W3.5.5 CRITICAL-1).
-  const procurementPilotEnabled = useFeatureFlag('procurement-workspace-pilot');
+  // so the pilot stays invisible to non-pilot designers
+  // (W3.5.5 CRITICAL-1 + HIGH-2).
+  const { value: procurementPilotEnabled } = useFeatureFlag(
+    'procurement-workspace-pilot',
+  );
 
   const openDecisionsCount = useMemo(
     () =>

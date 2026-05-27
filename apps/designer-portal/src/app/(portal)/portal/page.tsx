@@ -77,10 +77,13 @@ export default function DashboardPage() {
 
   // Procurement Today rollup card is part of the `procurement-workspace-pilot`
   // pilot. Non-pilot designers must NOT see the card on their Today Dashboard.
-  // Fail-closed during PostHog cold-load (the hook returns false until flags
-  // resolve), matching the route-level gate at /portal/procurement/layout.tsx
-  // and the nav-filter gate at top-bar.tsx (W3.5.5 CRITICAL-1).
-  const procurementPilotEnabled = useFeatureFlag('procurement-workspace-pilot');
+  // Fail-closed during PostHog cold-load (the hook returns value=false while
+  // isLoading=true), matching the route-level gate at
+  // /portal/procurement/layout.tsx and the nav-filter gate at top-bar.tsx
+  // (W3.5.5 CRITICAL-1 + HIGH-2).
+  const { value: procurementPilotEnabled } = useFeatureFlag(
+    'procurement-workspace-pilot',
+  );
 
   const firstName = user?.name?.split(' ')[0] || 'Designer';
 

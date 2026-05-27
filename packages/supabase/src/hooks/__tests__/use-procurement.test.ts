@@ -766,10 +766,14 @@ describe('useCreateReceivingInspection', () => {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
 
-    await config.mutationFn({
+    const result = (await config.mutationFn({
       purchaseOrderId: 'po-1',
       outcome: 'clean',
-    });
+    })) as { inspection: { id: string }; damageClaimCreated: boolean };
+
+    // W3.5.5 HIGH-1: clean outcome → no damage_claim INSERT → false.
+    expect(result.damageClaimCreated).toBe(false);
+    expect(result.inspection.id).toBe('insp-clean');
 
     // 1. INSERT into receiving_inspections.
     const inspBuilder = builders.receiving_inspections;
@@ -835,11 +839,17 @@ describe('useCreateReceivingInspection', () => {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
 
-    await config.mutationFn({
+    const result = (await config.mutationFn({
       purchaseOrderId: 'po-ap',
       outcome: 'damaged',
       notes: 'Chip on canopy of pendant cluster.',
-    });
+    })) as { inspection: { id: string }; damageClaimCreated: boolean };
+
+    // W3.5.5 HIGH-1: the resolved value must expose damageClaimCreated=true
+    // when step 4 succeeded, so callers can gate the
+    // procurement_damage_claim_created analytics event accurately.
+    expect(result.damageClaimCreated).toBe(true);
+    expect(result.inspection.id).toBe('insp-damaged');
 
     // 1. Inspection INSERT.
     const inspBuilder = builders.receiving_inspections;

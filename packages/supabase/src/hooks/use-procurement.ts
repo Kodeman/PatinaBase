@@ -1093,6 +1093,24 @@ export function useTodayProcurementCounts() {
 // ─── MUTATION HOOKS ────────────────────────────────────────────────────────
 
 /**
+ * Resolved value for `useCreateReceivingInspection.mutateAsync(...)`.
+ *
+ * `damageClaimCreated` reflects whether step 4 actually succeeded — callers
+ * (e.g. `LogInspectionDrawer`) need this to decide whether to fire the
+ * `procurement_damage_claim_created` analytics event. The compensating-delete
+ * path throws before returning, so a successful resolve with
+ * `damageClaimCreated: false` means either outcome was 'clean' or step 4 was
+ * not attempted. Set to `true` only after the damage_claims INSERT returned
+ * without error.
+ *
+ * (W3.5.5 HIGH-1.)
+ */
+export interface CreateReceivingInspectionResult {
+  inspection: ReceivingInspection;
+  damageClaimCreated: boolean;
+}
+
+/**
  * Mutation: logs a physical receiving inspection. Side effects, sequential,
  * with compensating delete on critical-path failure (dossier Section 4):
  *   1. INSERT receiving_inspections (critical path).
@@ -1112,6 +1130,13 @@ export function useTodayProcurementCounts() {
  * the PO was removed — it stamped the same value across all items, which is
  * wrong for multi-item POs. Per-item tracking deferred to Sprint 3+.
  *
+ * Returns `{ inspection, damageClaimCreated }`. Callers should use
+ * `damageClaimCreated` (not `outcome !== 'clean'`) to gate analytics events
+ * tied to the damage_claim row — when step 4 fails, the inspection is
+ * compensated away and this mutation rejects, so any spurious event from a
+ * caller previously triggered by outcome alone is now impossible
+ * (W3.5.5 HIGH-1).
+ *
  * Invalidates: ['receiving-inspections'], ['damage-claims'],
  *              ['purchase-orders'], ['purchase-order', poId],
  *              ['today-procurement-counts']
@@ -1121,7 +1146,7 @@ export function useCreateReceivingInspection() {
   return useMutation({
     mutationFn: async (
       input: CreateReceivingInspectionInput,
-    ): Promise<ReceivingInspection> => {
+    ): Promise<CreateReceivingInspectionResult> => {
       const supabase = getSupabase() as any;
 
       const {
@@ -1244,6 +1269,10 @@ export function useCreateReceivingInspection() {
       }
 
       // Step 4: IF outcome != 'clean', INSERT damage_claims (critical path).
+      // Tracks whether the row was actually written so the resolved value
+      // exposes ground truth to callers — analytics events keyed on
+      // damageClaimCreated stay accurate even if step 4 throws (W3.5.5 HIGH-1).
+      let damageClaimCreated = false;
       if (input.outcome !== 'clean') {
         const vendorName = poRow?.vendor?.name ?? 'vendor';
         const poNumber = poRow?.vendor_po_number ?? null;
@@ -1268,6 +1297,8 @@ export function useCreateReceivingInspection() {
             }. ${cleanupStatus}.`,
           );
         }
+        // INSERT returned without error → the damage_claim row exists.
+        damageClaimCreated = true;
       }
 
       // Step 5: IF net_30 + delivered_date just transitioned from NULL,
@@ -1301,14 +1332,14 @@ export function useCreateReceivingInspection() {
         }
       }
 
-      return inspectionRow;
+      return { inspection: inspectionRow, damageClaimCreated };
     },
-    onSuccess: (inspection) => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['receiving-inspections'] });
       queryClient.invalidateQueries({ queryKey: ['damage-claims'] });
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
       queryClient.invalidateQueries({
-        queryKey: ['purchase-order', inspection.purchase_order_id],
+        queryKey: ['purchase-order', result.inspection.purchase_order_id],
       });
       queryClient.invalidateQueries({ queryKey: ['today-procurement-counts'] });
     },
