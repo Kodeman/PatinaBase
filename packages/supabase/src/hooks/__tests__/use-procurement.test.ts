@@ -1086,16 +1086,32 @@ describe('useDeliveryCalendar', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('useTodayProcurementCounts', () => {
-  it('fires three independent sub-queries and aggregates their counts', async () => {
-    setTableDefault('purchase_orders', { data: null, error: null, count: 4 } as unknown as {
-      data: unknown;
-      error: unknown;
-    });
+  it('fires the three independent rollups (arriving count, inspections set-difference, damage claims count)', async () => {
+    // Reset the module-scoped `from` mock so this test's call-count assertions
+    // are not polluted by previous tests in the file.
+    (supabaseClient.from as unknown as { mockClear: () => void }).mockClear();
+
+    // purchase_orders is hit TWICE:
+    //   1. arrivingThisWeek — uses `count` (head: true).
+    //   2. inspectionsPending delivered query — uses `data` (rows).
+    queueTableResults(
+      'purchase_orders',
+      // 1. arriving count
+      { data: null, error: null, count: 4 } as unknown as {
+        data: unknown;
+        error: unknown;
+      },
+      // 2. delivered POs — three rows; two of them are already inspected
+      // (see receiving_inspections below), so pending = 1.
+      {
+        data: [{ id: 'po-a' }, { id: 'po-b' }, { id: 'po-c' }],
+        error: null,
+      },
+    );
     setTableDefault('receiving_inspections', {
-      data: null,
+      data: [{ purchase_order_id: 'po-a' }, { purchase_order_id: 'po-b' }],
       error: null,
-      count: 2,
-    } as unknown as { data: unknown; error: unknown });
+    });
     setTableDefault('damage_claims', { data: null, error: null, count: 1 } as unknown as {
       data: unknown;
       error: unknown;
@@ -1113,30 +1129,43 @@ describe('useTodayProcurementCounts', () => {
     const counts = await config.queryFn();
     expect(counts).toEqual({
       arrivingThisWeek: 4,
-      inspectionsPending: 2,
+      // 3 delivered POs minus 2 already inspected = 1 still pending.
+      inspectionsPending: 1,
       damageClaimsOpen: 1,
     });
 
-    // Each sub-query must hit its own table — proves independence.
+    // Both queries inside `inspectionsPendingP` must fire — set-difference is
+    // computed client-side from these two collections.
     const fromCalls = (
       supabaseClient.from as unknown as { mock: { calls: unknown[][] } }
     ).mock.calls.map((c) => c[0] as string);
     expect(fromCalls).toContain('purchase_orders');
     expect(fromCalls).toContain('receiving_inspections');
     expect(fromCalls).toContain('damage_claims');
+    // purchase_orders hit twice — once for arriving, once for delivered.
+    expect(fromCalls.filter((t) => t === 'purchase_orders').length).toBe(2);
+
+    // The delivered-PO query must filter on status='delivered' AND cap the
+    // result set (Today tile is a counter, not a list).
+    const poBuilder = builders.purchase_orders;
+    const eqCalls = poBuilder.__chain.filter((c) => c.method === 'eq');
+    expect(eqCalls.some((c) => c.args[0] === 'status' && c.args[1] === 'delivered')).toBe(true);
+    const limitCalls = poBuilder.__chain.filter((c) => c.method === 'limit');
+    expect(limitCalls.length).toBeGreaterThan(0);
   });
 
   it('returns 0 for the failing sub-query and still resolves the others', async () => {
-    // arrivingThisWeek fails; the other two succeed with concrete counts.
+    // arrivingThisWeek fails AND the delivered-PO query also fails — both
+    // sub-queries are scoped to the same builder, so the same default applies
+    // to both. The damage_claims tile still resolves normally.
     setTableDefault('purchase_orders', {
       data: null,
       error: { message: 'boom' },
     } as unknown as { data: unknown; error: unknown });
     setTableDefault('receiving_inspections', {
-      data: null,
+      data: [],
       error: null,
-      count: 7,
-    } as unknown as { data: unknown; error: unknown });
+    });
     setTableDefault('damage_claims', { data: null, error: null, count: 3 } as unknown as {
       data: unknown;
       error: unknown;
@@ -1147,11 +1176,11 @@ describe('useTodayProcurementCounts', () => {
     };
 
     // The hook must NOT throw — it must surface the partial result with the
-    // failing tile zeroed.
+    // failing tiles zeroed.
     const counts = await config.queryFn();
     expect(counts).toEqual({
       arrivingThisWeek: 0,
-      inspectionsPending: 7,
+      inspectionsPending: 0,
       damageClaimsOpen: 3,
     });
   });

@@ -98,7 +98,12 @@ struct MediaUploadClient {
             throw MediaUploadFailure.imageEncodingFailed
         }
 
-        let token = try? await SupabaseClientManager.shared.client.auth.session.accessToken
+        // Surface auth errors instead of silently passing nil to the upload-
+        // session HTTP calls — `try?` would swallow a session failure and
+        // produce an opaque 401 downstream. The caller
+        // (`ReceiveDeliveryViewModel.submit()`) already wraps this in
+        // try/catch and renders the error to the user.
+        let token = try await SupabaseClientManager.shared.client.auth.session.accessToken
         let filename = "receiving-\(UUID().uuidString).jpg"
         let intent = UploadIntent(
             kind: "IMAGE",
