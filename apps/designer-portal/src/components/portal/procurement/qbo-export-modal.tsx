@@ -44,17 +44,17 @@ import {
 } from '@patina/design-system';
 import { useToast } from '@/components/portal/toast-provider';
 
-// ─── Hook stubs (TODO: replace at merge with shared hooks) ─────────────────
+// ─── Hooks ──────────────────────────────────────────────────────────────────
 //
-// The shared @patina/supabase hooks are owned by the Edge Function Engineer
-// lane (Wave 3.2 EFE). They will export `useQboExport` (mutation that POSTs
-// to /functions/v1/qbo-export and triggers a CSV download) and
-// `useQboExportPreview` (query that returns row/vendor/$ counts for the
-// preview block). Until that lane merges, the modal calls local stubs that
-// return safe defaults so the component remains type-safe and renderable.
-//
-// TODO(post-EFE-merge): delete the stub block below and add:
-//   import { useQboExport, useQboExportPreview } from '@patina/supabase';
+// Adapter layer over the shared @patina/supabase hooks (Wave 3.2 EFE). The
+// modal's local input shape predates the EFE finalized contract; rather than
+// refactor every consumer, we convert at the boundary.
+
+import {
+  useQboExport as useQboExportShared,
+  useQboExportPreview as useQboExportPreviewShared,
+  type QboExportInput as SharedQboExportInput,
+} from '@patina/supabase';
 
 export interface QboExportInput {
   startDate: string;            // ISO YYYY-MM-DD
@@ -93,30 +93,39 @@ interface QboExportMutationResult {
   isPending: boolean;
 }
 
-// Local stub — returns empty preview. The real hook will fire a low-cost
-// query to the edge function (or a dedicated preview RPC) on every input
-// change with React Query's standard debounce/staleTime behaviour.
-function useQboExportPreview(_input: QboExportInput): QboExportPreviewHookResult {
-  return { data: undefined, isLoading: false, isError: false };
+function toSharedInput(local: QboExportInput): SharedQboExportInput {
+  return {
+    dateStart: local.startDate,
+    dateEnd: local.endDate,
+    includePaid: local.includeDepositsPaid || local.includeBalancesPaid,
+    includeOutstanding: local.includeOutstanding,
+    includePatinaCatalog: local.includePatinaCatalog,
+    projectIds: local.projectIds.length ? local.projectIds : undefined,
+    vendorIds: local.vendorIds.length ? local.vendorIds : undefined,
+  };
 }
 
-// Local stub — no-op. The real hook will:
-//   1. POST input to /functions/v1/qbo-export with the user's JWT.
-//   2. Receive `text/csv` body.
-//   3. Wrap response in a Blob, createObjectURL, anchor.click(), revoke.
+function useQboExportPreview(input: QboExportInput): QboExportPreviewHookResult {
+  const shared = useQboExportPreviewShared(toSharedInput(input));
+  const data = shared.data
+    ? {
+        ...shared.data,
+        estimatedFileSizeBytes: shared.data.transactionCount * 180, // ~180 bytes/row heuristic
+        filename: defaultFilename(input.endDate),
+      }
+    : undefined;
+  return { data, isLoading: shared.isLoading, isError: shared.isError };
+}
+
 function useQboExport(): QboExportMutationResult {
+  const shared = useQboExportShared();
   return {
-    mutate: (_input, options) => {
-      // Surface the "not wired yet" state via the onError path so the
-      // modal's existing error-handling UX renders consistently. Will be
-      // removed when the real hook lands.
-      options?.onError?.(
-        new Error(
-          'QBO export is not wired yet — the Edge Function Engineer lane is in flight. Re-test once Sprint 3 integration merges.',
-        ),
-      );
-    },
-    isPending: false,
+    mutate: (input, options) =>
+      shared.mutate(toSharedInput(input), {
+        onSuccess: () => options?.onSuccess?.(),
+        onError: (err) => options?.onError?.(err),
+      }),
+    isPending: shared.isPending,
   };
 }
 
