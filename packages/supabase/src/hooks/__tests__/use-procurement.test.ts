@@ -226,10 +226,12 @@ describe('useCreatePurchaseOrder', () => {
       },
       error: null,
     });
-    // po_payments insert and project_ffe_items update both terminate via await
-    // (no .single()), so the builder default suffices.
+    // po_payments insert terminates via await; default suffices.
     setTableDefault('po_payments', { data: null, error: null });
-    setTableDefault('project_ffe_items', { data: null, error: null });
+    // project_ffe_items updates now terminate via `.select('id')` (await on
+    // the builder) — return a single-row array so linkedCount matches
+    // ffeItemIds.length and the success path doesn't warn.
+    setTableDefault('project_ffe_items', { data: [{ id: 'placeholder' }], error: null });
 
     const config = useCreatePurchaseOrder() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
@@ -282,7 +284,8 @@ describe('useCreatePurchaseOrder', () => {
       })
     );
 
-    // 3. project_ffe_items update — one update per ffeItemId
+    // 3. project_ffe_items update — one update per ffeItemId, each scoped
+    //    by both id AND project_id (C-1 defence-in-depth).
     const ffeBuilder = builders.project_ffe_items;
     const ffeUpdates = ffeBuilder.__chain.filter((c) => c.method === 'update');
     expect(ffeUpdates).toHaveLength(2);
@@ -292,7 +295,9 @@ describe('useCreatePurchaseOrder', () => {
     const ffeEqs = ffeBuilder.__chain.filter((c) => c.method === 'eq');
     expect(ffeEqs.map((e) => e.args)).toEqual([
       ['id', 'ffe-1'],
+      ['project_id', 'proj-1'],
       ['id', 'ffe-2'],
+      ['project_id', 'proj-1'],
     ]);
 
     // Verify call order across tables: PO → payments → ffe links.
@@ -403,6 +408,165 @@ describe('useCreatePurchaseOrder', () => {
         sort_order: 2,
       })
     );
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // C-1: Step 3 FFE link scopes its UPDATE by both id AND project_id.
+  // Reviewer flagged that filtering by id alone allows another project's
+  // FFE row to be redirected to this PO if RLS ever regresses.
+  // ───────────────────────────────────────────────────────────────────────
+  it('scopes each project_ffe_items UPDATE by both id and project_id (C-1)', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+
+    queueTableResults('purchase_orders', {
+      data: {
+        id: 'po-scope',
+        designer_id: 'user-1',
+        project_id: 'proj-42',
+        vendor_id: 'vendor-1',
+        payment_pattern: 'full_upfront',
+        total_cents: 50000,
+      },
+      error: null,
+    });
+    setTableDefault('po_payments', { data: null, error: null });
+    // Return a single-row array per FFE update so linkedCount === ffeItemIds.length.
+    setTableDefault('project_ffe_items', { data: [{ id: 'placeholder' }], error: null });
+
+    const config = useCreatePurchaseOrder() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await config.mutationFn({
+      projectId: 'proj-42',
+      vendorId: 'vendor-1',
+      paymentPattern: 'full_upfront',
+      totalCents: 50000,
+      ffeItemIds: ['ffe-a', 'ffe-b', 'ffe-c'],
+    });
+
+    const ffeBuilder = builders.project_ffe_items;
+    const eqArgs = ffeBuilder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
+
+    // Three FFE items × two eq filters each (id + project_id) = 6 .eq() calls.
+    expect(eqArgs).toEqual([
+      ['id', 'ffe-a'],
+      ['project_id', 'proj-42'],
+      ['id', 'ffe-b'],
+      ['project_id', 'proj-42'],
+      ['id', 'ffe-c'],
+      ['project_id', 'proj-42'],
+    ]);
+
+    // Every update should also include the select('id') terminator so the
+    // hook can count affected rows.
+    const selects = ffeBuilder.__chain.filter((c) => c.method === 'select');
+    expect(selects).toHaveLength(3);
+    selects.forEach((s) => expect(s.args).toEqual(['id']));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // H-2: when Step 2 (payment insert) fails, the hook issues a compensating
+  // DELETE on purchase_orders so the header isn't orphaned in the DB.
+  // ───────────────────────────────────────────────────────────────────────
+  it('issues compensating DELETE on purchase_orders when payment-row insert fails (H-2)', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+
+    // Step 1 succeeds → returns the new PO id.
+    // Step "compensate" → DELETE on purchase_orders (await, no .single()),
+    // returns success.
+    queueTableResults(
+      'purchase_orders',
+      // 1. PO insert
+      {
+        data: {
+          id: 'po-orphan',
+          designer_id: 'user-1',
+          project_id: 'proj-1',
+          vendor_id: 'vendor-1',
+          payment_pattern: 'fifty_fifty',
+          total_cents: 100000,
+        },
+        error: null,
+      },
+      // 2. compensating delete result
+      { data: null, error: null }
+    );
+
+    // Step 2 fails.
+    setTableDefault('po_payments', {
+      data: null,
+      error: { message: 'simulated payment insert failure' },
+    });
+
+    const config = useCreatePurchaseOrder() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await expect(
+      config.mutationFn({
+        projectId: 'proj-1',
+        vendorId: 'vendor-1',
+        paymentPattern: 'fifty_fifty',
+        totalCents: 100000,
+        ffeItemIds: ['ffe-1'],
+      })
+    ).rejects.toThrow(/simulated payment insert failure/);
+
+    // The compensating delete must have been called against purchase_orders
+    // and scoped to the orphaned PO id.
+    const poBuilder = builders.purchase_orders;
+    const deletes = poBuilder.__chain.filter((c) => c.method === 'delete');
+    expect(deletes).toHaveLength(1);
+
+    // Walk the chain to confirm the delete was followed by .eq('id', 'po-orphan').
+    const deleteIdx = poBuilder.__chain.findIndex((c) => c.method === 'delete');
+    const afterDelete = poBuilder.__chain.slice(deleteIdx + 1);
+    expect(afterDelete[0]).toEqual({ method: 'eq', args: ['id', 'po-orphan'] });
+
+    // Step 3 should not have run.
+    expect(builders.project_ffe_items).toBeUndefined();
+
+    // Re-run with a fresh mock-state to capture the actual Error message and
+    // confirm it surfaces both the original failure and the cleanup outcome.
+    Object.keys(builders).forEach((k) => delete builders[k]);
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+    queueTableResults(
+      'purchase_orders',
+      { data: { id: 'po-orphan-2', project_id: 'proj-1' }, error: null },
+      { data: null, error: null }
+    );
+    setTableDefault('po_payments', {
+      data: null,
+      error: { message: 'simulated payment insert failure' },
+    });
+
+    let caughtError: Error | undefined;
+    try {
+      await (
+        useCreatePurchaseOrder() as unknown as {
+          mutationFn: (input: unknown) => Promise<unknown>;
+        }
+      ).mutationFn({
+        projectId: 'proj-1',
+        vendorId: 'vendor-1',
+        paymentPattern: 'fifty_fifty',
+        totalCents: 100000,
+        ffeItemIds: [],
+      });
+    } catch (e) {
+      caughtError = e as Error;
+    }
+
+    expect(caughtError).toBeDefined();
+    expect(caughtError?.message).toMatch(/simulated payment insert failure/);
+    expect(caughtError?.message).toMatch(/compensating delete succeeded/);
   });
 });
 

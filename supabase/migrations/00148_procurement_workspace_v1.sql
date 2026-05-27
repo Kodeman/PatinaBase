@@ -87,7 +87,12 @@ CREATE TABLE po_payments (
   notes               TEXT,
   sort_order          INTEGER     NOT NULL DEFAULT 0,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- A payment may only be recorded as 'paid' when paid_date is set. Pending and
+  -- due rows leave paid_date NULL. Enforced at the row level so the hook layer
+  -- (useLogPaymentPaid) cannot accidentally drop the paid_date assignment.
+  CONSTRAINT chk_paid_date_required_when_paid
+    CHECK (state <> 'paid' OR paid_date IS NOT NULL)
 );
 
 CREATE INDEX idx_po_payments_purchase_order ON po_payments(purchase_order_id);

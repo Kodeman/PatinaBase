@@ -337,8 +337,14 @@ export function useUpdateVendorPaymentTerms() {
  * po_payments rows for the chosen payment_pattern. Also updates
  * project_ffe_items.purchase_order_id atomically (best-effort sequential
  * within the same mutation function — the JS client cannot wrap these in a
- * Postgres transaction, so we surface any partial-failure context in the
- * thrown Error).
+ * Postgres transaction, so we issue compensating deletes when a later step
+ * fails to avoid orphaned PO headers / payment rows in the DB).
+ *
+ * Project scope: every project_ffe_items UPDATE is filtered by both `id` and
+ * `project_id` so a malicious or buggy caller cannot redirect another
+ * project's FFE row to their own PO. The 00066 RLS policy
+ * ("Designers manage their project FFE items") already enforces designer
+ * scope, but defence-in-depth at the hook layer is cheap.
  */
 export function useCreatePurchaseOrder() {
   const queryClient = useQueryClient();
@@ -376,6 +382,29 @@ export function useCreatePurchaseOrder() {
 
       const purchaseOrderId = (po as { id: string }).id;
 
+      // Compensating-delete helper. Deletes the PO header; the po_payments
+      // CASCADE removes any inserted payment rows automatically. Returns a
+      // short status string describing whether cleanup succeeded so the
+      // re-thrown error can surface it to the caller.
+      const compensatingDelete = async (): Promise<string> => {
+        try {
+          const { error: deleteError } = await supabase
+            .from('purchase_orders')
+            .delete()
+            .eq('id', purchaseOrderId);
+          if (deleteError) {
+            return `compensating delete FAILED: ${
+              deleteError.message ?? String(deleteError)
+            }`;
+          }
+          return 'compensating delete succeeded';
+        } catch (e) {
+          return `compensating delete THREW: ${
+            (e as Error)?.message ?? String(e)
+          }`;
+        }
+      };
+
       // Step 2: insert po_payments rows for the chosen pattern.
       const rows = buildPaymentRowsForPattern(input).map((r) => ({
         ...r,
@@ -385,27 +414,45 @@ export function useCreatePurchaseOrder() {
       if (rows.length > 0) {
         const { error: paymentsError } = await supabase.from('po_payments').insert(rows);
         if (paymentsError) {
+          const cleanupStatus = await compensatingDelete();
           throw new Error(
             `PO header created (${purchaseOrderId}) but payment rows failed to insert: ${
               paymentsError.message ?? String(paymentsError)
-            }. Manual cleanup may be required.`
+            }. ${cleanupStatus}.`
           );
         }
       }
 
-      // Step 3: link the supplied project_ffe_items to this PO.
+      // Step 3: link the supplied project_ffe_items to this PO. Each UPDATE
+      // is scoped to both id AND project_id so a buggy/malicious caller
+      // cannot redirect another project's FFE row to this PO. We also count
+      // affected rows (returned via .select()) and warn if any update was a
+      // no-op (RLS-denied or already-linked row).
+      let linkedCount = 0;
       for (const ffeItemId of input.ffeItemIds) {
-        const { error: linkError } = await supabase
+        const { data: updatedRows, error: linkError } = await supabase
           .from('project_ffe_items')
           .update({ purchase_order_id: purchaseOrderId })
-          .eq('id', ffeItemId);
+          .eq('id', ffeItemId)
+          .eq('project_id', input.projectId)
+          .select('id');
         if (linkError) {
+          const cleanupStatus = await compensatingDelete();
           throw new Error(
             `PO ${purchaseOrderId} created with payments but failed to link FFE item ${ffeItemId}: ${
               linkError.message ?? String(linkError)
-            }. Other FFE links may also be incomplete.`
+            }. ${cleanupStatus}.`
           );
         }
+        linkedCount += (updatedRows ?? []).length;
+      }
+
+      if (input.ffeItemIds.length > 0 && linkedCount !== input.ffeItemIds.length) {
+        // Non-fatal: RLS-denied or already-linked rows produce zero updates.
+        // The caller (and downstream telemetry) should know.
+        console.warn(
+          `useCreatePurchaseOrder: requested ${input.ffeItemIds.length} FFE links but only ${linkedCount} rows were updated for PO ${purchaseOrderId}.`
+        );
       }
 
       return po as PurchaseOrder;
@@ -426,6 +473,12 @@ export function useCreatePurchaseOrder() {
  * state = 'paid'. If the parent PO is on a `fifty_fifty` or `thirty_seventy`
  * pattern and the just-paid row was a deposit and the PO has already shipped
  * (status >= 'shipped'), the balance row is flipped to 'due' in the same call.
+ *
+ * Note for callers: the mutation's resolved value is only the updated deposit
+ * row. When the sibling balance row flips to 'due', that change is visible
+ * exclusively via the invalidated `po-payments` / `purchase-orders` caches —
+ * UI code that needs the flipped balance state must read it from a query
+ * subscription, not from the mutation's return value.
  */
 export function useLogPaymentPaid() {
   const queryClient = useQueryClient();
