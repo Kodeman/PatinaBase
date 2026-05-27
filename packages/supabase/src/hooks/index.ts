@@ -860,6 +860,7 @@ export {
   useCreatePurchaseOrder,
   useLogPaymentPaid,
   useAdvancePaymentToDue,
+  useUpdatePurchaseOrderETA,
   // Sprint 2 — Receiving, damage claims, calendar
   useReceivingInspections,
   useDamageClaims,

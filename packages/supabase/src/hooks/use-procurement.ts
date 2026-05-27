@@ -571,6 +571,90 @@ export function useLogPaymentPaid() {
 }
 
 /**
+ * Mutation: updates purchase_orders.confirmed_eta for a single PO. When a
+ * `notes` string is supplied, appends a timestamped audit line to
+ * `purchase_orders.notes` so the designer has a record of what the vendor
+ * told them and when. The notes column is a free-form text field and the
+ * line format is:
+ *
+ *     [YYYY-MM-DD ETA update]: <notes>
+ *
+ * (preserving any existing notes content). The update is a single-row
+ * mutation, so no compensating delete is needed — the PRD W2.4 vision is
+ * "vendor emails, designer types new date, hits save, 3 seconds done."
+ *
+ * Invalidates: ['purchase-orders'], ['purchase-order', poId],
+ *              ['delivery-calendar'] (so the unified calendar view picks
+ *              up the new ETA on its next render).
+ */
+export function useUpdatePurchaseOrderETA() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      purchaseOrderId,
+      newEta,
+      notes,
+    }: {
+      purchaseOrderId: string;
+      newEta: string;
+      notes?: string;
+    }): Promise<PurchaseOrder> => {
+      const supabase = getSupabase() as any;
+
+      const updates: Record<string, unknown> = { confirmed_eta: newEta };
+
+      // When the designer provided notes, append a timestamped line to
+      // the existing notes column. Read once to preserve prior content.
+      const trimmedNotes = notes?.trim();
+      if (trimmedNotes) {
+        const { data: current, error: readError } = await supabase
+          .from('purchase_orders')
+          .select('notes')
+          .eq('id', purchaseOrderId)
+          .single();
+        if (readError) {
+          throw new Error(
+            `Failed to read purchase_order ${purchaseOrderId} for ETA notes append: ${
+              readError.message ?? String(readError)
+            }`,
+          );
+        }
+        const existingNotes = (current as { notes: string | null })?.notes ?? '';
+        const today = new Date().toISOString().slice(0, 10);
+        const appended = `[${today} ETA update]: ${trimmedNotes}`;
+        updates.notes = existingNotes
+          ? `${existingNotes}\n${appended}`
+          : appended;
+      }
+
+      const { data, error } = await supabase
+        .from('purchase_orders')
+        .update(updates)
+        .eq('id', purchaseOrderId)
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(
+          `Failed to update purchase_order ETA for ${purchaseOrderId}: ${
+            error.message ?? String(error)
+          }`,
+        );
+      }
+      return data as PurchaseOrder;
+    },
+    onSuccess: (po) => {
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-order', po.id] });
+      // The unified calendar view derives event_date from confirmed_eta —
+      // invalidate every cached range so the next render reflects the shift.
+      queryClient.invalidateQueries({ queryKey: ['delivery-calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['today-procurement-counts'] });
+    },
+  });
+}
+
+/**
  * Mutation: advances a po_payment row to 'due' state. Called externally when a
  * status change in project_ffe_items should bump a payment row (e.g. an
  * `ordered → shipped` transition flips the balance row to `due` on a
