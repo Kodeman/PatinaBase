@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina · Three-Layer Product Catalog</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--sf:#FFFFFF;--subtle:#EDEAE3;--body:#5C4A3C;--muted:#8B7355;--fd:'Playfair Display',Georgia,serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace}
+html{scroll-behavior:smooth;background:var(--ow)}
+body{font-family:var(--fb);color:var(--ch);line-height:1.6;-webkit-font-smoothing:antialiased}
+.w{max-width:1180px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}
+section{padding:clamp(2rem,4vw,4.5rem) 0}
+
+/* Cover */
+.cover{min-height:65vh;display:flex;flex-direction:column;justify-content:flex-end;padding:4rem clamp(1.5rem,5vw,4rem);background:var(--ch);color:var(--ow)}
+.cover h1{font-family:var(--fd);font-weight:400;font-size:clamp(2rem,4.5vw,3.3rem);line-height:1.12;letter-spacing:-0.02em;color:var(--ow)}
+.cover h1 span{display:block;font-style:italic;color:var(--cl);font-weight:400;font-size:0.55em}
+.cover-sub{font-size:0.95rem;color:rgba(250,247,242,0.6);max-width:660px;margin:1rem 0 2.5rem;line-height:1.75}
+.cover-strata{display:flex;flex-direction:column;gap:6px;margin-bottom:2rem}
+.cover-strata div{height:2px;border-radius:1px}
+.cover-strata div:nth-child(1){width:100px;background:var(--cl)}
+.cover-strata div:nth-child(2){width:75px;background:var(--cl);opacity:0.5}
+.cover-strata div:nth-child(3){width:50px;background:var(--cl);opacity:0.25}
+.cm{display:flex;gap:3rem;flex-wrap:wrap}
+.cm .meta{margin-bottom:0.2rem;color:rgba(250,247,242,0.3)}
+.cm p{font-size:0.85rem;color:rgba(250,247,242,0.7)}
+
+h1,.h1{font-family:var(--fd);font-weight:400;font-size:clamp(1.6rem,3.5vw,2.4rem);line-height:1.15;letter-spacing:-0.02em;margin-bottom:0.5rem}
+h2,.h2{font-family:var(--fd);font-weight:400;font-size:clamp(1.3rem,2.8vw,1.85rem);line-height:1.2;letter-spacing:-0.02em;margin-bottom:0.5rem}
+h3,.h3{font-family:var(--fd);font-weight:500;font-size:1.1rem;margin-bottom:0.4rem}
+h4{font-family:var(--fd);font-weight:500;font-size:0.95rem;margin-bottom:0.3rem;color:var(--ch)}
+h1 em,h2 em,h3 em,h4 em{font-style:italic;color:var(--cl)}
+.meta{font-family:var(--fm);font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted)}
+.body{font-family:var(--fb);font-size:0.92rem;line-height:1.7;color:var(--body);max-width:680px}
+.eyebrow{font-family:var(--fm);font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--cl);margin-bottom:0.75rem}
+
+.sm{display:flex;flex-direction:column;gap:4px;padding:1.5rem 0}
+.sm div{height:1.5px;border-radius:1px}
+.sm div:nth-child(1){width:60px;background:var(--mo)}
+.sm div:nth-child(2){width:48px;background:var(--cl);opacity:.7}
+.sm div:nth-child(3){width:36px;background:var(--cl);opacity:.35}
+
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:2rem}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.25rem}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+@media(max-width:768px){.g2,.g3,.g4{grid-template-columns:1fr}}
+
+.card{padding:1.15rem;border:1px solid var(--pe);border-radius:6px;background:var(--sf)}
+.card-i{font-family:var(--fd);font-size:1.3rem;color:var(--cl);margin-bottom:0.3rem;line-height:1;font-style:italic}
+.card-t{font-family:var(--fb);font-weight:500;font-size:0.88rem;color:var(--ch);margin-bottom:0.25rem}
+.card-d{font-family:var(--fb);font-size:0.74rem;color:var(--body);line-height:1.6}
+
+.dk-section{background:var(--ch);color:var(--ow)}
+.dk-section .body{color:rgba(250,247,242,0.6)}
+.dk-section h1,.dk-section h2,.dk-section h3,.dk-section h4{color:var(--ow)}
+.dk-section .card{background:rgba(250,247,242,0.03);border-color:rgba(250,247,242,0.08)}
+.dk-section .card-t{color:var(--ow)}
+.dk-section .card-d{color:rgba(250,247,242,0.55)}
+.dk-section .meta{color:rgba(250,247,242,0.35)}
+
+.wm-section{background:linear-gradient(155deg,#e8ddd0,#ddd0c0 50%,#ede6dc)}
+
+.pq{padding:2rem 0;border-top:1px solid var(--pe);border-bottom:1px solid var(--pe);margin:2rem 0}
+.pq blockquote{font-family:var(--fd);font-size:clamp(1.05rem,2.2vw,1.4rem);font-style:italic;line-height:1.45;max-width:700px}
+.pq cite{display:block;font-family:var(--fm);font-size:0.55rem;font-style:normal;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-top:0.6rem}
+.dk-section .pq{border-color:rgba(250,247,242,0.15)}
+.dk-section .pq blockquote{color:var(--ow)}
+.dk-section .pq cite{color:rgba(250,247,242,0.4)}
+
+.callout{padding:1rem 1.15rem;background:rgba(196,165,123,0.06);border-left:3px solid var(--cl);border-radius:0 5px 5px 0;margin:1.25rem 0}
+.callout-l{display:block;font-family:var(--fm);font-size:0.5rem;color:var(--cl);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.3rem;font-weight:600}
+.callout-d{font-family:var(--fb);font-size:0.78rem;color:var(--body);line-height:1.65}
+.dk-section .callout{background:rgba(196,165,123,0.08)}
+.dk-section .callout-d{color:rgba(250,247,242,0.7)}
+
+/* Layer cards */
+.layer-stack{display:flex;flex-direction:column;gap:0.5rem;margin:1.5rem 0}
+.layer{display:grid;grid-template-columns:60px 1fr auto;gap:1.25rem;padding:1.5rem;border:1px solid var(--pe);border-radius:8px;background:var(--sf);align-items:center}
+.layer-num{font-family:var(--fd);font-weight:300;font-size:2.5rem;color:var(--cl);font-style:italic;line-height:1;text-align:center}
+.layer-content h3{margin-bottom:0.25rem;font-size:1.15rem}
+.layer-tag{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);margin-bottom:0.5rem;font-weight:600}
+.layer-d{font-family:var(--fb);font-size:0.78rem;color:var(--body);line-height:1.65}
+.layer-meta{font-family:var(--fb);font-size:0.65rem;color:var(--muted);text-align:right;font-style:italic;max-width:140px}
+.dk-section .layer{background:rgba(250,247,242,0.03);border-color:rgba(250,247,242,0.08)}
+.dk-section .layer-d{color:rgba(250,247,242,0.7)}
+.dk-section .layer-meta{color:rgba(250,247,242,0.4)}
+
+/* Layer chip */
+.chip{display:inline-flex;align-items:center;gap:0.3rem;padding:2px 7px;border-radius:2px;font-family:var(--fm);font-size:0.48rem;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;white-space:nowrap}
+.chip-personal{background:rgba(139,156,173,0.12);color:var(--db)}
+.chip-studio{background:rgba(168,181,160,0.12);color:var(--sa)}
+.chip-catalog{background:rgba(196,165,123,0.15);color:var(--cl)}
+.chip-pending{background:rgba(232,197,71,0.12);color:var(--gh)}
+
+.layer-icon{width:14px;height:10px;display:inline-flex;flex-direction:column;justify-content:center;gap:1.5px;flex-shrink:0}
+.layer-icon span{height:1.5px;border-radius:1px;display:block}
+.li-1 span:nth-child(1){width:100%;background:currentColor;opacity:0.6}
+.li-1 span:nth-child(2){display:none}
+.li-1 span:nth-child(3){display:none}
+.li-2 span:nth-child(1){width:100%;background:currentColor;opacity:0.9}
+.li-2 span:nth-child(2){width:75%;background:currentColor;opacity:0.6}
+.li-2 span:nth-child(3){display:none}
+.li-3 span:nth-child(1){width:100%;background:currentColor}
+.li-3 span:nth-child(2){width:75%;background:currentColor;opacity:0.6}
+.li-3 span:nth-child(3){width:50%;background:currentColor;opacity:0.3}
+
+/* App frame */
+.frame{background:var(--sf);border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04),0 12px 36px rgba(0,0,0,0.08);margin:1.25rem 0}
+.fr-bar{display:flex;align-items:center;padding:0 1rem;height:38px;background:var(--sf);border-bottom:1px solid var(--pe);gap:1rem}
+.fr-bar .ll{font-family:var(--fd);font-weight:500;font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase}
+.fr-bar .nv{display:flex;gap:0.85rem;flex:1}
+.fr-bar .nv span{font-family:var(--fb);font-size:0.62rem;color:var(--muted)}
+.fr-bar .nv span.on{color:var(--ch);border-bottom:2px solid var(--cl);padding-bottom:1px}
+.fr-bar .ut{display:flex;gap:0.4rem;font-size:0.7rem;color:var(--muted);align-items:center}
+.fr-avt{width:20px;height:20px;border-radius:50%;background:var(--pe);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-weight:500;font-size:0.48rem;color:var(--mo)}
+.fr-sub{padding:0.45rem 1rem;background:var(--ow);border-bottom:1px solid var(--pe);display:flex;align-items:center;gap:0.5rem;font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)}
+.fr-sub .seg{padding:0.25rem 0.6rem;border-radius:3px;display:flex;align-items:center;gap:0.35rem}
+.fr-sub .seg.on{background:rgba(196,165,123,0.1);color:var(--cl);font-weight:600}
+.fr-c{padding:1.25rem;background:var(--ow)}
+
+/* Product grid mockup */
+.pgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:0.85rem;margin-top:0.5rem}
+.pcard{background:var(--sf);border:1px solid var(--pe);border-radius:5px;overflow:hidden;display:flex;flex-direction:column}
+.pcard-img{aspect-ratio:1;background:linear-gradient(135deg,#d4c4a8,#a08868);position:relative;display:flex;align-items:flex-start;justify-content:flex-end;padding:6px}
+.pcard-img.tw1{background:linear-gradient(135deg,#c4b5a0,#8b7355)}
+.pcard-img.tw2{background:linear-gradient(135deg,#a8b5a0,#7a8770)}
+.pcard-img.tw3{background:linear-gradient(135deg,#b8a888,#8b7860)}
+.pcard-img.tw4{background:linear-gradient(135deg,#8b9cad,#5c6b7a)}
+.pcard-img.tw5{background:linear-gradient(135deg,#d4a090,#a07060)}
+.pcard-img.tw6{background:linear-gradient(135deg,#c4a57b,#8b7355)}
+.pcard-img.tw7{background:linear-gradient(135deg,#5c4a3c,#3c3026)}
+.pcard-img.tw8{background:linear-gradient(135deg,#e5d4b8,#b89870)}
+.pcard-info{padding:0.5rem 0.65rem 0.65rem}
+.pcard-n{font-family:var(--fb);font-weight:500;font-size:0.68rem;color:var(--ch);line-height:1.3;margin-bottom:0.15rem}
+.pcard-v{font-family:var(--fb);font-size:0.58rem;color:var(--muted);margin-bottom:0.25rem}
+.pcard-p{font-family:var(--fd);font-weight:500;font-size:0.72rem;color:var(--ch)}
+
+/* Filter pill */
+.filt{display:inline-flex;align-items:center;gap:0.3rem;padding:0.3rem 0.6rem;background:var(--sf);border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.65rem;color:var(--body);cursor:default}
+.filt.on{background:rgba(196,165,123,0.08);border-color:var(--cl);color:var(--cl);font-weight:500}
+
+/* Spec table */
+.spec-row{display:grid;grid-template-columns:160px 1fr;gap:1rem;padding:0.6rem 0;border-bottom:1px solid var(--pe);font-size:0.78rem}
+.spec-row:last-child{border-bottom:none}
+.spec-row-l{font-family:var(--fm);font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;padding-top:0.15rem}
+.spec-row-r{font-family:var(--fb);color:var(--body);line-height:1.6}
+.spec-row-r strong{color:var(--ch);font-weight:500}
+.spec-row-r code{font-family:var(--fm);font-size:0.7rem;background:var(--pe);padding:1px 5px;border-radius:2px;color:var(--ch)}
+
+/* Capture extension mock */
+.ext{width:340px;background:var(--sf);border-radius:8px;box-shadow:0 12px 40px rgba(44,41,38,0.15);overflow:hidden;border:1px solid var(--pe);margin:0 auto}
+.ext-bar{padding:0.6rem 0.85rem;background:var(--ch);color:var(--ow);font-family:var(--fm);font-size:0.5rem;letter-spacing:0.08em;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center}
+.ext-body{padding:1rem}
+.ext-img{aspect-ratio:4/3;background:linear-gradient(135deg,#c4b5a0,#8b7355);border-radius:4px;margin-bottom:0.6rem;position:relative}
+.ext-row{display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--pe);font-family:var(--fb);font-size:0.7rem}
+.ext-row:last-of-type{border-bottom:none;margin-bottom:0.5rem}
+.ext-row-l{color:var(--muted);font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase}
+.ext-row-v{color:var(--ch);font-weight:500}
+.ext-btn{display:block;width:100%;padding:0.7rem;background:var(--ch);color:var(--ow);border:none;border-radius:4px;font-family:var(--fb);font-weight:500;font-size:0.78rem;text-align:center;margin-top:0.5rem}
+.ext-select{width:100%;padding:0.55rem 0.7rem;border:1px solid var(--pe);border-radius:4px;font-family:var(--fb);font-size:0.72rem;color:var(--ch);background:var(--sf);display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem}
+
+/* Flow diagram */
+.flow{display:flex;align-items:center;justify-content:center;gap:0.5rem;flex-wrap:wrap;padding:1.5rem;background:var(--sf);border:1px solid var(--pe);border-radius:6px;margin:1.25rem 0}
+.fn{padding:0.6rem 0.85rem;border-radius:5px;font-family:var(--fb);font-size:0.7rem;font-weight:500;border:1.5px solid;display:flex;flex-direction:column;gap:0.15rem;align-items:center;min-width:90px}
+.fn-l{font-family:var(--fm);font-size:0.42rem;letter-spacing:0.06em;text-transform:uppercase;opacity:0.7}
+.fn.p1{border-color:var(--db);background:rgba(139,156,173,0.08);color:var(--db)}
+.fn.p2{border-color:var(--sa);background:rgba(168,181,160,0.08);color:var(--sa)}
+.fn.p3{border-color:var(--cl);background:rgba(196,165,123,0.1);color:var(--cl)}
+.fa{font-family:var(--fm);font-size:0.6rem;color:var(--muted);letter-spacing:0.04em}
+.dk-section .flow{background:rgba(250,247,242,0.03);border-color:rgba(250,247,242,0.1)}
+
+/* Comparison table */
+.comp{background:var(--sf);border:1px solid var(--pe);border-radius:6px;overflow:hidden;margin:1.25rem 0}
+.comp-r{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:0;border-bottom:1px solid var(--pe)}
+.comp-r:last-child{border-bottom:none}
+.comp-r.head{background:rgba(196,165,123,0.04)}
+.comp-r.head .comp-c{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--cl);font-weight:600;padding:0.65rem 0.85rem}
+.comp-c{padding:0.7rem 0.85rem;font-family:var(--fb);font-size:0.72rem;color:var(--body);line-height:1.55;border-right:1px solid var(--pe)}
+.comp-c:last-child{border-right:none}
+.comp-c.head-cell{font-family:var(--fb);font-weight:500;color:var(--ch);font-size:0.78rem;display:flex;align-items:center;gap:0.4rem}
+.comp-r:not(.head) .comp-c:first-child{background:rgba(229,226,221,0.3);font-family:var(--fb);font-weight:500;color:var(--ch);font-size:0.74rem}
+
+/* Promotion banner */
+.promo{padding:1.15rem 1.4rem;background:rgba(196,165,123,0.06);border:1px solid rgba(196,165,123,0.2);border-radius:6px;margin:1rem 0;display:grid;grid-template-columns:auto 1fr auto;gap:1rem;align-items:center}
+.promo-i{font-family:var(--fd);font-size:1.4rem;color:var(--cl);font-style:italic;line-height:1}
+.promo-t{font-family:var(--fd);font-weight:500;font-size:0.92rem;color:var(--ch);margin-bottom:0.15rem}
+.promo-d{font-family:var(--fb);font-size:0.7rem;color:var(--body);line-height:1.55}
+.promo-btn{font-family:var(--fb);font-weight:500;font-size:0.7rem;padding:0.5rem 0.85rem;background:var(--ch);color:var(--ow);border-radius:3px}
+
+/* Library detail view (catalog inside the layered system) */
+.cat-head{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:0.85rem;border-bottom:1px solid var(--pe);margin-bottom:1rem;flex-wrap:wrap;gap:0.85rem}
+.cat-head h2{margin:0;font-size:1.4rem}
+.cat-head-meta{font-family:var(--fb);font-size:0.72rem;color:var(--muted)}
+
+.tablist{display:flex;gap:0;border-bottom:1px solid var(--pe);margin-bottom:1rem}
+.tablist .ti{padding:0.55rem 1rem;font-family:var(--fb);font-size:0.74rem;color:var(--muted);border-bottom:2px solid transparent}
+.tablist .ti.on{color:var(--ch);font-weight:500;border-bottom-color:var(--cl)}
+.tablist .ti .ct{font-family:var(--fm);font-size:0.5rem;color:var(--muted);margin-left:0.3rem;letter-spacing:0.04em}
+
+/* Detail panel mock */
+.detail-panel{display:grid;grid-template-columns:240px 1fr;gap:1.5rem;background:var(--sf);border:1px solid var(--pe);border-radius:6px;padding:1.5rem;margin:1.25rem 0}
+.detail-img{aspect-ratio:1;background:linear-gradient(135deg,#c4b5a0,#8b7355);border-radius:5px}
+.detail-content h3{font-size:1.15rem;margin-bottom:0.3rem}
+.detail-vendor{font-family:var(--fb);font-size:0.72rem;color:var(--muted);margin-bottom:0.85rem}
+.detail-price{font-family:var(--fd);font-weight:500;font-size:1.4rem;color:var(--ch);margin-bottom:1rem}
+.detail-row{display:flex;gap:1rem;margin-bottom:0.45rem;font-family:var(--fb);font-size:0.72rem}
+.detail-row-l{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);min-width:80px;padding-top:0.15rem}
+.detail-row-v{color:var(--body);flex:1}
+
+/* Numbered principle */
+.principle{padding:1.25rem;border:1px solid var(--pe);border-radius:6px;background:var(--sf)}
+.p-num{font-family:var(--fd);font-weight:300;font-size:2rem;color:var(--cl);line-height:1;font-style:italic;margin-bottom:0.4rem}
+.p-t{font-family:var(--fd);font-weight:500;font-size:1rem;margin-bottom:0.3rem}
+.p-d{font-family:var(--fb);font-size:0.76rem;color:var(--body);line-height:1.6}
+
+/* Schema box */
+.schema{padding:1rem 1.2rem;background:#2c2926;color:#e5e2dd;border-radius:6px;font-family:var(--fm);font-size:0.72rem;line-height:1.7;overflow-x:auto;margin:1rem 0}
+.schema .kw{color:var(--cl)}
+.schema .ty{color:var(--sa)}
+.schema .cm-c{color:var(--muted);font-style:italic}
+
+/* Fade animation */
+.fade{opacity:0;transform:translateY(10px);transition:opacity 0.5s ease,transform 0.5s ease}
+.fade.vis{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <p class="meta" style="margin-bottom:1rem;color:rgba(250,247,242,0.4)">Designer Portal · Products Zone Redesign</p>
+  <div class="cover-strata"><div></div><div></div><div></div></div>
+  <h1>The Three-Layer Product Catalog<span>From a single shared catalog to a workspace that respects how designers actually source</span></h1>
+  <p class="cover-sub">The existing Products zone was built around one assumption: every captured item is a candidate for the shared Patina catalog. The reality is different. Designers source from everywhere — most of it personal, some of it studio-trusted, a fraction of it eventually marketplace-grade. This redesign restructures the Products zone around three concentric layers, each with its own purpose, visibility, and procurement path. Capture stays five-second fast. Items grow into the catalog organically. Patina earns commercial value where it adds the most.</p>
+  <div class="cm">
+    <div><p class="meta">Status</p><p>Design Proposal · Ready for Review</p></div>
+    <div><p class="meta">Builds on</p><p>Existing Products zone · Procurement v1 · Aesthete Engine</p></div>
+    <div><p class="meta">Companion docs</p><p>Procurement Workspace v1 · Mobile Receiving · Payment Model</p></div>
+  </div>
+</div>
+
+<!-- 01 THE PROBLEM WITH ONE-LAYER -->
+<section class="fade">
+<div class="w">
+  <p class="eyebrow">The problem with one shared catalog</p>
+  <h1>Capture <em>shouldn't mean publish.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">The existing Products zone treats every captured item as a candidate for the Patina catalog. This creates pressure at the capture moment — taxonomies to satisfy, quality bars to clear, review queues to wait through. The result is that capture becomes a heavier act than it needs to be, and designers learn to capture less. Meanwhile, the most valuable thing about capture — that it's the first signal of what a designer cares about — gets buried under publishing concerns.</p>
+
+  <div class="g2">
+    <div>
+      <h3>What the current model assumes</h3>
+      <p class="body" style="font-size:0.82rem">Every captured product belongs to a single, shared catalog. The designer's role is to feed it. Quality control happens at intake. The same taxonomy applies to a 1stDibs antique chair, a Sawkille custom dining table, and a CB2 floor lamp. The system is one big sorted pile.</p>
+    </div>
+    <div>
+      <h3>What designers actually do</h3>
+      <p class="body" style="font-size:0.82rem">They keep a personal inbox of "interesting finds." They build a studio working library of trusted vendors and proven pieces. A small subset of that working library is mature enough — relationship strong enough, quality proven, supply reliable — to belong to a shared catalog. These three things have different rules.</p>
+    </div>
+  </div>
+
+  <div class="pq">
+    <blockquote>"The first signal of what a designer cares about isn't what she publishes. It's what she captures, half-formed, on a Tuesday night while sourcing for the Chen project. That signal is the gold. We were sending it to the wrong house."</blockquote>
+    <cite>Design principle · Capture as signal</cite>
+  </div>
+</div>
+</section>
+
+<!-- 02 THE THREE LAYERS -->
+<section class="fade dk-section">
+<div class="w">
+  <div class="sm"><div style="background:rgba(250,247,242,0.6)"></div><div style="background:rgba(250,247,242,0.4)"></div><div style="background:rgba(250,247,242,0.2)"></div></div>
+  <p class="eyebrow">The three layers</p>
+  <h1>Three concentric circles, <em>three different jobs.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">The Products zone restructures around three layers. Each layer answers a different question about a captured item. Each layer has its own visibility scope, its own taxonomy expectations, its own procurement path. Items move outward from Layer 1 (private) to Layer 3 (shared marketplace) only when they earn that placement — through repeated use, proven supply, and explicit promotion.</p>
+
+  <div class="layer-stack">
+    <div class="layer" style="background:rgba(139,156,173,0.04);border-color:rgba(139,156,173,0.25)">
+      <div class="layer-num">01</div>
+      <div class="layer-content">
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.2rem">
+          <div class="layer-icon li-1" style="color:var(--db)"><span></span><span></span><span></span></div>
+          <span class="chip chip-personal">Personal Library</span>
+        </div>
+        <h3 style="color:var(--ow)">The idea inbox</h3>
+        <div class="layer-d" style="color:rgba(250,247,242,0.7)">Private to the designer. Five-second capture from anywhere — Chrome extension, mobile photo, URL paste. Minimum metadata required. No taxonomy enforcement, no review queue, no waiting. The pile of half-formed possibilities Leah is keeping warm. Most items live here forever. That's fine.</div>
+      </div>
+      <div class="layer-meta" style="color:rgba(250,247,242,0.45)">Visibility: just Leah<br>Quality bar: none<br>Procurement: external</div>
+    </div>
+
+    <div class="layer" style="background:rgba(168,181,160,0.04);border-color:rgba(168,181,160,0.25)">
+      <div class="layer-num">02</div>
+      <div class="layer-content">
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.2rem">
+          <div class="layer-icon li-2" style="color:var(--sa)"><span></span><span></span><span></span></div>
+          <span class="chip chip-studio">Studio Library</span>
+        </div>
+        <h3 style="color:var(--ow)">Proven and trusted</h3>
+        <div class="layer-d" style="color:rgba(250,247,242,0.7)">Shared within the studio (Middlewest's whole team if multi-designer). Items here have been used in real projects, vendor relationship is established, lead times and quirks documented. The institutional knowledge of the studio. Promoted from Layer 1 by an explicit action — usually after a piece ships successfully or vendor relationship matures.</div>
+      </div>
+      <div class="layer-meta" style="color:rgba(250,247,242,0.45)">Visibility: studio team<br>Quality bar: proven use<br>Procurement: external (with stored vendor context)</div>
+    </div>
+
+    <div class="layer" style="background:rgba(196,165,123,0.05);border-color:rgba(196,165,123,0.3)">
+      <div class="layer-num">03</div>
+      <div class="layer-content">
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.2rem">
+          <div class="layer-icon li-3" style="color:var(--cl)"><span></span><span></span><span></span></div>
+          <span class="chip chip-catalog">Patina Catalog</span>
+        </div>
+        <h3 style="color:var(--ow)">Frictionless marketplace</h3>
+        <div class="layer-d" style="color:rgba(250,247,242,0.7)">Public to all designers on Patina. Manufacturer-onboarded, Patina handles billing, commission tracked, one-click procurement. Items earn placement either by manufacturer submission (the Founding Circle pathway) or by nomination from the Studio Library when usage patterns prove the relationship is worth formalizing. This is where Patina is commercially the merchant.</div>
+      </div>
+      <div class="layer-meta" style="color:rgba(250,247,242,0.45)">Visibility: all Patina designers<br>Quality bar: manufacturer-onboarded<br>Procurement: Patina (one-click)</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <span class="callout-l">The Strata Mark in literal form</span>
+    <div class="callout-d" style="color:rgba(250,247,242,0.75)">The three layers map directly onto Patina's existing Strata Mark — three horizontal lines, descending in width and weight. Personal Library is the smallest line at the bottom. Studio Library is the middle. Patina Catalog is the full-width top line. The visual identity of the brand turns out to encode the architecture. Every layer indicator in the UI uses a miniature Strata Mark variant.</div>
+  </div>
+</div>
+</section>
+
+<!-- 03 NAVIGATION REDESIGN -->
+<section class="fade">
+<div class="w">
+  <p class="eyebrow">Navigation · Where layers live</p>
+  <h1>The Products zone <em>gets three rooms.</em></h1>
+  <p class="body" style="margin-bottom:1rem">The existing Products zone is a single browse-search-classify surface. The redesign opens it into three sibling views under a unified zone, with cross-cutting search that respects layer context. The top-level nav (Today / Pipeline / Procurement / Products / Clients) stays exactly the same — the change is inside the Products zone, not above it.</p>
+
+  <div class="frame">
+    <div class="fr-bar">
+      <div class="ll">Patina</div>
+      <div class="nv">
+        <span>Today</span>
+        <span>Pipeline</span>
+        <span>Procurement</span>
+        <span class="on">Products</span>
+        <span>Clients</span>
+      </div>
+      <div class="ut">⌕ ◎ ◆ <span class="fr-avt">LK</span></div>
+    </div>
+    <div class="fr-sub">
+      <span class="seg on">
+        <div class="layer-icon li-1" style="color:var(--db)"><span></span><span></span><span></span></div>
+        My Library · 247
+      </span>
+      <span class="seg">
+        <div class="layer-icon li-2" style="color:var(--sa)"><span></span><span></span><span></span></div>
+        Studio Library · 89
+      </span>
+      <span class="seg">
+        <div class="layer-icon li-3" style="color:var(--cl)"><span></span><span></span><span></span></div>
+        Patina Catalog · 2,847
+      </span>
+      <span class="seg" style="margin-left:auto;color:var(--cl);text-transform:none;letter-spacing:0;font-family:var(--fb);font-size:0.68rem">⌕ Search all layers · + Capture</span>
+    </div>
+    <div class="fr-c" style="padding:2rem;min-height:120px;display:flex;align-items:center;justify-content:center">
+      <div style="font-family:var(--fd);font-style:italic;color:var(--muted);font-size:0.9rem">Active layer's content appears here · Detail views follow</div>
+    </div>
+  </div>
+
+  <div class="g3" style="margin-top:1.5rem">
+    <div class="card" style="border-left:3px solid var(--db)">
+      <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.4rem">
+        <div class="layer-icon li-1" style="color:var(--db)"><span></span><span></span><span></span></div>
+        <span class="chip chip-personal">My Library</span>
+      </div>
+      <div class="card-t">Default landing</div>
+      <div class="card-d">When Leah clicks Products from the nav, she lands here. It's the view she touches every day — the unsorted pile of captures from this week's sourcing work.</div>
+    </div>
+    <div class="card" style="border-left:3px solid var(--sa)">
+      <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.4rem">
+        <div class="layer-icon li-2" style="color:var(--sa)"><span></span><span></span><span></span></div>
+        <span class="chip chip-studio">Studio Library</span>
+      </div>
+      <div class="card-t">Working knowledge</div>
+      <div class="card-d">The institutional library. When she's looking for "that great rug vendor we used on Whitfield," this is where she goes. Searchable by tag, project history, vendor.</div>
+    </div>
+    <div class="card" style="border-left:3px solid var(--cl)">
+      <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.4rem">
+        <div class="layer-icon li-3" style="color:var(--cl)"><span></span><span></span><span></span></div>
+        <span class="chip chip-catalog">Patina Catalog</span>
+      </div>
+      <div class="card-t">The marketplace</div>
+      <div class="card-d">Browse everything Patina-onboarded. Items here can be added directly to a project with one-click ordering. The teaching dashboard (Aesthete Engine work) lives here.</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <span class="callout-l">Cross-layer search</span>
+    <div class="callout-d">The ⌕ Search all layers field at top right searches across all three simultaneously. Results group by layer with clear visual indicators. Leah types "oak dining table"; she sees personal captures (3), studio favorites (2), and catalog matches (47) in three tabbed sections of the result. The layer she lands in determines next actions.</div>
+  </div>
+</div>
+</section>
+
+<!-- 04 MY LIBRARY (LAYER 1) -->
+<section class="fade wm-section">
+<div class="w">
+  <p class="eyebrow">Layer 1 · My Library</p>
+  <h1>The idea inbox, <em>built for the 11pm capture.</em></h1>
+  <p class="body" style="margin-bottom:1.25rem">My Library is Leah's private workspace. Everything she captures lands here first. The view is optimized for speed of retrieval — recently added at the top, easy filtering by source, by project intent, by status. No taxonomy enforcement. No fields required beyond name + image + source URL. This is the inbox.</p>
+
+  <div class="frame">
+    <div class="fr-bar">
+      <div class="ll">Patina</div>
+      <div class="nv"><span>Today</span><span>Pipeline</span><span>Procurement</span><span class="on">Products</span><span>Clients</span></div>
+      <div class="ut">⌕ ◎ ◆ <span class="fr-avt">LK</span></div>
+    </div>
+    <div class="fr-sub">
+      <span class="seg on"><div class="layer-icon li-1" style="color:var(--db)"><span></span><span></span><span></span></div>My Library · 247</span>
+      <span class="seg"><div class="layer-icon li-2" style="color:var(--sa)"><span></span><span></span><span></span></div>Studio Library · 89</span>
+      <span class="seg"><div class="layer-icon li-3" style="color:var(--cl)"><span></span><span></span><span></span></div>Patina Catalog · 2,847</span>
+      <span class="seg" style="margin-left:auto;color:var(--cl);text-transform:none;letter-spacing:0;font-family:var(--fb);font-size:0.68rem">⌕ Search · + Capture</span>
+    </div>
+    <div class="fr-c" style="padding:1.5rem">
+      <div class="cat-head">
+        <div>
+          <h2 style="display:flex;align-items:center;gap:0.5rem">
+            <div class="layer-icon li-1" style="color:var(--db);width:18px;height:13px"><span></span><span></span><span></span></div>
+            My Library
+          </h2>
+          <div class="cat-head-meta">247 items · Private to you · 12 added this week</div>
+        </div>
+        <div style="display:flex;gap:0.4rem">
+          <span class="filt"><span style="opacity:0.6">Sort:</span> Recent</span>
+          <span class="filt"><span style="opacity:0.6">View:</span> Grid</span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:0.4rem;margin-bottom:1rem;flex-wrap:wrap">
+        <span class="filt on">All · 247</span>
+        <span class="filt">From web · 198</span>
+        <span class="filt">From photo · 32</span>
+        <span class="filt">From URL · 17</span>
+        <span class="filt">Tagged to projects · 64</span>
+        <span class="filt">Pending decision · 8</span>
+      </div>
+
+      <div class="pgrid">
+        <div class="pcard">
+          <div class="pcard-img tw1">
+            <span class="chip chip-personal" style="background:rgba(250,247,242,0.9);color:var(--db);font-size:0.42rem">Personal</span>
+          </div>
+          <div class="pcard-info">
+            <div class="pcard-n">Restored Børge Mogensen Daybed</div>
+            <div class="pcard-v">1stDibs · Bauhaus Co · Captured 2d</div>
+            <div class="pcard-p">~$4,800</div>
+          </div>
+        </div>
+        <div class="pcard">
+          <div class="pcard-img tw2">
+            <span class="chip chip-personal" style="background:rgba(250,247,242,0.9);color:var(--db);font-size:0.42rem">Personal</span>
+          </div>
+          <div class="pcard-info">
+            <div class="pcard-n">Cane-back Lounge Chair (pair)</div>
+            <div class="pcard-v">Chairish · Captured 3d</div>
+            <div class="pcard-p">$2,400 ea</div>
+          </div>
+        </div>
+        <div class="pcard">
+          <div class="pcard-img tw3">
+            <span class="chip chip-personal" style="background:rgba(250,247,242,0.9);color:var(--db);font-size:0.42rem">Personal</span>
+            <span class="chip" style="background:rgba(232,197,71,0.9);color:var(--ch);font-size:0.42rem;position:absolute;bottom:6px;left:6px">Chen</span>
+          </div>
+          <div class="pcard-info">
+            <div class="pcard-n">Pale Linen Sectional · Custom</div>
+            <div class="pcard-v">Woodward & Sons · Captured 5d</div>
+            <div class="pcard-p">~$6,800 est.</div>
+          </div>
+        </div>
+        <div class="pcard">
+          <div class="pcard-img tw4">
+            <span class="chip chip-personal" style="background:rgba(250,247,242,0.9);color:var(--db);font-size:0.42rem">Personal</span>
+          </div>
+          <div class="pcard-info">
+            <div class="pcard-n">Vintage Brass Pharmacy Lamp</div>
+            <div class="pcard-v">Estate sale photo · Captured 5d</div>
+            <div class="pcard-p">$450</div>
+          </div>
+        </div>
+        <div class="pcard">
+          <div class="pcard-img tw5">
+            <span class="chip chip-personal" style="background:rgba(250,247,242,0.9);color:var(--db);font-size:0.42rem">Personal</span>
+            <span class="chip" style="background:rgba(232,197,71,0.9);color:var(--ch);font-size:0.42rem;position:absolute;bottom:6px;left:6px">Olsen</span>
+          </div>
+          <div class="pcard-info">
+            <div class="pcard-n">Terracotta Floor Vase</div>
+            <div class="pcard-v">Etsy · MossMakers · Captured 1w</div>
+            <div class="pcard-p">$220</div>
+          </div>
+        </div>
+        <div class="pcard">
+          <div class="pcard-img tw6">
+            <span class="chip chip-personal" style="background:rgba(250,247,242,0.9);color:var(--db);font-size:0.42rem">Personal</span>
+          </div>
+          <div class="pcard-info">
+            <div class="pcard-n">Heirloom Oak Console · Custom</div>
+            <div class="pcard-v">Nordic Atelier · Captured 1w</div>
+            <div class="pcard-p">~$3,400</div>
+          </div>
+        </div>
+        <div class="pcard">
+          <div class="pcard-img tw7">
+            <span class="chip chip-personal" style="background:rgba(250,247,242,0.9);color:var(--db);font-size:0.42rem">Personal</span>
+          </div>
+          <div class="pcard-info">
+            <div class="pcard-n">Smoked Glass Pendant</div>
+            <div class="pcard-v">Apparatus · Captured 2w</div>
+            <div class="pcard-p">$3,800</div>
+          </div>
+        </div>
+        <div class="pcard">
+          <div class="pcard-img tw8">
+            <span class="chip chip-personal" style="background:rgba(250,247,242,0.9);color:var(--db);font-size:0.42rem">Personal</span>
+          </div>
+          <div class="pcard-info">
+            <div class="pcard-n">Hand-knotted Wool Rug · 9×12</div>
+            <div class="pcard-v">Local rug dealer · Captured 2w</div>
+            <div class="pcard-p">~$3,200</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="g3" style="margin-top:1.25rem">
+    <div class="card">
+      <div class="card-i">◇</div>
+      <div class="card-t">Project tags are optional</div>
+      <div class="card-d">Items captured can be slotted into a specific project room ("Chen Residence → Living Room") or left untagged. Untagged items wait in the inbox until they find a home — or don't. Both are fine.</div>
+    </div>
+    <div class="card">
+      <div class="card-i">◇</div>
+      <div class="card-t">Captures from anywhere</div>
+      <div class="card-d">Chrome extension, mobile photo, URL paste, manual entry. The "From web/photo/URL" filters distinguish source so Leah can find that one she captured on her phone last weekend.</div>
+    </div>
+    <div class="card">
+      <div class="card-i">◇</div>
+      <div class="card-t">Quiet by default</div>
+      <div class="card-d">No "promote to studio" prompts cluttering the view. No taxonomy warnings. No completion percentages. Just the captures, retrievable. Promotion is initiated when Leah is ready.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- 05 CAPTURE FLOW (Chrome extension) -->
+<section class="fade">
+<div class="w">
+  <p class="eyebrow">Capture flow · The 5-second target</p>
+  <h1>From browsing to captured <em>in three clicks.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">Capture is the lifeblood of the layered system. The Chrome extension is the dominant capture path — Leah is on a furniture site, sees something worth keeping, hits the extension, picks a destination, done. The extension does the work of detecting price/dimensions/image; she does the work of choosing where it goes. Five seconds end to end. Mobile capture (photo, URL paste) follows the same pattern at the same speed.</p>
+
+  <div class="g2" style="align-items:start">
+    <div>
+      <h3>Chrome extension popup · After detection</h3>
+      <div class="ext">
+        <div class="ext-bar">
+          <span>Patina · Capture</span>
+          <span>×</span>
+        </div>
+        <div class="ext-body">
+          <div class="ext-img"></div>
+          <div style="font-family:var(--fd);font-weight:500;font-size:0.92rem;color:var(--ch);margin-bottom:0.15rem">Heirloom Oak Console</div>
+          <div style="font-family:var(--fb);font-size:0.68rem;color:var(--muted);margin-bottom:0.85rem">nordicatelier.com · trade pricing visible</div>
+
+          <div class="ext-row"><span class="ext-row-l">Price</span><span class="ext-row-v">$3,400</span></div>
+          <div class="ext-row"><span class="ext-row-l">Lead time</span><span class="ext-row-v">12 weeks</span></div>
+          <div class="ext-row"><span class="ext-row-l">Vendor</span><span class="ext-row-v">Nordic Atelier</span></div>
+
+          <div style="margin-top:0.85rem">
+            <div style="font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);margin-bottom:0.35rem">Save to</div>
+            <div class="ext-select">
+              <span>My Library</span>
+              <span style="color:var(--cl);font-size:0.6rem">▾</span>
+            </div>
+            <div style="font-family:var(--fb);font-size:0.62rem;color:var(--muted);font-style:italic;margin-bottom:0.5rem">Or tag to a project room</div>
+            <div class="ext-select" style="padding:0.4rem 0.7rem;color:var(--cl);background:rgba(196,165,123,0.05);border-color:rgba(196,165,123,0.3)">
+              <span style="font-size:0.68rem">+ Chen Residence · Living Room</span>
+              <span style="font-size:0.6rem">▾</span>
+            </div>
+          </div>
+
+          <button class="ext-btn">Save · 5 sec</button>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3>What the extension does automatically</h3>
+      <div class="frame" style="margin:0.5rem 0">
+        <div class="fr-c" style="background:var(--sf);padding:1.25rem">
+          <div class="spec-row">
+            <span class="spec-row-l">Image extraction</span>
+            <span class="spec-row-r">Pulls highest-resolution product image from page. Falls back to OpenGraph image, then first large image. User can swap if wrong.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Title detection</span>
+            <span class="spec-row-r">Product title from JSON-LD if present, else h1, else page title minus site suffix.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Price</span>
+            <span class="spec-row-r">Schema.org Price markup first, then common DOM patterns. If trade-pricing visible, captures trade price too.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Vendor</span>
+            <span class="spec-row-r">Derived from domain. Matched against existing vendor records — if Leah has worked with Nordic Atelier before, the existing vendor entity is reused.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">URL</span>
+            <span class="spec-row-r">Current page URL stored as source. Lets Leah return to the exact product later.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Dimensions</span>
+            <span class="spec-row-r">Best-effort regex on page text. If found, populated; if not, blank. Never blocks save.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Lead time</span>
+            <span class="spec-row-r">Pattern-matched on common phrases ("ships in 12 weeks", "12 week lead time"). Optional field.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <span class="callout-l">The one required choice</span>
+    <div class="callout-d"><strong>Where does this go?</strong> Every capture answers exactly one question that the system can't answer for her: which library, and optionally which project room. The destination dropdown defaults to "My Library" because that's the right answer 90% of the time. When Leah is actively sourcing for a project, she opens the project selector and slots directly to a room — saves the second pass later. The dropdown remembers her most recently active project to speed this further.</div>
+  </div>
+
+  <h3 style="margin-top:1.5rem">Capture from other sources</h3>
+  <div class="g3">
+    <div class="card">
+      <div class="card-i">◎</div>
+      <div class="card-t">Mobile photo</div>
+      <div class="card-d">Snap a photo (vintage chair at an antique shop, fabric swatch on a showroom wall). Voice-to-text quick notes. Same destination dropdown. Goes straight to My Library. OCR extracts any visible text — price tags, vendor cards.</div>
+    </div>
+    <div class="card">
+      <div class="card-i">⌕</div>
+      <div class="card-t">URL paste</div>
+      <div class="card-d">In the portal, the "+ Capture" button opens a URL field. Paste, the system scrapes everything the extension would. Useful when Leah is on her desktop without the extension installed (e.g., traveling, borrowed computer).</div>
+    </div>
+    <div class="card">
+      <div class="card-i">◈</div>
+      <div class="card-t">Manual entry</div>
+      <div class="card-d">For items without a web presence — local antique dealer, in-person estate sale, a maker Leah found at a craft fair with no website. Same fields, all manual. The slowest path, but always available.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- 06 STUDIO LIBRARY (LAYER 2) -->
+<section class="fade dk-section">
+<div class="w">
+  <p class="eyebrow">Layer 2 · Studio Library</p>
+  <h1>Proven, trusted, <em>institutional knowledge.</em></h1>
+  <p class="body" style="margin-bottom:1.25rem">Studio Library is what separates a one-designer shop from a real studio practice. It's the shared brain. When a junior designer at Middlewest is sourcing for a project and asks "what's that great rug vendor we use?" — the answer lives here, not in someone's Notion or Pinterest. Items get here by being promoted from Layer 1, with metadata that wasn't required at capture but matters now: vendor relationship status, lead-time accuracy, preferred contact, projects used in.</p>
+
+  <div class="frame">
+    <div class="fr-bar">
+      <div class="ll">Patina</div>
+      <div class="nv"><span>Today</span><span>Pipeline</span><span>Procurement</span><span class="on">Products</span><span>Clients</span></div>
+      <div class="ut">⌕ ◎ ◆ <span class="fr-avt">LK</span></div>
+    </div>
+    <div class="fr-sub">
+      <span class="seg"><div class="layer-icon li-1" style="color:var(--db)"><span></span><span></span><span></span></div>My Library · 247</span>
+      <span class="seg on"><div class="layer-icon li-2" style="color:var(--sa)"><span></span><span></span><span></span></div>Studio Library · 89</span>
+      <span class="seg"><div class="layer-icon li-3" style="color:var(--cl)"><span></span><span></span><span></span></div>Patina Catalog · 2,847</span>
+      <span class="seg" style="margin-left:auto;color:var(--cl);text-transform:none;letter-spacing:0;font-family:var(--fb);font-size:0.68rem">⌕ Search · + Capture</span>
+    </div>
+    <div class="fr-c" style="padding:1.5rem;background:var(--ow)">
+      <div class="cat-head">
+        <div>
+          <h2 style="display:flex;align-items:center;gap:0.5rem;color:var(--ch)">
+            <div class="layer-icon li-2" style="color:var(--sa);width:18px;height:13px"><span></span><span></span><span></span></div>
+            Studio Library
+          </h2>
+          <div class="cat-head-meta">89 items · Visible to all Middlewest designers · 12 vendors</div>
+        </div>
+        <div style="display:flex;gap:0.4rem">
+          <span class="filt"><span style="opacity:0.6">Sort:</span> Most used</span>
+          <span class="filt"><span style="opacity:0.6">View:</span> By Vendor</span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:0.4rem;margin-bottom:1rem;flex-wrap:wrap">
+        <span class="filt on" style="color:var(--ch)">All · 89</span>
+        <span class="filt" style="color:var(--ch)">Seating · 23</span>
+        <span class="filt" style="color:var(--ch)">Tables · 18</span>
+        <span class="filt" style="color:var(--ch)">Lighting · 16</span>
+        <span class="filt" style="color:var(--ch)">Rugs · 11</span>
+        <span class="filt" style="color:var(--ch)">Storage · 12</span>
+        <span class="filt" style="color:var(--ch)">Decor · 9</span>
+      </div>
+
+      <div class="pgrid">
+        <div class="pcard">
+          <div class="pcard-img tw1">
+            <span class="chip chip-studio" style="background:rgba(250,247,242,0.9);color:var(--sa);font-size:0.42rem">Studio</span>
+            <span class="chip" style="background:rgba(196,165,123,0.9);color:var(--ch);font-size:0.42rem;position:absolute;bottom:6px;left:6px">Used 6×</span>
+          </div>
+          <div class="pcard-info">
+            <div class="pcard-n">Heirloom Oak Dining Table</div>
+            <div class="pcard-v">Nordic Atelier · 14 wk LT</div>
+            <div class="pcard-p">$4,200 (trade)</div>
+          </div>
+        </div>
+        <div class="pcard">
+          <div class="pcard-img tw3">
+            <span class="chip chip-studio" style="background:rgba(250,247,242,0.9);color:var(--sa);font-size:0.42rem">Studio</span>
+            <span class="chip" style="background:rgba(196,165,123,0.9);color:var(--ch);font-size:0.42rem;position:absolute;bottom:6px;left:6px">Used 4×</span>
+          </div>
+          <div class="pcard-info">
+            <div class="pcard-n">Meadow Linen Sectional</div>
+            <div class="pcard-v">Woodward & Sons · 10 wk LT</div>
+            <div class="pcard-p">$6,800</div>
+          </div>
+        </div>
+        <div class="pcard">
+          <div class="pcard-img tw6">
+            <span class="chip chip-studio" style="background:rgba(250,247,242,0.9);color:var(--sa);font-size:0.42rem">Studio</span>
+            <span class="chip" style="background:rgba(196,165,123,0.9);color:var(--ch);font-size:0.42rem;position:absolute;bottom:6px;left:6px">Used 8×</span>
+          </div>
+          <div class="pcard-info">
+            <div class="pcard-n">Shaker Dining Chair</div>
+            <div class="pcard-v">Sawkille Co · 8 wk LT</div>
+            <div class="pcard-p">$400 ea</div>
+          </div>
+        </div>
+        <div class="pcard">
+          <div class="pcard-img tw8">
+            <span class="chip chip-studio" style="background:rgba(250,247,242,0.9);color:var(--sa);font-size:0.42rem">Studio</span>
+            <span class="chip" style="background:rgba(196,165,123,0.9);color:var(--ch);font-size:0.42rem;position:absolute;bottom:6px;left:6px">Used 3×</span>
+          </div>
+          <div class="pcard-info">
+            <div class="pcard-n">Hand-knotted Persian · 9×12</div>
+            <div class="pcard-v">Madison Rug Co · 2 wk LT</div>
+            <div class="pcard-p">$3,200</div>
+          </div>
+        </div>
+      </div>
+
+      <h4 style="margin-top:1.5rem;color:var(--ch);font-size:0.92rem">Studio vendors</h4>
+      <div class="comp">
+        <div class="comp-r head">
+          <div class="comp-c">Vendor</div>
+          <div class="comp-c">Items in library</div>
+          <div class="comp-c">Avg lead time</div>
+          <div class="comp-c">Projects used</div>
+        </div>
+        <div class="comp-r">
+          <div class="comp-c">Sawkille Co</div>
+          <div class="comp-c">14</div>
+          <div class="comp-c">8 weeks</div>
+          <div class="comp-c">11 projects</div>
+        </div>
+        <div class="comp-r">
+          <div class="comp-c">Nordic Atelier</div>
+          <div class="comp-c">11</div>
+          <div class="comp-c">12 weeks</div>
+          <div class="comp-c">8 projects</div>
+        </div>
+        <div class="comp-r">
+          <div class="comp-c">Woodward & Sons</div>
+          <div class="comp-c">9</div>
+          <div class="comp-c">10 weeks</div>
+          <div class="comp-c">7 projects</div>
+        </div>
+        <div class="comp-r">
+          <div class="comp-c">Apparatus Studio</div>
+          <div class="comp-c">7</div>
+          <div class="comp-c">6 weeks</div>
+          <div class="comp-c">5 projects</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="g2" style="margin-top:1.5rem">
+    <div class="card">
+      <div class="card-t">Layer 2 adds vendor relationship metadata</div>
+      <div class="card-d">When an item is promoted from My Library to Studio Library, additional fields become required: vendor preferred contact, average lead-time accuracy (vs quoted), trade discount status, preferred payment terms. These fields existed for procurement; promotion to Studio makes them part of the product record itself.</div>
+    </div>
+    <div class="card">
+      <div class="card-t">"By Vendor" view is the second sort axis</div>
+      <div class="card-d">Studio Library defaults to By Vendor view because that's how working knowledge is organized at this layer. Browse by maker first, then by item. The "By Category" view is still available for when Leah is shopping cross-vendor for a particular need.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- 07 PATINA CATALOG (LAYER 3) -->
+<section class="fade">
+<div class="w">
+  <p class="eyebrow">Layer 3 · Patina Catalog</p>
+  <h1>The marketplace. <em>Where Patina earns its keep.</em></h1>
+  <p class="body" style="margin-bottom:1.25rem">The Patina Catalog is what every designer on the platform can see. Manufacturer-onboarded, quality-controlled, fully spec'd. Items here flow through Patina's commerce infrastructure — one-click ordering, commission tracked, payment handled, vendor relationship managed centrally. This is the layer the existing Products zone was built around. The redesign doesn't replace this — it makes it part of a larger story that respects the other two layers as equal citizens.</p>
+
+  <div class="frame">
+    <div class="fr-bar">
+      <div class="ll">Patina</div>
+      <div class="nv"><span>Today</span><span>Pipeline</span><span>Procurement</span><span class="on">Products</span><span>Clients</span></div>
+      <div class="ut">⌕ ◎ ◆ <span class="fr-avt">LK</span></div>
+    </div>
+    <div class="fr-sub">
+      <span class="seg"><div class="layer-icon li-1" style="color:var(--db)"><span></span><span></span><span></span></div>My Library · 247</span>
+      <span class="seg"><div class="layer-icon li-2" style="color:var(--sa)"><span></span><span></span><span></span></div>Studio Library · 89</span>
+      <span class="seg on"><div class="layer-icon li-3" style="color:var(--cl)"><span></span><span></span><span></span></div>Patina Catalog · 2,847</span>
+      <span class="seg" style="margin-left:auto;color:var(--cl);text-transform:none;letter-spacing:0;font-family:var(--fb);font-size:0.68rem">⌕ Search · + Capture</span>
+    </div>
+    <div class="fr-c" style="padding:1.5rem">
+      <div class="cat-head">
+        <div>
+          <h2 style="display:flex;align-items:center;gap:0.5rem">
+            <div class="layer-icon li-3" style="color:var(--cl);width:18px;height:13px"><span></span><span></span><span></span></div>
+            Patina Catalog
+          </h2>
+          <div class="cat-head-meta">2,847 items · 47 manufacturer partners · One-click ordering</div>
+        </div>
+        <div style="display:flex;gap:0.4rem">
+          <span class="filt"><span style="opacity:0.6">Sort:</span> Aesthete match</span>
+          <span class="filt"><span style="opacity:0.6">View:</span> Grid</span>
+        </div>
+      </div>
+
+      <div class="tablist">
+        <div class="ti on">Browse <span class="ct">2,847</span></div>
+        <div class="ti">For your active projects <span class="ct">186</span></div>
+        <div class="ti">From Founding Circle <span class="ct">412</span></div>
+        <div class="ti">Teach the Engine <span class="ct">34 pending</span></div>
+      </div>
+
+      <div style="display:flex;gap:0.4rem;margin-bottom:1rem;flex-wrap:wrap">
+        <span class="filt on">Seating · 612</span>
+        <span class="filt">Tables · 487</span>
+        <span class="filt">Lighting · 398</span>
+        <span class="filt">Rugs · 244</span>
+        <span class="filt">Storage · 312</span>
+        <span class="filt">Decor · 794</span>
+      </div>
+
+      <div class="pgrid">
+        <div class="pcard">
+          <div class="pcard-img tw1">
+            <span class="chip chip-catalog" style="background:rgba(250,247,242,0.9);color:var(--cl);font-size:0.42rem">Catalog</span>
+            <span class="chip" style="background:rgba(168,181,160,0.9);color:var(--ch);font-size:0.42rem;position:absolute;bottom:6px;left:6px">94% match</span>
+          </div>
+          <div class="pcard-info">
+            <div class="pcard-n">Heirloom Oak Dining Table</div>
+            <div class="pcard-v">Nordic Atelier · Patina Partner</div>
+            <div class="pcard-p">$4,200 · 14 wk LT</div>
+          </div>
+        </div>
+        <div class="pcard">
+          <div class="pcard-img tw3">
+            <span class="chip chip-catalog" style="background:rgba(250,247,242,0.9);color:var(--cl);font-size:0.42rem">Catalog</span>
+            <span class="chip" style="background:rgba(168,181,160,0.9);color:var(--ch);font-size:0.42rem;position:absolute;bottom:6px;left:6px">89% match</span>
+          </div>
+          <div class="pcard-info">
+            <div class="pcard-n">Meadow Linen Sectional</div>
+            <div class="pcard-v">Woodward & Sons · Patina Partner</div>
+            <div class="pcard-p">$6,800 · 10 wk LT</div>
+          </div>
+        </div>
+        <div class="pcard">
+          <div class="pcard-img tw6">
+            <span class="chip chip-catalog" style="background:rgba(250,247,242,0.9);color:var(--cl);font-size:0.42rem">Catalog</span>
+            <span class="chip" style="background:rgba(168,181,160,0.9);color:var(--ch);font-size:0.42rem;position:absolute;bottom:6px;left:6px">82% match</span>
+          </div>
+          <div class="pcard-info">
+            <div class="pcard-n">Shaker Dining Chair</div>
+            <div class="pcard-v">Sawkille Co · Founding Circle</div>
+            <div class="pcard-p">$400 ea · 8 wk LT</div>
+          </div>
+        </div>
+        <div class="pcard">
+          <div class="pcard-img tw7">
+            <span class="chip chip-catalog" style="background:rgba(250,247,242,0.9);color:var(--cl);font-size:0.42rem">Catalog</span>
+            <span class="chip" style="background:rgba(168,181,160,0.9);color:var(--ch);font-size:0.42rem;position:absolute;bottom:6px;left:6px">78% match</span>
+          </div>
+          <div class="pcard-info">
+            <div class="pcard-n">Brass Pendant · Cluster</div>
+            <div class="pcard-v">Apparatus Studio · Founding Circle</div>
+            <div class="pcard-p">$3,800 · 6 wk LT</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="g3" style="margin-top:1.5rem">
+    <div class="card" style="border-left:3px solid var(--cl)">
+      <div class="card-t">Aesthete Engine integration is here</div>
+      <div class="card-d">Match scores on cards reflect the active project's style profile or client's Aesthete profile. "Sort: Aesthete match" is the default sort. The teaching tab (where Leah classifies items, corrects mistakes, adds rules) lives in this layer — because this is the data that powers consumer-facing recommendations.</div>
+    </div>
+    <div class="card" style="border-left:3px solid var(--cl)">
+      <div class="card-t">"For your active projects" tab</div>
+      <div class="card-d">Surfaces catalog items that match the style profiles of Leah's currently-active projects. Pre-filtered cross-section of "things I should know about while working on Chen, Whitfield, Olsen." Cuts down the 2,847 to ~186 most relevant.</div>
+    </div>
+    <div class="card" style="border-left:3px solid var(--cl)">
+      <div class="card-t">"From Founding Circle" tab</div>
+      <div class="card-d">A premium subset — items from the original Founding Circle manufacturers Leah helped onboard. Often featured prominently in editorial content, with curated context Leah herself helped write.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- 08 LAYER PROMOTION -->
+<section class="fade wm-section">
+<div class="w">
+  <p class="eyebrow">Layer transitions · How items move outward</p>
+  <h1>From private idea <em>to public marketplace.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">Items don't get demoted. They move outward — toward more visibility, more accountability, more procurement integration — only when they've earned it. Each transition has a different trigger, a different approver, and a different set of newly-required fields. The system never auto-promotes; promotion is always an explicit human choice. But the system surfaces strong candidates when usage patterns suggest they're ready.</p>
+
+  <div class="flow">
+    <div class="fn p1"><span class="fn-l">Layer 1</span>My Library</div>
+    <div class="fa">→ promote →</div>
+    <div class="fn p2"><span class="fn-l">Layer 2</span>Studio Library</div>
+    <div class="fa">→ nominate →</div>
+    <div class="fn p3"><span class="fn-l">Layer 3</span>Patina Catalog</div>
+  </div>
+
+  <div class="g2" style="margin-top:1.5rem">
+    <div>
+      <h3>My Library → Studio Library</h3>
+      <p class="body" style="font-size:0.82rem;margin-bottom:0.85rem">The lower-stakes transition. Promotion happens when an item proves out — successfully used in at least one project, or vendor relationship strong enough that the studio wants the item bookmarked.</p>
+
+      <div class="frame" style="margin:0.5rem 0">
+        <div class="fr-c" style="background:var(--sf);padding:1.25rem">
+          <div class="spec-row">
+            <span class="spec-row-l">Who can promote</span>
+            <span class="spec-row-r">Any studio member (in solo Middlewest, just Leah; in multi-designer studios, anyone with edit permissions)</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Triggers (system suggests)</span>
+            <span class="spec-row-r">Item used in 2+ projects · Item ordered successfully without issues · Vendor relationship has 3+ Studio items already</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Newly required fields</span>
+            <span class="spec-row-r">Vendor preferred contact · Verified lead time · Trade pricing confirmation · Category/subcategory · One usage note</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Approval</span>
+            <span class="spec-row-r">Self-approved by promoter (no review queue at this layer)</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">UX</span>
+            <span class="spec-row-r">"Promote to Studio Library" action on item detail. Modal shows the newly-required fields with pre-populated values where possible.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3>Studio Library → Patina Catalog</h3>
+      <p class="body" style="font-size:0.82rem;margin-bottom:0.85rem">The higher-stakes transition. This isn't really a designer-side promotion — it's a nomination that triggers a Patina-side conversation with the manufacturer. The designer signals interest; Patina formalizes the relationship.</p>
+
+      <div class="frame" style="margin:0.5rem 0">
+        <div class="fr-c" style="background:var(--sf);padding:1.25rem">
+          <div class="spec-row">
+            <span class="spec-row-l">Who can nominate</span>
+            <span class="spec-row-r">Studio owners only · Counts as a business-development action</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Triggers (system suggests)</span>
+            <span class="spec-row-r">Vendor has 5+ Studio Library items · Vendor used by 3+ different designers (multi-studio signal) · Vendor relationship documented as "trade account established"</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Newly required fields</span>
+            <span class="spec-row-r">Designer's recommendation note · Manufacturer contact for Patina outreach · Estimated catalog tier · Style tags · Aesthete classification</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Approval</span>
+            <span class="spec-row-r">Patina team reviews nomination · Reaches out to manufacturer · Onboarding flow (separate Manufacturer Portal) · Item appears in Catalog once manufacturer onboarded</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">UX</span>
+            <span class="spec-row-r">"Nominate to Patina Catalog" action on vendor record (not individual item — nomination is about the maker, not one piece). Confirmation modal shows what happens next.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:1.5rem">The "ready to promote" surfacing</h3>
+  <p class="body" style="margin-bottom:1rem">The system actively but quietly suggests promotion candidates — never as a popup or modal, only as a subtle indicator in the relevant view.</p>
+
+  <div class="promo">
+    <div class="promo-i">↗</div>
+    <div>
+      <div class="promo-t">3 items in My Library are ready for Studio Library</div>
+      <div class="promo-d">Each has been spec'd into at least 2 projects and ordered without issue. Promoting takes them out of your private inbox and into shared studio knowledge.</div>
+    </div>
+    <span class="promo-btn">Review</span>
+  </div>
+
+  <div class="promo" style="background:rgba(168,181,160,0.06);border-color:rgba(168,181,160,0.25)">
+    <div class="promo-i" style="color:var(--sa)">↗</div>
+    <div>
+      <div class="promo-t">Sawkille Co looks ready for Patina nomination</div>
+      <div class="promo-d">14 Studio Library items · Used in 11 projects · Trade account established · Strong fit with Founding Circle. Patina will reach out to formalize the partnership.</div>
+    </div>
+    <span class="promo-btn">Nominate</span>
+  </div>
+</div>
+</section>
+
+<!-- 09 ITEM DETAIL VIEW -->
+<section class="fade">
+<div class="w">
+  <p class="eyebrow">The item detail view</p>
+  <h1>One item, <em>three possible contexts.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">When Leah opens any item — from any layer — the detail view tells her not just what the item is, but where it lives in the system, how it's been used, and what actions are available. The layer indicator is always visible. The actions available shift based on which layer the item is in.</p>
+
+  <div class="detail-panel">
+    <div class="detail-img"></div>
+    <div class="detail-content">
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem;flex-wrap:wrap">
+        <div class="layer-icon li-2" style="color:var(--sa);width:16px;height:12px"><span></span><span></span><span></span></div>
+        <span class="chip chip-studio">Studio Library</span>
+        <span class="chip" style="background:rgba(196,165,123,0.1);color:var(--cl);font-size:0.45rem">Used in 6 projects</span>
+      </div>
+      <h3>Heirloom Oak Dining Table · 6-seat</h3>
+      <div class="detail-vendor">Nordic Atelier · trade pricing visible</div>
+      <div class="detail-price">$4,200 <span style="font-family:var(--fb);font-size:0.7rem;color:var(--muted);font-weight:400">(trade)</span></div>
+
+      <div class="detail-row"><span class="detail-row-l">Vendor</span><span class="detail-row-v"><strong>Nordic Atelier</strong> · trade@nordicatelier.com · Trade account established 2024</span></div>
+      <div class="detail-row"><span class="detail-row-l">Lead time</span><span class="detail-row-v"><strong>14 weeks</strong> · 12 actual avg from 6 historical orders</span></div>
+      <div class="detail-row"><span class="detail-row-l">Payment terms</span><span class="detail-row-v">50/50 split · Deposit at order, balance before ship</span></div>
+      <div class="detail-row"><span class="detail-row-l">Dimensions</span><span class="detail-row-v">84"L × 42"D × 30"H · seats 6 comfortably, 8 tight</span></div>
+      <div class="detail-row"><span class="detail-row-l">Used in projects</span><span class="detail-row-v">Chen Residence · Olsen Lake House · Whitfield · Morrison · 2 historical</span></div>
+      <div class="detail-row"><span class="detail-row-l">First captured</span><span class="detail-row-v">March 2024 · Promoted to Studio Library June 2024</span></div>
+      <div class="detail-row"><span class="detail-row-l">Source URL</span><span class="detail-row-v"><code>nordicatelier.com/trade/heirloom-oak-dining</code></span></div>
+
+      <div style="margin-top:1.25rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+        <span class="promo-btn">Add to project →</span>
+        <span class="filt">Edit details</span>
+        <span class="filt">View order history</span>
+        <span class="filt" style="color:var(--cl);border-color:rgba(196,165,123,0.3)">Nominate vendor to Catalog ↗</span>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:1.5rem">Actions shift by layer</h3>
+  <div class="comp">
+    <div class="comp-r head">
+      <div class="comp-c">Action</div>
+      <div class="comp-c head-cell"><div class="layer-icon li-1" style="color:var(--db)"><span></span><span></span><span></span></div>My Library</div>
+      <div class="comp-c head-cell"><div class="layer-icon li-2" style="color:var(--sa)"><span></span><span></span><span></span></div>Studio Library</div>
+      <div class="comp-c head-cell"><div class="layer-icon li-3" style="color:var(--cl)"><span></span><span></span><span></span></div>Patina Catalog</div>
+    </div>
+    <div class="comp-r">
+      <div class="comp-c">Add to project</div>
+      <div class="comp-c">Yes · external procurement</div>
+      <div class="comp-c">Yes · external procurement with stored vendor context</div>
+      <div class="comp-c">Yes · one-click ordering through Patina</div>
+    </div>
+    <div class="comp-r">
+      <div class="comp-c">Edit details</div>
+      <div class="comp-c">Always</div>
+      <div class="comp-c">Studio members only</div>
+      <div class="comp-c">Patina-side only · Designer can request edit</div>
+    </div>
+    <div class="comp-r">
+      <div class="comp-c">Promote / nominate</div>
+      <div class="comp-c">Promote to Studio (any studio member)</div>
+      <div class="comp-c">Nominate vendor to Patina (studio owner only)</div>
+      <div class="comp-c">N/A · already top layer</div>
+    </div>
+    <div class="comp-r">
+      <div class="comp-c">Delete</div>
+      <div class="comp-c">Yes · permanent</div>
+      <div class="comp-c">Yes · with confirmation · only if unused</div>
+      <div class="comp-c">No · catalog managed by Patina</div>
+    </div>
+    <div class="comp-r">
+      <div class="comp-c">Teach Aesthete</div>
+      <div class="comp-c">No · private items don't train shared engine</div>
+      <div class="comp-c">Optional · vendor-specific style notes</div>
+      <div class="comp-c">Yes · primary teaching surface</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- 10 PROCUREMENT + AESTHETE INTEGRATION -->
+<section class="fade dk-section">
+<div class="w">
+  <p class="eyebrow">Cross-system integration</p>
+  <h1>How the three layers <em>connect to everything else.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">The layered Products zone doesn't live in isolation. It's the upstream input to Procurement (every item ordered came from one of these layers) and the upstream input to the Aesthete Engine (every classification, every successful match, every "this paired well with that" teaches the engine). The layers make those connections cleaner — different procurement paths, different teaching opportunities, different commercial implications.</p>
+
+  <div class="g2">
+    <div>
+      <h3>Procurement integration</h3>
+      <p class="body" style="font-size:0.82rem;margin-bottom:1rem;color:rgba(250,247,242,0.7)">When an item is added to a project from any layer and the client approves it, it enters the Procurement Workspace. The layer it came from determines the procurement path.</p>
+
+      <div class="frame" style="margin:0">
+        <div class="fr-c" style="background:rgba(250,247,242,0.03);padding:1.25rem;border:1px solid rgba(250,247,242,0.08);border-radius:6px">
+          <div class="spec-row" style="border-bottom-color:rgba(250,247,242,0.08)">
+            <span class="spec-row-l" style="color:rgba(250,247,242,0.4)">From My Library</span>
+            <span class="spec-row-r" style="color:rgba(250,247,242,0.7)">Order Assistant flow · External vendor · Manual PO logging · Payment terms entered at confirmation</span>
+          </div>
+          <div class="spec-row" style="border-bottom-color:rgba(250,247,242,0.08)">
+            <span class="spec-row-l" style="color:rgba(250,247,242,0.4)">From Studio Library</span>
+            <span class="spec-row-r" style="color:rgba(250,247,242,0.7)">Order Assistant flow · External vendor with pre-filled context (preferred contact, payment terms, shipping defaults) · Less re-keying</span>
+          </div>
+          <div class="spec-row" style="border-bottom-color:rgba(250,247,242,0.08)">
+            <span class="spec-row-l" style="color:rgba(250,247,242,0.4)">From Patina Catalog</span>
+            <span class="spec-row-r" style="color:rgba(250,247,242,0.7)">One-click order through Patina · Patina handles deposit/balance · "Patina handled" pill in payment status · Commission tracked</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3>Aesthete Engine integration</h3>
+      <p class="body" style="font-size:0.82rem;margin-bottom:1rem;color:rgba(250,247,242,0.7)">The layers also determine how items contribute to ML training. Private captures still inform Leah's personal style profile (helps her recommendations); Studio items inform the studio's collective taste profile; only Patina Catalog items contribute to consumer-facing engine training.</p>
+
+      <div class="frame" style="margin:0">
+        <div class="fr-c" style="background:rgba(250,247,242,0.03);padding:1.25rem;border:1px solid rgba(250,247,242,0.08);border-radius:6px">
+          <div class="spec-row" style="border-bottom-color:rgba(250,247,242,0.08)">
+            <span class="spec-row-l" style="color:rgba(250,247,242,0.4)">My Library items</span>
+            <span class="spec-row-r" style="color:rgba(250,247,242,0.7)">Train Leah's personal style vector only · Never exposed beyond her account · Privacy-preserving signal aggregation</span>
+          </div>
+          <div class="spec-row" style="border-bottom-color:rgba(250,247,242,0.08)">
+            <span class="spec-row-l" style="color:rgba(250,247,242,0.4)">Studio Library items</span>
+            <span class="spec-row-r" style="color:rgba(250,247,242,0.7)">Train studio collective profile · Used for studio-wide recommendations · "What Middlewest tends to spec" learned implicitly</span>
+          </div>
+          <div class="spec-row" style="border-bottom-color:rgba(250,247,242,0.08)">
+            <span class="spec-row-l" style="color:rgba(250,247,242,0.4)">Patina Catalog items</span>
+            <span class="spec-row-r" style="color:rgba(250,247,242,0.7)">Primary engine training source · Public taxonomy work · Consumer recommendations powered by these · Teaching dashboard here</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pq">
+    <blockquote style="color:var(--ow)">"The flywheel hidden in plain sight: every captured item, even the private ones, makes the system smarter about that designer. Every item that gets promoted makes the studio smarter. Every item that becomes a Patina catalog item makes the marketplace smarter. The layers aren't just visibility scopes — they're three concentric circles of intelligence."</blockquote>
+    <cite>The three-layer flywheel</cite>
+  </div>
+</div>
+</section>
+
+<!-- 11 DATA MODEL -->
+<section class="fade">
+<div class="w">
+  <div class="sm"><div></div><div></div><div></div></div>
+  <p class="eyebrow">Data model · The shape of the change</p>
+  <h1>One products table, <em>one layer column.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">The implementation is simpler than the conceptual model suggests. The existing products table gains a single column — <code style="font-family:var(--fm);font-size:0.85rem;background:var(--pe);padding:2px 7px;border-radius:3px">layer</code> — that defines whether an item is Personal, Studio, or Catalog. Visibility rules, available actions, and procurement paths all key off this column. Promotions update the column value and trigger validation that the newly-required fields exist. No new tables. No data duplication.</p>
+
+  <div class="schema">
+<span class="cm-c">-- Extended products table</span>
+<span class="kw">CREATE TABLE</span> products (
+  id                <span class="ty">uuid PRIMARY KEY</span>,
+  name              <span class="ty">text NOT NULL</span>,
+  image_url         <span class="ty">text</span>,
+  source_url        <span class="ty">text</span>,
+  price_cents       <span class="ty">integer</span>,
+  vendor_id         <span class="ty">uuid REFERENCES vendors(id)</span>,
+  dimensions        <span class="ty">jsonb</span>,
+  lead_time_weeks   <span class="ty">integer</span>,
+
+  <span class="cm-c">-- NEW: the three-layer system</span>
+  layer             <span class="ty">enum('personal','studio','catalog') NOT NULL DEFAULT 'personal'</span>,
+  owner_user_id     <span class="ty">uuid REFERENCES users(id)</span>,    <span class="cm-c">-- set for personal</span>
+  studio_id         <span class="ty">uuid REFERENCES studios(id)</span>, <span class="cm-c">-- set for studio + catalog</span>
+
+  <span class="cm-c">-- Promotion tracking</span>
+  promoted_from_id  <span class="ty">uuid REFERENCES products(id)</span>, <span class="cm-c">-- when item is promoted, original kept</span>
+  promoted_at       <span class="ty">timestamptz</span>,
+  promoted_by       <span class="ty">uuid REFERENCES users(id)</span>,
+
+  <span class="cm-c">-- Layer 2+ fields (validated on promotion)</span>
+  vendor_contact    <span class="ty">jsonb</span>,                          <span class="cm-c">-- email, phone, name</span>
+  payment_terms     <span class="ty">uuid REFERENCES vendor_payment_terms(id)</span>,
+  category          <span class="ty">text</span>,
+  subcategory       <span class="ty">text</span>,
+  usage_notes       <span class="ty">text</span>,
+
+  <span class="cm-c">-- Layer 3 fields (Patina-managed)</span>
+  style_tags        <span class="ty">text[]</span>,
+  material_tags     <span class="ty">text[]</span>,
+  aesthete_vector   <span class="ty">vector(1536)</span>,
+  commission_rate   <span class="ty">numeric(4,2)</span>,
+  patina_managed    <span class="ty">boolean DEFAULT false</span>,
+
+  created_at        <span class="ty">timestamptz DEFAULT now()</span>,
+  updated_at        <span class="ty">timestamptz DEFAULT now()</span>
+);
+
+<span class="cm-c">-- Visibility rules enforced by RLS policies</span>
+<span class="kw">CREATE POLICY</span> products_personal <span class="kw">ON</span> products
+  <span class="kw">FOR ALL USING</span> (
+    (layer = <span class="ty">'personal'</span> <span class="kw">AND</span> owner_user_id = auth.uid())
+    <span class="kw">OR</span> (layer = <span class="ty">'studio'</span> <span class="kw">AND</span> studio_id = current_studio_id())
+    <span class="kw">OR</span> (layer = <span class="ty">'catalog'</span>)  <span class="cm-c">-- catalog visible to everyone</span>
+  );
+  </div>
+
+  <h3 style="margin-top:1.5rem">Why a single table with a layer column</h3>
+  <div class="g2">
+    <div class="card">
+      <div class="card-t">Search across layers is trivial</div>
+      <div class="card-d">"Find me an oak dining table" is one query with three layer filters. If layers were separate tables, every search would need three queries and a manual merge. Same table, same indexes, native cross-layer search.</div>
+    </div>
+    <div class="card">
+      <div class="card-t">Promotion is an update, not a copy</div>
+      <div class="card-d">When Leah promotes an item from Personal to Studio, the row updates in place. <code>layer='studio'</code>, populate the additional fields, done. The item's history (order count, project usage) carries forward automatically because the ID didn't change.</div>
+    </div>
+    <div class="card">
+      <div class="card-t">Visibility via RLS policies</div>
+      <div class="card-d">Supabase Row-Level Security policies handle visibility cleanly. The application code doesn't need layer-aware filtering scattered through it — the database enforces it. Bug-resistant by construction.</div>
+    </div>
+    <div class="card">
+      <div class="card-t">References across layers stay stable</div>
+      <div class="card-d">An item in My Library that gets spec'd into a project and later promoted to Studio retains the same ID. Project FF&E line items, procurement POs, and Aesthete training data all keep working without migration.</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <span class="callout-l">One subtlety worth noting</span>
+    <div class="callout-d">When an item is nominated from Studio to Patina Catalog, this is NOT just a layer flip. It triggers a Patina-side workflow that involves the manufacturer. The item in the Studio Library stays where it is. If the manufacturer onboards and the item gets published to Catalog, a new Catalog product is created with a reference back to the originating Studio item. This preserves the studio's "we sourced this first" credit while keeping the marketplace catalog as a separately-curated entity.</div>
+  </div>
+</div>
+</section>
+
+<!-- 12 ROLLOUT -->
+<section class="fade dk-section">
+<div class="w">
+  <p class="eyebrow">Rollout · Three-phase build</p>
+  <h1>Layers ship <em>in order of value.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">My Library ships first because it's the daily-use foundation everyone else builds on. Studio Library ships second once enough captures exist to populate it. Patina Catalog ships in parallel with the existing Founding Circle work since manufacturer onboarding runs on its own timeline. Promotion flows ship last, once both lower layers have enough data to suggest candidates.</p>
+
+  <div class="g3">
+    <div class="card">
+      <div class="meta" style="color:var(--cl)">Phase 1 · Weeks 1–4</div>
+      <h3 style="color:var(--ow);margin:0.3rem 0;font-size:1rem">My Library + Capture</h3>
+      <div class="card-d">
+        • Products zone subnav with three layer tabs<br>
+        • My Library view (default landing)<br>
+        • Chrome extension v2 with destination picker<br>
+        • Mobile photo capture with destination picker<br>
+        • URL paste capture flow<br>
+        • Item detail view with layer-aware actions<br>
+        • Cross-layer search infrastructure<br>
+        • Layer + visibility data model + RLS
+      </div>
+    </div>
+    <div class="card">
+      <div class="meta" style="color:var(--cl)">Phase 2 · Weeks 5–8</div>
+      <h3 style="color:var(--ow);margin:0.3rem 0;font-size:1rem">Studio Library + Promotions</h3>
+      <div class="card-d">
+        • Studio Library view with vendor grouping<br>
+        • By-vendor metadata aggregation<br>
+        • Promote My → Studio flow with required fields<br>
+        • System-suggested promotion candidates<br>
+        • Studio member permissions model<br>
+        • Procurement integration · stored vendor context flows to Order Assistant<br>
+        • Studio collective Aesthete profile generation
+      </div>
+    </div>
+    <div class="card">
+      <div class="meta" style="color:var(--cl)">Phase 3 · Weeks 9–12</div>
+      <h3 style="color:var(--ow);margin:0.3rem 0;font-size:1rem">Patina Catalog + Nominations</h3>
+      <div class="card-d">
+        • Patina Catalog view (extends existing browse)<br>
+        • Aesthete match scoring on catalog cards<br>
+        • "For your active projects" tab<br>
+        • Teaching dashboard relocated to Catalog layer<br>
+        • Nominate Studio → Patina flow<br>
+        • Patina-side nomination review queue<br>
+        • Manufacturer onboarding handoff workflow<br>
+        • Catalog-promotion preserves Studio reference
+      </div>
+    </div>
+  </div>
+
+  <div class="callout" style="background:rgba(196,165,123,0.08);border-left-color:var(--cl);margin-top:1.75rem">
+    <span class="callout-l">What we measure</span>
+    <div class="callout-d" style="color:rgba(250,247,242,0.75)">
+      <strong>Capture velocity:</strong> avg time from extension click to save · target under 5 seconds.<br>
+      <strong>Capture volume:</strong> items added to My Library per week per designer · baseline established Phase 1.<br>
+      <strong>Layer 1 → 2 promotion rate:</strong> % of My Library items that reach Studio Library within 90 days · expect 5-15%.<br>
+      <strong>Studio Library reuse:</strong> avg times a Studio item is added to projects · target 3+ over a year.<br>
+      <strong>Catalog match relevance:</strong> click-through rate on Aesthete-matched catalog items vs random · target 3× lift.
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- 13 CLOSE -->
+<section class="fade">
+<div class="w">
+  <div class="sm"><div></div><div></div><div></div></div>
+  <div class="pq">
+    <blockquote>"The three-layer system isn't about adding complexity. It's about removing pressure from the capture moment, respecting the natural arc from idea to institution, and letting the marketplace grow out of proven relationships instead of speculative ones. Most products will live their whole lives in My Library. That's not a failure of the system — that's the system working."</blockquote>
+    <cite>The three layers · Design philosophy</cite>
+  </div>
+
+  <h2 style="margin-top:2rem">From a single shelf <em>to three concentric circles.</em></h2>
+  <p class="body" style="margin-top:1rem;margin-bottom:2rem">The existing Products zone served as a working draft of what shared catalog tooling could feel like. The three-layer redesign respects that work while reframing the problem around how designers actually source. Capture stays trivially fast. Items grow into the catalog organically. The Aesthete Engine learns from every layer, with privacy preserved at the lower layers. Procurement integrates differently per layer, with Patina earning commercial value where it adds the most. And the brand's defining visual — the Strata Mark itself — becomes the architecture.</p>
+
+  <div class="g3" style="margin-bottom:2rem">
+    <div>
+      <div class="meta">Companion 1</div>
+      <div style="font-family:var(--fb);font-size:0.78rem;color:var(--body);line-height:1.6;margin-top:0.3rem">Procurement Workspace v1 · Where items from all three layers flow when they enter procurement.</div>
+    </div>
+    <div>
+      <div class="meta">Companion 2</div>
+      <div style="font-family:var(--fb);font-size:0.78rem;color:var(--body);line-height:1.6;margin-top:0.3rem">Mobile Receiving Flow · The phone-first inspection of every delivery, regardless of source layer.</div>
+    </div>
+    <div>
+      <div class="meta">Companion 3</div>
+      <div style="font-family:var(--fb);font-size:0.78rem;color:var(--body);line-height:1.6;margin-top:0.3rem">Payment Model & QBO Export · The financial spine that supports all three layers' commerce paths.</div>
+    </div>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:2rem;border-top:1px solid var(--pe);flex-wrap:wrap;gap:1rem">
+    <div>
+      <div style="font-family:var(--fd);font-weight:400;font-size:1rem;color:var(--ch)">Patina · Designer Portal</div>
+      <div style="font-family:var(--fd);font-style:italic;font-size:0.78rem;color:var(--muted)">Where Time Adds Value</div>
+    </div>
+    <div class="meta">Three-Layer Product Catalog · v1 Design Proposal · April 2026</div>
+  </div>
+</div>
+</section>
+
+<script>
+const f=document.querySelectorAll('.fade');
+const o=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('vis')})},{threshold:0.08,rootMargin:'0px 0px -40px 0px'});
+f.forEach(s=>o.observe(s));
+</script>
+</body>
+</html>

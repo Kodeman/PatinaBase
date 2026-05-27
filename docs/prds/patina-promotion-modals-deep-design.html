@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina · Layer Promotion Modals · Deep Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--sf:#FFFFFF;--subtle:#EDEAE3;--body:#5C4A3C;--muted:#8B7355;--fd:'Playfair Display',Georgia,serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace}
+html{scroll-behavior:smooth;background:var(--ow)}
+body{font-family:var(--fb);color:var(--ch);line-height:1.6;-webkit-font-smoothing:antialiased}
+.w{max-width:1180px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}
+section{padding:clamp(2rem,4vw,4.5rem) 0}
+
+/* Cover */
+.cover{min-height:65vh;display:flex;flex-direction:column;justify-content:flex-end;padding:4rem clamp(1.5rem,5vw,4rem);background:var(--ch);color:var(--ow)}
+.cover h1{font-family:var(--fd);font-weight:400;font-size:clamp(2rem,4.5vw,3.3rem);line-height:1.12;letter-spacing:-0.02em;color:var(--ow)}
+.cover h1 span{display:block;font-style:italic;color:var(--cl);font-weight:400;font-size:0.55em}
+.cover-sub{font-size:0.95rem;color:rgba(250,247,242,0.6);max-width:680px;margin:1rem 0 2.5rem;line-height:1.75}
+.cover-strata{display:flex;flex-direction:column;gap:6px;margin-bottom:2rem}
+.cover-strata div{height:2px;border-radius:1px}
+.cover-strata div:nth-child(1){width:100px;background:var(--cl)}
+.cover-strata div:nth-child(2){width:75px;background:var(--cl);opacity:0.5}
+.cover-strata div:nth-child(3){width:50px;background:var(--cl);opacity:0.25}
+.cm{display:flex;gap:3rem;flex-wrap:wrap}
+.cm .meta{margin-bottom:0.2rem;color:rgba(250,247,242,0.3)}
+.cm p{font-size:0.85rem;color:rgba(250,247,242,0.7)}
+
+h1,.h1{font-family:var(--fd);font-weight:400;font-size:clamp(1.6rem,3.5vw,2.4rem);line-height:1.15;letter-spacing:-0.02em;margin-bottom:0.5rem}
+h2,.h2{font-family:var(--fd);font-weight:400;font-size:clamp(1.3rem,2.8vw,1.85rem);line-height:1.2;letter-spacing:-0.02em;margin-bottom:0.5rem}
+h3,.h3{font-family:var(--fd);font-weight:500;font-size:1.1rem;margin-bottom:0.4rem}
+h4{font-family:var(--fd);font-weight:500;font-size:0.95rem;margin-bottom:0.3rem;color:var(--ch)}
+h1 em,h2 em,h3 em,h4 em{font-style:italic;color:var(--cl)}
+.meta{font-family:var(--fm);font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted)}
+.body{font-family:var(--fb);font-size:0.92rem;line-height:1.7;color:var(--body);max-width:680px}
+.eyebrow{font-family:var(--fm);font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--cl);margin-bottom:0.75rem}
+
+.sm{display:flex;flex-direction:column;gap:4px;padding:1.5rem 0}
+.sm div{height:1.5px;border-radius:1px}
+.sm div:nth-child(1){width:60px;background:var(--mo)}
+.sm div:nth-child(2){width:48px;background:var(--cl);opacity:.7}
+.sm div:nth-child(3){width:36px;background:var(--cl);opacity:.35}
+
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:2rem}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.25rem}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+@media(max-width:768px){.g2,.g3,.g4{grid-template-columns:1fr}}
+
+.card{padding:1.15rem;border:1px solid var(--pe);border-radius:6px;background:var(--sf)}
+.card-i{font-family:var(--fd);font-size:1.3rem;color:var(--cl);margin-bottom:0.3rem;line-height:1;font-style:italic}
+.card-t{font-family:var(--fb);font-weight:500;font-size:0.88rem;color:var(--ch);margin-bottom:0.25rem}
+.card-d{font-family:var(--fb);font-size:0.74rem;color:var(--body);line-height:1.6}
+
+.dk-section{background:var(--ch);color:var(--ow)}
+.dk-section .body{color:rgba(250,247,242,0.6)}
+.dk-section h1,.dk-section h2,.dk-section h3,.dk-section h4{color:var(--ow)}
+.dk-section .card{background:rgba(250,247,242,0.03);border-color:rgba(250,247,242,0.08)}
+.dk-section .card-t{color:var(--ow)}
+.dk-section .card-d{color:rgba(250,247,242,0.55)}
+.dk-section .meta{color:rgba(250,247,242,0.35)}
+
+.wm-section{background:linear-gradient(155deg,#e8ddd0,#ddd0c0 50%,#ede6dc)}
+
+.pq{padding:2rem 0;border-top:1px solid var(--pe);border-bottom:1px solid var(--pe);margin:2rem 0}
+.pq blockquote{font-family:var(--fd);font-size:clamp(1.05rem,2.2vw,1.4rem);font-style:italic;line-height:1.45;max-width:700px}
+.pq cite{display:block;font-family:var(--fm);font-size:0.55rem;font-style:normal;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-top:0.6rem}
+.dk-section .pq{border-color:rgba(250,247,242,0.15)}
+.dk-section .pq blockquote{color:var(--ow)}
+.dk-section .pq cite{color:rgba(250,247,242,0.4)}
+
+.callout{padding:1rem 1.15rem;background:rgba(196,165,123,0.06);border-left:3px solid var(--cl);border-radius:0 5px 5px 0;margin:1.25rem 0}
+.callout-l{display:block;font-family:var(--fm);font-size:0.5rem;color:var(--cl);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.3rem;font-weight:600}
+.callout-d{font-family:var(--fb);font-size:0.78rem;color:var(--body);line-height:1.65}
+.callout.warn{background:rgba(232,197,71,0.06);border-left-color:var(--gh)}
+.callout.warn .callout-l{color:var(--gh)}
+.callout.te{background:rgba(212,160,144,0.06);border-left-color:var(--te)}
+.callout.te .callout-l{color:var(--te)}
+
+/* Chips */
+.chip{display:inline-flex;align-items:center;gap:0.3rem;padding:2px 7px;border-radius:2px;font-family:var(--fm);font-size:0.48rem;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;white-space:nowrap}
+.chip-personal{background:rgba(139,156,173,0.12);color:var(--db)}
+.chip-studio{background:rgba(168,181,160,0.12);color:var(--sa)}
+.chip-catalog{background:rgba(196,165,123,0.15);color:var(--cl)}
+.chip-pending{background:rgba(232,197,71,0.12);color:var(--gh)}
+
+.layer-icon{width:14px;height:10px;display:inline-flex;flex-direction:column;justify-content:center;gap:1.5px;flex-shrink:0}
+.layer-icon span{height:1.5px;border-radius:1px;display:block}
+.li-1 span:nth-child(1){width:100%;background:currentColor;opacity:0.6}
+.li-1 span:nth-child(2){display:none}
+.li-1 span:nth-child(3){display:none}
+.li-2 span:nth-child(1){width:100%;background:currentColor;opacity:0.9}
+.li-2 span:nth-child(2){width:75%;background:currentColor;opacity:0.6}
+.li-2 span:nth-child(3){display:none}
+.li-3 span:nth-child(1){width:100%;background:currentColor}
+.li-3 span:nth-child(2){width:75%;background:currentColor;opacity:0.6}
+.li-3 span:nth-child(3){width:50%;background:currentColor;opacity:0.3}
+
+/* Frame for portal mockups */
+.frame{background:var(--sf);border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04),0 12px 36px rgba(0,0,0,0.08);margin:1.25rem 0}
+.fr-bar{display:flex;align-items:center;padding:0 1rem;height:38px;background:var(--sf);border-bottom:1px solid var(--pe);gap:1rem}
+.fr-bar .ll{font-family:var(--fd);font-weight:500;font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase}
+.fr-bar .nv{display:flex;gap:0.85rem;flex:1}
+.fr-bar .nv span{font-family:var(--fb);font-size:0.62rem;color:var(--muted)}
+.fr-bar .nv span.on{color:var(--ch);border-bottom:2px solid var(--cl);padding-bottom:1px}
+.fr-bar .ut{display:flex;gap:0.4rem;font-size:0.7rem;color:var(--muted);align-items:center}
+.fr-avt{width:20px;height:20px;border-radius:50%;background:var(--pe);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-weight:500;font-size:0.48rem;color:var(--mo)}
+
+/* Modal styling */
+.modal-stage{background:rgba(44,41,38,0.55);padding:2rem;border-radius:8px;display:flex;align-items:flex-start;justify-content:center;min-height:480px}
+.modal{background:var(--sf);border-radius:10px;width:100%;max-width:640px;box-shadow:0 24px 64px rgba(0,0,0,0.25);overflow:hidden}
+.modal.wide{max-width:880px}
+.modal-head{padding:1.4rem 1.6rem 1.1rem;border-bottom:1px solid var(--pe)}
+.modal-eyebrow{display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem}
+.modal-eyebrow-text{font-family:var(--fm);font-size:0.52rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--cl);font-weight:600}
+.modal-close{position:absolute;top:1.1rem;right:1.3rem;color:var(--muted);font-size:1rem;line-height:1;cursor:default;width:24px;height:24px;display:flex;align-items:center;justify-content:center}
+.modal h2{font-family:var(--fd);font-weight:500;font-size:1.35rem;line-height:1.25;letter-spacing:-0.01em;margin-bottom:0.3rem}
+.modal-sub{font-family:var(--fb);font-size:0.78rem;color:var(--body);line-height:1.55}
+.modal-body{padding:1.3rem 1.6rem}
+.modal-foot{padding:1rem 1.6rem;border-top:1px solid var(--pe);background:var(--ow);display:flex;justify-content:space-between;align-items:center;gap:1rem}
+.modal-foot-left{font-family:var(--fb);font-size:0.68rem;color:var(--muted);font-style:italic}
+
+/* Form fields inside modals */
+.field{margin-bottom:1rem}
+.field:last-child{margin-bottom:0}
+.field-label{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);margin-bottom:0.3rem;display:flex;justify-content:space-between;align-items:baseline}
+.field-label-required{color:var(--te);font-size:0.7rem;line-height:1}
+.field-label-status{font-family:var(--fb);font-size:0.55rem;color:var(--sa);text-transform:none;letter-spacing:0;font-style:italic;font-weight:400}
+.field-input{width:100%;padding:0.55rem 0.7rem;border:1px solid var(--pe);border-radius:4px;font-family:var(--fb);font-size:0.78rem;color:var(--ch);background:var(--sf);line-height:1.4}
+.field-input-prefilled{background:rgba(168,181,160,0.05);border-color:rgba(168,181,160,0.3)}
+.field-helper{font-family:var(--fb);font-size:0.62rem;color:var(--muted);font-style:italic;margin-top:0.25rem;line-height:1.4}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:0.65rem}
+.field-textarea{width:100%;padding:0.55rem 0.7rem;border:1px solid var(--pe);border-radius:4px;font-family:var(--fb);font-size:0.78rem;color:var(--ch);background:var(--sf);min-height:64px;resize:vertical;line-height:1.5}
+
+/* Buttons */
+.btn{font-family:var(--fb);font-weight:500;font-size:0.74rem;padding:0.55rem 1rem;border-radius:4px;display:inline-block;cursor:default;border:none}
+.btn-p{background:var(--ch);color:var(--ow)}
+.btn-c{background:var(--cl);color:white}
+.btn-s{border:1px solid var(--pe);color:var(--ch);background:transparent}
+.btn-g{color:var(--muted);background:transparent}
+.btn-d{color:var(--te);background:transparent;font-weight:500}
+.btn-large{padding:0.7rem 1.4rem;font-size:0.82rem}
+
+/* Pre-filled chip on form */
+.prefilled-chip{display:inline-flex;align-items:center;gap:0.25rem;font-family:var(--fm);font-size:0.42rem;letter-spacing:0.04em;text-transform:uppercase;color:var(--sa);font-weight:600;background:rgba(168,181,160,0.1);padding:1px 5px;border-radius:2px;margin-left:0.4rem}
+
+/* Item card inside modal */
+.modal-item{display:flex;gap:0.85rem;padding:0.85rem;border:1px solid var(--pe);border-radius:6px;background:var(--ow);margin-bottom:0.85rem;align-items:center}
+.modal-item-img{width:56px;height:56px;border-radius:4px;background:linear-gradient(135deg,#c4b5a0,#8b7355);flex-shrink:0}
+.modal-item-img.t1{background:linear-gradient(135deg,#c4b5a0,#8b7355)}
+.modal-item-img.t2{background:linear-gradient(135deg,#a8b5a0,#7a8770)}
+.modal-item-img.t3{background:linear-gradient(135deg,#b8a888,#8b7860)}
+.modal-item-img.t4{background:linear-gradient(135deg,#d4a090,#a07060)}
+.modal-item-img.t5{background:linear-gradient(135deg,#c4a57b,#8b7355)}
+.modal-item-img.t6{background:linear-gradient(135deg,#8b9cad,#5c6b7a)}
+.modal-item-info{flex:1;min-width:0}
+.modal-item-n{font-family:var(--fb);font-weight:500;font-size:0.8rem;color:var(--ch);line-height:1.3;margin-bottom:0.15rem}
+.modal-item-v{font-family:var(--fb);font-size:0.66rem;color:var(--muted);line-height:1.4}
+.modal-item-meta{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--cl);margin-top:0.25rem}
+
+/* Banner styling */
+.banner{padding:1rem 1.2rem;border-radius:6px;display:grid;grid-template-columns:auto 1fr auto;gap:1rem;align-items:center;margin:1rem 0}
+.banner-promote{background:rgba(168,181,160,0.06);border:1px solid rgba(168,181,160,0.25)}
+.banner-nominate{background:rgba(196,165,123,0.06);border:1px solid rgba(196,165,123,0.25)}
+.banner-i{font-family:var(--fd);font-size:1.5rem;font-style:italic;line-height:1}
+.banner-promote .banner-i{color:var(--sa)}
+.banner-nominate .banner-i{color:var(--cl)}
+.banner-t{font-family:var(--fd);font-weight:500;font-size:0.95rem;color:var(--ch);margin-bottom:0.15rem}
+.banner-d{font-family:var(--fb);font-size:0.72rem;color:var(--body);line-height:1.55}
+
+/* Bulk table inside modal */
+.bulk-row{display:grid;grid-template-columns:30px 56px 1fr 140px 100px;gap:0.7rem;padding:0.75rem 0.85rem;border-bottom:1px solid var(--pe);align-items:center}
+.bulk-row:last-child{border-bottom:none}
+.bulk-row.head{padding:0.45rem 0.85rem;border-bottom:1px solid var(--pe);background:rgba(196,165,123,0.04)}
+.bulk-row.head .meta{margin-bottom:0;font-size:0.45rem}
+.bulk-row.needs-info{background:rgba(232,197,71,0.04)}
+.bulk-row.expanded{background:rgba(196,165,123,0.03)}
+.bulk-status{font-family:var(--fm);font-size:0.48rem;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;padding:2px 6px;border-radius:2px;text-align:center}
+.bulk-status.ready{background:rgba(168,181,160,0.15);color:var(--sa)}
+.bulk-status.needs{background:rgba(232,197,71,0.15);color:var(--gh)}
+.bulk-item-img{width:48px;height:48px;border-radius:3px;background:linear-gradient(135deg,#c4b5a0,#8b7355);flex-shrink:0}
+
+/* Side panel for bulk expand */
+.bulk-expand{padding:1rem 1.2rem;background:rgba(232,197,71,0.04);border-left:3px solid var(--gh);margin:0 -0.85rem 0.5rem;border-radius:0 4px 4px 0}
+.bulk-expand-head{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--gh);font-weight:600;margin-bottom:0.5rem}
+
+/* Success / state surfaces */
+.success-state{padding:2rem;text-align:center;background:var(--sf);border-radius:8px;border:1px solid var(--pe)}
+.success-strata{display:flex;flex-direction:column;gap:4px;align-items:center;margin-bottom:1rem}
+.success-strata div{height:2px;border-radius:1px}
+.success-strata div:nth-child(1){width:60px;background:var(--sa)}
+.success-strata div:nth-child(2){width:42px;background:var(--sa);opacity:0.6}
+.success-strata div:nth-child(3){width:28px;background:var(--sa);opacity:0.3}
+.success-t{font-family:var(--fd);font-weight:500;font-size:1.3rem;font-style:italic;margin-bottom:0.4rem}
+.success-d{font-family:var(--fb);font-size:0.82rem;color:var(--body);line-height:1.6;max-width:440px;margin:0 auto 1.5rem}
+
+/* Timeline for nomination state */
+.timeline{padding:0;margin:1rem 0}
+.timeline-step{display:grid;grid-template-columns:32px 1fr;gap:0.85rem;padding:0.7rem 0;align-items:flex-start;position:relative}
+.timeline-step::before{content:'';position:absolute;left:15px;top:34px;bottom:-8px;width:1.5px;background:var(--pe)}
+.timeline-step:last-child::before{display:none}
+.timeline-dot{width:24px;height:24px;border-radius:50%;background:var(--sf);border:1.5px solid var(--pe);display:flex;align-items:center;justify-content:center;font-family:var(--fm);font-size:0.55rem;color:var(--muted);font-weight:600;margin:0 auto;z-index:1}
+.timeline-dot.done{background:var(--sa);border-color:var(--sa);color:white}
+.timeline-dot.active{background:var(--cl);border-color:var(--cl);color:white;box-shadow:0 0 0 4px rgba(196,165,123,0.15)}
+.timeline-content h4{font-family:var(--fb);font-weight:500;font-size:0.85rem;margin-bottom:0.15rem}
+.timeline-content p{font-family:var(--fb);font-size:0.72rem;color:var(--body);line-height:1.55}
+.timeline-content .meta{margin-top:0.2rem;font-size:0.5rem}
+
+/* Spec rows */
+.spec-row{display:grid;grid-template-columns:160px 1fr;gap:1rem;padding:0.6rem 0;border-bottom:1px solid var(--pe);font-size:0.78rem}
+.spec-row:last-child{border-bottom:none}
+.spec-row-l{font-family:var(--fm);font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;padding-top:0.15rem}
+.spec-row-r{font-family:var(--fb);color:var(--body);line-height:1.6}
+.spec-row-r strong{color:var(--ch);font-weight:500}
+.spec-row-r code{font-family:var(--fm);font-size:0.7rem;background:var(--pe);padding:1px 5px;border-radius:2px;color:var(--ch)}
+
+/* Flow */
+.path-flow{display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;padding:1rem 1.25rem;background:var(--sf);border:1px solid var(--pe);border-radius:6px;margin:1rem 0}
+.path-fn{padding:0.5rem 0.75rem;border-radius:4px;font-family:var(--fb);font-size:0.7rem;font-weight:500;border:1.5px solid var(--pe);background:var(--sf);color:var(--ch)}
+.path-fn.on{border-color:var(--cl);background:rgba(196,165,123,0.08);color:var(--cl)}
+.path-fa{font-family:var(--fm);font-size:0.6rem;color:var(--muted);letter-spacing:0.04em}
+
+/* Edge case cards */
+.edge{padding:1.1rem;border:1px solid var(--pe);border-radius:6px;background:var(--sf);border-left:3px solid var(--te)}
+.edge-t{font-family:var(--fd);font-weight:500;font-size:0.92rem;color:var(--ch);margin-bottom:0.3rem}
+.edge-q{font-family:var(--fb);font-size:0.72rem;color:var(--muted);font-style:italic;margin-bottom:0.5rem;line-height:1.55}
+.edge-a{font-family:var(--fb);font-size:0.75rem;color:var(--body);line-height:1.65}
+.edge-a strong{color:var(--ch);font-weight:500}
+
+/* Fade animation */
+.fade{opacity:0;transform:translateY(10px);transition:opacity 0.5s ease,transform 0.5s ease}
+.fade.vis{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <p class="meta" style="margin-bottom:1rem;color:rgba(250,247,242,0.4)">Three-Layer Catalog · Promotion Modals · Deep Design</p>
+  <div class="cover-strata"><div></div><div></div><div></div></div>
+  <h1>The promotion modals<span>Where capture-fast meets commitment-careful</span></h1>
+  <p class="cover-sub">The promotion modals are the only friction we deliberately introduce into a system otherwise designed around frictionless capture. Done right, they feel like a moment of quiet certainty — "yes, this belongs in the next ring." Done wrong, they're paperwork that makes the system feel bureaucratic and discourages the layering it's meant to enable. This document designs both modals end-to-end, plus the surrounding surfaces: how candidates get surfaced, the bulk-promote pattern, what happens after the action, and the edge cases that turn this from a happy path into a real system.</p>
+  <div class="cm">
+    <div><p class="meta">Status</p><p>Design Specification · Build-Ready</p></div>
+    <div><p class="meta">Builds on</p><p>Three-Layer Product Catalog · Designer Portal MVP</p></div>
+    <div><p class="meta">Scope</p><p>Two modals · Four surrounding surfaces · Edge cases</p></div>
+  </div>
+</div>
+
+<!-- 01 TWO MODALS, TWO JOBS -->
+<section class="fade">
+<div class="w">
+  <p class="eyebrow">The framing decision</p>
+  <h1>Two modals. <em>Two fundamentally different jobs.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">These aren't the same modal twice with different fields. They're two different acts, and the design has to make that distinction felt. My Library → Studio is self-service knowledge management — an internal commitment. Studio → Catalog is a business development action — a signal that starts a Patina-side workflow. Same brand, same patterns, but different shapes, different tones, different success states.</p>
+
+  <div class="g2">
+    <div class="card" style="border-left:3px solid var(--sa)">
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
+        <div class="layer-icon li-2" style="color:var(--sa);width:16px;height:12px"><span></span><span></span><span></span></div>
+        <span class="meta">Modal 1</span>
+      </div>
+      <h3>Promote to Studio Library</h3>
+      <p class="card-d" style="margin-bottom:0.75rem"><strong style="color:var(--ch)">The act:</strong> Internal knowledge management. Leah is saying "this is good enough to share with the studio and rely on going forward."</p>
+      <p class="card-d" style="margin-bottom:0.75rem"><strong style="color:var(--ch)">Friction type:</strong> Metadata friction. Fields that weren't required at capture but matter now because other people will rely on them.</p>
+      <p class="card-d"><strong style="color:var(--ch)">Design priority:</strong> Pre-populate aggressively. Make it edit-by-acceptance rather than fill-from-scratch. Should take under 60 seconds for a typical item.</p>
+    </div>
+
+    <div class="card" style="border-left:3px solid var(--cl)">
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
+        <div class="layer-icon li-3" style="color:var(--cl);width:16px;height:12px"><span></span><span></span><span></span></div>
+        <span class="meta">Modal 2</span>
+      </div>
+      <h3>Nominate vendor to Patina Catalog</h3>
+      <p class="card-d" style="margin-bottom:0.75rem"><strong style="color:var(--ch)">The act:</strong> Business development. Leah is signaling that a vendor relationship is mature enough to formalize, and Patina should bring this maker into the marketplace.</p>
+      <p class="card-d" style="margin-bottom:0.75rem"><strong style="color:var(--ch)">Friction type:</strong> Intent confirmation. Leah needs to understand what she's setting in motion — this doesn't put the item in the catalog instantly, it triggers an outreach.</p>
+      <p class="card-d"><strong style="color:var(--ch)">Design priority:</strong> Set expectations clearly. Show timeline. Focus on the vendor, not the item. Should leave Leah feeling like she just delegated something well, not that she filled out a form.</p>
+    </div>
+  </div>
+
+  <div class="pq">
+    <blockquote>"The first modal is editing-by-acceptance. The second is delegating-with-confidence. The first ends with 'promoted.' The second ends with 'we'll take it from here.' Same brand, different muscle."</blockquote>
+    <cite>Design principle · Two modals, two jobs</cite>
+  </div>
+</div>
+</section>
+
+<!-- 02 ENTRY PATHS -->
+<section class="fade wm-section">
+<div class="w">
+  <p class="eyebrow">How Leah arrives at a promotion modal</p>
+  <h1>Three entry paths, <em>one consistent destination.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">A promotion can be initiated from three places, each suiting a different context. The system never auto-promotes. The system never blocks Leah from finishing what she was doing to deal with a promotion. The path she takes determines the modal's starting state, but the modal itself is the same.</p>
+
+  <div class="g3">
+    <div class="card">
+      <div class="meta">Path 1</div>
+      <h4 style="margin-top:0.4rem">System-suggested</h4>
+      <p class="card-d" style="margin-bottom:0.65rem">A quiet banner appears at the top of My Library when system detects candidates ("3 items ready for Studio Library"). Leah clicks Review when she has a moment. Never a popup, never blocking.</p>
+      <div class="meta" style="color:var(--cl)">Best for: weekly cleanup, end-of-project promotion</div>
+    </div>
+    <div class="card">
+      <div class="meta">Path 2</div>
+      <h4 style="margin-top:0.4rem">Item-detail-triggered</h4>
+      <p class="card-d" style="margin-bottom:0.65rem">Leah is looking at a specific item in My Library, decides it's earned its place, clicks "Promote to Studio Library" on the item detail page. Single-item flow.</p>
+      <div class="meta" style="color:var(--cl)">Best for: in-the-moment decisions during work</div>
+    </div>
+    <div class="card">
+      <div class="meta">Path 3</div>
+      <h4 style="margin-top:0.4rem">Bulk selection</h4>
+      <p class="card-d" style="margin-bottom:0.65rem">Leah multi-selects items in My Library (after a successful project install, perhaps), clicks the bulk action menu's "Promote selected." Dense batch flow.</p>
+      <div class="meta" style="color:var(--cl)">Best for: project completion review, periodic library cleanup</div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:2rem">The candidate-surfacing banner</h3>
+  <p class="body" style="margin-bottom:1rem">The quiet system-suggested entry point. Lives at the top of My Library when 1+ items meet promotion criteria. Dismissible per-session; reappears next session if candidates still exist.</p>
+
+  <div class="frame">
+    <div class="fr-bar">
+      <div class="ll">Patina</div>
+      <div class="nv"><span>Today</span><span>Pipeline</span><span>Procurement</span><span class="on">Products</span><span>Clients</span></div>
+      <div class="ut">⌕ ◎ ◆ <span class="fr-avt">LK</span></div>
+    </div>
+    <div style="padding:0.45rem 1rem;background:var(--ow);border-bottom:1px solid var(--pe);display:flex;gap:0.5rem;font-family:var(--fm);font-size:0.52rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)">
+      <span style="padding:0.25rem 0.6rem;border-radius:3px;background:rgba(196,165,123,0.1);color:var(--cl);font-weight:600;display:flex;align-items:center;gap:0.35rem"><div class="layer-icon li-1" style="color:var(--db)"><span></span><span></span><span></span></div>My Library · 247</span>
+      <span style="padding:0.25rem 0.6rem">Studio Library · 89</span>
+      <span style="padding:0.25rem 0.6rem">Patina Catalog · 2,847</span>
+    </div>
+    <div style="padding:1.5rem;background:var(--ow)">
+      <div class="banner banner-promote">
+        <div class="banner-i">↗</div>
+        <div>
+          <div class="banner-t">3 items in My Library are ready for Studio Library</div>
+          <div class="banner-d">Each has been spec'd into 2+ projects and ordered without issue. Promoting moves them out of your private inbox and into shared studio knowledge.</div>
+        </div>
+        <span class="btn btn-p">Review 3 items</span>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin:1rem 0">
+        <h2 style="font-size:1.4rem;margin:0;display:flex;align-items:center;gap:0.5rem">
+          <div class="layer-icon li-1" style="color:var(--db);width:18px;height:13px"><span></span><span></span><span></span></div>
+          My Library
+        </h2>
+        <span style="font-family:var(--fb);font-size:0.72rem;color:var(--muted)">247 items · 12 added this week</span>
+      </div>
+      <div style="font-family:var(--fd);font-style:italic;color:var(--muted);font-size:0.8rem;padding:1.5rem 0;text-align:center;border-top:1px dashed var(--pe);border-bottom:1px dashed var(--pe)">Product grid continues below ↓</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <span class="callout-l">When the banner appears</span>
+    <div class="callout-d">Banner triggers when at least 1 item passes the promotion-eligibility check (used in 2+ projects, ordered without damage, vendor record exists). Maximum one banner shown per session. Dismissible with subtle "×" — dismissal lasts the session only. The banner never appears for items currently in the bulk-selection state.</div>
+  </div>
+</div>
+</section>
+
+<!-- 03 MY LIBRARY → STUDIO · SINGLE ITEM MODAL -->
+<section class="fade">
+<div class="w">
+  <div class="sm"><div></div><div></div><div></div></div>
+  <p class="eyebrow">Modal 1 · My Library → Studio Library · Single item</p>
+  <h1>The metadata-confirmation flow, <em>built around pre-population.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">The single-item promotion modal opens when Leah promotes one specific item — either from the item detail page or by selecting a single item from the candidate banner review. The design optimizes for one principle: most fields can be inferred from existing data; Leah should be confirming, not entering. Pre-filled fields are visually marked so she knows what to glance-check vs. what needs her input.</p>
+
+  <div class="modal-stage">
+    <div class="modal" style="position:relative">
+      <div class="modal-head">
+        <span class="modal-close">×</span>
+        <div class="modal-eyebrow">
+          <div class="layer-icon li-1" style="color:var(--db)"><span></span><span></span><span></span></div>
+          <span class="modal-eyebrow-text">From My Library</span>
+          <span style="font-family:var(--fm);font-size:0.55rem;color:var(--muted)">→</span>
+          <div class="layer-icon li-2" style="color:var(--sa)"><span></span><span></span><span></span></div>
+          <span class="modal-eyebrow-text">To Studio Library</span>
+        </div>
+        <h2>Promote to <em>Studio Library</em></h2>
+        <p class="modal-sub">Shared with all Middlewest designers. We've pre-filled what we could from your captures and order history — review and confirm.</p>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-item" style="margin-bottom:1.25rem">
+          <div class="modal-item-img t1"></div>
+          <div class="modal-item-info">
+            <div class="modal-item-n">Heirloom Oak Dining Table · 6-seat</div>
+            <div class="modal-item-v">Nordic Atelier · $4,200 · Captured March 2024</div>
+            <div class="modal-item-meta">Used in 3 projects · Ordered 3× · 0 damage claims</div>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label">
+            <span>Vendor preferred contact <span class="field-label-required">*</span></span>
+            <span class="prefilled-chip">Pre-filled from vendor record</span>
+          </div>
+          <input class="field-input field-input-prefilled" value="trade@nordicatelier.com" />
+          <div class="field-helper">The email you use for orders. Other studio designers will need this.</div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <div class="field-label">
+              <span>Verified lead time <span class="field-label-required">*</span></span>
+              <span class="prefilled-chip">From 3 orders</span>
+            </div>
+            <input class="field-input field-input-prefilled" value="12 weeks (avg from 3 orders)" />
+            <div class="field-helper">Quoted: 14 weeks · Actual avg: 12 weeks</div>
+          </div>
+          <div class="field">
+            <div class="field-label">
+              <span>Payment terms</span>
+              <span class="prefilled-chip">From vendor</span>
+            </div>
+            <input class="field-input field-input-prefilled" value="50/50 split" />
+            <div class="field-helper">Deposit at order, balance before ship</div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <div class="field-label">
+              <span>Category <span class="field-label-required">*</span></span>
+              <span class="prefilled-chip">Auto-detected</span>
+            </div>
+            <input class="field-input field-input-prefilled" value="Tables" />
+          </div>
+          <div class="field">
+            <div class="field-label">Subcategory</div>
+            <input class="field-input" value="Dining" />
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label">
+            <span>Usage note <span class="field-label-required">*</span></span>
+            <span class="field-label-status">Required · helps others know when to use this</span>
+          </div>
+          <textarea class="field-textarea" placeholder="Try: 'Beautiful piece for transitional homes. Lead time runs long — order 4 months before install. Sawkille chairs pair perfectly.'">Beautiful, sturdy. Holds up to family use. Lead time runs long — order 4 months ahead. Sawkille Shaker chairs pair perfectly.</textarea>
+          <div class="field-helper">One short paragraph. What should the next designer know?</div>
+        </div>
+      </div>
+
+      <div class="modal-foot">
+        <span class="modal-foot-left">Promotion is reversible — items can move back if you change your mind</span>
+        <div style="display:flex;gap:0.5rem">
+          <span class="btn btn-g">Cancel</span>
+          <span class="btn btn-c btn-large">Promote to Studio →</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:1.75rem">The pre-population pattern</h3>
+  <p class="body" style="margin-bottom:1rem">The Sage-tinted fields with "Pre-filled" chips are the key UX move. They tell Leah three things at once: this came from existing data, you can edit if needed, but if it looks right just leave it. The visual treatment removes the cognitive load of deciding "wait, what do I put here?" because the answer is already there.</p>
+
+  <div class="g2">
+    <div class="card">
+      <div class="card-t">What we pre-fill from</div>
+      <div class="card-d">
+        <strong>Vendor record:</strong> contact email, payment terms, trade discount status<br>
+        <strong>Order history:</strong> verified lead time (vs quoted), damage rate<br>
+        <strong>Capture data:</strong> auto-detected category, original capture URL<br>
+        <strong>Project usage:</strong> count of projects, last project used in
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-t">What we always require fresh</div>
+      <div class="card-d">
+        <strong>Usage note:</strong> Leah's voice. Can't be auto-generated. This is the field that makes Studio Library more than a less-private My Library — it's the institutional voice describing when and why to use this.<br>
+        Everything else is pre-filled and editable.
+      </div>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <span class="callout-l">The 60-second principle</span>
+    <div class="callout-d">A typical promotion of a well-captured item with existing vendor history should take Leah under 60 seconds. If it takes longer, we should question whether we're asking for too much. The single-item modal is the canonical case — if it crosses 60 seconds, the system has overreached.</div>
+  </div>
+</div>
+</section>
+
+<!-- 04 MY → STUDIO · BULK FLOW -->
+<section class="fade dk-section">
+<div class="w">
+  <p class="eyebrow">Modal 1 · Bulk variant</p>
+  <h1>When the action is <em>"process this batch."</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">The bulk-promote flow handles the realistic scenario: Leah finishes a big project, opens My Library, multi-selects 8 items that all worked out well, and wants to promote them as a batch. The design is a single dense screen rather than a wizard — she's in batch-processing mode and step-by-step would frustrate. Items split into two visual lanes: "Ready to promote" (no further input needed) and "Needs your input" (items where a required field can't be inferred).</p>
+
+  <div class="modal-stage" style="background:rgba(250,247,242,0.05);padding:0">
+    <div class="modal wide" style="position:relative">
+      <div class="modal-head">
+        <span class="modal-close">×</span>
+        <div class="modal-eyebrow">
+          <div class="layer-icon li-1" style="color:var(--db)"><span></span><span></span><span></span></div>
+          <span class="modal-eyebrow-text">8 items from My Library</span>
+          <span style="font-family:var(--fm);font-size:0.55rem;color:var(--muted)">→</span>
+          <div class="layer-icon li-2" style="color:var(--sa)"><span></span><span></span><span></span></div>
+          <span class="modal-eyebrow-text">To Studio Library</span>
+        </div>
+        <h2>Promote <em>8 items</em> to Studio Library</h2>
+        <p class="modal-sub">6 ready · 2 need your input · Items can be promoted individually or all at once.</p>
+      </div>
+
+      <div class="modal-body" style="padding:0">
+        <!-- Ready to promote section -->
+        <div style="padding:1rem 1.6rem 0.5rem;background:rgba(168,181,160,0.04);border-bottom:1px solid var(--pe)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.3rem">
+            <span style="font-family:var(--fm);font-size:0.55rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--sa);font-weight:600">Ready to promote · 6 items</span>
+            <span style="font-family:var(--fb);font-size:0.65rem;color:var(--muted);font-style:italic">All required fields pre-filled from existing data</span>
+          </div>
+        </div>
+
+        <div class="bulk-row head">
+          <div></div>
+          <div></div>
+          <div class="meta">Item · Vendor</div>
+          <div class="meta">Usage note</div>
+          <div class="meta">Status</div>
+        </div>
+
+        <div class="bulk-row">
+          <input type="checkbox" checked style="accent-color:var(--sa)"/>
+          <div class="bulk-item-img"></div>
+          <div>
+            <div style="font-family:var(--fb);font-weight:500;font-size:0.78rem;color:var(--ch);line-height:1.3">Heirloom Oak Dining Table</div>
+            <div style="font-family:var(--fb);font-size:0.65rem;color:var(--muted)">Nordic Atelier · Used 3× · 12wk LT</div>
+          </div>
+          <div style="font-family:var(--fb);font-size:0.7rem;color:var(--body);font-style:italic;line-height:1.5">"Beautiful, sturdy. Holds up to family use…"</div>
+          <span class="bulk-status ready">Ready</span>
+        </div>
+        <div class="bulk-row">
+          <input type="checkbox" checked style="accent-color:var(--sa)"/>
+          <div class="bulk-item-img t2"></div>
+          <div>
+            <div style="font-family:var(--fb);font-weight:500;font-size:0.78rem;color:var(--ch);line-height:1.3">Shaker Dining Chair</div>
+            <div style="font-family:var(--fb);font-size:0.65rem;color:var(--muted)">Sawkille Co · Used 6× · 8wk LT</div>
+          </div>
+          <div style="font-family:var(--fb);font-size:0.7rem;color:var(--body);font-style:italic;line-height:1.5">"Studio favorite. Endlessly reorderable…"</div>
+          <span class="bulk-status ready">Ready</span>
+        </div>
+        <div class="bulk-row">
+          <input type="checkbox" checked style="accent-color:var(--sa)"/>
+          <div class="bulk-item-img t3"></div>
+          <div>
+            <div style="font-family:var(--fb);font-weight:500;font-size:0.78rem;color:var(--ch);line-height:1.3">Meadow Linen Sectional</div>
+            <div style="font-family:var(--fb);font-size:0.65rem;color:var(--muted)">Woodward & Sons · Used 2× · 10wk LT</div>
+          </div>
+          <div style="font-family:var(--fb);font-size:0.7rem;color:var(--body);font-style:italic;line-height:1.5">"Lovely seat depth. Order swatches early…"</div>
+          <span class="bulk-status ready">Ready</span>
+        </div>
+
+        <!-- Needs input section -->
+        <div style="padding:1rem 1.6rem 0.5rem;background:rgba(232,197,71,0.04);border-top:1px solid var(--pe);border-bottom:1px solid var(--pe);margin-top:0.5rem">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.3rem">
+            <span style="font-family:var(--fm);font-size:0.55rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--gh);font-weight:600">Needs your input · 2 items</span>
+            <span style="font-family:var(--fb);font-size:0.65rem;color:var(--muted);font-style:italic">New vendors or missing fields — tap to expand</span>
+          </div>
+        </div>
+
+        <div class="bulk-row needs-info">
+          <input type="checkbox" style="accent-color:var(--gh)"/>
+          <div class="bulk-item-img t4"></div>
+          <div>
+            <div style="font-family:var(--fb);font-weight:500;font-size:0.78rem;color:var(--ch);line-height:1.3">Terracotta Floor Vase</div>
+            <div style="font-family:var(--fb);font-size:0.65rem;color:var(--muted)">MossMakers · New vendor</div>
+          </div>
+          <div style="font-family:var(--fb);font-size:0.65rem;color:var(--gh);font-style:italic;line-height:1.5">▾ Vendor contact + usage note needed</div>
+          <span class="bulk-status needs">Needs info</span>
+        </div>
+
+        <!-- Expanded sub-form for the needs-info row -->
+        <div class="bulk-expand" style="grid-column:1/-1;margin:0 1.6rem 0.75rem">
+          <div class="bulk-expand-head">MossMakers · Quick add</div>
+          <div class="field-row" style="margin-bottom:0.5rem">
+            <div class="field" style="margin-bottom:0">
+              <div class="field-label" style="color:var(--muted)">Vendor contact email <span class="field-label-required">*</span></div>
+              <input class="field-input" placeholder="hello@mossmakers.com" style="font-size:0.72rem;padding:0.4rem 0.55rem"/>
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <div class="field-label" style="color:var(--muted)">Lead time <span class="field-label-required">*</span></div>
+              <input class="field-input" placeholder="3 weeks" style="font-size:0.72rem;padding:0.4rem 0.55rem"/>
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <div class="field-label" style="color:var(--muted)">Usage note <span class="field-label-required">*</span></div>
+            <textarea class="field-textarea" style="min-height:46px;font-size:0.72rem;padding:0.4rem 0.55rem" placeholder="One short paragraph. What should the next designer know?"></textarea>
+          </div>
+        </div>
+
+        <div class="bulk-row needs-info">
+          <input type="checkbox" style="accent-color:var(--gh)"/>
+          <div class="bulk-item-img t5"></div>
+          <div>
+            <div style="font-family:var(--fb);font-weight:500;font-size:0.78rem;color:var(--ch);line-height:1.3">Hand-knotted Persian Rug</div>
+            <div style="font-family:var(--fb);font-size:0.65rem;color:var(--muted)">Madison Rug Co · Used 1×</div>
+          </div>
+          <div style="font-family:var(--fb);font-size:0.65rem;color:var(--gh);font-style:italic;line-height:1.5">▾ Usage note needed</div>
+          <span class="bulk-status needs">Needs info</span>
+        </div>
+      </div>
+
+      <div class="modal-foot">
+        <span class="modal-foot-left">Items you skip stay in My Library — promote them later when ready</span>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <span class="btn btn-g">Skip the 2 that need info</span>
+          <span class="btn btn-c btn-large">Promote 6 ready → 2 with input</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="g2" style="margin-top:1.5rem">
+    <div class="card">
+      <div class="card-t">The two-lane split is the key insight</div>
+      <div class="card-d">By segmenting "Ready" from "Needs input" visually, Leah immediately understands the shape of the work. 6 items need 2 seconds of confirmation each. 2 items need 30 seconds each. The mental math becomes obvious: "this is mostly fast with two real tasks." Without the split, every row would feel equally heavy.</div>
+    </div>
+    <div class="card">
+      <div class="card-t">Skip is a first-class action</div>
+      <div class="card-d">The "Skip the 2 that need info" button is prominent, not hidden. Some days Leah doesn't have 30 seconds × 2 to spare. She should be able to promote the easy 6 and come back to the hard 2 next week. Forcing her to handle all 8 in one sitting would teach her not to start the bulk flow.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- 05 SUCCESS STATE FOR MODAL 1 -->
+<section class="fade">
+<div class="w">
+  <p class="eyebrow">Modal 1 · After promotion</p>
+  <h1>The quiet <em>success state.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">Promotion completes silently — the modal closes, a brief toast confirms ("6 items promoted to Studio Library"), and the items disappear from the My Library view (because they're no longer there). The success state is calm. No celebration animation, no confetti, no "great job!" copy. Just confirmation that the work happened.</p>
+
+  <div class="g2">
+    <div>
+      <h3>Toast confirmation</h3>
+      <div style="padding:2rem;background:var(--ch);border-radius:8px;position:relative;min-height:200px;display:flex;align-items:flex-start;justify-content:center">
+        <div style="background:var(--sf);padding:1rem 1.2rem;border-radius:6px;display:flex;gap:0.85rem;align-items:center;max-width:380px;box-shadow:0 8px 24px rgba(0,0,0,0.2);border-left:3px solid var(--sa);margin-top:1rem">
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <div style="height:1.5px;width:24px;background:var(--sa)"></div>
+            <div style="height:1.5px;width:18px;background:var(--sa);opacity:0.6"></div>
+            <div style="height:1.5px;width:12px;background:var(--sa);opacity:0.3"></div>
+          </div>
+          <div>
+            <div style="font-family:var(--fd);font-weight:500;font-size:0.9rem;font-style:italic;color:var(--ch);margin-bottom:0.1rem">6 items promoted</div>
+            <div style="font-family:var(--fb);font-size:0.7rem;color:var(--muted);line-height:1.4">Now visible in Studio Library · <span style="color:var(--cl)">View</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="body" style="font-size:0.78rem;margin-top:0.85rem">Toast appears bottom-right for 5 seconds. Strata Mark in Sage. View link goes to Studio Library filtered to recently-promoted. Auto-dismisses, click to dismiss early.</p>
+    </div>
+
+    <div>
+      <h3>What happens behind the scenes</h3>
+      <div class="frame" style="margin:0">
+        <div style="padding:1.25rem;background:var(--sf)">
+          <div class="spec-row">
+            <span class="spec-row-l">Database</span>
+            <span class="spec-row-r">Items' <code>layer</code> column flips from <code>personal</code> to <code>studio</code>. <code>studio_id</code> populated. <code>promoted_at</code> and <code>promoted_by</code> set.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Visibility</span>
+            <span class="spec-row-r">Items immediately visible to all studio members via RLS policy update. Studio members get notified ("3 new items in Studio Library") in next morning digest, not real-time.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">References</span>
+            <span class="spec-row-r">Project FF&E line items, procurement POs, capture history all stay linked — same item ID, just different layer.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Aesthete Engine</span>
+            <span class="spec-row-r">Item now contributes to studio collective style profile, not just Leah's personal vector. Re-indexed in background within 30 minutes.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Reversibility</span>
+            <span class="spec-row-r">Undo available for 7 days via Settings → Studio Library → Recently Promoted. After 7 days, demotion requires explicit confirmation and removes vendor relationship metadata.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <span class="callout-l">Why no celebration</span>
+    <div class="callout-d">Promotion happens dozens of times over a year. Celebrating each one would feel infantilizing by the third instance. The Strata Mark in the toast is the only signal we need — quiet acknowledgment that the architecture moved forward, no fanfare required. The same principle Anthropic's design system uses: trust the user, don't perform on them.</div>
+  </div>
+</div>
+</section>
+
+<!-- 06 STUDIO → CATALOG NOMINATION · INTRO -->
+<section class="fade dk-section">
+<div class="w">
+  <div class="sm"><div style="background:rgba(250,247,242,0.6)"></div><div style="background:rgba(250,247,242,0.4)"></div><div style="background:rgba(250,247,242,0.2)"></div></div>
+  <p class="eyebrow">Modal 2 · Studio → Patina Catalog</p>
+  <h1>This is <em>delegating, not filing.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">The second modal is fundamentally different. Where the Studio promotion is about an item, the Catalog nomination is about a vendor. Where the Studio promotion is self-completing, the Catalog nomination starts a Patina-side workflow with unpredictable timing. The design must do three things the first modal didn't: focus on the vendor (not the item), set realistic timeline expectations, and leave Leah feeling she just delegated something well — not that she filled out a form.</p>
+
+  <div class="g3">
+    <div class="card">
+      <div class="meta" style="color:rgba(250,247,242,0.4)">Difference 1</div>
+      <h4 style="margin-top:0.4rem;color:var(--ow)">Vendor-focused, not item-focused</h4>
+      <p class="card-d">Nomination is about bringing the *maker* into the Patina marketplace. The specific Studio Library item that triggered the nomination is incidental. The modal centers the vendor: their existing items, the relationship history, why Patina should care.</p>
+    </div>
+    <div class="card">
+      <div class="meta" style="color:rgba(250,247,242,0.4)">Difference 2</div>
+      <h4 style="margin-top:0.4rem;color:var(--ow)">Outcome is uncertain and slow</h4>
+      <p class="card-d">Promotion to Studio is instant. Nomination to Catalog might take weeks or months — Patina reaches out to the manufacturer, who might say yes, no, or "let's talk." The modal must set this expectation clearly without making it feel discouraging.</p>
+    </div>
+    <div class="card">
+      <div class="meta" style="color:rgba(250,247,242,0.4)">Difference 3</div>
+      <h4 style="margin-top:0.4rem;color:var(--ow)">Studio owner only</h4>
+      <p class="card-d">Promotion is open to any studio member. Nomination is studio-owner only — this is a business action that signals a vendor recommendation in Leah's voice as the studio principal. Junior designers can suggest nominations, but the action belongs to the owner.</p>
+    </div>
+  </div>
+
+  <div class="pq">
+    <blockquote style="color:var(--ow)">"When Leah hits 'Nominate Sawkille to Patina,' she isn't checking a box. She's introducing two parties who don't know each other yet — her trusted maker and her trusted platform — and trusting Patina to handle the introduction well. The modal must earn that trust."</blockquote>
+    <cite>Design principle · Nomination as introduction</cite>
+  </div>
+</div>
+</section>
+
+<!-- 07 STUDIO → CATALOG · MODAL -->
+<section class="fade wm-section">
+<div class="w">
+  <p class="eyebrow">Modal 2 · The nomination modal</p>
+  <h1>The vendor in <em>full context.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">The modal opens when Leah clicks "Nominate vendor to Catalog" from a vendor record in Studio Library. The top of the modal grounds the nomination in evidence — here's everything Leah's studio has done with this vendor — so the act of nomination feels like the natural conclusion of a relationship, not a speculative pitch. The bottom is a short note where Leah tells Patina what she wants them to know.</p>
+
+  <div class="modal-stage">
+    <div class="modal wide" style="position:relative">
+      <div class="modal-head">
+        <span class="modal-close">×</span>
+        <div class="modal-eyebrow">
+          <div class="layer-icon li-2" style="color:var(--sa)"><span></span><span></span><span></span></div>
+          <span class="modal-eyebrow-text">From Studio Library</span>
+          <span style="font-family:var(--fm);font-size:0.55rem;color:var(--muted)">→</span>
+          <div class="layer-icon li-3" style="color:var(--cl)"><span></span><span></span><span></span></div>
+          <span class="modal-eyebrow-text">Nominate to Patina Catalog</span>
+        </div>
+        <h2>Nominate <em>Sawkille Co</em> to the Patina Catalog</h2>
+        <p class="modal-sub">This isn't an instant action. We'll review the nomination and reach out to Sawkille to bring them onto the platform. You'll be kept informed.</p>
+      </div>
+
+      <div class="modal-body">
+        <!-- Vendor context block -->
+        <div style="background:rgba(196,165,123,0.04);border:1px solid rgba(196,165,123,0.2);border-radius:6px;padding:1.1rem;margin-bottom:1.25rem">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.85rem">
+            <div>
+              <h3 style="font-size:1.1rem;margin-bottom:0.15rem">Sawkille Co</h3>
+              <div style="font-family:var(--fb);font-size:0.72rem;color:var(--muted)">Saugerties, NY · Trade account established 2023</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-family:var(--fd);font-weight:500;font-size:1.25rem;color:var(--cl);font-style:italic">Strong nomination signal</div>
+              <div style="font-family:var(--fb);font-size:0.65rem;color:var(--muted);margin-top:0.15rem">Based on usage patterns</div>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.85rem;padding-top:0.85rem;border-top:1px solid rgba(196,165,123,0.2)">
+            <div>
+              <div style="font-family:var(--fd);font-weight:600;font-size:1.4rem;color:var(--ch);line-height:1">14</div>
+              <div style="font-family:var(--fm);font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:0.2rem">Studio Library items</div>
+            </div>
+            <div>
+              <div style="font-family:var(--fd);font-weight:600;font-size:1.4rem;color:var(--ch);line-height:1">11</div>
+              <div style="font-family:var(--fm);font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:0.2rem">Projects used in</div>
+            </div>
+            <div>
+              <div style="font-family:var(--fd);font-weight:600;font-size:1.4rem;color:var(--ch);line-height:1">$47K</div>
+              <div style="font-family:var(--fm);font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:0.2rem">Lifetime order value</div>
+            </div>
+            <div>
+              <div style="font-family:var(--fd);font-weight:600;font-size:1.4rem;color:var(--sa);line-height:1">0</div>
+              <div style="font-family:var(--fm);font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:0.2rem">Damage claims</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label">
+            <span>Manufacturer contact <span class="field-label-required">*</span></span>
+            <span class="prefilled-chip">From vendor record</span>
+          </div>
+          <div class="field-row">
+            <input class="field-input field-input-prefilled" value="Mike Sawkille" />
+            <input class="field-input field-input-prefilled" value="mike@sawkille.com" />
+          </div>
+          <div class="field-helper">Patina will reach out to this contact. We'll mention you nominated them — Mike already knows you.</div>
+        </div>
+
+        <div class="field">
+          <div class="field-label">
+            <span>Your recommendation note <span class="field-label-required">*</span></span>
+            <span class="field-label-status">Patina's team will read this · 2-3 sentences is plenty</span>
+          </div>
+          <textarea class="field-textarea" placeholder="Why is this maker worth bringing onto Patina?" style="min-height:88px">Sawkille makes the best Shaker dining chairs I've found — period. Mike runs a small NY shop, prioritizes wood quality and traditional joinery, and turns around custom work in 8 weeks reliably. Aesthetic fit for Patina is obvious; he's a Founding Circle-caliber maker.</textarea>
+        </div>
+
+        <div class="field">
+          <div class="field-label">
+            <span>Why this fits the catalog now</span>
+            <span class="field-label-status">Optional · helps prioritize outreach</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:0.4rem">
+            <label style="display:flex;align-items:center;gap:0.5rem;font-family:var(--fb);font-size:0.74rem;color:var(--ch);padding:0.4rem 0.6rem;border:1px solid var(--cl);background:rgba(196,165,123,0.05);border-radius:4px">
+              <input type="checkbox" checked style="accent-color:var(--cl)"/>
+              <span>Multiple Middlewest designers use this vendor</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:0.5rem;font-family:var(--fb);font-size:0.74rem;color:var(--ch);padding:0.4rem 0.6rem;border:1px solid var(--pe);border-radius:4px">
+              <input type="checkbox" style="accent-color:var(--cl)"/>
+              <span>I've heard other Patina designers ask for this</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:0.5rem;font-family:var(--fb);font-size:0.74rem;color:var(--ch);padding:0.4rem 0.6rem;border:1px solid var(--cl);background:rgba(196,165,123,0.05);border-radius:4px">
+              <input type="checkbox" checked style="accent-color:var(--cl)"/>
+              <span>Strong fit with the Founding Circle aesthetic</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:0.5rem;font-family:var(--fb);font-size:0.74rem;color:var(--ch);padding:0.4rem 0.6rem;border:1px solid var(--pe);border-radius:4px">
+              <input type="checkbox" style="accent-color:var(--cl)"/>
+              <span>The vendor has expressed interest in a platform like Patina</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-foot">
+        <span class="modal-foot-left">Your Studio Library items from Sawkille stay where they are during outreach</span>
+        <div style="display:flex;gap:0.5rem">
+          <span class="btn btn-g">Cancel</span>
+          <span class="btn btn-c btn-large">Send nomination to Patina →</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="g2" style="margin-top:1.5rem">
+    <div class="card">
+      <div class="card-t">The vendor context block is the design centerpiece</div>
+      <div class="card-d">14 items, 11 projects, $47K lifetime value, 0 damage claims — these aren't decoration, they're the *argument* for the nomination. Leah doesn't need to make the case in prose; the numbers do. Her note adds qualitative texture on top. This pattern saves the recommendation note from becoming a sales pitch.</div>
+    </div>
+    <div class="card">
+      <div class="card-t">"Why this fits" checkboxes are strategic signal</div>
+      <div class="card-d">Each checkbox is a different *kind* of fit. Patina's review team needs to prioritize among nominations; these tags help. "Multiple Middlewest designers use" is internal proof. "Other Patina designers asked" is market demand. "Founding Circle aesthetic" is brand fit. "Vendor expressed interest" is reduced friction. Combination determines outreach priority.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- 08 NOMINATION POST-SUBMIT STATE -->
+<section class="fade">
+<div class="w">
+  <p class="eyebrow">Modal 2 · After submission</p>
+  <h1>What Leah sees <em>after she hits send.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">Where the Studio promotion success was a quiet toast, the Nomination submission deserves its own confirmation surface — because the act is bigger and Leah needs to understand the next steps. The post-submit state lives inside the modal (not a separate page), shows the timeline of what's about to happen, and gives Leah a place to find this nomination again later. It then closes to a quiet state inside the vendor record itself.</p>
+
+  <div class="modal-stage">
+    <div class="modal" style="position:relative">
+      <div class="modal-head" style="background:rgba(196,165,123,0.04)">
+        <div class="modal-eyebrow">
+          <div class="layer-icon li-3" style="color:var(--cl)"><span></span><span></span><span></span></div>
+          <span class="modal-eyebrow-text">Nomination sent</span>
+        </div>
+        <h2 style="color:var(--ch)">Sawkille nomination is <em>with Patina.</em></h2>
+        <p class="modal-sub">We've received your nomination and will begin outreach within 3 business days. You'll be notified at each step.</p>
+      </div>
+
+      <div class="modal-body" style="padding-top:0.5rem">
+        <div class="timeline">
+          <div class="timeline-step">
+            <div class="timeline-dot done">✓</div>
+            <div class="timeline-content">
+              <h4>Nomination submitted</h4>
+              <p>You sent the nomination to Patina's review team.</p>
+              <div class="meta">Just now</div>
+            </div>
+          </div>
+          <div class="timeline-step">
+            <div class="timeline-dot active">2</div>
+            <div class="timeline-content">
+              <h4>Patina reviews</h4>
+              <p>Our team reads your recommendation and confirms catalog fit. Usually 1–3 business days.</p>
+              <div class="meta">Next</div>
+            </div>
+          </div>
+          <div class="timeline-step">
+            <div class="timeline-dot">3</div>
+            <div class="timeline-content">
+              <h4>Patina reaches out to Sawkille</h4>
+              <p>We contact Mike at sawkille.com to introduce the marketplace. You're cc'd on the introduction.</p>
+              <div class="meta">After review</div>
+            </div>
+          </div>
+          <div class="timeline-step">
+            <div class="timeline-dot">4</div>
+            <div class="timeline-content">
+              <h4>Manufacturer onboarding</h4>
+              <p>If Sawkille is interested, we walk Mike through the Manufacturer Portal and catalog setup. Timing depends on his availability.</p>
+              <div class="meta">Variable · usually 2–6 weeks</div>
+            </div>
+          </div>
+          <div class="timeline-step">
+            <div class="timeline-dot">5</div>
+            <div class="timeline-content">
+              <h4>Sawkille items live on Catalog</h4>
+              <p>Sawkille's products appear in the Patina Catalog for all designers. Your Studio Library items link to the new Catalog entries.</p>
+              <div class="meta">When ready</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout" style="margin:1rem 0 0">
+          <span class="callout-l">Track this nomination</span>
+          <div class="callout-d">You'll see live status on the Sawkille vendor record in Studio Library. We'll email you at each step. If Sawkille declines or goes quiet, we'll let you know — no awkward follow-up needed from you.</div>
+        </div>
+      </div>
+
+      <div class="modal-foot">
+        <span class="modal-foot-left">Nomination #PAT-N-0042 · Saved to your account</span>
+        <div style="display:flex;gap:0.5rem">
+          <span class="btn btn-s">View vendor record</span>
+          <span class="btn btn-p btn-large">Done</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:1.75rem">The ongoing status surface</h3>
+  <p class="body" style="margin-bottom:1rem">After Leah closes the post-submit modal, the nomination status persists as a visible band on the vendor record inside Studio Library. She can return any time to see where things stand without having to dig through email or Patina notifications.</p>
+
+  <div class="frame">
+    <div style="padding:1.5rem;background:var(--ow)">
+      <div style="background:var(--sf);border:1px solid var(--pe);border-radius:8px;padding:1.5rem">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem">
+          <div>
+            <h3 style="font-size:1.2rem;margin-bottom:0.2rem">Sawkille Co</h3>
+            <div style="font-family:var(--fb);font-size:0.72rem;color:var(--muted)">Saugerties, NY · 14 Studio Library items · 11 projects</div>
+          </div>
+          <span class="chip chip-pending" style="font-size:0.55rem">Nomination · in review</span>
+        </div>
+
+        <div style="padding:0.95rem 1.1rem;background:rgba(232,197,71,0.05);border:1px solid rgba(232,197,71,0.2);border-radius:5px;display:grid;grid-template-columns:auto 1fr auto;gap:1rem;align-items:center">
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <div style="height:2px;width:30px;background:var(--gh)"></div>
+            <div style="height:2px;width:22px;background:var(--gh);opacity:0.6"></div>
+            <div style="height:2px;width:14px;background:var(--gh);opacity:0.3"></div>
+          </div>
+          <div>
+            <div style="font-family:var(--fd);font-weight:500;font-size:0.92rem;color:var(--ch);margin-bottom:0.15rem">Patina nomination in progress · Step 2 of 5</div>
+            <div style="font-family:var(--fb);font-size:0.72rem;color:var(--body);line-height:1.5">Patina team reviewing your nomination · Submitted April 8 · Next update by April 11</div>
+          </div>
+          <span class="btn btn-s" style="font-size:0.66rem">View timeline</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- 09 STATE TRANSITIONS IN VENDOR RECORD -->
+<section class="fade dk-section">
+<div class="w">
+  <p class="eyebrow">The post-nomination journey</p>
+  <h1>What Leah sees <em>at each stage.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">The nomination is a journey, not a single moment. Each state along the path needs its own visual treatment in the vendor record. Below: the four states beyond "in review," and what Leah sees in each. The goal is that she can glance at the vendor record and immediately know where things stand without needing to read an email thread.</p>
+
+  <div class="g2">
+    <div>
+      <h3>State: Manufacturer contacted</h3>
+      <p class="body" style="font-size:0.78rem;margin-bottom:0.75rem;color:rgba(250,247,242,0.6)">Patina has reached out to the maker. Awaiting response. Leah sees the email summary so she knows what was sent in her name.</p>
+      <div style="padding:0.95rem 1.1rem;background:rgba(139,156,173,0.06);border:1px solid rgba(139,156,173,0.25);border-radius:5px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem">
+          <div style="font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--db);font-weight:600">Step 3 of 5 · Awaiting Sawkille</div>
+          <span style="font-family:var(--fb);font-size:0.62rem;color:rgba(250,247,242,0.5)">Sent April 12</span>
+        </div>
+        <div style="font-family:var(--fb);font-size:0.78rem;color:var(--ow);font-weight:500;margin-bottom:0.3rem">Patina emailed Mike at Sawkille</div>
+        <div style="font-family:var(--fb);font-size:0.68rem;color:rgba(250,247,242,0.6);line-height:1.5">"Hi Mike, Leah Krueger at Middlewest Studio nominated Sawkille for the Patina marketplace. We'd love to talk about bringing your dining chairs to a broader designer audience..." <span style="color:var(--cl);cursor:default">View full email</span></div>
+      </div>
+    </div>
+
+    <div>
+      <h3>State: Onboarding in progress</h3>
+      <p class="body" style="font-size:0.78rem;margin-bottom:0.75rem;color:rgba(250,247,242,0.6)">Sawkille said yes. Patina is walking them through Manufacturer Portal setup. Could take weeks. Leah sees high-level progress, not the manufacturer's internal experience.</p>
+      <div style="padding:0.95rem 1.1rem;background:rgba(232,197,71,0.06);border:1px solid rgba(232,197,71,0.25);border-radius:5px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem">
+          <div style="font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--gh);font-weight:600">Step 4 of 5 · Sawkille onboarding</div>
+          <span style="font-family:var(--fb);font-size:0.62rem;color:rgba(250,247,242,0.5)">Started April 24</span>
+        </div>
+        <div style="font-family:var(--fb);font-size:0.78rem;color:var(--ow);font-weight:500;margin-bottom:0.3rem">Sawkille accepted · Building catalog presence</div>
+        <div style="font-family:var(--fb);font-size:0.68rem;color:rgba(250,247,242,0.6);line-height:1.5">Mike is working with Patina to set up his Manufacturer Portal account, finalize the first 8 catalog items, and complete trade pricing. Expected live mid-May.</div>
+      </div>
+    </div>
+
+    <div>
+      <h3>State: Live on catalog</h3>
+      <p class="body" style="font-size:0.78rem;margin-bottom:0.75rem;color:rgba(250,247,242,0.6)">Sawkille is in the catalog. Leah's Studio Library items now link to Catalog equivalents (where applicable). She gets a quiet but real moment of credit — "this maker is here because of you."</p>
+      <div style="padding:0.95rem 1.1rem;background:rgba(168,181,160,0.06);border:1px solid rgba(168,181,160,0.25);border-radius:5px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem">
+          <div style="font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--sa);font-weight:600">Complete · Live on Catalog</div>
+          <span style="font-family:var(--fb);font-size:0.62rem;color:rgba(250,247,242,0.5)">May 18</span>
+        </div>
+        <div style="font-family:var(--fb);font-size:0.78rem;color:var(--ow);font-weight:500;margin-bottom:0.3rem">Sawkille Co is in the Patina Catalog ✓</div>
+        <div style="font-family:var(--fb);font-size:0.68rem;color:rgba(250,247,242,0.6);line-height:1.5">8 items live · You're credited as the originating nomination · Your Studio Library items now link to Catalog versions for one-click ordering.</div>
+      </div>
+    </div>
+
+    <div>
+      <h3>State: Declined or stalled</h3>
+      <p class="body" style="font-size:0.78rem;margin-bottom:0.75rem;color:rgba(250,247,242,0.6)">Sawkille said no, or went quiet despite follow-ups. The nomination closes. Leah sees a respectful explanation. The Studio Library entry stays untouched — nothing was lost.</p>
+      <div style="padding:0.95rem 1.1rem;background:rgba(212,160,144,0.06);border:1px solid rgba(212,160,144,0.25);border-radius:5px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem">
+          <div style="font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--te);font-weight:600">Closed · Not joining at this time</div>
+          <span style="font-family:var(--fb);font-size:0.62rem;color:rgba(250,247,242,0.5)">April 30</span>
+        </div>
+        <div style="font-family:var(--fb);font-size:0.78rem;color:var(--ow);font-weight:500;margin-bottom:0.3rem">Sawkille passed on joining the catalog</div>
+        <div style="font-family:var(--fb);font-size:0.68rem;color:rgba(250,247,242,0.6);line-height:1.5">Mike appreciated the introduction but isn't ready for marketplace distribution right now. We can re-nominate in 6 months if you'd like. <span style="color:var(--cl);cursor:default">Renominate later →</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <span class="callout-l">The "declined" state design choice</span>
+    <div class="callout-d" style="color:rgba(250,247,242,0.7)">A declined nomination is not a failure — it's an outcome. The copy and color treatment shouldn't punish either party. Terracotta border (sober, not alarming), respectful framing, easy renomination path. This protects the designer's relationship with Patina (no shame in nominating) and Patina's relationship with the vendor (no awkwardness if they reconsider later).</div>
+  </div>
+</div>
+</section>
+
+<!-- 10 EDGE CASES -->
+<section class="fade">
+<div class="w">
+  <div class="sm"><div></div><div></div><div></div></div>
+  <p class="eyebrow">Edge cases that turn this from happy path to system</p>
+  <h1>The cases that <em>need defined answers.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">Promotion is mostly happy-path. But the moments it isn't — duplicate detection, multi-designer races, demotion requests, vendor conflicts — are where users decide whether the system is trustworthy. Each of these gets a defined behavior. Claude Code can implement directly from this.</p>
+
+  <div class="g2">
+    <div class="edge">
+      <div class="edge-t">Duplicate item already in Studio Library</div>
+      <div class="edge-q">Leah promotes "Heirloom Oak Dining Table" from My Library, but another designer (or Leah herself, earlier) already promoted a similar item with the same vendor + similar name.</div>
+      <div class="edge-a"><strong>Behavior:</strong> Modal opens with a warning banner at top: "Studio Library already has a similar item from Nordic Atelier." Side-by-side comparison shown. Three resolution options: (1) Merge into existing — adds Leah's usage history to the existing item, discards her private capture. (2) Keep as separate item — both exist, slightly different (perhaps different finish). (3) Cancel. Default to merge for solo studios.</div>
+    </div>
+
+    <div class="edge">
+      <div class="edge-t">Multi-designer race condition</div>
+      <div class="edge-q">In a multi-designer studio, two designers simultaneously try to promote items from the same vendor that doesn't yet exist in Studio Library. Both modals try to create the vendor record.</div>
+      <div class="edge-a"><strong>Behavior:</strong> The second submit detects the race and merges. The vendor record is created once; both items attach to it. The second designer sees a quiet message: "Vendor record was created by [name] just now — your item is attached." No error, no rollback.</div>
+    </div>
+
+    <div class="edge">
+      <div class="edge-t">Bulk promote includes items already in Studio</div>
+      <div class="edge-q">Leah multi-selects 10 items, hits bulk promote, but 2 of them are somehow already promoted (perhaps she undid recently and forgot, or another designer promoted them).</div>
+      <div class="edge-a"><strong>Behavior:</strong> Those 2 items appear in the modal with a "Already in Studio Library" badge and are unselected by default. They can't be re-promoted from this flow but are visible so Leah knows the system caught them. Counter at top reads "8 items to promote · 2 already in Studio."</div>
+    </div>
+
+    <div class="edge">
+      <div class="edge-t">Demoting a Studio item back to Personal</div>
+      <div class="edge-q">Leah realizes a Studio Library item shouldn't be there — wrong category, vendor relationship soured, item discontinued. She wants to pull it back to Personal or delete it.</div>
+      <div class="edge-a"><strong>Behavior:</strong> Within 7 days of promotion: undo restores to Personal silently. After 7 days: explicit confirmation modal, warns that demoting will remove vendor relationship metadata (which other designers may have relied on). Cannot demote items currently being used in active projects — must wait for projects to close first.</div>
+    </div>
+
+    <div class="edge">
+      <div class="edge-t">Vendor with both Studio items and an open Patina nomination</div>
+      <div class="edge-q">Leah nominates Sawkille to Patina. While nomination is in review, a junior designer tries to promote a new Sawkille item from her Personal to Studio Library.</div>
+      <div class="edge-a"><strong>Behavior:</strong> Promotion succeeds normally. Studio Library and Patina Catalog are independent layers — Studio activity doesn't pause during nomination. New items added to Studio during nomination get included in the Patina onboarding once Sawkille accepts. The vendor record's nomination banner stays visible throughout.</div>
+    </div>
+
+    <div class="edge">
+      <div class="edge-t">Nomination after vendor declined previously</div>
+      <div class="edge-q">Sawkille declined nomination 4 months ago. Leah wants to renominate (she heard Mike's situation changed).</div>
+      <div class="edge-a"><strong>Behavior:</strong> Renomination is allowed but the modal opens with the previous decline context visible — "Sawkille declined April 30, 2026. Brief reason: 'Not ready for marketplace distribution.'" Leah adds a new note explaining what's changed. Patina's review team sees both nominations and decides whether to reach out again.</div>
+    </div>
+
+    <div class="edge">
+      <div class="edge-t">Item promoted from a vendor not yet in Studio</div>
+      <div class="edge-q">Leah promotes a first-ever item from MossMakers — no prior vendor record exists. The promotion modal needs to create the vendor record on the fly.</div>
+      <div class="edge-a"><strong>Behavior:</strong> Modal expands to include "About MossMakers" mini-section above the item fields: vendor name, contact email, website. These become the foundation of the vendor record. Promotion creates both the vendor and the Studio item in one atomic action. The "Pre-filled from vendor" chips on remaining fields are replaced with "New vendor — please provide" cues.</div>
+    </div>
+
+    <div class="edge">
+      <div class="edge-t">Studio owner leaves the studio</div>
+      <div class="edge-q">In a multi-designer studio, the studio owner who nominated Sawkille leaves Middlewest. The nomination is in progress.</div>
+      <div class="edge-a"><strong>Behavior:</strong> Nomination ownership transfers to the new studio owner. Patina is notified internally and updates outreach copy ("Originally nominated by [former owner], now overseen by [new owner]"). The vendor record's "nominated by" history preserves both. No nomination is ever orphaned.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- 11 COMPONENT INVENTORY -->
+<section class="fade wm-section">
+<div class="w">
+  <p class="eyebrow">Component inventory for Claude Code</p>
+  <h1>What gets built. <em>Reusable, not bespoke.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">Both modals share common primitives — the modal shell, the field components, the chips, the timeline. Building reusable components saves implementation time and keeps visual consistency. The list below maps every UI element to a `@strata/*` component, indicating which exist and which are new.</p>
+
+  <h3>Modal primitives</h3>
+  <div class="frame">
+    <div style="padding:1.25rem;background:var(--sf)">
+      <div class="spec-row">
+        <span class="spec-row-l">&lt;Modal&gt;</span>
+        <span class="spec-row-r"><strong>Existing</strong> in <code>@strata/ui</code> · Used as-is. Width variants: default (640px), wide (880px). Has built-in close handling, focus trap, escape-to-close.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">&lt;ModalHead&gt;</span>
+        <span class="spec-row-r"><strong>Existing</strong> · Includes eyebrow, title (with em italic support), subtitle, optional border-bottom variant.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">&lt;ModalFoot&gt;</span>
+        <span class="spec-row-r"><strong>Existing</strong> · Background var(--ow), border-top, slot for left-aligned text + right-aligned button group.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">&lt;LayerEyebrow&gt;</span>
+        <span class="spec-row-r"><strong>New</strong> in <code>@strata/products</code> · The "From X → To Y" eyebrow used in both promotion modals. Composes two LayerIcons + arrow + label text.</span>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:1.5rem">Field components</h3>
+  <div class="frame">
+    <div style="padding:1.25rem;background:var(--sf)">
+      <div class="spec-row">
+        <span class="spec-row-l">&lt;Field&gt;</span>
+        <span class="spec-row-r"><strong>Existing</strong> from help-system spec · Wraps label + input + helper. Supports required, optional, error variants.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">&lt;FieldLabel&gt;</span>
+        <span class="spec-row-r"><strong>Existing</strong> · DM Mono uppercase. Required marker is Terracotta asterisk. Status text supports italic Inter for "Pre-filled" indicators.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">&lt;PrefilledChip&gt;</span>
+        <span class="spec-row-r"><strong>New</strong> in <code>@strata/products</code> · The small Sage chip indicating a field is pre-populated. Variants: "Pre-filled from vendor record" / "Auto-detected" / "From X orders" — text is prop.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">Field input pre-filled state</span>
+        <span class="spec-row-r"><strong>Extend existing input</strong> · Add <code>prefilled</code> prop. When true, background tints Sage at 5% opacity, border tints Sage at 30%. Sage = trustworthy, low-friction.</span>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:1.5rem">Bulk-flow components</h3>
+  <div class="frame">
+    <div style="padding:1.25rem;background:var(--sf)">
+      <div class="spec-row">
+        <span class="spec-row-l">&lt;BulkRow&gt;</span>
+        <span class="spec-row-r"><strong>New</strong> in <code>@strata/products</code> · Grid layout with checkbox, thumbnail, item info, optional inline data column, status pill. Variants: ready, needs-info, expanded.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">&lt;BulkExpand&gt;</span>
+        <span class="spec-row-r"><strong>New</strong> · Inline expansion below a needs-info row. Contains the mini-form for required field input. Animates open/closed on row tap.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">&lt;BulkSectionHeader&gt;</span>
+        <span class="spec-row-r"><strong>New</strong> · The "Ready to promote · 6 items" and "Needs your input · 2 items" headers that separate lanes. Color-coded Sage and Golden Hour.</span>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:1.5rem">Nomination-specific components</h3>
+  <div class="frame">
+    <div style="padding:1.25rem;background:var(--sf)">
+      <div class="spec-row">
+        <span class="spec-row-l">&lt;VendorContextBlock&gt;</span>
+        <span class="spec-row-r"><strong>New</strong> in <code>@strata/products</code> · The Clay-tinted card at the top of the nomination modal showing vendor name, location, "Strong nomination signal" assessment, and the 4-stat grid (items, projects, value, damage).</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">&lt;NominationFitChecklist&gt;</span>
+        <span class="spec-row-r"><strong>New</strong> · The "Why this fits" checkbox group with bordered-on-check styling. Options are configurable.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">&lt;NominationTimeline&gt;</span>
+        <span class="spec-row-r"><strong>New</strong> · The vertical timeline showing nomination journey states. Dots in done/active/pending states. Used in post-submit modal and in vendor-record status banner.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">&lt;NominationStatusBanner&gt;</span>
+        <span class="spec-row-r"><strong>New</strong> · The persistent status band on the vendor record. Five visual variants for the five states (in review, contacted, onboarding, live, declined). Each uses its color family.</span>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:1.5rem">Toast & confirmation</h3>
+  <div class="frame">
+    <div style="padding:1.25rem;background:var(--sf)">
+      <div class="spec-row">
+        <span class="spec-row-l">&lt;PromotionToast&gt;</span>
+        <span class="spec-row-r"><strong>New</strong> · Bottom-right toast for Studio promotion success. Includes mini Strata Mark, count, "View" link. 5-second auto-dismiss. Click-to-dismiss.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">&lt;DuplicateDetectionBanner&gt;</span>
+        <span class="spec-row-r"><strong>New</strong> · The warning banner at top of single-item modal when duplicate detected. Shows side-by-side comparison and three resolution actions.</span>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- 12 ANALYTICS -->
+<section class="fade">
+<div class="w">
+  <p class="eyebrow">Analytics · What we measure</p>
+  <h1>The numbers <em>that tell us this works.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">The promotion modals are where the three-layer system's success or failure shows up most clearly. If designers promote things, the system works. If they don't, we built a beautifully designed shelf no one uses. These metrics give us early signal — within the first month of v1 — whether the design is doing its job.</p>
+
+  <div class="g2">
+    <div>
+      <h3>For Studio promotion</h3>
+      <div class="frame" style="margin:0.5rem 0">
+        <div style="padding:1.25rem;background:var(--sf)">
+          <div class="spec-row">
+            <span class="spec-row-l">Modal completion rate</span>
+            <span class="spec-row-r">% of opened promotion modals that submit. Target: <strong>85%+</strong>. Low rate means the modal feels too heavy or fields are confusing.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Time to complete</span>
+            <span class="spec-row-r">Modal-open to submit. Target: <strong>under 60 seconds</strong> for single-item, under 3 minutes for bulk of 8+. Longer means too much input or too little pre-population.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Pre-fill edit rate</span>
+            <span class="spec-row-r">% of pre-filled fields Leah edits vs accepts. Target: <strong>under 25%</strong>. Higher means our pre-population logic is wrong; lower means we could pre-fill more.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Banner CTR</span>
+            <span class="spec-row-r">% of "ready for Studio Library" banners that get the Review action clicked. Target: <strong>40%+</strong>. Lower means the banner is too noisy or candidates aren't strong enough.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Promotion volume</span>
+            <span class="spec-row-r">Total items promoted per studio per month. Establishes baseline. Watch for drop-offs that signal the system stopped feeling worth it.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Demotion rate</span>
+            <span class="spec-row-r">% of Studio items demoted back to Personal within 30 days. Target: <strong>under 5%</strong>. Higher means the promotion threshold is too loose.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3>For Catalog nomination</h3>
+      <div class="frame" style="margin:0.5rem 0">
+        <div style="padding:1.25rem;background:var(--sf)">
+          <div class="spec-row">
+            <span class="spec-row-l">Nomination volume</span>
+            <span class="spec-row-r">Nominations submitted per studio per quarter. Target Phase 3: <strong>1-3 per studio per quarter</strong>. Drives marketplace growth.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Nomination acceptance rate</span>
+            <span class="spec-row-r">% of nominations where the vendor accepts onboarding. Target: <strong>50%+</strong>. Lower means designers are nominating speculatively; Patina should provide better guidance.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Time to onboard</span>
+            <span class="spec-row-r">Days from nomination submit to "Live on catalog." Track median and 90th percentile. Target median: <strong>under 30 days</strong> for accepted nominations.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Studio→Catalog conversion</span>
+            <span class="spec-row-r">Of vendors with 5+ Studio Library items, what % get nominated within 6 months. Tells us if the "ready to nominate" surfacing is being acted on.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Nomination withdrawal rate</span>
+            <span class="spec-row-r">% of nominations Leah cancels before completion. Target: <strong>under 10%</strong>. Higher means the post-submit timeline isn't setting expectations clearly enough.</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row-l">Re-nomination rate</span>
+            <span class="spec-row-r">% of declined nominations that get re-nominated within 12 months. Healthy if non-zero — shows the "decline is not failure" framing is working.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <span class="callout-l">The leading indicator to watch in week 1</span>
+    <div class="callout-d"><strong>Modal completion rate.</strong> Of every modal opened, what percentage submits. If this is under 70%, the modal is too heavy and we need to cut fields. If it's over 90%, the bar might be too low and we could ask for more. Sweet spot 80-90%. This metric alone tells us if the design is calibrated correctly within a week of launch.</div>
+  </div>
+</div>
+</section>
+
+<!-- 13 BUILD ORDER -->
+<section class="fade dk-section">
+<div class="w">
+  <p class="eyebrow">Build order · For Claude Code</p>
+  <h1>What ships <em>when.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">Both modals belong to Sprint 2 of the Three-Layer Catalog build. They can't ship before Studio Library exists (Sprint 2 deliverable) and the Catalog nomination modal needs the Manufacturer Portal's nomination-receipt side ready or stubbed. Below: the dependency-ordered build sequence.</p>
+
+  <div class="g3">
+    <div class="card">
+      <div class="meta" style="color:var(--cl)">Week 5</div>
+      <h3 style="color:var(--ow);margin:0.3rem 0;font-size:1rem">Foundation</h3>
+      <div class="card-d">
+        • Layer column on products table<br>
+        • RLS policies for studio visibility<br>
+        • Promote-to-Studio backend mutation<br>
+        • Vendor record promotion side effects<br>
+        • &lt;LayerEyebrow&gt; + &lt;PrefilledChip&gt; components<br>
+        • Pre-filled input variant on shared input
+      </div>
+    </div>
+    <div class="card">
+      <div class="meta" style="color:var(--cl)">Week 6</div>
+      <h3 style="color:var(--ow);margin:0.3rem 0;font-size:1rem">Promotion modals</h3>
+      <div class="card-d">
+        • Single-item Promote-to-Studio modal<br>
+        • Pre-population data pipeline<br>
+        • Promotion toast + 7-day undo<br>
+        • Candidate-detection logic<br>
+        • Promotion banner on My Library<br>
+        • Item detail page "Promote" action<br>
+        • Duplicate detection banner
+      </div>
+    </div>
+    <div class="card">
+      <div class="meta" style="color:var(--cl)">Week 7</div>
+      <h3 style="color:var(--ow);margin:0.3rem 0;font-size:1rem">Bulk + edge cases</h3>
+      <div class="card-d">
+        • Bulk Promote modal<br>
+        • Two-lane split UI<br>
+        • Inline BulkExpand component<br>
+        • Multi-designer race handling<br>
+        • Demotion flow (within 7d + explicit)<br>
+        • Vendor-not-yet-existing path<br>
+        • Analytics events wired
+      </div>
+    </div>
+  </div>
+
+  <div class="g2" style="margin-top:1.5rem">
+    <div class="card">
+      <div class="meta" style="color:var(--cl)">Week 8</div>
+      <h4 style="margin-top:0.4rem;color:var(--ow)">Nomination modal · Designer side</h4>
+      <div class="card-d">
+        • &lt;VendorContextBlock&gt; with usage stats<br>
+        • Nominate-to-Catalog modal<br>
+        • Post-submit timeline modal<br>
+        • &lt;NominationStatusBanner&gt; (5 variants)<br>
+        • Vendor-record status persistence<br>
+        • Renomination flow with prior context<br>
+        • Nomination ownership transfer (multi-designer)
+      </div>
+    </div>
+    <div class="card">
+      <div class="meta" style="color:var(--cl)">Week 8 · Parallel</div>
+      <h4 style="margin-top:0.4rem;color:var(--ow)">Nomination · Patina-side handoff</h4>
+      <div class="card-d">
+        • Nomination receipt endpoint<br>
+        • Patina internal review queue (admin UI)<br>
+        • Email template: manufacturer outreach<br>
+        • State transition machinery (5 states)<br>
+        • Status updates flow back to designer record<br>
+        • Manufacturer Portal onboarding entry point<br>
+        • Manual override controls for Patina ops team
+      </div>
+    </div>
+  </div>
+
+  <div class="callout" style="background:rgba(196,165,123,0.08);border-left-color:var(--cl)">
+    <span class="callout-l">Critical dependency note</span>
+    <div class="callout-d" style="color:rgba(250,247,242,0.75)">The Catalog nomination flow requires both the designer-facing modal AND the Patina-side intake mechanism. v1 can ship with a manual Patina-side process (nominations go to an internal email or Linear queue, ops team manually progresses states). The designer-facing experience must feel polished even if the back-end is humans-with-spreadsheets. Don't gate the modal launch on a fully automated Manufacturer Portal flow — that comes later.</div>
+  </div>
+</div>
+</section>
+
+<!-- 14 CLOSE -->
+<section class="fade">
+<div class="w">
+  <div class="sm"><div></div><div></div><div></div></div>
+  <div class="pq">
+    <blockquote>"The promotion modals are the only friction we deliberately keep in the system. That makes them precious — they have to earn their place every time they appear. The first one ends with 'promoted' and a quiet toast. The second one ends with 'we'll take it from here' and a timeline. Both should leave Leah feeling lighter, not heavier, than when she opened them."</blockquote>
+    <cite>Promotion modals · North star</cite>
+  </div>
+
+  <h2 style="margin-top:2rem">Two modals, <em>fully specified.</em></h2>
+  <p class="body" style="margin-top:1rem;margin-bottom:2rem">This document specifies both promotion flows end-to-end: entry paths, modal designs (single + bulk for Studio, the vendor-focused nomination), success states, ongoing status surfaces, edge cases, component inventory, analytics, and build order. The next-step companion is the Three-Layer Engineering Handoff — the source-of-truth document that turns these modals plus the larger three-layer architecture into something Claude Code can build autonomously.</p>
+
+  <div class="g3" style="margin-bottom:2rem">
+    <div>
+      <div class="meta">Builds on</div>
+      <div style="font-family:var(--fb);font-size:0.78rem;color:var(--body);line-height:1.6;margin-top:0.3rem">Three-Layer Product Catalog · Designer Portal MVP · Help & Guidance System</div>
+    </div>
+    <div>
+      <div class="meta">Pairs with</div>
+      <div style="font-family:var(--fb);font-size:0.78rem;color:var(--body);line-height:1.6;margin-top:0.3rem">Procurement Workspace v1 (where promoted items flow when they enter procurement)</div>
+    </div>
+    <div>
+      <div class="meta">Next document</div>
+      <div style="font-family:var(--fb);font-size:0.78rem;color:var(--body);line-height:1.6;margin-top:0.3rem">Three-Layer Engineering Handoff (source-of-truth doc, Claude Code autonomous-build ready)</div>
+    </div>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:2rem;border-top:1px solid var(--pe);flex-wrap:wrap;gap:1rem">
+    <div>
+      <div style="font-family:var(--fd);font-weight:400;font-size:1rem;color:var(--ch)">Patina · Designer Portal</div>
+      <div style="font-family:var(--fd);font-style:italic;font-size:0.78rem;color:var(--muted)">Where Time Adds Value</div>
+    </div>
+    <div class="meta">Promotion Modals · Deep Design · April 2026</div>
+  </div>
+</div>
+</section>
+
+<script>
+const f=document.querySelectorAll('.fade');
+const o=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('vis')})},{threshold:0.08,rootMargin:'0px 0px -40px 0px'});
+f.forEach(s=>o.observe(s));
+</script>
+</body>
+</html>
