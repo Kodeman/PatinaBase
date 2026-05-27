@@ -21,6 +21,13 @@ export interface VendorGroup {
   itemCount: number;       // count of PO header rows (one per "order/item" in the card sense)
   projectIds: Set<string>; // unique projects this vendor's POs span
   hasDuePayment: boolean;
+  /**
+   * True when this vendor is part of the Patina Catalog
+   * (vendors.is_patina_catalog = true). Drives the gold "Order via Patina"
+   * CTA in the card header (PRD slide §5). Derived by groupByVendor from
+   * the joined `vendor.is_patina_catalog` column.
+   */
+  isPatinaCatalog: boolean;
 }
 
 // ─── Formatting helpers ────────────────────────────────────────────────────
@@ -107,16 +114,24 @@ interface VendorSectionCardProps {
   group: VendorGroup;
   /**
    * Primary action label rendered in the card header. Defaults to "View orders".
-   * Click handler is a no-op in Sprint 1 — Wave 1.4 wires the side-panel flow.
+   * Ignored for Patina Catalog vendors — those always render the gold
+   * "Order via Patina" CTA via `onOrderViaPatina` instead (PRD §5).
    */
   ctaLabel?: string;
   onCtaClick?: () => void;
+  /**
+   * Click handler for the gold "Order via Patina" CTA. Only rendered when
+   * `group.isPatinaCatalog === true`. When provided, replaces the standard
+   * neutral CTA — Catalog vendors only see the one-click Patina-handled flow.
+   */
+  onOrderViaPatina?: () => void;
 }
 
 export function VendorSectionCard({
   group,
   ctaLabel = 'View orders',
   onCtaClick,
+  onOrderViaPatina,
 }: VendorSectionCardProps) {
   const [expanded, setExpanded] = useState(true);
 
@@ -155,7 +170,28 @@ export function VendorSectionCard({
           <span className="truncate font-heading text-[0.95rem] font-medium text-[var(--text-primary)]">
             {group.vendorName}
           </span>
-          <PaymentTermsPill terms={group.defaultPaymentTerms} />
+          {group.isPatinaCatalog ? (
+            // PRD §5 line 470 — Catalog vendor pill replaces the
+            // per-vendor payment-terms pill. Same clay tint, "Patina Catalog"
+            // label — signals that this vendor's payments are handled by
+            // Patina internally.
+            <span
+              className="inline-flex items-center rounded-[3px] px-2 py-0.5"
+              style={{
+                backgroundColor: 'rgba(196, 165, 123, 0.15)',
+                color: 'var(--color-clay)',
+                fontFamily: 'var(--font-meta)',
+                fontSize: '0.58rem',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                fontWeight: 600,
+              }}
+            >
+              Patina Catalog
+            </span>
+          ) : (
+            <PaymentTermsPill terms={group.defaultPaymentTerms} />
+          )}
         </button>
 
         <div className="flex flex-shrink-0 items-center gap-4">
@@ -169,14 +205,29 @@ export function VendorSectionCard({
               {projectCount} project{projectCount !== 1 ? 's' : ''}
             </span>
           </div>
-          <button
-            type="button"
-            onClick={onCtaClick}
-            className="rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-[var(--text-primary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]"
-            disabled={!onCtaClick}
-          >
-            {ctaLabel}
-          </button>
+          {group.isPatinaCatalog ? (
+            // PRD §5 — Catalog vendors get the gold/champagne pill-shaped CTA.
+            // Matches .btn-c (background:var(--cl);color:white) from the PRD
+            // mock, executed via the --color-clay design token.
+            <button
+              type="button"
+              onClick={onOrderViaPatina}
+              disabled={!onOrderViaPatina}
+              className="rounded-full px-4 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-clay)' }}
+            >
+              Order via Patina
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onCtaClick}
+              className="rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-[var(--text-primary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]"
+              disabled={!onCtaClick}
+            >
+              {ctaLabel}
+            </button>
+          )}
         </div>
       </header>
 

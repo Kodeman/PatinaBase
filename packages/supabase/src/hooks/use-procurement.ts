@@ -47,7 +47,12 @@ export interface PurchaseOrder {
   notes: string | null;
   created_at: string;
   updated_at: string;
-  vendor?: { id: string; name: string; default_payment_terms: PaymentPattern | null };
+  vendor?: {
+    id: string;
+    name: string;
+    default_payment_terms: PaymentPattern | null;
+    is_patina_catalog?: boolean;
+  };
   project?: { id: string; name: string };
   payments?: POPayment[];
 }
@@ -229,7 +234,7 @@ export function usePurchaseOrders(filters?: POFilters) {
         .select(
           `
           *,
-          vendor:vendors!purchase_orders_vendor_id_fkey(id, name, default_payment_terms),
+          vendor:vendors!purchase_orders_vendor_id_fkey(id, name, default_payment_terms, is_patina_catalog),
           project:projects!purchase_orders_project_id_fkey(id, name),
           payments:po_payments(*)
         `
