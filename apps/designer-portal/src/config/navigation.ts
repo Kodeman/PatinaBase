@@ -1,6 +1,7 @@
 import {
   CalendarDays,
   TrendingUp,
+  ShoppingBag,
   Package,
   Users,
   MessageSquare,
@@ -14,7 +15,7 @@ import {
 
 // ─── Zone Definitions ────────────────────────────────────────────────────────
 
-export type ZoneKey = 'today' | 'pipeline' | 'products' | 'clients' | 'messages';
+export type ZoneKey = 'today' | 'pipeline' | 'procurement' | 'products' | 'clients' | 'messages';
 
 export interface ZoneConfig {
   key: ZoneKey;
@@ -44,6 +45,13 @@ export const ZONES: ZoneConfig[] = [
       '/portal/projects',
     ],
     icon: TrendingUp,
+  },
+  {
+    key: 'procurement',
+    label: 'Procurement',
+    href: '/portal/procurement',
+    paths: ['/portal/procurement'],
+    icon: ShoppingBag,
   },
   {
     key: 'products',
@@ -96,6 +104,12 @@ export const ZONE_SUB_ITEMS: Record<ZoneKey, SubNavItem[]> = {
     { label: 'Proposals', href: '/portal/pipeline?stage=proposals', dotColor: 'var(--color-golden-hour, #E8C547)' },
     { label: 'Active', href: '/portal/pipeline?stage=active', dotColor: 'var(--color-clay, #C4A57B)' },
     { label: 'Completed', href: '/portal/pipeline?stage=completed', dotColor: 'var(--color-sage, #A8B5A0)' },
+  ],
+  procurement: [
+    { label: 'By Vendor', href: '/portal/procurement/by-vendor' },
+    { label: 'By Status', href: '/portal/procurement/by-status' },
+    { label: 'Calendar', href: '/portal/procurement/calendar' },
+    { label: 'Receiving', href: '/portal/procurement/receiving' },
   ],
   products: [
     { label: 'Catalog', href: '/portal/catalog', exact: true },
