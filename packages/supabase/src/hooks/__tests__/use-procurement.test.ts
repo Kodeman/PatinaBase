@@ -36,6 +36,8 @@ interface MockBuilder {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   not: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  is: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   single: any;
   then: (resolve: (value: BuilderResult) => unknown) => Promise<unknown>;
   __chain: Array<{ method: string; args: unknown[] }>;
@@ -67,6 +69,7 @@ function makeBuilder(initial: BuilderResult = { data: null, error: null }): Mock
   builder.lte = record('lte');
   builder.in = record('in');
   builder.not = record('not');
+  builder.is = record('is');
 
   const takeResult = (): BuilderResult =>
     builder.__resultQueue.length > 0
@@ -130,6 +133,10 @@ import {
   useCreateReceivingInspection,
   useUpdateDamageClaim,
   useUpdatePurchaseOrderETA,
+  // Sprint 3 / Wave 3.2 — Procurement notifications
+  useProcurementNotifications,
+  useProcurementUnreadCount,
+  useMarkProcurementNotificationRead,
 } from '../use-procurement';
 
 beforeEach(() => {
@@ -1371,5 +1378,266 @@ describe('useUpdatePurchaseOrderETA', () => {
     expect(payload.notes).toMatch(/\[\d{4}-\d{2}-\d{2} ETA update\]: Vendor pushed by 2 weeks/);
     // The existing notes must be preserved (no destructive overwrite).
     expect(payload.notes).toContain('Vendor said L8W ETA');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useProcurementNotifications  (Sprint 3 / Wave 3.2 — migration 00151)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useProcurementNotifications', () => {
+  it('queries procurement_notifications scoped to auth.uid() and DOES NOT apply .is(read_at, null) by default', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+    setTableDefault('procurement_notifications', {
+      data: [
+        {
+          id: 'n1',
+          user_id: 'user-1',
+          kind: 'balance_due',
+          subject_payment_id: 'p1',
+          subject_purchase_order_id: 'po1',
+          subject_inspection_id: null,
+          read_at: null,
+          created_at: '2026-05-27T00:00:00Z',
+        },
+        {
+          id: 'n2',
+          user_id: 'user-1',
+          kind: 'damage_claim_drafted',
+          subject_payment_id: null,
+          subject_purchase_order_id: 'po2',
+          subject_inspection_id: 'i2',
+          read_at: '2026-05-26T18:00:00Z',
+          created_at: '2026-05-26T17:55:00Z',
+        },
+      ],
+      error: null,
+    });
+
+    const config = useProcurementNotifications() as unknown as {
+      queryKey: unknown[];
+      queryFn: () => Promise<unknown[]>;
+      staleTime: number;
+    };
+
+    expect(config.queryKey).toEqual(['procurement-notifications', { unreadOnly: false }]);
+    expect(config.staleTime).toBe(60 * 1000);
+
+    const rows = await config.queryFn();
+    expect(rows).toHaveLength(2);
+
+    const builder = builders.procurement_notifications;
+    // Must scope to the authenticated user via .eq('user_id', ...).
+    const eqCalls = builder.__chain.filter((c) => c.method === 'eq');
+    expect(eqCalls).toContainEqual({ method: 'eq', args: ['user_id', 'user-1'] });
+    // Order by created_at DESC.
+    const orderCalls = builder.__chain.filter((c) => c.method === 'order');
+    expect(orderCalls).toContainEqual({
+      method: 'order',
+      args: ['created_at', { ascending: false }],
+    });
+    // unreadOnly default is false → no .is('read_at', null) filter.
+    const isCalls = builder.__chain.filter((c) => c.method === 'is');
+    expect(isCalls).toEqual([]);
+    // Select must request the joined purchase_order/vendor/project.
+    const selectCalls = builder.__chain.filter((c) => c.method === 'select');
+    expect(selectCalls).toHaveLength(1);
+    const selectStr = String(selectCalls[0].args[0]);
+    expect(selectStr).toContain('purchase_order:purchase_orders');
+    expect(selectStr).toContain('vendor:vendors');
+    expect(selectStr).toContain('project:projects');
+  });
+
+  it('applies .is(read_at, null) when unreadOnly: true and embeds the filter in the queryKey', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+    setTableDefault('procurement_notifications', { data: [], error: null });
+
+    const config = useProcurementNotifications({ unreadOnly: true }) as unknown as {
+      queryKey: unknown[];
+      queryFn: () => Promise<unknown[]>;
+    };
+
+    expect(config.queryKey).toEqual(['procurement-notifications', { unreadOnly: true }]);
+
+    await config.queryFn();
+
+    const builder = builders.procurement_notifications;
+    const isCalls = builder.__chain.filter((c) => c.method === 'is');
+    expect(isCalls).toEqual([{ method: 'is', args: ['read_at', null] }]);
+  });
+
+  it('throws when not authenticated', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({ data: { user: null } });
+    const config = useProcurementNotifications() as unknown as {
+      queryFn: () => Promise<unknown>;
+    };
+    await expect(config.queryFn()).rejects.toThrow('Not authenticated');
+  });
+
+  it('throws when supabase returns an error', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+    setTableDefault('procurement_notifications', {
+      data: null,
+      error: new Error('rls denied'),
+    });
+    const config = useProcurementNotifications() as unknown as {
+      queryFn: () => Promise<unknown>;
+    };
+    await expect(config.queryFn()).rejects.toThrow('rls denied');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useProcurementUnreadCount  (Sprint 3 / Wave 3.2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useProcurementUnreadCount', () => {
+  it('queries with head:true count and .is(read_at, null), scoped to auth.uid()', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+    setTableDefault('procurement_notifications', {
+      data: null,
+      error: null,
+      count: 7,
+    } as unknown as { data: unknown; error: unknown });
+
+    const config = useProcurementUnreadCount() as unknown as {
+      queryKey: unknown[];
+      queryFn: () => Promise<number>;
+      staleTime: number;
+    };
+
+    expect(config.queryKey).toEqual(['procurement-unread-count']);
+    expect(config.staleTime).toBe(30 * 1000);
+
+    const count = await config.queryFn();
+    expect(count).toBe(7);
+
+    const builder = builders.procurement_notifications;
+    // Select with head/count options.
+    const selectCalls = builder.__chain.filter((c) => c.method === 'select');
+    expect(selectCalls).toHaveLength(1);
+    expect(selectCalls[0].args[0]).toBe('id');
+    expect(selectCalls[0].args[1]).toEqual({ count: 'exact', head: true });
+    // Scoped by user_id.
+    const eqCalls = builder.__chain.filter((c) => c.method === 'eq');
+    expect(eqCalls).toContainEqual({ method: 'eq', args: ['user_id', 'user-1'] });
+    // .is('read_at', null) — only unread rows count.
+    const isCalls = builder.__chain.filter((c) => c.method === 'is');
+    expect(isCalls).toEqual([{ method: 'is', args: ['read_at', null] }]);
+  });
+
+  it('returns 0 when supabase returns an error (never throws — nav badge must not break shell)', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+    setTableDefault('procurement_notifications', {
+      data: null,
+      error: { message: 'boom' },
+      count: null,
+    } as unknown as { data: unknown; error: unknown });
+
+    const config = useProcurementUnreadCount() as unknown as {
+      queryFn: () => Promise<number>;
+    };
+    await expect(config.queryFn()).resolves.toBe(0);
+  });
+
+  it('returns 0 when the caller is not authenticated', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({ data: { user: null } });
+    const config = useProcurementUnreadCount() as unknown as {
+      queryFn: () => Promise<number>;
+    };
+    await expect(config.queryFn()).resolves.toBe(0);
+  });
+
+  it('returns 0 when getUser throws (catch-all fail-soft)', async () => {
+    supabaseClient.auth.getUser.mockRejectedValueOnce(new Error('network down'));
+    const config = useProcurementUnreadCount() as unknown as {
+      queryFn: () => Promise<number>;
+    };
+    await expect(config.queryFn()).resolves.toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useMarkProcurementNotificationRead  (Sprint 3 / Wave 3.2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useMarkProcurementNotificationRead', () => {
+  it('UPDATEs procurement_notifications with read_at = now(), scoped by id + user_id, and invalidates the right query keys', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+    queueTableResults('procurement_notifications', {
+      data: {
+        id: 'n-1',
+        user_id: 'user-1',
+        kind: 'balance_due',
+        read_at: '2026-05-27T12:00:00.000Z',
+        created_at: '2026-05-27T11:00:00.000Z',
+      },
+      error: null,
+    });
+
+    const config = useMarkProcurementNotificationRead() as unknown as {
+      mutationFn: (input: { notificationId: string }) => Promise<unknown>;
+      onSuccess: () => void;
+    };
+
+    const result = await config.mutationFn({ notificationId: 'n-1' });
+    expect((result as { id: string }).id).toBe('n-1');
+
+    const builder = builders.procurement_notifications;
+    const update = builder.__chain.find((c) => c.method === 'update');
+    expect(update).toBeDefined();
+    const payload = update?.args[0] as { read_at: string };
+    expect(payload.read_at).toBeDefined();
+    // ISO 8601 string for read_at = now()
+    expect(payload.read_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+
+    // Scope: by id AND by user_id (defense in depth on top of RLS).
+    const eqArgs = builder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
+    expect(eqArgs).toContainEqual(['id', 'n-1']);
+    expect(eqArgs).toContainEqual(['user_id', 'user-1']);
+
+    // Trigger onSuccess and verify the right invalidations fire.
+    config.onSuccess();
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['procurement-notifications']);
+    expect(invalidatedKeys).toContainEqual(['procurement-unread-count']);
+  });
+
+  it('throws when not authenticated', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({ data: { user: null } });
+
+    const config = useMarkProcurementNotificationRead() as unknown as {
+      mutationFn: (input: { notificationId: string }) => Promise<unknown>;
+    };
+    await expect(config.mutationFn({ notificationId: 'n-1' })).rejects.toThrow(
+      'Not authenticated'
+    );
+  });
+
+  it('throws when supabase returns an error', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+    queueTableResults('procurement_notifications', {
+      data: null,
+      error: new Error('rls denied'),
+    });
+
+    const config = useMarkProcurementNotificationRead() as unknown as {
+      mutationFn: (input: { notificationId: string }) => Promise<unknown>;
+    };
+    await expect(config.mutationFn({ notificationId: 'n-1' })).rejects.toThrow('rls denied');
   });
 });

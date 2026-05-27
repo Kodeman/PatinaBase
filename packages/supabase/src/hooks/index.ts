@@ -869,6 +869,10 @@ export {
   useCreateReceivingInspection,
   useUpdateDamageClaim,
   autoDraftDamageClaimDescription,
+  // Sprint 3 / Wave 3.2 — Procurement notifications (migration 00151)
+  useProcurementNotifications,
+  useProcurementUnreadCount,
+  useMarkProcurementNotificationRead,
 } from './use-procurement';
 export type {
   PaymentPattern,
@@ -890,4 +894,7 @@ export type {
   CreateReceivingInspectionInput,
   UpdateDamageClaimInput,
   TodayProcurementCounts,
+  // Sprint 3 / Wave 3.2 — Procurement notifications (migration 00151)
+  ProcurementNotificationKind,
+  ProcurementNotification,
 } from './use-procurement';
