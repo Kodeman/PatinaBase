@@ -609,3 +609,691 @@ export function useAdvancePaymentToDue() {
     },
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SPRINT 2 — RECEIVING + DAMAGE CLAIMS + CALENDAR (migration 00150)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Until Engineer A's `pnpm db:generate` runs, the regenerated
+// `database.types.ts` will not include `receiving_inspections`, `damage_claims`,
+// or the `delivery_events` view. Declare the canonical row shapes here per
+// dossier Section 3. These mirror migration 00150 exactly.
+
+// ─── TYPES ─────────────────────────────────────────────────────────────────
+
+export type ReceivingInspectionOutcome = 'clean' | 'damaged' | 'partial';
+export type DamageClaimState = 'drafted' | 'vendor_notified' | 'resolved';
+
+export interface ReceivingInspection {
+  id: string;
+  purchase_order_id: string;
+  inspected_at: string;
+  inspected_by: string;
+  outcome: ReceivingInspectionOutcome;
+  notes: string | null;
+  photo_asset_ids: string[];
+  created_at: string;
+  updated_at: string;
+  purchase_order?: {
+    id: string;
+    vendor_id: string;
+    project_id: string;
+    status: POStatus;
+    vendor?: { id: string; name: string };
+    project?: { id: string; name: string };
+  };
+  damage_claims?: DamageClaim[];
+}
+
+export interface DamageClaim {
+  id: string;
+  receiving_inspection_id: string;
+  state: DamageClaimState;
+  description: string | null;
+  vendor_notified_at: string | null;
+  resolved_at: string | null;
+  resolution_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  inspection?: {
+    id: string;
+    purchase_order_id: string;
+    outcome: ReceivingInspectionOutcome;
+    purchase_order?: {
+      id: string;
+      vendor?: { id: string; name: string };
+      project?: { id: string; name: string };
+    };
+  };
+}
+
+export interface DeliveryEvent {
+  event_id: string;
+  project_id: string;
+  project_name: string;
+  purchase_order_id: string | null;
+  vendor_id: string | null;
+  vendor_name: string | null;
+  event_date: string | null;
+  event_type: 'delivery_expected' | 'install_milestone';
+  po_status: POStatus | null;
+  delivered_date: string | null;
+  ffe_item_count: number | null;
+  line_total_cents: number | null;
+  inspection_id: string | null;
+  inspection_outcome: ReceivingInspectionOutcome | null;
+  phase_key: string | null;
+}
+
+export interface ReceivingInspectionFilters {
+  vendorId?: string;
+  projectId?: string;
+  outcome?: ReceivingInspectionOutcome;
+  sinceDate?: string;
+}
+
+export interface DamageClaimFilters {
+  state?: DamageClaimState;
+  vendorId?: string;
+  sinceDate?: string;
+}
+
+export interface CreateReceivingInspectionInput {
+  purchaseOrderId: string;
+  outcome: ReceivingInspectionOutcome;
+  notes?: string;
+  photoAssetIds?: string[];
+  receivedQuantity?: number;
+}
+
+export interface UpdateDamageClaimInput {
+  id: string;
+  state?: DamageClaimState;
+  description?: string;
+  vendor_notified_at?: string;
+  resolved_at?: string;
+  resolution_notes?: string;
+}
+
+export interface TodayProcurementCounts {
+  arrivingThisWeek: number;
+  inspectionsPending: number;
+  damageClaimsOpen: number;
+}
+
+// ─── HELPERS ───────────────────────────────────────────────────────────────
+
+/**
+ * ISO timestamp helper for damage-claim transition defaults.
+ */
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+/**
+ * Auto-drafted description template (dossier Section 4). Used by
+ * useCreateReceivingInspection when outcome is 'damaged' or 'partial'.
+ * Wave 2.3's claim form pre-fills the description from this template; the
+ * designer edits it before clicking "Notify vendor."
+ */
+export function autoDraftDamageClaimDescription(
+  outcome: ReceivingInspectionOutcome,
+  notes: string | undefined,
+  vendorName: string,
+  poNumber: string | null,
+): string {
+  const head = outcome === 'damaged' ? 'Damage reported on delivery' : 'Partial delivery received';
+  const poBit = poNumber ? ` (PO ${poNumber})` : '';
+  const notesBit = notes ? `\n\nInspection notes: ${notes}` : '';
+  return `${head} from ${vendorName}${poBit}.${notesBit}\n\nPlease describe the issue in detail before notifying the vendor.`;
+}
+
+// ─── QUERY HOOKS ───────────────────────────────────────────────────────────
+
+/**
+ * Fetches receiving_inspections for the authenticated designer. Joins the
+ * purchase_order (with vendor + project) and any nested damage_claims.
+ * Optional filters narrow by vendor, project, outcome, or recency.
+ * Query key: `['receiving-inspections', filters]`.
+ */
+export function useReceivingInspections(filters?: ReceivingInspectionFilters) {
+  return useQuery({
+    queryKey: ['receiving-inspections', filters],
+    queryFn: async (): Promise<ReceivingInspection[]> => {
+      const supabase = getSupabase() as any;
+      let query = supabase
+        .from('receiving_inspections')
+        .select(
+          `
+          *,
+          purchase_order:purchase_orders!receiving_inspections_purchase_order_id_fkey(
+            id, vendor_id, project_id, status,
+            vendor:vendors!purchase_orders_vendor_id_fkey(id, name),
+            project:projects!purchase_orders_project_id_fkey(id, name)
+          ),
+          damage_claims(*)
+        `,
+        )
+        .order('inspected_at', { ascending: false });
+
+      if (filters?.outcome) query = query.eq('outcome', filters.outcome);
+      if (filters?.sinceDate) query = query.gte('inspected_at', filters.sinceDate);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      let rows = (data ?? []) as ReceivingInspection[];
+
+      // vendorId / projectId live on the joined purchase_order — apply
+      // client-side because the embedded relationship can't be filtered via
+      // .eq() on the parent table.
+      if (filters?.vendorId) {
+        rows = rows.filter((r) => r.purchase_order?.vendor_id === filters.vendorId);
+      }
+      if (filters?.projectId) {
+        rows = rows.filter((r) => r.purchase_order?.project_id === filters.projectId);
+      }
+
+      return rows;
+    },
+  });
+}
+
+/**
+ * Fetches damage_claims for the authenticated designer. Joins the parent
+ * receiving_inspection and the inspection's purchase_order (with vendor +
+ * project). Optional filters narrow by state, vendor, or recency.
+ * Query key: `['damage-claims', filters]`.
+ */
+export function useDamageClaims(filters?: DamageClaimFilters) {
+  return useQuery({
+    queryKey: ['damage-claims', filters],
+    queryFn: async (): Promise<DamageClaim[]> => {
+      const supabase = getSupabase() as any;
+      let query = supabase
+        .from('damage_claims')
+        .select(
+          `
+          *,
+          inspection:receiving_inspections!damage_claims_receiving_inspection_id_fkey(
+            id, purchase_order_id, outcome,
+            purchase_order:purchase_orders!receiving_inspections_purchase_order_id_fkey(
+              id,
+              vendor:vendors!purchase_orders_vendor_id_fkey(id, name),
+              project:projects!purchase_orders_project_id_fkey(id, name)
+            )
+          )
+        `,
+        )
+        .order('created_at', { ascending: false });
+
+      if (filters?.state) query = query.eq('state', filters.state);
+      if (filters?.sinceDate) query = query.gte('created_at', filters.sinceDate);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      let rows = (data ?? []) as DamageClaim[];
+
+      // vendorId lives on the nested purchase_order — apply client-side.
+      if (filters?.vendorId) {
+        rows = rows.filter(
+          (r) => r.inspection?.purchase_order?.vendor?.id === filters.vendorId,
+        );
+      }
+
+      return rows;
+    },
+  });
+}
+
+/**
+ * Fetches the unified delivery_events view (PO confirmed_etas + project
+ * install milestones) within an inclusive date range. The view is
+ * SECURITY INVOKER — RLS on the underlying tables (purchase_orders,
+ * project_phases) is enforced automatically.
+ *
+ * `rangeStart` and `rangeEnd` are ISO YYYY-MM-DD strings.
+ * Query key: `['delivery-calendar', rangeStart, rangeEnd]`.
+ */
+export function useDeliveryCalendar(rangeStart: string, rangeEnd: string) {
+  return useQuery({
+    queryKey: ['delivery-calendar', rangeStart, rangeEnd],
+    queryFn: async (): Promise<DeliveryEvent[]> => {
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('delivery_events')
+        .select('*')
+        .gte('event_date', rangeStart)
+        .lte('event_date', rangeEnd)
+        .order('event_date', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as DeliveryEvent[];
+    },
+    enabled: !!rangeStart && !!rangeEnd,
+  });
+}
+
+/**
+ * Lightweight Today-tab counters: deliveries arriving in the next 7 days,
+ * inspections logged in the last 7 days, and open damage claims (drafted
+ * or vendor_notified). Sub-queries run independently — if any one fails,
+ * the others still resolve and the failing rollup falls back to zero.
+ *
+ * Query key: `['today-procurement-counts']`. Stale time: 5 minutes.
+ */
+export function useTodayProcurementCounts() {
+  return useQuery({
+    queryKey: ['today-procurement-counts'],
+    queryFn: async (): Promise<TodayProcurementCounts> => {
+      const supabase = getSupabase() as any;
+      const today = new Date().toISOString().slice(0, 10);
+      const sevenDaysAgoIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const sevenDaysAhead = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10);
+
+      // Each sub-query is wrapped so a single failure never poisons the
+      // whole rollup. The Today tab degrades gracefully — a stale or
+      // missing count is preferable to an entirely broken tile.
+      const arrivingThisWeekP = (async (): Promise<number> => {
+        try {
+          const { count, error } = await supabase
+            .from('purchase_orders')
+            .select('id', { count: 'exact', head: true })
+            .gte('confirmed_eta', today)
+            .lte('confirmed_eta', sevenDaysAhead)
+            .not('status', 'in', '("cancelled","delivered")');
+          if (error) {
+            console.warn('useTodayProcurementCounts: arrivingThisWeek failed', error);
+            return 0;
+          }
+          return count ?? 0;
+        } catch (e) {
+          console.warn('useTodayProcurementCounts: arrivingThisWeek threw', e);
+          return 0;
+        }
+      })();
+
+      const inspectionsPendingP = (async (): Promise<number> => {
+        try {
+          const { count, error } = await supabase
+            .from('receiving_inspections')
+            .select('id', { count: 'exact', head: true })
+            .gte('inspected_at', sevenDaysAgoIso);
+          if (error) {
+            console.warn('useTodayProcurementCounts: inspectionsPending failed', error);
+            return 0;
+          }
+          return count ?? 0;
+        } catch (e) {
+          console.warn('useTodayProcurementCounts: inspectionsPending threw', e);
+          return 0;
+        }
+      })();
+
+      const damageClaimsOpenP = (async (): Promise<number> => {
+        try {
+          const { count, error } = await supabase
+            .from('damage_claims')
+            .select('id', { count: 'exact', head: true })
+            .in('state', ['drafted', 'vendor_notified']);
+          if (error) {
+            console.warn('useTodayProcurementCounts: damageClaimsOpen failed', error);
+            return 0;
+          }
+          return count ?? 0;
+        } catch (e) {
+          console.warn('useTodayProcurementCounts: damageClaimsOpen threw', e);
+          return 0;
+        }
+      })();
+
+      const [arrivingThisWeek, inspectionsPending, damageClaimsOpen] = await Promise.all([
+        arrivingThisWeekP,
+        inspectionsPendingP,
+        damageClaimsOpenP,
+      ]);
+
+      return { arrivingThisWeek, inspectionsPending, damageClaimsOpen };
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+// ─── MUTATION HOOKS ────────────────────────────────────────────────────────
+
+/**
+ * Mutation: logs a physical receiving inspection. Side effects, sequential,
+ * with compensating delete on critical-path failure (dossier Section 4):
+ *   1. INSERT receiving_inspections (critical path).
+ *   2. UPDATE purchase_orders.delivered_date = inspected_at::date IF NULL
+ *      (fire-and-forget-with-warn).
+ *   3. UPDATE purchase_orders.status = 'delivered' IF NOT IN
+ *      (delivered, cancelled) (fire-and-forget-with-warn).
+ *   4. IF outcome != 'clean': INSERT damage_claims drafted with auto-draft
+ *      description (critical path — compensating DELETE on inspection if
+ *      this fails).
+ *   5. IF receivedQuantity supplied: UPDATE
+ *      project_ffe_items.received_quantity for items linked to this PO
+ *      (fire-and-forget-with-warn).
+ *   6. IF payment_pattern = 'net_30' AND delivered_date transitioned from
+ *      NULL: UPDATE po_payments.due_date = delivered_date + 30 days WHERE
+ *      kind = 'balance' AND state = 'pending'
+ *      (fire-and-forget-with-warn — never touches paid/dated rows).
+ *
+ * Invalidates: ['receiving-inspections'], ['damage-claims'],
+ *              ['purchase-orders'], ['purchase-order', poId],
+ *              ['today-procurement-counts']
+ */
+export function useCreateReceivingInspection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      input: CreateReceivingInspectionInput,
+    ): Promise<ReceivingInspection> => {
+      const supabase = getSupabase() as any;
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Step 1: INSERT receiving_inspections. Critical path.
+      const { data: inspection, error: inspectionError } = await supabase
+        .from('receiving_inspections')
+        .insert({
+          purchase_order_id: input.purchaseOrderId,
+          inspected_by: user.id,
+          outcome: input.outcome,
+          notes: input.notes ?? null,
+          photo_asset_ids: input.photoAssetIds ?? [],
+        })
+        .select()
+        .single();
+
+      if (inspectionError) {
+        throw new Error(
+          `Failed to insert receiving inspection: ${
+            inspectionError.message ?? String(inspectionError)
+          }`,
+        );
+      }
+
+      const inspectionRow = inspection as ReceivingInspection;
+      const inspectionId = inspectionRow.id;
+
+      // Compensating-delete helper for the inspection row itself. Used only
+      // when step 4 (damage_claim INSERT) fails — that path is the only
+      // critical-path side effect after step 1.
+      const compensatingDeleteInspection = async (): Promise<string> => {
+        try {
+          const { error: deleteError } = await supabase
+            .from('receiving_inspections')
+            .delete()
+            .eq('id', inspectionId);
+          if (deleteError) {
+            return `compensating delete FAILED: ${
+              deleteError.message ?? String(deleteError)
+            }`;
+          }
+          return 'compensating delete succeeded';
+        } catch (e) {
+          return `compensating delete THREW: ${(e as Error)?.message ?? String(e)}`;
+        }
+      };
+
+      // Resolve the parent PO once — used by steps 2/3/6 (and to source the
+      // vendor name + PO number for the auto-draft description in step 4).
+      type ResolvedPoRow = {
+        id: string;
+        payment_pattern: PaymentPattern;
+        status: POStatus;
+        delivered_date: string | null;
+        vendor_po_number: string | null;
+        vendor?: { id: string; name: string } | null;
+      };
+      let poRow: ResolvedPoRow | null = null;
+
+      try {
+        const { data: po, error: poError } = await supabase
+          .from('purchase_orders')
+          .select(
+            `
+            id, payment_pattern, status, delivered_date, vendor_po_number,
+            vendor:vendors!purchase_orders_vendor_id_fkey(id, name)
+          `,
+          )
+          .eq('id', input.purchaseOrderId)
+          .single();
+        if (poError) {
+          console.warn(
+            `useCreateReceivingInspection: failed to load parent PO ${input.purchaseOrderId}`,
+            poError,
+          );
+        } else {
+          poRow = po as ResolvedPoRow;
+        }
+      } catch (e) {
+        console.warn(
+          `useCreateReceivingInspection: PO load threw for ${input.purchaseOrderId}`,
+          e,
+        );
+      }
+
+      const deliveredDateWasNull = poRow?.delivered_date == null;
+      const inspectedDate = (inspectionRow.inspected_at ?? nowIso()).slice(0, 10);
+
+      // Steps 2 + 3: UPDATE purchase_orders. Fire-and-forget-with-warn.
+      // Combine into one UPDATE so the round-trip is cheap.
+      try {
+        const poUpdates: Record<string, unknown> = {};
+        if (deliveredDateWasNull) {
+          poUpdates.delivered_date = inspectedDate;
+        }
+        if (poRow && poRow.status !== 'delivered' && poRow.status !== 'cancelled') {
+          poUpdates.status = 'delivered';
+        }
+        if (Object.keys(poUpdates).length > 0) {
+          const { error: poUpdateError } = await supabase
+            .from('purchase_orders')
+            .update(poUpdates)
+            .eq('id', input.purchaseOrderId);
+          if (poUpdateError) {
+            console.warn(
+              `useCreateReceivingInspection: PO delivered_date/status update failed for ${input.purchaseOrderId}`,
+              poUpdateError,
+            );
+          }
+        }
+      } catch (e) {
+        console.warn(
+          `useCreateReceivingInspection: PO delivered_date/status update threw for ${input.purchaseOrderId}`,
+          e,
+        );
+      }
+
+      // Step 4: IF outcome != 'clean', INSERT damage_claims (critical path).
+      if (input.outcome !== 'clean') {
+        const vendorName = poRow?.vendor?.name ?? 'vendor';
+        const poNumber = poRow?.vendor_po_number ?? null;
+        const description = autoDraftDamageClaimDescription(
+          input.outcome,
+          input.notes,
+          vendorName,
+          poNumber,
+        );
+
+        const { error: claimError } = await supabase.from('damage_claims').insert({
+          receiving_inspection_id: inspectionId,
+          state: 'drafted',
+          description,
+        });
+
+        if (claimError) {
+          const cleanupStatus = await compensatingDeleteInspection();
+          throw new Error(
+            `Receiving inspection created (${inspectionId}) but damage_claim INSERT failed: ${
+              claimError.message ?? String(claimError)
+            }. ${cleanupStatus}.`,
+          );
+        }
+      }
+
+      // Step 5: IF receivedQuantity supplied, UPDATE project_ffe_items
+      // received_quantity for the items linked to this PO.
+      // Fire-and-forget-with-warn.
+      if (input.receivedQuantity !== undefined && input.receivedQuantity !== null) {
+        try {
+          const { error: qtyError } = await supabase
+            .from('project_ffe_items')
+            .update({ received_quantity: input.receivedQuantity })
+            .eq('purchase_order_id', input.purchaseOrderId);
+          if (qtyError) {
+            console.warn(
+              `useCreateReceivingInspection: received_quantity update failed for PO ${input.purchaseOrderId}`,
+              qtyError,
+            );
+          }
+        } catch (e) {
+          console.warn(
+            `useCreateReceivingInspection: received_quantity update threw for PO ${input.purchaseOrderId}`,
+            e,
+          );
+        }
+      }
+
+      // Step 6: IF net_30 + delivered_date just transitioned from NULL,
+      // shift the pending balance row's due_date to delivered_date + 30.
+      // Filter MUST include WHERE kind = 'balance' AND state = 'pending' so
+      // we never overwrite a paid or already-dated row.
+      // Fire-and-forget-with-warn.
+      if (poRow?.payment_pattern === 'net_30' && deliveredDateWasNull) {
+        try {
+          const due = new Date(inspectedDate);
+          due.setUTCDate(due.getUTCDate() + 30);
+          const dueDateIso = due.toISOString().slice(0, 10);
+
+          const { error: dueError } = await supabase
+            .from('po_payments')
+            .update({ due_date: dueDateIso })
+            .eq('purchase_order_id', input.purchaseOrderId)
+            .eq('kind', 'balance')
+            .eq('state', 'pending');
+          if (dueError) {
+            console.warn(
+              `useCreateReceivingInspection: net_30 due_date shift failed for PO ${input.purchaseOrderId}`,
+              dueError,
+            );
+          }
+        } catch (e) {
+          console.warn(
+            `useCreateReceivingInspection: net_30 due_date shift threw for PO ${input.purchaseOrderId}`,
+            e,
+          );
+        }
+      }
+
+      return inspectionRow;
+    },
+    onSuccess: (inspection) => {
+      queryClient.invalidateQueries({ queryKey: ['receiving-inspections'] });
+      queryClient.invalidateQueries({ queryKey: ['damage-claims'] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+      queryClient.invalidateQueries({
+        queryKey: ['purchase-order', inspection.purchase_order_id],
+      });
+      queryClient.invalidateQueries({ queryKey: ['today-procurement-counts'] });
+    },
+  });
+}
+
+/**
+ * Mutation: partial update on a damage_claim row. Validates state
+ * transitions client-side per dossier Section 3:
+ *   drafted → vendor_notified  (sets vendor_notified_at = now() if absent)
+ *   vendor_notified → resolved (sets resolved_at = now() if absent)
+ * No backwards transitions in v1. Same-state edits (description-only,
+ * resolution_notes-only) are allowed.
+ *
+ * The current state is resolved by reading the row once before the UPDATE.
+ *
+ * Invalidates: ['damage-claims'], ['receiving-inspections'],
+ *              ['today-procurement-counts']
+ */
+export function useUpdateDamageClaim() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: UpdateDamageClaimInput): Promise<DamageClaim> => {
+      const supabase = getSupabase() as any;
+
+      const updates: Record<string, unknown> = {};
+
+      if (input.state !== undefined) {
+        // Resolve current state to validate the transition.
+        const { data: current, error: readError } = await supabase
+          .from('damage_claims')
+          .select('id, state')
+          .eq('id', input.id)
+          .single();
+        if (readError) {
+          throw new Error(
+            `Failed to read damage_claim ${input.id} for state-transition check: ${
+              readError.message ?? String(readError)
+            }`,
+          );
+        }
+        const currentState = (current as { state: DamageClaimState }).state;
+        const nextState = input.state;
+
+        const validForward =
+          currentState === nextState ||
+          (currentState === 'drafted' && nextState === 'vendor_notified') ||
+          (currentState === 'vendor_notified' && nextState === 'resolved');
+
+        if (!validForward) {
+          throw new Error(
+            `Invalid damage_claim state transition: ${currentState} → ${nextState}. ` +
+              `Forward transitions only: drafted → vendor_notified → resolved.`,
+          );
+        }
+
+        updates.state = nextState;
+
+        if (currentState === 'drafted' && nextState === 'vendor_notified') {
+          updates.vendor_notified_at = input.vendor_notified_at ?? nowIso();
+        }
+        if (currentState === 'vendor_notified' && nextState === 'resolved') {
+          updates.resolved_at = input.resolved_at ?? nowIso();
+        }
+      }
+
+      if (input.description !== undefined) updates.description = input.description;
+      if (input.vendor_notified_at !== undefined && updates.vendor_notified_at === undefined) {
+        updates.vendor_notified_at = input.vendor_notified_at;
+      }
+      if (input.resolved_at !== undefined && updates.resolved_at === undefined) {
+        updates.resolved_at = input.resolved_at;
+      }
+      if (input.resolution_notes !== undefined) updates.resolution_notes = input.resolution_notes;
+
+      const { data, error } = await supabase
+        .from('damage_claims')
+        .update(updates)
+        .eq('id', input.id)
+        .select()
+        .single();
+      if (error) {
+        throw new Error(
+          `Failed to update damage_claim ${input.id}: ${error.message ?? String(error)}`,
+        );
+      }
+      return data as DamageClaim;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['damage-claims'] });
+      queryClient.invalidateQueries({ queryKey: ['receiving-inspections'] });
+      queryClient.invalidateQueries({ queryKey: ['today-procurement-counts'] });
+    },
+  });
+}

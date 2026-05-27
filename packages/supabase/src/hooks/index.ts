@@ -850,6 +850,7 @@ export type { PaintColor, PaintColorBrand } from './use-paint-colors';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Procurement Workspace v1 (Wave 1.2 — see migration 00148)
+// + Sprint 2 / Wave 2.2 (Receiving, damage claims, calendar — migration 00150)
 // ═══════════════════════════════════════════════════════════════════════════
 export {
   usePurchaseOrders,
@@ -859,6 +860,14 @@ export {
   useCreatePurchaseOrder,
   useLogPaymentPaid,
   useAdvancePaymentToDue,
+  // Sprint 2 — Receiving, damage claims, calendar
+  useReceivingInspections,
+  useDamageClaims,
+  useDeliveryCalendar,
+  useTodayProcurementCounts,
+  useCreateReceivingInspection,
+  useUpdateDamageClaim,
+  autoDraftDamageClaimDescription,
 } from './use-procurement';
 export type {
   PaymentPattern,
@@ -869,4 +878,15 @@ export type {
   POPayment,
   POFilters,
   CreatePurchaseOrderInput,
+  // Sprint 2 — Receiving, damage claims, calendar
+  ReceivingInspectionOutcome,
+  DamageClaimState,
+  ReceivingInspection,
+  DamageClaim,
+  DeliveryEvent,
+  ReceivingInspectionFilters,
+  DamageClaimFilters,
+  CreateReceivingInspectionInput,
+  UpdateDamageClaimInput,
+  TodayProcurementCounts,
 } from './use-procurement';
