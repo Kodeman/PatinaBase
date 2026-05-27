@@ -129,6 +129,7 @@ import {
   useTodayProcurementCounts,
   useCreateReceivingInspection,
   useUpdateDamageClaim,
+  useUpdatePurchaseOrderETA,
 } from '../use-procurement';
 
 beforeEach(() => {
@@ -1261,5 +1262,85 @@ describe('useUpdateDamageClaim', () => {
     await expect(
       config.mutationFn({ id: 'claim-3', state: 'drafted' }),
     ).rejects.toThrow(/Invalid damage_claim state transition/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useUpdatePurchaseOrderETA  (Wave 2.4 — manual ETA quick-edit drawer)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useUpdatePurchaseOrderETA', () => {
+  it('issues an UPDATE on purchase_orders with confirmed_eta scoped to id and returns the row', async () => {
+    // Only one round-trip: the UPDATE + .select().single().
+    queueTableResults('purchase_orders', {
+      data: {
+        id: 'po-eta-1',
+        confirmed_eta: '2026-07-15',
+        notes: null,
+      },
+      error: null,
+    });
+
+    const config = useUpdatePurchaseOrderETA() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    const result = await config.mutationFn({
+      purchaseOrderId: 'po-eta-1',
+      newEta: '2026-07-15',
+    });
+
+    const builder = builders.purchase_orders;
+    const update = builder.__chain.find((c) => c.method === 'update');
+    expect(update).toBeDefined();
+    const payload = update?.args[0] as { confirmed_eta: string; notes?: string };
+    expect(payload.confirmed_eta).toBe('2026-07-15');
+    // No notes supplied → must NOT touch the notes column.
+    expect(payload.notes).toBeUndefined();
+
+    // Scope: filter by id.
+    const eqArgs = builder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
+    expect(eqArgs).toContainEqual(['id', 'po-eta-1']);
+
+    expect((result as { id: string }).id).toBe('po-eta-1');
+  });
+
+  it('appends a timestamped notes line when notes are supplied', async () => {
+    // 1. SELECT current notes for the append.
+    // 2. UPDATE returning the new row.
+    queueTableResults(
+      'purchase_orders',
+      // Existing notes
+      { data: { notes: 'Vendor said L8W ETA' }, error: null },
+      // Update result
+      {
+        data: {
+          id: 'po-eta-2',
+          confirmed_eta: '2026-08-01',
+          notes: 'Vendor said L8W ETA\n[2026-05-27 ETA update]: Vendor pushed by 2 weeks',
+        },
+        error: null,
+      },
+    );
+
+    const config = useUpdatePurchaseOrderETA() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await config.mutationFn({
+      purchaseOrderId: 'po-eta-2',
+      newEta: '2026-08-01',
+      notes: 'Vendor pushed by 2 weeks',
+    });
+
+    const builder = builders.purchase_orders;
+    const update = builder.__chain.find((c) => c.method === 'update');
+    expect(update).toBeDefined();
+    const payload = update?.args[0] as { confirmed_eta: string; notes: string };
+    expect(payload.confirmed_eta).toBe('2026-08-01');
+    // The appended line must contain the supplied notes and the [YYYY-MM-DD ETA update] tag.
+    expect(payload.notes).toMatch(/\[\d{4}-\d{2}-\d{2} ETA update\]: Vendor pushed by 2 weeks/);
+    // The existing notes must be preserved (no destructive overwrite).
+    expect(payload.notes).toContain('Vendor said L8W ETA');
   });
 });
