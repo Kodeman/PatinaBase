@@ -125,6 +125,15 @@ interface VendorSectionCardProps {
    * neutral CTA — Catalog vendors only see the one-click Patina-handled flow.
    */
   onOrderViaPatina?: () => void;
+  /**
+   * Click handler for the secondary "Order all N" CTA. Rendered to the left
+   * of the primary "View orders" button for non-Catalog vendors that have at
+   * least one item waiting to be placed (Wave 1.4). Launches the Order
+   * Assistant side panel. When `undefined`, the button is not rendered.
+   */
+  onOrderAllClick?: () => void;
+  /** Label for the "Order all N" CTA (e.g. "Order all 3"). */
+  orderAllLabel?: string;
 }
 
 export function VendorSectionCard({
@@ -132,6 +141,8 @@ export function VendorSectionCard({
   ctaLabel = 'View orders',
   onCtaClick,
   onOrderViaPatina,
+  onOrderAllClick,
+  orderAllLabel,
 }: VendorSectionCardProps) {
   const [expanded, setExpanded] = useState(true);
 
@@ -219,14 +230,26 @@ export function VendorSectionCard({
               Order via Patina
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={onCtaClick}
-              className="rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-[var(--text-primary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]"
-              disabled={!onCtaClick}
-            >
-              {ctaLabel}
-            </button>
+            <div className="flex items-center gap-2">
+              {onOrderAllClick && (
+                <button
+                  type="button"
+                  onClick={onOrderAllClick}
+                  className="rounded-[3px] px-3 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-white transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: 'var(--color-clay)' }}
+                >
+                  {orderAllLabel ?? 'Order all'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onCtaClick}
+                className="rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-[var(--text-primary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]"
+                disabled={!onCtaClick}
+              >
+                {ctaLabel}
+              </button>
+            </div>
           )}
         </div>
       </header>

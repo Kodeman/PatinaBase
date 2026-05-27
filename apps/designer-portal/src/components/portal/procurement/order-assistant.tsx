@@ -1,0 +1,712 @@
+'use client';
+
+/**
+ * Order Assistant side panel (Sprint 1 / Wave 1.4)
+ *
+ * Launched from the By Vendor view when a designer clicks "Order all N" on a
+ * vendor card. Walks through the four-step PRD §6 flow:
+ *
+ *   1. Open vendor portal       — informational, deep-link
+ *   2. Copy item details        — informational, clipboard helper
+ *   3. Confirm order placed     — captures vendor PO # + confirmed ETA
+ *   4. Payment terms (new v1)   — captures payment pattern + deposit/milestone data
+ *
+ * On submit, calls `useCreatePurchaseOrder` from `@patina/supabase`, which
+ * inserts a `purchase_orders` row + the matching `po_payments` rows + links the
+ * supplied `project_ffe_items` to the new PO header. On success the panel
+ * closes and the parent view's React Query cache invalidates automatically.
+ *
+ * The panel is intentionally portal-local: it follows the same framer-motion
+ * slide-from-right pattern as MessagesPanel rather than depending on the
+ * shared `Drawer` primitive, so the visual treatment matches other portal
+ * side surfaces.
+ */
+
+import { useEffect, useMemo, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X, Copy, ExternalLink, Plus, Trash2 } from 'lucide-react';
+import {
+  useCreatePurchaseOrder,
+  type CreatePurchaseOrderInput,
+  type PaymentPattern,
+} from '@patina/supabase';
+import { useToast } from '@/components/portal/toast-provider';
+
+// ─── Shared types ──────────────────────────────────────────────────────────
+
+export interface OrderAssistantVendor {
+  id: string;
+  name: string;
+  default_payment_terms: PaymentPattern | null;
+  trade_portal_url?: string;
+  trade_account_email?: string;
+}
+
+export interface OrderAssistantProject {
+  id: string;
+  name: string;
+}
+
+export interface OrderAssistantFFEItem {
+  id: string;
+  name: string;
+  room?: string;
+  line_total_cents: number;
+}
+
+export interface OrderAssistantProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  vendor: OrderAssistantVendor;
+  project: OrderAssistantProject;
+  ffeItems: OrderAssistantFFEItem[];
+  /**
+   * Optional disclaimer rendered in the panel header when the vendor's items
+   * span multiple projects. Communicates that the assistant is scoped to a
+   * single project for v1 (one PO covers one project per the data model).
+   */
+  scopeDisclaimer?: string;
+}
+
+// ─── Static config ─────────────────────────────────────────────────────────
+
+const PAYMENT_PATTERN_OPTIONS: Array<{ value: PaymentPattern; label: string }> = [
+  { value: 'fifty_fifty', label: '50% deposit / 50% before ship' },
+  { value: 'thirty_seventy', label: '30% deposit / 70% before ship' },
+  { value: 'full_upfront', label: 'Full payment upfront' },
+  { value: 'net_30', label: 'NET-30 from delivery' },
+  { value: 'custom_milestones', label: 'Custom milestones' },
+];
+
+/** Studio ship-to surface is out of scope for Wave 1.4; PRD shows a static placeholder. */
+const SHIP_TO_PLACEHOLDER = 'Middlewest Studio · Madison WI';
+
+// ─── Formatting helpers ────────────────────────────────────────────────────
+
+function formatDollars(cents: number): string {
+  return `$${(cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+}
+
+function centsToDollarString(cents: number): string {
+  // Plain string for input default (no commas, no symbol) — converted back
+  // via `parseDollarsToCents` on submit.
+  return (cents / 100).toFixed(2);
+}
+
+function parseDollarsToCents(input: string): number {
+  const cleaned = input.replace(/[$,\s]/g, '');
+  const n = Number(cleaned);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.round(n * 100);
+}
+
+function formatItemDetailsForClipboard(
+  vendor: OrderAssistantVendor,
+  project: OrderAssistantProject,
+  items: OrderAssistantFFEItem[]
+): string {
+  const lines: string[] = [];
+  lines.push(`${vendor.name} — ${project.name}`);
+  lines.push('');
+  items.forEach((item, idx) => {
+    lines.push(`${idx + 1}. ${item.name}`);
+    if (item.room) lines.push(`   Room: ${item.room}`);
+    lines.push(`   Ship to: ${SHIP_TO_PLACEHOLDER}`);
+    lines.push(`   ${formatDollars(item.line_total_cents)}`);
+    lines.push('');
+  });
+  const total = items.reduce((sum, i) => sum + i.line_total_cents, 0);
+  lines.push(`Total: ${formatDollars(total)}`);
+  return lines.join('\n');
+}
+
+// ─── Milestone row helper type ─────────────────────────────────────────────
+
+interface MilestoneRow {
+  /** Locally-stable key for React lists. */
+  key: string;
+  label: string;
+  amountInput: string; // dollars string while editing
+  dueDate: string; // YYYY-MM-DD or empty
+}
+
+function freshMilestone(): MilestoneRow {
+  return {
+    key: `m_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    label: '',
+    amountInput: '',
+    dueDate: '',
+  };
+}
+
+// ─── Component ─────────────────────────────────────────────────────────────
+
+export function OrderAssistant(props: OrderAssistantProps) {
+  const { open, onOpenChange, vendor, project, ffeItems, scopeDisclaimer } = props;
+
+  const totalCents = useMemo(
+    () => ffeItems.reduce((sum, i) => sum + i.line_total_cents, 0),
+    [ffeItems]
+  );
+
+  // Step 3 fields ----------------------------------------------------------
+  const [vendorPoNumber, setVendorPoNumber] = useState('');
+  const [confirmedEta, setConfirmedEta] = useState('');
+
+  // Step 4 fields ----------------------------------------------------------
+  // Default the pattern to the vendor's stored default, else `fifty_fifty`.
+  const initialPattern: PaymentPattern = vendor.default_payment_terms ?? 'fifty_fifty';
+  const [paymentPattern, setPaymentPattern] = useState<PaymentPattern>(initialPattern);
+  const [depositDueDate, setDepositDueDate] = useState('');
+  // Deposit amount is rendered as a dollars input; derived default depends on
+  // the chosen pattern. We track the raw input string so the user can edit
+  // freely; conversion to cents happens at submit time.
+  const [depositAmountInput, setDepositAmountInput] = useState('');
+  const [milestones, setMilestones] = useState<MilestoneRow[]>([
+    freshMilestone(),
+    freshMilestone(),
+  ]);
+
+  // UI / submit state ------------------------------------------------------
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const createPO = useCreatePurchaseOrder();
+  const { toast } = useToast();
+
+  // Reset all fields when the panel opens with a fresh context. Keying off
+  // `open` plus `vendor.id`/`project.id` means re-opening for a different
+  // vendor/project never inherits stale state.
+  useEffect(() => {
+    if (!open) return;
+    setVendorPoNumber('');
+    setConfirmedEta('');
+    setPaymentPattern(vendor.default_payment_terms ?? 'fifty_fifty');
+    setDepositDueDate('');
+    setDepositAmountInput('');
+    setMilestones([freshMilestone(), freshMilestone()]);
+    setSubmitError(null);
+    setCopyState('idle');
+  }, [open, vendor.id, vendor.default_payment_terms, project.id]);
+
+  // When the user switches pattern, pre-fill the deposit amount input from
+  // the canonical pattern math (50% / 30% / 100% of total). Custom and net_30
+  // get their own treatment.
+  useEffect(() => {
+    if (paymentPattern === 'fifty_fifty') {
+      setDepositAmountInput(centsToDollarString(Math.floor(totalCents / 2)));
+    } else if (paymentPattern === 'thirty_seventy') {
+      setDepositAmountInput(centsToDollarString(Math.floor(totalCents * 0.3)));
+    } else if (paymentPattern === 'full_upfront') {
+      setDepositAmountInput(centsToDollarString(totalCents));
+    } else {
+      setDepositAmountInput('');
+    }
+  }, [paymentPattern, totalCents]);
+
+  // ─── Step 2 clipboard action ────────────────────────────────────────────
+
+  const handleCopyDetails = async () => {
+    const text = formatItemDetailsForClipboard(vendor, project, ffeItems);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyState('copied');
+      window.setTimeout(() => setCopyState('idle'), 2000);
+    } catch (e) {
+      console.error('Order Assistant: clipboard write failed', e);
+      setCopyState('error');
+      window.setTimeout(() => setCopyState('idle'), 2500);
+    }
+  };
+
+  // ─── Milestone row helpers ──────────────────────────────────────────────
+
+  const addMilestone = () => {
+    setMilestones((prev) =>
+      prev.length >= 4 ? prev : [...prev, freshMilestone()]
+    );
+  };
+
+  const removeMilestone = (key: string) => {
+    setMilestones((prev) => (prev.length <= 2 ? prev : prev.filter((m) => m.key !== key)));
+  };
+
+  const updateMilestone = (key: string, patch: Partial<MilestoneRow>) => {
+    setMilestones((prev) => prev.map((m) => (m.key === key ? { ...m, ...patch } : m)));
+  };
+
+  // ─── Validation ─────────────────────────────────────────────────────────
+
+  const validate = (): string | null => {
+    if (!paymentPattern) return 'Payment pattern is required.';
+
+    if (paymentPattern === 'fifty_fifty' || paymentPattern === 'thirty_seventy') {
+      const depositCents = parseDollarsToCents(depositAmountInput);
+      if (depositCents < 0) return 'Deposit amount must be zero or greater.';
+    }
+
+    if (paymentPattern === 'custom_milestones') {
+      if (milestones.length < 2 || milestones.length > 4) {
+        return 'Custom milestones requires 2–4 rows.';
+      }
+      for (const m of milestones) {
+        if (!m.label.trim()) return 'Each milestone needs a label.';
+        if (parseDollarsToCents(m.amountInput) <= 0) {
+          return 'Each milestone amount must be greater than zero.';
+        }
+      }
+    }
+
+    return null;
+  };
+
+  // ─── Submit ─────────────────────────────────────────────────────────────
+
+  const handleSubmit = async () => {
+    setSubmitError(null);
+
+    const validationError = validate();
+    if (validationError) {
+      setSubmitError(validationError);
+      return;
+    }
+
+    const input: CreatePurchaseOrderInput = {
+      projectId: project.id,
+      vendorId: vendor.id,
+      vendorPoNumber: vendorPoNumber.trim() || undefined,
+      confirmedEta: confirmedEta || undefined,
+      paymentPattern,
+      totalCents,
+      isPatinaCatalog: false,
+      ffeItemIds: ffeItems.map((i) => i.id),
+    };
+
+    if (paymentPattern === 'fifty_fifty' || paymentPattern === 'thirty_seventy') {
+      input.depositDueDate = depositDueDate || undefined;
+      const depositCents = parseDollarsToCents(depositAmountInput);
+      input.depositAmountCents = depositCents > 0 ? depositCents : undefined;
+    } else if (paymentPattern === 'full_upfront') {
+      input.depositDueDate = depositDueDate || undefined;
+      // depositAmountCents not needed — hook defaults to totalCents.
+    } else if (paymentPattern === 'custom_milestones') {
+      input.customMilestones = milestones.map((m, idx) => ({
+        label: m.label.trim(),
+        amountCents: parseDollarsToCents(m.amountInput),
+        dueDate: m.dueDate || undefined,
+        sortOrder: idx,
+      }));
+    }
+    // net_30: no extra fields; hook builds a single balance row at totalCents.
+
+    try {
+      await createPO.mutateAsync(input);
+
+      const successMessage =
+        paymentPattern === 'fifty_fifty' || paymentPattern === 'thirty_seventy'
+          ? `PO created — deposit of ${formatDollars(
+              parseDollarsToCents(depositAmountInput)
+            )} due ${depositDueDate || 'soon'}.`
+          : paymentPattern === 'full_upfront'
+            ? `PO created — full payment of ${formatDollars(totalCents)} due ${
+                depositDueDate || 'soon'
+              }.`
+            : paymentPattern === 'net_30'
+              ? `PO created — full balance due 30 days after delivery.`
+              : `PO created — ${milestones.length} milestone payments scheduled.`;
+
+      toast(successMessage, 'success');
+      onOpenChange(false);
+    } catch (e) {
+      const msg = (e as Error)?.message ?? 'Failed to create purchase order.';
+      setSubmitError(msg);
+    }
+  };
+
+  const handleSkip = () => {
+    if (createPO.isPending) return;
+    onOpenChange(false);
+  };
+
+  // ─── Render ─────────────────────────────────────────────────────────────
+
+  const showSplitFields =
+    paymentPattern === 'fifty_fifty' || paymentPattern === 'thirty_seventy';
+  const showFullUpfrontFields = paymentPattern === 'full_upfront';
+  const showNet30Note = paymentPattern === 'net_30';
+  const showCustomMilestones = paymentPattern === 'custom_milestones';
+
+  // Balance hint for split patterns ("Balance $X will become due ..."):
+  const splitBalanceCents = showSplitFields
+    ? Math.max(totalCents - parseDollarsToCents(depositAmountInput), 0)
+    : 0;
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-40 bg-black/20"
+            onClick={() => !createPO.isPending && onOpenChange(false)}
+            aria-hidden="true"
+          />
+          <motion.div
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Order Assistant for ${vendor.name}`}
+            className="fixed bottom-0 right-0 top-0 z-50 flex w-[440px] max-w-[92vw] flex-col border-l border-[var(--border-default)] bg-[var(--bg-surface)] shadow-xl"
+          >
+            {/* Header */}
+            <div className="flex flex-col gap-1 border-b border-[var(--border-default)] px-5 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="type-meta-small text-[var(--color-clay,#C4A57B)]">
+                    Order Assistant · {vendor.name}
+                  </div>
+                  <div className="mt-0.5 truncate font-heading text-[1rem] font-medium text-[var(--text-primary)]">
+                    {ffeItems.length} item{ffeItems.length !== 1 ? 's' : ''} ·{' '}
+                    {formatDollars(totalCents)} total
+                  </div>
+                  <div className="type-meta-small text-[var(--text-muted)]">
+                    {project.name}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSkip}
+                  disabled={createPO.isPending}
+                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--hover-bg,rgba(196,165,123,0.06))] hover:text-[var(--text-primary)] disabled:opacity-40"
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              {scopeDisclaimer && (
+                <p className="mt-1 text-[0.7rem] italic text-[var(--text-muted)]">
+                  {scopeDisclaimer}
+                </p>
+              )}
+            </div>
+
+            {/* Body — scrollable */}
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              {/* Step 1 — Open vendor portal */}
+              <section
+                className="mb-3 rounded-[5px] border px-3 py-3"
+                style={{
+                  borderColor: 'rgba(196,165,123,0.2)',
+                  background: 'rgba(196,165,123,0.06)',
+                }}
+              >
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <div className="type-meta-small text-[var(--color-clay,#C4A57B)]">
+                    Step 1 · Open vendor portal
+                  </div>
+                  {vendor.trade_portal_url ? (
+                    <a
+                      href={vendor.trade_portal_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-2.5 py-1 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-[var(--text-primary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]"
+                    >
+                      Open in new tab
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ) : (
+                    <span className="font-mono text-[0.58rem] text-[var(--text-muted)]">
+                      No trade portal on file
+                    </span>
+                  )}
+                </div>
+                <div className="text-[0.7rem] leading-relaxed text-[var(--text-muted)]">
+                  {vendor.trade_portal_url ?? '—'}
+                  {vendor.trade_account_email ? ` · ${vendor.trade_account_email}` : ''}
+                </div>
+              </section>
+
+              {/* Step 2 — Copy item details */}
+              <section className="mb-3 rounded-[5px] border border-[var(--border-default)] px-3 py-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="type-meta-small text-[var(--text-primary)]">
+                    Step 2 · Copy item details
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyDetails}
+                    className="inline-flex items-center gap-1.5 rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-2.5 py-1 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-[var(--text-primary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]"
+                  >
+                    <Copy className="h-3 w-3" />
+                    {copyState === 'copied'
+                      ? 'Copied!'
+                      : copyState === 'error'
+                        ? 'Copy failed'
+                        : 'Copy details'}
+                  </button>
+                </div>
+                <div
+                  className="border-l-2 pl-3 text-[0.7rem] leading-[1.7] text-[var(--text-primary)]"
+                  style={{ borderColor: 'var(--border-subtle)' }}
+                >
+                  {ffeItems.map((item, idx) => (
+                    <div key={item.id} className={idx > 0 ? 'mt-2' : ''}>
+                      <div>
+                        <strong>{idx + 1}.</strong> {item.name}
+                        {item.room ? ` · ${item.room}` : ''}
+                      </div>
+                      <div className="text-[var(--text-muted)]">
+                        Ship to: {SHIP_TO_PLACEHOLDER}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* Step 3 — Confirm order placed */}
+              <section className="mb-3 rounded-[5px] border border-[var(--border-default)] px-3 py-3">
+                <div className="mb-2 type-meta-small text-[var(--text-primary)]">
+                  Step 3 · Confirm order placed
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block">
+                    <span className="block text-[0.6rem] uppercase tracking-wider text-[var(--text-muted)]">
+                      Vendor PO #
+                    </span>
+                    <input
+                      type="text"
+                      value={vendorPoNumber}
+                      onChange={(e) => setVendorPoNumber(e.target.value)}
+                      placeholder="NA-2026-..."
+                      className="mt-1 w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-2 py-1.5 font-mono text-[0.7rem] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-primary)] focus:outline-none"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="block text-[0.6rem] uppercase tracking-wider text-[var(--text-muted)]">
+                      Confirmed ETA
+                    </span>
+                    <input
+                      type="date"
+                      value={confirmedEta}
+                      onChange={(e) => setConfirmedEta(e.target.value)}
+                      className="mt-1 w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-2 py-1.5 font-mono text-[0.7rem] text-[var(--text-primary)] focus:border-[var(--accent-primary)] focus:outline-none"
+                    />
+                  </label>
+                </div>
+              </section>
+
+              {/* Step 4 — Payment terms */}
+              <section
+                className="mb-3 rounded-[5px] border px-3 py-3"
+                style={{
+                  borderColor: 'var(--color-clay,#C4A57B)',
+                  background: 'rgba(196,165,123,0.04)',
+                }}
+              >
+                <div className="mb-2 flex items-baseline gap-2">
+                  <div className="type-meta-small text-[var(--color-clay,#C4A57B)]">
+                    Step 4 · Payment terms
+                  </div>
+                  <span className="font-mono text-[0.55rem] italic text-[var(--text-muted)]">
+                    new in v1
+                  </span>
+                </div>
+
+                <label className="block">
+                  <span className="block text-[0.6rem] uppercase tracking-wider text-[var(--text-muted)]">
+                    Terms
+                  </span>
+                  <select
+                    value={paymentPattern}
+                    onChange={(e) => setPaymentPattern(e.target.value as PaymentPattern)}
+                    className="mt-1 w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-2 py-1.5 font-mono text-[0.7rem] text-[var(--text-primary)] focus:border-[var(--accent-primary)] focus:outline-none"
+                  >
+                    {PAYMENT_PATTERN_OPTIONS.map((opt) => {
+                      const isDefault = vendor.default_payment_terms === opt.value;
+                      return (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                          {isDefault ? ` (${vendor.name} default)` : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </label>
+
+                {showSplitFields && (
+                  <>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <label className="block">
+                        <span className="block text-[0.6rem] uppercase tracking-wider text-[var(--text-muted)]">
+                          Deposit due
+                        </span>
+                        <input
+                          type="date"
+                          value={depositDueDate}
+                          onChange={(e) => setDepositDueDate(e.target.value)}
+                          className="mt-1 w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-2 py-1.5 font-mono text-[0.7rem] text-[var(--text-primary)] focus:border-[var(--accent-primary)] focus:outline-none"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="block text-[0.6rem] uppercase tracking-wider text-[var(--text-muted)]">
+                          Deposit amount
+                        </span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={depositAmountInput}
+                          onChange={(e) => setDepositAmountInput(e.target.value)}
+                          placeholder="0.00"
+                          className="mt-1 w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-2 py-1.5 font-mono text-[0.7rem] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-primary)] focus:outline-none"
+                        />
+                      </label>
+                    </div>
+                    <p className="mt-2 text-[0.62rem] italic text-[var(--color-aged-oak,#867257)]">
+                      Balance {formatDollars(splitBalanceCents)} will become due
+                      automatically when item enters &ldquo;Shipped&rdquo; stage.
+                    </p>
+                  </>
+                )}
+
+                {showFullUpfrontFields && (
+                  <div className="mt-2">
+                    <label className="block">
+                      <span className="block text-[0.6rem] uppercase tracking-wider text-[var(--text-muted)]">
+                        Payment due
+                      </span>
+                      <input
+                        type="date"
+                        value={depositDueDate}
+                        onChange={(e) => setDepositDueDate(e.target.value)}
+                        className="mt-1 w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-2 py-1.5 font-mono text-[0.7rem] text-[var(--text-primary)] focus:border-[var(--accent-primary)] focus:outline-none"
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {showNet30Note && (
+                  <p className="mt-2 text-[0.62rem] italic text-[var(--color-aged-oak,#867257)]">
+                    Full balance due 30 days after delivery.
+                  </p>
+                )}
+
+                {showCustomMilestones && (
+                  <div className="mt-2 flex flex-col gap-2">
+                    {milestones.map((m, idx) => (
+                      <div
+                        key={m.key}
+                        className="rounded-[3px] border border-[var(--border-subtle)] p-2"
+                      >
+                        <div className="mb-1 flex items-center justify-between">
+                          <span className="font-mono text-[0.58rem] uppercase tracking-wider text-[var(--text-muted)]">
+                            Milestone {idx + 1}
+                          </span>
+                          {milestones.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() => removeMilestone(m.key)}
+                              className="flex h-6 w-6 items-center justify-center rounded-sm text-[var(--text-muted)] hover:text-[var(--color-terracotta,#D4A090)]"
+                              aria-label={`Remove milestone ${idx + 1}`}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <input
+                            type="text"
+                            value={m.label}
+                            onChange={(e) => updateMilestone(m.key, { label: e.target.value })}
+                            placeholder="Label"
+                            className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-2 py-1 font-mono text-[0.65rem] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-primary)] focus:outline-none"
+                          />
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={m.amountInput}
+                            onChange={(e) =>
+                              updateMilestone(m.key, { amountInput: e.target.value })
+                            }
+                            placeholder="Amount"
+                            className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-2 py-1 font-mono text-[0.65rem] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-primary)] focus:outline-none"
+                          />
+                          <input
+                            type="date"
+                            value={m.dueDate}
+                            onChange={(e) =>
+                              updateMilestone(m.key, { dueDate: e.target.value })
+                            }
+                            className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-2 py-1 font-mono text-[0.65rem] text-[var(--text-primary)] focus:border-[var(--accent-primary)] focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    {milestones.length < 4 && (
+                      <button
+                        type="button"
+                        onClick={addMilestone}
+                        className="inline-flex items-center justify-center gap-1.5 self-start rounded-[3px] border border-dashed border-[var(--border-default)] px-2.5 py-1 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-[var(--text-muted)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]"
+                      >
+                        <Plus className="h-3 w-3" />
+                        Add milestone
+                      </button>
+                    )}
+                  </div>
+                )}
+              </section>
+
+              {submitError && (
+                <div
+                  className="mb-3 rounded-[3px] border px-3 py-2 text-[0.7rem]"
+                  style={{
+                    borderColor: 'var(--color-terracotta,#D4A090)',
+                    background: 'rgba(212,160,144,0.08)',
+                    color: 'var(--text-primary)',
+                  }}
+                  role="alert"
+                >
+                  {submitError}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between gap-2 border-t border-[var(--border-default)] px-5 py-3">
+              <button
+                type="button"
+                onClick={handleSkip}
+                disabled={createPO.isPending}
+                className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 font-mono text-[0.65rem] uppercase tracking-[0.06em] text-[var(--text-muted)] transition-colors hover:border-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40"
+              >
+                Skip — order externally
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={createPO.isPending}
+                className="inline-flex items-center gap-2 rounded-[3px] px-4 py-1.5 font-mono text-[0.7rem] uppercase tracking-[0.06em] text-white transition-opacity disabled:opacity-50"
+                style={{ background: 'var(--accent-primary,#C4A57B)' }}
+              >
+                {createPO.isPending && (
+                  <span
+                    className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                    aria-hidden="true"
+                  />
+                )}
+                {createPO.isPending
+                  ? 'Submitting…'
+                  : `Confirm ${ffeItems.length} ordered`}
+              </button>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}

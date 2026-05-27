@@ -10,6 +10,13 @@ import {
   type VendorGroup,
 } from '@/components/portal/procurement/vendor-section-card';
 import { OrderViaPatina } from '@/components/portal/procurement/order-via-patina';
+import {
+  OrderAssistant,
+  type OrderAssistantFFEItem,
+  type OrderAssistantProject,
+  type OrderAssistantVendor,
+} from '@/components/portal/procurement/order-assistant';
+import type { PaymentPattern } from '@patina/supabase';
 
 // ─── Grouping helper ─────────────────────────────────────────────────────────
 
@@ -87,11 +94,19 @@ function ByVendorContent() {
   const [search, setSearch] = useState('');
   // State for the Order-via-Patina confirmation dialog. The dialog opens
   // scoped to a single vendor + project pair. Sprint 1 wiring: the first
-  // project the vendor has POs against — see comment on the click handler
-  // below.
+  // project the vendor has POs against — see comment on `openOrderForVendor`.
   const [orderDialog, setOrderDialog] = useState<{
     vendor: { id: string; name: string };
     project: { id: string; name: string };
+  } | null>(null);
+  // State for the Order Assistant side panel (Wave 1.4). Opens scoped to a
+  // single vendor + project pair; the synthetic ffeItems list mirrors the
+  // vendor's draft POs against that project. See `openOrderAssistantFor`.
+  const [orderAssistant, setOrderAssistant] = useState<{
+    vendor: OrderAssistantVendor;
+    project: OrderAssistantProject;
+    ffeItems: OrderAssistantFFEItem[];
+    scopeDisclaimer?: string;
   } | null>(null);
 
   const { data: orders, isLoading, isError, error } = usePurchaseOrders();
@@ -194,37 +209,115 @@ function ByVendorContent() {
       {/* Vendor cards */}
       {groups.length > 0 && (
         <div className="flex flex-col gap-4">
-          {groups.map((group) => (
-            <VendorSectionCard
-              key={group.vendorId}
-              group={group}
-              onOrderViaPatina={
-                group.isPatinaCatalog
-                  ? () => {
-                      // Sprint 1 wiring: open the OrderViaPatina dialog scoped
-                      // to the first PO's project. The dialog accepts an
-                      // `ffeItems` list — Sprint 1 passes an empty list (the
-                      // dialog renders a "No items to order" guard). The full
-                      // FF&E-item selection flow is plumbed in a follow-up
-                      // wave from the per-project FF&E board, not from the
-                      // cross-project By Vendor view.
-                      const first = group.orders[0];
-                      if (!first?.project) return;
-                      setOrderDialog({
-                        vendor: {
-                          id: group.vendorId,
-                          name: group.vendorName,
-                        },
-                        project: {
-                          id: first.project.id,
-                          name: first.project.name,
-                        },
-                      });
-                    }
-                  : undefined
-              }
-            />
-          ))}
+          {groups.map((group) => {
+            // ── "Order all N" wiring (Wave 1.4) ──────────────────────────
+            // A draft PO is one whose vendor confirmation + payment pattern
+            // hasn't been logged yet. Each draft PO header is one "item" in
+            // the assistant's UI list. Non-Catalog vendors only; Catalog
+            // vendors use the OrderViaPatina dialog instead.
+            const draftOrders = group.orders.filter((po) => po.status === 'draft');
+            const draftCount = draftOrders.length;
+            // Pick a single project to scope the assistant against — the
+            // first project the draft POs target. If draft POs span multiple
+            // projects we surface a disclaimer (one PO covers one project per
+            // the data model, so a "true" multi-project flow needs separate
+            // panel sessions).
+            const draftProjectIds = new Set(
+              draftOrders.map((po) => po.project_id),
+            );
+            const firstDraft = draftOrders[0];
+            const canOrderAll =
+              !group.isPatinaCatalog && draftCount > 0 && !!firstDraft?.project;
+
+            const handleOrderAll = () => {
+              if (!firstDraft?.project) return;
+              const scopedDrafts = draftOrders.filter(
+                (po) => po.project_id === firstDraft.project_id,
+              );
+              // ffeItems are display-only here: each draft PO becomes one
+              // row in the assistant's "Copy item details" list. The `id`
+              // field is the draft PO's id, surfaced so the row has a stable
+              // React key — it is NOT used as a `project_ffe_items.id`
+              // because the assistant calls `useCreatePurchaseOrder` which
+              // creates a NEW PO header. The proper FFE→PO linking flow
+              // requires a `project_ffe_items` source (the per-project FF&E
+              // board), which lives outside the cross-project By Vendor
+              // view's data shape. Submit therefore passes an empty
+              // `ffeItemIds: []` (handled inside OrderAssistant).
+              const ffeItems: OrderAssistantFFEItem[] = scopedDrafts.map(
+                (po) => ({
+                  id: po.id,
+                  name: po.vendor_po_number
+                    ? `${group.vendorName} · ${po.vendor_po_number}`
+                    : `${group.vendorName} order`,
+                  room: po.project?.name,
+                  line_total_cents: po.total_cents,
+                }),
+              );
+              const disclaimer =
+                draftProjectIds.size > 1
+                  ? `Showing ${scopedDrafts.length} of ${draftCount} items for ${firstDraft.project!.name}; remaining items will need separate orders.`
+                  : undefined;
+              setOrderAssistant({
+                vendor: {
+                  id: group.vendorId,
+                  name: group.vendorName,
+                  default_payment_terms:
+                    (group.defaultPaymentTerms as PaymentPattern | null) ?? null,
+                  // PRD §6 surfaces the trade portal URL + account email here.
+                  // The current `vendors` query projection in
+                  // `usePurchaseOrders` only joins id/name/default_payment_terms,
+                  // so the panel renders the "No trade portal on file" fallback
+                  // until the join is widened. Out of lane for W1.4.
+                  trade_portal_url: undefined,
+                  trade_account_email: undefined,
+                },
+                project: {
+                  id: firstDraft.project!.id,
+                  name: firstDraft.project!.name,
+                },
+                ffeItems,
+                scopeDisclaimer: disclaimer,
+              });
+            };
+
+            return (
+              <VendorSectionCard
+                key={group.vendorId}
+                group={group}
+                onOrderAllClick={canOrderAll ? handleOrderAll : undefined}
+                orderAllLabel={
+                  canOrderAll ? `Order all ${draftCount}` : undefined
+                }
+                onOrderViaPatina={
+                  group.isPatinaCatalog
+                    ? () => {
+                        // Sprint 1 wiring: open the OrderViaPatina dialog
+                        // scoped to the first PO's project. The dialog
+                        // accepts an `ffeItems` list — Sprint 1 passes an
+                        // empty list (the dialog renders a "No items to
+                        // order" guard). The full FF&E-item selection flow is
+                        // plumbed in a follow-up wave from the per-project
+                        // FF&E board, not from the cross-project By Vendor
+                        // view.
+                        const first = group.orders[0];
+                        if (!first?.project) return;
+                        setOrderDialog({
+                          vendor: {
+                            id: group.vendorId,
+                            name: group.vendorName,
+                          },
+                          project: {
+                            id: first.project.id,
+                            name: first.project.name,
+                          },
+                        });
+                      }
+                    : undefined
+                }
+              />
+            );
+          })}
         </div>
       )}
 
@@ -237,6 +330,19 @@ function ByVendorContent() {
           vendor={orderDialog.vendor}
           project={orderDialog.project}
           ffeItems={[]}
+        />
+      )}
+
+      {orderAssistant && (
+        <OrderAssistant
+          open={!!orderAssistant}
+          onOpenChange={(open) => {
+            if (!open) setOrderAssistant(null);
+          }}
+          vendor={orderAssistant.vendor}
+          project={orderAssistant.project}
+          ffeItems={orderAssistant.ffeItems}
+          scopeDisclaimer={orderAssistant.scopeDisclaimer}
         />
       )}
     </div>
