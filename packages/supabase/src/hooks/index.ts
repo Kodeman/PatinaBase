@@ -370,6 +370,8 @@ export {
   useIsManufacturer,
   useIsAdmin,
   useIsSuperAdmin,
+  useIsStudioOwner,
+  isStudioOwnerFromRoles,
   hasPermission,
   hasAnyPermission,
   hasAllPermissions,

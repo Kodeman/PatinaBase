@@ -416,3 +416,39 @@ export function useIsSuperAdmin() {
   const isSuperAdmin = roles.some(r => r.role.name === 'super_admin');
   return { isSuperAdmin, isLoading: false };
 }
+
+/**
+ * Pure helper that derives studio-owner status from a UserRoleAssignment list.
+ * Extracted from the hook so the role-matching logic can be unit-tested
+ * without spinning up a React Query / Supabase rig.
+ */
+export function isStudioOwnerFromRoles(
+  roles: UserRoleAssignment[] | undefined,
+): boolean {
+  if (!roles) return false;
+  return roles.some(r => r.role?.name === 'studio_owner');
+}
+
+/**
+ * Check if user has the `studio_owner` role.
+ *
+ * Used by the Procurement workspace (PRD §11 "Bookkeeper Export") and the
+ * Wave 3.1 architect dossier (§4 "Studio-Owner Permission Gating") to gate
+ * the Export to QuickBooks CTA and any future studio-owner-only surfaces
+ * (cross-designer payment data visibility, multi-designer studio admin).
+ *
+ * Returns `{ isStudioOwner: false, isLoading: true }` while roles are
+ * loading; this matches the pattern of `useIsAdmin` / `useIsSuperAdmin`.
+ *
+ * Backed by `useUserRoles()` so it does not make an extra network call —
+ * the role list is fetched once per session and reused across surfaces.
+ */
+export function useIsStudioOwner() {
+  const { data: roles, isLoading } = useUserRoles();
+
+  if (isLoading || !roles) {
+    return { isStudioOwner: false, isLoading: true };
+  }
+
+  return { isStudioOwner: isStudioOwnerFromRoles(roles), isLoading: false };
+}
