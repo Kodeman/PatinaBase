@@ -370,6 +370,8 @@ export {
   useIsManufacturer,
   useIsAdmin,
   useIsSuperAdmin,
+  useIsStudioOwner,
+  isStudioOwnerFromRoles,
   hasPermission,
   hasAnyPermission,
   hasAllPermissions,
@@ -877,6 +879,8 @@ export {
   useProcurementNotifications,
   useProcurementUnreadCount,
   useMarkProcurementNotificationRead,
+  // Sprint 3 / Wave 3.3 — Capture-to-slot integration
+  useAssignProductToFfeSlot,
 } from './use-procurement';
 export type {
   PaymentPattern,

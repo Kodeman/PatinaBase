@@ -140,6 +140,8 @@ import {
   useProcurementNotifications,
   useProcurementUnreadCount,
   useMarkProcurementNotificationRead,
+  // Sprint 3 / Wave 3.3 — Capture-to-slot integration
+  useAssignProductToFfeSlot,
 } from '../use-procurement';
 import type { QboExportInput } from '../use-procurement';
 
@@ -1803,5 +1805,81 @@ describe('useMarkProcurementNotificationRead', () => {
       mutationFn: (input: { notificationId: string }) => Promise<unknown>;
     };
     await expect(config.mutationFn({ notificationId: 'n-1' })).rejects.toThrow('rls denied');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useAssignProductToFfeSlot  (Sprint 3 / Wave 3.3 — capture-to-slot)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useAssignProductToFfeSlot', () => {
+  it('UPDATEs project_ffe_items.product_id scoped by both id and project_id, then invalidates the slot + PO query keys', async () => {
+    queueTableResults('project_ffe_items', {
+      data: { id: 'ffe-1', product_id: 'prod-1' },
+      error: null,
+    });
+
+    const config = useAssignProductToFfeSlot() as unknown as {
+      mutationFn: (input: {
+        productId: string;
+        ffeItemId: string;
+        projectId: string;
+      }) => Promise<{ id: string; product_id: string }>;
+      onSuccess: (
+        result: unknown,
+        input: { productId: string; ffeItemId: string; projectId: string }
+      ) => void;
+    };
+
+    const result = await config.mutationFn({
+      productId: 'prod-1',
+      ffeItemId: 'ffe-1',
+      projectId: 'proj-1',
+    });
+    expect(result.id).toBe('ffe-1');
+    expect(result.product_id).toBe('prod-1');
+
+    const builder = builders.project_ffe_items;
+    // Update payload sets product_id
+    const update = builder.__chain.find((c) => c.method === 'update');
+    expect(update?.args[0]).toEqual({ product_id: 'prod-1' });
+
+    // Both filters are present — defense in depth on RLS + W1.2.6 pattern.
+    const eqArgs = builder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
+    expect(eqArgs).toContainEqual(['id', 'ffe-1']);
+    expect(eqArgs).toContainEqual(['project_id', 'proj-1']);
+
+    // Trigger onSuccess and verify cache invalidations.
+    config.onSuccess(result, {
+      productId: 'prod-1',
+      ffeItemId: 'ffe-1',
+      projectId: 'proj-1',
+    });
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['project-ffe-items', 'proj-1']);
+    expect(invalidatedKeys).toContainEqual(['purchase-orders']);
+  });
+
+  it('throws when supabase returns an error (e.g. RLS denies cross-designer FFE update)', async () => {
+    queueTableResults('project_ffe_items', {
+      data: null,
+      error: new Error('row level security policy denied'),
+    });
+
+    const config = useAssignProductToFfeSlot() as unknown as {
+      mutationFn: (input: {
+        productId: string;
+        ffeItemId: string;
+        projectId: string;
+      }) => Promise<unknown>;
+    };
+
+    await expect(
+      config.mutationFn({
+        productId: 'prod-1',
+        ffeItemId: 'ffe-1',
+        projectId: 'proj-other',
+      })
+    ).rejects.toThrow('row level security policy denied');
   });
 });

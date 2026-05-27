@@ -26,6 +26,7 @@ import { ModeToggle } from './components/ModeToggle';
 import { AuthScreen } from './components/AuthScreen';
 import { ProductCaptureForm } from './components/ProductCaptureForm';
 import { VendorCaptureForm } from './components/VendorCaptureForm';
+import { FFESlotPicker } from './components/FFESlotPicker';
 
 import { identifyUser, resetAnalytics, extensionEvents } from './lib/analytics';
 import { UpdateBanner } from './components/UpdateBanner';
@@ -92,6 +93,16 @@ function Popup() {
   const [isCapturing, setIsCapturing] = useState(false);
   const [captureSuccess, setCaptureSuccess] = useState(false);
   const [captureError, setCaptureError] = useState('');
+
+  // Wave 3.3 — Capture-to-slot integration (PRD §12 Phase 3).
+  // After a successful product capture/update, the designer can attach the
+  // resulting product to a specific FFE slot on one of their active projects
+  // without leaving the popup. We track the most recently captured product id
+  // (from `products` insert/update) and the picker's open state. The picker
+  // itself lives in components/FFESlotPicker.tsx and uses the extension's
+  // Supabase client directly to update `project_ffe_items.product_id`.
+  const [lastCapturedProductId, setLastCapturedProductId] = useState<UUID | null>(null);
+  const [showFfeSlotPicker, setShowFfeSlotPicker] = useState(false);
 
   // Track user interaction for auto-dismiss
   const [hasInteracted, setHasInteracted] = useState(false);
@@ -338,6 +349,9 @@ function Popup() {
     setProposalId(null);
     setScopeRoomId(null);
     setFfeCategorySlug(null);
+    // Wave 3.3 — clear the capture-to-slot state when navigating to a new page.
+    setLastCapturedProductId(null);
+    setShowFfeSlotPicker(false);
   }, []);
 
   // Re-extract when URL changes
@@ -945,6 +959,9 @@ function Popup() {
       }
 
       setCaptureSuccess(true);
+      // Wave 3.3 — remember the captured product so the slot picker
+      // can wire it to a project_ffe_items row without a re-query.
+      if (product?.id) setLastCapturedProductId(product.id);
       extensionEvents.productCapture({
         hasImages: (extractedData.images?.length ?? 0) > 0,
         hasPrice: !!price,
@@ -1070,6 +1087,8 @@ function Popup() {
       if (captureError) throw captureError;
 
       setCaptureSuccess(true);
+      // Wave 3.3 — remember the captured product for the slot picker.
+      if (product?.id) setLastCapturedProductId(product.id);
       extensionEvents.productCapture({
         hasImages: (extractedData.images?.length ?? 0) > 0,
         hasPrice: !!price,
@@ -1181,6 +1200,8 @@ function Popup() {
       }
 
       setCaptureSuccess(true);
+      // Wave 3.3 — the existing product id is the one we just updated.
+      if (existingProduct?.id) setLastCapturedProductId(existingProduct.id);
       extensionEvents.productCapture({
         hasImages: (extractedData?.images?.length ?? 0) > 0,
         hasPrice: !!price,
@@ -1497,6 +1518,24 @@ function Popup() {
             saveSuccess={captureSuccess}
           />
         )}
+
+        {/* Wave 3.3 — Capture-to-slot picker.
+            Appears in-line after a successful product capture/update when the
+            designer clicks the "Send to FFE slot" CTA in the footer. The
+            picker writes directly to project_ffe_items via the extension's
+            Supabase client; RLS enforces designer scoping. */}
+        {showFfeSlotPicker && lastCapturedProductId && captureMode === 'product' && (
+          <FFESlotPicker
+            productId={lastCapturedProductId}
+            productName={productName || extractedData?.productName || 'Captured product'}
+            projects={projects}
+            initialProjectId={selectedProjectId}
+            onComplete={() => {
+              setShowFfeSlotPicker(false);
+            }}
+            onCancel={() => setShowFfeSlotPicker(false)}
+          />
+        )}
       </div>
 
       {/* Extraction Debug Panel */}
@@ -1584,6 +1623,19 @@ function Popup() {
                   : proposalId && scopeRoomId && ffeCategorySlug
                   ? 'Save to Proposal'
                   : 'Save to Inbox'}
+              </button>
+            )}
+
+            {/* Wave 3.3 — Capture-to-slot CTA.
+                Shown after a successful capture/update, when we have a
+                product_id to attach. Toggles the in-popup FFESlotPicker. */}
+            {captureSuccess && lastCapturedProductId && !showFfeSlotPicker && (
+              <button
+                type="button"
+                onClick={() => setShowFfeSlotPicker(true)}
+                className="w-full py-2.5 px-4 rounded-[3px] text-[0.82rem] font-medium border border-clay bg-off-white text-mocha hover:bg-clay hover:text-off-white transition-all"
+              >
+                Send to FFE slot
               </button>
             )}
           </div>

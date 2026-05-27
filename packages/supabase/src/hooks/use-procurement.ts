@@ -1800,3 +1800,64 @@ export function useMarkProcurementNotificationRead() {
     },
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CAPTURE-TO-SLOT — Sprint 3 / Wave 3.3 (PRD §12 Phase 3)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Assigns a captured product (Layer 1: products.captured_by populated by the
+// Chrome extension) to a specific FFE slot on a project. This is the
+// post-activation analogue of the proposal_captures → consume_capture() flow
+// (which targets pre-activation proposals). For active projects, the slot
+// already exists in project_ffe_items; we just stamp product_id onto it.
+//
+// Schema: project_ffe_items.product_id is a nullable FK to products(id) —
+// already in place via migration 00066 line 261, NOT added by this wave.
+// No new migration is needed.
+//
+// RLS: scoping is enforced by the existing project_ffe_items policy
+// (designer_id = auth.uid() through the projects join). We additionally
+// .eq('project_id', projectId) for defense-in-depth and to match the
+// W1.2.6 ownership-scoping pattern used by useUpdateFFEItemStatus.
+//
+// Invalidations:
+//   ['project-ffe-items', projectId]  — refreshes the slot in By Vendor /
+//                                       By Status / Calendar views.
+//   ['purchase-orders']               — if the slot is later POed, the PO
+//                                       lists need to pick up the new
+//                                       product linkage (no-op when no PO
+//                                       exists yet, but cheap to invalidate).
+// ═══════════════════════════════════════════════════════════════════════════
+
+export function useAssignProductToFfeSlot() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      productId,
+      ffeItemId,
+      projectId,
+    }: {
+      productId: string;
+      ffeItemId: string;
+      projectId: string;
+    }): Promise<{ id: string; product_id: string }> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      const { data, error } = await supabase
+        .from('project_ffe_items')
+        .update({ product_id: productId })
+        .eq('id', ffeItemId)
+        .eq('project_id', projectId)
+        .select('id, product_id')
+        .single();
+
+      if (error) throw error;
+      return data as { id: string; product_id: string };
+    },
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+    },
+  });
+}
