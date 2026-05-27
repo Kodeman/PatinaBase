@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useActiveZone } from '@/hooks/use-active-zone';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { ZONES, type ZoneKey } from '@/config/navigation';
 import { UtilityBar } from './utility-bar';
 
@@ -27,6 +28,17 @@ export function TopBar() {
   const { zone: activeZoneKey } = useActiveZone();
   const prefersReducedMotion = useReducedMotion();
 
+  // Procurement workspace is behind the `procurement-workspace-pilot` flag.
+  // Hide the zone in the top nav when the flag is off so non-pilot designers
+  // never see a tab they can't use. Route-level gating lives in
+  // `/portal/procurement/layout.tsx` so deep-links land on a Coming Soon
+  // placeholder rather than 404ing through the nav filter.
+  const procurementPilotEnabled = useFeatureFlag('procurement-workspace-pilot');
+  const visibleZones = ZONES.filter((zone) => {
+    if (zone.key === 'procurement') return procurementPilotEnabled;
+    return true;
+  });
+
   return (
     <header className="hidden border-b border-[var(--border-default)] bg-[var(--bg-surface)] md:block">
       <div className="flex h-[52px] items-center px-5 lg:px-8">
@@ -40,7 +52,7 @@ export function TopBar() {
 
         {/* Primary Navigation — 4 Zones */}
         <nav className="flex h-full flex-1 items-stretch gap-0">
-          {ZONES.map((zone) => {
+          {visibleZones.map((zone) => {
             const isActive = activeZoneKey === zone.key;
             const tourAnchor = TOUR_ANCHOR_FOR_ZONE[zone.key];
             return (

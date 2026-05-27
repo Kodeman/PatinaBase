@@ -23,8 +23,8 @@ const nextConfig = {
       // Development: localhost, local network IPs, AND patina.cloud domains (for Cloudflare tunnel access)
       // Production: patina.cloud API gateway and WebSocket connections
       isDevelopment
-        ? "connect-src 'self' http://localhost:* ws://localhost:* http://192.168.1.18:* ws://192.168.1.18:* http://192.168.1.36:* ws://192.168.1.36:* http://192.168.1.16:* ws://192.168.1.16:* http://127.0.0.1:* ws://127.0.0.1:* http://*.nordicheat.org ws://*.nordicheat.org https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.identity.oraclecloud.com https://*.oraclecloud.com https://*.sanity.io wss://*.sanity.io"
-        : "connect-src 'self' https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.identity.oraclecloud.com https://*.oraclecloud.com https://*.sanity.io wss://*.sanity.io",
+        ? "connect-src 'self' http://localhost:* ws://localhost:* http://192.168.1.18:* ws://192.168.1.18:* http://192.168.1.36:* ws://192.168.1.36:* http://192.168.1.16:* ws://192.168.1.16:* http://127.0.0.1:* ws://127.0.0.1:* http://*.nordicheat.org ws://*.nordicheat.org https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.identity.oraclecloud.com https://*.oraclecloud.com https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com"
+        : "connect-src 'self' https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.identity.oraclecloud.com https://*.oraclecloud.com https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com",
       "media-src 'self' blob:",
       "object-src 'none'",
       "base-uri 'self'",

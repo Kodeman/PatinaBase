@@ -27,6 +27,7 @@ import {
   type ReceivingInspectionOutcome,
 } from '@patina/supabase';
 import { useToast } from '@/components/portal/toast-provider';
+import { procurementEvents } from '@/lib/analytics/procurement-events';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -92,12 +93,26 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
   const handleSubmit = async () => {
     setSubmitError(null);
     try {
+      const photoAssetIds: string[] = [];
       await createInspection.mutateAsync({
         purchaseOrderId,
         outcome,
         notes: notes.trim() ? notes.trim() : undefined,
-        photoAssetIds: [],
+        photoAssetIds,
       });
+
+      procurementEvents.inspectionLogged({
+        outcome,
+        has_photos: photoAssetIds.length > 0,
+      });
+      // useCreateReceivingInspection auto-drafts a damage_claims row when
+      // outcome != 'clean' (see use-procurement.ts step 4). Fire the
+      // damageClaimCreated event from the same onSuccess so the dashboard
+      // metric "Damage discovery lag" has a single source of truth.
+      if (outcome !== 'clean') {
+        procurementEvents.damageClaimCreated({ outcome });
+      }
+
       const successMsg =
         outcome === 'clean'
           ? `Inspection logged — ${poLabel} cleared.`
