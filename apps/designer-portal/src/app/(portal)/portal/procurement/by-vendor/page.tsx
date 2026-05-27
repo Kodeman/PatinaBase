@@ -2,10 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import { ArrowUpDown, Filter } from 'lucide-react';
-import { usePurchaseOrders, type PurchaseOrder } from '@patina/supabase';
+import { usePurchaseOrders, useIsStudioOwner, type PurchaseOrder } from '@patina/supabase';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { SearchInput } from '@/components/portal/search-input';
-import { useIsStudioOwner } from '@/hooks/use-is-studio-owner';
 import { QboExportModal } from '@/components/portal/procurement/qbo-export-modal';
 import {
   VendorSectionCard,
