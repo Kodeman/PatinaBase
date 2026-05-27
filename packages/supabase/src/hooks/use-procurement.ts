@@ -787,7 +787,11 @@ export interface CreateReceivingInspectionInput {
   outcome: ReceivingInspectionOutcome;
   notes?: string;
   photoAssetIds?: string[];
-  receivedQuantity?: number;
+  // NOTE: per-item `received_quantity` tracking is deferred to Sprint 3+.
+  // The previous shape took a single `receivedQuantity` and stamped it
+  // across every FFE item on the PO, which is wrong for multi-item POs.
+  // The column `project_ffe_items.received_quantity` remains in the schema
+  // for the future per-item write path.
 }
 
 export interface UpdateDamageClaimInput {
@@ -972,7 +976,6 @@ export function useTodayProcurementCounts() {
     queryFn: async (): Promise<TodayProcurementCounts> => {
       const supabase = getSupabase() as any;
       const today = new Date().toISOString().slice(0, 10);
-      const sevenDaysAgoIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const sevenDaysAhead = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         .toISOString()
         .slice(0, 10);
@@ -999,17 +1002,59 @@ export function useTodayProcurementCounts() {
         }
       })();
 
+      // `inspectionsPending` = POs in status 'delivered' WITHOUT a matching
+      // row in `receiving_inspections` (i.e., the work the designer still has
+      // to log). This mirrors the client-side filter used by the Receiving
+      // page's "Pending Inspection" tab — replicated here so the Today
+      // Dashboard tile and the Receiving tab agree.
+      //
+      // We compute the set difference client-side from two small queries:
+      //   1. delivered PO ids
+      //   2. distinct purchase_order_id from receiving_inspections (any age —
+      //      we don't want a single old inspection on a re-delivered PO to
+      //      flip back to "pending" when the next delivery arrives).
+      //
+      // The delivered-PO query is capped at DELIVERED_PO_LIMIT — designers
+      // with thousands of historical delivered POs would never see them all
+      // in a Today tile, and PostgREST `.limit()` keeps the response bounded.
+      const DELIVERED_PO_LIMIT = 500;
       const inspectionsPendingP = (async (): Promise<number> => {
         try {
-          const { count, error } = await supabase
-            .from('receiving_inspections')
-            .select('id', { count: 'exact', head: true })
-            .gte('inspected_at', sevenDaysAgoIso);
-          if (error) {
-            console.warn('useTodayProcurementCounts: inspectionsPending failed', error);
+          const [deliveredRes, inspectedRes] = await Promise.all([
+            supabase
+              .from('purchase_orders')
+              .select('id')
+              .eq('status', 'delivered')
+              .limit(DELIVERED_PO_LIMIT),
+            supabase
+              .from('receiving_inspections')
+              .select('purchase_order_id'),
+          ]);
+          if (deliveredRes.error) {
+            console.warn(
+              'useTodayProcurementCounts: inspectionsPending delivered query failed',
+              deliveredRes.error,
+            );
             return 0;
           }
-          return count ?? 0;
+          if (inspectedRes.error) {
+            console.warn(
+              'useTodayProcurementCounts: inspectionsPending inspections query failed',
+              inspectedRes.error,
+            );
+            return 0;
+          }
+          const inspectedIds = new Set(
+            ((inspectedRes.data ?? []) as Array<{ purchase_order_id: string }>).map(
+              (r) => r.purchase_order_id,
+            ),
+          );
+          const delivered = (deliveredRes.data ?? []) as Array<{ id: string }>;
+          let pending = 0;
+          for (const po of delivered) {
+            if (!inspectedIds.has(po.id)) pending++;
+          }
+          return pending;
         } catch (e) {
           console.warn('useTodayProcurementCounts: inspectionsPending threw', e);
           return 0;
@@ -1058,13 +1103,14 @@ export function useTodayProcurementCounts() {
  *   4. IF outcome != 'clean': INSERT damage_claims drafted with auto-draft
  *      description (critical path — compensating DELETE on inspection if
  *      this fails).
- *   5. IF receivedQuantity supplied: UPDATE
- *      project_ffe_items.received_quantity for items linked to this PO
- *      (fire-and-forget-with-warn).
- *   6. IF payment_pattern = 'net_30' AND delivered_date transitioned from
+ *   5. IF payment_pattern = 'net_30' AND delivered_date transitioned from
  *      NULL: UPDATE po_payments.due_date = delivered_date + 30 days WHERE
  *      kind = 'balance' AND state = 'pending'
  *      (fire-and-forget-with-warn — never touches paid/dated rows).
+ *
+ * NOTE: A previous step that wrote `received_quantity` to every FFE item on
+ * the PO was removed — it stamped the same value across all items, which is
+ * wrong for multi-item POs. Per-item tracking deferred to Sprint 3+.
  *
  * Invalidates: ['receiving-inspections'], ['damage-claims'],
  *              ['purchase-orders'], ['purchase-order', poId],
@@ -1224,30 +1270,7 @@ export function useCreateReceivingInspection() {
         }
       }
 
-      // Step 5: IF receivedQuantity supplied, UPDATE project_ffe_items
-      // received_quantity for the items linked to this PO.
-      // Fire-and-forget-with-warn.
-      if (input.receivedQuantity !== undefined && input.receivedQuantity !== null) {
-        try {
-          const { error: qtyError } = await supabase
-            .from('project_ffe_items')
-            .update({ received_quantity: input.receivedQuantity })
-            .eq('purchase_order_id', input.purchaseOrderId);
-          if (qtyError) {
-            console.warn(
-              `useCreateReceivingInspection: received_quantity update failed for PO ${input.purchaseOrderId}`,
-              qtyError,
-            );
-          }
-        } catch (e) {
-          console.warn(
-            `useCreateReceivingInspection: received_quantity update threw for PO ${input.purchaseOrderId}`,
-            e,
-          );
-        }
-      }
-
-      // Step 6: IF net_30 + delivered_date just transitioned from NULL,
+      // Step 5: IF net_30 + delivered_date just transitioned from NULL,
       // shift the pending balance row's due_date to delivered_date + 30.
       // Filter MUST include WHERE kind = 'balance' AND state = 'pending' so
       // we never overwrite a paid or already-dated row.

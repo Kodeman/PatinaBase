@@ -109,16 +109,28 @@ SELECT
   po.delivered_date                  AS delivered_date,
   COUNT(fi.id)                       AS ffe_item_count,
   SUM(fi.line_total_cents)           AS line_total_cents,
-  NULL::UUID                         AS inspection_id,
-  NULL::receiving_inspection_outcome AS inspection_outcome,
+  -- LATERAL subquery selects the most recent receiving_inspection per PO so
+  -- callers can resolve "what's the current inspection status on this
+  -- delivery?" without an extra round-trip. NULL when no inspection has
+  -- been logged yet. LATERAL does not introduce duplicate rows because it
+  -- returns at most one row per PO and is joined LEFT.
+  latest_inspection.id               AS inspection_id,
+  latest_inspection.outcome          AS inspection_outcome,
   NULL::TEXT                         AS phase_key
 FROM purchase_orders po
 JOIN projects p  ON p.id = po.project_id
 JOIN vendors v   ON v.id = po.vendor_id
 LEFT JOIN project_ffe_items fi ON fi.purchase_order_id = po.id
+LEFT JOIN LATERAL (
+  SELECT ri.id, ri.outcome
+  FROM receiving_inspections ri
+  WHERE ri.purchase_order_id = po.id
+  ORDER BY ri.inspected_at DESC
+  LIMIT 1
+) latest_inspection ON TRUE
 WHERE po.confirmed_eta IS NOT NULL
   AND po.status NOT IN ('cancelled')
-GROUP BY po.id, p.id, p.name, v.id, v.name
+GROUP BY po.id, p.id, p.name, v.id, v.name, latest_inspection.id, latest_inspection.outcome
 
 UNION ALL
 
