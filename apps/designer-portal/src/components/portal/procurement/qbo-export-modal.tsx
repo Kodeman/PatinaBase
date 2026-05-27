@@ -43,6 +43,7 @@ import {
   DialogTitle,
 } from '@patina/design-system';
 import { useToast } from '@/components/portal/toast-provider';
+import { procurementEvents } from '@/lib/analytics/procurement-events';
 
 // ─── Hooks ──────────────────────────────────────────────────────────────────
 //
@@ -236,6 +237,15 @@ export function QboExportModal({ open, onOpenChange }: QboExportModalProps) {
     if (submitDisabled) return;
     exportMutation.mutate(input, {
       onSuccess: () => {
+        // Snapshot preview row count at submit time (the mutation itself
+        // doesn't echo back the count — the download is a Blob side-effect).
+        procurementEvents.qboExported({
+          date_start: startDate,
+          date_end: endDate,
+          include_paid: includeDepositsPaid || includeBalancesPaid,
+          include_outstanding: includeOutstanding,
+          row_count: preview.data?.transactionCount,
+        });
         toast('Exported vendor bills CSV. Check your downloads folder.', 'success');
         onOpenChange(false);
       },

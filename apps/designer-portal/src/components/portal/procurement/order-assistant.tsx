@@ -31,6 +31,7 @@ import {
   type PaymentPattern,
 } from '@patina/supabase';
 import { useToast } from '@/components/portal/toast-provider';
+import { procurementEvents } from '@/lib/analytics/procurement-events';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
 
@@ -301,6 +302,14 @@ export function OrderAssistant(props: OrderAssistantProps) {
 
     try {
       await createPO.mutateAsync(input);
+
+      procurementEvents.poCreated({
+        payment_pattern: paymentPattern,
+        total_cents: totalCents,
+        is_patina_catalog: false,
+        vendor_id: vendor.id,
+        project_id: project.id,
+      });
 
       const successMessage =
         paymentPattern === 'fifty_fifty' || paymentPattern === 'thirty_seventy'
