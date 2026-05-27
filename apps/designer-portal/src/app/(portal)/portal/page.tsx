@@ -3,6 +3,7 @@
 import { useAuth } from '@/hooks/use-auth';
 import { useLeads, useLeadStats, useAllDecisions } from '@patina/supabase';
 import { useProjects } from '@/hooks/use-projects';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyProject = any;
@@ -73,6 +74,13 @@ export default function DashboardPage() {
   const projects = (Array.isArray(rawProjects) ? rawProjects : []) as AnyProject[];
   const { data: earningsStats } = useEarningsStats();
   const { data: overdueDecisions = [] } = useAllDecisions({ isOverdue: true });
+
+  // Procurement Today rollup card is part of the `procurement-workspace-pilot`
+  // pilot. Non-pilot designers must NOT see the card on their Today Dashboard.
+  // Fail-closed during PostHog cold-load (the hook returns false until flags
+  // resolve), matching the route-level gate at /portal/procurement/layout.tsx
+  // and the nav-filter gate at top-bar.tsx (W3.5.5 CRITICAL-1).
+  const procurementPilotEnabled = useFeatureFlag('procurement-workspace-pilot');
 
   const firstName = user?.name?.split(' ')[0] || 'Designer';
 
@@ -193,13 +201,16 @@ export default function DashboardPage() {
         )}
       </section>
 
-      {/* Procurement (Today rollup) */}
-      <section
-        className="mt-10 animate-section-enter"
-        style={{ animationDelay: '375ms' }}
-      >
-        <ProcurementTodayCard />
-      </section>
+      {/* Procurement (Today rollup) — pilot-gated. Non-pilot designers see
+          nothing in this slot. Fail-closed during PostHog cold-load. */}
+      {procurementPilotEnabled && (
+        <section
+          className="mt-10 animate-section-enter"
+          style={{ animationDelay: '375ms' }}
+        >
+          <ProcurementTodayCard />
+        </section>
+      )}
 
       {/* Two-Column Content */}
       <div className="mt-10 grid gap-12 overflow-hidden md:grid-cols-[58%_42%]">

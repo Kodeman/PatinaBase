@@ -16,6 +16,7 @@ import {
   useUpdateTask,
 } from '@/hooks/use-projects';
 import { useDecisionsByProject, useProjectActivityFromLog } from '@patina/supabase';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { LoadingStrata } from '@/components/portal/loading-strata';
@@ -64,6 +65,11 @@ export default function ProjectDetailPage({
   const { data: timeTracking } = useProjectTimeTracking(id);
   const { data: keyMetrics } = useProjectKeyMetrics(id);
   const { data: projectDecisions = [] } = useDecisionsByProject(id);
+
+  // FFESummaryTile surfaces procurement KPIs + a CTA into /portal/procurement/*.
+  // Pilot-gate it the same way the Today card and procurement zone are gated
+  // so the pilot stays invisible to non-pilot designers (W3.5.5 CRITICAL-1).
+  const procurementPilotEnabled = useFeatureFlag('procurement-workspace-pilot');
 
   const openDecisionsCount = useMemo(
     () =>
@@ -217,9 +223,14 @@ export default function ProjectDetailPage({
         />
         <StrataMark variant="mini" />
 
-        {/* Zone 5: Procurement summary (collapsed from full FF&E table — Sprint 1 W1.4) */}
-        <FFESummaryTile projectId={id} />
-        <StrataMark variant="mini" />
+        {/* Zone 5: Procurement summary (collapsed from full FF&E table — Sprint 1 W1.4).
+            Pilot-gated — see procurementPilotEnabled comment above. */}
+        {procurementPilotEnabled && (
+          <>
+            <FFESummaryTile projectId={id} />
+            <StrataMark variant="mini" />
+          </>
+        )}
 
         {/* Zone 6: Financials */}
         {typedFinancials.length > 0 && (
