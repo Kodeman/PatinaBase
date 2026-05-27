@@ -9,6 +9,7 @@ import {
   VendorSectionCard,
   type VendorGroup,
 } from '@/components/portal/procurement/vendor-section-card';
+import { OrderViaPatina } from '@/components/portal/procurement/order-via-patina';
 
 // ─── Grouping helper ─────────────────────────────────────────────────────────
 
@@ -37,6 +38,10 @@ function groupByVendor(orders: PurchaseOrder[]): VendorGroup[] {
         itemCount: 0,
         projectIds: new Set<string>(),
         hasDuePayment: false,
+        // Derived from the joined vendors.is_patina_catalog column (post-00149).
+        // When true, the card renders the gold "Order via Patina" CTA (PRD §5)
+        // in place of the standard neutral "View orders" button.
+        isPatinaCatalog: po.vendor?.is_patina_catalog ?? false,
       };
       map.set(key, group);
     }
@@ -80,6 +85,15 @@ function FilterStubRow() {
 
 function ByVendorContent() {
   const [search, setSearch] = useState('');
+  // State for the Order-via-Patina confirmation dialog. The dialog opens
+  // scoped to a single vendor + project pair. Sprint 1 wiring: the first
+  // project the vendor has POs against — see comment on the click handler
+  // below.
+  const [orderDialog, setOrderDialog] = useState<{
+    vendor: { id: string; name: string };
+    project: { id: string; name: string };
+  } | null>(null);
+
   const { data: orders, isLoading, isError, error } = usePurchaseOrders();
 
   const allOrders = useMemo<PurchaseOrder[]>(
@@ -181,9 +195,49 @@ function ByVendorContent() {
       {groups.length > 0 && (
         <div className="flex flex-col gap-4">
           {groups.map((group) => (
-            <VendorSectionCard key={group.vendorId} group={group} />
+            <VendorSectionCard
+              key={group.vendorId}
+              group={group}
+              onOrderViaPatina={
+                group.isPatinaCatalog
+                  ? () => {
+                      // Sprint 1 wiring: open the OrderViaPatina dialog scoped
+                      // to the first PO's project. The dialog accepts an
+                      // `ffeItems` list — Sprint 1 passes an empty list (the
+                      // dialog renders a "No items to order" guard). The full
+                      // FF&E-item selection flow is plumbed in a follow-up
+                      // wave from the per-project FF&E board, not from the
+                      // cross-project By Vendor view.
+                      const first = group.orders[0];
+                      if (!first?.project) return;
+                      setOrderDialog({
+                        vendor: {
+                          id: group.vendorId,
+                          name: group.vendorName,
+                        },
+                        project: {
+                          id: first.project.id,
+                          name: first.project.name,
+                        },
+                      });
+                    }
+                  : undefined
+              }
+            />
           ))}
         </div>
+      )}
+
+      {orderDialog && (
+        <OrderViaPatina
+          open={!!orderDialog}
+          onOpenChange={(open) => {
+            if (!open) setOrderDialog(null);
+          }}
+          vendor={orderDialog.vendor}
+          project={orderDialog.project}
+          ffeItems={[]}
+        />
       )}
     </div>
   );

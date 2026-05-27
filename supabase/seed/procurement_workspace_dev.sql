@@ -89,6 +89,13 @@ UPDATE vendors SET default_payment_terms = 'net_30'
 UPDATE vendors SET default_payment_terms = 'full_upfront'
   WHERE name ILIKE 'Ceramica%';
 
+-- ─── Patina Catalog vendor flag (post-00149 column) ─────────────────────────
+-- Per PRD slide §5, Sawkille Co is the demo Patina Catalog vendor — Patina
+-- handles deposit + balance internally for orders against this vendor. Drives
+-- the gold "Order via Patina" CTA on the By Vendor card.
+UPDATE vendors SET is_patina_catalog = true
+  WHERE name ILIKE 'Sawkille%';
+
 DO $$
 DECLARE
   v_designer_id  UUID;
@@ -141,11 +148,15 @@ BEGIN
   VALUES (v_po2, 'deposit', 340000, '2026-04-08', '2026-04-08', 'paid', 0),
          (v_po2, 'balance', 340000, '2026-05-12', NULL, 'due', 1);
 
-  -- PO 3: Sawkille / Chen — 30/70, just ordered, deposit DUE
+  -- PO 3: Sawkille / Chen — Patina Catalog, "Patina handled" pill (PRD §7).
+  -- Same vendor as PO 8 (Sawkille is the demo Catalog vendor — see 00149
+  -- seed flag) but flagged is_patina_catalog so the row in By Status renders
+  -- the single "Patina handled" pill instead of deposit/balance pills. Per
+  -- PRD slide §7 line 629.
   INSERT INTO purchase_orders (id, designer_id, project_id, vendor_id, vendor_po_number,
-    confirmed_eta, payment_pattern, total_cents, status)
+    confirmed_eta, payment_pattern, total_cents, status, is_patina_catalog)
   VALUES (v_po3, v_designer_id, v_proj_chen, v_v_sawkille, 'SK-087',
-    '2026-08-02', 'thirty_seventy', 240000, 'confirmed');
+    '2026-08-02', 'thirty_seventy', 240000, 'confirmed', true);
   INSERT INTO po_payments (purchase_order_id, kind, amount_cents, due_date, paid_date, state, sort_order)
   VALUES (v_po3, 'deposit', 72000, '2026-04-19', NULL, 'due', 0),
          (v_po3, 'balance', 168000, NULL, NULL, 'pending', 1);
