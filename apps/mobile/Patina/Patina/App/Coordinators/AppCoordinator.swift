@@ -384,7 +384,8 @@ public final class AppCoordinator: Coordinator {
             updateContext(for: route)
         case .projectList, .projectDetail,
              .decisionList, .decisionDetail,
-             .threadList, .threadDetail:
+             .threadList, .threadDetail,
+             .receiveDelivery:
             navigationPath.append(route)
             updateContext(for: route)
         }
@@ -471,7 +472,8 @@ public final class AppCoordinator: Coordinator {
         case .designerHome,
              .projectList, .projectDetail,
              .decisionList, .decisionDetail,
-             .threadList, .threadDetail:
+             .threadList, .threadDetail,
+             .receiveDelivery:
             companionContext.viewingPiece = nil
             companionContext.walkProgress = nil
         }

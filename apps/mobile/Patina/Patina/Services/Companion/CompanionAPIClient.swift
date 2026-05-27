@@ -372,6 +372,7 @@ extension CompanionAPIClient {
         case .decisionDetail: return "decision_detail"
         case .threadList: return "thread_list"
         case .threadDetail: return "thread_detail"
+        case .receiveDelivery: return "receive_delivery"
         }
     }
 }

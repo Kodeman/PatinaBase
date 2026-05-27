@@ -345,6 +345,10 @@ struct ContentView: View {
         case .threadDetail(let threadId):
             ThreadDetailView(threadId: threadId)
                 .navigationBarTitleDisplayMode(.inline)
+
+        case .receiveDelivery:
+            ReceiveDeliveryView()
+                .navigationBarHidden(true)
         }
     }
 
