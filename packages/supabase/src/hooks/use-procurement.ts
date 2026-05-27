@@ -1404,3 +1404,221 @@ export function useUpdateDamageClaim() {
     },
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Sprint 3 / Wave 3.2 — QBO Bookkeeper Export
+//
+// Hooks for the `qbo-export` Deno edge function at
+// `supabase/functions/qbo-export/index.ts`. The mutation downloads a CSV; the
+// query returns preview stats (same endpoint with `preview: true`).
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface QboExportInput {
+  /** Inclusive start date, ISO YYYY-MM-DD. */
+  dateStart: string;
+  /** Inclusive end date, ISO YYYY-MM-DD. */
+  dateEnd: string;
+  /** Include `po_payments.state = 'paid'` rows (deposits + balances/milestones). */
+  includePaid: boolean;
+  /** Include `po_payments.state IN ('due','pending')` rows. */
+  includeOutstanding: boolean;
+  /** When false, `purchase_orders.is_patina_catalog = true` rows are excluded. */
+  includePatinaCatalog: boolean;
+  /** Optional list of `purchase_orders.project_id` UUIDs; empty = all projects. */
+  projectIds?: string[];
+  /** Optional list of `purchase_orders.vendor_id` UUIDs; empty = all vendors. */
+  vendorIds?: string[];
+}
+
+export interface QboExportPreview {
+  /** Total rows in the CSV (one per po_payments event). */
+  transactionCount: number;
+  /** Distinct vendor count across the result set. */
+  vendorCount: number;
+  /** Sum of `po_payments.amount_cents`. */
+  totalCents: number;
+  /** Number of rows with `state = 'paid'`. */
+  paidCount: number;
+  /** Sum of cents on paid rows. */
+  paidCents: number;
+  /** Number of rows with `state IN ('due','pending')`. */
+  outstandingCount: number;
+  /** Sum of cents on outstanding rows. */
+  outstandingCents: number;
+}
+
+/**
+ * Resolve the qbo-export edge function URL from the configured Supabase URL.
+ * Self-hosted: `${SUPABASE_URL}/functions/v1/qbo-export`. The browser hits
+ * Kong on `:54321` locally and `https://api.patina.cloud` in prod.
+ */
+function qboExportUrl(): string {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set');
+  }
+  return `${base.replace(/\/$/, '')}/functions/v1/qbo-export`;
+}
+
+/**
+ * Extract the preview-stat custom headers (X-Patina-*) from the CSV response.
+ * The edge function emits these alongside the CSV download so the modal can
+ * show the post-download stat summary without a second request.
+ */
+function parsePreviewHeaders(headers: Headers): QboExportPreview {
+  const num = (h: string): number => {
+    const v = headers.get(h);
+    return v ? Number(v) : 0;
+  };
+  return {
+    transactionCount: num('X-Patina-Transaction-Count'),
+    vendorCount: num('X-Patina-Vendor-Count'),
+    totalCents: num('X-Patina-Total-Cents'),
+    paidCount: num('X-Patina-Paid-Count'),
+    paidCents: num('X-Patina-Paid-Cents'),
+    outstandingCount: num('X-Patina-Outstanding-Count'),
+    outstandingCents: num('X-Patina-Outstanding-Cents'),
+  };
+}
+
+/**
+ * Parse the `filename` value from a Content-Disposition header.
+ * Falls back to a sensible default if the header is missing or malformed.
+ */
+function parseFilename(headers: Headers, dateStart: string): string {
+  const disposition = headers.get('Content-Disposition') ?? '';
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  if (match) return match[1];
+  return `patina-vendor-bills-${dateStart}.csv`;
+}
+
+/**
+ * Trigger a browser download of a Blob with the given filename. Uses the
+ * createObjectURL + anchor click pattern. No-op when `window` is undefined
+ * (so server-rendered code paths don't blow up).
+ */
+function triggerCsvDownload(blob: Blob, filename: string): void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Defer revoke so the browser has a chance to actually open the file dialog.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * POST to the qbo-export edge function with the caller's access_token bearer
+ * and the export params. Throws on non-200 or when the user has no session.
+ *
+ * Common helper for both the mutation (download mode) and the query
+ * (preview mode). The `preview` flag toggles JSON-vs-CSV response shape.
+ */
+async function callQboExport(
+  input: QboExportInput,
+  preview: boolean
+): Promise<Response> {
+  const supabase = getSupabase();
+  const { data: sessionResult, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  const accessToken = sessionResult?.session?.access_token;
+  if (!accessToken) {
+    throw new Error('Not authenticated — sign in to export to QBO');
+  }
+
+  const body = {
+    dateStart: input.dateStart,
+    dateEnd: input.dateEnd,
+    includePaid: input.includePaid,
+    includeOutstanding: input.includeOutstanding,
+    includePatinaCatalog: input.includePatinaCatalog,
+    projectIds: input.projectIds ?? [],
+    vendorIds: input.vendorIds ?? [],
+    preview,
+  };
+
+  const response = await fetch(qboExportUrl(), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    let message = `QBO export failed: ${response.status} ${response.statusText}`;
+    try {
+      const errBody = await response.json();
+      if (errBody?.error) message = errBody.error;
+    } catch {
+      /* response was not JSON — keep status-based message */
+    }
+    throw new Error(message);
+  }
+
+  return response;
+}
+
+/**
+ * Mutation: POST to `qbo-export`, download the CSV in the browser, and
+ * return the preview stats parsed from the response's X-Patina-* headers.
+ *
+ * Studio-owner-only on the server side — the edge function returns 403
+ * to callers without the `studio_owner` role.
+ *
+ * Use from the BookkeeperExportModal's "Export" button onClick.
+ */
+export function useQboExport() {
+  return useMutation({
+    mutationFn: async (input: QboExportInput): Promise<QboExportPreview> => {
+      const response = await callQboExport(input, false);
+
+      const blob = await response.blob();
+      const filename = parseFilename(response.headers, input.dateStart);
+      triggerCsvDownload(blob, filename);
+
+      return parsePreviewHeaders(response.headers);
+    },
+  });
+}
+
+/**
+ * Query: POST to `qbo-export` with `preview: true`, returning preview stats
+ * without downloading the CSV. Drives the "23 transactions · 8 vendors ·
+ * $42,800 total" preview shown in the modal before the user confirms the
+ * download.
+ *
+ * Disabled until both date fields are valid YYYY-MM-DD strings AND at least
+ * one include-flag is true. Re-runs whenever any input field changes.
+ *
+ * staleTime: 30 seconds — preview stats are cheap to recompute and the user
+ * is likely to tweak filters in quick succession.
+ */
+export function useQboExportPreview(input: QboExportInput) {
+  const ready = isValidExportInput(input);
+  return useQuery({
+    queryKey: ['qbo-export-preview', input],
+    queryFn: async (): Promise<QboExportPreview> => {
+      const response = await callQboExport(input, true);
+      return (await response.json()) as QboExportPreview;
+    },
+    enabled: ready,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Returns true when the input has both dates AND at least one include-flag
+ * set — the minimum required to produce a non-empty result.
+ */
+function isValidExportInput(input: QboExportInput): boolean {
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRe.test(input.dateStart ?? '')) return false;
+  if (!dateRe.test(input.dateEnd ?? '')) return false;
+  if (input.dateStart > input.dateEnd) return false;
+  return input.includePaid || input.includeOutstanding;
+}

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mocks
@@ -103,7 +103,7 @@ function setTableDefault(table: string, result: BuilderResult): MockBuilder {
 }
 
 const supabaseClient = {
-  auth: { getUser: vi.fn() },
+  auth: { getUser: vi.fn(), getSession: vi.fn() },
   from: vi.fn((table: string) => getBuilder(table)),
 };
 
@@ -130,12 +130,17 @@ import {
   useCreateReceivingInspection,
   useUpdateDamageClaim,
   useUpdatePurchaseOrderETA,
+  // Sprint 3 — QBO export
+  useQboExport,
+  useQboExportPreview,
 } from '../use-procurement';
+import type { QboExportInput } from '../use-procurement';
 
 beforeEach(() => {
   Object.keys(builders).forEach((k) => delete builders[k]);
   invalidateQueries.mockReset();
   supabaseClient.auth.getUser.mockReset();
+  supabaseClient.auth.getSession.mockReset();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1371,5 +1376,165 @@ describe('useUpdatePurchaseOrderETA', () => {
     expect(payload.notes).toMatch(/\[\d{4}-\d{2}-\d{2} ETA update\]: Vendor pushed by 2 weeks/);
     // The existing notes must be preserved (no destructive overwrite).
     expect(payload.notes).toContain('Vendor said L8W ETA');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 3 / Wave 3.2 — useQboExport / useQboExportPreview
+//
+// These tests stub the global fetch + supabase.auth.getSession to verify the
+// hook composes the right POST shape against the qbo-export edge function.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useQboExport', () => {
+  const ORIGINAL_FETCH = globalThis.fetch;
+  const ORIGINAL_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ORIGINAL_URL = (globalThis as any).URL;
+
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://localhost:54321';
+    // jsdom / node doesn't always expose URL.createObjectURL/revokeObjectURL;
+    // patch them so triggerCsvDownload doesn't throw. The mutation runs in
+    // a non-window/document environment by default (vitest node pool), so
+    // triggerCsvDownload is a no-op anyway — but we patch for safety.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).URL = {
+      ...ORIGINAL_URL,
+      createObjectURL: vi.fn(() => 'blob:mock'),
+      revokeObjectURL: vi.fn(),
+    };
+  });
+
+  afterEach(() => {
+    globalThis.fetch = ORIGINAL_FETCH;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = ORIGINAL_SUPABASE_URL;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).URL = ORIGINAL_URL;
+  });
+
+  it('POSTs to /functions/v1/qbo-export with bearer JWT + correct body, then returns parsed preview headers', async () => {
+    supabaseClient.auth.getSession.mockResolvedValue({
+      data: { session: { access_token: 'jwt-token-abc' } },
+      error: null,
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('Vendor,Bill Date\n"Woodward & Sons","2026-04-08"\n', {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition':
+            'attachment; filename="patina-vendor-bills-2026-04-01.csv"',
+          'X-Patina-Transaction-Count': '23',
+          'X-Patina-Vendor-Count': '8',
+          'X-Patina-Total-Cents': '4280000',
+          'X-Patina-Paid-Count': '10',
+          'X-Patina-Paid-Cents': '2000000',
+          'X-Patina-Outstanding-Count': '13',
+          'X-Patina-Outstanding-Cents': '2280000',
+        },
+      })
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const input: QboExportInput = {
+      dateStart: '2026-04-01',
+      dateEnd: '2026-04-30',
+      includePaid: true,
+      includeOutstanding: true,
+      includePatinaCatalog: false,
+      projectIds: ['proj-1'],
+      vendorIds: ['vendor-1'],
+    };
+
+    const config = useQboExport() as unknown as {
+      mutationFn: (input: QboExportInput) => Promise<unknown>;
+    };
+
+    const stats = await config.mutationFn(input);
+
+    // 1. fetch called with the right URL.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [calledUrl, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toBe('http://localhost:54321/functions/v1/qbo-export');
+    expect(init.method).toBe('POST');
+
+    // 2. Authorization header carries the Supabase JWT.
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer jwt-token-abc');
+    expect(headers['Content-Type']).toBe('application/json');
+
+    // 3. Body contains all the input flags, preview:false.
+    const sentBody = JSON.parse(init.body as string);
+    expect(sentBody).toMatchObject({
+      dateStart: '2026-04-01',
+      dateEnd: '2026-04-30',
+      includePaid: true,
+      includeOutstanding: true,
+      includePatinaCatalog: false,
+      projectIds: ['proj-1'],
+      vendorIds: ['vendor-1'],
+      preview: false,
+    });
+
+    // 4. The returned preview stats are parsed from the X-Patina-* headers.
+    expect(stats).toEqual({
+      transactionCount: 23,
+      vendorCount: 8,
+      totalCents: 4280000,
+      paidCount: 10,
+      paidCents: 2000000,
+      outstandingCount: 13,
+      outstandingCents: 2280000,
+    });
+  });
+
+  it('throws when the user is not authenticated (no session)', async () => {
+    supabaseClient.auth.getSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const config = useQboExport() as unknown as {
+      mutationFn: (input: QboExportInput) => Promise<unknown>;
+    };
+
+    await expect(
+      config.mutationFn({
+        dateStart: '2026-04-01',
+        dateEnd: '2026-04-30',
+        includePaid: true,
+        includeOutstanding: true,
+        includePatinaCatalog: false,
+      }),
+    ).rejects.toThrow(/not authenticated/i);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('preview hook is disabled until both dates are valid and at least one include-flag is true', () => {
+    const config = useQboExportPreview({
+      dateStart: '',
+      dateEnd: '',
+      includePaid: false,
+      includeOutstanding: false,
+      includePatinaCatalog: false,
+    }) as unknown as { enabled: boolean; queryKey: unknown[] };
+
+    expect(config.enabled).toBe(false);
+    expect(config.queryKey[0]).toBe('qbo-export-preview');
+
+    const ready = useQboExportPreview({
+      dateStart: '2026-04-01',
+      dateEnd: '2026-04-30',
+      includePaid: true,
+      includeOutstanding: false,
+      includePatinaCatalog: false,
+    }) as unknown as { enabled: boolean };
+
+    expect(ready.enabled).toBe(true);
   });
 });
