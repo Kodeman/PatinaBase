@@ -28,6 +28,14 @@ interface MockBuilder {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   limit: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  gte: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  lte: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  in: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  not: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   single: any;
   then: (resolve: (value: BuilderResult) => unknown) => Promise<unknown>;
   __chain: Array<{ method: string; args: unknown[] }>;
@@ -55,6 +63,10 @@ function makeBuilder(initial: BuilderResult = { data: null, error: null }): Mock
   builder.eq = record('eq');
   builder.order = record('order');
   builder.limit = record('limit');
+  builder.gte = record('gte');
+  builder.lte = record('lte');
+  builder.in = record('in');
+  builder.not = record('not');
 
   const takeResult = (): BuilderResult =>
     builder.__resultQueue.length > 0
@@ -112,6 +124,11 @@ import {
   usePOPayments,
   useCreatePurchaseOrder,
   useLogPaymentPaid,
+  // Sprint 2 — Receiving, damage claims, calendar
+  useDeliveryCalendar,
+  useTodayProcurementCounts,
+  useCreateReceivingInspection,
+  useUpdateDamageClaim,
 } from '../use-procurement';
 
 beforeEach(() => {
@@ -683,5 +700,566 @@ describe('useLogPaymentPaid', () => {
     // The flip targets the balance row's id.
     const eqArgs = builder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
     expect(eqArgs).toContainEqual(['id', 'pay-balance']);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SPRINT 2 — RECEIVING + DAMAGE CLAIMS + CALENDAR (migration 00150)
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useCreateReceivingInspection
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useCreateReceivingInspection', () => {
+  it('clean outcome: INSERTs inspection, UPDATEs delivered_date + status, does NOT insert damage_claim', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+
+    // Step 1: inspection INSERT → returns the new inspection row.
+    queueTableResults('receiving_inspections', {
+      data: {
+        id: 'insp-clean',
+        purchase_order_id: 'po-1',
+        inspected_at: '2026-05-27T10:30:00.000Z',
+        inspected_by: 'user-1',
+        outcome: 'clean',
+        notes: null,
+        photo_asset_ids: [],
+      },
+      error: null,
+    });
+
+    // PO load (single() call).
+    queueTableResults('purchase_orders', {
+      data: {
+        id: 'po-1',
+        payment_pattern: 'fifty_fifty',
+        status: 'shipped',
+        delivered_date: null,
+        vendor_po_number: 'WS-188',
+        vendor: { id: 'vendor-1', name: 'Woodward Sectional Co.' },
+      },
+      error: null,
+    });
+
+    // PO UPDATE (steps 2/3) terminates via await — default suffices.
+    setTableDefault('purchase_orders', { data: null, error: null });
+
+    const config = useCreateReceivingInspection() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await config.mutationFn({
+      purchaseOrderId: 'po-1',
+      outcome: 'clean',
+    });
+
+    // 1. INSERT into receiving_inspections.
+    const inspBuilder = builders.receiving_inspections;
+    const inspInsert = inspBuilder.__chain.find((c) => c.method === 'insert');
+    expect(inspInsert?.args[0]).toEqual(
+      expect.objectContaining({
+        purchase_order_id: 'po-1',
+        inspected_by: 'user-1',
+        outcome: 'clean',
+        notes: null,
+        photo_asset_ids: [],
+      }),
+    );
+
+    // 2/3. UPDATE on purchase_orders with both delivered_date and status.
+    const poBuilder = builders.purchase_orders;
+    const poUpdate = poBuilder.__chain.find((c) => c.method === 'update');
+    expect(poUpdate).toBeDefined();
+    expect(poUpdate?.args[0]).toEqual(
+      expect.objectContaining({
+        delivered_date: '2026-05-27',
+        status: 'delivered',
+      }),
+    );
+
+    // 4. NO insert on damage_claims for a clean outcome.
+    expect(builders.damage_claims).toBeUndefined();
+  });
+
+  it('damaged outcome: INSERTs inspection, UPDATEs PO, INSERTs drafted damage_claim with auto-drafted description', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+
+    queueTableResults('receiving_inspections', {
+      data: {
+        id: 'insp-damaged',
+        purchase_order_id: 'po-ap',
+        inspected_at: '2026-05-26T14:15:00.000Z',
+        inspected_by: 'user-1',
+        outcome: 'damaged',
+        notes: 'Chip on canopy of pendant cluster.',
+        photo_asset_ids: [],
+      },
+      error: null,
+    });
+
+    queueTableResults('purchase_orders', {
+      data: {
+        id: 'po-ap',
+        payment_pattern: 'fifty_fifty',
+        status: 'shipped',
+        delivered_date: null,
+        vendor_po_number: 'AP-012',
+        vendor: { id: 'vendor-ap', name: 'Apparatus Studio' },
+      },
+      error: null,
+    });
+    setTableDefault('purchase_orders', { data: null, error: null });
+    setTableDefault('damage_claims', { data: null, error: null });
+
+    const config = useCreateReceivingInspection() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await config.mutationFn({
+      purchaseOrderId: 'po-ap',
+      outcome: 'damaged',
+      notes: 'Chip on canopy of pendant cluster.',
+    });
+
+    // 1. Inspection INSERT.
+    const inspBuilder = builders.receiving_inspections;
+    const inspInsert = inspBuilder.__chain.find((c) => c.method === 'insert');
+    expect(inspInsert?.args[0]).toEqual(
+      expect.objectContaining({
+        purchase_order_id: 'po-ap',
+        outcome: 'damaged',
+        notes: 'Chip on canopy of pendant cluster.',
+      }),
+    );
+
+    // 2/3. PO UPDATE.
+    const poBuilder = builders.purchase_orders;
+    const poUpdate = poBuilder.__chain.find((c) => c.method === 'update');
+    expect(poUpdate?.args[0]).toEqual(
+      expect.objectContaining({
+        delivered_date: '2026-05-26',
+        status: 'delivered',
+      }),
+    );
+
+    // 4. damage_claims INSERT with state='drafted' and auto-drafted description.
+    const claimBuilder = builders.damage_claims;
+    expect(claimBuilder).toBeDefined();
+    const claimInsert = claimBuilder.__chain.find((c) => c.method === 'insert');
+    expect(claimInsert).toBeDefined();
+    const claimRow = claimInsert?.args[0] as Record<string, unknown>;
+    expect(claimRow.receiving_inspection_id).toBe('insp-damaged');
+    expect(claimRow.state).toBe('drafted');
+    // Description must contain vendor name AND PO number.
+    expect(claimRow.description).toEqual(expect.stringContaining('Apparatus Studio'));
+    expect(claimRow.description).toEqual(expect.stringContaining('PO AP-012'));
+    // Inspection notes should be embedded too.
+    expect(claimRow.description).toEqual(
+      expect.stringContaining('Chip on canopy of pendant cluster.'),
+    );
+  });
+
+  it('step 4 failure: compensating DELETE on receiving_inspections and combined error message', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+
+    // 1. Inspection INSERT succeeds → returns id 'insp-orphan'.
+    // 2. Compensating DELETE result (await, no .single()) → success.
+    queueTableResults(
+      'receiving_inspections',
+      {
+        data: {
+          id: 'insp-orphan',
+          purchase_order_id: 'po-x',
+          inspected_at: '2026-05-26T14:15:00.000Z',
+          inspected_by: 'user-1',
+          outcome: 'damaged',
+          notes: null,
+          photo_asset_ids: [],
+        },
+        error: null,
+      },
+      // Compensating delete return value.
+      { data: null, error: null },
+    );
+
+    queueTableResults('purchase_orders', {
+      data: {
+        id: 'po-x',
+        payment_pattern: 'fifty_fifty',
+        status: 'shipped',
+        delivered_date: null,
+        vendor_po_number: 'X-1',
+        vendor: { id: 'vendor-x', name: 'Vendor X' },
+      },
+      error: null,
+    });
+    setTableDefault('purchase_orders', { data: null, error: null });
+
+    // Step 4 (damage_claims INSERT) FAILS.
+    setTableDefault('damage_claims', {
+      data: null,
+      error: { message: 'simulated damage_claim insert failure' },
+    });
+
+    const config = useCreateReceivingInspection() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    let caught: Error | undefined;
+    try {
+      await config.mutationFn({
+        purchaseOrderId: 'po-x',
+        outcome: 'damaged',
+      });
+    } catch (e) {
+      caught = e as Error;
+    }
+
+    expect(caught).toBeDefined();
+    // Error must surface BOTH the original failure and the cleanup outcome.
+    expect(caught?.message).toMatch(/simulated damage_claim insert failure/);
+    expect(caught?.message).toMatch(/compensating delete succeeded/);
+
+    // Verify the compensating DELETE on receiving_inspections scoped to the
+    // orphaned inspection id.
+    const inspBuilder = builders.receiving_inspections;
+    const deletes = inspBuilder.__chain.filter((c) => c.method === 'delete');
+    expect(deletes).toHaveLength(1);
+    const deleteIdx = inspBuilder.__chain.findIndex((c) => c.method === 'delete');
+    const afterDelete = inspBuilder.__chain.slice(deleteIdx + 1);
+    expect(afterDelete[0]).toEqual({ method: 'eq', args: ['id', 'insp-orphan'] });
+  });
+
+  it('NET-30 step 6: UPDATEs po_payments due_date scoped to kind=balance AND state=pending', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+
+    queueTableResults('receiving_inspections', {
+      data: {
+        id: 'insp-net30',
+        purchase_order_id: 'po-net',
+        inspected_at: '2026-05-27T10:30:00.000Z',
+        inspected_by: 'user-1',
+        outcome: 'clean',
+        notes: null,
+        photo_asset_ids: [],
+      },
+      error: null,
+    });
+
+    // PO row: net_30 + delivered_date IS NULL → triggers step 6.
+    queueTableResults('purchase_orders', {
+      data: {
+        id: 'po-net',
+        payment_pattern: 'net_30',
+        status: 'shipped',
+        delivered_date: null,
+        vendor_po_number: 'NET-1',
+        vendor: { id: 'vendor-net', name: 'NetVendor' },
+      },
+      error: null,
+    });
+    setTableDefault('purchase_orders', { data: null, error: null });
+    setTableDefault('po_payments', { data: null, error: null });
+
+    const config = useCreateReceivingInspection() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await config.mutationFn({
+      purchaseOrderId: 'po-net',
+      outcome: 'clean',
+    });
+
+    const payBuilder = builders.po_payments;
+    expect(payBuilder).toBeDefined();
+
+    // The UPDATE must shift due_date to delivered_date + 30 days.
+    const update = payBuilder.__chain.find((c) => c.method === 'update');
+    expect(update).toBeDefined();
+    const updatePayload = update?.args[0] as { due_date: string };
+    // inspected_at 2026-05-27 + 30 = 2026-06-26.
+    expect(updatePayload.due_date).toBe('2026-06-26');
+
+    // Filter scope must be kind = balance AND state = pending AND PO id.
+    const eqArgs = payBuilder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
+    expect(eqArgs).toContainEqual(['purchase_order_id', 'po-net']);
+    expect(eqArgs).toContainEqual(['kind', 'balance']);
+    expect(eqArgs).toContainEqual(['state', 'pending']);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useDeliveryCalendar
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useDeliveryCalendar', () => {
+  it('keys by both range dates and returns rows for both event_type discriminants', async () => {
+    setTableDefault('delivery_events', {
+      data: [
+        {
+          event_id: 'po-1',
+          event_type: 'delivery_expected',
+          project_id: 'proj-1',
+          project_name: 'Project Alpha',
+          purchase_order_id: 'po-1',
+          vendor_id: 'vendor-1',
+          vendor_name: 'Vendor One',
+          event_date: '2026-06-01',
+          po_status: 'shipped',
+          delivered_date: null,
+          ffe_item_count: 3,
+          line_total_cents: 100000,
+          inspection_id: null,
+          inspection_outcome: null,
+          phase_key: null,
+        },
+        {
+          event_id: 'phase-2',
+          event_type: 'install_milestone',
+          project_id: 'proj-1',
+          project_name: 'Project Alpha',
+          purchase_order_id: null,
+          vendor_id: null,
+          vendor_name: null,
+          event_date: '2026-06-05',
+          po_status: null,
+          delivered_date: null,
+          ffe_item_count: null,
+          line_total_cents: null,
+          inspection_id: null,
+          inspection_outcome: null,
+          phase_key: 'install_kickoff',
+        },
+      ],
+      error: null,
+    });
+
+    const config = useDeliveryCalendar('2026-06-01', '2026-06-30') as unknown as {
+      queryKey: unknown[];
+      queryFn: () => Promise<unknown[]>;
+      enabled: boolean;
+    };
+
+    // Query key includes BOTH range dates.
+    expect(config.queryKey).toEqual(['delivery-calendar', '2026-06-01', '2026-06-30']);
+    expect(config.enabled).toBe(true);
+
+    const rows = await config.queryFn();
+    expect(rows).toHaveLength(2);
+
+    // The response includes both event types.
+    const types = (rows as Array<{ event_type: string }>).map((r) => r.event_type);
+    expect(types).toContain('delivery_expected');
+    expect(types).toContain('install_milestone');
+
+    // Source table is the delivery_events view.
+    expect(supabaseClient.from).toHaveBeenCalledWith('delivery_events');
+
+    // Range filter is applied via gte/lte on event_date.
+    const builder = builders.delivery_events;
+    const gteArgs = builder.__chain.filter((c) => c.method === 'gte').map((c) => c.args);
+    const lteArgs = builder.__chain.filter((c) => c.method === 'lte').map((c) => c.args);
+    expect(gteArgs).toContainEqual(['event_date', '2026-06-01']);
+    expect(lteArgs).toContainEqual(['event_date', '2026-06-30']);
+  });
+
+  it('is disabled when either range bound is empty', () => {
+    const configEmpty = useDeliveryCalendar('', '2026-06-30') as unknown as {
+      enabled: boolean;
+    };
+    expect(configEmpty.enabled).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useTodayProcurementCounts
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useTodayProcurementCounts', () => {
+  it('fires three independent sub-queries and aggregates their counts', async () => {
+    setTableDefault('purchase_orders', { data: null, error: null, count: 4 } as unknown as {
+      data: unknown;
+      error: unknown;
+    });
+    setTableDefault('receiving_inspections', {
+      data: null,
+      error: null,
+      count: 2,
+    } as unknown as { data: unknown; error: unknown });
+    setTableDefault('damage_claims', { data: null, error: null, count: 1 } as unknown as {
+      data: unknown;
+      error: unknown;
+    });
+
+    const config = useTodayProcurementCounts() as unknown as {
+      queryKey: unknown[];
+      queryFn: () => Promise<{ arrivingThisWeek: number; inspectionsPending: number; damageClaimsOpen: number }>;
+      staleTime: number;
+    };
+
+    expect(config.queryKey).toEqual(['today-procurement-counts']);
+    expect(config.staleTime).toBe(5 * 60 * 1000);
+
+    const counts = await config.queryFn();
+    expect(counts).toEqual({
+      arrivingThisWeek: 4,
+      inspectionsPending: 2,
+      damageClaimsOpen: 1,
+    });
+
+    // Each sub-query must hit its own table — proves independence.
+    const fromCalls = (
+      supabaseClient.from as unknown as { mock: { calls: unknown[][] } }
+    ).mock.calls.map((c) => c[0] as string);
+    expect(fromCalls).toContain('purchase_orders');
+    expect(fromCalls).toContain('receiving_inspections');
+    expect(fromCalls).toContain('damage_claims');
+  });
+
+  it('returns 0 for the failing sub-query and still resolves the others', async () => {
+    // arrivingThisWeek fails; the other two succeed with concrete counts.
+    setTableDefault('purchase_orders', {
+      data: null,
+      error: { message: 'boom' },
+    } as unknown as { data: unknown; error: unknown });
+    setTableDefault('receiving_inspections', {
+      data: null,
+      error: null,
+      count: 7,
+    } as unknown as { data: unknown; error: unknown });
+    setTableDefault('damage_claims', { data: null, error: null, count: 3 } as unknown as {
+      data: unknown;
+      error: unknown;
+    });
+
+    const config = useTodayProcurementCounts() as unknown as {
+      queryFn: () => Promise<{ arrivingThisWeek: number; inspectionsPending: number; damageClaimsOpen: number }>;
+    };
+
+    // The hook must NOT throw — it must surface the partial result with the
+    // failing tile zeroed.
+    const counts = await config.queryFn();
+    expect(counts).toEqual({
+      arrivingThisWeek: 0,
+      inspectionsPending: 7,
+      damageClaimsOpen: 3,
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useUpdateDamageClaim
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useUpdateDamageClaim', () => {
+  it('drafted → vendor_notified sets vendor_notified_at = now() when not supplied', async () => {
+    // Sequential calls to damage_claims:
+    //   1. SELECT current state via .single() → returns 'drafted'.
+    //   2. UPDATE → returns the updated row via .single().
+    queueTableResults(
+      'damage_claims',
+      // 1. current state
+      { data: { id: 'claim-1', state: 'drafted' }, error: null },
+      // 2. update result
+      {
+        data: {
+          id: 'claim-1',
+          state: 'vendor_notified',
+          vendor_notified_at: '2026-05-27T00:00:00.000Z',
+        },
+        error: null,
+      },
+    );
+
+    const config = useUpdateDamageClaim() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    const before = Date.now();
+    await config.mutationFn({ id: 'claim-1', state: 'vendor_notified' });
+    const after = Date.now();
+
+    const builder = builders.damage_claims;
+    const updates = builder.__chain.filter((c) => c.method === 'update');
+    expect(updates).toHaveLength(1);
+
+    const payload = updates[0].args[0] as {
+      state: string;
+      vendor_notified_at: string;
+      resolved_at?: string;
+    };
+    expect(payload.state).toBe('vendor_notified');
+    expect(payload.vendor_notified_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    // The defaulted ISO timestamp must be wall-clock-now (between before/after).
+    const ts = Date.parse(payload.vendor_notified_at);
+    expect(ts).toBeGreaterThanOrEqual(before);
+    expect(ts).toBeLessThanOrEqual(after);
+    // Resolved_at must NOT be set on this transition.
+    expect(payload.resolved_at).toBeUndefined();
+  });
+
+  it('vendor_notified → resolved sets resolved_at = now() when not supplied', async () => {
+    queueTableResults(
+      'damage_claims',
+      // 1. current state
+      { data: { id: 'claim-2', state: 'vendor_notified' }, error: null },
+      // 2. update result
+      {
+        data: {
+          id: 'claim-2',
+          state: 'resolved',
+          resolved_at: '2026-05-27T00:00:00.000Z',
+        },
+        error: null,
+      },
+    );
+
+    const config = useUpdateDamageClaim() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    const before = Date.now();
+    await config.mutationFn({ id: 'claim-2', state: 'resolved' });
+    const after = Date.now();
+
+    const builder = builders.damage_claims;
+    const updates = builder.__chain.filter((c) => c.method === 'update');
+    expect(updates).toHaveLength(1);
+    const payload = updates[0].args[0] as {
+      state: string;
+      resolved_at: string;
+      vendor_notified_at?: string;
+    };
+    expect(payload.state).toBe('resolved');
+    expect(payload.resolved_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    const ts = Date.parse(payload.resolved_at);
+    expect(ts).toBeGreaterThanOrEqual(before);
+    expect(ts).toBeLessThanOrEqual(after);
+    // vendor_notified_at must NOT be re-set on this transition.
+    expect(payload.vendor_notified_at).toBeUndefined();
+  });
+
+  it('rejects backwards transitions (vendor_notified → drafted)', async () => {
+    queueTableResults('damage_claims', {
+      data: { id: 'claim-3', state: 'vendor_notified' },
+      error: null,
+    });
+
+    const config = useUpdateDamageClaim() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await expect(
+      config.mutationFn({ id: 'claim-3', state: 'drafted' }),
+    ).rejects.toThrow(/Invalid damage_claim state transition/);
   });
 });
