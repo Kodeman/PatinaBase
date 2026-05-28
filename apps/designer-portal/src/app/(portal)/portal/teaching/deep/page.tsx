@@ -12,9 +12,17 @@ import { useToast } from '@/components/portal/toast-provider';
 type Any = any;
 
 export default function DeepAnalysisPage() {
-  // The page operates on the next-in-queue deep-analysis product, which the
-  // existing queue hook atomically claims for the current designer.
-  const { data: product, isLoading } = useClaimNextProduct('deep_analysis') as { data: Any; isLoading: boolean };
+  // useClaimNextProduct is a MUTATION (claiming a product is a write). Trigger it
+  // once on mount to atomically claim the next-in-queue deep-analysis product for
+  // the current designer; the claimed queue row (with joined product) is the
+  // mutation result.
+  const claim = useClaimNextProduct('deep_analysis');
+  const { mutate: claimNext } = claim;
+  useEffect(() => {
+    claimNext();
+  }, [claimNext]);
+  const product = claim.data as Any;
+  const isLoading = claim.isPending;
   const productId = product?.product_id || product?.id;
   const { data: spectrum } = useProductSpectrum(productId) as { data: Any };
   const saveSpectrum = useSaveSpectrum();
