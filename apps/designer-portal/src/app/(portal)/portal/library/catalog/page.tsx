@@ -1,11 +1,16 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search } from 'lucide-react';
 import { useLayerProducts, type LayerProductRow } from '@patina/supabase';
 import { EmptyState, ProductCard } from '@patina/catalog-ui';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import {
+  useForProjectsCatalog,
+  useFoundingCircleCatalog,
+  useTeachTheEngineCatalog,
+} from '@/hooks/use-library-tabs';
 
 type CatalogTab = 'browse' | 'for-projects' | 'founding-circle' | 'teach';
 
@@ -14,7 +19,7 @@ const TABS: Array<{ key: CatalogTab; label: string; hint: string }> = [
   {
     key: 'for-projects',
     label: 'For your active projects',
-    hint: 'Filtered by your in-flight project briefs (Sprint 3 follow-up).',
+    hint: 'Catalog items matching the categories and styles in your active projects.',
   },
   {
     key: 'founding-circle',
@@ -24,24 +29,26 @@ const TABS: Array<{ key: CatalogTab; label: string; hint: string }> = [
   {
     key: 'teach',
     label: 'Teach the Engine',
-    hint: 'Items the Aesthete engine wants more signal on (Sprint 3 follow-up).',
+    hint: 'Items the Aesthete engine wants more signal on.',
   },
 ];
 
 /**
- * Catalog LayerView — PRD §5.2 four-tab structure. v1 ships the
- * Browse tab functionally; the other three render guidance copy until
- * their data dependencies land:
+ * Catalog LayerView — PRD §5.2 four-tab structure. All four tabs read live
+ * data where a source exists (PROD-12 / PROD-13):
  *
- *   For projects     — needs a project-brief → catalog match step that
- *                      depends on the Aesthete engine's project vectors.
- *   Founding Circle  — needs a vendor flag distinguishing Founding
- *                      Circle onboarding from regular nomination-driven
- *                      onboarding (the field exists conceptually; a
- *                      vendors.founding_circle boolean lands with the
- *                      Founding Circle migration when Patina runs it).
- *   Teach the Engine — Aesthete training feedback loop. Out of lane
- *                      until the engine ships.
+ *   Browse           — full catalog layer via `useLayerProducts`.
+ *   For projects     — heuristic match: catalog products sharing the
+ *                      categories/style_tags of products in the designer's
+ *                      ACTIVE projects (no Aesthete project-vector source
+ *                      exists yet). Honest empty state when there are no
+ *                      active projects.
+ *   Founding Circle  — intended source is `vendors.founding_circle`, which
+ *                      DOES NOT EXIST in the schema. Renders an honest empty
+ *                      state flagging the missing column rather than inventing
+ *                      it. See `useFoundingCircleCatalog`.
+ *   Teach the Engine — catalog products with a `pending` `teaching_queue`
+ *                      entry (same source as the teaching hooks).
  *
  * Aesthete-driven sort on Browse defers to a tuning iteration once the
  * engine produces match scores.
@@ -51,12 +58,17 @@ export default function CatalogLibraryPage() {
   const [search, setSearch] = useState('');
   const router = useRouter();
 
-  const { data, isLoading, error } = useLayerProducts({
+  const browse = useLayerProducts({
     layer: 'catalog',
     search: search.trim() || undefined,
     enabled: tab === 'browse',
   });
-  const items = data ?? [];
+
+  const forProjects = useForProjectsCatalog(tab === 'for-projects');
+  const foundingCircle = useFoundingCircleCatalog(tab === 'founding-circle');
+  const teach = useTeachTheEngineCatalog(tab === 'teach');
+
+  const onOpen = (id: string) => router.push(`/portal/catalog/${id}`);
 
   return (
     <div className="flex flex-col gap-5">
@@ -89,21 +101,103 @@ export default function CatalogLibraryPage() {
         })}
       </nav>
 
-      <ActiveTab
-        tab={tab}
-        search={search}
-        onSearchChange={setSearch}
-        items={items}
-        isLoading={isLoading}
-        error={error}
-        onOpen={(id) => router.push(`/portal/catalog/${id}`)}
-      />
+      {tab === 'browse' ? (
+        <BrowseTab
+          search={search}
+          onSearchChange={setSearch}
+          items={browse.data ?? []}
+          isLoading={browse.isLoading}
+          error={browse.error}
+          onOpen={onOpen}
+        />
+      ) : tab === 'for-projects' ? (
+        forProjects.isLoading ? (
+          <LoadingStrata />
+        ) : forProjects.error ? (
+          <QueryError error={forProjects.error} />
+        ) : !forProjects.data?.hasActiveProjects ? (
+          <EmptyState
+            title="No active projects yet"
+            description="Once you have an active project with products specified, we'll surface catalog items that match its categories and styles here."
+          />
+        ) : forProjects.data.items.length === 0 ? (
+          <EmptyState
+            title="Nothing to suggest yet"
+            description="We couldn't find catalog items matching your active projects' categories and styles. Add more products to your projects to sharpen these suggestions."
+          />
+        ) : (
+          <ProductGrid items={forProjects.data.items} onOpen={onOpen} />
+        )
+      ) : tab === 'founding-circle' ? (
+        foundingCircle.isLoading ? (
+          <LoadingStrata />
+        ) : foundingCircle.error ? (
+          <QueryError error={foundingCircle.error} />
+        ) : foundingCircle.data?.missing ? (
+          <EmptyState
+            title="Founding Circle not yet wired"
+            description="This view needs a vendors.founding_circle flag to identify Founding Circle makers. That column doesn't exist in the schema yet — it lands with the Founding Circle vendor migration. Flagging for Patina."
+          />
+        ) : foundingCircle.data && foundingCircle.data.items.length === 0 ? (
+          <EmptyState
+            title="No Founding Circle makers yet"
+            description="No vendors are flagged into the Founding Circle pathway right now."
+          />
+        ) : (
+          <ProductGrid items={foundingCircle.data?.items ?? []} onOpen={onOpen} />
+        )
+      ) : /* teach */ teach.isLoading ? (
+        <LoadingStrata />
+      ) : teach.error ? (
+        <QueryError error={teach.error} />
+      ) : (teach.data?.length ?? 0) === 0 ? (
+        <EmptyState
+          title="Nothing needs teaching"
+          description="Every catalog item has enough signal for the Aesthete engine right now. Newly captured products will appear here when they need a designer's eye."
+        />
+      ) : (
+        <ProductGrid items={teach.data ?? []} onOpen={onOpen} />
+      )}
     </div>
   );
 }
 
-function ActiveTab({
-  tab,
+function QueryError({ error }: { error: unknown }) {
+  return (
+    <div className="rounded-md border border-[var(--color-error,#C77B6E)] bg-[rgba(199,123,110,0.06)] p-4 text-sm text-[var(--color-error,#C77B6E)]">
+      Couldn&apos;t load catalog: {error instanceof Error ? error.message : String(error)}
+    </div>
+  );
+}
+
+function ProductGrid({
+  items,
+  onOpen,
+}: {
+  items: LayerProductRow[];
+  onOpen: (id: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-x-5 gap-y-7 sm:grid-cols-3 lg:grid-cols-4">
+      {items.map((p) => (
+        <ProductCard
+          key={p.id}
+          id={p.id}
+          name={p.name}
+          imageUrl={p.images?.[0]}
+          price={(p.price_retail ?? 0) / 100}
+          status={p.status ?? undefined}
+          layer="catalog"
+          showLayer
+          showAestheteMatch
+          onClick={onOpen}
+        />
+      ))}
+    </div>
+  );
+}
+
+function BrowseTab({
   search,
   onSearchChange,
   items,
@@ -111,7 +205,6 @@ function ActiveTab({
   error,
   onOpen,
 }: {
-  tab: CatalogTab;
   search: string;
   onSearchChange: (next: string) => void;
   items: LayerProductRow[];
@@ -119,16 +212,6 @@ function ActiveTab({
   error: unknown;
   onOpen: (id: string) => void;
 }) {
-  if (tab !== 'browse') {
-    const meta = TABS.find((t) => t.key === tab)!;
-    return (
-      <EmptyState
-        title={meta.label}
-        description={`${meta.hint} Coming in a Sprint 3 follow-up — the Browse tab is functional today.`}
-      />
-    );
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <div className="relative flex items-center">
@@ -149,31 +232,14 @@ function ActiveTab({
       {isLoading ? (
         <LoadingStrata />
       ) : error ? (
-        <div className="rounded-md border border-[var(--color-error,#C77B6E)] bg-[rgba(199,123,110,0.06)] p-4 text-sm text-[var(--color-error,#C77B6E)]">
-          Couldn&apos;t load catalog: {error instanceof Error ? error.message : String(error)}
-        </div>
+        <QueryError error={error} />
       ) : items.length === 0 ? (
         <EmptyState
           title="No catalog items match"
           description="Try a different search, or browse the full catalog by clearing the field."
         />
       ) : (
-        <div className="grid grid-cols-2 gap-x-5 gap-y-7 sm:grid-cols-3 lg:grid-cols-4">
-          {items.map((p) => (
-            <ProductCard
-              key={p.id}
-              id={p.id}
-              name={p.name}
-              imageUrl={p.images?.[0]}
-              price={(p.price_retail ?? 0) / 100}
-              status={p.status ?? undefined}
-              layer="catalog"
-              showLayer
-              showAestheteMatch
-              onClick={onOpen}
-            />
-          ))}
-        </div>
+        <ProductGrid items={items} onOpen={onOpen} />
       )}
     </div>
   );
