@@ -204,6 +204,38 @@ export function OrderAssistant(props: OrderAssistantProps) {
   const createPO = useCreatePurchaseOrder();
   const { toast } = useToast();
 
+  // ─── One-click Patina order (S3.10) ─────────────────────────────────────
+  // For catalog routing, skip the multi-step external-vendor flow and
+  // create the PO directly with isPatinaCatalog=true. Patina invoices
+  // on net_30 by default; deposit/balance milestone fields don't apply.
+  const handleCatalogSubmit = async () => {
+    setSubmitError(null);
+    try {
+      await createPO.mutateAsync({
+        projectId: project.id,
+        vendorId: vendor.id,
+        paymentPattern: 'net_30',
+        totalCents,
+        isPatinaCatalog: true,
+        ffeItemIds: ffeItems.map((i) => i.id),
+      });
+      procurementEvents.poCreated({
+        payment_pattern: 'net_30',
+        total_cents: totalCents,
+        is_patina_catalog: true,
+        vendor_id: vendor.id,
+        project_id: project.id,
+      });
+      toast(
+        `Patina order placed — ${ffeItems.length} item${ffeItems.length === 1 ? '' : 's'} routed through Patina.`,
+        'success',
+      );
+      onOpenChange(false);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Failed to place order');
+    }
+  };
+
   // Reset all fields when the panel opens with a fresh context. Keying off
   // `open` plus `vendor.id`/`project.id` means re-opening for a different
   // vendor/project never inherits stale state.
@@ -723,25 +755,45 @@ export function OrderAssistant(props: OrderAssistantProps) {
                 disabled={createPO.isPending}
                 className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 font-mono text-[0.65rem] uppercase tracking-[0.06em] text-[var(--text-muted)] transition-colors hover:border-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40"
               >
-                Skip — order externally
+                {dominantLayer === 'catalog' ? 'Cancel' : 'Skip — order externally'}
               </button>
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={createPO.isPending}
-                className="inline-flex items-center gap-2 rounded-[3px] px-4 py-1.5 font-mono text-[0.7rem] uppercase tracking-[0.06em] text-white transition-opacity disabled:opacity-50"
-                style={{ background: 'var(--accent-primary,#C4A57B)' }}
-              >
-                {createPO.isPending && (
-                  <span
-                    className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white"
-                    aria-hidden="true"
-                  />
-                )}
-                {createPO.isPending
-                  ? 'Submitting…'
-                  : `Confirm ${ffeItems.length} ordered`}
-              </button>
+              {dominantLayer === 'catalog' ? (
+                <button
+                  type="button"
+                  onClick={handleCatalogSubmit}
+                  disabled={createPO.isPending}
+                  className="inline-flex items-center gap-2 rounded-[3px] px-4 py-1.5 font-mono text-[0.7rem] uppercase tracking-[0.06em] text-white transition-opacity disabled:opacity-50"
+                  style={{ background: 'var(--color-clay,#C4A57B)' }}
+                >
+                  {createPO.isPending && (
+                    <span
+                      className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                      aria-hidden="true"
+                    />
+                  )}
+                  {createPO.isPending
+                    ? 'Placing Patina order…'
+                    : `One-click order via Patina · ${formatDollars(totalCents)}`}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={createPO.isPending}
+                  className="inline-flex items-center gap-2 rounded-[3px] px-4 py-1.5 font-mono text-[0.7rem] uppercase tracking-[0.06em] text-white transition-opacity disabled:opacity-50"
+                  style={{ background: 'var(--accent-primary,#C4A57B)' }}
+                >
+                  {createPO.isPending && (
+                    <span
+                      className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                      aria-hidden="true"
+                    />
+                  )}
+                  {createPO.isPending
+                    ? 'Submitting…'
+                    : `Confirm ${ffeItems.length} ordered`}
+                </button>
+              )}
             </div>
           </motion.div>
         </>

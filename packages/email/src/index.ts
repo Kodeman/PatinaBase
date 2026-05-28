@@ -37,6 +37,8 @@ export { WeeklyInspiration } from './templates/weekly-inspiration';
 export type { WeeklyInspirationProps, InspirationProduct } from './templates/weekly-inspiration';
 export { FoundingCircleUpdate } from './templates/founding-circle-update';
 export type { FoundingCircleUpdateProps } from './templates/founding-circle-update';
+export { ManufacturerOutreach } from './templates/manufacturer-outreach';
+export type { ManufacturerOutreachProps } from './templates/manufacturer-outreach';
 
 // Campaign templates
 export { CampaignProductLaunch } from './templates/campaign-product-launch';
