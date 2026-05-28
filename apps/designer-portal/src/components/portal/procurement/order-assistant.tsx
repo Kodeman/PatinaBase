@@ -41,6 +41,13 @@ export interface OrderAssistantVendor {
   default_payment_terms: PaymentPattern | null;
   trade_portal_url?: string;
   trade_account_email?: string;
+  /**
+   * Mirrors `vendors.is_patina_catalog` (migration 00149). When true, the
+   * order is routed through Patina as the merchant — a different
+   * payment + invoicing path than the external-vendor flow. Optional
+   * for now; one-click Catalog ordering ships in S3.10 (Sprint 3).
+   */
+  is_patina_catalog?: boolean;
 }
 
 export interface OrderAssistantProject {
@@ -53,6 +60,14 @@ export interface OrderAssistantFFEItem {
   name: string;
   room?: string;
   line_total_cents: number;
+  /**
+   * Three-layer catalog layer of the underlying product, when known.
+   * Drives the routing-mode badge in the assistant header and (in
+   * Sprint 3) selects between the Patina one-click path and the
+   * external-vendor manual PO flow. Optional during the transition —
+   * callers may leave it undefined.
+   */
+  layer?: 'personal' | 'studio' | 'catalog';
 }
 
 export interface OrderAssistantProps {
@@ -149,6 +164,20 @@ export function OrderAssistant(props: OrderAssistantProps) {
     () => ffeItems.reduce((sum, i) => sum + i.line_total_cents, 0),
     [ffeItems]
   );
+
+  // Three-layer routing detection (PRD §7.1 / S2.9). Catalog routing wins
+  // any time the vendor is Patina-handled OR every item is catalog-layer.
+  // Studio routing fires when any non-catalog item is studio. Personal is
+  // the residual default — Order Assistant works identically to the
+  // pre-layer-aware flow.
+  const dominantLayer: 'personal' | 'studio' | 'catalog' = useMemo(() => {
+    if (vendor.is_patina_catalog) return 'catalog';
+    if (ffeItems.length > 0 && ffeItems.every((i) => i.layer === 'catalog'))
+      return 'catalog';
+    if (ffeItems.some((i) => i.layer === 'studio')) return 'studio';
+    if (ffeItems.some((i) => i.layer === 'personal')) return 'personal';
+    return 'studio'; // safest default for vendor flows without explicit layer signal
+  }, [vendor.is_patina_catalog, ffeItems]);
 
   // Step 3 fields ----------------------------------------------------------
   const [vendorPoNumber, setVendorPoNumber] = useState('');
@@ -403,6 +432,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
                   {scopeDisclaimer}
                 </p>
               )}
+              <RoutingBadge layer={dominantLayer} />
             </div>
 
             {/* Body — scrollable */}
@@ -717,5 +747,62 @@ export function OrderAssistant(props: OrderAssistantProps) {
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+// ─── Routing badge ─────────────────────────────────────────────────────────
+
+const ROUTING_COPY: Record<
+  'personal' | 'studio' | 'catalog',
+  { label: string; hint: string; color: string; bg: string }
+> = {
+  personal: {
+    label: 'Personal-library order',
+    hint: 'Vendor relationship is informal — confirm payment terms manually.',
+    color: 'var(--color-dusty-blue, #8B9CAD)',
+    bg: 'rgba(139, 156, 173, 0.12)',
+  },
+  studio: {
+    label: 'Studio-library order',
+    hint: 'Stored vendor context pre-fills below. Verify before submitting.',
+    color: 'var(--color-sage, #A8B5A0)',
+    bg: 'rgba(168, 181, 160, 0.12)',
+  },
+  catalog: {
+    label: 'Patina-handled order',
+    hint: 'One-click ordering through Patina ships with Sprint 3. For now, the manual flow below applies.',
+    color: 'var(--color-clay, #C4A57B)',
+    bg: 'rgba(196, 165, 123, 0.15)',
+  },
+};
+
+/**
+ * Small inline badge surfacing the three-layer routing mode. Sits below
+ * the scope disclaimer in the panel header so the designer knows which
+ * procurement path applies before they start filling in PO details.
+ *
+ * Sprint 2 / S2.9 light touch — the actual catalog one-click flow
+ * ships in S3.10. For now the badge is visual and the underlying flow
+ * is unchanged.
+ */
+function RoutingBadge({ layer }: { layer: 'personal' | 'studio' | 'catalog' }) {
+  const copy = ROUTING_COPY[layer];
+  return (
+    <div
+      className="mt-2 flex flex-col gap-1 rounded-md px-2 py-1.5"
+      style={{ background: copy.bg }}
+    >
+      <span
+        className="type-meta-small"
+        style={{
+          color: copy.color,
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+        }}
+      >
+        {copy.label}
+      </span>
+      <span className="text-[0.7rem] text-[var(--text-muted)]">{copy.hint}</span>
+    </div>
   );
 }
