@@ -5,7 +5,6 @@ import {
   useMotionValue,
   useSpring,
   useTransform,
-  useInView,
   useReducedMotion,
   motion,
 } from 'framer-motion';
@@ -58,7 +57,6 @@ function AnimatedNumber({
   original: string | number;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
-  const isInView = useInView(ref, { once: true });
   const prefersReducedMotion = useReducedMotion();
 
   const motionValue = useMotionValue(0);
@@ -67,11 +65,12 @@ function AnimatedNumber({
     formatAnimatedNumber(v, original),
   );
 
+  // Always converge to the real value on mount and whenever it changes.
+  // (Previously gated on useInView, which could miss above-the-fold cards
+  // that mount after an async load — leaving the number stuck at 0.)
   useEffect(() => {
-    if (isInView) {
-      motionValue.set(value);
-    }
-  }, [isInView, value, motionValue]);
+    motionValue.set(value);
+  }, [value, motionValue]);
 
   if (prefersReducedMotion) {
     return <span ref={ref}>{formatAnimatedNumber(value, original)}</span>;
