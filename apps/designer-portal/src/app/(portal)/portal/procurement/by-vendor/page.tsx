@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ArrowUpDown, Filter } from 'lucide-react';
+import { ArrowUpDown } from 'lucide-react';
 import { usePurchaseOrders, useIsStudioOwner, type PurchaseOrder } from '@patina/supabase';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { SearchInput } from '@/components/portal/search-input';
@@ -73,24 +73,34 @@ function groupByVendor(orders: PurchaseOrder[]): VendorGroup[] {
   });
 }
 
-// ─── Stub filter / sort row (no logic in Sprint 1) ───────────────────────────
+// ─── Sort row ────────────────────────────────────────────────────────────────
+// NOTE: faceted filtering (vendor terms, has-due-payment, project) is still a
+// Sprint-2 follow-up; sort is wired here. The free-text search above already
+// filters the list.
 
-// TODO(sprint-2): wire faceted filter (vendor terms, has-due-payment, project)
-//                  and sort (Due first / Total / Vendor A→Z) onto these buttons.
-function FilterStubRow() {
-  const buttonClass =
-    'inline-flex items-center gap-1.5 rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-[var(--text-muted)] opacity-60';
+type VendorSortKey = 'due' | 'total' | 'vendor';
+
+function SortRow({
+  value,
+  onChange,
+}: {
+  value: VendorSortKey;
+  onChange: (v: VendorSortKey) => void;
+}) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <button type="button" disabled className={buttonClass}>
-        <Filter className="h-3 w-3" />
-        Filter
-      </button>
-      <button type="button" disabled className={buttonClass}>
-        <ArrowUpDown className="h-3 w-3" />
-        Sort
-      </button>
-    </div>
+    <label className="inline-flex items-center gap-1.5 rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+      <ArrowUpDown className="h-3 w-3" />
+      Sort
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as VendorSortKey)}
+        className="bg-transparent font-mono text-[0.62rem] uppercase tracking-[0.06em] text-[var(--text-default)] focus:outline-none"
+      >
+        <option value="due">Due first</option>
+        <option value="total">Total (high→low)</option>
+        <option value="vendor">Vendor A→Z</option>
+      </select>
+    </label>
   );
 }
 
@@ -98,6 +108,7 @@ function FilterStubRow() {
 
 function ByVendorContent() {
   const [search, setSearch] = useState('');
+  const [sortKey, setSortKey] = useState<VendorSortKey>('due');
   // NOTE(W1.5.5): the Order-via-Patina dialog state was removed. In v1 the
   // Catalog dialog had no ffeItems to display (the source feed lands later),
   // so the dialog only ever rendered "Order 0 items totalling $0" with a
@@ -141,7 +152,17 @@ function ByVendorContent() {
     });
   }, [allOrders, search]);
 
-  const groups = useMemo(() => groupByVendor(filtered), [filtered]);
+  const groups = useMemo(() => {
+    const g = groupByVendor(filtered);
+    if (sortKey === 'total') {
+      return [...g].sort((a, b) => b.totalCents - a.totalCents);
+    }
+    if (sortKey === 'vendor') {
+      return [...g].sort((a, b) => a.vendorName.localeCompare(b.vendorName));
+    }
+    // 'due' — keep groupByVendor's default (due-payment vendors first, then A→Z)
+    return g;
+  }, [filtered, sortKey]);
 
   // ─── Loading state ───────────────────────────────────────────────────────
   if (isLoading) {
@@ -215,7 +236,7 @@ function ByVendorContent() {
           onChange={setSearch}
           placeholder="Search vendor, project, or PO number…"
         />
-        <FilterStubRow />
+        <SortRow value={sortKey} onChange={setSortKey} />
       </div>
 
       {/* Empty state */}
