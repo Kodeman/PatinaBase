@@ -7,6 +7,7 @@ import { FieldGroup } from '@/components/portal/field-group';
 import { DetailRow } from '@/components/portal/detail-row';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { RoomScanViewer } from '@/components/rooms/viewer';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -30,16 +31,15 @@ export default function RoomViewerPage({ params }: { params: Promise<{ id: strin
       <h1 className="type-page-title mb-4">{room.name || 'Room Viewer'}</h1>
 
       {/* 3D Viewer Area */}
-      <div
-        className="mb-8 flex h-[400px] items-center justify-center rounded-lg bg-patina-pearl"
-        style={{
-          backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(196,165,123,0.05) 10px, rgba(196,165,123,0.05) 20px)',
-        }}
-      >
-        <span className="type-body text-[var(--text-muted)]">
-          {roomScans.length > 0 ? '3D Room Viewer' : 'No scans available for this room'}
-        </span>
-      </div>
+      {roomScans.length > 0 ? (
+        <div className="mb-8 h-[560px] overflow-hidden rounded-lg">
+          <RoomScanViewer scan={roomScans[0]} />
+        </div>
+      ) : (
+        <div className="mb-8 flex h-[400px] items-center justify-center rounded-lg bg-patina-pearl">
+          <span className="type-body text-[var(--text-muted)]">No room scan uploaded yet</span>
+        </div>
+      )}
 
       <StrataMark variant="mini" />
 
