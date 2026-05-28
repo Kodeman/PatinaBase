@@ -7,9 +7,12 @@ import { useLayerProducts, type LayerProductRow } from '@patina/supabase';
 import {
   ProductCard,
   EmptyState,
+  PromotionToast,
   type Layer,
 } from '@patina/catalog-ui';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { PromotionBanner } from './promotion-banner';
+import { PromoteToStudioModal } from './promotion/promote-to-studio-modal';
 
 const STORAGE_KEY = 'library_last_layer';
 
@@ -48,6 +51,8 @@ export function LayerView({
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
+  const [promoteTargetId, setPromoteTargetId] = useState<string | null>(null);
+  const [toastState, setToastState] = useState<{ count: number } | null>(null);
 
   // Persist the last layer so /portal/library defaults back here.
   useEffect(() => {
@@ -71,6 +76,8 @@ export function LayerView({
       <p className="font-body text-[0.85rem] leading-relaxed text-[var(--text-muted)]">
         {description}
       </p>
+
+      {layer === 'personal' && <PromotionBanner />}
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex flex-1 items-center">
@@ -107,10 +114,32 @@ export function LayerView({
           }
         />
       ) : (
-        <Grid items={items} layer={layer} onOpen={(id) => router.push(`/portal/library/${layer}/${id}`)}
+        <Grid
+          items={items}
+          layer={layer}
+          onOpen={(id) => router.push(`/portal/library/${layer}/${id}`)}
+          onPromote={
+            layer === 'personal' ? (id) => setPromoteTargetId(id) : undefined
+          }
           showProjectTags={showProjectTags}
           showUsageCount={showUsageCount}
           showAestheteMatch={showAestheteMatch}
+        />
+      )}
+
+      <PromoteToStudioModal
+        open={Boolean(promoteTargetId)}
+        productId={promoteTargetId}
+        onClose={() => setPromoteTargetId(null)}
+        onSuccess={() => setToastState({ count: 1 })}
+      />
+
+      {toastState && (
+        <PromotionToast
+          count={toastState.count}
+          layer="studio"
+          viewUrl="/portal/library/studio"
+          onDismiss={() => setToastState(null)}
         />
       )}
     </div>
@@ -163,6 +192,7 @@ function Grid({
   items,
   layer,
   onOpen,
+  onPromote,
   showProjectTags,
   showUsageCount,
   showAestheteMatch,
@@ -170,6 +200,7 @@ function Grid({
   items: LayerProductRow[];
   layer: Layer;
   onOpen: (id: string) => void;
+  onPromote?: (id: string) => void;
   showProjectTags: boolean;
   showUsageCount: boolean;
   showAestheteMatch: boolean;
@@ -190,6 +221,25 @@ function Grid({
           showUsageCount={showUsageCount}
           showAestheteMatch={showAestheteMatch}
           onClick={onOpen}
+          footerSlot={
+            onPromote && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPromote(p.id);
+                }}
+                className="w-full rounded-md border px-3 py-1.5 text-[0.78rem] transition-colors"
+                style={{
+                  borderColor: 'rgba(168, 181, 160, 0.4)',
+                  color: 'var(--color-sage, #A8B5A0)',
+                  background: 'transparent',
+                }}
+              >
+                Promote to Studio
+              </button>
+            )
+          }
         />
       ))}
     </div>
