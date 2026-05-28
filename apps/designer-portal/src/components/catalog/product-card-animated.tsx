@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { Heart, Plus, Eye, Share2, TrendingUp, Tag, Clock } from 'lucide-react';
 import { Button, Card, CardContent, Badge } from '@patina/design-system';
 import { formatCurrency } from '@/lib/utils';
@@ -65,7 +65,7 @@ export function ProductCardAnimated({
   });
 
   // Animation variants
-  const cardVariants = {
+  const cardVariants: Variants = {
     hidden: {
       opacity: 0,
       y: shouldReduceMotion ? 0 : 20,
@@ -98,7 +98,7 @@ export function ProductCardAnimated({
     },
   };
 
-  const imageVariants = {
+  const imageVariants: Variants = {
     initial: { scale: 1 },
     hover: shouldReduceMotion ? {} : {
       scale: 1.05,
@@ -106,7 +106,7 @@ export function ProductCardAnimated({
     },
   };
 
-  const overlayVariants = {
+  const overlayVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
@@ -114,7 +114,7 @@ export function ProductCardAnimated({
     },
   };
 
-  const actionButtonVariants = {
+  const actionButtonVariants: Variants = {
     hidden: { opacity: 0, y: 10 },
     visible: (i: number) => ({
       opacity: 1,

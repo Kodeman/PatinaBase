@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion, type Variants } from 'framer-motion';
 import { ArrowUp } from 'lucide-react';
 import { Button } from '@patina/design-system';
 
@@ -41,7 +41,7 @@ export function BackToTop({ threshold = 400, smooth = true }: BackToTopProps) {
     }
   };
 
-  const buttonVariants = {
+  const buttonVariants: Variants = {
     hidden: {
       opacity: 0,
       y: shouldReduceMotion ? 0 : 20,

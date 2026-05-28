@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { SearchX, Package, Filter, Sparkles } from 'lucide-react';
 import { Button, Card, CardContent } from '@patina/design-system';
 
@@ -21,7 +21,7 @@ export function EmptyState({
 }: EmptyStateProps) {
   const shouldReduceMotion = useReducedMotion();
 
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0, scale: shouldReduceMotion ? 1 : 0.95 },
     visible: {
       opacity: 1,
@@ -34,7 +34,7 @@ export function EmptyState({
     },
   };
 
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { opacity: 0, y: shouldReduceMotion ? 0 : 10 },
     visible: {
       opacity: 1,
@@ -43,7 +43,7 @@ export function EmptyState({
     },
   };
 
-  const iconVariants = {
+  const iconVariants: Variants = {
     initial: { rotate: 0 },
     animate: shouldReduceMotion ? {} : {
       rotate: [0, -5, 5, -5, 0],

@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion, type Variants } from 'framer-motion';
 import { X, TrendingUp, Plus, ChevronRight } from 'lucide-react';
 import { Button, Badge, Card, CardContent } from '@patina/design-system';
 import { formatCurrency } from '@/lib/utils';
@@ -26,7 +26,7 @@ export function ProductComparison({
 
   if (products.length === 0) return null;
 
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: {
       y: shouldReduceMotion ? 0 : 100,
       opacity: 0,
@@ -49,7 +49,7 @@ export function ProductComparison({
     },
   };
 
-  const productVariants = {
+  const productVariants: Variants = {
     hidden: {
       scale: shouldReduceMotion ? 1 : 0.8,
       opacity: 0,

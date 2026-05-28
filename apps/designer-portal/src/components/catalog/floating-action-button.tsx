@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { SlidersHorizontal, X } from 'lucide-react';
 import { Button, Badge } from '@patina/design-system';
 
@@ -19,7 +19,7 @@ export function FloatingActionButton({
 }: FloatingActionButtonProps) {
   const shouldReduceMotion = useReducedMotion();
 
-  const buttonVariants = {
+  const buttonVariants: Variants = {
     initial: {
       scale: 1,
     },
@@ -34,7 +34,7 @@ export function FloatingActionButton({
     },
   };
 
-  const badgeVariants = {
+  const badgeVariants: Variants = {
     initial: {
       scale: 0,
     },
