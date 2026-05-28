@@ -96,7 +96,7 @@ export default function CatalogLibraryPage() {
         items={items}
         isLoading={isLoading}
         error={error}
-        onOpen={(id) => router.push(`/portal/library/catalog/${id}`)}
+        onOpen={(id) => router.push(`/portal/catalog/${id}`)}
       />
     </div>
   );

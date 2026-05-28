@@ -105,7 +105,7 @@ export default function StudioLibraryPage() {
                     layer="studio"
                     showLayer
                     showUsageCount
-                    onClick={(id) => router.push(`/portal/library/studio/${id}`)}
+                    onClick={(id) => router.push(`/portal/catalog/${id}`)}
                   />
                 ))}
               </div>

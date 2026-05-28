@@ -84,7 +84,7 @@ export default function LibrarySearchPage() {
             <SearchGrid
               items={items}
               layer={layer}
-              onOpen={(id) => router.push(`/portal/library/${layer}/${id}`)}
+              onOpen={(id) => router.push(`/portal/catalog/${id}`)}
             />
           </section>
         );

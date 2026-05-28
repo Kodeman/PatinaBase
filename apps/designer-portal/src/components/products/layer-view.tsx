@@ -117,7 +117,7 @@ export function LayerView({
         <Grid
           items={items}
           layer={layer}
-          onOpen={(id) => router.push(`/portal/library/${layer}/${id}`)}
+          onOpen={(id) => router.push(`/portal/catalog/${id}`)}
           onPromote={
             layer === 'personal' ? (id) => setPromoteTargetId(id) : undefined
           }

@@ -113,6 +113,7 @@ export const ZONE_SUB_ITEMS: Record<ZoneKey, SubNavItem[]> = {
     { label: 'Receiving', href: '/portal/procurement/receiving' },
   ],
   products: [
+    { label: 'Library', href: '/portal/library/personal' },
     { label: 'Catalog', href: '/portal/catalog', exact: true },
     { label: 'Capture Queue', href: '/portal/catalog/import' },
     { label: 'Teaching', href: '/portal/teaching' },
