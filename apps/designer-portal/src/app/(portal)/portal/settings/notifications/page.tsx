@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import type { NotificationPreferences } from '@patina/shared/types';
 import {
+  createBrowserClient,
   useMyThreadOverrides,
   useUpdateThreadNotificationPref,
   useMuteThread,
@@ -75,6 +76,49 @@ async function patchPrefs(updates: Partial<NotificationPreferences>) {
   return res.json();
 }
 
+// ─── SMS (SET-08) ──────────────────────────────────────────────────────────
+// Phone + consent live on profiles. Read/write directly via Supabase since the
+// preferences API only covers notification_preferences.
+
+interface SmsProfile {
+  phone: string;
+  sms_opt_in: boolean;
+}
+
+async function fetchSmsProfile(): Promise<SmsProfile> {
+  const supabase = createBrowserClient() as any;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { phone: '', sms_opt_in: false };
+
+  const { data } = await supabase
+    .from('profiles')
+    .select('phone, sms_opt_in')
+    .eq('id', user.id)
+    .single();
+
+  return {
+    phone: data?.phone ?? '',
+    sms_opt_in: data?.sms_opt_in ?? false,
+  };
+}
+
+async function updateSmsProfile(updates: Partial<SmsProfile>) {
+  const supabase = createBrowserClient() as any;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not signed in');
+
+  const { error } = await supabase
+    .from('profiles')
+    .update(updates)
+    .eq('id', user.id);
+
+  if (error) throw new Error(error.message || 'Failed to save SMS settings');
+}
+
 export default function NotificationsSettingsPage() {
   const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,11 +126,18 @@ export default function NotificationsSettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
 
+  // SET-08: SMS opt-in lives on profiles (phone, sms_opt_in); the channel
+  // toggle mirrors into notification_preferences.channels_sms.
+  const [profile, setProfile] = useState<SmsProfile | null>(null);
+
   useEffect(() => {
     fetchPrefs()
       .then(setPrefs)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+    fetchSmsProfile()
+      .then(setProfile)
+      .catch(() => setProfile({ phone: '', sms_opt_in: false }));
   }, []);
 
   async function update(key: keyof NotificationPreferences, value: unknown) {
@@ -98,6 +149,43 @@ export default function NotificationsSettingsPage() {
     try {
       const saved = await patchPrefs({
         [key]: value,
+      } as Partial<NotificationPreferences>);
+      setPrefs(saved);
+      setSavedAt(new Date());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Persist the phone number to profiles.phone.
+  async function saveSmsPhone(phone: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      await updateSmsProfile({ phone });
+      setProfile((p) => ({ phone, sms_opt_in: p?.sms_opt_in ?? false }));
+      setSavedAt(new Date());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Toggle SMS: writes profiles.sms_opt_in AND
+  // notification_preferences.channels_sms so dispatch honours both gates.
+  async function toggleSms(enabled: boolean) {
+    if (!profile?.phone) return; // gated on a saved phone
+    setProfile((p) => ({ phone: p?.phone ?? '', sms_opt_in: enabled }));
+    if (prefs) setPrefs({ ...prefs, channels_sms: enabled });
+    setSaving(true);
+    setError(null);
+    try {
+      await updateSmsProfile({ sms_opt_in: enabled });
+      const saved = await patchPrefs({
+        channels_sms: enabled,
       } as Partial<NotificationPreferences>);
       setPrefs(saved);
       setSavedAt(new Date());
@@ -152,11 +240,11 @@ export default function NotificationsSettingsPage() {
           onChange={(v) => update('channels_push', v)}
           help="Requires the Patina mobile app"
         />
-        <Toggle
-          label="SMS"
-          checked={prefs.channels_sms}
-          disabled
-          help="Coming soon"
+        <SmsChannel
+          profile={profile}
+          channelEnabled={prefs.channels_sms}
+          onSavePhone={saveSmsPhone}
+          onToggle={toggleSms}
         />
       </Section>
 
@@ -351,6 +439,85 @@ function ThreadOverrideRow({
         )}
       </div>
     </li>
+  );
+}
+
+function SmsChannel({
+  profile,
+  channelEnabled,
+  onSavePhone,
+  onToggle,
+}: {
+  profile: SmsProfile | null;
+  channelEnabled: boolean;
+  onSavePhone: (phone: string) => void;
+  onToggle: (enabled: boolean) => void;
+}) {
+  const [draftPhone, setDraftPhone] = useState('');
+
+  // Sync the draft once the profile loads / changes.
+  useEffect(() => {
+    setDraftPhone(profile?.phone ?? '');
+  }, [profile?.phone]);
+
+  const savedPhone = profile?.phone ?? '';
+  const hasPhone = savedPhone.trim().length > 0;
+  const dirty = draftPhone.trim() !== savedPhone.trim();
+  const enabled = channelEnabled && (profile?.sms_opt_in ?? false);
+
+  return (
+    <div className="border-t border-[#EEE6DB] pt-3 mt-1">
+      <div className="flex items-start justify-between gap-4">
+        <span className="flex-1">
+          <span className="block text-[15px] text-[#2C2926] font-medium">SMS</span>
+          <span className="block text-xs text-[#7A736C] mt-0.5">
+            Time-sensitive alerts via text. SMS requires admin Twilio setup —
+            standard message and data rates may apply.
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          checked={enabled}
+          disabled={!hasPhone}
+          onChange={(e) => onToggle(e.target.checked)}
+          aria-label="Enable SMS notifications"
+          title={hasPhone ? undefined : 'Save a phone number to enable SMS'}
+          className={`mt-1 h-5 w-5 rounded border-[#DDD4C8] text-[#A3927C] focus:ring-[#A3927C] ${
+            hasPhone ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'
+          }`}
+        />
+      </div>
+
+      <div className="mt-3 flex items-end gap-2">
+        <label className="flex-1">
+          <span className="block text-sm font-medium text-[#2C2926] mb-1">
+            Mobile number
+          </span>
+          <input
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            placeholder="+1 (555) 123-4567"
+            value={draftPhone}
+            onChange={(e) => setDraftPhone(e.target.value)}
+            className="w-full px-3 py-2 border border-[#DDD4C8] rounded-md bg-white text-[#2C2926]"
+          />
+        </label>
+        <button
+          type="button"
+          disabled={!dirty || draftPhone.trim().length === 0}
+          onClick={() => onSavePhone(draftPhone.trim())}
+          className="shrink-0 rounded-md border border-[#DDD4C8] bg-white px-3 py-2 text-sm text-[#2C2926] hover:bg-[#F5F1E8] disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Save
+        </button>
+      </div>
+      {!hasPhone && (
+        <p className="mt-2 text-xs text-[#7A736C]">
+          Save a verified mobile number to enable the SMS channel.
+        </p>
+      )}
+    </div>
   );
 }
 
