@@ -1,5 +1,8 @@
 'use client';
 
+import { useRef } from 'react';
+import { useImageUpload } from '@/hooks/use-image-upload';
+
 interface DecisionOptionValue {
   name: string;
   imageUrl: string;
@@ -44,31 +47,83 @@ export function DecisionOptionBuilder({
   onRemove,
   index,
 }: DecisionOptionBuilderProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { uploadToBucket, isUploading } = useImageUpload();
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    // No backing product id exists for a decision option, so upload directly
+    // to the public product-images bucket under a `decisions/` path. The
+    // returned URL persists to client_decision_options.image_url on submit.
+    const url = await uploadToBucket('product-images', 'decisions', file);
+    if (url) onChange({ ...value, imageUrl: url });
+  };
+
   return (
     <div
       className="rounded-md p-4"
       style={{ border: '1px solid var(--color-pearl)' }}
     >
-      <div
-        className="mb-3 flex items-center justify-center rounded"
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={isUploading}
+        className="relative mb-3 flex w-full items-center justify-center overflow-hidden rounded"
         style={{
-          width: '100%',
           height: '80px',
-          background: 'linear-gradient(135deg, var(--color-off-white), var(--color-pearl))',
+          background: value.imageUrl
+            ? undefined
+            : 'linear-gradient(135deg, var(--color-off-white), var(--color-pearl))',
+          border: '1px dashed var(--border-default)',
+          cursor: isUploading ? 'wait' : 'pointer',
         }}
+        aria-label={value.imageUrl ? `Replace Option ${index + 1} image` : `Upload Option ${index + 1} image`}
+        data-testid={`option-${index}-image-upload`}
       >
-        <span
-          style={{
-            fontFamily: 'var(--font-meta)',
-            fontSize: '0.55rem',
-            textTransform: 'uppercase',
-            letterSpacing: '0.04em',
-            color: 'var(--text-muted)',
-          }}
-        >
-          Option {index + 1} Image
-        </span>
-      </div>
+        {value.imageUrl ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={value.imageUrl}
+            alt={`Option ${index + 1}`}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <span
+            style={{
+              fontFamily: 'var(--font-meta)',
+              fontSize: '0.55rem',
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+              color: 'var(--text-muted)',
+            }}
+          >
+            {isUploading ? 'Uploading…' : `Option ${index + 1} Image`}
+          </span>
+        )}
+        {isUploading && value.imageUrl && (
+          <span
+            className="absolute inset-0 flex items-center justify-center bg-white/70"
+            style={{
+              fontFamily: 'var(--font-meta)',
+              fontSize: '0.55rem',
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+              color: 'var(--text-muted)',
+            }}
+          >
+            Uploading…
+          </span>
+        )}
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileSelect}
+        className="hidden"
+      />
 
       <div className="mb-2 flex flex-col gap-1">
         <label style={labelStyle}>Option Name</label>

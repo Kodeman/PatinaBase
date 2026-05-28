@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCategories } from '@/hooks/use-products';
+import { useImageUpload } from '@/hooks/use-image-upload';
 import { catalogApi } from '@/lib/api-client';
 import {
   Breadcrumb,
@@ -45,6 +46,12 @@ export default function NewProductPage() {
     },
   });
 
+  const { upload: uploadImage } = useImageUpload();
+  // Images can't upload until the product row exists (it owns the id used in
+  // the storage path + the `products.images` array). Stage selected files in
+  // component state and POST them after the create call returns the new id.
+  const [stagedFiles, setStagedFiles] = useState<File[]>([]);
+
   const [form, setForm] = useState({
     name: '',
     maker: '',
@@ -60,28 +67,39 @@ export default function NewProductPage() {
   const set = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
-  const handleSave = (publish: boolean) => {
+  const handleSave = async (publish: boolean) => {
     if (!form.name.trim()) return;
     // Parse the free-text lead time ("8–12 weeks") into the integer
     // `lead_time_weeks` column; fall back to undefined when no number is present.
     const leadTimeMatch = form.leadTime.match(/\d+/);
     const material = form.material.trim();
     const dimensions = form.dimensions.trim();
-    createProduct.mutate(
-      {
-        name: form.name.trim(),
-        description: form.description.trim() || undefined,
-        price: form.retailPrice ? parseFloat(form.retailPrice.replace(/[^0-9.]/g, '')) || undefined : undefined,
-        brand: form.maker.trim() || undefined,
-        category: form.category || undefined,
-        tier: form.tier || undefined,
-        leadTimeWeeks: leadTimeMatch ? parseInt(leadTimeMatch[0], 10) : undefined,
-        materials: material ? [material] : undefined,
-        dimensions: dimensions || undefined,
-        status: publish ? 'published' : 'draft',
-      },
-      { onSuccess: () => router.push('/portal/catalog') }
-    );
+
+    const created = await createProduct.mutateAsync({
+      name: form.name.trim(),
+      description: form.description.trim() || undefined,
+      price: form.retailPrice ? parseFloat(form.retailPrice.replace(/[^0-9.]/g, '')) || undefined : undefined,
+      brand: form.maker.trim() || undefined,
+      category: form.category || undefined,
+      tier: form.tier || undefined,
+      leadTimeWeeks: leadTimeMatch ? parseInt(leadTimeMatch[0], 10) : undefined,
+      materials: material ? [material] : undefined,
+      dimensions: dimensions || undefined,
+      status: publish ? 'published' : 'draft',
+    });
+
+    // The product now exists — upload any staged hero images against its id.
+    // Defensively unwrap the new id from common response shapes.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = created as any;
+    const newId: string | undefined = res?.id ?? res?.data?.id ?? res?.product?.id;
+    if (newId && stagedFiles.length > 0) {
+      for (const file of stagedFiles) {
+        await uploadImage(`/api/catalog/products/${newId}/images`, file);
+      }
+    }
+
+    router.push('/portal/catalog');
   };
 
   return (
@@ -127,18 +145,41 @@ export default function NewProductPage() {
         className="mb-6 max-w-prose"
       />
 
-      {/* Image First */}
+      {/* Image First. Files are staged here and uploaded on Save (after the
+          product id exists) — see handleSave. */}
       <UploadZone
-        onFiles={(files) => {
-          // TODO: wire to media service
-          console.log('Upload files:', files);
-        }}
+        onFiles={(files) => setStagedFiles((prev) => [...prev, ...files])}
         accept="image/*"
         description="Start with the product image"
         label="Drop images here or click to upload"
         hint="This is what designers and clients see first. Lead with the hero shot."
-        className="mb-8 min-h-[180px]"
+        className="mb-2 min-h-[180px]"
       />
+      {stagedFiles.length > 0 && (
+        <div className="mb-8 flex flex-wrap gap-3">
+          {stagedFiles.map((file, i) => (
+            <div
+              key={`${file.name}-${i}`}
+              className="relative h-20 w-20 overflow-hidden rounded-md border border-[var(--color-pearl)]"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={URL.createObjectURL(file)}
+                alt={file.name}
+                className="h-full w-full object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => setStagedFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                className="absolute right-1 top-1 rounded-full bg-white/90 px-1.5 text-[0.7rem] leading-none text-[var(--color-terracotta)] shadow"
+                aria-label={`Remove ${file.name}`}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ===== Product Identity ===== */}
       <h3 className={sectionHeadClass}>Product Identity</h3>
