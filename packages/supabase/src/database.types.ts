@@ -10261,6 +10261,7 @@ export type Database = {
         Args: { quiz_answers: Json; timings?: Json }
         Returns: Json
       }
+      promote_batch_to_studio: { Args: { p_items: Json }; Returns: string[] }
       promote_to_studio: {
         Args: {
           p_category: string

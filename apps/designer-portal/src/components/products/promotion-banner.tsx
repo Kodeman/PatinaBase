@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { LayerIcon } from '@patina/catalog-ui';
+import { LayerIcon, PromotionToast } from '@patina/catalog-ui';
 import { usePromotionCandidates } from '@patina/supabase';
+import { BulkPromoteToStudioModal } from './promotion/bulk-promote-to-studio-modal';
 
 const DISMISS_KEY = 'library_promotion_banner_dismissed';
 
@@ -12,13 +13,15 @@ const DISMISS_KEY = 'library_promotion_banner_dismissed';
  * of personal items that meet the PRD §6.1 promotion bar. Renders only
  * when count >= 1 and the user hasn't dismissed it this session.
  *
- * v1 keeps the CTA informational — clicking the chevron expands a small
- * preview list rather than navigating elsewhere. Bulk-promote routing
- * lands with the BulkPromoteToStudioModal in Sprint 2 chunk 3.
+ * "Review and promote" opens the BulkPromoteToStudioModal — atomic batch
+ * promotion of every selected candidate in a single transaction.
+ * Individual per-item promotion is available from the card footers.
  */
 export function PromotionBanner() {
   const { data } = usePromotionCandidates({ limit: 5 });
   const [sessionDismissed, setSessionDismissed] = useState(true);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkSuccessCount, setBulkSuccessCount] = useState<number | null>(null);
 
   useEffect(() => {
     try {
@@ -72,9 +75,19 @@ export function PromotionBanner() {
             {data.count > 4 && <li>+ {data.count - 4} more</li>}
           </ul>
         )}
-        <p className="text-[0.78rem] text-[var(--text-muted)]">
-          Click any item below and choose <em>Promote to Studio</em> to make it studio-wide.
-        </p>
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <button
+            type="button"
+            onClick={() => setBulkOpen(true)}
+            className="rounded-md px-3 py-1.5 text-[0.78rem] text-white"
+            style={{ background: 'var(--color-sage, #A8B5A0)' }}
+          >
+            Review and promote
+          </button>
+          <p className="text-[0.78rem] text-[var(--text-muted)]">
+            Or click any item below and choose <em>Promote to Studio</em>.
+          </p>
+        </div>
       </div>
       <button
         type="button"
@@ -84,6 +97,21 @@ export function PromotionBanner() {
       >
         <X className="h-4 w-4" />
       </button>
+
+      <BulkPromoteToStudioModal
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        onSuccess={(ids) => setBulkSuccessCount(ids.length)}
+      />
+
+      {bulkSuccessCount !== null && (
+        <PromotionToast
+          count={bulkSuccessCount}
+          layer="studio"
+          viewUrl="/portal/library/studio"
+          onDismiss={() => setBulkSuccessCount(null)}
+        />
+      )}
     </div>
   );
 }

@@ -23,9 +23,12 @@ export {
 export {
   promoteToStudio,
   demoteToPersonal,
+  promoteBatchToStudio,
   isWithinUndoWindow,
   type PromoteToStudioInput,
   type DemoteToPersonalInput,
+  type PromoteBatchToStudioInput,
+  type PromoteBatchItem,
   type PaymentPattern,
 } from './mutations/promotion';
 

@@ -31,8 +31,10 @@ export {
 export {
   usePromoteToStudio,
   useDemoteToPersonal,
+  usePromoteBatchToStudio,
   type UsePromoteToStudioOptions,
   type UseDemoteToPersonalOptions,
+  type UsePromoteBatchToStudioOptions,
 } from './use-promote-to-studio';
 export type {
   ProductWithVendorPricing,

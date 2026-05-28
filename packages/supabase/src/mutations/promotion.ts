@@ -83,6 +83,51 @@ export async function demoteToPersonal(
   return data;
 }
 
+// ─── Batch promotion ───────────────────────────────────────────────────────
+
+export type PromoteBatchItem = Omit<PromoteToStudioInput, 'studioId'>;
+
+export interface PromoteBatchToStudioInput {
+  studioId: string;
+  items: PromoteBatchItem[];
+}
+
+/**
+ * Atomic batch promotion. Wraps N single-item promotes in a single
+ * transaction server-side; any item that fails its constraints rolls
+ * back the entire batch. Used by the BulkPromoteToStudioModal.
+ *
+ * For the "skip needs-info" continue-on-error path, callers should
+ * issue N independent `promoteToStudio` calls instead — that variant
+ * commits each successful item even if a later item raises.
+ */
+export async function promoteBatchToStudio(
+  input: PromoteBatchToStudioInput,
+  client: SupabaseClient<Database> = createBrowserClient(),
+): Promise<string[]> {
+  if (input.items.length === 0) return [];
+
+  const payload = input.items.map((item) => ({
+    product_id: item.productId,
+    studio_id: input.studioId,
+    vendor_contact: item.vendorContact,
+    payment_terms: item.paymentTerms,
+    category: item.category,
+    subcategory: item.subcategory ?? null,
+    usage_notes: item.usageNotes,
+    lead_time_weeks: item.leadTimeWeeks,
+  }));
+
+  const { data, error } = await client.rpc('promote_batch_to_studio', {
+    p_items: payload as unknown as Json,
+  });
+
+  if (error) {
+    throw new Error(`promoteBatchToStudio: ${error.message}`);
+  }
+  return data ?? [];
+}
+
 /**
  * Helper for the 7-day undo window check. The modal layer reads
  * `promoted_at` from the product row and uses this to decide whether

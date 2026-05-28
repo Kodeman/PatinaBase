@@ -4,8 +4,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   promoteToStudio,
   demoteToPersonal,
+  promoteBatchToStudio,
   type PromoteToStudioInput,
   type DemoteToPersonalInput,
+  type PromoteBatchToStudioInput,
 } from '../mutations/promotion';
 
 function invalidateLayerCaches(qc: ReturnType<typeof useQueryClient>) {
@@ -43,6 +45,31 @@ export function usePromoteToStudio(options: UsePromoteToStudioOptions = {}) {
 export interface UseDemoteToPersonalOptions {
   onSuccess?: (productId: string) => void;
   onError?: (error: Error) => void;
+}
+
+export interface UsePromoteBatchToStudioOptions {
+  onSuccess?: (productIds: string[]) => void;
+  onError?: (error: Error) => void;
+}
+
+/**
+ * Atomic batch promotion hook. All items succeed or all roll back. For
+ * the continue-on-error / skip-needs-info path, run individual
+ * `usePromoteToStudio` mutations instead.
+ */
+export function usePromoteBatchToStudio(options: UsePromoteBatchToStudioOptions = {}) {
+  const queryClient = useQueryClient();
+  return useMutation<string[], Error, PromoteBatchToStudioInput>({
+    mutationKey: ['promote-batch-to-studio'],
+    mutationFn: (input) => promoteBatchToStudio(input),
+    onSuccess: (productIds) => {
+      invalidateLayerCaches(queryClient);
+      options.onSuccess?.(productIds);
+    },
+    onError: (error) => {
+      options.onError?.(error);
+    },
+  });
 }
 
 /**
