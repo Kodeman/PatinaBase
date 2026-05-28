@@ -10008,6 +10008,7 @@ export type Database = {
         Args: { p_count?: number; p_room_id: string }
         Returns: undefined
       }
+      demote_to_personal: { Args: { p_product_id: string }; Returns: string }
       evaluate_collection_rules: {
         Args: { p_collection_id: string }
         Returns: Json
@@ -10229,6 +10230,10 @@ export type Database = {
         Args: { _organization_id: string; _user_id?: string }
         Returns: boolean
       }
+      is_product_in_active_use: {
+        Args: { p_product_id: string }
+        Returns: boolean
+      }
       is_project_team_member: {
         Args: { _project_id: string; _user_id?: string }
         Returns: boolean
@@ -10255,6 +10260,19 @@ export type Database = {
       process_style_quiz: {
         Args: { quiz_answers: Json; timings?: Json }
         Returns: Json
+      }
+      promote_to_studio: {
+        Args: {
+          p_category: string
+          p_lead_time_weeks: number
+          p_payment_terms: string
+          p_product_id: string
+          p_studio_id: string
+          p_subcategory?: string
+          p_usage_notes: string
+          p_vendor_contact: Json
+        }
+        Returns: string
       }
       revoke_role_from_user: {
         Args: { p_role_name: string; p_user_id: string }

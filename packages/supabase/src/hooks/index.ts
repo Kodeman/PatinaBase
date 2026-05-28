@@ -28,6 +28,12 @@ export {
   type CrossLayerSearchResult,
   type UseCrossLayerSearchOptions,
 } from './use-cross-layer-search';
+export {
+  usePromoteToStudio,
+  useDemoteToPersonal,
+  type UsePromoteToStudioOptions,
+  type UseDemoteToPersonalOptions,
+} from './use-promote-to-studio';
 export type {
   ProductWithVendorPricing,
   VendorPricingInfo,

@@ -20,6 +20,14 @@ export {
   type CaptureProductResult,
   type CaptureProductDestination,
 } from './mutations/capture-product';
+export {
+  promoteToStudio,
+  demoteToPersonal,
+  isWithinUndoWindow,
+  type PromoteToStudioInput,
+  type DemoteToPersonalInput,
+  type PaymentPattern,
+} from './mutations/promotion';
 
 // Server-side auth utilities are available via '@patina/supabase/server'
 // Do NOT re-export here — server.ts uses next/headers which breaks client components

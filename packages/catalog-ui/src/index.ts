@@ -30,6 +30,10 @@ export {
   type DestinationPickerProject,
   type DestinationPickerRoom,
 } from './components/destination-picker';
+export {
+  PromotionToast,
+  type PromotionToastProps,
+} from './components/promotion-toast';
 
 export { SearchInput } from './components/search-input';
 export { FilterRow } from './components/filter-row';
