@@ -223,7 +223,7 @@ export function DuplicateDetectionPanel({
       toast({
         title: 'Error',
         description: 'Failed to dismiss duplicate.',
-        variant: 'destructive',
+        variant: 'error',
       });
     }
   };
@@ -244,7 +244,7 @@ export function DuplicateDetectionPanel({
       toast({
         title: 'Error',
         description: 'Failed to mark as duplicate.',
-        variant: 'destructive',
+        variant: 'error',
       });
     }
   };
@@ -265,7 +265,7 @@ export function DuplicateDetectionPanel({
       toast({
         title: 'Error',
         description: 'Failed to merge products.',
-        variant: 'destructive',
+        variant: 'error',
       });
     }
   };

@@ -50,7 +50,7 @@ export function ValidationIssuesPanel({ productId, className }: ValidationIssues
       toast({
         title: 'Error',
         description: 'Failed to load validation issues.',
-        variant: 'destructive',
+        variant: 'error',
       });
     } finally {
       setIsLoading(false);
@@ -78,7 +78,7 @@ export function ValidationIssuesPanel({ productId, className }: ValidationIssues
       toast({
         title: 'Error',
         description: 'Failed to revalidate product.',
-        variant: 'destructive',
+        variant: 'error',
       });
     } finally {
       setIsRevalidating(false);
@@ -110,7 +110,7 @@ export function ValidationIssuesPanel({ productId, className }: ValidationIssues
       toast({
         title: 'Error',
         description: 'Failed to resolve validation issue.',
-        variant: 'destructive',
+        variant: 'error',
       });
     }
   };
@@ -129,7 +129,7 @@ export function ValidationIssuesPanel({ productId, className }: ValidationIssues
       toast({
         title: 'Error',
         description: 'Failed to unresolve validation issue.',
-        variant: 'destructive',
+        variant: 'error',
       });
     }
   };

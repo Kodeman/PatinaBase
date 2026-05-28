@@ -72,7 +72,7 @@ function MfaVerifyContent() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="w-full max-w-md rounded-lg bg-white p-8 shadow">
-          <Alert variant="destructive">
+          <Alert variant="error">
             No two-factor authentication methods found. Please contact support.
           </Alert>
           <Button
@@ -102,7 +102,7 @@ function MfaVerifyContent() {
           </p>
         </div>
 
-        {error && <Alert variant="destructive">{error}</Alert>}
+        {error && <Alert variant="error">{error}</Alert>}
 
         {/* Factor selection (only shown when multiple factors exist) */}
         {verifiedFactors.length > 1 && (

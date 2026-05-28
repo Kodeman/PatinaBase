@@ -135,7 +135,7 @@ export const MLPredictionsPanel: React.FC<MLPredictionsPanelProps> = ({ clientId
 
   if (error || !predictions) {
     return (
-      <Alert variant="destructive">
+      <Alert variant="error">
         <AlertDescription>
           Failed to load ML predictions. Please try again later.
         </AlertDescription>
