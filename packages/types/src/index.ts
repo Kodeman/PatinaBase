@@ -91,6 +91,25 @@ export * from './analytics';
 // Exported as namespace to avoid conflicts with comms.ts NotificationType/Channel/Status/Priority
 export * as Notifications from './strata-notifications';
 
+// Email-builder block-prop types are non-conflicting, so also re-export them at
+// the top level — the email-builder props-forms import them directly by name.
+export type {
+  ContentBlockType,
+  ContentBlock,
+  TypedContentBlock,
+  HeaderBlockProps,
+  HeroBlockProps,
+  TextBlockProps,
+  DividerBlockProps,
+  ProductCardProps,
+  ProductGridProduct,
+  ProductGridProps,
+  CtaButtonProps,
+  NotificationBlockProps,
+  MakerSpotlightProps,
+  FooterBlockProps,
+} from './strata-notifications';
+
 // User management types (organizations, RBAC, GDPR)
 // Exported as namespace to avoid conflicts with user.ts Role/Permission/UserRole
 export * as UserManagement from './user-management';
