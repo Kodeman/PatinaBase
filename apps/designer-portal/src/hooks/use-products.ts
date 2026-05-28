@@ -11,7 +11,7 @@ import { withMockData } from '@/lib/mock-data';
 import { queryKeys } from '@/lib/react-query';
 
 // Product Queries
-export interface ProductFilters {
+export type ProductFilters = {
   status?: string;
   categoryId?: string;
   vendorId?: string;
@@ -58,17 +58,20 @@ export function useProducts(filters?: ProductFilters, enabled = true) {
       };
     }
 
+    // raw.data may be a bare Product[] or a nested object; narrow to the object
+    // form before reading scalar fields off it.
+    const rawDataObj = Array.isArray(raw.data) ? undefined : raw.data;
     const rawData = Array.isArray(raw.data)
       ? raw.data
       : raw.data?.products ?? raw.data?.results ?? undefined;
 
     const products = raw.products ?? raw.results ?? rawData ?? [];
-    const total = raw.total ?? raw.meta?.total ?? raw.data?.total ?? (Array.isArray(products) ? products.length : 0);
-    const page = raw.page ?? raw.meta?.page ?? raw.data?.page ?? fallbackPage;
+    const total = raw.total ?? raw.meta?.total ?? rawDataObj?.total ?? (Array.isArray(products) ? products.length : 0);
+    const page = raw.page ?? raw.meta?.page ?? rawDataObj?.page ?? fallbackPage;
     const pageSize =
       raw.pageSize ??
       raw.meta?.pageSize ??
-      raw.data?.pageSize ??
+      rawDataObj?.pageSize ??
       (Array.isArray(products) ? products.length : undefined) ??
       fallbackPageSize ??
       0;
