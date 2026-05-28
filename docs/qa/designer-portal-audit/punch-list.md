@@ -16,6 +16,14 @@ Source: live Chrome walk (`findings.md`) + 3 background code-audit agents. Local
 
 Counts (approx): P1 ≈ 16, P2 ≈ 40, P3 ≈ 35. Total ≈ 90 distinct items (excludes pure dupes).
 
+## Remediation status (2026-05-28) — DONE & pushed to `main`
+
+Cross-cutting wave: **X-01, X-02 (audit), X-04 (MetricBlock + useProjectListMetrics residual), MSG-01** ✅.
+Lane waves (5 parallel agents, file-disjoint, integrated + spot-verified in Chrome): **A-02, B-01..B-07, SEED-03, C-01/C-02, PROD-06/08/11/15/17/18/21/22/23/32, CLI-01/02/04/05/06/07/10/11/12/13/14/18, MSG-04/05/07, SEC-02/04/05/08/09, COMM-03/04/05/06/07, VEN-03, SET-03/04/05/07/11** ✅.
+All 40 changed files type-clean (no new tsc errors vs the pre-existing baseline). Verified live: profile menu (one Settings), pipeline names + budgets, projects metrics ($120k/1 real), financials card consistency, decisions/dashboard metric cards, teaching honest metrics, settings notif toggles, unread badge.
+
+**Still open (Large / needs-its-own-plan):** X-02 implement missing `/api/*` routes (search/comms/orders/style-profile/admin-comms-dashboard) → COMM-01/02; PROD-05 image upload, PROD-09/10 import pipeline, PROD-16 teaching save, PROD-19/20 deep analysis, PROD-12/13 library tabs; CLI-03 option-image upload, CLI-08 nurture send, CLI-09/19 reviews send/schedule, CLI-17 journey phase; VEN-01/02 vendor actions; SET-01 team invite, SET-06 2FA, SET-08 SMS, SET-09 unify notif systems, SET-10 sessions; SEC-03 3D viewer, SEC-06/07 help CMS; X-05 loading skeletons; C-03 procurement filters; SMOKE-04/05 repo type-check/lint health. Minor: `/portal/insights` nav entry still shown to non-admins (page now shows a friendly message).
+
 ---
 
 ## Cross-cutting (fix once — assign to a dedicated agent)
