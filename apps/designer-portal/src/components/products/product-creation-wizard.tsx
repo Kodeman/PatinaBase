@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils';
 import { catalogApi } from '@/lib/api-client';
 import { canCreateProducts } from '@/lib/permissions';
 import { DetailsTab, MediaTab, PricingTab, InventoryTab, SEOTab } from './tabs';
-import type { Product, UserRole } from '@patina/types';
+import type { Product, UserRoleName } from '@patina/types';
 
 interface WizardStep {
   id: string;
@@ -99,7 +99,7 @@ export function ProductCreationWizard({ onSuccess, onCancel }: ProductCreationWi
   const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([0]));
 
   const sessionRoles = user?.roles ?? [];
-  const userRole = (sessionRoles[0] as UserRole | undefined) ?? (user as any)?.role;
+  const userRole = (sessionRoles[0] as UserRoleName | undefined) ?? (user as any)?.role;
   const isDesigner = sessionRoles.includes('designer') || (user as any)?.role === 'designer';
 
   // Check permissions
@@ -115,7 +115,7 @@ export function ProductCreationWizard({ onSuccess, onCancel }: ProductCreationWi
       toast({
         title: 'Access Denied',
         description: 'You do not have permission to create products.',
-        variant: 'destructive',
+        variant: 'error',
       });
       router.push('/catalog');
       return;
@@ -203,7 +203,7 @@ export function ProductCreationWizard({ onSuccess, onCancel }: ProductCreationWi
       toast({
         title: 'Validation Error',
         description: 'Product name and brand are required.',
-        variant: 'destructive',
+        variant: 'error',
       });
       setCurrentStep(0); // Go back to essentials
       return;
@@ -229,7 +229,7 @@ export function ProductCreationWizard({ onSuccess, onCancel }: ProductCreationWi
       toast({
         title: 'Error',
         description: 'Failed to create the product. Please try again.',
-        variant: 'destructive',
+        variant: 'error',
       });
       console.error('Failed to create product:', error);
     } finally {

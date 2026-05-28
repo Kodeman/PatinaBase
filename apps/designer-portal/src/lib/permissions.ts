@@ -1,4 +1,4 @@
-import type { UserRole } from '@patina/types';
+import type { UserRoleName } from '@patina/types';
 
 /**
  * Permission utility functions for catalog operations
@@ -23,7 +23,7 @@ export interface CatalogPermissions {
 /**
  * Get catalog permissions for a user role
  */
-export function getCatalogPermissions(role: UserRole | undefined): CatalogPermissions {
+export function getCatalogPermissions(role: UserRoleName | undefined): CatalogPermissions {
   if (!role) {
     return {
       canCreateProducts: false,
@@ -77,49 +77,49 @@ export function getCatalogPermissions(role: UserRole | undefined): CatalogPermis
 /**
  * Check if user can create products
  */
-export function canCreateProducts(role: UserRole | undefined): boolean {
+export function canCreateProducts(role: UserRoleName | undefined): boolean {
   return role === 'admin' || role === 'designer';
 }
 
 /**
  * Check if user can edit products
  */
-export function canEditProducts(role: UserRole | undefined): boolean {
+export function canEditProducts(role: UserRoleName | undefined): boolean {
   return role === 'admin' || role === 'designer';
 }
 
 /**
  * Check if user can delete products
  */
-export function canDeleteProducts(role: UserRole | undefined): boolean {
+export function canDeleteProducts(role: UserRoleName | undefined): boolean {
   return role === 'admin'; // Only admins can delete
 }
 
 /**
  * Check if user can publish/unpublish products
  */
-export function canPublishProducts(role: UserRole | undefined): boolean {
+export function canPublishProducts(role: UserRoleName | undefined): boolean {
   return role === 'admin'; // Only admins can publish
 }
 
 /**
  * Check if user has full catalog access
  */
-export function hasFullCatalogAccess(role: UserRole | undefined): boolean {
+export function hasFullCatalogAccess(role: UserRoleName | undefined): boolean {
   return role === 'admin';
 }
 
 /**
  * Check if user can manage collections
  */
-export function canManageCollections(role: UserRole | undefined): boolean {
+export function canManageCollections(role: UserRoleName | undefined): boolean {
   return role === 'admin' || role === 'designer';
 }
 
 /**
  * Check if user can create collections
  */
-export function canCreateCollections(role: UserRole | undefined): boolean {
+export function canCreateCollections(role: UserRoleName | undefined): boolean {
   return role === 'admin' || role === 'designer';
 }
 
@@ -127,7 +127,7 @@ export function canCreateCollections(role: UserRole | undefined): boolean {
  * Check if user can edit a collection
  * Designers can only edit draft collections, admins can edit any
  */
-export function canEditCollection(role: UserRole | undefined, collectionStatus?: string): boolean {
+export function canEditCollection(role: UserRoleName | undefined, collectionStatus?: string): boolean {
   if (role === 'admin') return true;
   return role === 'designer' && (collectionStatus === 'draft' || !collectionStatus);
 }
@@ -135,41 +135,41 @@ export function canEditCollection(role: UserRole | undefined, collectionStatus?:
 /**
  * Check if user can delete collections
  */
-export function canDeleteCollection(role: UserRole | undefined): boolean {
+export function canDeleteCollection(role: UserRoleName | undefined): boolean {
   return role === 'admin';
 }
 
 /**
  * Check if user can publish/unpublish collections
  */
-export function canPublishCollection(role: UserRole | undefined): boolean {
+export function canPublishCollection(role: UserRoleName | undefined): boolean {
   return role === 'admin';
 }
 
 /**
  * Check if user can manage categories (full CRUD)
  */
-export function canManageCategories(role: UserRole | undefined): boolean {
+export function canManageCategories(role: UserRoleName | undefined): boolean {
   return role === 'admin';
 }
 
 /**
  * Check if user can create categories
  */
-export function canCreateCategories(role: UserRole | undefined): boolean {
+export function canCreateCategories(role: UserRoleName | undefined): boolean {
   return role === 'admin';
 }
 
 /**
  * Check if user can edit categories
  */
-export function canEditCategories(role: UserRole | undefined): boolean {
+export function canEditCategories(role: UserRoleName | undefined): boolean {
   return role === 'admin';
 }
 
 /**
  * Check if user can delete categories
  */
-export function canDeleteCategories(role: UserRole | undefined): boolean {
+export function canDeleteCategories(role: UserRoleName | undefined): boolean {
   return role === 'admin';
 }
