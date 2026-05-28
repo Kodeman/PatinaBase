@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useClaimNextProduct, useAssignStyle, useAllStyles, useSubmitTeaching } from '@patina/supabase';
+import { useClaimNextProduct, useAssignStyle, useAllStyles } from '@patina/supabase';
 import { PortalButton } from '@/components/portal/button';
 import { StyleTag } from '@/components/portal/style-tag';
 import { LoadingStrata } from '@/components/portal/loading-strata';
@@ -11,10 +11,17 @@ import { LoadingStrata } from '@/components/portal/loading-strata';
 type Any = any;
 
 export default function QuickTagsPage() {
-  const { data: product, isLoading: claiming } = useClaimNextProduct('quick') as { data: Any; isLoading: boolean };
+  // useClaimNextProduct is a MUTATION (claiming is a write). Trigger it on mount
+  // to claim the next quick-tags product; the claimed row is the mutation result.
+  const claim = useClaimNextProduct('quick_tags');
+  const { mutate: claimNext } = claim;
+  useEffect(() => {
+    claimNext();
+  }, [claimNext]);
+  const product = claim.data as Any;
+  const claiming = claim.isPending;
   const { data: rawStyles } = useAllStyles() as { data: Any };
   const assignStyle = useAssignStyle();
-  const submitTeaching = useSubmitTeaching();
   const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
 
   const styles = Array.isArray(rawStyles) ? rawStyles : [];
@@ -26,11 +33,18 @@ export default function QuickTagsPage() {
   };
 
   const handleSubmit = () => {
-    if (!product?.id || selectedStyles.length === 0) return;
-    submitTeaching.mutate(
-      { productId: product.product_id || product.id, styles: selectedStyles, mode: 'quick' },
-      { onSuccess: () => setSelectedStyles([]) }
-    );
+    const productId = product?.product_id || product?.id;
+    if (!productId || selectedStyles.length === 0) return;
+    // Quick-tags assigns each selected style to the product (first = primary),
+    // then claims the next product in the queue.
+    Promise.all(
+      selectedStyles.map((styleId, i) =>
+        assignStyle.mutateAsync({ productId, styleId, isPrimary: i === 0 })
+      )
+    ).then(() => {
+      setSelectedStyles([]);
+      claimNext();
+    });
   };
 
   if (claiming) return <LoadingStrata />;
@@ -73,8 +87,8 @@ export default function QuickTagsPage() {
           </div>
 
           <div className="flex gap-4">
-            <PortalButton variant="primary" onClick={handleSubmit} disabled={selectedStyles.length === 0 || submitTeaching.isPending}>
-              {submitTeaching.isPending ? 'Submitting...' : 'Submit Tags'}
+            <PortalButton variant="primary" onClick={handleSubmit} disabled={selectedStyles.length === 0 || assignStyle.isPending}>
+              {assignStyle.isPending ? 'Submitting...' : 'Submit Tags'}
             </PortalButton>
             <PortalButton variant="ghost" onClick={() => setSelectedStyles([])}>
               Clear
