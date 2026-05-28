@@ -8,14 +8,17 @@ Source: live Chrome walk (`findings.md`) + 3 background code-audit agents. Local
 **Wave 2 (wire existing backend):** ✅ SEC-03 room viewer, ✅ PROD-16/19/20 teaching persistence, ✅ PROD-05/CLI-03 image upload, ✅ SET-01 invite / SET-06 2FA / SET-10 sessions / SET-09 notif-unify, ✅ CLI-08 nurture send / CLI-09/19 review send+schedule / VEN-01/02 vendor actions / CLI-17 real journey.
 **Wave 3 (net-new + polish):** ✅ PROD-09/10 CSV import, ✅ PROD-12/13 library tabs (2 of 3 live), ✅ SET-08 SMS plumbing (creds-gated), ✅ C-03 by-vendor sort.
 
-**Also done (resume pass):** ✅ **PROD-13 Founding Circle** — migration 00163 adds `vendors.founding_circle`; hook wired (two-step query, avoids the dual-FK embed); verified live (renders the linked catalog products). Vendor **Save** (VEN-02) verified end-to-end (POST 200 → `saved_vendors` row).
+**Also done (resume + follow-up passes):**
+- ✅ **PROD-13 Founding Circle** — migration 00163 adds `vendors.founding_circle`; hook wired (two-step query, avoids the dual-FK embed); verified live (renders the linked catalog products).
+- ✅ **VEN-02 / SET-06** verified end-to-end live: vendor Save (POST 200 → `saved_vendors` row); 2FA enroll (real Supabase TOTP QR + secret).
+- ✅ **SET-10 session list** — migration 00164 adds an exception-guarded `auth.sessions`→`user_sessions` trigger (can't block login) + `ON DELETE CASCADE` FK + backfill. Profile Active Sessions now shows real sessions (verified live).
+- ✅ **SMOKE-04 (partial)** — app tsconfig was type-checking other packages' **test/story** files (missing vitest/jest globals); added the missing excludes → tsc errors **3085 → 267** (only real app-source errors remain).
 
 **Still open (explicitly deferred, with reasons):**
+- **SMOKE-04 remainder + SMOKE-05** — ~267 real app/api-client type errors (pre-existing app debt, a separate file-by-file cleanup) + migrate deprecated `next lint` → ESLint CLI. Needed before `tsc`/lint can gate CI.
 - **SEC-06/07 Help content** — Sanity content-authoring task (studio + components wired); needs a dedicated authoring pass with the `kv3qrinl` project, not app code.
-- **SMOKE-04/05 repo health** — ~3085 pre-existing tsc errors (test/story globals across packages) + deprecated `next lint`; repo-wide infra fix, not designer-portal feature work.
-- **X-05 loading skeletons** — broad cosmetic polish; most data pages already use `LoadingStrata`. NOTE: `/portal/resources` specifically renders **stuck-faded** (the `animate-page-enter` entrance animation never settles — not a fill-mode issue, no console error; likely a re-render reset). Low-value static SEC-01 page; needs a focused investigation, not a global animation change.
-- **SET-10 session list** — needs an auth hook/edge function to populate `user_sessions` on login (UI shows the current session meanwhile).
-- **C-03 by-status faceted filters** — different stage-bucket structure; Sprint-2 follow-up (by-vendor sort done). XLSX import — needs a parser dep (CSV done).
+- **X-05 / `/portal/resources` stuck-fade** — `animate-page-enter` never settles on that static SEC-01 page (not fill-mode, no console error; likely a re-render reset). Low value; needs focused debug, not a global animation change. Broader X-05 (no-SSR blank) is architectural; most data pages already use `LoadingStrata`.
+- **C-03 by-status faceted filters** — `aria-hidden` decorative Sprint-1 stubs on the pilot-gated, data-less zone (can't verify); by-vendor sort done. **XLSX import** — needs a parser dep (CSV done).
 
 
 **Severity:** P0 crash · P1 core-broken · P2 incomplete-stub · P3 cosmetic.
