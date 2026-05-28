@@ -20,10 +20,12 @@ Counts (approx): P1 ≈ 16, P2 ≈ 40, P3 ≈ 35. Total ≈ 90 distinct items (e
 
 ## Cross-cutting (fix once — assign to a dedicated agent)
 
+> **Status (2026-05-28 wave):** X-01 ✅ fixed+verified, X-02 ✅ audited, X-04 ✅ fixed+verified (MetricBlock), MSG-01 ✅ fixed+verified. Remaining: X-05 (loading skeletons), X-03 (placeholder images), and X-04 residual = `useProjectListMetrics` still returns mock (projects-list "$142k across 5 projects" vs 1 real project).
+
 | ID | Sev | Effort | Item | Fix |
 |----|-----|--------|------|-----|
-| X-01 | P1 | Quick | `withMockData` logs full error object (17KB HTML ×4) → renderer freeze | `src/lib/mock-data.ts:30` → log `error?.message` only; de-dupe; debug-gate |
-| X-02 | P1 | Large | `auto` data mode silently masks broken live endpoints across 5 hooks (30 sites) | Audit which `api-client`/service/admin endpoints 404; fix/implement; make fallback visibly loud in dev |
+| X-01 | P1 | Quick | ✅ DONE — `withMockData` logged full 17KB HTML error ×4 → renderer freeze. Now logs `error.message` only. Verified: /portal/projects renders, no freeze. | `src/lib/mock-data.ts` |
+| X-02 | P1 | Large | `auto` data mode silently masks broken live endpoints across 5 hooks (30 sites) | **AUDIT DONE (2026-05-28):** these api-client base paths have NO route handler in designer-portal → 404 `text/html` → mock fallback: `/api/search` (searchApi), `/api/comms` (commsApi), `/api/style-profile` (styleProfileApi), `/api/orders` (ordersApi), `/api/admin/comms/dashboard` (COMM-01). Working: `/api/catalog/*` (200), `/api/projects` (401=auth OK). Fix = implement these proxy routes (Large, needs backing services). X-01 already makes the failures non-fatal. |
 | X-04 | P1 | Medium | Stat/metric cards read 0 while lists show real data (dashboard, decisions, financials, project-detail) | Wire `*ListMetrics`/aggregate queries to same Supabase data as lists; drop mock metric branches |
 | X-05 | P2 | Medium | No-SSR pages ghost/empty 3–7s on entry; entrance fade can stick | Loading skeletons; ensure fade completes to full opacity |
 | X-03 | P3 | Quick | `via.placeholder.com` images + hardcoded `Middlewest Studio` ship-to | Local placeholder asset; remove hardcoded ship-to |
