@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { formatCents, formatCentsCompact, formatRelativeDate } from '@patina/utils';
 import { useProjects, useProjectListMetrics, useUpdateProject } from '@/hooks/use-projects';
@@ -397,18 +397,14 @@ export default function ProjectsPage() {
         />
       )}
 
-      {/* Bulk action bar */}
+      {/* Bulk action bar. Change Lead / Export Financials / Combined Report are
+          not built yet — render disabled with a tooltip rather than firing an
+          alert (B-07). */}
       <BulkActionBar count={selected.size} onClear={() => setSelected(new Set())}>
         <BulkActionButton onClick={bulkArchive}>Move to On Hold</BulkActionButton>
-        <BulkActionButton onClick={() => alert('Change lead designer — coming soon')}>
-          Change Lead
-        </BulkActionButton>
-        <BulkActionButton onClick={() => alert('Export financials — coming soon')}>
-          Export Financials
-        </BulkActionButton>
-        <BulkActionButton onClick={() => alert('Combined report — coming soon')}>
-          Combined Report
-        </BulkActionButton>
+        <ComingSoonButton>Change Lead</ComingSoonButton>
+        <ComingSoonButton>Export Financials</ComingSoonButton>
+        <ComingSoonButton>Combined Report</ComingSoonButton>
       </BulkActionBar>
     </div>
   );
@@ -572,5 +568,27 @@ function GridView({
         );
       })}
     </div>
+  );
+}
+
+// ── Coming-soon bulk action (disabled + tooltip) ─────────────────────────────
+// Matches BulkActionButton styling but disabled — used for bulk actions that
+// aren't built yet (B-07). Kept local so the shared BulkActionButton component
+// stays untouched.
+function ComingSoonButton({ children }: { children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      disabled
+      title="Coming soon"
+      className="cursor-not-allowed rounded-[3px] border px-3 py-1.5 text-[0.8rem] opacity-50"
+      style={{
+        borderColor: 'var(--border-default)',
+        color: 'var(--text-primary)',
+        fontFamily: 'var(--font-body)',
+      }}
+    >
+      {children}
+    </button>
   );
 }

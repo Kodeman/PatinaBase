@@ -3,7 +3,8 @@
 import { useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useLeads, useProposals, useProjects } from '@patina/supabase';
+import { useLeads, useProposals } from '@patina/supabase';
+import { useProjects } from '@/hooks/use-projects';
 import {
   EmptyState,
   SectionIntro,
@@ -175,11 +176,15 @@ function PipelineContent() {
     // Leads
     if (leads && (!stageFilter || stageFilter === 'leads')) {
       for (const lead of leads) {
+        const leadTitle = lead.project_type || 'New Lead';
         result.push({
           id: `lead-${lead.id}`,
           stage: 'leads',
-          title: lead.project_type || 'New Lead',
-          clientName: lead.homeowner?.full_name || 'Unknown',
+          title: leadTitle,
+          clientName:
+            lead.homeowner?.full_name ||
+            [lead.location_city, lead.location_state].filter(Boolean).join(', ') ||
+            leadTitle,
           value: undefined,
           lastActivity: lead.created_at,
           href: `/portal/leads/${lead.id}`,
@@ -190,11 +195,12 @@ function PipelineContent() {
     // Proposals
     if (proposals && (!stageFilter || stageFilter === 'proposals')) {
       for (const proposal of proposals) {
+        const proposalTitle = proposal.title || 'Untitled Proposal';
         result.push({
           id: `proposal-${proposal.id}`,
           stage: 'proposals',
-          title: proposal.title || 'Untitled Proposal',
-          clientName: proposal.client?.full_name || 'Unknown',
+          title: proposalTitle,
+          clientName: proposal.client?.full_name || proposal.project?.name || proposalTitle,
           value: proposal.total_amount ? proposal.total_amount : undefined,
           lastActivity: proposal.updated_at || proposal.created_at,
           href: `/portal/proposals/${proposal.id}`,
@@ -209,12 +215,14 @@ function PipelineContent() {
         const stage: PipelineStage = project.status === 'completed' ? 'completed' : 'active';
         if (stageFilter && stageFilter !== stage) continue;
 
+        const projectTitle = project.name || 'Untitled Project';
+        const budgetCents = project.total_amount_cents ?? project.budget_cents ?? 0;
         result.push({
           id: `project-${project.id}`,
           stage,
-          title: project.name || 'Untitled Project',
-          clientName: project.client?.full_name || 'Unknown',
-          value: project.budget ? project.budget : undefined,
+          title: projectTitle,
+          clientName: project.client?.full_name || project.client_name || projectTitle,
+          value: budgetCents || undefined,
           lastActivity: project.updated_at || project.created_at,
           href: `/portal/projects/${project.id}`,
         });

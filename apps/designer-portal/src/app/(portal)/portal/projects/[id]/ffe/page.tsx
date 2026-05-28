@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useMemo, useState } from 'react';
+import { use, useMemo, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useProjectFFEItems, useProjectRooms } from '@/hooks/use-projects';
 import { useProject } from '@/hooks/use-projects';
@@ -342,18 +342,36 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
         />
       )}
 
-      {/* Bulk action bar */}
+      {/* Bulk action bar. Generate POs + Reassign Vendor are not built yet —
+          render disabled with a tooltip rather than firing an alert (B-07). */}
       <BulkActionBar count={selected.size} onClear={() => setSelected(new Set())}>
         <BulkActionButton onClick={() => bulkAdvance('approved')}>Mark Approved</BulkActionButton>
         <BulkActionButton onClick={() => bulkAdvance('ordered')}>Mark Ordered</BulkActionButton>
-        <BulkActionButton onClick={() => alert('Generate POs — coming soon')}>
-          Generate POs
-        </BulkActionButton>
-        <BulkActionButton onClick={() => alert('Reassign vendor — coming soon')}>
-          Reassign Vendor
-        </BulkActionButton>
+        <ComingSoonButton>Generate POs</ComingSoonButton>
+        <ComingSoonButton>Reassign Vendor</ComingSoonButton>
       </BulkActionBar>
     </div>
+  );
+}
+
+// Matches BulkActionButton styling but disabled with a tooltip — used for
+// procurement actions that aren't built yet (B-07). Kept local so the shared
+// BulkActionButton component stays untouched.
+function ComingSoonButton({ children }: { children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      disabled
+      title="Coming soon"
+      className="cursor-not-allowed rounded-[3px] border px-3 py-1.5 text-[0.8rem] opacity-50"
+      style={{
+        borderColor: 'var(--border-default)',
+        color: 'var(--text-primary)',
+        fontFamily: 'var(--font-body)',
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -462,8 +480,9 @@ function ItemDrawer({
           )}
           <button
             type="button"
-            onClick={() => alert('Generate PO — coming soon')}
-            className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
+            disabled
+            title="Coming soon"
+            className="cursor-not-allowed rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem] opacity-50"
             style={{ borderColor: 'var(--border-default)' }}
           >
             Generate PO

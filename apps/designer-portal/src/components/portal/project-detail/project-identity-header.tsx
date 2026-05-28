@@ -8,7 +8,8 @@ interface ProjectIdentityHeaderProps {
     client_name?: string;
     client_location?: string;
     site_address?: string | null;
-    startDate: string;
+    startDate?: string | null;
+    start_date?: string | null;
     client_id?: string | null;
     proposal?: { id: string } | null;
   };
@@ -16,9 +17,21 @@ interface ProjectIdentityHeaderProps {
   projectId: string;
 }
 
+function formatStartDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 export function ProjectIdentityHeader({ project, phase, projectId }: ProjectIdentityHeaderProps) {
   const phaseConfig = PHASE_CONFIG[phase];
   const currentIndex = ALL_PHASES.indexOf(phase);
+  const startedLabel = formatStartDate(project.startDate ?? project.start_date);
 
   return (
     <div
@@ -70,12 +83,7 @@ export function ProjectIdentityHeader({ project, phase, projectId }: ProjectIden
             const where = project.site_address || project.client_location;
             return where ? ` · ${where}` : '';
           })()}
-          {' · Started '}
-          {new Date(project.startDate).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-          })}
+          {startedLabel ? ` · Started ${startedLabel}` : ''}
         </div>
 
         {/* Phase progress dots */}

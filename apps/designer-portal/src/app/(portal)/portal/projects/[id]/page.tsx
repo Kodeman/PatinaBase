@@ -74,6 +74,10 @@ export default function ProjectDetailPage({
     'procurement-workspace-pilot',
   );
 
+  // Decisions count must match the DecisionsPanel list below (which treats
+  // pending/draft as "Open"). useProjectKeyMetrics derives its own count from a
+  // separate query that omits drafts, so override it here to keep the
+  // KeyMetricsRow stat consistent with the list (B-06).
   const openDecisionsCount = useMemo(
     () =>
       (Array.isArray(projectDecisions) ? projectDecisions : []).filter(
@@ -171,7 +175,9 @@ export default function ProjectDetailPage({
 
         {/* Zone 2: Key Metrics */}
         {keyMetrics && (
-          <KeyMetricsRow metrics={keyMetrics} />
+          <KeyMetricsRow
+            metrics={{ ...keyMetrics, decisionsOpen: openDecisionsCount }}
+          />
         )}
 
         <Link

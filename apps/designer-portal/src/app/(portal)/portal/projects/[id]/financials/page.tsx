@@ -2,6 +2,7 @@
 
 import { use, useMemo, useState } from 'react';
 import { useProject, useProjectFinancials, useProjectMilestones, useProjectFFEItems } from '@/hooks/use-projects';
+import { useAuth } from '@/hooks/use-auth';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { MetricBlock } from '@/components/portal/metric-block';
 import { PaymentMilestoneCard } from '@/components/portal/payment-milestone-card';
@@ -61,6 +62,7 @@ export default function ProjectFinancialsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const { user } = useAuth();
   const { data: project, isLoading } = useProject(id) as { data: AnyData; isLoading: boolean };
   const { data: financials } = useProjectFinancials(id);
   const { data: milestones = [] } = useProjectMilestones(id);
@@ -72,9 +74,6 @@ export default function ProjectFinancialsPage({
   const typedMilestones = (Array.isArray(milestones) ? milestones : []) as AnyData[];
   const typedItems = (Array.isArray(ffeItems) ? ffeItems : []) as AnyData[];
 
-  const totalBudget = fin.budgetCents ?? project?.budget_cents ?? project?.budget ?? 0;
-  const totalCommitted = fin.committedCents ?? 0;
-  const totalActual = fin.actualCents ?? 0;
   const designFee = fin.designFeeCents ?? project?.design_fee_cents ?? project?.design_fee ?? 0;
 
   // Build category rows from useProjectFinancials byCategory + add fallback Design Fee row
@@ -148,10 +147,11 @@ export default function ProjectFinancialsPage({
   const outstanding = totalInvoiced - totalCollected;
 
   // Designer earnings (lead-designer-only)
-  const productSpend = totalCommitted - designFee;
+  const productSpend = totalsRow.committed - designFee;
   const commissionRate = 0.12;
   const commissions = Math.round(productSpend * commissionRate);
-  const isLeadDesigner = true; // TODO: compare project.lead_designer_id === auth.uid()
+  const leadDesignerId = project?.lead_designer_id ?? project?.designer_id ?? null;
+  const isLeadDesigner = !!user?.id && !!leadDesignerId && leadDesignerId === user.id;
 
   return (
     <div className="pt-8">
@@ -175,9 +175,11 @@ export default function ProjectFinancialsPage({
         </div>
         <div className="flex gap-2">
           <button
-            className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
+            type="button"
+            disabled
+            title="Coming soon"
+            className="cursor-not-allowed rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem] opacity-50"
             style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)' }}
-            onClick={() => alert('Generate invoice — coming soon')}
           >
             Generate Invoice
           </button>
@@ -187,11 +189,14 @@ export default function ProjectFinancialsPage({
 
       {/* High-level metrics row — every label is a Patina-defined measurement
           (especially Committed vs Actual, which mean different things in
-          Patina's procurement model than in general accounting). */}
+          Patina's procurement model than in general accounting).
+          Cards read from the same totals as the variance table below
+          (totalsRow) so Budget / Committed / Actual / Variance stay consistent
+          across the screen (B-05). */}
       <div className="mb-8 flex flex-wrap gap-0 border-b pb-6" style={{ borderColor: 'var(--border-default)' }}>
         <div className="pr-8">
           <div className="flex items-baseline gap-1">
-            <MetricBlock label="Budget" value={formatCurrencyCompact(totalBudget)} />
+            <MetricBlock label="Budget" value={formatCurrencyCompact(totalsRow.budget)} />
             <StrataInfoIcon
               surfaceKey={SurfaceKeys.DesignerPortal.Financials.Metric.Budget}
               ariaLabel="What does Budget include?"
@@ -200,7 +205,7 @@ export default function ProjectFinancialsPage({
         </div>
         <div className="border-l px-8" style={{ borderColor: 'var(--border-default)' }}>
           <div className="flex items-baseline gap-1">
-            <MetricBlock label="Committed" value={formatCurrencyCompact(totalCommitted)} change={`${formatCurrency(totalBudget - totalCommitted)} remaining`} trend="neutral" />
+            <MetricBlock label="Committed" value={formatCurrencyCompact(totalsRow.committed)} change={`${formatCurrency(totalsRow.budget - totalsRow.committed)} remaining`} trend="neutral" />
             <StrataInfoIcon
               surfaceKey={SurfaceKeys.DesignerPortal.Financials.Metric.Committed}
               ariaLabel="What counts as committed spend?"
@@ -209,7 +214,7 @@ export default function ProjectFinancialsPage({
         </div>
         <div className="border-l px-8" style={{ borderColor: 'var(--border-default)' }}>
           <div className="flex items-baseline gap-1">
-            <MetricBlock label="Actual" value={formatCurrencyCompact(totalActual)} change={`${Math.round(((totalActual / Math.max(totalBudget, 1)) * 100))}% of budget`} trend="neutral" />
+            <MetricBlock label="Actual" value={formatCurrencyCompact(totalsRow.actual)} change={`${Math.round(((totalsRow.actual / Math.max(totalsRow.budget, 1)) * 100))}% of budget`} trend="neutral" />
             <StrataInfoIcon
               surfaceKey={SurfaceKeys.DesignerPortal.Financials.Metric.Actual}
               ariaLabel="When does spend become actual?"
@@ -492,37 +497,17 @@ function DrillDownModal({
 }
 
 function ExportMenu() {
-  const [open, setOpen] = useState(false);
+  // Export pipeline (XLSX / PDF / CSV) is not built yet — render the control
+  // disabled with a tooltip rather than firing an alert (B-07).
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
-        style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)' }}
-      >
-        Export ▾
-      </button>
-      {open && (
-        <div
-          className="absolute right-0 z-10 mt-1 w-48 rounded-md border bg-[var(--bg-surface)] py-1 shadow-md"
-          style={{ borderColor: 'var(--border-default)' }}
-        >
-          {['XLSX (line items)', 'PDF (client summary)', 'CSV (accounting)'].map((label) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() => {
-                alert(`${label} export — coming soon`);
-                setOpen(false);
-              }}
-              className="block w-full px-3 py-1.5 text-left text-[0.78rem] hover:bg-[var(--bg-hover)]"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <button
+      type="button"
+      disabled
+      title="Coming soon"
+      className="cursor-not-allowed rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem] opacity-50"
+      style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)' }}
+    >
+      Export
+    </button>
   );
 }
