@@ -128,7 +128,22 @@ async function tryFetch(
   contentType: HelpContentType,
   persona: Persona,
 ): Promise<unknown | null> {
-  const query = groq`*[_type == "helpContent" && surfaceKey == $sk && contentType == $ct && persona == $p][0]`
+  // Project to flat field names the components read, falling back from a
+  // top-level field to the studio's nested object shape (tooltipContent.* etc.).
+  // `coalesce(flat, nested...)` keeps flat-authored docs working while also
+  // rendering content authored via the Studio's nested schema (SEC-06/07).
+  const query = groq`*[_type == "helpContent" && surfaceKey == $sk && contentType == $ct && persona == $p][0]{
+    _id, surfaceKey, contentType, persona,
+    "eyebrow": coalesce(eyebrow, tooltipContent.eyebrow, helpArticleContent.eyebrow),
+    "body": coalesce(body, tooltipContent.body, coachmarkContent.body),
+    "heading": coalesce(heading, emptyStateContent.heading, coachmarkContent.heading),
+    "description": coalesce(description, emptyStateContent.description),
+    "icon": coalesce(icon, emptyStateContent.icon),
+    "primaryActionLabel": coalesce(primaryActionLabel, emptyStateContent.primaryActionLabel),
+    "secondaryActionLabel": coalesce(secondaryActionLabel, emptyStateContent.secondaryActionLabel),
+    "secondaryActionArticleKey": coalesce(secondaryActionArticleKey, emptyStateContent.secondaryActionArticleKey),
+    "ctaLabel": coalesce(ctaLabel, coachmarkContent.ctaLabel)
+  }`
   try {
     const result: unknown = await client.fetch(query, { sk: surfaceKey, ct: contentType, p: persona })
     return result ?? null
