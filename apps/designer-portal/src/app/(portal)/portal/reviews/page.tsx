@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   useClientReviews,
   useReviewStats,
@@ -31,6 +32,8 @@ export default function ReviewsPage() {
     useCompletedProjectsWithoutReview();
   const createReviewRequest = useCreateReviewRequest();
   const togglePublish = useTogglePortfolioPublish();
+  const queryClient = useQueryClient();
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const filterOptions = [
     { key: 'collected', label: 'Collected', count: stats?.totalCollected },
@@ -38,8 +41,68 @@ export default function ReviewsPage() {
     { key: 'queued', label: 'Request Queued', count: stats?.queuedCount },
   ];
 
+  const invalidateReviews = () => {
+    queryClient.invalidateQueries({ queryKey: ['client-reviews'] });
+    queryClient.invalidateQueries({ queryKey: ['review-stats'] });
+    queryClient.invalidateQueries({ queryKey: ['completed-projects-without-review'] });
+  };
+
+  // CLI-09: brand-new request for a completed project with no review row yet.
+  // The create hook writes the row directly (request_status='sent' or, with
+  // scheduledFor, 'queued').
   const handleSendRequest = (designerClientId: string, projectId?: string) => {
     createReviewRequest.mutate({ designerClientId, projectId });
+  };
+
+  // CLI-19: schedule a brand-new request for a future date.
+  const handleScheduleRequest = (
+    designerClientId: string,
+    scheduledFor: string,
+    projectId?: string
+  ) => {
+    createReviewRequest.mutate({ designerClientId, projectId, scheduledFor });
+  };
+
+  // CLI-09: (re)send an existing client_reviews row via the send route —
+  // sets request_status='sent', request_sent_at=now(), best-effort email.
+  const handleSendExisting = async (designerClientId: string, reviewId: string) => {
+    setBusyId(reviewId);
+    try {
+      const res = await fetch(
+        `/api/clients/${designerClientId}/reviews/${reviewId}/send`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'send' }),
+        }
+      );
+      if (res.ok) invalidateReviews();
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  // CLI-19: schedule an existing client_reviews row -> request_status='queued',
+  // scheduled_for=<date>.
+  const handleScheduleExisting = async (
+    designerClientId: string,
+    reviewId: string,
+    scheduledFor: string
+  ) => {
+    setBusyId(reviewId);
+    try {
+      const res = await fetch(
+        `/api/clients/${designerClientId}/reviews/${reviewId}/send`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'schedule', scheduledFor }),
+        }
+      );
+      if (res.ok) invalidateReviews();
+    } finally {
+      setBusyId(null);
+    }
   };
 
   return (
@@ -97,6 +160,9 @@ export default function ReviewsPage() {
                 })}
                 daysSinceCompletion={daysSince}
                 onSend={() => handleSendRequest(dc.id, project.id)}
+                onSchedule={(scheduledFor) =>
+                  handleScheduleRequest(dc.id, scheduledFor, project.id)
+                }
               />
             );
           })}
@@ -169,8 +235,12 @@ export default function ReviewsPage() {
                     day: 'numeric',
                   })}
                   daysSinceCompletion={daysSince}
+                  busy={busyId === review.id}
                   onSend={() =>
-                    handleSendRequest(review.designer_client_id, review.project_id || undefined)
+                    handleSendExisting(review.designer_client_id, review.id)
+                  }
+                  onSchedule={(scheduledFor) =>
+                    handleScheduleExisting(review.designer_client_id, review.id, scheduledFor)
                   }
                 />
               );

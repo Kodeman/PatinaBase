@@ -1,8 +1,11 @@
 'use client';
 
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNurtureTouchpoints, useUpdateTouchpoint } from '@patina/supabase';
 import type { ClientNurtureTouchpoint } from '@patina/supabase';
 import { NurtureCard } from '@/components/portal/nurture-card';
+import { NurtureComposeModal } from '@/components/portal/nurture-card';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 
 function formatLastContact(date: string | null): string {
@@ -24,18 +27,23 @@ function getSuggestedTiming(date: string | null): string {
   return 'This Month';
 }
 
+interface ComposeTarget {
+  touchpointId: string;
+  designerClientId: string;
+  clientName: string;
+  reason: string;
+}
+
 export default function NurtureQueuePage() {
   const { data: touchpoints, isLoading } = useNurtureTouchpoints({
     status: ['suggested', 'scheduled'],
   });
   const updateTouchpoint = useUpdateTouchpoint();
+  const queryClient = useQueryClient();
+  const [composeTarget, setComposeTarget] = useState<ComposeTarget | null>(null);
 
   const handleDismiss = (id: string) => {
     updateTouchpoint.mutate({ touchpointId: id, status: 'dismissed' });
-  };
-
-  const handleSend = (id: string) => {
-    updateTouchpoint.mutate({ touchpointId: id, status: 'sent' });
   };
 
   const handleSchedule = (id: string) => {
@@ -74,17 +82,25 @@ export default function NurtureQueuePage() {
             const lastContact = tp.designer_client?.last_contacted_at || tp.designer_client?.last_project_at;
             const timing = getSuggestedTiming(tp.suggested_date);
             const isPriority = timing === 'This Week' || timing === 'Overdue';
+            const reason = tp.reason || 'A great time for a personal check-in.';
 
             return (
               <NurtureCard
                 key={tp.id}
                 clientName={clientName}
-                projectContext={`${tp.designer_client?.status || ''} \u00B7 $${((tp.designer_client?.total_revenue || 0) / 100).toLocaleString()} lifetime`}
+                projectContext={`${tp.designer_client?.status || ''} · $${((tp.designer_client?.total_revenue || 0) / 100).toLocaleString()} lifetime`}
                 lastContact={formatLastContact(lastContact || null)}
                 suggestedTiming={timing}
-                reason={tp.reason || 'A great time for a personal check-in.'}
+                reason={reason}
                 isPriority={isPriority}
-                onSendNote={() => handleSend(tp.id)}
+                onSendNote={() =>
+                  setComposeTarget({
+                    touchpointId: tp.id,
+                    designerClientId: tp.designer_client_id,
+                    clientName,
+                    reason,
+                  })
+                }
                 onSchedule={() => handleSchedule(tp.id)}
                 onDismiss={() => handleDismiss(tp.id)}
               />
@@ -95,6 +111,32 @@ export default function NurtureQueuePage() {
         <p className="type-body py-16 text-center italic text-[var(--text-muted)]">
           No nurture touchpoints suggested. Past clients will appear here after project completion.
         </p>
+      )}
+
+      {composeTarget && (
+        <NurtureComposeModal
+          clientName={composeTarget.clientName}
+          defaultContent={`Hi ${composeTarget.clientName},\n\n`}
+          onClose={() => setComposeTarget(null)}
+          onSent={() => {
+            setComposeTarget(null);
+            queryClient.invalidateQueries({ queryKey: ['nurture-touchpoints'] });
+          }}
+          onSend={async (content) => {
+            const res = await fetch(
+              `/api/clients/${composeTarget.designerClientId}/nurture-send`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ touchpointId: composeTarget.touchpointId, content }),
+              }
+            );
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              throw new Error(err.error || 'Failed to send note');
+            }
+          }}
+        />
       )}
     </div>
   );

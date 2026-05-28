@@ -8,6 +8,7 @@ import {
   useClientDecisions,
   useClientProjects,
   useClientRoomScans,
+  useProjectPhases,
 } from '@patina/supabase';
 import type { DesignerClient, ClientLifecycleStage } from '@patina/supabase';
 import { StageBadge } from '@/components/portal/stage-badge';
@@ -75,6 +76,14 @@ export default function ClientProfilePage({
   const { data: projects } = useClientProjects(id) as { data: any[] | undefined };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: roomScans } = useClientRoomScans(id) as { data: any[] | undefined };
+  // CLI-17 — Relationship Journey reads authoritative project_phases for the
+  // client's primary (most-recent) project. Disabled gracefully when the
+  // client has no project; we fall back to the activity-log heuristic below.
+  const primaryProjectId = projects?.[0]?.id ?? '';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: projectPhases } = useProjectPhases(primaryProjectId) as {
+    data: any[] | undefined;
+  };
 
   if (isLoading) return <LoadingStrata />;
   if (!client) {
@@ -111,18 +120,47 @@ export default function ClientProfilePage({
     }),
   }));
 
-  // Build timeline from activity log — milestone and status-change events only.
-  // Status assignment heuristic (ascending sort by created_at):
-  //   • Last entry       → 'active'  (most recent in-progress milestone)
-  //   • All entries before it → 'done'
-  //   • No 'future' entries are emitted because the seed data does not encode
-  //     scheduled-but-not-yet-completed milestones in the activity log.
+  // CLI-17 — Relationship Journey from authoritative project_phases.
+  //   project_phases.status (migration 00066) maps directly to the timeline:
+  //     completed              → 'done'
+  //     in_progress            → 'active'
+  //     pending | delayed      → 'future'
+  //   Phases are ordered by sort_order (already applied by the hook). The
+  //   target_end_date drives the displayed date (falls back to start_date).
+  const PHASE_STATUS_MAP: Record<string, 'done' | 'active' | 'future'> = {
+    completed: 'done',
+    in_progress: 'active',
+    pending: 'future',
+    delayed: 'future',
+  };
+
+  const formatTimelineDate = (value: string | null | undefined): string =>
+    value
+      ? new Date(value).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        })
+      : '';
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const phaseEntries = (projectPhases ?? []).map((p: any) => ({
+    id: p.id,
+    label: p.name,
+    date: formatTimelineDate(p.target_end_date ?? p.start_date ?? p.completed_at),
+    status: (PHASE_STATUS_MAP[p.status] ?? 'future') as 'done' | 'active' | 'future',
+  }));
+
+  // Fallback timeline from the activity log — used only when the client has no
+  // project phases (e.g. no project, or a project predating phase tracking).
+  // Status heuristic (ascending sort by created_at): last entry → 'active',
+  // all earlier entries → 'done'.
   const sortedTimelineActivities = (activities ?? [])
     .filter((a) => TIMELINE_ACTIVITY_TYPES.has(a.activity_type))
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
   const lastTimelineIdx = sortedTimelineActivities.length - 1;
-  const timelineEntries = sortedTimelineActivities.map((a, i) => ({
+  const activityTimelineEntries = sortedTimelineActivities.map((a, i) => ({
     id: a.id,
     label: a.title,
     date: new Date(a.created_at).toLocaleDateString('en-US', {
@@ -132,6 +170,10 @@ export default function ClientProfilePage({
     }),
     status: (i === lastTimelineIdx ? 'active' : 'done') as 'done' | 'active' | 'future',
   }));
+
+  // Prefer authoritative phases; fall back to the activity-log heuristic.
+  const timelineEntries =
+    phaseEntries.length > 0 ? phaseEntries : activityTimelineEntries;
 
   // Style preferences from JSONB
   const prefs = (client.style_preferences || {}) as Record<string, string>;

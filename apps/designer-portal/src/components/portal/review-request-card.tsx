@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { PortalButton } from './button';
 
 interface ReviewRequestCardProps {
@@ -9,7 +10,9 @@ interface ReviewRequestCardProps {
   daysSinceCompletion: number;
   onSend: () => void;
   onCustomize?: () => void;
-  onSchedule?: () => void;
+  // Schedule the request for a future date (ISO yyyy-mm-dd from the picker).
+  onSchedule?: (scheduledFor: string) => void;
+  busy?: boolean;
 }
 
 export function ReviewRequestCard({
@@ -20,7 +23,18 @@ export function ReviewRequestCard({
   onSend,
   onCustomize,
   onSchedule,
+  busy = false,
 }: ReviewRequestCardProps) {
+  const [scheduling, setScheduling] = useState(false);
+  const [date, setDate] = useState('');
+
+  const confirmSchedule = () => {
+    if (!date || !onSchedule) return;
+    onSchedule(new Date(`${date}T09:00:00`).toISOString());
+    setScheduling(false);
+    setDate('');
+  };
+
   return (
     <div
       className="mb-6 rounded-md p-5"
@@ -42,7 +56,7 @@ export function ReviewRequestCard({
             color: 'var(--color-golden-hour)',
           }}
         >
-          Ready to send {'\u00B7'} Completed {completedDate}
+          Ready to send {'·'} Completed {completedDate}
         </span>
       </div>
       <p
@@ -56,21 +70,47 @@ export function ReviewRequestCard({
         Project completed {daysSinceCompletion} day{daysSinceCompletion !== 1 ? 's' : ''} ago.
         Recommended timing to request a review &mdash; client satisfaction peaks in the first week.
       </p>
-      <div className="flex gap-2">
-        <PortalButton variant="primary" onClick={onSend}>
-          Send Review Request
-        </PortalButton>
-        {onCustomize && (
-          <PortalButton variant="secondary" onClick={onCustomize}>
-            Customize Message
+
+      {scheduling ? (
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            min={new Date().toISOString().slice(0, 10)}
+            className="rounded-[3px] border bg-white px-2 py-1.5 font-body text-[0.82rem] outline-none"
+            style={{ borderColor: 'var(--border-default)' }}
+          />
+          <PortalButton variant="primary" onClick={confirmSchedule}>
+            Confirm
           </PortalButton>
-        )}
-        {onSchedule && (
-          <PortalButton variant="ghost" onClick={onSchedule}>
-            Schedule for Later
+          <PortalButton
+            variant="ghost"
+            onClick={() => {
+              setScheduling(false);
+              setDate('');
+            }}
+          >
+            Cancel
           </PortalButton>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <PortalButton variant="primary" onClick={onSend} disabled={busy}>
+            {busy ? 'Sending…' : 'Send Review Request'}
+          </PortalButton>
+          {onCustomize && (
+            <PortalButton variant="secondary" onClick={onCustomize}>
+              Customize Message
+            </PortalButton>
+          )}
+          {onSchedule && (
+            <PortalButton variant="ghost" onClick={() => setScheduling(true)}>
+              Schedule for Later
+            </PortalButton>
+          )}
+        </div>
+      )}
     </div>
   );
 }
