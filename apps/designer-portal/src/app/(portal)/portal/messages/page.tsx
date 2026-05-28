@@ -121,7 +121,7 @@ function MessagesPageInner() {
             className="w-full sm:max-w-sm"
           />
           <FilterRow
-            value={scope ?? 'all'}
+            active={scope ?? 'all'}
             options={FILTER_OPTIONS.map((o) => ({
               key: o.key ?? 'all',
               label: o.label,

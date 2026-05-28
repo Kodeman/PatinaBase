@@ -48,7 +48,6 @@ interface DecisionCardProps {
   optionThumbnails?: string[];
   onSendReminder?: () => void;
   onViewOptions?: () => void;
-  onView?: () => void;
   href?: string;
 }
 
@@ -161,10 +160,6 @@ export function DecisionCard({
             <PortalButton variant="primary" onClick={onSendReminder}>
               Send Reminder
             </PortalButton>
-          )}
-
-          {!isOverdue && status === 'pending' && href && (
-            <PortalButton variant="secondary">View</PortalButton>
           )}
         </div>
       </div>

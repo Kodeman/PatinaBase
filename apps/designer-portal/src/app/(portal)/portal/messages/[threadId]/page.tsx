@@ -12,9 +12,11 @@ import {
   useTypingIndicator,
   useArchiveThread,
   useMuteThread,
+  createBrowserClient,
   type CommsMessage,
   type ThreadSummary,
 } from '@patina/supabase';
+import { useQuery } from '@tanstack/react-query';
 import {
   MessageThread,
   MessageComposer,
@@ -33,9 +35,13 @@ const counterpartName = (thread: ThreadSummary, myId: string): string => {
   return others.map((p) => p.profile?.full_name ?? 'Unknown').join(', ');
 };
 
+const ATTACHMENTS_BUCKET = 'comms-attachments';
+const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hour
+
 const messageToThreadMessage = (
   msg: CommsMessage,
-  myId: string
+  myId: string,
+  signedUrls: Record<string, string>
 ): ThreadMessage => ({
   id: msg.id,
   author: {
@@ -53,7 +59,7 @@ const messageToThreadMessage = (
   attachments: msg.attachments.map((a, i) => ({
     id: `${msg.id}-att-${i}`,
     name: a.filename ?? a.storage_path.split('/').pop() ?? 'Attachment',
-    url: a.storage_path,
+    url: signedUrls[a.storage_path] ?? a.storage_path,
     size: a.size ? `${Math.round(a.size / 1024)} KB` : undefined,
     type: a.mime?.startsWith('image/') ? 'image' : 'file',
   })),
@@ -83,6 +89,35 @@ export default function ThreadDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threadId, pages?.pages[0]?.[0]?.id]);
 
+  // Attachments live in the private `comms-attachments` bucket, so their
+  // raw storage_path isn't a usable URL — resolve short-lived signed URLs
+  // (mirrors useSignedCommsAttachmentUrl) and feed them into the renderer.
+  const attachmentPaths = useMemo(() => {
+    const paths = (pages?.pages ?? [])
+      .flat()
+      .flatMap((m) => m.attachments.map((a) => a.storage_path))
+      .filter(Boolean);
+    return Array.from(new Set(paths));
+  }, [pages]);
+
+  const { data: signedUrls = {} } = useQuery({
+    queryKey: ['comms-attachment-urls', threadId, attachmentPaths],
+    enabled: attachmentPaths.length > 0,
+    staleTime: (SIGNED_URL_TTL_SECONDS - 60) * 1000,
+    queryFn: async (): Promise<Record<string, string>> => {
+      const supabase = createBrowserClient();
+      const { data, error } = await supabase.storage
+        .from(ATTACHMENTS_BUCKET)
+        .createSignedUrls(attachmentPaths, SIGNED_URL_TTL_SECONDS);
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      for (const row of data ?? []) {
+        if (row.path && row.signedUrl) map[row.path] = row.signedUrl;
+      }
+      return map;
+    },
+  });
+
   const conversationMessages = useMemo<ThreadMessage[]>(() => {
     const all = (pages?.pages ?? []).flat();
     return all
@@ -91,8 +126,8 @@ export default function ThreadDetailPage() {
         (a, b) =>
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       )
-      .map((m) => messageToThreadMessage(m, myId));
-  }, [pages, myId]);
+      .map((m) => messageToThreadMessage(m, myId, signedUrls));
+  }, [pages, myId, signedUrls]);
 
   const typingIndicators: MessageAuthor[] = typingUsers.map((u) => ({
     id: u.profile_id,

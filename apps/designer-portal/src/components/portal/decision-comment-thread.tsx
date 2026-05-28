@@ -80,10 +80,10 @@ export function DecisionCommentThread({ decisionId }: DecisionCommentThreadProps
                 <div className="mb-1 flex items-baseline justify-between gap-2">
                   <div className="flex items-baseline gap-2">
                     <span
-                      className="type-meta-small font-mono"
+                      className="type-meta-small"
                       style={{ color: 'var(--text-primary)' }}
                     >
-                      {c.author_id.slice(0, 8)}
+                      {isAuthor ? 'You' : 'Client'}
                     </span>
                     <span
                       className="type-meta-small"

@@ -41,7 +41,7 @@ export function NurtureCard({
             {clientName}
           </div>
           <div className="type-label-secondary">
-            {projectContext} \u00B7 Last contact: {lastContact}
+            {projectContext} {'\u00B7'} Last contact: {lastContact}
           </div>
         </div>
         <span

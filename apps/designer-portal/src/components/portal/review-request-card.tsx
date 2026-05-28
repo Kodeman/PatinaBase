@@ -42,7 +42,7 @@ export function ReviewRequestCard({
             color: 'var(--color-golden-hour)',
           }}
         >
-          Ready to send \u00B7 Completed {completedDate}
+          Ready to send {'\u00B7'} Completed {completedDate}
         </span>
       </div>
       <p

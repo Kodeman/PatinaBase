@@ -125,7 +125,16 @@ export default function NewDecisionPage({
           })),
       },
       {
-        onSuccess: () => router.push(`/portal/clients/${id}/messages`),
+        onSuccess: () => {
+          // Profile-less clients can't open a direct thread (the /messages
+          // route dead-ends), so fall back to the client profile (CLI-12).
+          const canMessage = !!(client.client?.id || client.client_id);
+          router.push(
+            canMessage
+              ? `/portal/clients/${id}/messages`
+              : `/portal/clients/${id}`
+          );
+        },
       }
     );
   };

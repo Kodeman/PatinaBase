@@ -14,8 +14,10 @@ import { ProgressBar } from '@/components/portal/progress-bar';
 
 const typeLabels: Record<DecisionType, string> = {
   material: 'Material / Color',
+  color: 'Color',
   product: 'Product Selection',
   layout: 'Layout Approval',
+  substitution: 'Substitution',
   budget: 'Budget Change',
   approval: 'Phase Approval',
 };

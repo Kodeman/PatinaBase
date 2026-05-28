@@ -7,17 +7,21 @@ import {
   useUpdateDecisionStatus,
   useDecisionOverrides,
   useProjectFFEItems,
+  useClient,
 } from '@patina/supabase';
 import type { DecisionType, BlockingStatus, DecisionOverride } from '@patina/supabase';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { PortalButton } from '@/components/portal/button';
 import { OverrideDecisionModal } from '@/components/portal/override-decision-modal';
 import { DecisionCommentThread } from '@/components/portal/decision-comment-thread';
+import { useAuth } from '@/hooks/use-auth';
 
 const typeLabels: Record<DecisionType, string> = {
   material: 'Material / Color',
+  color: 'Color',
   product: 'Product Selection',
   layout: 'Layout Approval',
+  substitution: 'Substitution',
   budget: 'Budget Change',
   approval: 'Phase Approval',
 };
@@ -81,10 +85,12 @@ export default function DecisionDetailPage({
   params: Promise<{ decisionId: string }>;
 }) {
   const { decisionId } = use(params);
+  const { user } = useAuth();
   const { data: decision, isLoading } = useDecision(decisionId);
   const updateStatus = useUpdateDecisionStatus();
   const { data: overrides } = useDecisionOverrides(decisionId);
   const { data: ffeItemsRaw } = useProjectFFEItems(decision?.project_id ?? '');
+  const { data: decisionClient } = useClient(decision?.designer_client_id ?? '');
   const [overrideOpen, setOverrideOpen] = useState(false);
 
   if (isLoading) return <LoadingStrata />;
@@ -97,6 +103,12 @@ export default function DecisionDetailPage({
   }
 
   const selectedOption = decision.options?.find((o) => o.selected);
+
+  // Direct threads require a registered client profile. Without one the legacy
+  // /messages route dead-ends, so disable the conversation action (CLI-10).
+  const canMessageClient = !!(
+    decisionClient?.client?.id || decisionClient?.client_id
+  );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ffeItems = (Array.isArray(ffeItemsRaw) ? ffeItemsRaw : []) as any[];
@@ -141,7 +153,7 @@ export default function DecisionDetailPage({
         {decision.title}
       </h1>
       <p className="type-label-secondary mb-8">
-        {typeLabels[decision.decision_type]} {'\u00B7'} {decision.linked_phase ?? 'No phase linked'}
+        {typeLabels[decision.decision_type] ?? 'Decision'} {'\u00B7'} {decision.linked_phase ?? 'No phase linked'}
       </p>
 
       <div className="grid grid-cols-1 gap-10 md:grid-cols-[1fr_320px]">
@@ -341,10 +353,10 @@ export default function DecisionDetailPage({
                       style={{ fontSize: '0.78rem' }}
                     >
                       <span
-                        className="type-meta-small font-mono"
+                        className="type-meta-small"
                         style={{ color: 'var(--text-primary)' }}
                       >
-                        {ov.acted_by.slice(0, 8)}
+                        {user && ov.acted_by === user.id ? 'You' : 'Designer'}
                       </span>
                       <span
                         className="type-meta-small"
@@ -457,11 +469,20 @@ export default function DecisionDetailPage({
                 <PortalButton variant="secondary">View in Project</PortalButton>
               </Link>
             )}
-            {decision.designer_client_id && (
-              <Link href={`/portal/clients/${decision.designer_client_id}/messages`}>
-                <PortalButton variant="secondary">View Conversation</PortalButton>
-              </Link>
-            )}
+            {decision.designer_client_id &&
+              (canMessageClient ? (
+                <Link href={`/portal/clients/${decision.designer_client_id}/messages`}>
+                  <PortalButton variant="secondary">View Conversation</PortalButton>
+                </Link>
+              ) : (
+                <PortalButton
+                  variant="secondary"
+                  disabled
+                  title="This client has no registered profile yet — messaging isn't available."
+                >
+                  View Conversation
+                </PortalButton>
+              ))}
             {decision.status === 'pending' && (decision.options?.length ?? 0) > 0 && (
               <PortalButton
                 variant="secondary"

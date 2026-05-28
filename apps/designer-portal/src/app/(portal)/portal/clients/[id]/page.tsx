@@ -90,6 +90,10 @@ export default function ClientProfilePage({
     client.client_name ||
     client.client_email ||
     'Unknown Client';
+  // Direct threads need a registered profile. Profile-less clients would hit
+  // the legacy /messages route's "Cannot open conversation" dead-end, so we
+  // disable the action instead (CLI-11).
+  const canMessage = !!(client.client?.id || client.client_id);
   const email = client.client?.email || client.client_email || '';
   const phone = client.client?.phone || '';
   const stage = (client.status || 'active') as ClientLifecycleStage;
@@ -212,8 +216,21 @@ export default function ClientProfilePage({
 
         {/* Actions */}
         <div className="flex flex-col gap-2">
-          <PortalButton variant="primary" asChild>
-            <Link href={`/portal/clients/${id}/messages`}>Message</Link>
+          {canMessage ? (
+            <PortalButton variant="primary" asChild>
+              <Link href={`/portal/clients/${id}/messages`}>Message</Link>
+            </PortalButton>
+          ) : (
+            <PortalButton
+              variant="primary"
+              disabled
+              title="This client has no registered profile yet — invite them to enable messaging."
+            >
+              Message
+            </PortalButton>
+          )}
+          <PortalButton variant="secondary" asChild>
+            <Link href={`/portal/clients/${id}/decisions/new`}>+ New Decision</Link>
           </PortalButton>
           {projects?.[0]?.id ? (
             <PortalButton variant="secondary" asChild>

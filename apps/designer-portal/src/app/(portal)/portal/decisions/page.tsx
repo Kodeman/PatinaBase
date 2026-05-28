@@ -166,7 +166,9 @@ export default function DecisionsDashboardPage() {
             fallback="Open choices awaiting client response — overdue items block procurement and ETA promises."
           />
         </div>
-        <PortalButton variant="primary">+ New Decision</PortalButton>
+        <PortalButton variant="primary" asChild>
+          <Link href="/portal/clients">+ New Decision</Link>
+        </PortalButton>
       </div>
 
       {/* Filter Tabs */}
@@ -263,7 +265,6 @@ export default function DecisionsDashboardPage() {
                   ? () => sendReminder.mutate({ decisionId: decision.id })
                   : undefined
               }
-              onView={() => {}}
               href={`/portal/decisions/${decision.id}`}
             />
           ))}

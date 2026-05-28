@@ -102,6 +102,7 @@ function deepLinkFor(n: InboxNotification): string | null {
 
 export default function InboxPage() {
   const [tab, setTab] = useState<Tab>('notifications');
+  const [markReadError, setMarkReadError] = useState<string | null>(null);
   const qc = useQueryClient();
   const router = useRouter();
 
@@ -132,14 +133,23 @@ export default function InboxPage() {
 
   async function markRead(ids: string[] | 'all') {
     if (Array.isArray(ids) && ids.length === 0) return;
+    setMarkReadError(null);
     try {
-      await fetch('/api/inbox/mark-read', {
+      const res = await fetch('/api/inbox/mark-read', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids }),
       });
-    } finally {
+      if (!res.ok) {
+        throw new Error(`Mark read failed (${res.status})`);
+      }
+      // Only refresh from the server on success — a failed write leaves the
+      // unread state intact rather than flashing a false "read" result.
       qc.invalidateQueries({ queryKey: ['inbox'] });
+    } catch (err) {
+      setMarkReadError(
+        err instanceof Error ? err.message : 'Could not mark as read. Try again.'
+      );
     }
   }
 
@@ -182,6 +192,16 @@ export default function InboxPage() {
           </button>
         )}
       </div>
+
+      {markReadError && (
+        <p
+          className="mt-3 rounded-md border px-3 py-2 type-body-small"
+          style={{ borderColor: 'var(--color-terracotta, #D4A090)', color: 'var(--color-terracotta, #D4A090)' }}
+          role="alert"
+        >
+          {markReadError}
+        </p>
+      )}
 
       <div className="mt-6 flex gap-1 border-b border-[var(--border-default)]">
         <TabButton
@@ -347,7 +367,7 @@ function MessageRow({ message }: { message: InboxMessage }) {
       : message.thread?.kind === 'vendor_brief'
         ? 'Vendor brief'
         : 'Direct message');
-  const href = `/portal/communications`;
+  const href = `/portal/messages/${message.thread_id}`;
   return (
     <li>
       <Link
