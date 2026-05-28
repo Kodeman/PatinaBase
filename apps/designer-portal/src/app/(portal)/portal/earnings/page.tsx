@@ -4,7 +4,6 @@ import { useState } from 'react';
 import {
   useEarnings,
   useEarningsStats,
-  usePayouts,
 } from '@patina/supabase';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { MetricBlock } from '@/components/portal/metric-block';

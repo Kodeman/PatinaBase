@@ -61,7 +61,7 @@ export default function VendorsPage() {
                 <span className="type-item-name">{vendor.trade_name || vendor.name}</span>
                 <div className="flex items-center gap-3">
                   <button
-                    className="type-btn-text hidden text-[var(--text-muted)] opacity-0 transition-opacity hover:text-[var(--accent-primary)] group-hover:opacity-100 md:block"
+                    className="type-btn-text text-[var(--text-muted)] transition-opacity hover:text-[var(--accent-primary)] md:opacity-0 md:group-hover:opacity-100"
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleSave.mutate(vendor.id);

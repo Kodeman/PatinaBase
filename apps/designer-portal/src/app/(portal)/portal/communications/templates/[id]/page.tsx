@@ -2,6 +2,7 @@
 
 import { use } from 'react';
 import Link from 'next/link';
+import DOMPurify from 'dompurify';
 import { useTemplate, useDeleteTemplate } from '@patina/supabase';
 import { useRouter } from 'next/navigation';
 import { FieldGroup } from '@/components/portal/field-group';
@@ -34,11 +35,13 @@ export default function TemplateDetailPage({ params }: { params: Promise<{ id: s
       </FieldGroup>
       {template.body_html && (
         <FieldGroup label="Content Preview">
-          <div className="type-body max-w-[640px] rounded border border-[var(--border-subtle)] p-4" dangerouslySetInnerHTML={{ __html: template.body_html }} />
+          <div className="type-body max-w-[640px] rounded border border-[var(--border-subtle)] p-4" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(template.body_html) }} />
         </FieldGroup>
       )}
       <div className="mt-6">
-        <PortalButton variant="ghost" onClick={() => { deleteTemplate.mutate(id); router.push('/portal/communications/templates'); }}>Delete Template</PortalButton>
+        <PortalButton variant="ghost" disabled={deleteTemplate.isPending} onClick={() => deleteTemplate.mutate(id, { onSuccess: () => router.push('/portal/communications/templates') })}>
+          {deleteTemplate.isPending ? 'Deleting...' : 'Delete Template'}
+        </PortalButton>
       </div>
     </div>
   );

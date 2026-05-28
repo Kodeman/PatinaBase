@@ -7,9 +7,16 @@ import { LoadingStrata } from '@/components/portal/loading-strata';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyProject = any;
 
+// useProjects falls back to slug-IDed mock projects when Supabase has no real
+// rows. Real records carry UUID ids — filter to those so the portfolio only
+// ever shows genuine completed projects (and an honest empty state otherwise).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default function PortfolioPage() {
   const { data: rawProjects, isLoading } = useProjects({ status: 'completed' });
-  const projects = (Array.isArray(rawProjects) ? rawProjects : []) as AnyProject[];
+  const projects = ((Array.isArray(rawProjects) ? rawProjects : []) as AnyProject[]).filter(
+    (p) => typeof p.id === 'string' && UUID_RE.test(p.id)
+  );
 
   if (isLoading) return <LoadingStrata />;
 

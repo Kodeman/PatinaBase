@@ -75,7 +75,7 @@ export default function ProfilePage() {
       </div>
 
       <div className="mt-8">
-        <PortalButton variant="secondary">
+        <PortalButton variant="secondary" asChild>
           <Link href="/portal/settings" className="no-underline text-inherit">
             Edit Settings
           </Link>

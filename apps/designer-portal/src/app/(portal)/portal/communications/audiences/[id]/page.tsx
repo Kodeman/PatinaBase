@@ -34,7 +34,9 @@ export default function AudienceDetailPage({ params }: { params: Promise<{ id: s
         <DetailRow label="Created" value={audience.created_at ? new Date(audience.created_at).toLocaleDateString() : '—'} />
       </FieldGroup>
       <div className="mt-6">
-        <PortalButton variant="ghost" onClick={() => { deleteAudience.mutate(id); router.push('/portal/communications/audiences'); }}>Delete Audience</PortalButton>
+        <PortalButton variant="ghost" disabled={deleteAudience.isPending} onClick={() => deleteAudience.mutate(id, { onSuccess: () => router.push('/portal/communications/audiences') })}>
+          {deleteAudience.isPending ? 'Deleting...' : 'Delete Audience'}
+        </PortalButton>
       </div>
     </div>
   );

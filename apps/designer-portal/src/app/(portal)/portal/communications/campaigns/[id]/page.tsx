@@ -2,6 +2,7 @@
 
 import { use } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCampaign, useDeleteCampaign, useSendCampaign } from '@patina/supabase';
 import { FieldGroup } from '@/components/portal/field-group';
 import { DetailRow } from '@/components/portal/detail-row';
@@ -13,6 +14,7 @@ type Any = any;
 
 export default function CampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const { data: campaign, isLoading } = useCampaign(id) as { data: Any; isLoading: boolean };
   const sendCampaign = useSendCampaign();
   const deleteCampaign = useDeleteCampaign();
@@ -42,7 +44,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
           <PortalButton variant="primary" onClick={() => sendCampaign.mutate(id)} disabled={sendCampaign.isPending}>
             {sendCampaign.isPending ? 'Sending...' : 'Send Campaign'}
           </PortalButton>
-          <PortalButton variant="ghost" onClick={() => deleteCampaign.mutate(id)} disabled={deleteCampaign.isPending}>Delete</PortalButton>
+          <PortalButton variant="ghost" onClick={() => deleteCampaign.mutate(id, { onSuccess: () => router.push('/portal/communications/campaigns') })} disabled={deleteCampaign.isPending}>Delete</PortalButton>
         </div>
       )}
     </div>

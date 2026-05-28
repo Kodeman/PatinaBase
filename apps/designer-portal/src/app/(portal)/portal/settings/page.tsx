@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { useProfile, useUpdateProfile, useUpdatePassword, useNotificationPreferences, useUpdateNotificationPreferences, useOrganizations, useOrganizationMembers } from '@patina/supabase';
+import { useProfile, useUpdateProfile, useUpdatePassword, useNotificationPreferences, useUpdateNotificationPreferences, useOrganizations } from '@patina/supabase';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { FieldGroup } from '@/components/portal/field-group';
 import { DetailRow } from '@/components/portal/detail-row';
@@ -79,22 +79,22 @@ export default function SettingsPage() {
   // explain what each notification covers.
   const notificationPreferences: { key: string; label: string; surfaceKey: string }[] = [
     {
-      key: 'new_leads',
+      key: 'type_new_lead',
       label: 'New leads',
       surfaceKey: SurfaceKeys.DesignerPortal.Settings.Notifications.NewLeads,
     },
     {
-      key: 'project_updates',
+      key: 'type_project_milestone',
       label: 'Project updates',
       surfaceKey: SurfaceKeys.DesignerPortal.Settings.Notifications.ProjectUpdates,
     },
     {
-      key: 'client_messages',
+      key: 'type_client_message',
       label: 'Client messages',
       surfaceKey: SurfaceKeys.DesignerPortal.Settings.Notifications.ClientMessages,
     },
     {
-      key: 'earnings',
+      key: 'type_commission_earned',
       label: 'Earnings',
       surfaceKey: SurfaceKeys.DesignerPortal.Settings.Notifications.Earnings,
     },

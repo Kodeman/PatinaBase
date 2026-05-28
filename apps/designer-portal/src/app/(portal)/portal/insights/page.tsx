@@ -33,7 +33,9 @@ export default function InsightsPage() {
     return (
       <div className="pt-8">
         <h1 className="type-section-head mb-4">Insights</h1>
-        <p className="type-body py-16 text-center text-[var(--text-muted)]">Access denied. Admin role required.</p>
+        <p className="type-body py-16 text-center text-[var(--text-muted)]">
+          Insights aren&apos;t available for your role yet. This dashboard surfaces platform-wide engagement metrics for Patina administrators.
+        </p>
       </div>
     );
   }

@@ -129,8 +129,7 @@ export default function TeamPage() {
           )}
 
           <p className="mt-6 type-body italic text-[var(--text-muted)] text-[0.82rem]">
-            Studio-level invites and role-by-project assignment matrix are coming in Sprint 3.
-            For now, add support designers from each project&apos;s detail page.
+            To add support designers, open a project and assign them from its detail page.
           </p>
         </>
       )}

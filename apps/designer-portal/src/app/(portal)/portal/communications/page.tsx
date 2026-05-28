@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useCommsDashboard, useRecentActivity, useUpcomingSends } from '@patina/supabase';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { MetricBlock } from '@/components/portal/metric-block';
-import { LoadingStrata } from '@/components/portal/loading-strata';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -16,7 +15,7 @@ const sections = [
 ];
 
 export default function CommunicationsPage() {
-  const { data: dashboard, isLoading } = useCommsDashboard() as { data: Any; isLoading: boolean };
+  const { data: dashboard } = useCommsDashboard() as { data: Any };
   const { data: rawActivity } = useRecentActivity() as { data: Any };
   const { data: rawSends } = useUpcomingSends() as { data: Any };
 
