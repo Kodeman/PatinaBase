@@ -1,7 +1,9 @@
 import type {
   CatalogProductsResponse,
   CatalogSearchResponse,
+  CatalogSearchFacetValue,
   Collection,
+  Product,
   ProposalStatus,
 } from '@patina/types';
 
@@ -1566,6 +1568,11 @@ type ProductFilterInput = {
   take?: number;
 };
 
+type ProjectFilterInput = {
+  status?: string;
+  clientId?: string;
+};
+
 type ThreadFilter = {
   clientId?: string;
   proposalId?: string;
@@ -1670,11 +1677,12 @@ const buildFacets = (products: MockProduct[]) => ({
   style: buildCount(products.flatMap((p) => p.styleTags)),
 });
 
-function buildCount(values: string[]) {
-  return values.reduce<Record<string, number>>((acc, value) => {
+function buildCount(values: string[]): CatalogSearchFacetValue[] {
+  const counts = values.reduce<Record<string, number>>((acc, value) => {
     acc[value] = (acc[value] || 0) + 1;
     return acc;
   }, {});
+  return Object.entries(counts).map(([value, count]) => ({ value, count }));
 }
 
 function getProducts(filters: ProductFilterInput = {}): CatalogProductsResponse {
@@ -1683,7 +1691,7 @@ function getProducts(filters: ProductFilterInput = {}): CatalogProductsResponse 
   const items = paginate(filtered, page, pageSize);
 
   return {
-    products: clone(items),
+    products: clone(items) as unknown as Product[],
     meta: {
       total: filtered.length,
       page,
@@ -1719,7 +1727,7 @@ function searchProducts(params: { q?: string; filters?: string; limit?: number }
   }
 
   return {
-    results: clone(results.slice(0, limit)),
+    results: clone(results.slice(0, limit)) as unknown as Product[],
     total: results.length,
     limit,
     facets: buildFacets(results),

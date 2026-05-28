@@ -163,7 +163,7 @@ export class BasePage {
   /**
    * Wait for console message (useful for debugging)
    */
-  async onConsoleMessage(callback: (msg: string) => void): void {
+  async onConsoleMessage(callback: (msg: string) => void): Promise<void> {
     this.page.on('console', (msg) => callback(msg.text()));
   }
 

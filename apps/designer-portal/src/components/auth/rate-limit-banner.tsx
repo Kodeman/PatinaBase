@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@patina/design-system';
 import { AlertCircle, Clock } from 'lucide-react';
 import { RateLimitHandler, RateLimitInfo } from '@/lib/auth/rate-limit-handler';
 
@@ -52,7 +52,7 @@ export function RateLimitBanner({ endpoint = 'auth', info: propInfo, onExpire }:
   }
 
   return (
-    <Alert variant="destructive" className="mb-4">
+    <Alert variant="error" className="mb-4">
       <AlertCircle className="h-4 w-4" />
       <AlertTitle>Too Many Attempts</AlertTitle>
       <AlertDescription className="mt-2 space-y-2">

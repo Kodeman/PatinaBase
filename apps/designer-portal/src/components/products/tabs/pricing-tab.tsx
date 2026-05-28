@@ -226,7 +226,10 @@ export function PricingTab({ product, onChange }: PricingTabProps) {
                 <div className="flex items-center gap-2">
                   <DollarSign className="w-4 h-4 text-muted-foreground" />
                   <span className="text-sm font-medium">Discount:</span>
-                  <Badge variant={saleIsActive ? 'success' : 'secondary'}>
+                  <Badge
+                    variant={saleIsActive ? 'solid' : 'subtle'}
+                    color={saleIsActive ? 'success' : undefined}
+                  >
                     {discountPercentage}% OFF
                   </Badge>
                 </div>

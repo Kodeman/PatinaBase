@@ -24,7 +24,15 @@ export default function NewCampaignPage() {
   const handleSave = (sendNow = false) => {
     if (!name.trim() || !subject.trim()) return;
     createCampaign.mutate(
-      { name: name.trim(), subject: subject.trim(), body: content.trim(), audience_segment_id: audienceId || undefined, send_immediately: sendNow },
+      {
+        name: name.trim(),
+        subject: subject.trim(),
+        template_id: '',
+        audience_type: audienceId ? 'segment' : 'all',
+        template_data: { body: content.trim() },
+        audience_segment: audienceId ? { id: audienceId } : undefined,
+        scheduled_for: sendNow ? new Date().toISOString() : undefined,
+      },
       { onSuccess: () => router.push('/portal/communications/campaigns') }
     );
   };

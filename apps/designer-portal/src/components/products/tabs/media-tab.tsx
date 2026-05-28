@@ -232,7 +232,7 @@ export function MediaTab({ product, onChange }: MediaTabProps) {
                 {/* Primary Badge */}
                 {image.isPrimary && (
                   <div className="absolute top-2 left-2">
-                    <Badge variant="default" className="text-xs">
+                    <Badge variant="solid" className="text-xs">
                       Primary
                     </Badge>
                   </div>
@@ -240,7 +240,7 @@ export function MediaTab({ product, onChange }: MediaTabProps) {
 
                 {/* Order Badge */}
                 <div className="absolute top-2 right-2">
-                  <Badge variant="secondary" className="text-xs">
+                  <Badge variant="subtle" className="text-xs">
                     {index + 1}
                   </Badge>
                 </div>

@@ -145,7 +145,7 @@ export function CollectionRulesForm({ collection, onChange }: CollectionRulesFor
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Conditions</h3>
-          <Badge variant="secondary">{rule.conditions.length} conditions</Badge>
+          <Badge variant="subtle">{rule.conditions.length} conditions</Badge>
         </div>
 
         {rule.conditions.length === 0 ? (

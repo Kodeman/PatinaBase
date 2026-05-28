@@ -16,28 +16,28 @@ export function CollectionDetailsForm({ collection, onChange, errors }: Collecti
     label: string;
     description: string;
     icon: React.ComponentType<any>;
-    color: 'blue' | 'purple' | 'green';
+    color: 'info' | 'success';
   }> = [
     {
       value: 'manual',
       label: 'Manual Collection',
       description: 'Curate products manually',
       icon: Package,
-      color: 'blue',
+      color: 'info',
     },
     {
       value: 'rule',
       label: 'Dynamic Collection',
       description: 'Auto-include products by rules',
       icon: Zap,
-      color: 'purple',
+      color: 'info',
     },
     {
       value: 'smart',
       label: 'Smart Collection',
       description: 'AI-powered recommendations',
       icon: Sparkles,
-      color: 'green',
+      color: 'success',
     },
   ];
 

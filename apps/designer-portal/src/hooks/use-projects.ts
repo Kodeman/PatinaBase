@@ -537,7 +537,7 @@ export function useCreateTask() {
     mutationFn: ({ projectId, data }: { projectId: string; data: unknown }) =>
       withMockData(
         () => projectsApi.createTask(projectId, data),
-        () => Promise.resolve({ projectId, ...data })
+        () => Promise.resolve({ projectId, ...(data as object) })
       ),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(variables.projectId) });
@@ -553,7 +553,7 @@ export function useUpdateTask() {
     mutationFn: ({ taskId, data }: { taskId: string; data: unknown }) =>
       withMockData(
         () => projectsApi.updateTask(taskId, data),
-        () => Promise.resolve({ taskId, ...data })
+        () => Promise.resolve({ taskId, ...(data as object) })
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
@@ -611,7 +611,7 @@ export function useCreateRFI() {
     mutationFn: ({ projectId, data }: { projectId: string; data: unknown }) =>
       withMockData(
         () => projectsApi.createRFI(projectId, data),
-        () => Promise.resolve({ projectId, ...data })
+        () => Promise.resolve({ projectId, ...(data as object) })
       ),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(variables.projectId) });
@@ -627,7 +627,7 @@ export function useCreateChangeOrder() {
     mutationFn: ({ projectId, data }: { projectId: string; data: unknown }) =>
       withMockData(
         () => projectsApi.createChangeOrder(projectId, data),
-        () => Promise.resolve({ projectId, ...data })
+        () => Promise.resolve({ projectId, ...(data as object) })
       ),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(variables.projectId) });

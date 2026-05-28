@@ -277,7 +277,7 @@ export function CatalogFilterPanel({
                 {commonTags.map((tag) => (
                   <Badge
                     key={tag}
-                    variant={filters.tags?.includes(tag) ? 'default' : 'outline'}
+                    variant={filters.tags?.includes(tag) ? 'solid' : 'outline'}
                     className="cursor-pointer"
                     onClick={() => handleTagToggle(tag)}
                   >

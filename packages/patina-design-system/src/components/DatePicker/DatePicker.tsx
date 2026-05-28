@@ -1,7 +1,14 @@
 'use client'
 
 import * as React from 'react'
-import { DayPicker, type DayPickerProps } from 'react-day-picker'
+import {
+  DayPicker,
+  type DayPickerProps,
+  type DayPickerSingleProps,
+  type DayPickerRangeProps,
+  type DateRange,
+  type Matcher,
+} from 'react-day-picker'
 import * as PopoverPrimitive from '@radix-ui/react-popover'
 import { format } from 'date-fns'
 import { cn } from '../../utils/cn'
@@ -111,9 +118,9 @@ export const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
                 setOpen(false)
               }}
               disabled={[
-                disableBefore && { before: disableBefore },
-                disableAfter && { after: disableAfter },
-              ].filter(Boolean)}
+                ...(disableBefore ? [{ before: disableBefore }] : []),
+                ...(disableAfter ? [{ after: disableAfter }] : []),
+              ] satisfies Matcher[]}
               initialFocus
               className={cn('p-3', className)}
               classNames={{
@@ -146,7 +153,7 @@ export const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
                   'aria-selected:bg-accent aria-selected:text-accent-foreground',
                 day_hidden: 'invisible',
               }}
-              {...props}
+              {...(props as Partial<DayPickerSingleProps>)}
             />
           </PopoverPrimitive.Content>
         </PopoverPrimitive.Portal>
@@ -211,7 +218,7 @@ export const DateRangePicker = React.forwardRef<HTMLButtonElement, DateRangePick
       variant = 'outline',
       size = 'md',
       className,
-      ...props
+      ...rangeProps
     },
     ref
   ) => {
@@ -252,7 +259,7 @@ export const DateRangePicker = React.forwardRef<HTMLButtonElement, DateRangePick
           >
             <DayPicker
               mode="range"
-              selected={dateRange}
+              selected={dateRange as DateRange | undefined}
               onSelect={onDateRangeChange}
               numberOfMonths={2}
               className={cn('p-3', className)}
@@ -286,7 +293,7 @@ export const DateRangePicker = React.forwardRef<HTMLButtonElement, DateRangePick
                   'aria-selected:bg-accent aria-selected:text-accent-foreground',
                 day_hidden: 'invisible',
               }}
-              {...props}
+              {...(rangeProps as Partial<DayPickerRangeProps>)}
             />
           </PopoverPrimitive.Content>
         </PopoverPrimitive.Portal>

@@ -1,5 +1,6 @@
 'use client';
 
+import type React from 'react';
 import type { ProposalEngagementEvent } from '@/hooks/use-proposals';
 
 const eventConfig: Record<string, { icon: string; className: string }> = {
@@ -44,7 +45,7 @@ function formatDuration(seconds: number): string {
   return `${min} min ${sec} sec`;
 }
 
-function formatEventDescription(event: ProposalEngagementEvent): JSX.Element {
+function formatEventDescription(event: ProposalEngagementEvent): React.JSX.Element {
   const viewerName = event.viewer?.full_name || 'Someone';
 
   switch (event.event_type) {

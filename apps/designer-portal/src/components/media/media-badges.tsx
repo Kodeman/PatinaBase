@@ -34,7 +34,7 @@ export function MediaBadges({
       key: 'ar',
       icon: View,
       label: 'AR View',
-      color: 'purple' as const,
+      color: 'info' as const,
       tooltip: 'View in your space with AR',
     });
   }
@@ -44,7 +44,7 @@ export function MediaBadges({
       key: '3d',
       icon: Box,
       label: '3D Model',
-      color: 'blue' as const,
+      color: 'info' as const,
       tooltip: 'Interactive 3D model available',
     });
   }
@@ -54,7 +54,7 @@ export function MediaBadges({
       key: 'video',
       icon: Video,
       label: 'Video',
-      color: 'green' as const,
+      color: 'success' as const,
       tooltip: 'Product video available',
     });
   }
@@ -64,7 +64,7 @@ export function MediaBadges({
       key: '360',
       icon: Rotate3D,
       label: '360° View',
-      color: 'orange' as const,
+      color: 'warning' as const,
       tooltip: '360° product view',
     });
   }

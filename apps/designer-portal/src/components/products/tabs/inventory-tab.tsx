@@ -11,16 +11,20 @@ interface InventoryTabProps {
   onChange: (updates: Partial<Product>) => void;
 }
 
+type BadgeVariant = 'solid' | 'subtle' | 'outline' | 'dot';
+type BadgeColor = 'primary' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
+
 const AVAILABILITY_STATUSES: {
   value: AvailabilityStatus;
   label: string;
-  variant?: 'default' | 'secondary' | 'destructive' | 'success';
+  variant?: BadgeVariant;
+  color?: BadgeColor;
 }[] = [
-  { value: 'in_stock', label: 'In Stock', variant: 'success' },
-  { value: 'out_of_stock', label: 'Out of Stock', variant: 'destructive' },
-  { value: 'preorder', label: 'Pre-order', variant: 'default' },
-  { value: 'backorder', label: 'Backorder', variant: 'secondary' },
-  { value: 'discontinued', label: 'Discontinued', variant: 'destructive' },
+  { value: 'in_stock', label: 'In Stock', variant: 'solid', color: 'success' },
+  { value: 'out_of_stock', label: 'Out of Stock', variant: 'solid', color: 'error' },
+  { value: 'preorder', label: 'Pre-order', variant: 'solid' },
+  { value: 'backorder', label: 'Backorder', variant: 'subtle' },
+  { value: 'discontinued', label: 'Discontinued', variant: 'solid', color: 'error' },
 ];
 
 export function InventoryTab({ product, onChange }: InventoryTabProps) {
@@ -182,13 +186,18 @@ export function InventoryTab({ product, onChange }: InventoryTabProps) {
               {/* Variant Header */}
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary">Variant {index + 1}</Badge>
+                  <Badge variant="subtle">Variant {index + 1}</Badge>
                   {variant.availabilityStatus && (
                     <Badge
                       variant={
                         AVAILABILITY_STATUSES.find(
                           (s) => s.value === variant.availabilityStatus
-                        )?.variant || 'default'
+                        )?.variant || 'solid'
+                      }
+                      color={
+                        AVAILABILITY_STATUSES.find(
+                          (s) => s.value === variant.availabilityStatus
+                        )?.color
                       }
                     >
                       {AVAILABILITY_STATUSES.find(
@@ -290,9 +299,8 @@ export function InventoryTab({ product, onChange }: InventoryTabProps) {
                     Availability Status*
                   </Label>
                   <Select
-                    id={`variant-status-${index}`}
                     value={variant.availabilityStatus}
-                    onValueChange={(value) =>
+                    onValueChange={(value: string) =>
                       handleVariantChange(
                         index,
                         'availabilityStatus',

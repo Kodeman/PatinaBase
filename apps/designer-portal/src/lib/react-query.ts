@@ -84,7 +84,6 @@ export const queryClient = new QueryClient({
   mutationCache,
   defaultOptions: {
     queries: {
-      suspense: false, // Explicitly disable suspense - we handle loading states manually
       staleTime: 1000 * 60 * 5, // 5 minutes
       gcTime: 1000 * 60 * 30, // 30 minutes (replaces cacheTime)
       retry: (failureCount, error) => {

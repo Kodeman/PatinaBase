@@ -12,7 +12,10 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import type { EmailTemplate, ContentBlockType, ContentBlock } from '@patina/types';
+import { Notifications } from '@patina/types';
+import type { ContentBlockType, ContentBlock } from '@patina/types';
+
+type EmailTemplate = Notifications.EmailTemplate;
 import { useUpdateTemplate } from '@patina/supabase/hooks';
 import { renderTemplate } from '@patina/email/renderer';
 import { useTemplateBuilderStore } from '@/stores/template-builder-store';

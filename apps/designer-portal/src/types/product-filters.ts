@@ -48,6 +48,6 @@ export interface ProductFiltersProps {
 export interface ActiveFilter {
   key: keyof FilterState;
   label: string;
-  value: string | number | boolean;
+  value: string | number | boolean | string[];
   displayValue: string;
 }

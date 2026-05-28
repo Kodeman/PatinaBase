@@ -16,7 +16,7 @@ export default function NewAudiencePage() {
   const handleSubmit = () => {
     if (!name.trim()) return;
     createAudience.mutate(
-      { name: name.trim(), description: description.trim(), rules: {} },
+      { name: name.trim(), description: description.trim(), rules: { logic: 'and', conditions: [] } },
       { onSuccess: () => router.push('/portal/communications/audiences') }
     );
   };

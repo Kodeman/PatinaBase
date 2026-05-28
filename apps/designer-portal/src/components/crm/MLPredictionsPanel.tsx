@@ -93,7 +93,7 @@ export const MLPredictionsPanel: React.FC<MLPredictionsPanelProps> = ({ clientId
     }
   }
 
-  const handlePresentUpsell = async (opportunity: (typeof predictions)['upsell']['opportunities'][0]) => {
+  const handlePresentUpsell = async (opportunity: NonNullable<typeof predictions>['upsell']['opportunities'][0]) => {
     try {
       const response = await fetch(`/api/clients/${clientId}/present-opportunity`, {
         method: 'POST',

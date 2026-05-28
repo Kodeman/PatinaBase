@@ -26,9 +26,9 @@ export function CollectionCard({
   canDelete = false,
 }: CollectionCardProps) {
   const typeColors = {
-    manual: 'blue' as const,
-    rule: 'purple' as const,
-    smart: 'green' as const,
+    manual: 'info' as const,
+    rule: 'info' as const,
+    smart: 'success' as const,
   };
 
   const typeLabels = {
@@ -39,8 +39,8 @@ export function CollectionCard({
 
   const statusColors = {
     draft: 'neutral' as const,
-    published: 'green' as const,
-    scheduled: 'blue' as const,
+    published: 'success' as const,
+    scheduled: 'info' as const,
     archived: 'neutral' as const,
   };
 
@@ -78,7 +78,7 @@ export function CollectionCard({
                 {typeLabels[collection.type]}
               </Badge>
               {collection.featured && (
-                <Badge variant="solid" color="yellow" className="flex items-center gap-1">
+                <Badge variant="solid" color="warning" className="flex items-center gap-1">
                   <Star className="h-3 w-3 fill-current" />
                   Featured
                 </Badge>

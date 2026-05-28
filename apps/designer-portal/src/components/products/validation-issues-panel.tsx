@@ -26,10 +26,16 @@ const SEVERITY_COLORS = {
 };
 
 const SEVERITY_BADGE_VARIANTS = {
-  error: 'destructive' as const,
-  warning: 'default' as const,
-  info: 'secondary' as const,
-};
+  error: { variant: 'solid', color: 'error' },
+  warning: { variant: 'solid', color: 'warning' },
+  info: { variant: 'subtle' },
+} as const satisfies Record<
+  'error' | 'warning' | 'info',
+  {
+    variant: 'solid' | 'subtle' | 'outline' | 'dot';
+    color?: 'primary' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
+  }
+>;
 
 export function ValidationIssuesPanel({ productId, className }: ValidationIssuesPanelProps) {
   const [issues, setIssues] = React.useState<ValidationIssue[]>([]);
@@ -43,7 +49,9 @@ export function ValidationIssuesPanel({ productId, className }: ValidationIssues
   const loadIssues = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await catalogApi.getProductValidation(productId);
+      const response = (await catalogApi.getProductValidation(productId)) as {
+        data?: ValidationIssue[];
+      };
       setIssues(response.data || []);
     } catch (error) {
       console.error('Failed to load validation issues:', error);
@@ -247,7 +255,7 @@ export function ValidationIssuesPanel({ productId, className }: ValidationIssues
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <Badge variant={SEVERITY_BADGE_VARIANTS[issue.severity]}>
+                            <Badge {...SEVERITY_BADGE_VARIANTS[issue.severity]}>
                               {issue.severity}
                             </Badge>
                             {issue.field && (

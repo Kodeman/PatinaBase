@@ -51,7 +51,7 @@ export function CollectionHero({ collections }: CollectionHeroProps) {
         <div className="flex flex-col justify-center space-y-6">
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <Badge variant="solid" color="yellow" className="flex items-center gap-1">
+              <Badge variant="solid" color="warning" className="flex items-center gap-1">
                 <Star className="h-3 w-3 fill-current" />
                 Featured Collection
               </Badge>

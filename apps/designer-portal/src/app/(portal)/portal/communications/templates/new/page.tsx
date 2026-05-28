@@ -17,7 +17,7 @@ export default function NewTemplatePage() {
   const handleSubmit = () => {
     if (!name.trim()) return;
     createTemplate.mutate(
-      { name: name.trim(), subject: subject.trim(), body_html: body.trim() },
+      { name: name.trim(), subject_default: subject.trim(), html_content: body.trim() },
       { onSuccess: () => router.push('/portal/communications/templates') }
     );
   };

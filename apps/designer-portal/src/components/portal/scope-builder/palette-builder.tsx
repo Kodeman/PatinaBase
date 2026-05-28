@@ -104,7 +104,7 @@ export function PaletteBuilder({ proposalId }: PaletteBuilderProps) {
             <TabStrip active={tab} onChange={setTab} />
           </div>
 
-          {tab === 'image' && <ImageTab paletteId={active.id} sourceImageUrl={active.source_image_url} />}
+          {tab === 'image' && <ImageTab proposalId={proposalId} paletteId={active.id} sourceImageUrl={active.source_image_url} />}
           {tab === 'brand' && <BrandTab paletteId={active.id} />}
           {tab === 'manual' && <ManualTab paletteId={active.id} />}
 
@@ -214,7 +214,7 @@ function TabStrip({ active, onChange }: TabStripProps) {
   );
 }
 
-function ImageTab({ paletteId, sourceImageUrl }: { paletteId: string; sourceImageUrl: string | null }) {
+function ImageTab({ proposalId, paletteId, sourceImageUrl }: { proposalId: string; paletteId: string; sourceImageUrl: string | null }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const upsertPalette = useUpsertPalette();
@@ -232,12 +232,12 @@ function ImageTab({ paletteId, sourceImageUrl }: { paletteId: string; sourceImag
         });
         if (error) throw error;
         const { data } = supabase.storage.from('proposal-mood-boards').getPublicUrl(path);
-        upsertPalette.mutate({ paletteId, sourceImageUrl: data.publicUrl });
+        upsertPalette.mutate({ proposalId, paletteId, sourceImageUrl: data.publicUrl });
       } finally {
         setUploading(false);
       }
     },
-    [paletteId, upsertPalette],
+    [proposalId, paletteId, upsertPalette],
   );
 
   const handleExtracted = useCallback(

@@ -49,9 +49,7 @@ export const GET = createRouteHandler(
       const email = searchParams.get('email');
 
       if (!email) {
-        return apiValidationError('Email is required', {
-          query: { email: ['Email is required'] },
-        });
+        return apiValidationError('Email is required', 'Email query parameter is required');
       }
 
       // Create a POST request to the backend with the email in the body

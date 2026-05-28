@@ -256,7 +256,7 @@ export function SEOTab({ product, onChange }: SEOTabProps) {
               {keywords.map((keyword, index) => (
                 <Badge
                   key={index}
-                  variant="secondary"
+                  variant="subtle"
                   className="cursor-pointer"
                   onClick={() => handleRemoveKeyword(index)}
                 >

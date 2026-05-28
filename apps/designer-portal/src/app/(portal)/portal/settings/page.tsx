@@ -72,7 +72,7 @@ export default function SettingsPage() {
 
   const handleSaveProfile = () => {
     updateProfile.mutate(
-      { display_name: displayName, bio },
+      { full_name: displayName, bio },
       { onSuccess: () => setEditingSection(null) }
     );
   };

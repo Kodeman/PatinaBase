@@ -1,10 +1,12 @@
 import { create } from 'zustand';
+import { Notifications } from '@patina/types';
 import type {
   TypedContentBlock,
   ContentBlockType,
-  EmailTemplate,
 } from '@patina/types';
 import { getDefaultProps } from '@patina/shared';
+
+type EmailTemplate = Notifications.EmailTemplate;
 
 // --- Types ------------------------------------------------------------------
 

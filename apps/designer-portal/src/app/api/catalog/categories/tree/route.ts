@@ -1,6 +1,22 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
 
+interface CategoryTreeNode {
+  id: string;
+  name: string;
+  slug: string;
+  parentId: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  productCount: number | null;
+  product_count: number | null;
+  sortOrder: number | null;
+  isActive: boolean | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  children: CategoryTreeNode[];
+}
+
 // GET /api/catalog/categories/tree - Category tree with hierarchy
 export async function GET() {
   try {
@@ -22,7 +38,7 @@ export async function GET() {
 
     // Build tree: attach children to their parent nodes
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mapped = rows.map((cat: any) => ({
+    const mapped: CategoryTreeNode[] = rows.map((cat: any) => ({
       id: cat.id,
       name: cat.name,
       slug: cat.slug,
@@ -35,14 +51,13 @@ export async function GET() {
       isActive: cat.is_active,
       createdAt: cat.created_at,
       updatedAt: cat.updated_at,
-      children: [] as any[],
+      children: [],
     }));
 
     // Index by id for quick lookup
-    const byId = new Map(mapped.map((c: any) => [c.id, c]));
+    const byId = new Map<string, CategoryTreeNode>(mapped.map((c) => [c.id, c]));
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const roots: any[] = [];
+    const roots: CategoryTreeNode[] = [];
     for (const node of mapped) {
       if (node.parentId && byId.has(node.parentId)) {
         byId.get(node.parentId)!.children.push(node);

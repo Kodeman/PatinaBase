@@ -99,11 +99,6 @@ export function ProductEditorModal({
     }
   };
 
-  // Close handler
-  const handleClose = () => {
-    onOpenChange(false);
-  };
-
   // Update product data when prop changes
   React.useEffect(() => {
     setProductData(product);
@@ -155,7 +150,6 @@ export function ProductEditorModal({
           'max-w-[90vw] h-[90vh] p-0 gap-0',
           'flex flex-col overflow-hidden'
         )}
-        onClose={handleClose}
       >
         {/* Header - Media thumbnail + name/SKU + save state */}
         <div className="flex items-center gap-3 px-6 py-4 border-b border-border shrink-0">
@@ -188,12 +182,13 @@ export function ProductEditorModal({
           <div className="flex items-center gap-2 shrink-0">
             {hasChanges && (
               <Badge
-                variant={
+                variant={saveState === 'saving' ? 'subtle' : 'solid'}
+                color={
                   saveState === 'saved'
                     ? 'success'
                     : saveState === 'saving'
-                    ? 'secondary'
-                    : 'destructive'
+                    ? 'neutral'
+                    : 'error'
                 }
                 className="transition-all duration-200"
               >

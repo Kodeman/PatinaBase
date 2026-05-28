@@ -256,7 +256,7 @@ export function RuleBuilder({ operator, conditions, onChange, className }: RuleB
               Rule Preview
             </Label>
             <div className="flex flex-wrap gap-2 items-center">
-              <Badge variant="subtle" color="blue">
+              <Badge variant="subtle" color="info">
                 Include products where
               </Badge>
               {conditions.map((condition, index) => (
@@ -266,7 +266,7 @@ export function RuleBuilder({ operator, conditions, onChange, className }: RuleB
                       {operator}
                     </Badge>
                   )}
-                  <Badge variant="secondary">
+                  <Badge variant="subtle">
                     <span className="font-semibold">{condition.field}</span>
                     <span className="mx-1">{condition.operator}</span>
                     <span className="font-semibold">

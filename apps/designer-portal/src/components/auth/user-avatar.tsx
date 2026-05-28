@@ -31,19 +31,11 @@ export function UserAvatar({ size = 'md', showName = false, className = '' }: Us
 
   return (
     <div className={`flex items-center gap-3 ${className}`}>
-      {user.image ? (
-        <img
-          src={user.image}
-          alt={user.name || user.email}
-          className={`rounded-full ${sizeClasses[size]}`}
-        />
-      ) : (
-        <div
-          className={`flex items-center justify-center rounded-full bg-blue-600 font-medium text-white ${sizeClasses[size]}`}
-        >
-          {initials}
-        </div>
-      )}
+      <div
+        className={`flex items-center justify-center rounded-full bg-blue-600 font-medium text-white ${sizeClasses[size]}`}
+      >
+        {initials}
+      </div>
       {showName && (
         <div className="flex flex-col">
           <span className="text-sm font-medium text-gray-900">{user.name || user.email}</span>

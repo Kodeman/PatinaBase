@@ -70,7 +70,7 @@ export function WorkstreamBoard() {
                   <h3 className="text-sm font-medium">{item.title}</h3>
                   <p className="text-xs text-muted-foreground">Owner: {item.owner}</p>
                 </div>
-                <Badge variant="secondary">{item.status}</Badge>
+                <Badge variant="subtle">{item.status}</Badge>
               </article>
             ))}
             {items.length === 0 ? (

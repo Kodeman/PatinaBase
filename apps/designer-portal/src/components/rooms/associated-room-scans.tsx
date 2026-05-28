@@ -28,6 +28,7 @@ import {
   ScanLine,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { RoomScanAssociationWithDetails } from '@patina/types';
 
 type AssociationContext =
   | { type: 'client'; clientId: string }
@@ -82,7 +83,7 @@ export function AssociatedRoomScans({ context, onViewScan }: AssociatedRoomScans
               <ScanLine className="h-5 w-5 text-muted-foreground" />
               <h2 className="text-lg font-semibold">Room Scans</h2>
               {scanCount > 0 && (
-                <Badge variant="secondary">{scanCount}</Badge>
+                <Badge variant="subtle">{scanCount}</Badge>
               )}
             </div>
             <Button variant="outline" size="sm" onClick={() => setShowPicker(true)}>
@@ -103,7 +104,7 @@ export function AssociatedRoomScans({ context, onViewScan }: AssociatedRoomScans
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {associations.map((assoc) => {
+              {associations.map((assoc: RoomScanAssociationWithDetails) => {
                 const scan = assoc.scan;
                 if (!scan) return null;
 
@@ -183,7 +184,7 @@ export function AssociatedRoomScans({ context, onViewScan }: AssociatedRoomScans
         open={showPicker}
         onOpenChange={setShowPicker}
         context={context}
-        existingScanIds={associations.map((a) => a.scanId)}
+        existingScanIds={associations.map((a: RoomScanAssociationWithDetails) => a.scanId)}
       />
     </>
   );
@@ -210,7 +211,7 @@ function ScanPickerDialog({
   const [isAssociating, setIsAssociating] = useState(false);
 
   // Filter out already-associated scans, and for project context filter to the client
-  const availableScans = sharedScans.filter((assoc) => {
+  const availableScans = sharedScans.filter((assoc: RoomScanAssociationWithDetails) => {
     if (!assoc.scan) return false;
     if (existingScanIds.includes(assoc.scanId)) return false;
     if (context.type === 'project' && context.clientId && assoc.consumerId !== context.clientId) {
@@ -290,7 +291,7 @@ function ScanPickerDialog({
             </div>
           ) : (
             <div className="grid gap-3">
-              {availableScans.map((assoc) => {
+              {availableScans.map((assoc: RoomScanAssociationWithDetails) => {
                 const scan = assoc.scan!;
                 const isSelected = selectedIds.has(assoc.scanId);
 

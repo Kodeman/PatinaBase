@@ -156,7 +156,7 @@ export function CollectionProductsForm({
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Products in Collection</h3>
-          <Badge variant="secondary">{collectionItems.length} products</Badge>
+          <Badge variant="subtle">{collectionItems.length} products</Badge>
         </div>
 
         {collectionItems.length === 0 ? (

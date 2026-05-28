@@ -252,7 +252,7 @@ export function ProductFilters({
               <Filter className="mr-2 h-4 w-4" />
               Filters
               {activeFilters.length > 0 && (
-                <Badge variant="default" className="ml-2 h-5 min-w-5 px-1.5">
+                <Badge variant="solid" className="ml-2 h-5 min-w-5 px-1.5">
                   {activeFilters.length}
                 </Badge>
               )}
@@ -525,7 +525,7 @@ export function ProductFilters({
           {activeFilters.map((filter) => (
             <Badge
               key={filter.key}
-              variant="secondary"
+              variant="subtle"
               className="pl-3 pr-1 transition-all duration-200 hover:bg-secondary/80"
             >
               <span className="text-xs">

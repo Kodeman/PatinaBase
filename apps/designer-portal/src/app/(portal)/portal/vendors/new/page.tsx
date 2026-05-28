@@ -17,7 +17,7 @@ export default function NewVendorPage() {
   const handleSubmit = () => {
     if (!name.trim()) return;
     findOrCreate.mutate(
-      { name: name.trim(), website: '', category: category.trim(), email: email.trim() },
+      { name: name.trim(), website: '', primaryCategory: category.trim() },
       { onSuccess: () => router.push('/portal/vendors') }
     );
   };

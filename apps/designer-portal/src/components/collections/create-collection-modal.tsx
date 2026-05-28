@@ -38,21 +38,21 @@ export function CreateCollectionModal({
       label: 'Curated Collection',
       description: 'Hand-pick products for this collection',
       icon: Package,
-      color: 'blue' as const,
+      color: 'info' as const,
     },
     {
       value: 'rule' as const,
       label: 'Dynamic Collection',
       description: 'Automatically include products based on rules',
       icon: Zap,
-      color: 'purple' as const,
+      color: 'info' as const,
     },
     {
       value: 'smart' as const,
       label: 'AI-Powered Collection',
       description: 'Let AI suggest products based on style compatibility',
       icon: Sparkles,
-      color: 'green' as const,
+      color: 'success' as const,
     },
   ];
 

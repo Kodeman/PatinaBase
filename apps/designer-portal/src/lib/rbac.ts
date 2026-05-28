@@ -203,7 +203,7 @@ export function hasAnyRole(
   roles: (Role | string)[]
 ): boolean {
   if (!session?.user?.roles) return false;
-  return roles.some((role) => session.user.roles.includes(role));
+  return roles.some((role) => session.user.roles?.includes(role) ?? false);
 }
 
 /**
@@ -214,7 +214,7 @@ export function hasAllRoles(
   roles: (Role | string)[]
 ): boolean {
   if (!session?.user?.roles) return false;
-  return roles.every((role) => session.user.roles.includes(role));
+  return roles.every((role) => session.user.roles?.includes(role) ?? false);
 }
 
 /**

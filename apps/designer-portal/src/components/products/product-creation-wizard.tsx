@@ -76,7 +76,7 @@ interface ProductCreationWizardProps {
 const createEmptyProduct = (): Partial<Product> => ({
   name: '',
   brand: '',
-  description: '',
+  seoDescription: '',
   shortDescription: '',
   price: 0,
   currency: 'USD',
@@ -86,7 +86,6 @@ const createEmptyProduct = (): Partial<Product> => ({
   styleTags: [],
   images: [],
   variants: [],
-  availability: 'in_stock',
 });
 
 export function ProductCreationWizard({ onSuccess, onCancel }: ProductCreationWizardProps) {
@@ -215,7 +214,9 @@ export function ProductCreationWizard({ onSuccess, onCancel }: ProductCreationWi
         ...productData,
         status: asDraft ? 'draft' : (productData.status || 'draft'),
       };
-      const response = await catalogApi.createProduct(payload as Product);
+      const response = (await catalogApi.createProduct(
+        payload as Record<string, unknown>
+      )) as { data: Product };
       toast({
         title: 'Product created',
         description: 'The product has been successfully added to your catalog.',

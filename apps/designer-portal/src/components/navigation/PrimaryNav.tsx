@@ -71,7 +71,7 @@ export function PrimaryNav({ onToggleSidebar }: PrimaryNavProps) {
           <PopoverTrigger asChild>
             <Button variant="outline" className="hidden md:inline-flex" aria-expanded={searchOpen}>
               <Search className="mr-2 h-4 w-4" />Quick search
-              <Badge variant="secondary" className="ml-3 hidden lg:inline-flex">
+              <Badge variant="subtle" className="ml-3 hidden lg:inline-flex">
                 Cmd+K
               </Badge>
             </Button>

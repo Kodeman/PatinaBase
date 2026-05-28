@@ -214,7 +214,7 @@ export function DetailsTab({ product, onChange }: DetailsTabProps) {
               {tags.map((tag, index) => (
                 <Badge
                   key={index}
-                  variant="secondary"
+                  variant="subtle"
                   className="cursor-pointer"
                   onClick={() => handleRemoveTag(index)}
                 >
@@ -244,7 +244,7 @@ export function DetailsTab({ product, onChange }: DetailsTabProps) {
               {styleTags.map((tag, index) => (
                 <Badge
                   key={index}
-                  variant="default"
+                  variant="solid"
                   className="cursor-pointer"
                   onClick={() => handleRemoveStyleTag(index)}
                 >
