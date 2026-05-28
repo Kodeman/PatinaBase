@@ -8,6 +8,8 @@ import {
   useProductSpectrum,
   useTeachingQueue,
   useDesignerTeachingStats,
+  useAllStyles,
+  useSubmitTeaching,
 } from '@patina/supabase';
 import {
   Breadcrumb,
@@ -18,6 +20,7 @@ import {
   TeachPanel,
   SpectrumSlider,
   ImageGallery,
+  useToast,
 } from '@/components/portal';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -63,6 +66,9 @@ export default function TeachProductPage({ params }: { params: Promise<{ id: str
   const { data: spectrum } = useProductSpectrum(id) as { data: Any };
   const { data: rawQueue } = useTeachingQueue() as { data: Any };
   const { data: stats } = useDesignerTeachingStats() as { data: Any };
+  const { data: allStyleRecords } = useAllStyles() as { data: Any };
+  const submitTeaching = useSubmitTeaching();
+  const { toast } = useToast();
 
   const queueRemaining = Array.isArray(rawQueue) ? rawQueue.length : 0;
   const productsTaught = stats?.products_taught ?? stats?.total_teachings ?? 0;
@@ -149,14 +155,41 @@ export default function TeachProductPage({ params }: { params: Promise<{ id: str
   };
 
   const handleSave = (andNext: boolean) => {
-    // TODO: save teaching data via API
-    console.log('Save teaching:', { primaryStyle, secondaryStyles, spectrumValues, idealClient, lifestyleSignals, avoidanceFlags, keyFeatures, bestContext, avoidWhen });
-    if (andNext) {
-      // Navigate to next product in queue
-      router.push('/portal/teaching');
-    } else {
-      router.push('/portal/teaching');
-    }
+    // Resolve the selected primary style name → styleId. The spectrum sliders
+    // are 0..100; the DB stores -1..1, mirroring the load mapping above
+    // (ornate→complexity, timeless→timelessness, statement→boldness,
+    // artisan→craftsmanship). Conversion: db = (slider - 50) / 50.
+    const toDb = (slider: number) => (slider - 50) / 50;
+    const primaryStyleId = Array.isArray(allStyleRecords)
+      ? allStyleRecords.find((s: Any) => s.name === primaryStyle)?.id
+      : undefined;
+
+    submitTeaching.mutate(
+      {
+        productId: id,
+        teaching: {
+          primaryStyleId,
+          spectrum: {
+            warmth: toDb(spectrumValues.warmth),
+            complexity: toDb(spectrumValues.ornate),
+            formality: toDb(spectrumValues.formality),
+            timelessness: toDb(spectrumValues.timeless),
+            boldness: toDb(spectrumValues.statement),
+            craftsmanship: toDb(spectrumValues.artisan),
+          },
+          notes: [keyFeatures, bestContext, avoidWhen].filter(Boolean).join('\n\n') || undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast('Teaching saved.', 'success');
+          router.push('/portal/teaching');
+        },
+        onError: (err: Any) => {
+          toast(err?.message || 'Failed to save teaching.', 'error');
+        },
+      }
+    );
   };
 
   return (
@@ -325,13 +358,22 @@ export default function TeachProductPage({ params }: { params: Promise<{ id: str
               variant="primary"
               className="bg-[var(--accent-primary)] text-white hover:bg-[var(--accent-hover)]"
               onClick={() => handleSave(true)}
+              disabled={submitTeaching.isPending}
             >
-              Save & Next Product →
+              {submitTeaching.isPending ? 'Saving…' : 'Save & Next Product →'}
             </PortalButton>
-            <PortalButton variant="secondary" onClick={() => handleSave(false)}>
-              Save & Close
+            <PortalButton
+              variant="secondary"
+              onClick={() => handleSave(false)}
+              disabled={submitTeaching.isPending}
+            >
+              {submitTeaching.isPending ? 'Saving…' : 'Save & Close'}
             </PortalButton>
-            <PortalButton variant="ghost" onClick={() => router.push('/portal/teaching')}>
+            <PortalButton
+              variant="ghost"
+              onClick={() => router.push('/portal/teaching')}
+              disabled={submitTeaching.isPending}
+            >
               Skip Product
             </PortalButton>
           </div>
