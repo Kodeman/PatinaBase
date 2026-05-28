@@ -48,30 +48,35 @@ export interface CatalogSearchResponse {
   facets?: CatalogSearchFacets;
 }
 
-export type CatalogSearchApiResponse =
-  | CatalogSearchResponse
-  | {
-      data?: {
-        results?: Product[];
-        total?: number;
-        limit?: number;
-        cursor?: string;
-        nextCursor?: string;
-        facets?: CatalogSearchFacets;
-      };
-      meta?: {
-        total?: number;
-        pageSize?: number;
-        cursor?: string;
-        nextCursor?: string;
-      };
-      results?: Product[];
-      total?: number;
-      facets?: CatalogSearchFacets;
-      limit?: number;
-      cursor?: string;
-      nextCursor?: string;
-    };
+/**
+ * Permissive wire shape for a catalog search response. The backend may return
+ * either the flat {@link CatalogSearchResponse} shape or a wrapped
+ * `{ data, meta }` envelope, so every field is optional; `useSearch`'s
+ * `normalizeResponse` collapses whichever variant arrives into the canonical
+ * {@link CatalogSearchResponse}.
+ */
+export interface CatalogSearchApiResponse {
+  data?: {
+    results?: Product[];
+    total?: number;
+    limit?: number;
+    cursor?: string;
+    nextCursor?: string;
+    facets?: CatalogSearchFacets;
+  };
+  meta?: {
+    total?: number;
+    pageSize?: number;
+    cursor?: string;
+    nextCursor?: string;
+  };
+  results?: Product[];
+  total?: number;
+  facets?: CatalogSearchFacets;
+  limit?: number;
+  cursor?: string;
+  nextCursor?: string;
+}
 
 export interface CatalogFeaturedCollectionsResponse {
   collections: Collection[];
