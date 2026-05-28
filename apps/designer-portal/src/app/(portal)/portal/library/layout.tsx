@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Search } from 'lucide-react';
-import { useLayerCounts } from '@patina/supabase';
+import { useLayerCounts, useLibraryPilotEnabled } from '@patina/supabase';
 import { LayerIcon, type Layer } from '@patina/catalog-ui';
 
 interface TabDef {
@@ -34,6 +34,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: counts } = useLayerCounts();
+  const { enabled: pilotEnabled, isLoading: pilotLoading } = useLibraryPilotEnabled();
 
   const isSearchRoute = pathname === '/portal/library/search';
   const activeTab = isSearchRoute
@@ -47,6 +48,18 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     const trimmed = searchValue.trim();
     if (trimmed.length === 0) return;
     router.push(`/portal/library/search?q=${encodeURIComponent(trimmed)}`);
+  }
+
+  // S3.12 pilot launch gate. While organizations.settings.three_layer_catalog_enabled
+  // is false (default), surface a Coming-soon card rather than the live view so
+  // non-pilot studios stay on the existing /portal/catalog single-tier surface.
+  // The route itself isn't redirected — pilot operators can still deep-link to
+  // a layer for QA without flipping the flag globally.
+  if (pilotLoading) {
+    return null;
+  }
+  if (!pilotEnabled) {
+    return <LibraryComingSoon />;
   }
 
   return (
@@ -128,6 +141,32 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
       </nav>
 
       <div>{children}</div>
+    </div>
+  );
+}
+
+function LibraryComingSoon() {
+  return (
+    <div className="pt-12">
+      <div className="mx-auto max-w-2xl rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-8 py-12 text-center">
+        <div
+          className="type-meta-small mb-3"
+          style={{
+            color: 'var(--color-clay, #C4A57B)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+          }}
+        >
+          Pilot
+        </div>
+        <h1 className="type-section-head mb-3">Three-layer Library is in pilot</h1>
+        <p className="mx-auto max-w-md text-[0.85rem] leading-relaxed text-[var(--text-muted)]">
+          We&apos;re rolling out the new Library — Personal · Studio · Catalog —
+          with a small group of studios before flipping it on broadly. Talk to
+          your Patina contact if you&apos;d like to join the pilot. For now,
+          continue using <code>/portal/catalog</code> as usual.
+        </p>
+      </div>
     </div>
   );
 }

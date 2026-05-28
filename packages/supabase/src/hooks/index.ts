@@ -55,6 +55,7 @@ export {
   type SetNominationStatusInput,
   type UseAdminNominationsOptions,
 } from './use-admin-nominations';
+export { useLibraryPilotEnabled } from './use-library-pilot-flag';
 export type {
   ProductWithVendorPricing,
   VendorPricingInfo,

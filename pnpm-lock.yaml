@@ -835,6 +835,34 @@ importers:
         specifier: ^4.0.17
         version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.37)(@vitest/ui@1.6.1)(jiti@1.21.7)(jsdom@24.1.3)(less@4.5.1)(lightningcss@1.31.1)(msw@2.12.10(@types/node@20.19.37)(typescript@5.9.3))(sass@1.97.3)(terser@5.46.0)(yaml@2.8.2)
 
+  apps/manufacturer-portal:
+    dependencies:
+      '@patina/supabase':
+        specifier: workspace:*
+        version: link:../../packages/supabase
+      next:
+        specifier: ^15.0.0
+        version: 15.5.12(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.3)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.4(react@19.2.4)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.37
+      '@types/react':
+        specifier: ^19.2.2
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.2
+        version: 19.2.3(@types/react@19.2.14)
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+
   packages/api-client:
     dependencies:
       '@patina/types':
@@ -24643,7 +24671,7 @@ snapshots:
       posthtml: 0.16.7
       posthtml-parser: 0.10.2
       posthtml-render: 3.0.0
-      semver: 7.7.4
+      semver: 7.8.0
       srcset: 4.0.0
     transitivePeerDependencies:
       - '@parcel/core'
@@ -24712,7 +24740,7 @@ snapshots:
       posthtml: 0.16.7
       posthtml-parser: 0.10.2
       posthtml-render: 3.0.0
-      semver: 7.7.4
+      semver: 7.8.0
     transitivePeerDependencies:
       - '@parcel/core'
 
@@ -24757,7 +24785,7 @@ snapshots:
       posthtml: 0.16.7
       posthtml-parser: 0.10.2
       posthtml-render: 3.0.0
-      semver: 7.7.4
+      semver: 7.8.0
     transitivePeerDependencies:
       - '@parcel/core'
 
