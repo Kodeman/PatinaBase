@@ -34,6 +34,11 @@ export {
   PromotionToast,
   type PromotionToastProps,
 } from './components/promotion-toast';
+export {
+  NominationStatusBanner,
+  type NominationStatus,
+  type NominationStatusBannerProps,
+} from './components/nomination-status-banner';
 
 export { SearchInput } from './components/search-input';
 export { FilterRow } from './components/filter-row';

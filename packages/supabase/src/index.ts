@@ -31,6 +31,12 @@ export {
   type PromoteBatchItem,
   type PaymentPattern,
 } from './mutations/promotion';
+export {
+  nominateVendor,
+  type NominateVendorInput,
+  type NominateVendorResult,
+  type NominationStatus,
+} from './mutations/nomination';
 
 // Server-side auth utilities are available via '@patina/supabase/server'
 // Do NOT re-export here — server.ts uses next/headers which breaks client components

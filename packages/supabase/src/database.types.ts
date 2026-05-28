@@ -11031,6 +11031,10 @@ export type Database = {
       }
       migrate_legacy_ffe_notes: { Args: never; Returns: number }
       next_co_number: { Args: { p_project_id: string }; Returns: string }
+      nomination_transition_is_legal: {
+        Args: { p_from: string; p_to: string }
+        Returns: boolean
+      }
       process_style_quiz: {
         Args: { quiz_answers: Json; timings?: Json }
         Returns: Json

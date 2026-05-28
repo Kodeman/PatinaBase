@@ -36,6 +36,12 @@ export {
   type UseDemoteToPersonalOptions,
   type UsePromoteBatchToStudioOptions,
 } from './use-promote-to-studio';
+export {
+  useNominateVendor,
+  useLatestVendorNomination,
+  type UseNominateVendorOptions,
+  type VendorNominationRow,
+} from './use-nominate-vendor';
 export type {
   ProductWithVendorPricing,
   VendorPricingInfo,
