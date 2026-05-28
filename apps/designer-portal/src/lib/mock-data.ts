@@ -27,7 +27,11 @@ export async function withMockData<T>(
     }
 
     if (process.env.NODE_ENV !== 'production') {
-      console.warn('[Designer Portal] Falling back to mock data', error);
+      // Log only the error message — never the full error object. A failed
+      // fetch can carry the entire HTML response body (e.g. a 404 page),
+      // and serializing that to the console repeatedly freezes the renderer.
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[Designer Portal] Falling back to mock data: ${message}`);
     }
 
     return mockCall();
