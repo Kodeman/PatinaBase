@@ -1,16 +1,15 @@
 import { NextRequest } from 'next/server';
-import { auth } from '@/auth';
 import {
   createRouteHandler,
   proxyToBackend
 } from '@patina/api-routes';
-import { apiError } from '@patina/api-routes';
+import { apiError, type RouteContext } from '@patina/api-routes';
 
 const PROJECTS_URL = process.env.PROJECTS_SERVICE_URL || 'http://localhost:3016';
 
 // GET /api/projects/:id - Get project details
 export const GET = createRouteHandler(
-  async (request: NextRequest, context) => {
+  async (request: NextRequest, context: RouteContext) => {
     try {
       const projectId = context.custom?.params?.id;
       return await proxyToBackend(request, context, {
@@ -33,7 +32,7 @@ export const GET = createRouteHandler(
 
 // PATCH /api/projects/:id - Update project
 export const PATCH = createRouteHandler(
-  async (request: NextRequest, context) => {
+  async (request: NextRequest, context: RouteContext) => {
     try {
       const projectId = context.custom?.params?.id;
       return await proxyToBackend(request, context, {
@@ -55,7 +54,7 @@ export const PATCH = createRouteHandler(
 
 // DELETE /api/projects/:id - Delete project
 export const DELETE = createRouteHandler(
-  async (request: NextRequest, context) => {
+  async (request: NextRequest, context: RouteContext) => {
     try {
       const projectId = context.custom?.params?.id;
       return await proxyToBackend(request, context, {

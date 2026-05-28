@@ -1,16 +1,15 @@
 import { NextRequest } from 'next/server';
-import { auth } from '@/auth';
 import {
   createRouteHandler,
   proxyToBackend
 } from '@patina/api-routes';
-import { apiError } from '@patina/api-routes';
+import { apiError, type RouteContext } from '@patina/api-routes';
 
 const PROJECTS_URL = process.env.PROJECTS_SERVICE_URL || 'http://localhost:3016';
 
 // GET /api/projects - List projects
 export const GET = createRouteHandler(
-  async (request: NextRequest, context) => {
+  async (request: NextRequest, context: RouteContext) => {
     try {
       return await proxyToBackend(request, context, {
         service: {
@@ -32,7 +31,7 @@ export const GET = createRouteHandler(
 
 // POST /api/projects - Create project
 export const POST = createRouteHandler(
-  async (request: NextRequest, context) => {
+  async (request: NextRequest, context: RouteContext) => {
     try {
       return await proxyToBackend(request, context, {
         service: {
