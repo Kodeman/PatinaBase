@@ -18,6 +18,11 @@ export {
   useCaptureProduct,
   type UseCaptureProductOptions,
 } from './use-capture-product';
+export {
+  usePromotionCandidates,
+  type PromotionCandidate,
+  type UsePromotionCandidatesOptions,
+} from './use-promotion-candidates';
 export type {
   ProductWithVendorPricing,
   VendorPricingInfo,
