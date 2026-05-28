@@ -23,6 +23,11 @@ export {
   type PromotionCandidate,
   type UsePromotionCandidatesOptions,
 } from './use-promotion-candidates';
+export {
+  useCrossLayerSearch,
+  type CrossLayerSearchResult,
+  type UseCrossLayerSearchOptions,
+} from './use-cross-layer-search';
 export type {
   ProductWithVendorPricing,
   VendorPricingInfo,
