@@ -144,25 +144,44 @@ export function useForProjectsCatalog(enabled = true) {
 
 // ─── Tab: Founding Circle ──────────────────────────────────────────────────
 //
-// Intended source: products joined to vendors flagged `vendors.founding_circle`.
-// That column DOES NOT EXIST in the schema (verified against
-// supabase/migrations + packages/supabase/src). The only `founding_circle`
-// references are an unrelated notification-preference flag and an audience
-// segment rule. We therefore return `{ missing: true }` so the page can render
-// an honest empty state and flag the missing column, instead of inventing it.
+// Catalog-layer products whose vendor is flagged `vendors.founding_circle`
+// (added in migration 00163). Inner-joins vendors and filters on the flag.
 
 export interface FoundingCircleResult {
-  /** True when the `vendors.founding_circle` flag does not yet exist. */
+  /** Retained for the page's empty-state branch; always false now the flag exists. */
   missing: boolean;
   items: LayerProductRow[];
 }
 
-export function useFoundingCircleCatalog(_enabled = true) {
+export function useFoundingCircleCatalog(enabled = true) {
   return useQuery<FoundingCircleResult>({
     queryKey: ['library-tab', 'founding-circle'],
-    // No query to run — the data dependency (vendors.founding_circle) is absent.
-    queryFn: async () => ({ missing: true, items: [] }),
-    staleTime: Infinity,
+    enabled,
+    queryFn: async () => {
+      const supabase = getSupabase();
+      // Two-step (avoids the ambiguous products↔vendors embed: products has
+      // both vendor_id and retailer_id FKs to vendors).
+      const { data: vendors, error: vErr } = await supabase
+        .from('vendors')
+        .select('id')
+        .eq('founding_circle', true);
+      if (vErr) throw new Error(`founding-circle(vendors): ${vErr.message}`);
+      const vendorIds = (vendors ?? []).map((v: any) => v.id);
+      if (vendorIds.length === 0) return { missing: false, items: [] };
+
+      const { data, error } = await supabase
+        .from('products')
+        .select(PRODUCT_COLUMNS)
+        .in('vendor_id', vendorIds)
+        .eq('layer', 'catalog')
+        .order('created_at', { ascending: false })
+        .limit(60);
+      if (error) throw new Error(`founding-circle(products): ${error.message}`);
+
+      const items = (data ?? []).filter((p: any): p is LayerProductRow => Boolean(p?.id));
+      return { missing: false, items: uniqById(items as LayerProductRow[]) };
+    },
+    staleTime: 60_000,
   });
 }
 
