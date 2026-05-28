@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useValidationQueue, useSubmitValidation } from '@patina/supabase';
 import { PortalButton } from '@/components/portal/button';
@@ -11,8 +12,11 @@ type Any = any;
 export default function ValidatePage() {
   const { data: rawQueue, isLoading } = useValidationQueue() as { data: Any; isLoading: boolean };
   const submitValidation = useSubmitValidation();
+  const [skipped, setSkipped] = useState<Set<string>>(new Set());
   const queue = Array.isArray(rawQueue) ? rawQueue : [];
-  const current = queue[0];
+  const idOf = (item: Any) => item?.product_id || item?.id;
+  const remaining = queue.filter((item: Any) => !skipped.has(idOf(item)));
+  const current = remaining[0];
 
   if (isLoading) return <LoadingStrata />;
 
@@ -23,7 +27,7 @@ export default function ValidatePage() {
         <span className="mx-2">&rarr;</span><span>Validation</span>
       </div>
 
-      <h1 className="type-section-head mb-6">Validation ({queue.length} remaining)</h1>
+      <h1 className="type-section-head mb-6">Validation ({remaining.length} remaining)</h1>
 
       {current ? (
         <div>
@@ -44,19 +48,19 @@ export default function ValidatePage() {
           <div className="mt-6 flex gap-4">
             <PortalButton
               variant="primary"
-              onClick={() => submitValidation.mutate({ productId: current.product_id || current.id, vote: 'agree' })}
+              onClick={() => submitValidation.mutate({ productId: idOf(current), vote: 'confirm' })}
               disabled={submitValidation.isPending}
             >
               Agree
             </PortalButton>
             <PortalButton
               variant="secondary"
-              onClick={() => submitValidation.mutate({ productId: current.product_id || current.id, vote: 'disagree' })}
+              onClick={() => submitValidation.mutate({ productId: idOf(current), vote: 'flag' })}
               disabled={submitValidation.isPending}
             >
               Disagree
             </PortalButton>
-            <PortalButton variant="ghost" onClick={() => submitValidation.mutate({ productId: current.product_id || current.id, vote: 'skip' })}>
+            <PortalButton variant="ghost" onClick={() => setSkipped((prev) => new Set(prev).add(idOf(current)))}>
               Skip
             </PortalButton>
           </div>
