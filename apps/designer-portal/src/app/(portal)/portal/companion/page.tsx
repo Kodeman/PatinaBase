@@ -26,6 +26,18 @@ import { Sparkles } from 'lucide-react';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
+// Graceful empty-state fallback for the quick-action chips. The
+// companion-context edge function is optional context — when it's
+// unavailable the hook returns null (see use-companion.ts), so these
+// starter prompts keep the first-touch teaching surface useful rather
+// than rendering an empty row. Not a substitute for real CMS/edge data.
+const FALLBACK_QUICK_ACTIONS = [
+  'Find products for a modern living room',
+  'Style recommendations for small spaces',
+  'Help me prepare for a client meeting',
+  'Market trends in sustainable furniture',
+];
+
 export default function CompanionPage() {
   const { data: conversation } = useCompanionConversation() as { data: Any };
   const conversationId = conversation?.id;
@@ -34,12 +46,9 @@ export default function CompanionPage() {
   const { data: rawQuickActions } = useCompanionQuickActions({ screen: 'home' }) as { data: Any };
 
   const messages = Array.isArray(rawHistory) ? rawHistory : rawHistory?.messages || [];
-  const quickActions = Array.isArray(rawQuickActions) ? rawQuickActions : rawQuickActions?.actions || [
-    'Find products for a modern living room',
-    'Style recommendations for small spaces',
-    'Help me prepare for a client meeting',
-    'Market trends in sustainable furniture',
-  ];
+  const quickActions = Array.isArray(rawQuickActions)
+    ? rawQuickActions
+    : rawQuickActions?.actions || FALLBACK_QUICK_ACTIONS;
 
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -51,9 +60,7 @@ export default function CompanionPage() {
   const handleSend = () => {
     if (!input.trim()) return;
     sendMessage.mutate(
-      // Existing typo `conversationId` (vs schema `conversation_id`) is
-      // pre-existing baseline — out of scope for the F1.4 help-system migration.
-      { message: input.trim(), conversationId },
+      { message: input.trim(), conversation_id: conversationId },
       { onSuccess: () => setInput('') }
     );
     setInput('');

@@ -114,12 +114,8 @@ export default function BulkImportPage() {
               Need a template?
             </p>
             <p className="font-body text-[0.82rem] text-[var(--text-body)]">
-              Download the{' '}
-              <span className="cursor-pointer border-b border-[var(--accent-primary)] text-[var(--accent-primary)]">
-                Patina Import Template
-              </span>{' '}
-              with all required and optional columns pre-configured. Includes a sample row for
-              reference.
+              Match these columns in your file: Name, Brand, Category, Price, Description, Material,
+              Dimensions. Anything we can&apos;t map lands as a draft for teaching.
             </p>
           </div>
         </>

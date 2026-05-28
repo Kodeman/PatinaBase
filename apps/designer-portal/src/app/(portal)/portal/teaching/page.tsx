@@ -25,7 +25,12 @@ export default function TeachingPage() {
   if (statsLoading) return <LoadingStrata />;
 
   const totalTaught = stats?.total_teachings ?? stats?.products_taught ?? 0;
-  const accuracy = stats?.accuracy ? Math.round(stats.accuracy * 100) : 94;
+  // `accuracy_score` is the real 0–1 fraction from designer_teaching_stats.
+  // Show "—" rather than a fabricated number when the designer has no score yet.
+  const accuracyScore = stats?.accuracy_score ?? stats?.accuracy ?? null;
+  const accuracy = accuracyScore != null ? Math.round(accuracyScore * 100) : null;
+  // Real cumulative count of future matches this designer's teaching improved.
+  const matchImpact = stats?.match_impact_count ?? 0;
   const dailyGoal = 20;
   const todayProgress = stats?.today_count ?? Math.min(totalTaught, dailyGoal);
 
@@ -56,16 +61,13 @@ export default function TeachingPage() {
         <div className="border-l border-[var(--border-subtle)] px-8">
           <span className="type-meta-small mb-1 block">Your Accuracy</span>
           <span className="type-data-large" style={{ fontSize: '1.8rem' }}>
-            {accuracy}%
+            {accuracy != null ? `${accuracy}%` : '—'}
           </span>
-          <div className="mt-1 font-body text-[0.72rem] text-[var(--color-sage)]">
-            ↑ 1.4% this week
-          </div>
         </div>
         <div className="border-l border-[var(--border-subtle)] pl-8">
           <span className="type-meta-small mb-1 block">Impact</span>
           <span className="type-data-large" style={{ fontSize: '1.8rem' }}>
-            847
+            {matchImpact.toLocaleString()}
           </span>
           <div className="mt-1 font-body text-[0.72rem] text-[var(--text-muted)]">
             future matches improved

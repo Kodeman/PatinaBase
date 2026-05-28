@@ -127,6 +127,7 @@ export async function POST(request: NextRequest) {
       images: body.images || [],
       materials: body.materials || [],
       dimensions: body.dimensions || null,
+      lead_time_weeks: body.leadTimeWeeks ?? body.lead_time_weeks ?? null,
       tags: body.tags || [],
       style_tags: body.styleTags || body.style_tags || [],
       seo_title: body.seoTitle || null,

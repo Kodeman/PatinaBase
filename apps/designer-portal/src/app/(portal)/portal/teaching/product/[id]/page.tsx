@@ -1,8 +1,14 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useProduct, useProductStyles, useProductSpectrum } from '@patina/supabase';
+import {
+  useProduct,
+  useProductStyles,
+  useProductSpectrum,
+  useTeachingQueue,
+  useDesignerTeachingStats,
+} from '@patina/supabase';
 import {
   Breadcrumb,
   DetailRow,
@@ -55,6 +61,11 @@ export default function TeachProductPage({ params }: { params: Promise<{ id: str
   const { data: product, isLoading } = useProduct(id) as { data: Any; isLoading: boolean };
   const { data: rawStyles } = useProductStyles(id) as { data: Any };
   const { data: spectrum } = useProductSpectrum(id) as { data: Any };
+  const { data: rawQueue } = useTeachingQueue() as { data: Any };
+  const { data: stats } = useDesignerTeachingStats() as { data: Any };
+
+  const queueRemaining = Array.isArray(rawQueue) ? rawQueue.length : 0;
+  const productsTaught = stats?.products_taught ?? stats?.total_teachings ?? 0;
 
   // Teaching form state
   const [primaryStyle, setPrimaryStyle] = useState('');
@@ -74,14 +85,44 @@ export default function TeachProductPage({ params }: { params: Promise<{ id: str
   const [bestContext, setBestContext] = useState('');
   const [avoidWhen, setAvoidWhen] = useState('');
 
+  // Seed the form from any existing teaching so editing shows current values
+  // rather than blank defaults. Styles come from `product_styles` (is_primary
+  // flag); spectrum columns are stored -1..1 and map to the 0..100 sliders.
+  useEffect(() => {
+    if (!Array.isArray(rawStyles) || rawStyles.length === 0) return;
+    const primary = rawStyles.find((s: Any) => s.is_primary);
+    const secondary = rawStyles.filter((s: Any) => !s.is_primary);
+    if (primary?.style?.name) setPrimaryStyle(primary.style.name);
+    const secondaryNames = secondary
+      .map((s: Any) => s.style?.name)
+      .filter(Boolean) as string[];
+    if (secondaryNames.length) setSecondaryStyles(secondaryNames);
+  }, [rawStyles]);
+
+  useEffect(() => {
+    if (!spectrum) return;
+    const toSlider = (v: number | null | undefined) =>
+      v == null ? 50 : Math.round((v + 1) * 50);
+    setSpectrumValues({
+      warmth: toSlider(spectrum.warmth),
+      ornate: toSlider(spectrum.complexity),
+      formality: toSlider(spectrum.formality),
+      timeless: toSlider(spectrum.timelessness),
+      statement: toSlider(spectrum.boldness),
+      artisan: toSlider(spectrum.craftsmanship),
+    });
+  }, [spectrum]);
+
   if (isLoading) return <LoadingStrata />;
   if (!product) {
     return <p className="type-body py-16 text-center text-[var(--text-muted)]">Product not found.</p>;
   }
 
+  // Empty array → ImageGallery renders its built-in placeholder rather than a
+  // broken <img> from an empty `url`.
   const images = product.images?.length
     ? product.images.map((img: Any) => ({ url: img.url, alt: img.alt }))
-    : [{ url: '', alt: 'Product image' }];
+    : [];
 
   const price = product.base_price || product.price || 0;
 
@@ -142,16 +183,16 @@ export default function TeachProductPage({ params }: { params: Promise<{ id: str
           <div className="text-center">
             <div className="type-meta-small mb-0.5">Queue</div>
             <span className="type-data-large" style={{ fontSize: '1.3rem' }}>
-              4
+              {queueRemaining}
             </span>
             <span className="ml-1 font-body text-[0.8rem] text-[var(--text-muted)]">remaining</span>
           </div>
           <div className="text-center">
-            <div className="type-meta-small mb-0.5">Today&apos;s Impact</div>
+            <div className="type-meta-small mb-0.5">Products Taught</div>
             <span className="type-data-large" style={{ fontSize: '1.3rem' }}>
-              12
+              {productsTaught.toLocaleString()}
             </span>
-            <span className="ml-1 font-body text-[0.8rem] text-[var(--text-muted)]">products</span>
+            <span className="ml-1 font-body text-[0.8rem] text-[var(--text-muted)]">total</span>
           </div>
         </div>
       </div>

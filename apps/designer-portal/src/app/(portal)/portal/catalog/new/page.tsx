@@ -62,14 +62,22 @@ export default function NewProductPage() {
 
   const handleSave = (publish: boolean) => {
     if (!form.name.trim()) return;
+    // Parse the free-text lead time ("8–12 weeks") into the integer
+    // `lead_time_weeks` column; fall back to undefined when no number is present.
+    const leadTimeMatch = form.leadTime.match(/\d+/);
+    const material = form.material.trim();
+    const dimensions = form.dimensions.trim();
     createProduct.mutate(
       {
         name: form.name.trim(),
         description: form.description.trim() || undefined,
-        price: form.retailPrice ? parseFloat(form.retailPrice) : undefined,
+        price: form.retailPrice ? parseFloat(form.retailPrice.replace(/[^0-9.]/g, '')) || undefined : undefined,
         brand: form.maker.trim() || undefined,
         category: form.category || undefined,
         tier: form.tier || undefined,
+        leadTimeWeeks: leadTimeMatch ? parseInt(leadTimeMatch[0], 10) : undefined,
+        materials: material ? [material] : undefined,
+        dimensions: dimensions || undefined,
         status: publish ? 'published' : 'draft',
       },
       { onSuccess: () => router.push('/portal/catalog') }

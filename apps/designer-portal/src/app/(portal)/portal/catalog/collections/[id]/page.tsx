@@ -190,7 +190,7 @@ export default function CollectionDetailPage({ params }: { params: Promise<{ id:
                     </div>
                     <span className="font-heading text-lg font-semibold text-[var(--text-primary)]">
                       {product.price
-                        ? `$${(product.price / 100).toLocaleString()}`
+                        ? `$${Number(product.price).toLocaleString()}`
                         : product.base_price
                           ? `$${Number(product.base_price).toLocaleString()}`
                           : '—'}
