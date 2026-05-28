@@ -48,6 +48,13 @@ export {
   type VendorStudioStats,
   type SignalStrength,
 } from './use-vendor-studio-stats';
+export {
+  useAdminNominations,
+  useSetNominationStatus,
+  type AdminNominationRow,
+  type SetNominationStatusInput,
+  type UseAdminNominationsOptions,
+} from './use-admin-nominations';
 export type {
   ProductWithVendorPricing,
   VendorPricingInfo,

@@ -11161,6 +11161,15 @@ export type Database = {
           text_score: number
         }[]
       }
+      set_nomination_status: {
+        Args: {
+          p_decline_reason?: string
+          p_nomination_id: string
+          p_patina_outreach_summary?: string
+          p_to_status: string
+        }
+        Returns: string
+      }
       set_room_emergence: {
         Args: {
           p_has_emergence: boolean
