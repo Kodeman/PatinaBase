@@ -2,6 +2,21 @@
 
 Source: live Chrome walk (`findings.md`) + 3 background code-audit agents. Local seeded dev, `designer@patina.dev`.
 
+## Backlog build status (2026-05-28) — Waves 1–3 DELIVERED & pushed to `main`
+
+**Wave 1 (backend foundation):** ✅ migration 00162 (vendor_quote_requests, user_sessions, nurture content, sms_opt_in); ✅ all missing `/api/*` routes (orders proxy, comms, style-profile, search FTS, comms dashboard) — X-02 / COMM-01/02 fixed at the source.
+**Wave 2 (wire existing backend):** ✅ SEC-03 room viewer, ✅ PROD-16/19/20 teaching persistence, ✅ PROD-05/CLI-03 image upload, ✅ SET-01 invite / SET-06 2FA / SET-10 sessions / SET-09 notif-unify, ✅ CLI-08 nurture send / CLI-09/19 review send+schedule / VEN-01/02 vendor actions / CLI-17 real journey.
+**Wave 3 (net-new + polish):** ✅ PROD-09/10 CSV import, ✅ PROD-12/13 library tabs (2 of 3 live), ✅ SET-08 SMS plumbing (creds-gated), ✅ C-03 by-vendor sort.
+
+**Still open (explicitly deferred, with reasons):**
+- **SEC-06/07 Help content** — Sanity content-authoring task (studio + components wired); needs a dedicated authoring pass with the `kv3qrinl` project, not app code.
+- **SMOKE-04/05 repo health** — ~3085 pre-existing tsc errors (test/story globals across packages) + deprecated `next lint`; repo-wide infra fix, not designer-portal feature work.
+- **X-05 loading skeletons** — broad cosmetic polish touching dozens of no-SSR pages (collision-prone); low value vs. risk.
+- **PROD-13 Founding Circle tab** — needs a `vendors.founding_circle` column/migration (tab shows an honest "not yet wired" state).
+- **SET-10 session list** — needs an auth hook/edge function to populate `user_sessions` on login (UI shows the current session meanwhile).
+- **C-03 by-status faceted filters** — different stage-bucket structure; Sprint-2 follow-up (by-vendor sort done). XLSX import — needs a parser dep (CSV done).
+
+
 **Severity:** P0 crash · P1 core-broken · P2 incomplete-stub · P3 cosmetic.
 **Effort:** Quick (no-op/dead-link/copy/hide) · Medium (wire to existing Supabase hook) · Large (needs backend/feature build).
 
