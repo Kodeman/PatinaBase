@@ -236,12 +236,14 @@
   }
 
   @keyframes page-enter {
+    /* Animate transform only — NOT opacity. The layout wraps every page in
+       .animate-page-enter; if this animation restarts/pins (a re-render reset,
+       as seen on /portal/resources), an opacity 0 keyframe would leave content
+       invisible. Sliding without fading keeps content always visible (X-05). */
     from {
-      opacity: 0;
       transform: translateY(8px);
     }
     to {
-      opacity: 1;
       transform: translateY(0);
     }
   }
