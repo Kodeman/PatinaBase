@@ -32,11 +32,57 @@ interface ProjectFilters {
 export function useProjectListMetrics() {
   return useQuery({
     queryKey: [...queryKeys.projects.all, 'list-metrics'],
-    queryFn: () =>
-      withMockData(
-        () => Promise.resolve(mockData.getProjectListMetrics()),
-        () => mockData.getProjectListMetrics()
-      ),
+    queryFn: async () => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase
+        .from('projects')
+        .select('status, budget_cents, start_date, target_end_date');
+
+      // Supabase unavailable / no real rows yet → keep the showcase fixture so
+      // dev/demo doesn't render an empty zero state.
+      if (error || !data || data.length === 0) {
+        return mockData.getProjectListMetrics();
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows = data as any[];
+      const active = rows.filter(
+        (p) => p.status === 'active' || p.status === 'planning'
+      );
+
+      const activeValue = active.reduce(
+        (sum, p) => sum + (p.budget_cents || 0),
+        0
+      );
+
+      const withDates = active.filter((p) => p.start_date && p.target_end_date);
+      const avgMonths =
+        withDates.length > 0
+          ? withDates.reduce((sum, p) => {
+              const start = new Date(p.start_date).getTime();
+              const end = new Date(p.target_end_date).getTime();
+              return sum + (end - start) / (1000 * 60 * 60 * 24 * 30.44);
+            }, 0) / withDates.length
+          : 0;
+
+      // Invoiced MTD — sum of paid + outstanding milestones across all projects.
+      const { data: milestones } = await supabase
+        .from('project_payment_milestones')
+        .select('amount_cents, status')
+        .in('status', ['paid', 'outstanding']);
+      const invoicedMTD = (milestones ?? []).reduce(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (sum: number, m: any) => sum + (m.amount_cents || 0),
+        0
+      );
+
+      return {
+        activeValue,
+        activeCount: active.length,
+        avgTimeline: Math.round(avgMonths * 10) / 10,
+        invoicedMTD,
+      };
+    },
   });
 }
 

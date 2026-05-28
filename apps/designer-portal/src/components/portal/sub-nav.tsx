@@ -1,11 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
 import { useActiveZone } from '@/hooks/use-active-zone';
 import { useNavCounts } from '@/hooks/use-nav-counts';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { ZONE_ACTIONS } from '@/config/navigation';
 import { useClient } from '@patina/supabase';
 
@@ -27,8 +27,16 @@ export function SubNav() {
   const counts = useNavCounts(zone);
   const prefersReducedMotion = useReducedMotion();
 
+  // Procurement sub-nav is gated behind the same pilot flag as the top-nav zone
+  // (fail-closed while loading). Non-pilot designers who deep-link into
+  // /portal/procurement/* see only the Coming Soon placeholder, not the tabs.
+  const { value: procurementPilotEnabled } = useFeatureFlag(
+    'procurement-workspace-pilot',
+  );
+
   // No sub-nav for Today zone or when there are no items
   if (!zone || subNavItems.length === 0) return null;
+  if (zone === 'procurement' && !procurementPilotEnabled) return null;
 
   const action = zone ? ZONE_ACTIONS[zone] : undefined;
 
@@ -126,7 +134,7 @@ export function SubNav() {
         )}
 
         {/* Right-side action */}
-        {!isDeepPage && action && !action.isViewToggle && action.href && (
+        {!isDeepPage && action && action.href && (
           <div className="ml-auto flex items-center">
             <Link
               href={action.href}
@@ -137,40 +145,7 @@ export function SubNav() {
             </Link>
           </div>
         )}
-
-        {/* Pipeline view toggle */}
-        {!isDeepPage && action?.isViewToggle && zone === 'pipeline' && (
-          <PipelineViewToggle />
-        )}
       </div>
     </nav>
-  );
-}
-
-function PipelineViewToggle() {
-  const router = useRouter();
-
-  // For now, default to List view. Could be stored in URL params or local state.
-  return (
-    <div className="ml-auto flex items-center gap-2">
-      <span className="font-mono text-[0.55rem] uppercase tracking-wider text-[var(--text-muted)]">
-        View:
-      </span>
-      <button
-        className="text-[0.68rem] text-[var(--text-primary)]"
-        style={{ fontFamily: 'var(--font-body)' }}
-      >
-        List
-      </button>
-      <button
-        className="text-[0.68rem] text-[var(--text-muted)]"
-        style={{ fontFamily: 'var(--font-body)' }}
-        onClick={() => {
-          // TODO: Implement timeline view toggle
-        }}
-      >
-        Timeline
-      </button>
-    </div>
   );
 }

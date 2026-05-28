@@ -37,16 +37,11 @@ export default function ProcurementLayout({
     procurementEvents.zoneVisited(subView ? { sub_view: subView } : {});
   }, [pathname, pilotEnabled]);
 
-  // W3.5.5 HIGH-2: while PostHog is resolving the flag, render nothing
-  // instead of the fail-closed "Coming soon" placeholder. Pilot designers
-  // deep-linking to /portal/procurement/by-vendor previously saw a brief
-  // "Coming soon" flash before the flag resolved — now they see a clean
-  // empty zone for a few hundred ms instead.
-  if (flagLoading) {
-    return null;
-  }
-
-  if (!pilotEnabled) {
+  // While PostHog resolves the flag, render the fail-closed "Coming soon"
+  // placeholder immediately rather than `null`. Returning nothing left a blank
+  // flash for the few hundred ms it takes the flag to resolve (C-02); since the
+  // gate is fail-closed anyway, showing the placeholder up front is correct.
+  if (flagLoading || !pilotEnabled) {
     return <ProcurementComingSoon />;
   }
 

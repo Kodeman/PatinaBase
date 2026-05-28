@@ -7,8 +7,6 @@ import {
   MessageSquare,
   DollarSign,
   Image,
-  Clock,
-  Settings,
   HelpCircle,
   type LucideIcon,
 } from 'lucide-react';
@@ -139,14 +137,11 @@ export const ZONE_SUB_ITEMS: Record<ZoneKey, SubNavItem[]> = {
 export interface SubNavAction {
   label: string;
   href?: string;
-  /** If true, rendered as a toggle group instead of a link */
-  isViewToggle?: boolean;
 }
 
 export const ZONE_ACTIONS: Partial<Record<ZoneKey, SubNavAction>> = {
   products: { label: '+ Add Product', href: '/portal/catalog/new' },
   clients: { label: '+ Add Client', href: '/portal/clients?add=1' },
-  pipeline: { label: '', isViewToggle: true },
 };
 
 // ─── Profile Menu Items ──────────────────────────────────────────────────────
@@ -162,7 +157,5 @@ export interface ProfileMenuItem {
 export const PROFILE_MENU_ITEMS: ProfileMenuItem[] = [
   { label: 'Earnings', icon: DollarSign, href: '/portal/earnings' },
   { label: 'Portfolio', icon: Image, href: '/portal/portfolio' },
-  { label: 'Time Tracking', icon: Clock, href: '/portal/settings' },
-  { label: 'Settings', icon: Settings, href: '/portal/settings' },
   { label: 'Help & Resources', icon: HelpCircle, href: '/portal/resources' },
 ];
