@@ -23,6 +23,13 @@ export {
   type PrefilledInputProps,
 } from './components/prefilled-input';
 export { PrefilledChip, type PrefilledChipProps } from './components/prefilled-chip';
+export {
+  DestinationPicker,
+  type DestinationPickerProps,
+  type DestinationPickerValue,
+  type DestinationPickerProject,
+  type DestinationPickerRoom,
+} from './components/destination-picker';
 
 export { SearchInput } from './components/search-input';
 export { FilterRow } from './components/filter-row';

@@ -12,9 +12,12 @@ import type {
   VendorCaptureInput,
 } from '@patina/shared';
 
+import {
+  DestinationPicker,
+  type DestinationPickerValue,
+} from '@patina/catalog-ui/destination-picker';
 import { StrataMark } from './StrataMark';
 import { ImageCarousel } from './ImageCarousel';
-import { ProjectSelector } from './ProjectSelector';
 import { ProposalTargetSelector } from './ProposalTargetSelector';
 import { StyleChips } from './StyleChips';
 import { ConfidenceIndicator } from './ConfidenceIndicator';
@@ -393,21 +396,28 @@ export function ProductCaptureForm({
 
       {/* Project selector */}
       <div>
-        <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">
-          Project
-        </label>
-        <ProjectSelector
-          projects={projects}
-          selectedProjectId={selectedProjectId}
-          isPersonalCatalog={isPersonalCatalog}
-          onSelectProject={(id) => {
+        <DestinationPicker
+          label="Save to"
+          value={
+            isPersonalCatalog
+              ? { type: 'personal' }
+              : selectedProjectId
+                ? { type: 'project-room', projectId: selectedProjectId }
+                : { type: 'personal' }
+          }
+          onChange={(next: DestinationPickerValue) => {
             setHasInteracted(true);
-            setSelectedProjectId(id);
+            if (next.type === 'personal') {
+              setIsPersonalCatalog(true);
+              setSelectedProjectId(null);
+            } else {
+              setIsPersonalCatalog(false);
+              setSelectedProjectId(next.projectId as UUID);
+            }
           }}
-          onTogglePersonalCatalog={(value) => {
-            setHasInteracted(true);
-            setIsPersonalCatalog(value);
-          }}
+          projects={projects
+            .filter((p) => p.status === 'active')
+            .map((p) => ({ id: p.id, name: p.name }))}
           isLoading={isLoadingData}
         />
       </div>

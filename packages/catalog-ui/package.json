@@ -9,6 +9,14 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./destination-picker": {
+      "types": "./src/components/destination-picker.tsx",
+      "default": "./src/components/destination-picker.tsx"
+    },
+    "./layer-icon": {
+      "types": "./src/components/layer-icon.tsx",
+      "default": "./src/components/layer-icon.tsx"
     }
   },
   "scripts": {

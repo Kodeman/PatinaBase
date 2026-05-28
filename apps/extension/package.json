@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@plasmohq/storage": "^1.15.0",
+    "@patina/catalog-ui": "workspace:*",
     "@patina/shared": "workspace:*",
     "@supabase/supabase-js": "^2.43.0",
     "plasmo": "^0.90.5",

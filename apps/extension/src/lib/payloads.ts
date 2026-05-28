@@ -54,6 +54,14 @@ export function buildProductInsertPayload(input: BuildProductPayloadInput) {
     retailer_id: retailerId,
     captured_by: userId,
     captured_at: new Date().toISOString(),
+    // Three-layer catalog (migration 00152). Captures always land in the
+    // personal library — owner_user_id is the authoritative owner; the
+    // legacy captured_by stays for historical attribution. The DB trigger
+    // (products_normalize_layer_defaults) is a safety net; we set the
+    // fields explicitly so the row passes products_personal_requires_owner
+    // even when the trigger is later removed.
+    layer: 'personal' as const,
+    owner_user_id: userId,
   };
 }
 

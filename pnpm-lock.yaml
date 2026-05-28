@@ -764,6 +764,9 @@ importers:
 
   apps/extension:
     dependencies:
+      '@patina/catalog-ui':
+        specifier: workspace:*
+        version: link:../../packages/catalog-ui
       '@patina/shared':
         specifier: workspace:*
         version: link:../../packages/shared
