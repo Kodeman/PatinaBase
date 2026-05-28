@@ -42,6 +42,12 @@ export {
   type UseNominateVendorOptions,
   type VendorNominationRow,
 } from './use-nominate-vendor';
+export {
+  useVendorStudioStats,
+  computeSignalStrength,
+  type VendorStudioStats,
+  type SignalStrength,
+} from './use-vendor-studio-stats';
 export type {
   ProductWithVendorPricing,
   VendorPricingInfo,

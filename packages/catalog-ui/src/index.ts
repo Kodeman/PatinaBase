@@ -39,6 +39,11 @@ export {
   type NominationStatus,
   type NominationStatusBannerProps,
 } from './components/nomination-status-banner';
+export {
+  VendorContextBlock,
+  type VendorContextBlockProps,
+  type SignalStrength,
+} from './components/vendor-context-block';
 
 export { SearchInput } from './components/search-input';
 export { FilterRow } from './components/filter-row';

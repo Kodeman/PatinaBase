@@ -10739,6 +10739,39 @@ export type Database = {
         }
         Relationships: []
       }
+      v_vendor_studio_stats: {
+        Row: {
+          lifetime_value_cents: number | null
+          projects_used_count: number | null
+          studio_id: string | null
+          studio_item_count: number | null
+          unresolved_damage_count: number | null
+          vendor_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       activate_project_v2: { Args: { input: Json }; Returns: string }
