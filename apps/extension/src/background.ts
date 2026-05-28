@@ -234,6 +234,11 @@ async function syncQueue(): Promise<void> {
           captured_by: session.user.id,
           captured_at: new Date().toISOString(),
           status: productStatus,
+          // Three-layer catalog (migration 00152). Queue-drained captures
+          // land in the personal library, owned by the signed-in user.
+          // Mirrors the sync-save path in `payloads.ts`.
+          layer: 'personal',
+          owner_user_id: session.user.id,
         }).select('id').single();
 
         if (error) throw error;

@@ -14,6 +14,10 @@ export {
   type LayerProductRow,
   type UseLayerProductsOptions,
 } from './use-layer-products';
+export {
+  useCaptureProduct,
+  type UseCaptureProductOptions,
+} from './use-capture-product';
 export type {
   ProductWithVendorPricing,
   VendorPricingInfo,
