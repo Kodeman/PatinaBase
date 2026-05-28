@@ -1206,6 +1206,27 @@ export type Database = {
             foreignKeyName: "client_nurture_touchpoints_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "client_nurture_touchpoints_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "client_nurture_touchpoints_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "client_nurture_touchpoints_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
           },
@@ -1357,6 +1378,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "collection_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "collection_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "collection_products_product_id_fkey"
@@ -2772,6 +2814,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "editorial_stories_featured_product_id_fkey"
+            columns: ["featured_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "editorial_stories_featured_product_id_fkey"
+            columns: ["featured_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "editorial_stories_featured_product_id_fkey"
+            columns: ["featured_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "editorial_stories_featured_product_id_fkey"
@@ -4285,6 +4348,27 @@ export type Database = {
             foreignKeyName: "product_appeal_signals_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_appeal_signals_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_appeal_signals_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_appeal_signals_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
           },
@@ -4335,6 +4419,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_client_matches_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_client_matches_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_client_matches_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "product_client_matches_product_id_fkey"
@@ -4397,6 +4502,27 @@ export type Database = {
             foreignKeyName: "product_engagement_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: true
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_engagement_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_engagement_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_engagement_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
           },
@@ -4434,6 +4560,27 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_inventory_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_inventory_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_inventory_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "product_inventory_product_id_fkey"
@@ -4484,6 +4631,27 @@ export type Database = {
             foreignKeyName: "product_relations_product_a_id_fkey"
             columns: ["product_a_id"]
             isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_relations_product_a_id_fkey"
+            columns: ["product_a_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_relations_product_a_id_fkey"
+            columns: ["product_a_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_relations_product_a_id_fkey"
+            columns: ["product_a_id"]
+            isOneToOne: false
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
           },
@@ -4493,6 +4661,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_relations_product_b_id_fkey"
+            columns: ["product_b_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_relations_product_b_id_fkey"
+            columns: ["product_b_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_relations_product_b_id_fkey"
+            columns: ["product_b_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "product_relations_product_b_id_fkey"
@@ -4555,6 +4744,27 @@ export type Database = {
             foreignKeyName: "product_style_spectrum_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: true
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_style_spectrum_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_style_spectrum_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_style_spectrum_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
           },
@@ -4603,6 +4813,27 @@ export type Database = {
             foreignKeyName: "product_styles_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_styles_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_styles_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_styles_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
           },
@@ -4641,6 +4872,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_tags_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_tags_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_tags_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "product_tags_product_id_fkey"
@@ -4702,6 +4954,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_user_dwell_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_user_dwell_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_user_dwell_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "product_user_dwell_product_id_fkey"
@@ -4890,6 +5163,27 @@ export type Database = {
             foreignKeyName: "products_catalog_equivalent_id_fkey"
             columns: ["catalog_equivalent_id"]
             isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "products_catalog_equivalent_id_fkey"
+            columns: ["catalog_equivalent_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "products_catalog_equivalent_id_fkey"
+            columns: ["catalog_equivalent_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "products_catalog_equivalent_id_fkey"
+            columns: ["catalog_equivalent_id"]
+            isOneToOne: false
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
           },
@@ -4899,6 +5193,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "products_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "products_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "products_merged_into_id_fkey"
@@ -4941,6 +5256,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_promoted_from_id_fkey"
+            columns: ["promoted_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "products_promoted_from_id_fkey"
+            columns: ["promoted_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "products_promoted_from_id_fkey"
+            columns: ["promoted_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "products_promoted_from_id_fkey"
@@ -5261,6 +5597,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "project_ffe_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "project_ffe_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "project_ffe_items_product_id_fkey"
@@ -5595,6 +5952,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "project_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "project_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "project_products_product_id_fkey"
@@ -6043,6 +6421,27 @@ export type Database = {
             foreignKeyName: "promotion_audit_log_merged_into_id_fkey"
             columns: ["merged_into_id"]
             isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "promotion_audit_log_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "promotion_audit_log_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "promotion_audit_log_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
           },
@@ -6052,6 +6451,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_audit_log_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "promotion_audit_log_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "promotion_audit_log_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "promotion_audit_log_product_id_fkey"
@@ -6136,6 +6556,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_captures_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "proposal_captures_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "proposal_captures_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "proposal_captures_product_id_fkey"
@@ -6383,6 +6824,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "proposal_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "proposal_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "proposal_items_product_id_fkey"
@@ -8018,6 +8480,27 @@ export type Database = {
             foreignKeyName: "saved_items_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "saved_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "saved_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "saved_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
           },
@@ -8332,6 +8815,27 @@ export type Database = {
             foreignKeyName: "spatial_context_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "spatial_context_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "spatial_context_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "spatial_context_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
           },
@@ -8380,6 +8884,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spectrum_calibration_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "spectrum_calibration_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "spectrum_calibration_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "spectrum_calibration_products_product_id_fkey"
@@ -8522,6 +9047,27 @@ export type Database = {
             foreignKeyName: "teaching_queue_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: true
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "teaching_queue_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "teaching_queue_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "teaching_queue_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
           },
@@ -8592,6 +9138,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teaching_validations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "teaching_validations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "teaching_validations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "teaching_validations_product_id_fkey"
@@ -8898,6 +9465,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_wishlist_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "user_wishlist_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "user_wishlist_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "user_wishlist_product_id_fkey"
@@ -9904,6 +10492,192 @@ export type Database = {
           role?: string | null
         }
         Relationships: []
+      }
+      v_aesthete_catalog_input: {
+        Row: {
+          aesthete_vector: string | null
+          category: string | null
+          commission_rate: number | null
+          created_at: string | null
+          description: string | null
+          embedding: string | null
+          material_tags: string[] | null
+          materials: string[] | null
+          name: string | null
+          product_id: string | null
+          style_tags: string[] | null
+          subcategory: string | null
+          updated_at: string | null
+          vendor_id: string | null
+        }
+        Insert: {
+          aesthete_vector?: string | null
+          category?: string | null
+          commission_rate?: number | null
+          created_at?: string | null
+          description?: string | null
+          embedding?: string | null
+          material_tags?: string[] | null
+          materials?: string[] | null
+          name?: string | null
+          product_id?: string | null
+          style_tags?: string[] | null
+          subcategory?: string | null
+          updated_at?: string | null
+          vendor_id?: string | null
+        }
+        Update: {
+          aesthete_vector?: string | null
+          category?: string | null
+          commission_rate?: number | null
+          created_at?: string | null
+          description?: string | null
+          embedding?: string | null
+          material_tags?: string[] | null
+          materials?: string[] | null
+          name?: string | null
+          product_id?: string | null
+          style_tags?: string[] | null
+          subcategory?: string | null
+          updated_at?: string | null
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_aesthete_personal_input: {
+        Row: {
+          captured_at: string | null
+          description: string | null
+          embedding: string | null
+          material_tags: string[] | null
+          materials: string[] | null
+          name: string | null
+          owner_user_id: string | null
+          product_id: string | null
+          style_tags: string[] | null
+          updated_at: string | null
+        }
+        Insert: {
+          captured_at?: string | null
+          description?: string | null
+          embedding?: string | null
+          material_tags?: string[] | null
+          materials?: string[] | null
+          name?: string | null
+          owner_user_id?: string | null
+          product_id?: string | null
+          style_tags?: string[] | null
+          updated_at?: string | null
+        }
+        Update: {
+          captured_at?: string | null
+          description?: string | null
+          embedding?: string | null
+          material_tags?: string[] | null
+          materials?: string[] | null
+          name?: string | null
+          owner_user_id?: string | null
+          product_id?: string | null
+          style_tags?: string[] | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_owner_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_owner_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_aesthete_studio_input: {
+        Row: {
+          captured_at: string | null
+          category: string | null
+          description: string | null
+          embedding: string | null
+          material_tags: string[] | null
+          materials: string[] | null
+          name: string | null
+          product_id: string | null
+          promoted_at: string | null
+          studio_id: string | null
+          style_tags: string[] | null
+          subcategory: string | null
+          updated_at: string | null
+          vendor_id: string | null
+        }
+        Insert: {
+          captured_at?: string | null
+          category?: string | null
+          description?: string | null
+          embedding?: string | null
+          material_tags?: string[] | null
+          materials?: string[] | null
+          name?: string | null
+          product_id?: string | null
+          promoted_at?: string | null
+          studio_id?: string | null
+          style_tags?: string[] | null
+          subcategory?: string | null
+          updated_at?: string | null
+          vendor_id?: string | null
+        }
+        Update: {
+          captured_at?: string | null
+          category?: string | null
+          description?: string | null
+          embedding?: string | null
+          material_tags?: string[] | null
+          materials?: string[] | null
+          name?: string | null
+          product_id?: string | null
+          promoted_at?: string | null
+          studio_id?: string | null
+          style_tags?: string[] | null
+          subcategory?: string | null
+          updated_at?: string | null
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       v_promotion_candidates: {
         Row: {
