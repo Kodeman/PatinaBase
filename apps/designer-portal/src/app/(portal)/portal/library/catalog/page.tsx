@@ -165,7 +165,7 @@ function ActiveTab({
               id={p.id}
               name={p.name}
               imageUrl={p.images?.[0]}
-              price={p.price_retail ?? 0}
+              price={(p.price_retail ?? 0) / 100}
               status={p.status ?? undefined}
               layer="catalog"
               showLayer
