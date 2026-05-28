@@ -38,16 +38,15 @@ const STEP_INTRO_SURFACE_KEYS: Record<ImportStep, string> = {
 };
 
 const STEP_INTRO_FALLBACKS: Record<ImportStep, string> = {
-  1: 'Drop a CSV export from your vendor. We map up to 5,000 products per import.',
+  1: 'Drop a CSV or Excel export from your vendor. We map up to 5,000 products per import.',
   2: 'Confirm we read your columns correctly. Anything we can\'t map will land as a draft for teaching.',
   3: 'Review what will be imported. Products land as drafts and queue for teaching automatically.',
 };
 
 // --- Inline CSV parser ----------------------------------------------------
-// No new dependency: papaparse is not in the workspace. This handles quoted
-// fields (incl. commas and newlines inside quotes) and escaped quotes ("").
-// XLSX is intentionally out of scope — it needs a parser dependency (e.g.
-// sheetjs/xlsx) which is not present. CSV only.
+// No new dependency for CSV: papaparse is not in the workspace. This handles
+// quoted fields (incl. commas and newlines inside quotes) and escaped quotes ("").
+// XLSX/XLS is parsed via SheetJS (xlsx), lazy-loaded in handleFiles below.
 function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
   let field = '';
@@ -148,25 +147,14 @@ export default function BulkImportPage() {
     setStep(1);
   };
 
-  const handleFiles = (files: File[]) => {
+  const handleFiles = async (files: File[]) => {
     if (files.length === 0) return;
     const picked = files[0];
-
-    const lower = picked.name.toLowerCase();
-    if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
-      setParseError(
-        'Excel (.xlsx) files are not supported yet — please export to CSV and re-upload.',
-      );
-      return;
-    }
 
     setParseError(null);
     setFile(picked);
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const text = String(reader.result ?? '');
-      const parsed = parseCsv(text);
+    const finish = (parsed: string[][]) => {
       if (parsed.length < 2) {
         setParseError('This file has no data rows. Expected a header row plus at least one product.');
         setHeaders([]);
@@ -179,8 +167,24 @@ export default function BulkImportPage() {
       setMapping(hdr.map((h) => guessField(h)));
       setStep(2);
     };
-    reader.onerror = () => setParseError('Could not read the file. Please try again.');
-    reader.readAsText(picked);
+
+    const lower = picked.name.toLowerCase();
+    try {
+      if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
+        // XLSX/XLS: lazy-load SheetJS so it stays out of the main bundle.
+        const XLSX = await import('xlsx');
+        const wb = XLSX.read(await picked.arrayBuffer(), { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = (
+          XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false, defval: '' }) as unknown[][]
+        ).map((r) => r.map((cell) => (cell == null ? '' : String(cell))));
+        finish(rows);
+      } else {
+        finish(parseCsv(await picked.text()));
+      }
+    } catch {
+      setParseError('Could not read the file. Please try again.');
+    }
   };
 
   // Build mapped + validated rows for the preview step.
@@ -312,7 +316,7 @@ export default function BulkImportPage() {
         <>
           <UploadZone
             onFiles={handleFiles}
-            accept=".csv,.tsv"
+            accept=".csv,.tsv,.xlsx,.xls"
             multiple={false}
             description="Drop your CSV file here"
             label="Or click to browse your computer"

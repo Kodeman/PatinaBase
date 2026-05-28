@@ -41,7 +41,7 @@ export default function ResourcesPage() {
             {category.items.map((item) => (
               <div
                 key={item.title}
-                className="cursor-pointer border-b border-[var(--border-subtle)] py-4 transition-colors hover:bg-[var(--bg-hover)]"
+                className="border-b border-[var(--border-subtle)] py-4"
               >
                 <span className="type-label">{item.title}</span>
                 <p className="type-body-small mt-1">{item.description}</p>
