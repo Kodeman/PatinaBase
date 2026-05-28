@@ -119,8 +119,8 @@ const ARTICLES_QUERY = groq`
   ] | order(length(surfaceKey) desc) [0...10] {
     "_id": _id,
     surfaceKey,
-    title,
-    "excerpt": pt::text(body)
+    "title": coalesce(title, helpArticleContent.title),
+    "excerpt": pt::text(coalesce(body, helpArticleContent.body))
   }
 `
 

@@ -117,18 +117,22 @@ const SEARCH_QUERY = groq`
   *[_type == "helpContent"
     && (
          helpArticleContent.title match $q
+      || title match $q
       || pt::text(helpArticleContent.body) match $q
+      || pt::text(body) match $q
       || tooltipContent.body match $q
+      || body match $q
     )
     && ($persona == null || !defined(persona) || persona == "all" || persona == $persona)
   ] | order(_updatedAt desc) [0...$max] {
     "_id": _id,
     surfaceKey,
     contentType,
-    "title": coalesce(helpArticleContent.title, surfaceKey),
+    "title": coalesce(helpArticleContent.title, title, surfaceKey),
     "excerpt": coalesce(
       helpArticleContent.oneSentenceAnswer,
-      pt::text(helpArticleContent.body)[0...160],
+      oneSentenceAnswer,
+      pt::text(coalesce(helpArticleContent.body, body))[0...160],
       tooltipContent.body
     )
   }
