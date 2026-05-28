@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
-import { useProfile, useUpdateProfile, useUpdatePassword, useNotificationPreferences, useUpdateNotificationPreferences, useOrganizations } from '@patina/supabase';
+import { useProfile, useUpdateProfile, useUpdatePassword, useOrganizations, useMfaFactors } from '@patina/supabase';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { FieldGroup } from '@/components/portal/field-group';
 import { DetailRow } from '@/components/portal/detail-row';
@@ -29,10 +30,27 @@ export default function SettingsPage() {
   const { data: profile } = useProfile() as { data: Any };
   const updateProfile = useUpdateProfile();
   const updatePassword = useUpdatePassword();
-  const { data: notifPrefs } = useNotificationPreferences() as { data: Any };
-  const updateNotifPrefs = useUpdateNotificationPreferences();
+  // SET-09 — read/write notification toggles through /api/user/preferences,
+  // the same canonical endpoint used by settings/notifications and (via the
+  // shared notification_preferences table) the preferences page, so all three
+  // UIs stay consistent.
+  const [notifPrefs, setNotifPrefs] = useState<Any>(null);
+  useEffect(() => {
+    let active = true;
+    fetch('/api/user/preferences')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active && data && !data.error) setNotifPrefs(data);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
   const { data: rawOrgs } = useOrganizations() as { data: Any };
   const orgs = Array.isArray(rawOrgs) ? rawOrgs : [];
+  const { factors: mfaFactors, hasMfaEnabled } = useMfaFactors();
+  const verifiedFactorCount = mfaFactors.filter((f) => f.status === 'verified').length;
 
   const [editingSection, setEditingSection] = useState<string | null>(null);
 
@@ -68,7 +86,18 @@ export default function SettingsPage() {
   };
 
   const handleToggleNotif = (key: string, value: boolean) => {
-    updateNotifPrefs.mutate({ [key]: value });
+    // Optimistic local update, then PATCH the canonical preferences endpoint.
+    setNotifPrefs((prev: Any) => ({ ...(prev || {}), [key]: value }));
+    fetch('/api/user/preferences', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [key]: value }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && !data.error) setNotifPrefs(data);
+      })
+      .catch(() => {});
   };
 
   const notifSettings = notifPrefs || {};
@@ -219,7 +248,22 @@ export default function SettingsPage() {
           fallback="Two-factor authentication and assigned roles."
           className="mb-4"
         />
-        <DetailRow label="2FA" value="Not enabled" />
+        <div className="flex items-center justify-between border-b border-[var(--border-subtle)] py-3">
+          <div>
+            <span className="type-label-secondary">2FA</span>
+            <div className="type-label mt-0.5">
+              {hasMfaEnabled
+                ? `Enabled${verifiedFactorCount > 1 ? ` (${verifiedFactorCount} authenticators)` : ''}`
+                : 'Not enabled'}
+            </div>
+          </div>
+          <Link
+            href="/portal/settings/security"
+            className="type-btn-text text-[var(--accent-primary)] no-underline"
+          >
+            {hasMfaEnabled ? 'Manage' : 'Enable'}
+          </Link>
+        </div>
         <DetailRow label="Roles" value={user?.roles?.join(', ') || 'designer'} />
       </section>
 

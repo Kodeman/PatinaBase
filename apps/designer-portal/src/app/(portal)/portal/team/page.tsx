@@ -1,10 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { useOrganizations, useSession } from '@patina/supabase';
+import { useOrganizations, useSession, useAddClient } from '@patina/supabase';
 import { useProjects } from '@/hooks/use-projects';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { PortalButton } from '@/components/portal/button';
 // F1.7 — Team migrated to ambient + reactive help-system layers per spec
 // §12.4. Studio is Patina vocabulary (multi-user org); StrataInfoIcon
 // explains the concept inline. Aliased the local EmptyState helper to
@@ -38,10 +40,141 @@ function NoStudioEmpty() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyData = any;
 
+// SET-01 — Invite member modal. POSTs to the existing /api/clients/invite route
+// via the useAddClient hook (clientEmail + optional clientName, invite=true so a
+// magic-link email is sent). Mirrors the AddClientDialog pattern but scoped to
+// the Team page per the task brief.
+function InviteMemberModal({ onClose }: { onClose: () => void }) {
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const addClient = useAddClient();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) return;
+
+    setSuccessMessage(null);
+    setErrorMessage(null);
+
+    addClient.mutate(
+      {
+        clientEmail: trimmedEmail,
+        clientName: name.trim() || undefined,
+        source: 'direct',
+        invite: true,
+      },
+      {
+        onSuccess: (result: AnyData) => {
+          const label = name.trim() || trimmedEmail;
+          setSuccessMessage(
+            result?.alreadyExists
+              ? `${label} is already on Patina — linked to their existing account.`
+              : result?.invited
+                ? `${label} invited — they'll get a magic-link email shortly.`
+                : `${label} added.`
+          );
+          setEmail('');
+          setName('');
+        },
+        onError: (err: Error) => {
+          setErrorMessage(err.message ?? 'Something went wrong. Please try again.');
+        },
+      }
+    );
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Invite member"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-md p-6"
+        style={{ backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="type-item-name mb-2">Invite member</h2>
+        <p className="type-body mb-5 text-[0.82rem] text-[var(--text-muted)]">
+          Send a magic-link invite. They'll join your roster once they accept.
+        </p>
+
+        {successMessage && (
+          <div
+            role="status"
+            className="mb-4 rounded-sm border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800"
+          >
+            {successMessage}
+          </div>
+        )}
+        {errorMessage && (
+          <div
+            role="alert"
+            className="mb-4 rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+          >
+            {errorMessage}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="invite-email" className="type-meta-small uppercase tracking-wider">
+              Email
+            </label>
+            <input
+              id="invite-email"
+              type="email"
+              required
+              autoFocus
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="member@example.com"
+              className="type-body border-0 border-b border-[var(--border-default)] bg-transparent py-2 text-[0.85rem] outline-none focus:border-[var(--accent-primary)]"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label htmlFor="invite-name" className="type-meta-small uppercase tracking-wider">
+              Name <span className="normal-case text-[var(--text-muted)]">(optional)</span>
+            </label>
+            <input
+              id="invite-name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Jordan Avery"
+              className="type-body border-0 border-b border-[var(--border-default)] bg-transparent py-2 text-[0.85rem] outline-none focus:border-[var(--accent-primary)]"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <PortalButton
+              variant="primary"
+              type="submit"
+              disabled={addClient.isPending || !email.trim()}
+            >
+              {addClient.isPending ? 'Sending...' : 'Send invite'}
+            </PortalButton>
+            <PortalButton variant="ghost" type="button" onClick={onClose}>
+              {successMessage ? 'Done' : 'Cancel'}
+            </PortalButton>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function TeamPage() {
   const { session } = useSession();
   const { data: orgs, isLoading: orgsLoading } = useOrganizations();
   const { data: projects, isLoading: projectsLoading } = useProjects();
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   const orgList = (Array.isArray(orgs) ? orgs : []) as AnyData[];
   const projectList = (Array.isArray(projects) ? projects : []) as AnyData[];
@@ -66,12 +199,14 @@ export default function TeamPage() {
         </div>
         <button
           type="button"
-          onClick={() => alert('Invite — coming soon')}
+          onClick={() => setInviteOpen(true)}
           className="rounded-[3px] bg-[var(--text-primary)] px-3 py-1.5 text-[0.8rem] text-[var(--bg-primary)]"
         >
           + Invite member
         </button>
       </div>
+
+      {inviteOpen && <InviteMemberModal onClose={() => setInviteOpen(false)} />}
 
       {!studio ? (
         <NoStudioEmpty />
