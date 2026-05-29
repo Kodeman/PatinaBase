@@ -55,17 +55,22 @@ export function useActiveZone(): ActiveZoneResult {
     let activeSubNavHref: string | null = null;
 
     if (zone.key === 'pipeline') {
-      // Pipeline uses search params for stage filtering
-      const stage = searchParams.get('stage');
-      if (stage && pathname === '/portal/pipeline') {
-        activeSubNavHref = `/portal/pipeline?stage=${stage}`;
+      // Stage tabs point at dedicated entity pages (Leads/Proposals/Projects)
+      // rather than /portal/pipeline?stage= filters. Match the configured tab
+      // hrefs exactly so SubNav's string-equality highlight works. The two
+      // /portal/projects tabs (Active vs Completed) are disambiguated by ?status.
+      if (pathname.startsWith('/portal/leads')) {
+        activeSubNavHref = '/portal/leads';
+      } else if (pathname.startsWith('/portal/proposals')) {
+        activeSubNavHref = '/portal/proposals';
+      } else if (pathname.startsWith('/portal/projects')) {
+        activeSubNavHref =
+          searchParams.get('status') === 'completed'
+            ? '/portal/projects?status=completed'
+            : '/portal/projects';
       } else if (pathname === '/portal/pipeline') {
         activeSubNavHref = '/portal/pipeline';
       }
-      // If on /portal/leads, /portal/proposals, /portal/projects — map to pipeline stage
-      if (pathname.startsWith('/portal/leads')) activeSubNavHref = '/portal/pipeline?stage=leads';
-      if (pathname.startsWith('/portal/proposals')) activeSubNavHref = '/portal/pipeline?stage=proposals';
-      if (pathname.startsWith('/portal/projects')) activeSubNavHref = '/portal/pipeline?stage=active';
     } else if (zone.key === 'messages') {
       // Messages uses ?scope=… for sub-nav filtering. The base /portal/messages
       // path is "Inbox"; deeper /portal/messages/:threadId routes also surface

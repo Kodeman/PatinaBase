@@ -181,6 +181,7 @@ export {
   useLeads,
   useLead,
   useLeadStats,
+  useCreateLead,
   useUpdateLeadStatus,
   useMarkLeadViewed,
   useAcceptLead,

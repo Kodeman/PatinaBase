@@ -122,11 +122,11 @@ export function CommandPalette() {
         <CommandSeparator />
 
         <CommandGroup heading="Quick Actions">
-          <CommandItem onSelect={() => navigate('/portal/pipeline?stage=leads')}>
+          <CommandItem onSelect={() => navigate('/portal/leads')}>
             <Search className="mr-2 h-4 w-4" />
             View Leads
           </CommandItem>
-          <CommandItem onSelect={() => navigate('/portal/pipeline?stage=proposals')}>
+          <CommandItem onSelect={() => navigate('/portal/proposals')}>
             <Search className="mr-2 h-4 w-4" />
             View Proposals
           </CommandItem>
