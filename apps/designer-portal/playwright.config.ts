@@ -27,6 +27,11 @@ loadEnvFile('.env');
  */
 export default defineConfig({
   testDir: './e2e',
+  /* Per-test timeout. The shared auth fixture signs in through the UI and waits
+   * on Next dev cold-compiles, whose internal waits alone approach the old 30s
+   * default — making every auth-backed spec flaky on a cold server. 60s gives
+   * headroom without masking genuinely hung tests. */
+  timeout: 60_000,
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
