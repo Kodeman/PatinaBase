@@ -97,8 +97,8 @@ export function useProjects(filters?: ProjectFilters) {
         .from('projects')
         .select(`
           *,
-          client:profiles!projects_client_id_fkey(id, full_name, email),
-          designer:profiles!projects_designer_id_fkey(id, full_name, email)
+          client:profiles!projects_client_id_fkey(id, full_name, display_name, email),
+          designer:profiles!projects_designer_id_fkey(id, full_name, display_name, email)
         `)
         .order('updated_at', { ascending: false });
 
@@ -140,8 +140,8 @@ export function useProject(id: string | null) {
         .from('projects')
         .select(`
           *,
-          designer:profiles!projects_designer_id_fkey(id, full_name, email),
-          client:profiles!projects_client_id_fkey(id, full_name, email),
+          designer:profiles!projects_designer_id_fkey(id, full_name, display_name, email),
+          client:profiles!projects_client_id_fkey(id, full_name, display_name, email),
           proposal:proposals!projects_proposal_id_fkey(id, title, signed_at)
         `)
         .eq('id', id)

@@ -154,6 +154,48 @@ export const PHASE_STATUS_DISPLAY: Record<PhaseStatus, StatusDisplayConfig> = {
 // HELPERS
 // ============================================================================
 
+/**
+ * Non-canonical / legacy phase keys mapped to their canonical slug.
+ *
+ * The proposal scope-builder and `activate_proposal_as_project` persist a
+ * simplified phase vocabulary (e.g. `concept`) that predates / diverges from
+ * the canonical six-phase model. These aliases let every UI lookup resolve a
+ * canonical config without a data migration.
+ */
+const PHASE_SLUG_ALIASES: Record<string, PhaseSlug> = {
+  concept: 'concept_development',
+  schematic: 'concept_development',
+  schematic_design: 'concept_development',
+  design: 'design_refinement',
+  design_development: 'design_refinement',
+  procure: 'procurement',
+  install: 'installation',
+  completion: 'final_walkthrough',
+  handover: 'final_walkthrough',
+  walkthrough: 'final_walkthrough',
+  final: 'final_walkthrough',
+};
+
+/**
+ * Normalize any phase string to a canonical `PhaseSlug`.
+ *
+ * Resolution order: exact canonical slug → known alias → reverse label lookup →
+ * `'consultation'` fallback. ALWAYS returns a valid slug so that
+ * `PHASE_DISPLAY_CONFIG[normalizePhaseSlug(x)]` can never be `undefined`
+ * (the root cause of the project-detail crash on real, activated projects).
+ */
+export function normalizePhaseSlug(value: string | null | undefined): PhaseSlug {
+  if (!value) return 'consultation';
+  const v = value.toLowerCase().trim();
+  if (Object.prototype.hasOwnProperty.call(PHASE_DISPLAY_CONFIG, v)) {
+    return v as PhaseSlug;
+  }
+  if (Object.prototype.hasOwnProperty.call(PHASE_SLUG_ALIASES, v)) {
+    return PHASE_SLUG_ALIASES[v];
+  }
+  return getPhaseSlugFromLabel(v) ?? 'consultation';
+}
+
 /** Reverse lookup: map a label (designer or client) to a phase slug */
 export function getPhaseSlugFromLabel(label: string): PhaseSlug | undefined {
   const normalized = label.toLowerCase().trim();

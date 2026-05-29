@@ -19,6 +19,8 @@ export {
   type PhaseStatus,
   PHASE_STATUS_DISPLAY,
   getPhaseLabel,
+  getPhaseConfig,
+  normalizePhaseSlug,
   calculateProjectProgress,
 } from '@patina/types';
 

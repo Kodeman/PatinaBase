@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { PhaseDot } from '@/components/portal/phase-dot';
-import { PHASE_CONFIG, ALL_PHASES, type ProjectPhase } from '@/types/project-ui';
+import { PHASE_CONFIG, ALL_PHASES, normalizePhaseSlug, type ProjectPhase } from '@/types/project-ui';
 
 interface ProjectIdentityHeaderProps {
   project: {
@@ -11,6 +11,7 @@ interface ProjectIdentityHeaderProps {
     startDate?: string | null;
     start_date?: string | null;
     client_id?: string | null;
+    client?: { full_name?: string | null; display_name?: string | null; email?: string | null } | null;
     proposal?: { id: string } | null;
   };
   phase: ProjectPhase;
@@ -19,7 +20,13 @@ interface ProjectIdentityHeaderProps {
 
 function formatStartDate(value: string | null | undefined): string | null {
   if (!value) return null;
-  const date = new Date(value);
+  // Date-only strings (YYYY-MM-DD) parse as UTC midnight; rendering them in a
+  // timezone behind UTC shifts the displayed day back by one ("Started May 28"
+  // for a 2026-05-29 start). Parse date-only values in local time instead.
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.exec(value);
+  const date = dateOnly
+    ? new Date(Number(value.slice(0, 4)), Number(value.slice(5, 7)) - 1, Number(value.slice(8, 10)))
+    : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.toLocaleDateString('en-US', {
     month: 'short',
@@ -29,8 +36,9 @@ function formatStartDate(value: string | null | undefined): string | null {
 }
 
 export function ProjectIdentityHeader({ project, phase, projectId }: ProjectIdentityHeaderProps) {
-  const phaseConfig = PHASE_CONFIG[phase];
-  const currentIndex = ALL_PHASES.indexOf(phase);
+  const canonicalPhase = normalizePhaseSlug(phase);
+  const phaseConfig = PHASE_CONFIG[canonicalPhase];
+  const currentIndex = ALL_PHASES.indexOf(canonicalPhase);
   const startedLabel = formatStartDate(project.startDate ?? project.start_date);
 
   return (
@@ -78,12 +86,22 @@ export function ProjectIdentityHeader({ project, phase, projectId }: ProjectIden
             marginBottom: '0.75rem',
           }}
         >
-          {project.client_name}
           {(() => {
-            const where = project.site_address || project.client_location;
-            return where ? ` · ${where}` : '';
+            // Derive client name from the joined `client` profile embed
+            // (full_name/display_name/email) — `client_name` is rarely set
+            // directly. Join only the present parts so there's never a
+            // dangling "· Started …" when the client/location is missing.
+            const clientName =
+              project.client_name ||
+              project.client?.full_name ||
+              project.client?.display_name ||
+              project.client?.email ||
+              '';
+            const where = project.site_address || project.client_location || '';
+            const parts = [clientName, where].filter(Boolean);
+            if (startedLabel) parts.push(`Started ${startedLabel}`);
+            return parts.join(' · ');
           })()}
-          {startedLabel ? ` · Started ${startedLabel}` : ''}
         </div>
 
         {/* Phase progress dots */}

@@ -33,12 +33,12 @@ const projectBudgetCents = (p: AnyProject): number =>
   p.total_amount_cents ?? p.budget_cents ?? p.budget ?? 0;
 const projectProgress = (p: AnyProject): number => p.progress ?? 0;
 const projectClientName = (p: AnyProject): string =>
-  p.client_name || p.client?.full_name || '';
+  p.client_name || p.client?.full_name || p.client?.display_name || '';
 const projectAddress = (p: AnyProject): string =>
   p.site_address || p.client_location || p.address || '';
 const projectPhase = (p: AnyProject): string => p.current_phase || 'consultation';
 const projectDesignerName = (p: AnyProject): string =>
-  p.designer?.full_name || p.designer_name || '';
+  p.designer?.full_name || p.designer?.display_name || p.designer_name || '';
 const projectUpdatedAt = (p: AnyProject): string =>
   p.updated_at || p.updatedAt || p.created_at || '';
 

@@ -20,7 +20,7 @@ import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { LoadingStrata } from '@/components/portal/loading-strata';
-import { PHASE_CONFIG, type ProjectPhase } from '@/types/project-ui';
+import { PHASE_CONFIG, normalizePhaseSlug, type ProjectPhase } from '@/types/project-ui';
 import {
   EditModeBar,
   ProjectIdentityHeader,
@@ -109,7 +109,10 @@ export default function ProjectDetailPage({
     );
   }
 
-  const phase = (project.current_phase || 'consultation') as ProjectPhase;
+  // Normalize to a canonical PhaseSlug — activated projects persist a
+  // simplified vocab (e.g. 'concept') that isn't in PHASE_CONFIG; an
+  // un-normalized value crashes ProjectIdentityHeader (AP-C0).
+  const phase = normalizePhaseSlug(project.current_phase) as ProjectPhase;
 
   const handleTaskToggle = (taskId: string, done: boolean) => {
     updateTask.mutate({
@@ -121,8 +124,24 @@ export default function ProjectDetailPage({
   // Safely coerce arrays
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedTasks = (Array.isArray(tasks) ? tasks : []) as any[];
+  // Adapt project_phases rows into the segment shape PhaseTimelineV2 matches on.
+  // Real (UUID) projects expose phase_key / start_date / target_end_date and a
+  // non-canonical phase vocab; the component matches `segment.phase ===
+  // canonicalSlug`, so without this mapping nothing matched and every phase
+  // rendered as "pending" (AP-C4). Mock (slug) rows already have the right shape.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const typedTimeline = (Array.isArray(timeline) ? timeline : []) as any[];
+  const typedTimeline = (Array.isArray(timeline) ? timeline : []).map((seg: any) =>
+    seg && seg.phase_key !== undefined
+      ? {
+          id: seg.id,
+          phase: normalizePhaseSlug(seg.phase_key),
+          status: seg.status,
+          startDate: seg.start_date ?? undefined,
+          endDate: seg.target_end_date ?? undefined,
+          progress: seg.progress ?? 0,
+        }
+      : seg
+  ) as any[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedDocuments = (Array.isArray(documents) ? documents : []) as any[];
   // Adapt ClientActivity shape → ActivityItem shape expected by RecentActivityPanel
@@ -136,15 +155,46 @@ export default function ProjectDetailPage({
   const typedMilestones = (Array.isArray(milestones) ? milestones : []) as any[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedRooms = (Array.isArray(rooms) ? rooms : []) as any[];
+  // Adapt useProjectFinancials into the FinancialLineItem[] the panel renders.
+  // Real (UUID) projects return an aggregate OBJECT ({ byCategory, ... });
+  // mock (slug) projects return an array of line items. This page previously
+  // only handled the array shape (`Array.isArray(financials) ? … : []`), so
+  // the inline Financials panel silently never rendered for real projects
+  // (AP-C6). Earnings are now derived (12% commission on product spend, matching
+  // the /financials page) instead of hardcoded fabricated numbers.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const typedFinancials = (Array.isArray(financials) ? financials : []) as any[];
-
-  // Designer earnings (derived from project data)
+  const financialsObj = financials as any;
+  const isFinArray = Array.isArray(financials);
+  const designFeeCents: number =
+    (isFinArray ? undefined : financialsObj?.designFeeCents) ??
+    project.design_fee_cents ??
+    project.design_fee ??
+    0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const financialItems: any[] = isFinArray
+    ? (financials as any[])
+    : [
+        ...(designFeeCents > 0
+          ? [{ id: 'design-fee', category: 'Design Fee', label: 'Design Fee', budget: designFeeCents, committed: designFeeCents, actual: designFeeCents, variance: 0 }]
+          : []),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ...((financialsObj?.byCategory ?? []) as any[]).map((c: any) => ({
+          id: c.category,
+          category: c.category,
+          label: c.category,
+          budget: c.budgetCents ?? 0,
+          committed: c.committedCents ?? 0,
+          actual: c.actualCents ?? 0,
+          variance: (c.actualCents ?? 0) - (c.budgetCents ?? 0),
+        })),
+      ];
+  const committedCents: number = isFinArray ? 0 : (financialsObj?.committedCents ?? 0);
+  const productSpend = Math.max(committedCents - designFeeCents, 0);
   const designerEarnings = {
-    designFee: project.design_fee ?? 250000,
-    commissions: 268700,
-    commissionRate: 0.15,
-    productTotal: 1791000,
+    designFee: designFeeCents,
+    commissions: Math.round(productSpend * 0.12),
+    commissionRate: 0.12,
+    productTotal: productSpend,
   };
 
   return (
@@ -242,10 +292,10 @@ export default function ProjectDetailPage({
         )}
 
         {/* Zone 6: Financials */}
-        {typedFinancials.length > 0 && (
+        {financialItems.length > 0 && (
           <>
             <FinancialsPanel
-              items={typedFinancials}
+              items={financialItems}
               milestones={typedMilestones}
               earnings={designerEarnings}
             />

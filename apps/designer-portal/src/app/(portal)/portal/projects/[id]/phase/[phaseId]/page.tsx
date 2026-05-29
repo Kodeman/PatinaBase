@@ -14,7 +14,7 @@ import { PhaseDot } from '@/components/portal/phase-dot';
 import { ProgressBar } from '@/components/portal/progress-bar';
 import { TaskChecklist } from '@/components/portal/task-checklist';
 import { LoadingStrata } from '@/components/portal/loading-strata';
-import { PHASE_CONFIG, ALL_PHASES, type ProjectPhase } from '@/types/project-ui';
+import { PHASE_CONFIG, ALL_PHASES, normalizePhaseSlug, type ProjectPhase } from '@/types/project-ui';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyProject = any;
@@ -32,7 +32,9 @@ export default function PhaseTaskViewPage({
   const createTask = useCreateTask();
   const updateProject = useUpdateProject();
 
-  const phase = phaseId as ProjectPhase;
+  // phaseId in the URL may be a simplified/legacy key (e.g. 'concept');
+  // normalize for display config, but keep raw phaseId for task matching.
+  const phase = normalizePhaseSlug(phaseId) as ProjectPhase;
   const phaseConfig = PHASE_CONFIG[phase];
   const phaseIndex = ALL_PHASES.indexOf(phase);
 
