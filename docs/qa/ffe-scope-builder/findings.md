@@ -24,7 +24,7 @@ validation, capture-consume, and DB persistence all behave correctly.
 | **High (UX)** | BUG-1 — schedule/summary don't refresh after add/update/remove | **Fixed + verified** |
 | **High (functional)** | BUG-2 — Quick-create Draft product blocked by RLS | **Fixed + verified** |
 | Low (cosmetic) | BUG-3 — duplicate "Preliminary FF&E Schedule" heading | **Fixed + verified** |
-| Medium (data/finance) | OBS-1 — allowance midpoint excluded from `proposals.total_amount` | Documented (needs product decision) |
+| Medium (data/finance) | OBS-1 — allowance midpoint excluded from `proposals.total_amount` | **Resolved — estimate route (on-screen total relabeled)** |
 | Low (UX) | OBS-2 — "FF&E Budget" summary tile ignores item costs | Documented |
 | Low (gap) | OBS-3 — no in-UI edit of an existing item | Documented |
 | Low (gap) | OBS-4 — catalog "+ Add Item" can't assign to a room | Documented |
@@ -132,9 +132,15 @@ components; out of scope for this FF&E pass but worth a follow-up sweep.)*
   "Estimated Total" includes allowance midpoints (e.g. $3,890) but `proposals.total_amount`
   does **not** (stayed $1,890). This propagates to the proposals-list "Value", win-rate
   metrics, and — via `activate_proposal_as_project` — the project's `budget_cents`. **Two
-  totals on the same workflow disagree.** *Recommended fix needs a product decision:* either
-  fold the allowance midpoint into the stored total/budget, or relabel the on-screen figure as
-  a non-binding estimate. Not changed here because it alters financial semantics.
+  totals on the same workflow disagree.**
+
+  **Resolution (estimate route, implemented):** `proposals.total_amount` is intentionally
+  kept as committed-cost only (no data/semantics change). The on-screen FF&E total is now
+  explicitly framed as a planning estimate — when any allowance is present, a caption under
+  "Estimated Total" reads *"Planning estimate — allowances are counted at the midpoint of
+  their range. The proposal's committed value reflects fixed selections; allowance spend is
+  confirmed as each item is specified."* This removes the "two totals disagree" confusion
+  without changing financial behavior. (`ffe-schedule-builder.tsx`)
 
 - **OBS-2 — "FF&E Budget" summary tile ignores item costs (low).**
   `useScopeBuilderSummary` computes the tile as `Σ proposal_scope_rooms.budget_cents`, so it
@@ -169,7 +175,8 @@ components; out of scope for this FF&E pass but worth a follow-up sweep.)*
 - `packages/supabase/src/hooks/use-products.ts` — BUG-2: set `layer:'personal'` +
   `owner_user_id` on the draft-product insert.
 - `apps/designer-portal/src/components/portal/scope-builder/ffe-schedule-builder.tsx` — BUG-3:
-  drop the duplicate heading.
+  drop the duplicate heading; OBS-1: add the planning-estimate caption under the total when
+  allowances are present.
 
 **Verification:** `tsc --noEmit` clean for the designer-portal (covers the .tsx change and
 `@patina/supabase` imports); all three fixes re-tested live (UI live-update) and against the DB.
