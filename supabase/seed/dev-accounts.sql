@@ -98,15 +98,25 @@ BEGIN
   -- ─────────────────────────────────────────────────────────────────────────
   -- 3. Create profiles entries (if handle_new_user trigger didn't fire)
   -- ─────────────────────────────────────────────────────────────────────────
-  INSERT INTO public.profiles (id, email, display_name, role, created_at, updated_at) VALUES
-    (uid_superadmin, 'superadmin@patina.dev', 'Super Admin', 'admin', ts, ts),
-    (uid_admin, 'admin@patina.dev', 'Admin User', 'admin', ts, ts),
-    (uid_studio_mgr, 'studio_manager@patina.dev', 'Studio Manager', 'designer', ts, ts),
-    (uid_designer, 'designer@patina.dev', 'Designer User', 'designer', ts, ts),
-    (uid_client, 'client@patina.dev', 'Client User', 'homeowner', ts, ts),
-    (uid_manufacturer, 'manufacturer@patina.dev', 'Manufacturer User', 'designer', ts, ts),
-    (uid_support, 'support@patina.dev', 'Support Agent', 'admin', ts, ts)
-  ON CONFLICT (id) DO NOTHING;
+  -- NOTE: the handle_new_user trigger pre-creates a bare profile (empty
+  -- full_name/display_name, default role) when the auth.users row is inserted
+  -- above. A plain `DO NOTHING` therefore left every dev account nameless and
+  -- mis-roled (client showed as 'designer'), which surfaced as blank client
+  -- names across the portal. UPSERT the intended name/role so the seed wins.
+  -- `full_name` is the column the UI/profile embeds read.
+  INSERT INTO public.profiles (id, email, full_name, display_name, role, created_at, updated_at) VALUES
+    (uid_superadmin, 'superadmin@patina.dev', 'Super Admin', 'Super Admin', 'admin', ts, ts),
+    (uid_admin, 'admin@patina.dev', 'Admin User', 'Admin User', 'admin', ts, ts),
+    (uid_studio_mgr, 'studio_manager@patina.dev', 'Studio Manager', 'Studio Manager', 'designer', ts, ts),
+    (uid_designer, 'designer@patina.dev', 'Designer User', 'Designer User', 'designer', ts, ts),
+    (uid_client, 'client@patina.dev', 'Client User', 'Client User', 'homeowner', ts, ts),
+    (uid_manufacturer, 'manufacturer@patina.dev', 'Manufacturer User', 'Manufacturer User', 'designer', ts, ts),
+    (uid_support, 'support@patina.dev', 'Support Agent', 'Support Agent', 'admin', ts, ts)
+  ON CONFLICT (id) DO UPDATE SET
+    full_name = EXCLUDED.full_name,
+    display_name = EXCLUDED.display_name,
+    role = EXCLUDED.role,
+    updated_at = EXCLUDED.updated_at;
 
   -- ─────────────────────────────────────────────────────────────────────────
   -- 4. Assign user_roles (look up role IDs by name)
