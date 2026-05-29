@@ -8,11 +8,27 @@ import { LoadingStrata } from '@/components/portal/loading-strata';
 import { ProposalLetterhead } from '@/components/portal/proposal-letterhead';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { ProposalProductItem } from '@/components/portal/proposal-product-item';
-import { InvestmentTable } from '@/components/portal/investment-table';
-import { PaymentSchedule } from '@/components/portal/payment-schedule';
-import { TimelinePhases } from '@/components/portal/timeline-phases';
 import { SignatureBlock } from '@/components/portal/signature-block';
-import { createBrowserClient } from '@patina/supabase';
+import {
+  createBrowserClient,
+  useProposalPaymentMilestones,
+  useProposalPhases,
+  useProposalExclusions,
+  useProposalScopeRooms,
+} from '@patina/supabase';
+import type {
+  ProposalPaymentMilestone,
+  ProposalPhase,
+  ProposalExclusion,
+  ProposalScopeRoom,
+} from '@patina/supabase';
+import {
+  LineItemsBlock,
+  PaymentScheduleBlock,
+  TimelinePhasesBlock,
+  ExclusionsBlock,
+  ScopeRoomsBlock,
+} from '@patina/design-system';
 
 /**
  * Client-facing read-only proposal viewer.
@@ -31,6 +47,10 @@ export default function ProposalPreviewPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal, isLoading: proposalLoading } = useProposal(id) as { data: any; isLoading: boolean };
   const { data: sections, isLoading: sectionsLoading } = useProposalSections(id);
+  const { data: paymentMilestones } = useProposalPaymentMilestones(id) as { data: ProposalPaymentMilestone[] | undefined };
+  const { data: phases } = useProposalPhases(id) as { data: ProposalPhase[] | undefined };
+  const { data: exclusions } = useProposalExclusions(id) as { data: ProposalExclusion[] | undefined };
+  const { data: scopeRooms } = useProposalScopeRooms(id) as { data: ProposalScopeRoom[] | undefined };
 
   useEffect(() => {
     if (!shouldAutoPrint) return;
@@ -281,42 +301,87 @@ export default function ProposalPreviewPage({
 
               {/* Investment */}
               {section.type === 'investment' && (
-                <div>
-                  <InvestmentTable
-                    rows={(proposal.items || []).map(
-                      (item: { name: string; product?: { name?: string } | null; unit_price: number; quantity: number }) => ({
-                        label: item.name || item.product?.name || 'Item',
-                        amount: item.unit_price * item.quantity,
+                <div className="mt-2">
+                  <LineItemsBlock
+                    items={(proposal.items || []).map(
+                      (item: {
+                        id: string;
+                        name: string;
+                        item_type?: string;
+                        quantity: number;
+                        unit_price: number;
+                        line_total_cents: number;
+                        budget_min_cents?: number | null;
+                        budget_max_cents?: number | null;
+                        vendor_name?: string | null;
+                        product?: { name?: string; brand?: string | null } | null;
+                      }) => ({
+                        id: item.id,
+                        name: item.name,
+                        item_type: item.item_type,
+                        quantity: item.quantity,
+                        unit_price: item.unit_price,
+                        line_total_cents: item.line_total_cents,
+                        budget_min_cents: item.budget_min_cents,
+                        budget_max_cents: item.budget_max_cents,
+                        vendor_name: item.vendor_name,
+                        product: item.product,
                       })
                     )}
-                    totalAmount={proposal.total_amount || 0}
+                    totalCents={proposal.total_amount || 0}
                   />
-                  <div className="mt-6">
-                    <PaymentSchedule
-                      milestones={[
-                        { label: 'Deposit', percent: 30, description: 'due on signing' },
-                        { label: 'Procurement', percent: 40, description: 'due before ordering' },
-                        { label: 'Completion', percent: 30, description: 'due on final walkthrough' },
-                      ]}
-                      totalAmount={proposal.total_amount || 0}
-                    />
-                  </div>
+                  {(scopeRooms ?? []).length > 0 && (
+                    <div className="mt-6">
+                      <p
+                        className="mb-1 type-meta-small text-[var(--text-muted)]"
+                        style={{ textTransform: 'uppercase', letterSpacing: '0.12em' }}
+                      >
+                        Per-room budgets
+                      </p>
+                      <ScopeRoomsBlock
+                        rooms={(scopeRooms ?? []).map((r) => ({
+                          name: r.name,
+                          room_type: r.room_type,
+                          budget_cents: r.budget_cents,
+                        }))}
+                      />
+                    </div>
+                  )}
+                  <PaymentScheduleBlock
+                    milestones={(paymentMilestones ?? []).map((m) => ({
+                      label: m.label,
+                      percentage: m.percentage,
+                      amount_cents: m.amount_cents,
+                      trigger_condition: m.trigger_condition,
+                    }))}
+                    totalCents={proposal.total_amount || 0}
+                  />
+                  {(exclusions ?? []).length > 0 && (
+                    <div className="mt-6">
+                      <p
+                        className="mb-1 type-meta-small text-[var(--text-muted)]"
+                        style={{ textTransform: 'uppercase', letterSpacing: '0.12em' }}
+                      >
+                        Not included
+                      </p>
+                      <ExclusionsBlock
+                        exclusions={(exclusions ?? []).map((e) => ({
+                          description: e.description,
+                          category: e.category,
+                        }))}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Timeline */}
               {section.type === 'timeline' && (
-                <TimelinePhases
-                  phases={
-                    (section.metadata?.phases as Array<{ dateRange: string; name: string }>) || [
-                      { dateRange: 'Weeks 1\u20132', name: 'Consultation & site documentation' },
-                      { dateRange: 'Weeks 3\u20136', name: 'Concept development & design presentation' },
-                      { dateRange: 'Weeks 7\u201310', name: 'Refinement, final selections, client approvals' },
-                      { dateRange: 'Weeks 11\u201316', name: 'Procurement & order management' },
-                      { dateRange: 'Weeks 17\u201318', name: 'Delivery, installation & styling' },
-                      { dateRange: 'Week 19', name: 'Final walkthrough & photography' },
-                    ]
-                  }
+                <TimelinePhasesBlock
+                  phases={(phases ?? []).map((p) => ({
+                    name: p.name,
+                    duration_weeks: p.duration_weeks,
+                  }))}
                 />
               )}
 

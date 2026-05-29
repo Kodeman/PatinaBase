@@ -2,7 +2,22 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { createBrowserClient } from '@patina/supabase';
-import type { Proposal, ProposalSection, ProposalItem } from '@patina/supabase';
+import type {
+  Proposal,
+  ProposalSection,
+  ProposalItem,
+  ProposalPaymentMilestone,
+  ProposalPhase,
+  ProposalExclusion,
+  ProposalScopeRoom,
+} from '@patina/supabase';
+import {
+  LineItemsBlock,
+  PaymentScheduleBlock,
+  TimelinePhasesBlock,
+  ExclusionsBlock,
+  ScopeRoomsBlock,
+} from '@patina/design-system';
 import { useAuth } from '@/hooks/use-auth';
 import { StrataMark } from '@/components/strata-mark';
 import { proposalClientEvents } from '@/lib/analytics/events';
@@ -11,6 +26,10 @@ interface ProposalDocumentProps {
   proposal: Proposal & { items?: ProposalItem[]; version?: number };
   sections: ProposalSection[];
   trackEngagement?: boolean;
+  paymentMilestones?: ProposalPaymentMilestone[];
+  phases?: ProposalPhase[];
+  exclusions?: ProposalExclusion[];
+  scopeRooms?: ProposalScopeRoom[];
 }
 
 function formatCurrency(amount: number): string {
@@ -29,7 +48,15 @@ function formatDate(iso: string): string {
   });
 }
 
-export function ProposalDocument({ proposal, sections, trackEngagement = true }: ProposalDocumentProps) {
+export function ProposalDocument({
+  proposal,
+  sections,
+  trackEngagement = true,
+  paymentMilestones = [],
+  phases = [],
+  exclusions = [],
+  scopeRooms = [],
+}: ProposalDocumentProps) {
   const { user } = useAuth();
   const hasRecordedOpen = useRef(false);
   const activeSectionRef = useRef<string | null>(null);
@@ -218,11 +245,60 @@ export function ProposalDocument({ proposal, sections, trackEngagement = true }:
             )}
 
             {section.type === 'investment' && (
-              <InvestmentBlock items={items} totalAmount={proposal.total_amount || 0} />
+              <div className="mt-2">
+                <LineItemsBlock items={items} totalCents={proposal.total_amount || 0} />
+                {scopeRooms.length > 0 && (
+                  <div className="mt-6">
+                    <p
+                      className="mb-1 type-meta-small text-[var(--text-muted)]"
+                      style={{ textTransform: 'uppercase', letterSpacing: '0.12em' }}
+                    >
+                      Per-room budgets
+                    </p>
+                    <ScopeRoomsBlock
+                      rooms={scopeRooms.map((r) => ({
+                        name: r.name,
+                        room_type: r.room_type,
+                        budget_cents: r.budget_cents,
+                      }))}
+                    />
+                  </div>
+                )}
+                <PaymentScheduleBlock
+                  milestones={paymentMilestones.map((m) => ({
+                    label: m.label,
+                    percentage: m.percentage,
+                    amount_cents: m.amount_cents,
+                    trigger_condition: m.trigger_condition,
+                  }))}
+                  totalCents={proposal.total_amount || 0}
+                />
+                {exclusions.length > 0 && (
+                  <div className="mt-6">
+                    <p
+                      className="mb-1 type-meta-small text-[var(--text-muted)]"
+                      style={{ textTransform: 'uppercase', letterSpacing: '0.12em' }}
+                    >
+                      Not included
+                    </p>
+                    <ExclusionsBlock
+                      exclusions={exclusions.map((e) => ({
+                        description: e.description,
+                        category: e.category,
+                      }))}
+                    />
+                  </div>
+                )}
+              </div>
             )}
 
             {section.type === 'timeline' && (
-              <TimelineBlock metadata={section.metadata} />
+              <TimelinePhasesBlock
+                phases={phases.map((p) => ({
+                  name: p.name,
+                  duration_weeks: p.duration_weeks,
+                }))}
+              />
             )}
           </section>
         </div>
@@ -326,7 +402,7 @@ function SelectionsList({ items }: { items: ProposalItem[] }) {
             )}
           </div>
           <span className="type-meta text-[var(--text-primary)]">
-            {formatCurrency(item.unit_price * item.quantity)}
+            {formatCurrency((item.line_total_cents || 0) / 100)}
           </span>
         </li>
       ))}
@@ -334,90 +410,3 @@ function SelectionsList({ items }: { items: ProposalItem[] }) {
   );
 }
 
-function InvestmentBlock({ items, totalAmount }: { items: ProposalItem[]; totalAmount: number }) {
-  const milestones = [
-    { label: 'Deposit', percent: 30, description: 'due on signing' },
-    { label: 'Procurement', percent: 40, description: 'due before ordering' },
-    { label: 'Completion', percent: 30, description: 'due on final walkthrough' },
-  ];
-  return (
-    <div className="mt-2">
-      {items.length > 0 && (
-        <table className="w-full border-collapse">
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.id} className="border-b border-[var(--border-subtle)]">
-                <td className="py-2 type-body-small text-[var(--text-body)]">
-                  {item.name || item.product?.name || 'Item'}
-                </td>
-                <td className="py-2 text-right type-body-small text-[var(--text-primary)]">
-                  {formatCurrency(item.unit_price * item.quantity)}
-                </td>
-              </tr>
-            ))}
-            <tr>
-              <td
-                className="pt-3 type-meta text-[var(--text-muted)]"
-                style={{ textTransform: 'uppercase', letterSpacing: '0.12em' }}
-              >
-                Total
-              </td>
-              <td className="pt-3 text-right" style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem' }}>
-                {formatCurrency(totalAmount)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      )}
-
-      <div className="mt-6">
-        <p
-          className="mb-3 type-meta-small text-[var(--text-muted)]"
-          style={{ textTransform: 'uppercase', letterSpacing: '0.12em' }}
-        >
-          Payment schedule
-        </p>
-        <ul className="space-y-1.5">
-          {milestones.map((m) => (
-            <li key={m.label} className="flex items-baseline justify-between type-body-small">
-              <span className="text-[var(--text-primary)]">
-                {m.label} <span className="text-[var(--text-muted)]">— {m.description}</span>
-              </span>
-              <span className="text-[var(--text-primary)]">
-                {formatCurrency((totalAmount * m.percent) / 100)}{' '}
-                <span className="text-[var(--text-muted)]">({m.percent}%)</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
-}
-
-function TimelineBlock({ metadata }: { metadata: Record<string, unknown> }) {
-  const phases =
-    (metadata?.phases as Array<{ dateRange: string; name: string }>) || [
-      { dateRange: 'Weeks 1–2', name: 'Consultation & site documentation' },
-      { dateRange: 'Weeks 3–6', name: 'Concept development & design presentation' },
-      { dateRange: 'Weeks 7–10', name: 'Refinement, final selections, client approvals' },
-      { dateRange: 'Weeks 11–16', name: 'Procurement & order management' },
-      { dateRange: 'Weeks 17–18', name: 'Delivery, installation & styling' },
-      { dateRange: 'Week 19', name: 'Final walkthrough & photography' },
-    ];
-  return (
-    <ul className="mt-2 space-y-2.5">
-      {phases.map((p, i) => (
-        <li key={i} className="flex items-baseline gap-4">
-          <span
-            className="type-meta-small flex-shrink-0 text-[var(--text-muted)]"
-            style={{ minWidth: 110, letterSpacing: '0.06em' }}
-          >
-            {p.dateRange}
-          </span>
-          <span className="type-body-small text-[var(--text-body)]">{p.name}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}

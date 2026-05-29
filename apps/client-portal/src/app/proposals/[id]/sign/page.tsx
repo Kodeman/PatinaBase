@@ -63,6 +63,28 @@ export default function ClientProposalSignPage({
     );
   }
 
+  const isPassedExpiry =
+    !!proposal.valid_until &&
+    !Number.isNaN(new Date(proposal.valid_until).getTime()) &&
+    new Date(proposal.valid_until).getTime() < Date.now();
+
+  if (isPassedExpiry) {
+    return (
+      <div className="mx-auto max-w-2xl px-6 py-16 text-center">
+        <p className="type-body-small">
+          This proposal has expired and can no longer be signed. Contact your designer to renew it.
+        </p>
+        <Link
+          href={`/proposals/${id}`}
+          className="mt-4 inline-flex items-center gap-1 type-meta text-[var(--accent-primary)] no-underline hover:underline"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Back to proposal
+        </Link>
+      </div>
+    );
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!agreed || name.trim().length < 2 || submitting) return;
@@ -118,7 +140,7 @@ export default function ClientProposalSignPage({
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoComplete="name"
-            placeholder={user?.user_metadata?.full_name || 'Full name'}
+            placeholder={user?.name || 'Full name'}
             className="w-full rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-3 font-heading text-xl text-[var(--text-primary)] placeholder:font-sans placeholder:text-base placeholder:text-[var(--text-muted)] focus-visible:focus-ring"
             required
             minLength={2}

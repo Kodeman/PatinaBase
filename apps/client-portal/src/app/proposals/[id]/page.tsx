@@ -3,7 +3,13 @@
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, CheckCircle2, Clock, Download, Loader2 } from 'lucide-react';
-import { useProposalSections } from '@patina/supabase';
+import {
+  useProposalSections,
+  useProposalPaymentMilestones,
+  useProposalPhases,
+  useProposalExclusions,
+  useProposalScopeRooms,
+} from '@patina/supabase';
 import { useClientProposal } from '@/hooks/use-proposals-client';
 import { ProposalDocument } from '@/components/proposal-document';
 import { ProposalDeclineDialog } from '@/components/proposals/ProposalDeclineDialog';
@@ -25,6 +31,10 @@ export default function ClientProposalDetailPage({
   const { id } = use(params);
   const { data: proposal, isLoading: proposalLoading } = useClientProposal(id);
   const { data: sections, isLoading: sectionsLoading } = useProposalSections(id);
+  const { data: paymentMilestones } = useProposalPaymentMilestones(id);
+  const { data: phases } = useProposalPhases(id);
+  const { data: exclusions } = useProposalExclusions(id);
+  const { data: scopeRooms } = useProposalScopeRooms(id);
   const [declineOpen, setDeclineOpen] = useState(false);
 
   if (proposalLoading || sectionsLoading) {
@@ -50,10 +60,24 @@ export default function ClientProposalDetailPage({
     );
   }
 
-  const isActionable = proposal.status === 'sent' || proposal.status === 'viewed';
   const isSigned = proposal.status === 'accepted';
-  const isExpired = proposal.status === 'expired';
+  const isExpiredStatus = proposal.status === 'expired';
   const isDeclined = proposal.status === 'declined';
+
+  // Expiry gate: a proposal can still carry status "sent"/"viewed" past its
+  // valid_until date if the server-side expiry job hasn't run yet. Treat a
+  // passed valid_until as expired for actionability, but only when the
+  // proposal isn't already signed or explicitly expired.
+  const isPassedExpiry =
+    !isSigned &&
+    !isExpiredStatus &&
+    !!proposal.valid_until &&
+    !Number.isNaN(new Date(proposal.valid_until).getTime()) &&
+    new Date(proposal.valid_until).getTime() < Date.now();
+
+  const isExpired = isExpiredStatus || isPassedExpiry;
+  const isActionable =
+    (proposal.status === 'sent' || proposal.status === 'viewed') && !isPassedExpiry;
 
   const proposalAudit = proposal as unknown as {
     signed_at?: string | null;
@@ -133,6 +157,10 @@ export default function ClientProposalDetailPage({
         proposal={proposal}
         sections={sections ?? []}
         trackEngagement={!isSigned}
+        paymentMilestones={paymentMilestones ?? []}
+        phases={phases ?? []}
+        exclusions={exclusions ?? []}
+        scopeRooms={scopeRooms ?? []}
       />
 
       {isActionable && (

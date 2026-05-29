@@ -27,7 +27,7 @@ export async function POST(
 
   const { data: proposal, error: fetchError } = await supabase
     .from('proposals')
-    .select('id, status, client_id, designer_id')
+    .select('id, status, client_id, designer_id, valid_until')
     .eq('id', id)
     .single();
 
@@ -39,6 +39,15 @@ export async function POST(
   }
   if (proposal.status !== 'sent' && proposal.status !== 'viewed') {
     return NextResponse.json({ error: 'not_signable' }, { status: 409 });
+  }
+
+  // Authoritative expiry enforcement: a proposal past its valid_until cannot
+  // be signed even if the status hasn't been flipped to "expired" yet.
+  if (proposal.valid_until) {
+    const expiresAt = new Date(proposal.valid_until).getTime();
+    if (!Number.isNaN(expiresAt) && expiresAt < Date.now()) {
+      return NextResponse.json({ error: 'proposal_expired' }, { status: 410 });
+    }
   }
 
   const now = new Date().toISOString();
