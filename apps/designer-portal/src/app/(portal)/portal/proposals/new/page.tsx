@@ -4,8 +4,10 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProposalTemplates, useCreateProposal } from '@/hooks/use-proposals';
 import { useProjects } from '@/hooks/use-projects';
+import { useClients } from '@/hooks/use-clients';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { TemplateCard } from '@/components/portal/template-card';
+import { ClientPicker } from '@/components/portal/client-picker';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { proposalEvents } from '@/lib/analytics';
@@ -14,10 +16,12 @@ export default function NewProposalPage() {
   const router = useRouter();
   const { data: templates, isLoading: templatesLoading } = useProposalTemplates();
   const { data: projects } = useProjects();
+  useClients();
   const createProposal = useCreateProposal();
 
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [version, setVersion] = useState('v1.0');
 
   const handleCreate = async () => {
@@ -30,6 +34,7 @@ export default function NewProposalPage() {
       const result = await createProposal.mutateAsync({
         title: project ? `${(project as { id: string; name: string }).name} \u2014 ${template?.name || 'Proposal'}` : template?.name || 'New Proposal',
         projectId: selectedProjectId || undefined,
+        clientId: selectedClientId ?? undefined,
         templateId: selectedTemplateId,
       });
 
@@ -62,8 +67,8 @@ export default function NewProposalPage() {
         Select a template, then customize for your client.
       </p>
 
-      {/* Project link + Version */}
-      <div className="mb-8 grid max-w-[500px] grid-cols-2 gap-6">
+      {/* Project link + Client link + Version */}
+      <div className="mb-8 grid max-w-[760px] grid-cols-3 gap-6">
         <div className="flex flex-col gap-1.5">
           <label
             style={{
@@ -89,6 +94,24 @@ export default function NewProposalPage() {
               </option>
             ))}
           </select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label
+            style={{
+              fontFamily: 'var(--font-meta)',
+              fontSize: '0.62rem',
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              color: 'var(--text-muted)',
+            }}
+          >
+            Linked Client
+          </label>
+          <ClientPicker
+            value={selectedClientId}
+            onChange={setSelectedClientId}
+            placeholder="— No linked client —"
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <label

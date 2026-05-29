@@ -16,6 +16,7 @@ import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { ProposalLetterhead } from '@/components/portal/proposal-letterhead';
 import { ProposalSectionEditor } from '@/components/portal/proposal-section-editor';
+import { ClientPicker } from '@/components/portal/client-picker';
 
 export default function ProposalDetailPage({
   params,
@@ -33,6 +34,7 @@ export default function ProposalDetailPage({
   const updateProposal = useUpdateProposal();
 
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
 
   // Status-based routing: redirect non-draft proposals to appropriate views
   useEffect(() => {
@@ -135,6 +137,39 @@ export default function ProposalDetailPage({
           </span>
           <span className="type-meta-small">&middot;</span>
           <span className="type-meta-small">v{proposal.version || 1}.0</span>
+          <span className="type-meta-small">&middot;</span>
+          {proposal.client_id ? (
+            <span className="type-meta-small">
+              Client: {proposal.client?.full_name || proposal.client?.email || 'Linked'}
+            </span>
+          ) : (
+            <span className="type-meta-small italic text-[var(--text-muted)]">
+              Unlinked
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setClientPickerOpen((o) => !o)}
+            className="type-meta-small cursor-pointer border-0 bg-transparent text-[var(--accent-primary)] underline-offset-2 hover:underline"
+          >
+            Change
+          </button>
+          {clientPickerOpen && (
+            <div className="w-[260px]">
+              <ClientPicker
+                value={proposal.client_id ?? null}
+                onChange={(clientId) => {
+                  updateProposal.mutate({
+                    proposalId: id,
+                    updates: { client_id: clientId },
+                  });
+                  setClientPickerOpen(false);
+                }}
+                placeholder="Link a client…"
+                inlineChip
+              />
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           <PortalButton
