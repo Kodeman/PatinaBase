@@ -403,6 +403,11 @@ export function useAddProposalItem() {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
+      // The FF&E Schedule builder and Scope Builder summary read their own
+      // query keys; invalidate them so the schedule + summary tiles refresh
+      // immediately after add/update/remove (mirrors useConsumeCapture).
+      queryClient.invalidateQueries({ queryKey: ['proposal-items-schedule', proposalId] });
+      queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
     },
   });
 }
@@ -461,6 +466,9 @@ export function useUpdateProposalItem() {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
+      // Keep the FF&E schedule + scope summary in sync after an edit.
+      queryClient.invalidateQueries({ queryKey: ['proposal-items-schedule', proposalId] });
+      queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
     },
   });
 }
@@ -496,6 +504,9 @@ export function useRemoveProposalItem() {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
+      // Keep the FF&E schedule + scope summary in sync after a removal.
+      queryClient.invalidateQueries({ queryKey: ['proposal-items-schedule', proposalId] });
+      queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
     },
   });
 }
