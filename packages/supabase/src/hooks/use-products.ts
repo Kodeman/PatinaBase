@@ -682,6 +682,11 @@ export function useCreateDraftProduct() {
       const { data, error } = await supabase
         .from('products')
         .insert({
+          // A designer-created stub lives in their personal layer. RLS
+          // (products_personal_insert) requires layer='personal' AND
+          // owner_user_id = auth.uid(); without these the insert is rejected.
+          layer: 'personal',
+          owner_user_id: user.id,
           name: trimmedName,
           brand: input.brand?.trim() || null,
           source_url: input.sourceUrl?.trim() || null,
