@@ -28,6 +28,9 @@ export interface Lead {
   declined_at: string | null;
   created_at: string;
   updated_at: string;
+  // Contact details for designer-captured prospects with no homeowner profile
+  contact_name: string | null;
+  contact_email: string | null;
   // Joined data
   homeowner?: {
     id: string;
@@ -162,6 +165,63 @@ export function useLeadStats() {
       };
 
       return stats;
+    },
+  });
+}
+
+/**
+ * Create a lead manually as a designer (inbound prospect capture).
+ *
+ * The lead is attributed to the current designer with homeowner_id = null
+ * (no Patina profile yet). Requires the designer-side INSERT RLS policy from
+ * migration 00166. Contact details are optional and carry onto designer_clients
+ * when the lead is later accepted (see useAcceptLead).
+ */
+export function useCreateLead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: {
+      project_type: string; // required (NOT NULL on the table)
+      project_description?: string;
+      budget_range?: string;
+      timeline?: string;
+      location_city?: string;
+      location_state?: string;
+      contact_name?: string;
+      contact_email?: string;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase
+        .from('leads')
+        .insert({
+          designer_id: user.user.id,
+          homeowner_id: null,
+          status: 'new',
+          project_type: input.project_type,
+          project_description: input.project_description || null,
+          budget_range: input.budget_range || null,
+          timeline: input.timeline || null,
+          location_city: input.location_city || null,
+          location_state: input.location_state || null,
+          contact_name: input.contact_name || null,
+          contact_email: input.contact_email || null,
+          // match_score left null — the UI coalesces `match_score || 0`.
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as Lead;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['lead-stats'] });
     },
   });
 }
@@ -320,6 +380,25 @@ export function useAcceptLead() {
 
           if (clientError) throw clientError;
         }
+      } else {
+        // Manually-captured lead with no homeowner profile — create a
+        // profile-less client row carrying the captured contact info.
+        // designer_clients.client_id is nullable (00018); a NULL client_id
+        // sidesteps the partial unique index (WHERE client_id IS NOT NULL),
+        // so no existence check is needed.
+        const { error: clientError } = await supabase
+          .from('designer_clients')
+          .insert({
+            designer_id: lead.designer_id,
+            client_id: null,
+            client_name: lead.contact_name ?? null,
+            client_email: lead.contact_email ?? null,
+            source: 'lead',
+            lead_id: leadId,
+            status: 'active',
+          });
+
+        if (clientError) throw clientError;
       }
 
       return lead;
