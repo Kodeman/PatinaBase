@@ -99,10 +99,10 @@ export const ZONE_SUB_ITEMS: Record<ZoneKey, SubNavItem[]> = {
   today: [], // no sub-nav for Today
   pipeline: [
     { label: 'All', href: '/portal/pipeline', exact: true },
-    { label: 'Leads', href: '/portal/pipeline?stage=leads', dotColor: 'var(--color-dusty-blue, #8B9CAD)' },
-    { label: 'Proposals', href: '/portal/pipeline?stage=proposals', dotColor: 'var(--color-golden-hour, #E8C547)' },
-    { label: 'Active', href: '/portal/pipeline?stage=active', dotColor: 'var(--color-clay, #C4A57B)' },
-    { label: 'Completed', href: '/portal/pipeline?stage=completed', dotColor: 'var(--color-sage, #A8B5A0)' },
+    { label: 'Leads', href: '/portal/leads', dotColor: 'var(--color-dusty-blue, #8B9CAD)' },
+    { label: 'Proposals', href: '/portal/proposals', dotColor: 'var(--color-golden-hour, #E8C547)' },
+    { label: 'Active', href: '/portal/projects', dotColor: 'var(--color-clay, #C4A57B)' },
+    { label: 'Completed', href: '/portal/projects?status=completed', dotColor: 'var(--color-sage, #A8B5A0)' },
   ],
   procurement: [
     { label: 'By Vendor', href: '/portal/procurement/by-vendor' },

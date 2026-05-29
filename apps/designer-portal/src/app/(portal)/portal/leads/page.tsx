@@ -1,15 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useLeads, useLeadStats, useAcceptLead, useDeclineLead } from '@patina/supabase';
 import { LeadListItem } from '@/components/portal/lead-list-item';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { AddLeadDialog } from '@/components/portal/add-lead-dialog';
+import { PortalButton } from '@/components/portal/button';
 
 type FilterStatus = 'all' | 'new' | 'saved' | 'archived';
 
-export default function LeadInboxPage() {
+function LeadInboxContent() {
+  const searchParams = useSearchParams();
   const [filter, setFilter] = useState<FilterStatus>('all');
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
   const { data: leadStats } = useLeadStats();
+
+  // Open the Add Lead dialog when arriving via ?add=1 (from the pipeline
+  // overview quick-create or the command palette).
+  useEffect(() => {
+    if (searchParams.get('add') === '1') setAddDialogOpen(true);
+  }, [searchParams]);
 
   const statusMap: Record<FilterStatus, string | string[] | undefined> = {
     all: undefined,
@@ -34,7 +45,14 @@ export default function LeadInboxPage() {
 
   return (
     <div className="pt-8">
-      <h1 className="type-section-head mb-4">Leads</h1>
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-4">
+        <h1 className="type-section-head">Leads</h1>
+        <PortalButton variant="secondary" onClick={() => setAddDialogOpen(true)}>
+          + Add Lead
+        </PortalButton>
+      </div>
+
+      <AddLeadDialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} />
 
       {/* Filter Row */}
       <div className="mb-6 flex gap-4">
@@ -89,6 +107,16 @@ export default function LeadInboxPage() {
         </p>
       )}
     </div>
+  );
+}
+
+// useSearchParams (read in LeadInboxContent for ?add=1) requires a Suspense
+// boundary in the App Router.
+export default function LeadInboxPage() {
+  return (
+    <Suspense fallback={<LoadingStrata />}>
+      <LeadInboxContent />
+    </Suspense>
   );
 }
 

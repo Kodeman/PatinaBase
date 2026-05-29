@@ -252,9 +252,34 @@ function PipelineContent() {
 
   return (
     <div className="pt-8">
-      <h1 className="type-section-head mb-2">
-        {stageFilter ? STAGE_LABELS[stageFilter] : 'Pipeline'}
-      </h1>
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-4">
+        <h1 className="type-section-head">
+          {stageFilter ? STAGE_LABELS[stageFilter] : 'Pipeline'}
+        </h1>
+        {/* Cross-stage quick-create. Each stage also has its own create
+            control on its dedicated page; these are conveniences from the
+            unified overview. "+ Add Lead" opens the inline dialog via ?add=1. */}
+        <div className="flex flex-wrap items-center gap-4">
+          <Link
+            href="/portal/leads?add=1"
+            className="text-[0.78rem] text-[var(--accent-primary)] no-underline hover:text-[var(--text-primary)]"
+          >
+            + Add Lead
+          </Link>
+          <Link
+            href="/portal/proposals/new"
+            className="text-[0.78rem] text-[var(--accent-primary)] no-underline hover:text-[var(--text-primary)]"
+          >
+            + New Proposal
+          </Link>
+          <Link
+            href="/portal/projects/new"
+            className="text-[0.78rem] text-[var(--accent-primary)] no-underline hover:text-[var(--text-primary)]"
+          >
+            + New Project
+          </Link>
+        </div>
+      </div>
       <SectionIntro
         surfaceKey={SurfaceKeys.DesignerPortal.Pipeline.ProjectList}
         fallback="Track every project from first inquiry to handoff in one chronological view."

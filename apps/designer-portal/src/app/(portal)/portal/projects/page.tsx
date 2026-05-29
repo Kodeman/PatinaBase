@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { formatCents, formatCentsCompact, formatRelativeDate } from '@patina/utils';
 import { useProjects, useProjectListMetrics, useUpdateProject } from '@/hooks/use-projects';
 import { FilterRow } from '@/components/portal/filter-row';
@@ -53,6 +54,15 @@ const STATUS_FILTERS = [
   { key: 'completed', label: 'Completed' },
   { key: 'on_hold', label: 'On Hold' },
 ];
+
+const VALID_STATUS_KEYS = STATUS_FILTERS.map((f) => f.key);
+
+// The pipeline sub-nav deep-links into this page via ?status= (e.g. the
+// "Completed" stage tab → /portal/projects?status=completed). Anything else
+// falls back to the default "active" tab.
+function statusKeyFromParam(param: string | null): string {
+  return param && VALID_STATUS_KEYS.includes(param) ? param : 'active';
+}
 
 function getStatusKey(status: string): string {
   switch (status) {
@@ -130,13 +140,19 @@ function SortHeader({
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ProjectsPage() {
+function ProjectsContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
   const { data: rawProjects, isLoading } = useProjects();
   const { data: metrics } = useProjectListMetrics();
   const updateProject = useUpdateProject();
   const projects = (Array.isArray(rawProjects) ? rawProjects : []) as AnyProject[];
 
-  const [activeFilter, setActiveFilter] = useState('active');
+  const [activeFilter, setActiveFilter] = useState(() =>
+    statusKeyFromParam(searchParams.get('status'))
+  );
   const [search, setSearch] = useState('');
   const [view, setView] = useState<ViewMode>('list');
   const [sortKey, setSortKey] = useState<SortKey>('updated');
@@ -154,6 +170,12 @@ export default function ProjectsPage() {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(VIEW_STORAGE_KEY, view);
   }, [view]);
+
+  // Keep the active tab in sync with the URL ?status= param so deep-links
+  // (e.g. the pipeline "Completed" stage tab) and back/forward nav work.
+  useEffect(() => {
+    setActiveFilter(statusKeyFromParam(searchParams.get('status')));
+  }, [searchParams]);
 
   // Tab counts
   const filterOptions = useMemo(() => {
@@ -310,6 +332,15 @@ export default function ProjectsPage() {
     }
   };
 
+  // Switching tabs writes ?status= to the URL (so the tab is shareable/
+  // deep-linkable and the pipeline sub-nav highlight stays correct). The
+  // default "active" tab uses a clean URL with no param.
+  const handleFilterChange = (key: string) => {
+    setActiveFilter(key);
+    const url = key === 'active' ? pathname : `${pathname}?status=${key}`;
+    router.replace(url, { scroll: false });
+  };
+
   const bulkArchive = async () => {
     const ids = Array.from(selected);
     await Promise.all(
@@ -357,7 +388,7 @@ export default function ProjectsPage() {
       </div>
 
       {/* Tab filters */}
-      <FilterRow options={filterOptions} active={activeFilter} onChange={setActiveFilter} />
+      <FilterRow options={filterOptions} active={activeFilter} onChange={handleFilterChange} />
 
       {/* Toolbar: search, filters, view toggle */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -407,6 +438,17 @@ export default function ProjectsPage() {
         <ComingSoonButton>Combined Report</ComingSoonButton>
       </BulkActionBar>
     </div>
+  );
+}
+
+// useSearchParams (read in ProjectsContent) requires a Suspense boundary in the
+// App Router, otherwise the whole route opts out of static rendering / errors
+// at build time. Mirror the clients/proposals pages' pattern.
+export default function ProjectsPage() {
+  return (
+    <Suspense fallback={<LoadingStrata />}>
+      <ProjectsContent />
+    </Suspense>
   );
 }
 
