@@ -11,16 +11,33 @@ import { PortalButton } from '@/components/portal/button';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+/** A room the picked item can be targeted at. */
+export interface ProductPickerRoom {
+  id: string;
+  name: string;
+}
+
 export interface ProductPickerModalProps {
   open: boolean;
   onClose: () => void;
-  /** Called when the user picks a product (catalog or freshly-created draft). */
-  onPick: (productId: string) => void;
+  /**
+   * Called when the user picks a product (catalog or freshly-created draft).
+   * `scopeRoomId` reflects the room selected in the modal (or the
+   * `defaultScopeRoomId` it was opened with), or null for Unassigned.
+   */
+  onPick: (productId: string, scopeRoomId: string | null) => void;
   /**
    * Default category slug to attach to the picked item — surfaced as a
    * subtle hint above the list. Wave 1 doesn't filter by category yet.
    */
   defaultCategorySlug?: string;
+  /**
+   * Scope rooms the picked item can be targeted at. When non-empty a room
+   * selector is rendered above the tabs.
+   */
+  rooms?: ProductPickerRoom[];
+  /** Room to pre-select in the selector (null/undefined → Unassigned). */
+  defaultScopeRoomId?: string | null;
   /** Show the Quick-create draft tab. Defaults to true. */
   allowDraftCreate?: boolean;
 }
@@ -499,14 +516,20 @@ export function ProductPickerModal({
   onClose,
   onPick,
   defaultCategorySlug,
+  rooms = [],
+  defaultScopeRoomId = null,
   allowDraftCreate = true,
 }: ProductPickerModalProps) {
   const [tab, setTab] = useState<Tab>('catalog');
+  const [scopeRoomId, setScopeRoomId] = useState<string | null>(defaultScopeRoomId ?? null);
 
-  // Reset to the catalog tab whenever the modal opens.
+  // Reset to the catalog tab and the default room whenever the modal opens.
   useEffect(() => {
-    if (open) setTab('catalog');
-  }, [open]);
+    if (open) {
+      setTab('catalog');
+      setScopeRoomId(defaultScopeRoomId ?? null);
+    }
+  }, [open, defaultScopeRoomId]);
 
   // Close on Escape.
   useEffect(() => {
@@ -521,7 +544,7 @@ export function ProductPickerModal({
   if (!open) return null;
 
   const handlePick = (id: string) => {
-    onPick(id);
+    onPick(id, scopeRoomId);
     onClose();
   };
 
@@ -551,6 +574,25 @@ export function ProductPickerModal({
             ×
           </button>
         </div>
+
+        {/* Room targeting */}
+        {rooms.length > 0 && (
+          <label className="mb-4 block">
+            <span className="type-meta mb-1 block">Add to room</span>
+            <select
+              value={scopeRoomId ?? ''}
+              onChange={(e) => setScopeRoomId(e.target.value || null)}
+              className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
+            >
+              <option value="">Unassigned</option>
+              {rooms.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         {/* Tabs */}
         <div

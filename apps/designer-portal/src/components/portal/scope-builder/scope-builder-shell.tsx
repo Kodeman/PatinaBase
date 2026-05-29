@@ -52,7 +52,8 @@ export function ScopeBuilderShell({
   const tab: Tab = tabParam && VALID_TABS.has(tabParam as Tab) ? (tabParam as Tab) : 'rooms';
 
   const { data: summary } = useScopeBuilderSummary(proposalId);
-  const totalProjectCents = (summary?.totalBudgetCents || 0) + (summary?.totalDesignFeeCents || 0);
+  const totalProjectCents =
+    (summary?.totalFFEEstimateCents ?? 0) + (summary?.totalDesignFeeCents ?? 0);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal } = useProposal(proposalId) as { data: any };
@@ -101,8 +102,8 @@ export function ScopeBuilderShell({
               <p className="font-display text-lg">{summary.totalFFEItems}</p>
             </div>
             <div>
-              <span className="font-mono text-[0.58rem] uppercase tracking-wider text-[var(--text-muted)]">FF&E Budget</span>
-              <p className="font-display text-lg">{formatDollars(summary.totalBudgetCents)}</p>
+              <span className="font-mono text-[0.58rem] uppercase tracking-wider text-[var(--text-muted)]">FF&E Est. Total</span>
+              <p className="font-display text-lg">{formatDollars(summary.totalFFEEstimateCents ?? 0)}</p>
             </div>
             <div>
               <span className="font-mono text-[0.58rem] uppercase tracking-wider text-[var(--text-muted)]">Design Fees</span>
