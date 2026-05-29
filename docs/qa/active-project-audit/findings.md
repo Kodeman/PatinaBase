@@ -70,12 +70,15 @@ Live-mode integrity pass (JWT-authenticated endpoint probing) found the masking 
 - proxy route prefix corrected `/api/v1/projects`→`/v1/projects` (9 files, correctness for any remaining svc consumers).
 - seed `project_documents_tasks.sql` (3 docs + 3 tasks on Aspen Loft) + e2e assertion that documents/tasks render from Supabase. **Verified** (11/11 spec tests pass).
 
-**Remaining / not yet done (honest record):**
-- **AP-A2** — "Budget" label means `total_amount_cents` (list row) vs `budget_cents` (detail/metric); per `supabase/CLAUDE.md` these are intentional distinct columns → needs a product decision on labels, not a code bug.
-- **AP-C7** — global layout breadcrumb shows raw UUID instead of project name (P3).
-- **`/projects/new`** — a dead "Sandbox · no API calls yet" mockup page, separate from the real wizard at `/portal/projects/new` (confusing duplicate).
-- Interactive create/update behaviors on E (decisions "+ New"), H (scope-change create), J (complete/archive) — sub-routes load clean, but their write actions weren't individually exercised this pass.
-- Live manual Chrome walk paused — extension lost host permission; Playwright covered the navigate/crash verification as the real owner.
+**Minor items — picked up + resolved (✅):**
+- **AP-A2** — the list "Budget" column now uses `budget_cents` (matching the detail KeyMetrics + the "Active Value" metric); previously it showed `total_amount_cents` (budget+fee), contradicting the detail.
+- **AP-C7** — the top sub-nav breadcrumb now resolves the project name instead of the raw UUID (`useActiveZone` tags UUID segments; `SubNav` resolves project/client names in both the linked and current-page crumb). Verified by spec.
+- **`/projects/new`** — confirmed it 308-redirects to the real wizard at `/portal/projects/new` (not a dead sandbox). Fixed the `SidebarNav` "Create project" link to point straight at `/portal/projects/new`, and replaced the stale `projects-new.spec.ts` (it asserted a removed mockup) with a real wizard-loads + redirect test.
+- **Write-actions** — verified by code: scope-change create (`useCreateScopeChangeRequest`/`useSendScopeChangeRequest` → navigate) and complete/archive (`useCompleteProject` → redirect, gated on the closure checklist) are properly wired. The project decisions sub-page is an intentional read-only list (the "+ New Decision" CTA lives on the separate global `/portal/decisions`).
+
+**Still open (out of scope for this pass):**
+- The `/portal/decisions` global page "+ New Decision" CTA wiring (CLI-01) — not an Active Project screen.
+- Time tracking is a deferred feature (now an honest empty state rather than fabricated hours).
 
 ### Fix batch (Phase 4) — high-confidence, implemented
 1. ✅ AP-C0 phase normalization.

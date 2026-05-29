@@ -106,6 +106,16 @@ test.describe('Active Project screens', () => {
     expect(body).not.toMatch(/(^|\n)\s*·\s*Started/);
   });
 
+  test('top breadcrumb resolves the project name, not the raw UUID (AP-C7)', async ({ authenticatedPage: page }) => {
+    await page.goto(`/portal/projects/${projectId}`);
+    await page.waitForLoadState('networkidle');
+    // The sub-nav breadcrumb trail (Pipeline › Active › <project name>).
+    const breadcrumb = page.locator('nav', { hasText: 'Active' }).first();
+    await expect(breadcrumb).toContainText('QA Active Project', { timeout: 10_000 });
+    // It must NOT fall back to the uppercased raw UUID segment.
+    await expect(breadcrumb).not.toContainText(projectId.slice(0, 8).toUpperCase());
+  });
+
   test('detail shows real documents + tasks from Supabase, not mock (backend)', async ({ authenticatedPage: page }) => {
     await page.goto(`/portal/projects/${projectId}`);
     await page.waitForLoadState('networkidle');
