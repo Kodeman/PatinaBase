@@ -11,6 +11,12 @@ import { DetailRow } from '@/components/portal/detail-row';
 import { StyleTag } from '@/components/portal/style-tag';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import {
+  formatBudgetRange,
+  formatProjectType,
+  formatTimeline,
+  leadDisplayName,
+} from '@/lib/lead-format';
 
 export default function LeadBriefPage({
   params,
@@ -41,7 +47,7 @@ export default function LeadBriefPage({
     );
   }
 
-  const clientName = lead.homeowner?.full_name || 'Anonymous Client';
+  const clientName = leadDisplayName(lead);
   const location = [lead.location_city, lead.location_state]
     .filter(Boolean)
     .join(', ');
@@ -65,13 +71,15 @@ export default function LeadBriefPage({
         <div>
           <h1 className="type-page-title mb-2">{clientName}</h1>
           <p className="type-label-secondary">
-            {[lead.project_type, location].filter(Boolean).join(' \u00B7 ')}
+            {[formatProjectType(lead.project_type), location]
+              .filter(Boolean)
+              .join(' \u00B7 ')}
           </p>
           {(lead.budget_range || lead.timeline) && (
             <p className="type-label-secondary mt-1">
               {[
-                lead.budget_range ? `Budget: ${lead.budget_range}` : null,
-                lead.timeline ? `Timeline: ${lead.timeline}` : null,
+                lead.budget_range ? `Budget: ${formatBudgetRange(lead.budget_range)}` : null,
+                lead.timeline ? `Timeline: ${formatTimeline(lead.timeline)}` : null,
               ]
                 .filter(Boolean)
                 .join(' \u00B7 ')}
@@ -107,7 +115,7 @@ export default function LeadBriefPage({
 
           {lead.timeline && (
             <FieldGroup label="Timeline">
-              <p className="type-body-small">{lead.timeline}</p>
+              <p className="type-body-small">{formatTimeline(lead.timeline)}</p>
             </FieldGroup>
           )}
         </div>

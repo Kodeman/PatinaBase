@@ -12,6 +12,7 @@ import {
   useHelpContent,
 } from '@patina/help-system';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { formatProjectType } from '@/lib/lead-format';
 
 type PipelineStage = 'leads' | 'proposals' | 'active' | 'completed';
 
@@ -176,13 +177,14 @@ function PipelineContent() {
     // Leads
     if (leads && (!stageFilter || stageFilter === 'leads')) {
       for (const lead of leads) {
-        const leadTitle = lead.project_type || 'New Lead';
+        const leadTitle = formatProjectType(lead.project_type) || 'New Lead';
         result.push({
           id: `lead-${lead.id}`,
           stage: 'leads',
           title: leadTitle,
           clientName:
             lead.homeowner?.full_name ||
+            lead.contact_name ||
             [lead.location_city, lead.location_state].filter(Boolean).join(', ') ||
             leadTitle,
           value: undefined,

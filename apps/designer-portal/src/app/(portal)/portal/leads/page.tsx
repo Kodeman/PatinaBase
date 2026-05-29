@@ -7,6 +7,11 @@ import { LeadListItem } from '@/components/portal/lead-list-item';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { AddLeadDialog } from '@/components/portal/add-lead-dialog';
 import { PortalButton } from '@/components/portal/button';
+import {
+  formatBudgetRange,
+  formatProjectType,
+  leadDisplayName,
+} from '@/lib/lead-format';
 
 type FilterStatus = 'all' | 'new' | 'saved' | 'archived';
 
@@ -81,14 +86,14 @@ function LeadInboxContent() {
             <LeadListItem
               key={lead.id}
               id={lead.id}
-              clientName={lead.homeowner?.full_name || 'Anonymous Client'}
-              projectType={lead.project_type || ''}
+              clientName={leadDisplayName(lead)}
+              projectType={formatProjectType(lead.project_type)}
               location={
                 [lead.location_city, lead.location_state]
                   .filter(Boolean)
                   .join(', ') || ''
               }
-              budgetRange={lead.budget_range || ''}
+              budgetRange={formatBudgetRange(lead.budget_range)}
               responseDeadline={
                 lead.response_deadline
                   ? formatRelativeTime(lead.response_deadline)
