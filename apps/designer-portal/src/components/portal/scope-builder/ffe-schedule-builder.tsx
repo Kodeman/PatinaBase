@@ -810,14 +810,6 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
     }, 0);
   }, [items]);
 
-  // Allowances are folded into the on-screen estimate at their midpoint, but are
-  // NOT part of the proposal's committed value (proposals.total_amount), so the
-  // footer is framed as a planning estimate whenever an allowance is present.
-  const hasAllowance = useMemo(
-    () => (items as FFEItem[]).some((i) => i.item_type === 'allowance'),
-    [items]
-  );
-
   const handleAllowanceSave = (form: AllowanceFormState) => {
     const budgetMin = Math.round(parseFloat(form.minDollars || '0') * 100);
     const budgetMax = Math.round(parseFloat(form.maxDollars || '0') * 100);
@@ -1081,22 +1073,6 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
             {formatDollars(totalEstimate)}
           </span>
           <span />
-        </div>
-      )}
-
-      {(items as FFEItem[]).length > 0 && hasAllowance && (
-        <div
-          className="mt-1 text-right"
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: '0.7rem',
-            fontStyle: 'italic',
-            color: 'var(--text-muted)',
-          }}
-        >
-          Planning estimate — allowances are counted at the midpoint of their range.
-          The proposal&apos;s committed value reflects fixed selections; allowance
-          spend is confirmed as each item is specified.
         </div>
       )}
 

@@ -24,7 +24,7 @@ validation, capture-consume, and DB persistence all behave correctly.
 | **High (UX)** | BUG-1 — schedule/summary don't refresh after add/update/remove | **Fixed + verified** |
 | **High (functional)** | BUG-2 — Quick-create Draft product blocked by RLS | **Fixed + verified** |
 | Low (cosmetic) | BUG-3 — duplicate "Preliminary FF&E Schedule" heading | **Fixed + verified** |
-| Medium (data/finance) | OBS-1 — allowance midpoint excluded from `proposals.total_amount` | **Resolved — estimate route (on-screen total relabeled)** |
+| Medium (data/finance) | OBS-1 — allowance midpoint excluded from `proposals.total_amount` | **Resolved — folded midpoint into `total_amount` + project budget** |
 | Low (UX) | OBS-2 — "FF&E Budget" summary tile ignores item costs | Documented |
 | Low (gap) | OBS-3 — no in-UI edit of an existing item | Documented |
 | Low (gap) | OBS-4 — catalog "+ Add Item" can't assign to a room | Documented |
@@ -134,13 +134,20 @@ components; out of scope for this FF&E pass but worth a follow-up sweep.)*
   metrics, and — via `activate_proposal_as_project` — the project's `budget_cents`. **Two
   totals on the same workflow disagree.**
 
-  **Resolution (estimate route, implemented):** `proposals.total_amount` is intentionally
-  kept as committed-cost only (no data/semantics change). The on-screen FF&E total is now
-  explicitly framed as a planning estimate — when any allowance is present, a caption under
-  "Estimated Total" reads *"Planning estimate — allowances are counted at the midpoint of
-  their range. The proposal's committed value reflects fixed selections; allowance spend is
-  confirmed as each item is specified."* This removes the "two totals disagree" confusion
-  without changing financial behavior. (`ffe-schedule-builder.tsx`)
+  **Resolution (fold-in, implemented):** allowances now count toward the proposal value and
+  the project budget at the **midpoint** of their range. The midpoint is stored in the
+  allowance's `line_total_cents`, so it flows automatically into `proposals.total_amount`
+  (`updateProposalTotal` = Σ `line_total_cents`) and into `projects.budget_cents` on
+  activation (`activate_proposal_as_project` also sums `line_total_cents`) — no SQL-function
+  change required. The stored total now equals the on-screen "Estimated Total".
+  - `useAddProposalItem` (`use-proposals.ts`): allowance `line_total_cents = round((min+max)/2)`.
+  - Migration `00160_allowance_line_total_midpoint.sql`: backfills existing allowance rows and
+    recomputes `total_amount` for affected proposals.
+  - Verified: existing Seating allowance → `line_total_cents=150000`; proposal `total_amount`
+    recomputed to $6,640 (matches estimate); a new $400–$600 allowance stored `50000` and
+    lifted the total to $7,140.
+  - *Follow-up:* if/when an item-edit UI is added (OBS-3), editing an allowance's range must
+    recompute `line_total_cents` too (currently only the create path does).
 
 - **OBS-2 — "FF&E Budget" summary tile ignores item costs (low).**
   `useScopeBuilderSummary` computes the tile as `Σ proposal_scope_rooms.budget_cents`, so it
@@ -171,12 +178,14 @@ components; out of scope for this FF&E pass but worth a follow-up sweep.)*
 ## Files changed
 
 - `packages/supabase/src/hooks/use-proposals.ts` — BUG-1: add `proposal-items-schedule` +
-  `scope-builder-summary` invalidations to the three item-mutation hooks.
+  `scope-builder-summary` invalidations to the three item-mutation hooks. OBS-1: store the
+  allowance midpoint in `line_total_cents` so it folds into `total_amount` + project budget.
 - `packages/supabase/src/hooks/use-products.ts` — BUG-2: set `layer:'personal'` +
   `owner_user_id` on the draft-product insert.
 - `apps/designer-portal/src/components/portal/scope-builder/ffe-schedule-builder.tsx` — BUG-3:
-  drop the duplicate heading; OBS-1: add the planning-estimate caption under the total when
-  allowances are present.
+  drop the duplicate heading.
+- `supabase/migrations/00160_allowance_line_total_midpoint.sql` — OBS-1: backfill existing
+  allowance `line_total_cents` to the midpoint and recompute affected proposal totals.
 
 **Verification:** `tsc --noEmit` clean for the designer-portal (covers the .tsx change and
 `@patina/supabase` imports); all three fixes re-tested live (UI live-update) and against the DB.

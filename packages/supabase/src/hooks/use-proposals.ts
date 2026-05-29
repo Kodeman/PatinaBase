@@ -365,7 +365,17 @@ export function useAddProposalItem() {
 
       const nextPosition = (existingItems?.[0]?.position ?? -1) + 1;
       const sellPrice = unitPrice;
-      const lineTotal = quantity * sellPrice;
+      // Allowances have no unit price; their planned cost is the midpoint of the
+      // budget range. Storing it in line_total_cents folds allowances into
+      // proposals.total_amount (Σ line_total_cents) and, on activation, the
+      // project FF&E budget — keeping the stored total in step with the
+      // on-screen estimate. Fixed/TBD items use quantity × unit price.
+      const lineTotal =
+        itemType === 'allowance' &&
+        typeof budgetMinCents === 'number' &&
+        typeof budgetMaxCents === 'number'
+          ? Math.round((budgetMinCents + budgetMaxCents) / 2)
+          : quantity * sellPrice;
 
       const { data, error } = await supabase
         .from('proposal_items')
