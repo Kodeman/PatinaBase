@@ -62,6 +62,20 @@ test.describe('Active Project screens', () => {
       { project_id: projectId, phase_key: 'procurement', name: 'Procurement & Install', status: 'pending', progress: 0, duration_weeks: 8, sort_order: 1 },
     ]);
     if (phaseErr) throw new Error(`seed phases failed: ${phaseErr.message}`);
+
+    // Documents + tasks now live in Supabase public tables (00169), read
+    // directly by the portal (previously the disconnected svc_projects store →
+    // mock fallback). Seed one of each to assert the wiring end-to-end.
+    const { error: docErr } = await adminDb.from('project_documents').insert({
+      project_id: projectId, title: 'QA Service Agreement', doc_type: 'pdf',
+      category: 'contract', size_bytes: 512000, version: 'v1.0', status: 'signed',
+    });
+    if (docErr) throw new Error(`seed document failed: ${docErr.message}`);
+    const { error: taskErr } = await adminDb.from('project_tasks').insert({
+      project_id: projectId, phase_key: 'concept', title: 'QA Present concept storyboards',
+      status: 'todo', sort_order: 0,
+    });
+    if (taskErr) throw new Error(`seed task failed: ${taskErr.message}`);
   });
 
   test.afterAll(async () => {
@@ -90,6 +104,14 @@ test.describe('Active Project screens', () => {
     await expect(page.getByText('Client User', { exact: false }).first()).toBeVisible();
     const body = (await page.locator('body').textContent()) ?? '';
     expect(body).not.toMatch(/(^|\n)\s*·\s*Started/);
+  });
+
+  test('detail shows real documents + tasks from Supabase, not mock (backend)', async ({ authenticatedPage: page }) => {
+    await page.goto(`/portal/projects/${projectId}`);
+    await page.waitForLoadState('networkidle');
+    // DocumentGrid (project_documents) and PhaseTimelineV2 tasks (project_tasks).
+    await expect(page.getByText('QA Service Agreement', { exact: false }).first()).toBeVisible();
+    await expect(page.getByText('QA Present concept storyboards', { exact: false }).first()).toBeVisible();
   });
 
   for (const route of SUB_ROUTES) {

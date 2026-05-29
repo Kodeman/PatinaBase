@@ -62,8 +62,15 @@ _Note: walk continues signed in as the real owner `designer@patina.dev` (…004)
 - All 7 detail sub-routes (`/`, `/edit`, `/decisions`, `/ffe`, `/financials`, `/scope-change`, `/complete`) load with **no runtime crash** (spec).
 - Test infra: bumped Playwright per-test timeout 30s→60s (auth fixture cold-compile headroom).
 
+**Backend (svc_projects) — DIAGNOSED + fixed Supabase-first (✅).**
+Live-mode integrity pass (JWT-authenticated endpoint probing) found the masking had three layers: (1) the designer-portal proxy routes called `/api/v1/projects/...` but svc_projects mounts at `/v1` → 404; (2) the Supabase JWT carries no `app_metadata.roles/permissions`, so svc guards 403; (3) **root cause** — svc_projects runs on a separate, **empty** `svc_projects.*` schema (0 projects/tasks/documents) that nothing populates for the public projects created by `activate_proposal_as_project`. So the svc path was a dead end. Per the Supabase-first architecture (user-approved):
+- migration `00169` — new public `project_documents` + `project_tasks` tables + RLS (mirrors project_rooms).
+- `useProjectTasks`/`useProjectDocuments` + `useCreateTask`/`useUpdateTask`/`useDeleteTask` rewired to Supabase (off svc/mock); tasks `phase_key` normalized so PhaseTimelineV2 groups them.
+- `useProjectTimeTracking` → honest empty for real projects (was always-fabricated mock); time tracking remains a deferred feature.
+- proxy route prefix corrected `/api/v1/projects`→`/v1/projects` (9 files, correctness for any remaining svc consumers).
+- seed `project_documents_tasks.sql` (3 docs + 3 tasks on Aspen Loft) + e2e assertion that documents/tasks render from Supabase. **Verified** (11/11 spec tests pass).
+
 **Remaining / not yet done (honest record):**
-- **Backend (svc_projects) — NOT yet built.** Tasks/documents/activity/time-tracking still route through `withMockData` (default mode masks failures). Needs the live-mode (`DATA_MODE=live`) integrity pass + JWT-authenticated endpoint checks to scope whether svc_projects endpoints are functional-but-empty vs. broken before building. (Phase 2 / backend lane.)
 - **AP-A2** — "Budget" label means `total_amount_cents` (list row) vs `budget_cents` (detail/metric); per `supabase/CLAUDE.md` these are intentional distinct columns → needs a product decision on labels, not a code bug.
 - **AP-C7** — global layout breadcrumb shows raw UUID instead of project name (P3).
 - **`/projects/new`** — a dead "Sandbox · no API calls yet" mockup page, separate from the real wizard at `/portal/projects/new` (confusing duplicate).
