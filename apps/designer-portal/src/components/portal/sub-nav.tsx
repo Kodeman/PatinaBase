@@ -8,18 +8,26 @@ import { useNavCounts } from '@/hooks/use-nav-counts';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { ZONE_ACTIONS } from '@/config/navigation';
 import { useClient } from '@patina/supabase';
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { useProject } from '@/hooks/use-projects';
 
 /**
- * Resolves the display name for a client breadcrumb segment.
- * Only rendered when a UUID-shaped segment appears under /portal/clients/[id]/...
+ * Resolves the display name for a client breadcrumb segment (tagged by
+ * useActiveZone when a UUID appears under /portal/clients/[id]).
  */
 function ClientBreadcrumbLabel({ clientId }: { clientId: string }) {
   const { data } = useClient(clientId);
   const displayName =
     data?.client?.full_name || data?.client_name || data?.client_email || clientId;
   return <>{displayName}</>;
+}
+
+/**
+ * Resolves the project name for a project breadcrumb segment so the trail reads
+ * "Pipeline › Active › Aspen Loft Refresh" instead of the raw UUID (AP-C7).
+ */
+function ProjectBreadcrumbLabel({ projectId }: { projectId: string }) {
+  const { data } = useProject(projectId) as { data?: { name?: string } };
+  return <>{data?.name || 'Project'}</>;
 }
 
 export function SubNav() {
@@ -47,10 +55,17 @@ export function SubNav() {
           // Breadcrumb mode for deep pages
           <div className="flex h-[38px] items-center gap-1.5">
             {breadcrumbs.map((crumb, i) => {
-              // Detect a UUID segment under /portal/clients/[id] — resolve to client name
-              const clientUuidInHref = crumb.href?.match(/^\/portal\/clients\/([0-9a-f-]+)$/i)?.[1];
-              const isClientUuidCrumb =
-                typeof clientUuidInHref === 'string' && UUID_RE.test(clientUuidInHref);
+              // Resolve UUID segments to a name (tagged by useActiveZone). Works
+              // for both linked crumbs (sub-routes) and the current-page crumb
+              // (project detail, which has no href).
+              const labelNode =
+                crumb.resourceType === 'project' && crumb.resourceId ? (
+                  <ProjectBreadcrumbLabel projectId={crumb.resourceId} />
+                ) : crumb.resourceType === 'client' && crumb.resourceId ? (
+                  <ClientBreadcrumbLabel clientId={crumb.resourceId} />
+                ) : (
+                  crumb.label
+                );
 
               return (
               <span key={i} className="flex items-center gap-1.5">
@@ -62,15 +77,11 @@ export function SubNav() {
                     href={crumb.href}
                     className="font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--accent-primary)] no-underline hover:text-[var(--text-primary)]"
                   >
-                    {isClientUuidCrumb ? (
-                      <ClientBreadcrumbLabel clientId={clientUuidInHref as string} />
-                    ) : (
-                      crumb.label
-                    )}
+                    {labelNode}
                   </Link>
                 ) : (
                   <span className="font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--text-muted)]">
-                    {crumb.label}
+                    {labelNode}
                   </span>
                 )}
               </span>

@@ -29,8 +29,12 @@ const VIEW_STORAGE_KEY = 'patina:projects:view';
 // ── Helpers (normalize across Supabase + mock shapes) ────────────────────────
 
 const projectName = (p: AnyProject): string => p.name || 'Untitled';
+// The list "Budget" column shows the FF&E budget (budget_cents), matching the
+// detail-page KeyMetrics "Budget" and the "Active Value" list metric. Using
+// total_amount_cents here (contract total = budget + design fee) made the row
+// ($6,900) contradict the detail ($2,900) and the metric (AP-A2).
 const projectBudgetCents = (p: AnyProject): number =>
-  p.total_amount_cents ?? p.budget_cents ?? p.budget ?? 0;
+  p.budget_cents ?? p.budget ?? 0;
 const projectProgress = (p: AnyProject): number => p.progress ?? 0;
 const projectClientName = (p: AnyProject): string =>
   p.client_name || p.client?.full_name || p.client?.display_name || '';

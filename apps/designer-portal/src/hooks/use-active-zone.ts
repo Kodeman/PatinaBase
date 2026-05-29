@@ -7,7 +7,12 @@ import { ZONES, ZONE_SUB_ITEMS, type ZoneKey, type SubNavItem } from '@/config/n
 export interface BreadcrumbItem {
   label: string;
   href?: string;
+  /** Set when the segment is a UUID, so SubNav can resolve it to a name. */
+  resourceType?: 'project' | 'client';
+  resourceId?: string;
 }
+
+const BREADCRUMB_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface ActiveZoneResult {
   /** The currently active zone key, or null if no zone matches */
@@ -192,12 +197,23 @@ function buildBreadcrumbs(
       continue;
     }
 
-    // For ID-like segments, we just use the segment as-is (will be resolved by the page)
-    // The last segment gets no href (it's the current page)
+    // For ID-like segments, we just use the segment as-is (will be resolved by
+    // SubNav into a project/client name). The last segment gets no href (it's
+    // the current page).
     const isLast = i === segments.length - 1;
+    const isUuid = BREADCRUMB_UUID_RE.test(segment);
+    const resourceType: BreadcrumbItem['resourceType'] =
+      isUuid && segments[0] === 'projects'
+        ? 'project'
+        : isUuid && segments[0] === 'clients'
+          ? 'client'
+          : undefined;
     crumbs.push({
-      label: formatSegment(segment),
+      // Keep the raw id as the fallback label; SubNav swaps in the resolved name.
+      label: isUuid ? segment : formatSegment(segment),
       href: isLast ? undefined : currentPath,
+      resourceType,
+      resourceId: resourceType ? segment : undefined,
     });
   }
 

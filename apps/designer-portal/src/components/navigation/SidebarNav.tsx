@@ -72,7 +72,7 @@ export function SidebarNav({ collapsed }: SidebarNavProps) {
             </div>
           ))}
           <Button variant="ghost" className="mt-auto justify-start" asChild>
-            <Link href="/projects/new">{collapsed ? '+' : 'Create project'}</Link>
+            <Link href="/portal/projects/new">{collapsed ? '+' : 'Create project'}</Link>
           </Button>
         </div>
       </ScrollArea>
