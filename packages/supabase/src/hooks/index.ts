@@ -642,6 +642,12 @@ export {
   useUpsertChangeOrderTerms,
   useScopeBuilderSummary,
 } from './use-scope-builder';
+export type {
+  ProposalScopeRoom,
+  ProposalPhase,
+  ProposalExclusion,
+  ProposalPaymentMilestone,
+} from './use-scope-builder';
 export {
   // Project v2 (scope-aware)
   useProjectV2,

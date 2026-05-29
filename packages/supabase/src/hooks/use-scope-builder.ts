@@ -1,7 +1,58 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { updateProposalTotal } from '../lib/proposal-total';
 
 const getSupabase = () => createBrowserClient();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TYPES — canonical row shapes for the scope-builder tables. Shared with the
+// design-system proposal sub-blocks and both portals so renderers don't redefine.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface ProposalScopeRoom {
+  id: string;
+  proposal_id: string;
+  name: string;
+  room_type: string | null;
+  dimensions: string | null;
+  floor_area_sqft: number | null;
+  budget_cents: number;
+  ffe_categories: string[];
+  notes: string | null;
+  sort_order: number;
+}
+
+export interface ProposalPhase {
+  id: string;
+  proposal_id: string;
+  name: string;
+  phase_key: string | null;
+  duration_weeks: number | null;
+  fee_cents: number;
+  revision_limit: number | null;
+  gate_condition: string | null;
+  deliverables: Array<{ label: string; type?: string }>;
+  sort_order: number;
+}
+
+export interface ProposalExclusion {
+  id: string;
+  proposal_id: string;
+  description: string;
+  category: string | null;
+  sort_order: number;
+}
+
+export interface ProposalPaymentMilestone {
+  id: string;
+  proposal_id: string;
+  phase_id: string | null;
+  label: string;
+  percentage: number;
+  amount_cents: number;
+  trigger_condition: string | null;
+  sort_order: number;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SCOPE ROOMS
@@ -205,11 +256,14 @@ export function useAddProposalPhase() {
         .select()
         .single();
       if (error) throw error;
+      // Phase fees count toward proposals.total_amount — keep it in step.
+      await updateProposalTotal(supabase, proposalId);
       return data;
     },
     onSuccess: (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-phases', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
+      queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
     },
   });
 }
@@ -235,11 +289,14 @@ export function useUpdateProposalPhase() {
         .select()
         .single();
       if (error) throw error;
+      // A fee edit changes proposals.total_amount.
+      await updateProposalTotal(supabase, proposalId);
       return data;
     },
     onSuccess: (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-phases', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
+      queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
     },
   });
 }
@@ -252,10 +309,13 @@ export function useRemoveProposalPhase() {
       const supabase = getSupabase() as any;
       const { error } = await supabase.from('proposal_phases').delete().eq('id', phaseId);
       if (error) throw error;
+      // Removing a phase drops its fee from proposals.total_amount.
+      await updateProposalTotal(supabase, proposalId);
     },
     onSuccess: (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-phases', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
+      queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
     },
   });
 }
@@ -543,7 +603,7 @@ export function useScopeBuilderSummary(proposalId: string) {
           .eq('proposal_id', proposalId),
         supabase
           .from('proposal_items')
-          .select('id')
+          .select('line_total_cents')
           .eq('proposal_id', proposalId),
       ]);
 
@@ -554,7 +614,14 @@ export function useScopeBuilderSummary(proposalId: string) {
       return {
         totalRooms: rooms.length,
         totalFFEItems: items.length,
+        // Per-room budget inputs (designer's target allocation per room).
         totalBudgetCents: rooms.reduce((sum: number, r: { budget_cents: number }) => sum + (r.budget_cents || 0), 0),
+        // Actual FF&E schedule estimate = Σ line totals (fixed qty×price +
+        // allowance midpoints). This is what the "FF&E Est. Total" tile shows.
+        totalFFEEstimateCents: items.reduce(
+          (sum: number, i: { line_total_cents: number | null }) => sum + (i.line_total_cents || 0),
+          0
+        ),
         totalDesignFeeCents: phases.reduce((sum: number, p: { fee_cents: number }) => sum + (p.fee_cents || 0), 0),
         totalPhases: phases.length,
         estimatedWeeks: phases.reduce((sum: number, p: { duration_weeks: number | null }) => sum + (p.duration_weeks || 0), 0),

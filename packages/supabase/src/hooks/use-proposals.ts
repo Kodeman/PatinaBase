@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { updateProposalTotal } from '../lib/proposal-total';
 
 // Lazy client getter to avoid module-level initialization during SSR
 const getSupabase = () => createBrowserClient();
@@ -458,9 +459,39 @@ export function useUpdateProposalItem() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
+      // Fetch the current row so line_total_cents can be recomputed from the
+      // merged values — mirrors useAddProposalItem (allowance → budget midpoint,
+      // otherwise quantity × sell price). Without this, editing an allowance's
+      // range or an item's quantity would leave the stored cost (and the
+      // proposal total) stale.
+      const { data: current, error: currentError } = await supabase
+        .from('proposal_items')
+        .select('item_type, quantity, unit_price, unit_sell_price, budget_min_cents, budget_max_cents')
+        .eq('id', itemId)
+        .single();
+      if (currentError) throw currentError;
+
+      const merged = { ...current, ...updates };
+      const mergedType = merged.item_type ?? 'fixed';
+      const mergedQty = merged.quantity ?? 1;
+      const mergedSell = merged.unit_sell_price ?? merged.unit_price ?? 0;
+      const lineTotal =
+        mergedType === 'allowance' &&
+        typeof merged.budget_min_cents === 'number' &&
+        typeof merged.budget_max_cents === 'number'
+          ? Math.round((merged.budget_min_cents + merged.budget_max_cents) / 2)
+          : mergedQty * mergedSell;
+
+      const payload: Record<string, unknown> = { ...updates, line_total_cents: lineTotal };
+      // Keep unit_sell_price in step when the editable unit_price changes
+      // (the add path sets sellPrice = unitPrice).
+      if (updates.unit_price !== undefined) {
+        payload.unit_sell_price = updates.unit_price;
+      }
+
       const { data, error } = await supabase
         .from('proposal_items')
-        .update(updates)
+        .update(payload)
         .eq('id', itemId)
         .select()
         .single();
@@ -559,17 +590,23 @@ export function useSendProposal() {
 
       if (error) throw error;
 
-      // Best-effort email dispatch — failure here should not roll back the send
-      // (the proposal is already marked sent in the DB). Surfacing the failure
-      // would require a UI surface for retry; for now we log and move on.
+      // Best-effort email dispatch — failure here does NOT roll back the send
+      // (the proposal is already marked sent in the DB). We surface the outcome
+      // via `_emailDispatched` so the Send page can warn the designer instead of
+      // failing silently; they can resend from the proposal page.
+      let emailDispatched = true;
       try {
-        await supabase.functions.invoke('proposal-send', { body: { proposalId } });
+        const { error: fnError } = await supabase.functions.invoke('proposal-send', {
+          body: { proposalId },
+        });
+        if (fnError) emailDispatched = false;
       } catch (e) {
+        emailDispatched = false;
         // eslint-disable-next-line no-console
         console.warn('proposal-send invocation failed', e);
       }
 
-      return data;
+      return { ...data, _emailDispatched: emailDispatched };
     },
     onSuccess: (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
@@ -1200,22 +1237,6 @@ export function useDeclineProposal() {
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function updateProposalTotal(supabase: any, proposalId: string) {
-  // Calculate total from items
-  const { data: items } = await supabase
-    .from('proposal_items')
-    .select('line_total_cents')
-    .eq('proposal_id', proposalId);
-
-  const total = (items ?? []).reduce(
-    (sum: number, item: { line_total_cents: number }) =>
-      sum + (item.line_total_cents || 0),
-    0
-  );
-
-  await supabase
-    .from('proposals')
-    .update({ total_amount: total })
-    .eq('id', proposalId);
-}
+// updateProposalTotal lives in ../lib/proposal-total so the phase mutations in
+// use-scope-builder.ts can reuse the exact same calculation (FF&E line totals +
+// design phase fees) without a circular import.

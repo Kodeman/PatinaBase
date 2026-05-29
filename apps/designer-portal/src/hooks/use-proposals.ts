@@ -28,8 +28,10 @@ export {
   // Versions & Revisions
   useProposalVersions,
   useCreateProposalRevision,
+  useDuplicateProposal,
   // Signing
   useSignProposal,
+  useDeclineProposal,
 } from '@patina/supabase';
 
 export type {
