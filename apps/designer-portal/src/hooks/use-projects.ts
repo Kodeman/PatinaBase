@@ -15,12 +15,34 @@ import { mockData } from '@/data/mock-designer-data';
 import { projectsApi } from '@/lib/api-client';
 import { withMockData } from '@/lib/mock-data';
 import { queryKeys } from '@/lib/react-query';
+import { normalizePhaseSlug } from '@/types/project-ui';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (id: string) => UUID_RE.test(id);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getSupabase = () => createBrowserClient() as any;
+
+// Human-readable size for project_documents.size_bytes (DocumentGrid shows the
+// `size` string verbatim).
+function formatBytes(bytes?: number | null): string {
+  if (!bytes || bytes <= 0) return '';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let v = bytes;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  return `${v % 1 === 0 ? v : v.toFixed(1)} ${units[i]}`;
+}
+
+function formatDocDate(value?: string | null): string {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
 interface ProjectFilters {
   designerId?: string;
@@ -155,15 +177,35 @@ export function useProject(id: string | null) {
 
 // ── Project Sub-Resource Queries ──
 
-// Tasks remain on NestJS svc_projects (real-time surface)
+// Tasks live in Supabase public.project_tasks (00169). Previously routed to the
+// disconnected svc_projects store, which 404'd → fabricated mock fallback.
 export function useProjectTasks(projectId: string | null) {
   return useQuery({
     queryKey: projectId ? queryKeys.projects.tasks(projectId) : ['projects', 'tasks', 'null'],
-    queryFn: () => {
+    queryFn: async () => {
       if (!projectId) throw new Error('Project ID required');
-      const mockFn = () => mockData.getProjectTasks(projectId);
-      if (!isUuid(projectId)) return Promise.resolve(mockFn());
-      return withMockData(() => projectsApi.getTasks(projectId), mockFn);
+      if (!isUuid(projectId)) return mockData.getProjectTasks(projectId);
+
+      const supabase = getSupabase();
+      const { data, error } = await supabase
+        .from('project_tasks')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('sort_order', { ascending: true });
+      if (error) throw error;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (data ?? []).map((t: any) => ({
+        id: t.id,
+        projectId: t.project_id,
+        // Normalize so PhaseTimelineV2 (which matches canonical slugs) groups
+        // the task under the right phase.
+        phase: normalizePhaseSlug(t.phase_key),
+        title: t.title,
+        description: t.description ?? undefined,
+        status: t.status,
+        dueDate: t.due_date ?? undefined,
+        completedAt: t.completed_at ?? undefined,
+      }));
     },
     enabled: !!projectId,
   });
@@ -191,15 +233,34 @@ export function useProjectTimeline(projectId: string | null) {
   });
 }
 
-// Documents remain on NestJS svc_projects
+// Documents live in Supabase public.project_documents (00169). Previously routed
+// to the disconnected svc_projects store, which 404'd → silent mock fallback.
 export function useProjectDocuments(projectId: string | null) {
   return useQuery({
     queryKey: projectId ? queryKeys.projects.documents(projectId) : ['projects', 'documents', 'null'],
-    queryFn: () => {
+    queryFn: async () => {
       if (!projectId) throw new Error('Project ID required');
-      const mockFn = () => mockData.getProjectDocuments(projectId);
-      if (!isUuid(projectId)) return Promise.resolve(mockFn());
-      return withMockData(() => projectsApi.getDocuments(projectId), mockFn);
+      if (!isUuid(projectId)) return mockData.getProjectDocuments(projectId);
+
+      const supabase = getSupabase();
+      const { data, error } = await supabase
+        .from('project_documents')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (data ?? []).map((d: any) => ({
+        id: d.id,
+        projectId: d.project_id,
+        title: d.title,
+        type: d.doc_type,
+        category: d.category ?? undefined,
+        date: formatDocDate(d.created_at),
+        size: formatBytes(d.size_bytes),
+        status: d.status ?? undefined,
+        version: d.version ?? undefined,
+      }));
     },
     enabled: !!projectId,
   });
@@ -372,15 +433,16 @@ export function useProjectFinancials(projectId: string | null) {
   });
 }
 
-// Time tracking remains on NestJS svc_projects
+// Time tracking is not yet a built feature. Slug fixtures keep their mock data
+// for demos; real (UUID) projects return null so TimeTrackingPanel renders
+// nothing rather than fabricating hours (was previously always-mock).
 export function useProjectTimeTracking(projectId: string | null) {
   return useQuery({
     queryKey: projectId ? queryKeys.projects.timeTracking(projectId) : ['projects', 'time-tracking', 'null'],
     queryFn: () => {
       if (!projectId) throw new Error('Project ID required');
-      const mockFn = () => mockData.getProjectTimeTracking(projectId);
-      if (!isUuid(projectId)) return Promise.resolve(mockFn());
-      return withMockData(() => Promise.resolve(mockFn()), mockFn);
+      if (!isUuid(projectId)) return Promise.resolve(mockData.getProjectTimeTracking(projectId));
+      return Promise.resolve(null);
     },
     enabled: !!projectId,
   });
@@ -534,11 +596,30 @@ export function useCreateTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ projectId, data }: { projectId: string; data: unknown }) =>
-      withMockData(
+    mutationFn: async ({ projectId, data }: { projectId: string; data: unknown }) => {
+      // UUID → Supabase public.project_tasks. Callers pass { title, phase, status }.
+      if (isUuid(projectId)) {
+        const supabase = getSupabase();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const d = (data ?? {}) as any;
+        const { data: row, error } = await supabase
+          .from('project_tasks')
+          .insert({
+            project_id: projectId,
+            title: d.title,
+            phase_key: d.phase ?? d.phase_key ?? null,
+            status: d.status ?? 'todo',
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        return row;
+      }
+      return withMockData(
         () => projectsApi.createTask(projectId, data),
         () => Promise.resolve({ projectId, ...(data as object) })
-      ),
+      );
+    },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(variables.projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.tasks(variables.projectId) });
@@ -550,11 +631,28 @@ export function useUpdateTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ taskId, data }: { taskId: string; data: unknown }) =>
-      withMockData(
+    mutationFn: async ({ taskId, data }: { taskId: string; data: unknown }) => {
+      if (isUuid(taskId)) {
+        const supabase = getSupabase();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const patch: Record<string, any> = { ...((data ?? {}) as object) };
+        // Keep completed_at consistent with the done/undone toggle.
+        if (patch.status === 'done') patch.completed_at = new Date().toISOString();
+        else if (patch.status === 'todo' || patch.status === 'blocked') patch.completed_at = null;
+        const { data: row, error } = await supabase
+          .from('project_tasks')
+          .update(patch)
+          .eq('id', taskId)
+          .select()
+          .single();
+        if (error) throw error;
+        return row;
+      }
+      return withMockData(
         () => projectsApi.updateTask(taskId, data),
         () => Promise.resolve({ taskId, ...(data as object) })
-      ),
+      );
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
     },
@@ -565,11 +663,18 @@ export function useDeleteTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (taskId: string) =>
-      withMockData(
+    mutationFn: async (taskId: string) => {
+      if (isUuid(taskId)) {
+        const supabase = getSupabase();
+        const { error } = await supabase.from('project_tasks').delete().eq('id', taskId);
+        if (error) throw error;
+        return;
+      }
+      return withMockData(
         () => projectsApi.deleteTask(taskId),
         () => Promise.resolve()
-      ),
+      );
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
     },

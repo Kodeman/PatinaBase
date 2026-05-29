@@ -18,7 +18,7 @@ export const GET = createRouteHandler(
         service: {
           name: 'projects',
           baseUrl: PROJECTS_URL,
-          path: `/api/v1/projects/${projectId}/rfis/${rfiId}`,
+          path: `/v1/projects/${projectId}/rfis/${rfiId}`,
         },
         requireAuth: true,
         retry: { maxRetries: 3 },
@@ -43,7 +43,7 @@ export const PATCH = createRouteHandler(
         service: {
           name: 'projects',
           baseUrl: PROJECTS_URL,
-          path: `/api/v1/projects/${projectId}/rfis/${rfiId}`,
+          path: `/v1/projects/${projectId}/rfis/${rfiId}`,
         },
         requireAuth: true,
         retry: { maxRetries: 2 },

@@ -18,7 +18,7 @@ export const DELETE = createRouteHandler(
         service: {
           name: 'projects',
           baseUrl: PROJECTS_URL,
-          path: `/api/v1/projects/${projectId}/documents/${documentId}`,
+          path: `/v1/projects/${projectId}/documents/${documentId}`,
         },
         requireAuth: true,
         retry: { maxRetries: 1 },
