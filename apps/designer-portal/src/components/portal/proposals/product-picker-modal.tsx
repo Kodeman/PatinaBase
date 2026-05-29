@@ -127,6 +127,8 @@ function CatalogTab({
               key={p.id}
               type="button"
               onClick={() => onPick(p.id)}
+              data-testid="product-picker-result"
+              data-product-id={p.id}
               className="group flex cursor-pointer flex-col items-stretch gap-2 rounded-sm border border-[var(--border-default)] p-2 text-left transition-colors hover:border-[var(--accent-primary)]"
             >
               <div
@@ -553,6 +555,7 @@ export function ProductPickerModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="product-picker-title"
+      data-testid="product-picker-modal"
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-8"
       onClick={onClose}
     >
@@ -582,6 +585,7 @@ export function ProductPickerModal({
             <select
               value={scopeRoomId ?? ''}
               onChange={(e) => setScopeRoomId(e.target.value || null)}
+              data-testid="product-picker-room"
               className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
             >
               <option value="">Unassigned</option>

@@ -167,6 +167,243 @@ export async function getProposalScopeRooms(proposalId: string) {
   return data ?? [];
 }
 
+// ─── Scope-seeding helpers (used by client-sign / client-decline specs) ──────
+//
+// These mirror the rows the FF&E / Scope Builder UI persists, but go straight
+// through the service role so the client-side specs don't depend on the fragile
+// drag-and-drop builder. Column names match the live schema (post-00142:
+// proposal_items.line_total_cents).
+
+export interface InsertScopeRoomPayload {
+  proposalId: string;
+  name: string;
+  roomType?: string | null;
+  budgetCents?: number;
+  sortOrder?: number;
+}
+
+export async function insertScopeRoom(payload: InsertScopeRoomPayload) {
+  const { data, error } = await adminDb
+    .from('proposal_scope_rooms')
+    .insert({
+      proposal_id: payload.proposalId,
+      name: payload.name,
+      room_type: payload.roomType ?? null,
+      budget_cents: payload.budgetCents ?? 0,
+      sort_order: payload.sortOrder ?? 0,
+    })
+    .select('id, name, room_type, budget_cents, sort_order')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export interface InsertAllowanceItemPayload {
+  proposalId: string;
+  name: string;
+  budgetMinCents: number;
+  budgetMaxCents: number;
+  ffeCategory?: string | null;
+  scopeRoomId?: string | null;
+  position?: number;
+}
+
+/**
+ * Insert an `item_type='allowance'` proposal item. line_total_cents is set to
+ * the budget midpoint to mirror the 00160 trigger so the client document shows
+ * a non-$0 amount and the allowance range renders.
+ */
+export async function insertAllowanceItem(payload: InsertAllowanceItemPayload) {
+  const midpoint = Math.round((payload.budgetMinCents + payload.budgetMaxCents) / 2);
+  const { data, error } = await adminDb
+    .from('proposal_items')
+    .insert({
+      proposal_id: payload.proposalId,
+      name: payload.name,
+      item_type: 'allowance',
+      quantity: 1,
+      unit_price: 0,
+      unit_sell_price: 0,
+      line_total_cents: midpoint,
+      budget_min_cents: payload.budgetMinCents,
+      budget_max_cents: payload.budgetMaxCents,
+      ffe_category: payload.ffeCategory ?? null,
+      scope_room_id: payload.scopeRoomId ?? null,
+      position: payload.position ?? 0,
+    })
+    .select('id, item_type, line_total_cents, budget_min_cents, budget_max_cents, name')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export interface InsertPhasePayload {
+  proposalId: string;
+  name: string;
+  feeCents: number;
+  durationWeeks?: number;
+  phaseKey?: string | null;
+  sortOrder?: number;
+}
+
+export async function insertProposalPhase(payload: InsertPhasePayload) {
+  const { data, error } = await adminDb
+    .from('proposal_phases')
+    .insert({
+      proposal_id: payload.proposalId,
+      name: payload.name,
+      fee_cents: payload.feeCents,
+      duration_weeks: payload.durationWeeks ?? 2,
+      phase_key: payload.phaseKey ?? null,
+      sort_order: payload.sortOrder ?? 0,
+    })
+    .select('id, name, fee_cents, sort_order')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export interface InsertMilestonePayload {
+  proposalId: string;
+  label: string;
+  percentage: number;
+  amountCents: number;
+  triggerCondition?: string | null;
+  phaseId?: string | null;
+  sortOrder?: number;
+}
+
+export async function insertPaymentMilestone(payload: InsertMilestonePayload) {
+  const { data, error } = await adminDb
+    .from('proposal_payment_milestones')
+    .insert({
+      proposal_id: payload.proposalId,
+      label: payload.label,
+      percentage: payload.percentage,
+      amount_cents: payload.amountCents,
+      trigger_condition: payload.triggerCondition ?? null,
+      phase_id: payload.phaseId ?? null,
+      sort_order: payload.sortOrder ?? 0,
+    })
+    .select('id, label, percentage, amount_cents, sort_order')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function setProposalTotals(
+  proposalId: string,
+  totals: { subtotalCents?: number; totalAmountCents: number },
+): Promise<void> {
+  const patch: Record<string, number> = { total_amount: totals.totalAmountCents };
+  if (typeof totals.subtotalCents === 'number') patch.subtotal = totals.subtotalCents;
+  const { error } = await adminDb.from('proposals').update(patch).eq('id', proposalId);
+  if (error) throw error;
+}
+
+export async function getProposalPhases(proposalId: string) {
+  const { data, error } = await adminDb
+    .from('proposal_phases')
+    .select('id, name, fee_cents, duration_weeks, sort_order')
+    .eq('proposal_id', proposalId)
+    .order('sort_order', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getPaymentMilestones(proposalId: string) {
+  const { data, error } = await adminDb
+    .from('proposal_payment_milestones')
+    .select('id, label, percentage, amount_cents, trigger_condition, sort_order')
+    .eq('proposal_id', proposalId)
+    .order('sort_order', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
+ * Set designer_clients.status for a designer↔client pair. Used to put the
+ * relationship into a pre-activation state ('proposal') so the activation
+ * assertion (status → 'active') is a meaningful regression guard — the
+ * RPC only promotes rows currently in ('lead','proposal').
+ */
+export async function setDesignerClientStatus(
+  designerId: string,
+  clientId: string,
+  status: string,
+): Promise<void> {
+  const { error } = await adminDb
+    .from('designer_clients')
+    .update({ status })
+    .eq('designer_id', designerId)
+    .eq('client_id', clientId);
+  if (error) throw error;
+}
+
+export async function getDesignerClient(designerId: string, clientId: string) {
+  const { data, error } = await adminDb
+    .from('designer_clients')
+    .select('id, status, designer_id, client_id')
+    .eq('designer_id', designerId)
+    .eq('client_id', clientId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function getProjectByProposal(proposalId: string) {
+  const { data, error } = await adminDb
+    .from('projects')
+    .select(
+      'id, proposal_id, designer_id, client_id, created_by, status, budget_cents, total_amount_cents, design_fee_cents',
+    )
+    .eq('proposal_id', proposalId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function countByProject(table: string, projectId: string): Promise<number> {
+  const { count, error } = await adminDb
+    .from(table)
+    .select('id', { count: 'exact', head: true })
+    .eq('project_id', projectId);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function getEngagementSignedRow(proposalId: string) {
+  const { data, error } = await adminDb
+    .from('proposal_engagement')
+    .select('id, event_type, viewer_id, metadata')
+    .eq('proposal_id', proposalId)
+    .eq('event_type', 'signed');
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
+ * Reset a proposal back to a clean 'sent' state. Used by the decline spec so
+ * the seeded fixture proposal can be re-run idempotently (clears decline /
+ * sign audit columns and re-arms the status).
+ */
+export async function resetProposalToSent(proposalId: string): Promise<void> {
+  const { error } = await adminDb
+    .from('proposals')
+    .update({
+      status: 'sent',
+      declined_at: null,
+      decline_reason: null,
+      accepted_at: null,
+      signed_at: null,
+      signed_by_name: null,
+      signed_ip: null,
+      viewed_at: null,
+    })
+    .eq('id', proposalId);
+  if (error) throw error;
+}
+
 export interface ConsumeCaptureRpcArgs {
   captureId: string;
   proposalId: string;

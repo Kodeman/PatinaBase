@@ -108,6 +108,7 @@ export function ClientPicker({
           <button
             type="button"
             role="combobox"
+            data-testid="client-picker-trigger"
             aria-expanded={open}
             disabled={disabled}
             className={cn(
@@ -139,6 +140,7 @@ export function ClientPicker({
                 <CommandPrimitive.Input
                   value={search}
                   onValueChange={setSearch}
+                  data-testid="client-picker-search"
                   placeholder="Search or add a client…"
                   className="flex h-10 w-full bg-transparent py-3 text-[0.85rem] outline-none placeholder:text-[var(--text-muted)]"
                   style={{ fontFamily: 'var(--font-body)' }}
@@ -175,6 +177,7 @@ export function ClientPicker({
                     <CommandPrimitive.Item
                       key={dc.id}
                       value={dc.id}
+                      data-testid={`client-picker-option-${dc.client_id ?? dc.id}`}
                       disabled={!linkable}
                       onSelect={() => {
                         if (disabled || !linkable) return;
@@ -222,6 +225,7 @@ export function ClientPicker({
                 <div className="-mx-1 my-1 h-px bg-[var(--border-subtle)]" aria-hidden />
                 <button
                   type="button"
+                  data-testid="client-picker-add"
                   disabled={!canAdd || adding || disabled}
                   onClick={handleAdd}
                   className={cn(
