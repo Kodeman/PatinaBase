@@ -913,17 +913,9 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
   return (
     <DndContext onDragEnd={handleDragEnd}>
     <div>
-      <h3
-        style={{
-          fontFamily: 'var(--font-heading)',
-          fontWeight: 500,
-          fontSize: '1.25rem',
-          lineHeight: 1.35,
-          marginBottom: '0.25rem',
-        }}
-      >
-        Preliminary FF&amp;E Schedule
-      </h3>
+      {/* The "Preliminary FF&E Schedule" heading + description are rendered by
+          ScopeBuilderShell. We only render the live item-count / estimated-total
+          summary here to avoid a duplicate heading. */}
       <div
         style={{
           fontFamily: 'var(--font-body)',
