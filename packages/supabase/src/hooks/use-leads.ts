@@ -381,24 +381,72 @@ export function useAcceptLead() {
           if (clientError) throw clientError;
         }
       } else {
-        // Manually-captured lead with no homeowner profile — create a
+        // Manually-captured lead with no homeowner profile — upsert a
         // profile-less client row carrying the captured contact info.
-        // designer_clients.client_id is nullable (00018); a NULL client_id
-        // sidesteps the partial unique index (WHERE client_id IS NOT NULL),
-        // so no existence check is needed.
-        const { error: clientError } = await supabase
-          .from('designer_clients')
-          .insert({
-            designer_id: lead.designer_id,
-            client_id: null,
-            client_name: lead.contact_name ?? null,
-            client_email: lead.contact_email ?? null,
-            source: 'lead',
-            lead_id: leadId,
-            status: 'active',
-          });
+        // designer_clients.client_id is nullable (00018), but two partial
+        // unique indexes still apply to NULL-client rows:
+        //   - idx_designer_clients_unique_profile ON (designer_id, client_id)
+        //     WHERE client_id IS NOT NULL  (irrelevant here — client_id is null)
+        //   - idx_designer_clients_unique_email ON (designer_id, client_email)
+        //     WHERE client_email IS NOT NULL AND client_id IS NULL
+        // A blind insert collides with the email index when re-accepting this
+        // lead, or when another profile-less client already holds this email.
+        // Partial unique indexes don't support onConflict, so check-then-write.
 
-        if (clientError) throw clientError;
+        // First, look for a client already linked to this exact lead (makes
+        // re-accepting the same lead idempotent).
+        const { data: existingByLead } = await supabase
+          .from('designer_clients')
+          .select('id')
+          .eq('lead_id', leadId)
+          .maybeSingle();
+
+        let existingId: string | null = existingByLead?.id ?? null;
+
+        // Otherwise, if the lead carries an email, look for a profile-less
+        // client of this designer already using that email (the row the
+        // idx_designer_clients_unique_email index would collide with).
+        if (!existingId && lead.contact_email) {
+          const { data: existingByEmail } = await supabase
+            .from('designer_clients')
+            .select('id')
+            .eq('designer_id', lead.designer_id)
+            .eq('client_email', lead.contact_email)
+            .is('client_id', null)
+            .maybeSingle();
+
+          existingId = existingByEmail?.id ?? null;
+        }
+
+        if (existingId) {
+          // Update the existing profile-less row in place (keep client_id null).
+          const { error: clientError } = await supabase
+            .from('designer_clients')
+            .update({
+              client_name: lead.contact_name ?? null,
+              client_email: lead.contact_email ?? null,
+              source: 'lead',
+              lead_id: leadId,
+              status: 'active',
+            })
+            .eq('id', existingId);
+
+          if (clientError) throw clientError;
+        } else {
+          const { error: clientError } = await supabase
+            .from('designer_clients')
+            .insert({
+              designer_id: lead.designer_id,
+              client_id: null,
+              client_name: lead.contact_name ?? null,
+              client_email: lead.contact_email ?? null,
+              source: 'lead',
+              lead_id: leadId,
+              status: 'active',
+            });
+
+          if (clientError) throw clientError;
+        }
       }
 
       return lead;

@@ -1,6 +1,6 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import Link from 'next/link';
 import { useLead, useAcceptLead, useDeclineLead, useMarkLeadViewed, useUpdateLeadStatus } from '@patina/supabase';
 import { useEffect } from 'react';
@@ -30,6 +30,48 @@ export default function LeadBriefPage({
   const acceptLead = useAcceptLead();
   const declineLead = useDeclineLead();
   const updateStatus = useUpdateLeadStatus();
+
+  // This portal mounts no Toaster, so action feedback is rendered inline.
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const resetFeedback = () => {
+    setSuccessMessage(null);
+    setErrorMessage(null);
+  };
+
+  const handleAccept = () => {
+    resetFeedback();
+    acceptLead.mutate(id, {
+      onSuccess: () => setSuccessMessage('Lead accepted — added to your clients.'),
+      onError: (err: Error) =>
+        setErrorMessage(err.message ?? 'Something went wrong. Please try again.'),
+    });
+  };
+
+  const handleRequestContext = () => {
+    resetFeedback();
+    updateStatus.mutate(
+      { leadId: id, status: 'contacted' },
+      {
+        onSuccess: () => setSuccessMessage('Requested more context.'),
+        onError: (err: Error) =>
+          setErrorMessage(err.message ?? 'Something went wrong. Please try again.'),
+      }
+    );
+  };
+
+  const handleDecline = () => {
+    resetFeedback();
+    declineLead.mutate(
+      { leadId: id },
+      {
+        onSuccess: () => setSuccessMessage('Passed on this lead.'),
+        onError: (err: Error) =>
+          setErrorMessage(err.message ?? 'Something went wrong. Please try again.'),
+      }
+    );
+  };
 
   useEffect(() => {
     if (id) {
@@ -162,24 +204,42 @@ export default function LeadBriefPage({
 
       {/* Action Bar */}
       <div className="mt-8 border-t border-[var(--border-default)] pt-8">
+        {successMessage && (
+          <div
+            role="status"
+            className="mb-4 rounded-sm border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800"
+          >
+            {successMessage}
+          </div>
+        )}
+
+        {errorMessage && (
+          <div
+            role="alert"
+            className="mb-4 rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+          >
+            {errorMessage}
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-4">
           <PortalButton
             variant="primary"
-            onClick={() => acceptLead.mutate(id)}
+            onClick={handleAccept}
             disabled={acceptLead.isPending}
           >
-            Accept &amp; Introduce Yourself
+            {acceptLead.isPending ? 'Accepting…' : 'Accept & Introduce Yourself'}
           </PortalButton>
           <PortalButton
             variant="secondary"
-            onClick={() => updateStatus.mutate({ leadId: id, status: 'contacted' })}
+            onClick={handleRequestContext}
             disabled={updateStatus.isPending}
           >
             {updateStatus.isPending ? 'Requesting...' : 'Request More Context'}
           </PortalButton>
           <PortalButton
             variant="ghost"
-            onClick={() => declineLead.mutate({ leadId: id })}
+            onClick={handleDecline}
             disabled={declineLead.isPending}
           >
             Pass on This Lead
