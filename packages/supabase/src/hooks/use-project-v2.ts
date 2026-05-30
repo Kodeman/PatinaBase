@@ -390,7 +390,9 @@ export function useUpdatePaymentMilestoneStatus() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const updates: Record<string, unknown> = { status };
-      if (status === 'paid') updates.paid_at = new Date().toISOString();
+      // Stamp paid_at on paid; clear it when a milestone moves back to a
+      // non-paid status (Mark due / Mark unpaid) so the date doesn't linger.
+      updates.paid_at = status === 'paid' ? new Date().toISOString() : null;
       if (dueDate) updates.due_date = dueDate;
 
       const { data, error } = await supabase
