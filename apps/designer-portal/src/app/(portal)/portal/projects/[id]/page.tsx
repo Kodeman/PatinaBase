@@ -15,12 +15,20 @@ import {
   useProjectKeyMetrics,
   useUpdateTask,
 } from '@/hooks/use-projects';
-import { useDecisionsByProject, useProjectActivityFromLog } from '@patina/supabase';
+import {
+  useDecisionsByProject,
+  useProjectActivityFromLog,
+  useUpdateProjectPhaseStatus,
+  useUpdatePaymentMilestoneStatus,
+} from '@patina/supabase';
+import { useQueryClient } from '@tanstack/react-query';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { useToast } from '@/components/portal/toast-provider';
+import { queryKeys } from '@/lib/react-query';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { LoadingStrata } from '@/components/portal/loading-strata';
-import { PHASE_CONFIG, normalizePhaseSlug, type ProjectPhase } from '@/types/project-ui';
+import { PHASE_CONFIG, normalizePhaseSlug, type ProjectPhase, type PaymentMilestone } from '@/types/project-ui';
 import {
   EditModeBar,
   ProjectIdentityHeader,
@@ -41,6 +49,9 @@ import { adaptProjectRooms } from '@/lib/project-room-adapter';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyProject = any;
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function ProjectDetailPage({
   params,
@@ -88,6 +99,20 @@ export default function ProjectDetailPage({
 
   const updateTask = useUpdateTask();
 
+  // Phase / milestone mutations live in @patina/supabase (use-project-v2) and
+  // invalidate their OWN query keys, which the portal does not read. We call them
+  // here and additionally invalidate the portal's keys (queryKeys.projects.all)
+  // so the timeline, financials, and key-metrics surfaces refresh in place.
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const updatePhaseStatus = useUpdateProjectPhaseStatus();
+  const updateMilestoneStatus = useUpdatePaymentMilestoneStatus();
+
+  // Mutating controls only make sense for real (Supabase-backed) projects — the
+  // mutation hooks hit Supabase directly and would error on slug fixtures.
+  const isRealProject = UUID_PATTERN.test(id);
+  const editable = editMode && isRealProject;
+
   // Adapt raw project_rooms + project_ffe_items into the MockRoom shape
   // RoomScopeGrid expects (derives itemCount/orderedCount/progress/itemNames).
   // Must be declared before any early return to satisfy Rules of Hooks.
@@ -121,6 +146,42 @@ export default function ProjectDetailPage({
     });
   };
 
+  const refreshProject = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+
+  const handlePhaseStatusChange = async (phaseId: string, status: string) => {
+    try {
+      await updatePhaseStatus.mutateAsync({ phaseId, projectId: id, status });
+      refreshProject();
+      toast(status === 'completed' ? 'Phase marked complete' : 'Phase started', 'success');
+    } catch {
+      toast('Could not update phase', 'error');
+    }
+  };
+
+  const handlePhaseProgressChange = async (phaseId: string, progress: number) => {
+    try {
+      await updatePhaseStatus.mutateAsync({ phaseId, projectId: id, progress });
+      refreshProject();
+      toast('Progress updated', 'success');
+    } catch {
+      toast('Could not update progress', 'error');
+    }
+  };
+
+  const handleMilestoneStatusChange = async (
+    milestoneId: string,
+    status: PaymentMilestone['status'],
+  ) => {
+    try {
+      await updateMilestoneStatus.mutateAsync({ milestoneId, projectId: id, status });
+      refreshProject();
+      toast(status === 'paid' ? 'Payment marked paid' : 'Milestone updated', 'success');
+    } catch {
+      toast('Could not update milestone', 'error');
+    }
+  };
+
   // Safely coerce arrays
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedTasks = (Array.isArray(tasks) ? tasks : []) as any[];
@@ -151,8 +212,28 @@ export default function ProjectDetailPage({
     actorName: (item.actor_name as string | null) ?? undefined,
     timestamp: item.created_at as string,
   }));
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const typedMilestones = (Array.isArray(milestones) ? milestones : []) as any[];
+  // Normalize milestones to the PaymentMilestone shape the panel renders. Real
+  // (UUID) projects return raw project_payment_milestones rows (label /
+  // amount_cents / due_date / paid_at); mock fixtures already match the UI shape.
+  // Without this map, FinancialsPanel read m.title (undefined) on real projects.
+  const typedMilestones: PaymentMilestone[] = (Array.isArray(milestones) ? milestones : []).map(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (m: any) =>
+      m && m.amount_cents !== undefined
+        ? {
+            id: m.id,
+            title: m.label ?? m.title ?? 'Payment',
+            percentage: m.percentage ?? 0,
+            amount: m.amount_cents ?? 0,
+            status: m.status,
+            date: m.paid_at
+              ? new Date(m.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+              : m.due_date
+                ? new Date(m.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                : undefined,
+          }
+        : (m as PaymentMilestone),
+  );
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedRooms = (Array.isArray(rooms) ? rooms : []) as any[];
   // Adapt useProjectFinancials into the FinancialLineItem[] the panel renders.
@@ -276,9 +357,13 @@ export default function ProjectDetailPage({
 
         {/* Zone 4: Phase Timeline */}
         <PhaseTimelineV2
+          projectId={id}
           segments={typedTimeline}
           tasks={typedTasks}
           onTaskToggle={handleTaskToggle}
+          editable={editable}
+          onPhaseStatusChange={handlePhaseStatusChange}
+          onPhaseProgressChange={handlePhaseProgressChange}
         />
         <StrataMark variant="mini" />
 
@@ -298,6 +383,8 @@ export default function ProjectDetailPage({
               items={financialItems}
               milestones={typedMilestones}
               earnings={designerEarnings}
+              editable={editable}
+              onMilestoneStatusChange={handleMilestoneStatusChange}
             />
             <StrataMark variant="mini" />
           </>

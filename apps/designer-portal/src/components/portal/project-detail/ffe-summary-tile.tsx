@@ -113,6 +113,10 @@ export function FFESummaryTile({ projectId }: FFESummaryTileProps) {
       counts[bucketForStatus(item.status)] += 1;
     }
 
+    // Items sitting in "approved" are orderable but not yet on a PO — the
+    // primary purchasing CTA targets exactly these.
+    const approvedCount = items.filter((item) => item.status === 'approved').length;
+
     const poCount = pos.length;
     const committedCents = pos.reduce((sum, po) => sum + (po.total_cents ?? 0), 0);
 
@@ -132,6 +136,7 @@ export function FFESummaryTile({ projectId }: FFESummaryTileProps) {
     return {
       totalItems,
       counts,
+      approvedCount,
       poCount,
       committedCents,
       dueCount,
@@ -263,6 +268,20 @@ export function FFESummaryTile({ projectId }: FFESummaryTileProps) {
 
         {/* Primary CTA */}
         <div className="mt-5 flex flex-wrap items-center gap-3 border-t pt-4" style={{ borderColor: 'var(--border-default)' }}>
+          {summary.approvedCount > 0 && (
+            <Link
+              href={`/portal/projects/${projectId}/ffe?focus=approved`}
+              className="rounded-[3px] px-3 py-1.5 text-white no-underline"
+              style={{
+                background: 'var(--text-primary)',
+                fontFamily: 'var(--font-body)',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+              }}
+            >
+              Order {summary.approvedCount} approved item{summary.approvedCount === 1 ? '' : 's'} &rarr;
+            </Link>
+          )}
           <Link
             href="/portal/procurement/by-vendor"
             className="rounded-[3px] border px-3 py-1.5 text-[var(--text-primary)] no-underline"

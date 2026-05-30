@@ -82,6 +82,13 @@ export interface OrderAssistantProps {
    * single project for v1 (one PO covers one project per the data model).
    */
   scopeDisclaimer?: string;
+  /**
+   * Fires after a purchase order is successfully created (external or Patina
+   * catalog), before the panel closes. Lets the launching surface react —
+   * e.g. the FF&E board advances the ordered items to the "ordered" stage and
+   * refreshes its list. Optional; the By Vendor view does not use it.
+   */
+  onCreated?: () => void;
 }
 
 // ─── Static config ─────────────────────────────────────────────────────────
@@ -158,7 +165,7 @@ function freshMilestone(): MilestoneRow {
 // ─── Component ─────────────────────────────────────────────────────────────
 
 export function OrderAssistant(props: OrderAssistantProps) {
-  const { open, onOpenChange, vendor, project, ffeItems, scopeDisclaimer } = props;
+  const { open, onOpenChange, vendor, project, ffeItems, scopeDisclaimer, onCreated } = props;
 
   const totalCents = useMemo(
     () => ffeItems.reduce((sum, i) => sum + i.line_total_cents, 0),
@@ -230,6 +237,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
         `Patina order placed — ${ffeItems.length} item${ffeItems.length === 1 ? '' : 's'} routed through Patina.`,
         'success',
       );
+      onCreated?.();
       onOpenChange(false);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Failed to place order');
@@ -386,6 +394,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
               : `PO created — ${milestones.length} milestone payments scheduled.`;
 
       toast(successMessage, 'success');
+      onCreated?.();
       onOpenChange(false);
     } catch (e) {
       const msg = (e as Error)?.message ?? 'Failed to create purchase order.';

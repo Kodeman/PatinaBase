@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { MessageThread, MessageComposer, StatusDot, type ThreadMessage } from '@patina/design-system';
 import { useThread, useSendMessage, useThreads } from '@/hooks/use-comms';
 import {
@@ -17,6 +17,103 @@ interface PhaseTimelineV2Props {
   tasks: MockTask[];
   approvals?: PhaseApproval[];
   onTaskToggle?: (taskId: string, done: boolean) => void;
+  /** When true, render inline phase advancement + progress controls. */
+  editable?: boolean;
+  onPhaseStatusChange?: (phaseId: string, status: string) => void;
+  onPhaseProgressChange?: (phaseId: string, progress: number) => void;
+}
+
+const phaseActionButtonStyle: CSSProperties = {
+  fontFamily: 'var(--font-meta)',
+  fontSize: '0.55rem',
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+  padding: '0.18rem 0.55rem',
+  borderRadius: '3px',
+  border: '1px solid var(--border-default)',
+  background: 'transparent',
+  color: 'var(--text-primary)',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+};
+
+const phaseActionGhostStyle: CSSProperties = {
+  ...phaseActionButtonStyle,
+  border: '1px solid transparent',
+  color: 'var(--text-muted)',
+};
+
+function PhaseActionRow({
+  phaseId,
+  status,
+  progress,
+  onStatusChange,
+  onProgressChange,
+}: {
+  phaseId: string;
+  status: 'completed' | 'in_progress' | 'pending';
+  progress: number;
+  onStatusChange?: (phaseId: string, status: string) => void;
+  onProgressChange?: (phaseId: string, progress: number) => void;
+}) {
+  const [editingProgress, setEditingProgress] = useState(false);
+  const [progressValue, setProgressValue] = useState(progress);
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2" style={{ paddingLeft: '1.5rem' }}>
+      {status === 'pending' && onStatusChange && (
+        <button type="button" style={phaseActionButtonStyle} onClick={() => onStatusChange(phaseId, 'in_progress')}>
+          Start phase
+        </button>
+      )}
+      {status === 'in_progress' && onStatusChange && (
+        <button type="button" style={phaseActionButtonStyle} onClick={() => onStatusChange(phaseId, 'completed')}>
+          Mark complete
+        </button>
+      )}
+      {status !== 'pending' && onProgressChange && (
+        editingProgress ? (
+          <span className="inline-flex items-center gap-1">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={progressValue}
+              onChange={(e) =>
+                setProgressValue(Math.max(0, Math.min(100, Number(e.target.value) || 0)))
+              }
+              className="w-14 rounded-[3px] border px-1.5 py-0.5"
+              style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)', fontSize: '0.72rem' }}
+            />
+            <button
+              type="button"
+              style={phaseActionButtonStyle}
+              onClick={() => {
+                onProgressChange(phaseId, progressValue);
+                setEditingProgress(false);
+              }}
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              style={phaseActionGhostStyle}
+              onClick={() => {
+                setProgressValue(progress);
+                setEditingProgress(false);
+              }}
+            >
+              Cancel
+            </button>
+          </span>
+        ) : (
+          <button type="button" style={phaseActionGhostStyle} onClick={() => setEditingProgress(true)}>
+            Progress: {progress}%
+          </button>
+        )
+      )}
+    </div>
+  );
 }
 
 const indicatorStyles: Record<string, { bg: string; border: string; color: string; icon: string }> = {
@@ -317,7 +414,16 @@ function TaskRow({ task, onToggle, isFuture }: { task: MockTask; onToggle?: (id:
   );
 }
 
-export function PhaseTimelineV2({ projectId, segments, tasks, approvals = [], onTaskToggle }: PhaseTimelineV2Props) {
+export function PhaseTimelineV2({
+  projectId,
+  segments,
+  tasks,
+  approvals = [],
+  onTaskToggle,
+  editable = false,
+  onPhaseStatusChange,
+  onPhaseProgressChange,
+}: PhaseTimelineV2Props) {
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
   return (
     <div>
@@ -452,6 +558,17 @@ export function PhaseTimelineV2({ projectId, segments, tasks, approvals = [], on
                   <ApprovalDetailRow key={approval.id} approval={approval} />
                 ))}
               </div>
+            )}
+
+            {/* Phase actions — advance status + edit progress (real projects only) */}
+            {editable && segment?.id && (
+              <PhaseActionRow
+                phaseId={segment.id}
+                status={status}
+                progress={segment.progress ?? 0}
+                onStatusChange={onPhaseStatusChange}
+                onProgressChange={onPhaseProgressChange}
+              />
             )}
 
             {/* Phase Messages */}
