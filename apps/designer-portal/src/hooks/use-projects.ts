@@ -681,6 +681,106 @@ export function useDeleteTask() {
   });
 }
 
+// Add a room to a project's scope (public.project_rooms, 00066). UUID projects
+// only. Budget is stored in cents.
+export function useAddProjectRoom() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      data,
+    }: {
+      projectId: string;
+      data: { name: string; dimensions?: string; budgetCents?: number; notes?: string };
+    }) => {
+      const supabase = getSupabase();
+      const { data: row, error } = await supabase
+        .from('project_rooms')
+        .insert({
+          project_id: projectId,
+          name: data.name,
+          dimensions: data.dimensions ?? null,
+          budget_cents: data.budgetCents ?? 0,
+          notes: data.notes ?? null,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return row;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.rooms(variables.projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(variables.projectId) });
+    },
+  });
+}
+
+// Upload a file to the private project-documents bucket (00170) then record a
+// public.project_documents row (00169). UUID projects only — slug fixtures have
+// no Supabase project to attach to.
+export function useUploadProjectDocument() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      file,
+      category,
+    }: {
+      projectId: string;
+      file: File;
+      category?: string;
+    }) => {
+      const supabase = getSupabase();
+      const ext = (file.name.split('.').pop() ?? '').toLowerCase();
+      const docType =
+        ext === 'pdf'
+          ? 'pdf'
+          : ext === 'png'
+            ? 'png'
+            : ['jpg', 'jpeg', 'gif', 'webp', 'img'].includes(ext)
+              ? 'img'
+              : ['doc', 'docx'].includes(ext)
+                ? 'doc'
+                : ['xls', 'xlsx', 'csv'].includes(ext)
+                  ? 'xlsx'
+                  : ext === 'dwg'
+                    ? 'dwg'
+                    : 'doc';
+
+      // Path is {projectId}/{uuid}-{name} so storage RLS can scope by project.
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `${projectId}/${crypto.randomUUID()}-${safeName}`;
+      const { error: upErr } = await supabase.storage
+        .from('project-documents')
+        .upload(path, file, { contentType: file.type || undefined, upsert: false });
+      if (upErr) throw upErr;
+
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: row, error } = await supabase
+        .from('project_documents')
+        .insert({
+          project_id: projectId,
+          title: file.name,
+          doc_type: docType,
+          category: category ?? null,
+          storage_path: path,
+          size_bytes: file.size,
+          uploaded_by: userData?.user?.id ?? null,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return row;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.documents(variables.projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(variables.projectId) });
+    },
+  });
+}
+
 export function useCompleteProject() {
   const queryClient = useQueryClient();
 

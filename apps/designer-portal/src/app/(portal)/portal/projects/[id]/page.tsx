@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useMemo, useState } from 'react';
+import { use, useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import {
   useProject,
@@ -14,13 +14,29 @@ import {
   useProjectTimeTracking,
   useProjectKeyMetrics,
   useUpdateTask,
+  useCreateTask,
+  useDeleteTask,
+  useUploadProjectDocument,
+  useAddProjectRoom,
+  useUpdateProject,
 } from '@/hooks/use-projects';
-import { useDecisionsByProject, useProjectActivityFromLog } from '@patina/supabase';
+import {
+  useDecisionsByProject,
+  useProjectActivityFromLog,
+  useCreateProjectPhase,
+  useUpdateProjectPhaseStatus,
+  useUpdatePaymentMilestoneStatus,
+  useStartProjectThread,
+  useSendMessage,
+} from '@patina/supabase';
+import { useQueryClient } from '@tanstack/react-query';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { useToast } from '@/components/portal/toast-provider';
+import { queryKeys } from '@/lib/react-query';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { LoadingStrata } from '@/components/portal/loading-strata';
-import { PHASE_CONFIG, normalizePhaseSlug, type ProjectPhase } from '@/types/project-ui';
+import { PHASE_CONFIG, ALL_PHASES, normalizePhaseSlug, type ProjectPhase, type PaymentMilestone } from '@/types/project-ui';
 import {
   EditModeBar,
   ProjectIdentityHeader,
@@ -35,12 +51,28 @@ import {
   RecentActivityPanel,
 } from '@/components/portal/project-detail';
 import { DecisionsPanel } from '@/components/portal/project-detail/decisions-panel';
+import { SendUpdateModal } from '@/components/portal/project-detail/send-update-modal';
 import { TeamPanel } from '@/components/portal/project-detail/team-panel';
 import { ProjectCommunicationsPanel } from '@/components/portal/project-communications-panel';
 import { adaptProjectRooms } from '@/lib/project-room-adapter';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyProject = any;
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const statusActionStyle: CSSProperties = {
+  fontFamily: 'var(--font-body)',
+  fontSize: '0.78rem',
+  fontWeight: 500,
+  padding: '0.5rem 0.85rem',
+  borderRadius: '3px',
+  border: '1px solid var(--border-default)',
+  background: 'transparent',
+  color: 'var(--text-primary)',
+  cursor: 'pointer',
+};
 
 export default function ProjectDetailPage({
   params,
@@ -49,6 +81,7 @@ export default function ProjectDetailPage({
 }) {
   const { id } = use(params);
   const [editMode, setEditMode] = useState(true);
+  const [showUpdateComposer, setShowUpdateComposer] = useState(false);
 
   // Core data
   const { data: project, isLoading } = useProject(id) as { data: AnyProject; isLoading: boolean };
@@ -87,6 +120,28 @@ export default function ProjectDetailPage({
   );
 
   const updateTask = useUpdateTask();
+  const createTask = useCreateTask();
+  const deleteTask = useDeleteTask();
+  const uploadDocument = useUploadProjectDocument();
+  const addRoom = useAddProjectRoom();
+  const updateProject = useUpdateProject();
+  const startThread = useStartProjectThread();
+  const sendMessage = useSendMessage();
+
+  // Phase / milestone mutations live in @patina/supabase (use-project-v2) and
+  // invalidate their OWN query keys, which the portal does not read. We call them
+  // here and additionally invalidate the portal's keys (queryKeys.projects.all)
+  // so the timeline, financials, and key-metrics surfaces refresh in place.
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const updatePhaseStatus = useUpdateProjectPhaseStatus();
+  const updateMilestoneStatus = useUpdatePaymentMilestoneStatus();
+  const createPhase = useCreateProjectPhase();
+
+  // Mutating controls only make sense for real (Supabase-backed) projects — the
+  // mutation hooks hit Supabase directly and would error on slug fixtures.
+  const isRealProject = UUID_PATTERN.test(id);
+  const editable = editMode && isRealProject;
 
   // Adapt raw project_rooms + project_ffe_items into the MockRoom shape
   // RoomScopeGrid expects (derives itemCount/orderedCount/progress/itemNames).
@@ -121,6 +176,133 @@ export default function ProjectDetailPage({
     });
   };
 
+  const refreshProject = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+
+  const handlePhaseStatusChange = async (phaseId: string, status: string) => {
+    try {
+      await updatePhaseStatus.mutateAsync({ phaseId, projectId: id, status });
+      refreshProject();
+      toast(status === 'completed' ? 'Phase marked complete' : 'Phase started', 'success');
+    } catch {
+      toast('Could not update phase', 'error');
+    }
+  };
+
+  const handlePhaseProgressChange = async (phaseId: string, progress: number) => {
+    try {
+      await updatePhaseStatus.mutateAsync({ phaseId, projectId: id, progress });
+      refreshProject();
+      toast('Progress updated', 'success');
+    } catch {
+      toast('Could not update progress', 'error');
+    }
+  };
+
+  const handleMilestoneStatusChange = async (
+    milestoneId: string,
+    status: PaymentMilestone['status'],
+  ) => {
+    try {
+      await updateMilestoneStatus.mutateAsync({ milestoneId, projectId: id, status });
+      refreshProject();
+      toast(status === 'paid' ? 'Payment marked paid' : 'Milestone updated', 'success');
+    } catch {
+      toast('Could not update milestone', 'error');
+    }
+  };
+
+  const handleAddTask = async (phase: string, title: string) => {
+    if (!title.trim()) return;
+    try {
+      await createTask.mutateAsync({ projectId: id, data: { title: title.trim(), phase } });
+      toast('Task added', 'success');
+    } catch {
+      toast('Could not add task', 'error');
+    }
+  };
+
+  const handleUpdateTaskTitle = async (taskId: string, title: string) => {
+    if (!title.trim()) return;
+    try {
+      await updateTask.mutateAsync({ taskId, data: { title: title.trim() } });
+      toast('Task updated', 'success');
+    } catch {
+      toast('Could not update task', 'error');
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      await deleteTask.mutateAsync(taskId);
+      toast('Task deleted', 'success');
+    } catch {
+      toast('Could not delete task', 'error');
+    }
+  };
+
+  const handleSendUpdate = async (body: string) => {
+    if (!body.trim()) return;
+    try {
+      const threadId = await startThread.mutateAsync(id);
+      await sendMessage.mutateAsync({ threadId, body: body.trim() });
+      toast('Update sent to client', 'success');
+      setShowUpdateComposer(false);
+    } catch {
+      toast('Could not send update', 'error');
+    }
+  };
+
+  const handleChangeStatus = async (status: string, verb: string) => {
+    try {
+      await updateProject.mutateAsync({ id, data: { status } });
+      refreshProject();
+      toast(`Project ${verb}`, 'success');
+    } catch {
+      toast('Could not update project status', 'error');
+    }
+  };
+
+  const handleAddRoom = async (room: {
+    name: string;
+    dimensions?: string;
+    budgetCents?: number;
+    notes?: string;
+  }) => {
+    try {
+      await addRoom.mutateAsync({ projectId: id, data: room });
+      toast('Room added', 'success');
+    } catch {
+      toast('Could not add room', 'error');
+    }
+  };
+
+  const handleUploadDocument = async (file: File) => {
+    try {
+      await uploadDocument.mutateAsync({ projectId: id, file });
+      toast('Document uploaded', 'success');
+    } catch {
+      toast('Could not upload document', 'error');
+    }
+  };
+
+  const handleAddPhase = async (phaseKey: string) => {
+    try {
+      const label = PHASE_CONFIG[phaseKey as ProjectPhase]?.label ?? phaseKey;
+      const sortOrder = ALL_PHASES.indexOf(phaseKey as ProjectPhase);
+      await createPhase.mutateAsync({
+        projectId: id,
+        phaseKey,
+        name: label,
+        sortOrder: sortOrder >= 0 ? sortOrder : undefined,
+      });
+      refreshProject();
+      toast('Phase added', 'success');
+    } catch {
+      toast('Could not add phase', 'error');
+    }
+  };
+
   // Safely coerce arrays
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedTasks = (Array.isArray(tasks) ? tasks : []) as any[];
@@ -151,8 +333,28 @@ export default function ProjectDetailPage({
     actorName: (item.actor_name as string | null) ?? undefined,
     timestamp: item.created_at as string,
   }));
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const typedMilestones = (Array.isArray(milestones) ? milestones : []) as any[];
+  // Normalize milestones to the PaymentMilestone shape the panel renders. Real
+  // (UUID) projects return raw project_payment_milestones rows (label /
+  // amount_cents / due_date / paid_at); mock fixtures already match the UI shape.
+  // Without this map, FinancialsPanel read m.title (undefined) on real projects.
+  const typedMilestones: PaymentMilestone[] = (Array.isArray(milestones) ? milestones : []).map(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (m: any) =>
+      m && m.amount_cents !== undefined
+        ? {
+            id: m.id,
+            title: m.label ?? m.title ?? 'Payment',
+            percentage: m.percentage ?? 0,
+            amount: m.amount_cents ?? 0,
+            status: m.status,
+            date: m.paid_at
+              ? new Date(m.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+              : m.due_date
+                ? new Date(m.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                : undefined,
+          }
+        : (m as PaymentMilestone),
+  );
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedRooms = (Array.isArray(rooms) ? rooms : []) as any[];
   // Adapt useProjectFinancials into the FinancialLineItem[] the panel renders.
@@ -203,9 +405,16 @@ export default function ProjectDetailPage({
       {editMode && (
         <EditModeBar
           onToggleClientView={() => setEditMode(false)}
-          onSendUpdate={() => {}}
+          onSendUpdate={() => setShowUpdateComposer(true)}
         />
       )}
+
+      <SendUpdateModal
+        open={showUpdateComposer}
+        sending={startThread.isPending || sendMessage.isPending}
+        onClose={() => setShowUpdateComposer(false)}
+        onSend={handleSendUpdate}
+      />
 
       <div className="pt-8">
         {/* Breadcrumb */}
@@ -267,18 +476,30 @@ export default function ProjectDetailPage({
         />
 
         {/* Zone 3b: Room-by-Room Scope */}
-        {adaptedRooms.length > 0 && (
+        {(adaptedRooms.length > 0 || editable) && (
           <>
-            <RoomScopeGrid rooms={adaptedRooms} />
+            <RoomScopeGrid
+              rooms={adaptedRooms}
+              editable={editable}
+              onAddRoom={handleAddRoom}
+            />
             <StrataMark variant="mini" />
           </>
         )}
 
         {/* Zone 4: Phase Timeline */}
         <PhaseTimelineV2
+          projectId={id}
           segments={typedTimeline}
           tasks={typedTasks}
           onTaskToggle={handleTaskToggle}
+          editable={editable}
+          onPhaseStatusChange={handlePhaseStatusChange}
+          onPhaseProgressChange={handlePhaseProgressChange}
+          onAddTask={handleAddTask}
+          onUpdateTaskTitle={handleUpdateTaskTitle}
+          onDeleteTask={handleDeleteTask}
+          onAddPhase={handleAddPhase}
         />
         <StrataMark variant="mini" />
 
@@ -298,6 +519,8 @@ export default function ProjectDetailPage({
               items={financialItems}
               milestones={typedMilestones}
               earnings={designerEarnings}
+              editable={editable}
+              onMilestoneStatusChange={handleMilestoneStatusChange}
             />
             <StrataMark variant="mini" />
           </>
@@ -315,7 +538,12 @@ export default function ProjectDetailPage({
         )}
 
         {/* Zone 8: Documents */}
-        <DocumentGrid documents={typedDocuments} />
+        <DocumentGrid
+          documents={typedDocuments}
+          editable={editable}
+          uploading={uploadDocument.isPending}
+          onUpload={handleUploadDocument}
+        />
         <StrataMark variant="mini" />
 
         {/* Zones 8 + 9: Time Tracking + Recent Activity */}
@@ -371,6 +599,40 @@ export default function ProjectDetailPage({
             >
               Complete Project
             </a>
+          )}
+
+          {/* Lifecycle status — hold / reactivate / archive (real projects). */}
+          {editable && (
+            <div className="ml-auto flex items-center gap-2">
+              <span
+                className="type-meta-small text-[var(--text-muted)]"
+                style={{ textTransform: 'capitalize' }}
+              >
+                {String(project.status ?? 'active').replace('_', ' ')}
+              </span>
+              {project.status === 'active' && (
+                <button type="button" style={statusActionStyle} onClick={() => handleChangeStatus('on_hold', 'put on hold')}>
+                  Put on hold
+                </button>
+              )}
+              {project.status === 'draft' && (
+                <button type="button" style={statusActionStyle} onClick={() => handleChangeStatus('active', 'activated')}>
+                  Activate
+                </button>
+              )}
+              {(project.status === 'on_hold' ||
+                project.status === 'archived' ||
+                project.status === 'completed') && (
+                <button type="button" style={statusActionStyle} onClick={() => handleChangeStatus('active', 'reactivated')}>
+                  Reactivate
+                </button>
+              )}
+              {project.status !== 'archived' && project.status !== 'completed' && (
+                <button type="button" style={statusActionStyle} onClick={() => handleChangeStatus('archived', 'archived')}>
+                  Archive
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

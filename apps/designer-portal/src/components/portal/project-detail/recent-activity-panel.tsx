@@ -31,15 +31,9 @@ export function RecentActivityPanel({ items, projectId }: RecentActivityPanelPro
       </div>
 
       <ActivityFeed items={items} />
-
-      <div className="mt-2">
-        <button
-          className="px-3 py-1.5 text-[var(--text-muted)]"
-          style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 500 }}
-        >
-          View Full Activity Log
-        </button>
-      </div>
+      {/* "View Full Activity Log" removed — there is no dedicated activity
+          route yet, and a dead button reads as broken. Re-add as a link once a
+          /portal/projects/[id]/activity surface exists. */}
     </div>
   );
 }

@@ -1,8 +1,111 @@
+'use client';
+
+import { useState, type CSSProperties } from 'react';
 import type { MockRoom } from '@/types/project-ui';
 import { ProgressBar } from '@/components/portal/progress-bar';
 
+export interface NewRoomInput {
+  name: string;
+  dimensions?: string;
+  budgetCents?: number;
+  notes?: string;
+}
+
 interface RoomScopeGridProps {
   rooms: MockRoom[];
+  /** When true, show the inline "add room" form. */
+  editable?: boolean;
+  onAddRoom?: (room: NewRoomInput) => void;
+}
+
+const roomFieldStyle: CSSProperties = {
+  borderColor: 'var(--border-default)',
+  fontFamily: 'var(--font-body)',
+  fontSize: '0.78rem',
+};
+
+function AddRoomInline({ onAdd }: { onAdd: (room: NewRoomInput) => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [dimensions, setDimensions] = useState('');
+  const [budget, setBudget] = useState('');
+
+  const reset = () => {
+    setName('');
+    setDimensions('');
+    setBudget('');
+    setOpen(false);
+  };
+
+  const submit = () => {
+    const n = name.trim();
+    if (!n) return;
+    const cleaned = budget.replace(/[$,\s]/g, '');
+    const dollars = Number(cleaned);
+    const budgetCents = cleaned && Number.isFinite(dollars) && dollars >= 0 ? Math.round(dollars * 100) : undefined;
+    onAdd({ name: n, dimensions: dimensions.trim() || undefined, budgetCents });
+    reset();
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[var(--text-primary)]"
+        style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 500 }}
+      >
+        + Add Room to Scope
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-md border p-3" style={{ borderColor: 'var(--border-default)' }}>
+      <input
+        autoFocus
+        value={name}
+        placeholder="Room name"
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && submit()}
+        className="rounded-[3px] border px-2 py-1"
+        style={roomFieldStyle}
+      />
+      <input
+        value={dimensions}
+        placeholder="Dimensions (optional)"
+        onChange={(e) => setDimensions(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && submit()}
+        className="rounded-[3px] border px-2 py-1"
+        style={roomFieldStyle}
+      />
+      <input
+        value={budget}
+        placeholder="Budget $ (optional)"
+        inputMode="decimal"
+        onChange={(e) => setBudget(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && submit()}
+        className="w-32 rounded-[3px] border px-2 py-1"
+        style={roomFieldStyle}
+      />
+      <button
+        type="button"
+        onClick={submit}
+        className="rounded-[3px] px-3 py-1.5 text-white"
+        style={{ background: 'var(--text-primary)', fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 500 }}
+      >
+        Add
+      </button>
+      <button
+        type="button"
+        onClick={reset}
+        className="rounded-[3px] px-3 py-1.5 text-[var(--text-muted)]"
+        style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem' }}
+      >
+        Cancel
+      </button>
+    </div>
+  );
 }
 
 function formatDollars(cents: number): string {
@@ -71,7 +174,7 @@ function RoomCard({ room }: { room: MockRoom }) {
   );
 }
 
-export function RoomScopeGrid({ rooms }: RoomScopeGridProps) {
+export function RoomScopeGrid({ rooms, editable = false, onAddRoom }: RoomScopeGridProps) {
   return (
     <div>
       <h3
@@ -93,14 +196,17 @@ export function RoomScopeGrid({ rooms }: RoomScopeGridProps) {
         <RoomCard key={room.id} room={room} />
       ))}
 
-      <div className="mt-2">
-        <button
-          className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[var(--text-primary)]"
-          style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 500 }}
-        >
-          + Add Room to Scope
-        </button>
-      </div>
+      {rooms.length === 0 && (
+        <div className="mb-2 type-body italic text-[var(--text-muted)]" style={{ fontSize: '0.82rem' }}>
+          No rooms in scope yet.
+        </div>
+      )}
+
+      {editable && onAddRoom && (
+        <div className="mt-2">
+          <AddRoomInline onAdd={onAddRoom} />
+        </div>
+      )}
     </div>
   );
 }

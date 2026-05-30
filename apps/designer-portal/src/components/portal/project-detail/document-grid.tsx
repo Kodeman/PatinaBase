@@ -1,7 +1,14 @@
+'use client';
+
+import { useRef } from 'react';
 import type { MockDocument, DocumentCategory } from '@/types/project-ui';
 
 interface DocumentGridProps {
   documents: MockDocument[];
+  /** When true, show the upload control. */
+  editable?: boolean;
+  uploading?: boolean;
+  onUpload?: (file: File) => void;
 }
 
 const categoryIcon: Record<DocumentCategory, { icon: string; bg: string; color: string }> = {
@@ -16,7 +23,8 @@ function typeToFormat(type: string): string {
   return map[type] ?? type.toUpperCase();
 }
 
-export function DocumentGrid({ documents }: DocumentGridProps) {
+export function DocumentGrid({ documents, editable = false, uploading = false, onUpload }: DocumentGridProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   return (
     <div id="documents">
       <h3
@@ -94,14 +102,35 @@ export function DocumentGrid({ documents }: DocumentGridProps) {
         );
       })}
 
-      <div className="mt-2">
-        <button
-          className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[var(--text-primary)]"
-          style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 500 }}
-        >
-          + Upload Document
-        </button>
-      </div>
+      {documents.length === 0 && (
+        <div className="py-6 text-center type-body italic text-[var(--text-muted)]" style={{ fontSize: '0.82rem' }}>
+          No documents yet.
+        </div>
+      )}
+
+      {editable && onUpload && (
+        <div className="mt-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onUpload(f);
+              e.target.value = '';
+            }}
+          />
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[var(--text-primary)] disabled:opacity-50"
+            style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 500 }}
+          >
+            {uploading ? 'Uploading…' : '+ Upload Document'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

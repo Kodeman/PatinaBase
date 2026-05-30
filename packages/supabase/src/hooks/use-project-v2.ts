@@ -247,6 +247,46 @@ export function useProjectPhases(projectId: string) {
   });
 }
 
+export function useCreateProjectPhase() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      phaseKey,
+      name,
+      sortOrder,
+      status = 'pending',
+    }: {
+      projectId: string;
+      phaseKey: string;
+      name: string;
+      sortOrder?: number;
+      status?: string;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const insert: Record<string, unknown> = {
+        project_id: projectId,
+        phase_key: phaseKey,
+        name,
+        status,
+      };
+      if (sortOrder !== undefined) insert.sort_order = sortOrder;
+      const { data, error } = await supabase
+        .from('project_phases')
+        .insert(insert)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
+    },
+  });
+}
+
 export function useUpdateProjectPhaseStatus() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -350,7 +390,9 @@ export function useUpdatePaymentMilestoneStatus() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const updates: Record<string, unknown> = { status };
-      if (status === 'paid') updates.paid_at = new Date().toISOString();
+      // Stamp paid_at on paid; clear it when a milestone moves back to a
+      // non-paid status (Mark due / Mark unpaid) so the date doesn't linger.
+      updates.paid_at = status === 'paid' ? new Date().toISOString() : null;
       if (dueDate) updates.due_date = dueDate;
 
       const { data, error } = await supabase

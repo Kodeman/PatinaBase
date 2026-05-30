@@ -1,13 +1,22 @@
 'use client';
 
-import { use, useMemo, useState, type ReactNode } from 'react';
+import { use, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useProjectFFEItems, useProjectRooms } from '@/hooks/use-projects';
 import { useProject } from '@/hooks/use-projects';
-import { useUpdateFFEItemStatus, useVendors } from '@patina/supabase';
+import { useUpdateFFEItemStatus, useVendors, type PaymentPattern } from '@patina/supabase';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { SearchInput } from '@/components/portal/search-input';
+import { useToast } from '@/components/portal/toast-provider';
+import { queryKeys } from '@/lib/react-query';
+import {
+  OrderAssistant,
+  type OrderAssistantFFEItem,
+  type OrderAssistantProject,
+  type OrderAssistantVendor,
+} from '@/components/portal/procurement/order-assistant';
 import {
   FacetedFilterPopover,
   type Facet,
@@ -30,6 +39,15 @@ import {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyItem = any;
+
+// One vendor's worth of FF&E to push through the Order Assistant. Selecting
+// items across multiple vendors enqueues one PendingOrder per vendor and the
+// assistant walks them one at a time.
+interface PendingOrder {
+  vendor: OrderAssistantVendor;
+  project: OrderAssistantProject;
+  ffeItems: OrderAssistantFFEItem[];
+}
 
 // FF&E procurement stages — each is a Patina-defined step in the lifecycle.
 // `surfaceKey` is the StrataInfoIcon target for the column header, so authors
@@ -90,14 +108,26 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
   const { data: vendors } = useVendors();
   const updateStatus = useUpdateFFEItemStatus();
 
-  const items = (Array.isArray(rawItems) ? rawItems : []) as AnyItem[];
-  const rooms = (Array.isArray(rawRooms) ? rawRooms : []) as AnyItem[];
+  const items = useMemo(() => (Array.isArray(rawItems) ? rawItems : []) as AnyItem[], [rawItems]);
+  const rooms = useMemo(() => (Array.isArray(rawRooms) ? rawRooms : []) as AnyItem[], [rawRooms]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const vendorList = (Array.isArray(vendors) ? vendors : []) as any[];
 
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<FacetSelections>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Deep-link from the project-detail Procurement tile: ?focus=approved lands
+  // the designer here with all approved items pre-selected, one click from
+  // "Generate POs". Runs once after items first load.
+  const focus = searchParams.get('focus');
+  const focusApplied = useRef(false);
+  useEffect(() => {
+    if (focus === 'approved' && !focusApplied.current && items.length > 0) {
+      focusApplied.current = true;
+      setSelected(new Set(items.filter((it) => it.status === 'approved').map((it) => it.id)));
+    }
+  }, [focus, items]);
 
   const facets = useMemo<Facet[]>(() => {
     const itemTypes = new Set<string>();
@@ -172,6 +202,84 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
       ids.map((itemId) => updateStatus.mutateAsync({ itemId, projectId, status: toStatus }))
     );
     setSelected(new Set());
+  };
+
+  // ── Purchasing (P1.1) ──────────────────────────────────────────────────
+  // Reuse the existing OrderAssistant (built for the By Vendor view) to turn
+  // selected FF&E items into purchase orders. Items are grouped by vendor —
+  // one PO per vendor — and the assistant walks the queue one vendor at a time.
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  // Enriches the per-item vendor_id/vendor_name with payment terms + portal URL.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const vendorById = useMemo(() => {
+    const map = new Map<string, any>();
+    // useVendors() returns { data, pagination }, not a bare array.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const v of ((vendors as any)?.data ?? []) as any[]) map.set(v.id, v);
+    return map;
+  }, [vendors]);
+
+  // poQueue[0] is the active order shown in the assistant; closing drops it.
+  const [poQueue, setPoQueue] = useState<PendingOrder[]>([]);
+  const activeOrder = poQueue[0] ?? null;
+
+  const startGeneratePOs = (sourceItems: AnyItem[]) => {
+    const withVendor = sourceItems.filter((it) => it.vendor_id);
+    const withoutVendor = sourceItems.length - withVendor.length;
+    if (withVendor.length === 0) {
+      toast('Assign a vendor to these items before generating a PO.', 'warning');
+      return;
+    }
+    if (withoutVendor > 0) {
+      toast(
+        `${withoutVendor} item${withoutVendor === 1 ? '' : 's'} skipped — assign a vendor first.`,
+        'warning',
+      );
+    }
+
+    const groups = new Map<string, AnyItem[]>();
+    for (const it of withVendor) {
+      const arr = groups.get(it.vendor_id) ?? [];
+      arr.push(it);
+      groups.set(it.vendor_id, arr);
+    }
+
+    const orders: PendingOrder[] = Array.from(groups.entries()).map(([vendorId, groupItems]) => {
+      const rec = vendorById.get(vendorId);
+      return {
+        vendor: {
+          id: vendorId,
+          name: groupItems[0].vendor_name ?? rec?.name ?? 'Vendor',
+          default_payment_terms: (rec?.default_payment_terms as PaymentPattern | null) ?? null,
+          trade_portal_url: rec?.trade_portal_url ?? undefined,
+          trade_account_email: rec?.trade_account_email ?? undefined,
+          is_patina_catalog: rec?.is_patina_catalog ?? undefined,
+        },
+        project: { id: projectId, name: project?.name ?? 'Project' },
+        ffeItems: groupItems.map((it) => ({
+          id: it.id,
+          name: it.name,
+          room: it.room?.name,
+          line_total_cents: it.line_total_cents || 0,
+        })),
+      };
+    });
+
+    setPoQueue(orders);
+    setSelected(new Set());
+  };
+
+  // After a PO is created, advance its items to "ordered" and refresh the board
+  // (useCreatePurchaseOrder only invalidates its own @patina/supabase keys, not
+  // the portal's project-scoped FF&E key).
+  const handleOrderCreated = async (order: PendingOrder) => {
+    await Promise.allSettled(
+      order.ffeItems.map((i) =>
+        updateStatus.mutateAsync({ itemId: i.id, projectId, status: 'ordered' }),
+      ),
+    );
+    queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
   };
 
   if (!project) return <LoadingStrata />;
@@ -339,17 +447,46 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
           onUpdateStatus={async (status) => {
             await updateStatus.mutateAsync({ itemId: drawerItem.id, projectId, status });
           }}
+          onGeneratePO={() => {
+            router.push(`/portal/projects/${projectId}/ffe`);
+            startGeneratePOs([drawerItem]);
+          }}
         />
       )}
 
-      {/* Bulk action bar. Generate POs + Reassign Vendor are not built yet —
-          render disabled with a tooltip rather than firing an alert (B-07). */}
+      {/* Bulk action bar. Generate POs launches the Order Assistant (P1.1).
+          Reassign Vendor is not built yet — disabled with a tooltip (B-07). */}
       <BulkActionBar count={selected.size} onClear={() => setSelected(new Set())}>
         <BulkActionButton onClick={() => bulkAdvance('approved')}>Mark Approved</BulkActionButton>
         <BulkActionButton onClick={() => bulkAdvance('ordered')}>Mark Ordered</BulkActionButton>
-        <ComingSoonButton>Generate POs</ComingSoonButton>
+        <BulkActionButton
+          onClick={() => startGeneratePOs(items.filter((it) => selected.has(it.id)))}
+        >
+          Generate POs
+        </BulkActionButton>
         <ComingSoonButton>Reassign Vendor</ComingSoonButton>
       </BulkActionBar>
+
+      {/* Order Assistant — one vendor at a time; closing advances the queue. */}
+      {activeOrder && (
+        <OrderAssistant
+          open={!!activeOrder}
+          onOpenChange={(open) => {
+            if (!open) setPoQueue((q) => q.slice(1));
+          }}
+          vendor={activeOrder.vendor}
+          project={activeOrder.project}
+          ffeItems={activeOrder.ffeItems}
+          scopeDisclaimer={
+            poQueue.length > 1
+              ? `${poQueue.length} vendor orders queued — you'll confirm each in turn.`
+              : undefined
+          }
+          onCreated={() => {
+            void handleOrderCreated(activeOrder);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -381,12 +518,14 @@ function ItemDrawer({
   vendors,
   onClose,
   onUpdateStatus,
+  onGeneratePO,
 }: {
   item: AnyItem;
   rooms: AnyItem[];
   vendors: AnyItem[];
   onClose: () => void;
   onUpdateStatus: (status: string) => Promise<void>;
+  onGeneratePO?: () => void;
 }) {
   const room = rooms.find((r) => r.id === item.project_room_id);
   const currentIdx = STAGES.findIndex((s) => s.key === item.status);
@@ -480,9 +619,10 @@ function ItemDrawer({
           )}
           <button
             type="button"
-            disabled
-            title="Coming soon"
-            className="cursor-not-allowed rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem] opacity-50"
+            onClick={() => item.vendor_id && onGeneratePO?.()}
+            disabled={!item.vendor_id}
+            title={item.vendor_id ? 'Create a purchase order for this item' : 'Assign a vendor first'}
+            className={`rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem] ${item.vendor_id ? '' : 'cursor-not-allowed opacity-50'}`}
             style={{ borderColor: 'var(--border-default)' }}
           >
             Generate PO

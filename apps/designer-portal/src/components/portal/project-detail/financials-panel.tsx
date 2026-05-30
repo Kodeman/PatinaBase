@@ -1,9 +1,13 @@
+import type { CSSProperties } from 'react';
 import type { FinancialLineItem, PaymentMilestone, DesignerEarnings } from '@/types/project-ui';
 
 interface FinancialsPanelProps {
   items: FinancialLineItem[];
   milestones: PaymentMilestone[];
   earnings?: DesignerEarnings;
+  /** When true, render inline status controls on each payment milestone. */
+  editable?: boolean;
+  onMilestoneStatusChange?: (milestoneId: string, status: PaymentMilestone['status']) => void;
 }
 
 function formatDollars(cents: number): string {
@@ -36,7 +40,27 @@ const milestoneStatusLabel: Record<PaymentMilestone['status'], string> = {
   pending: 'At walkthrough',
 };
 
-export function FinancialsPanel({ items, milestones, earnings }: FinancialsPanelProps) {
+const milestoneActionButtonStyle: CSSProperties = {
+  fontFamily: 'var(--font-meta)',
+  fontSize: '0.5rem',
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+  padding: '0.1rem 0.4rem',
+  borderRadius: '3px',
+  border: '1px solid var(--border-default)',
+  background: 'transparent',
+  color: 'var(--text-primary)',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+};
+
+export function FinancialsPanel({
+  items,
+  milestones,
+  earnings,
+  editable = false,
+  onMilestoneStatusChange,
+}: FinancialsPanelProps) {
   const totals = items.reduce(
     (acc, item) => ({
       budget: acc.budget + item.budget,
@@ -191,15 +215,48 @@ export function FinancialsPanel({ items, milestones, earnings }: FinancialsPanel
               <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: 'var(--text-body)', lineHeight: 1.5 }}>
                 {formatDollars(m.amount)} ({m.percentage}%)
               </div>
-              <div
-                style={{
-                  fontFamily: 'var(--font-meta)',
-                  fontSize: '0.48rem',
-                  textTransform: 'uppercase',
-                  color: milestoneStatusColor[m.status],
-                }}
-              >
-                {m.status === 'paid' ? m.date : milestoneStatusLabel[m.status]}
+              <div className="flex flex-col items-end gap-1">
+                <div
+                  style={{
+                    fontFamily: 'var(--font-meta)',
+                    fontSize: '0.48rem',
+                    textTransform: 'uppercase',
+                    color: milestoneStatusColor[m.status],
+                  }}
+                >
+                  {m.status === 'paid' ? m.date : milestoneStatusLabel[m.status]}
+                </div>
+                {editable && onMilestoneStatusChange && (
+                  <div className="flex gap-1">
+                    {m.status !== 'paid' && (
+                      <button
+                        type="button"
+                        style={milestoneActionButtonStyle}
+                        onClick={() => onMilestoneStatusChange(m.id, 'paid')}
+                      >
+                        Mark paid
+                      </button>
+                    )}
+                    {m.status === 'pending' && (
+                      <button
+                        type="button"
+                        style={milestoneActionButtonStyle}
+                        onClick={() => onMilestoneStatusChange(m.id, 'outstanding')}
+                      >
+                        Mark due
+                      </button>
+                    )}
+                    {m.status === 'paid' && (
+                      <button
+                        type="button"
+                        style={milestoneActionButtonStyle}
+                        onClick={() => onMilestoneStatusChange(m.id, 'outstanding')}
+                      >
+                        Mark unpaid
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ))}
