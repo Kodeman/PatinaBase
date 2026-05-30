@@ -14,10 +14,15 @@ import {
   useProjectTimeTracking,
   useProjectKeyMetrics,
   useUpdateTask,
+  useCreateTask,
+  useDeleteTask,
+  useUploadProjectDocument,
+  useAddProjectRoom,
 } from '@/hooks/use-projects';
 import {
   useDecisionsByProject,
   useProjectActivityFromLog,
+  useCreateProjectPhase,
   useUpdateProjectPhaseStatus,
   useUpdatePaymentMilestoneStatus,
 } from '@patina/supabase';
@@ -28,7 +33,7 @@ import { queryKeys } from '@/lib/react-query';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { LoadingStrata } from '@/components/portal/loading-strata';
-import { PHASE_CONFIG, normalizePhaseSlug, type ProjectPhase, type PaymentMilestone } from '@/types/project-ui';
+import { PHASE_CONFIG, ALL_PHASES, normalizePhaseSlug, type ProjectPhase, type PaymentMilestone } from '@/types/project-ui';
 import {
   EditModeBar,
   ProjectIdentityHeader,
@@ -98,6 +103,10 @@ export default function ProjectDetailPage({
   );
 
   const updateTask = useUpdateTask();
+  const createTask = useCreateTask();
+  const deleteTask = useDeleteTask();
+  const uploadDocument = useUploadProjectDocument();
+  const addRoom = useAddProjectRoom();
 
   // Phase / milestone mutations live in @patina/supabase (use-project-v2) and
   // invalidate their OWN query keys, which the portal does not read. We call them
@@ -107,6 +116,7 @@ export default function ProjectDetailPage({
   const { toast } = useToast();
   const updatePhaseStatus = useUpdateProjectPhaseStatus();
   const updateMilestoneStatus = useUpdatePaymentMilestoneStatus();
+  const createPhase = useCreateProjectPhase();
 
   // Mutating controls only make sense for real (Supabase-backed) projects — the
   // mutation hooks hit Supabase directly and would error on slug fixtures.
@@ -179,6 +189,75 @@ export default function ProjectDetailPage({
       toast(status === 'paid' ? 'Payment marked paid' : 'Milestone updated', 'success');
     } catch {
       toast('Could not update milestone', 'error');
+    }
+  };
+
+  const handleAddTask = async (phase: string, title: string) => {
+    if (!title.trim()) return;
+    try {
+      await createTask.mutateAsync({ projectId: id, data: { title: title.trim(), phase } });
+      toast('Task added', 'success');
+    } catch {
+      toast('Could not add task', 'error');
+    }
+  };
+
+  const handleUpdateTaskTitle = async (taskId: string, title: string) => {
+    if (!title.trim()) return;
+    try {
+      await updateTask.mutateAsync({ taskId, data: { title: title.trim() } });
+      toast('Task updated', 'success');
+    } catch {
+      toast('Could not update task', 'error');
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      await deleteTask.mutateAsync(taskId);
+      toast('Task deleted', 'success');
+    } catch {
+      toast('Could not delete task', 'error');
+    }
+  };
+
+  const handleAddRoom = async (room: {
+    name: string;
+    dimensions?: string;
+    budgetCents?: number;
+    notes?: string;
+  }) => {
+    try {
+      await addRoom.mutateAsync({ projectId: id, data: room });
+      toast('Room added', 'success');
+    } catch {
+      toast('Could not add room', 'error');
+    }
+  };
+
+  const handleUploadDocument = async (file: File) => {
+    try {
+      await uploadDocument.mutateAsync({ projectId: id, file });
+      toast('Document uploaded', 'success');
+    } catch {
+      toast('Could not upload document', 'error');
+    }
+  };
+
+  const handleAddPhase = async (phaseKey: string) => {
+    try {
+      const label = PHASE_CONFIG[phaseKey as ProjectPhase]?.label ?? phaseKey;
+      const sortOrder = ALL_PHASES.indexOf(phaseKey as ProjectPhase);
+      await createPhase.mutateAsync({
+        projectId: id,
+        phaseKey,
+        name: label,
+        sortOrder: sortOrder >= 0 ? sortOrder : undefined,
+      });
+      refreshProject();
+      toast('Phase added', 'success');
+    } catch {
+      toast('Could not add phase', 'error');
     }
   };
 
@@ -348,9 +427,13 @@ export default function ProjectDetailPage({
         />
 
         {/* Zone 3b: Room-by-Room Scope */}
-        {adaptedRooms.length > 0 && (
+        {(adaptedRooms.length > 0 || editable) && (
           <>
-            <RoomScopeGrid rooms={adaptedRooms} />
+            <RoomScopeGrid
+              rooms={adaptedRooms}
+              editable={editable}
+              onAddRoom={handleAddRoom}
+            />
             <StrataMark variant="mini" />
           </>
         )}
@@ -364,6 +447,10 @@ export default function ProjectDetailPage({
           editable={editable}
           onPhaseStatusChange={handlePhaseStatusChange}
           onPhaseProgressChange={handlePhaseProgressChange}
+          onAddTask={handleAddTask}
+          onUpdateTaskTitle={handleUpdateTaskTitle}
+          onDeleteTask={handleDeleteTask}
+          onAddPhase={handleAddPhase}
         />
         <StrataMark variant="mini" />
 
@@ -402,7 +489,12 @@ export default function ProjectDetailPage({
         )}
 
         {/* Zone 8: Documents */}
-        <DocumentGrid documents={typedDocuments} />
+        <DocumentGrid
+          documents={typedDocuments}
+          editable={editable}
+          uploading={uploadDocument.isPending}
+          onUpload={handleUploadDocument}
+        />
         <StrataMark variant="mini" />
 
         {/* Zones 8 + 9: Time Tracking + Recent Activity */}

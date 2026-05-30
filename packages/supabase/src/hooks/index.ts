@@ -657,6 +657,7 @@ export {
   useProjectFFEItems,
   useUpdateFFEItemStatus,
   useProjectPhases,
+  useCreateProjectPhase,
   useUpdateProjectPhaseStatus,
   useProjectPaymentMilestones,
   useUpdatePaymentMilestoneStatus,

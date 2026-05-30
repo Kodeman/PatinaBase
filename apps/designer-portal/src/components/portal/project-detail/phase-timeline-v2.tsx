@@ -21,6 +21,10 @@ interface PhaseTimelineV2Props {
   editable?: boolean;
   onPhaseStatusChange?: (phaseId: string, status: string) => void;
   onPhaseProgressChange?: (phaseId: string, progress: number) => void;
+  onAddTask?: (phase: string, title: string) => void;
+  onUpdateTaskTitle?: (taskId: string, title: string) => void;
+  onDeleteTask?: (taskId: string) => void;
+  onAddPhase?: (name: string) => void;
 }
 
 const phaseActionButtonStyle: CSSProperties = {
@@ -323,13 +327,35 @@ function PhaseMessageThread({ projectId, phase }: { projectId: string; phase: st
   );
 }
 
-function TaskRow({ task, onToggle, isFuture }: { task: MockTask; onToggle?: (id: string, done: boolean) => void; isFuture: boolean }) {
+function TaskRow({
+  task,
+  onToggle,
+  isFuture,
+  editable = false,
+  onEditTitle,
+  onDelete,
+}: {
+  task: MockTask;
+  onToggle?: (id: string, done: boolean) => void;
+  isFuture: boolean;
+  editable?: boolean;
+  onEditTitle?: (taskId: string, title: string) => void;
+  onDelete?: (taskId: string) => void;
+}) {
   const isDone = task.status === 'done';
   const isBlocked = task.status === 'blocked';
+  const [editing, setEditing] = useState(false);
+  const [titleValue, setTitleValue] = useState(task.title);
+
+  const commitTitle = () => {
+    const next = titleValue.trim();
+    if (next && next !== task.title) onEditTitle?.(task.id, next);
+    setEditing(false);
+  };
 
   return (
     <div
-      className="grid items-start gap-2.5 py-1"
+      className="group grid items-start gap-2.5 py-1"
       style={{
         gridTemplateColumns: '18px 1fr auto',
         paddingLeft: '1.5rem',
@@ -354,17 +380,38 @@ function TaskRow({ task, onToggle, isFuture }: { task: MockTask; onToggle?: (id:
 
       {/* Task content */}
       <div>
-        <div
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: '0.82rem',
-            color: isDone ? 'var(--text-muted)' : 'var(--text-primary)',
-            textDecoration: isDone ? 'line-through' : 'none',
-            textDecorationColor: isDone ? 'var(--color-pearl)' : undefined,
-          }}
-        >
-          {task.title}
-        </div>
+        {editing ? (
+          <input
+            autoFocus
+            value={titleValue}
+            onChange={(e) => setTitleValue(e.target.value)}
+            onBlur={commitTitle}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitTitle();
+              if (e.key === 'Escape') {
+                setTitleValue(task.title);
+                setEditing(false);
+              }
+            }}
+            className="w-full rounded-[3px] border px-1.5 py-0.5"
+            style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}
+          />
+        ) : (
+          <div
+            onClick={() => editable && onEditTitle && setEditing(true)}
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: '0.82rem',
+              color: isDone ? 'var(--text-muted)' : 'var(--text-primary)',
+              textDecoration: isDone ? 'line-through' : 'none',
+              textDecorationColor: isDone ? 'var(--color-pearl)' : undefined,
+              cursor: editable && onEditTitle ? 'text' : 'default',
+            }}
+            title={editable && onEditTitle ? 'Click to edit' : undefined}
+          >
+            {task.title}
+          </div>
+        )}
         {task.indicators && task.indicatorText && (
           <span
             className="mt-0.5 inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5"
@@ -388,28 +435,163 @@ function TaskRow({ task, onToggle, isFuture }: { task: MockTask; onToggle?: (id:
         )}
       </div>
 
-      {/* Date */}
-      <div
-        style={{
-          fontFamily: 'var(--font-meta)',
-          fontSize: '0.48rem',
-          textTransform: 'uppercase',
-          letterSpacing: '0.04em',
-          color: isBlocked
-            ? 'var(--color-terracotta)'
-            : 'var(--text-muted)',
-          whiteSpace: 'nowrap',
-          paddingTop: '0.15rem',
-        }}
-      >
-        {isBlocked
-          ? 'Blocked'
-          : task.completedAt
-            ? new Date(task.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-            : task.dueDate
-              ? new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-              : ''}
+      {/* Date + delete */}
+      <div className="flex items-center gap-2">
+        <span
+          style={{
+            fontFamily: 'var(--font-meta)',
+            fontSize: '0.48rem',
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            color: isBlocked
+              ? 'var(--color-terracotta)'
+              : 'var(--text-muted)',
+            whiteSpace: 'nowrap',
+            paddingTop: '0.15rem',
+          }}
+        >
+          {isBlocked
+            ? 'Blocked'
+            : task.completedAt
+              ? new Date(task.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              : task.dueDate
+                ? new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                : ''}
+        </span>
+        {editable && onDelete && (
+          <button
+            type="button"
+            onClick={() => onDelete(task.id)}
+            aria-label={`Delete task ${task.title}`}
+            className="opacity-0 transition-opacity group-hover:opacity-100"
+            style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: 1 }}
+          >
+            ×
+          </button>
+        )}
       </div>
+    </div>
+  );
+}
+
+// Inline "add task" affordance shown per phase when editable. Defaults the new
+// task's phase to the phase it sits under.
+function AddTaskInline({ phase, onAdd }: { phase: string; onAdd: (phase: string, title: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+
+  const submit = () => {
+    const next = title.trim();
+    if (next) onAdd(phase, next);
+    setTitle('');
+    setOpen(false);
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-1 type-meta text-[var(--accent-primary)] hover:text-[var(--text-primary)] transition-colors"
+        style={{ paddingLeft: '1.5rem', fontSize: '0.55rem' }}
+      >
+        + Add task
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-1 flex items-center gap-2" style={{ paddingLeft: '1.5rem' }}>
+      <input
+        autoFocus
+        value={title}
+        placeholder="Task title…"
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') submit();
+          if (e.key === 'Escape') {
+            setTitle('');
+            setOpen(false);
+          }
+        }}
+        className="flex-1 rounded-[3px] border px-1.5 py-0.5"
+        style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}
+      />
+      <button type="button" onClick={submit} style={phaseActionButtonStyle}>
+        Add
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setTitle('');
+          setOpen(false);
+        }}
+        style={phaseActionGhostStyle}
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
+// "Add Phase" materializes a canonical phase that has no project_phases row yet
+// (the timeline renders the fixed canonical vocab, so only missing phases can
+// be added). Renders nothing once every phase exists.
+function AddPhaseInline({
+  available,
+  onAdd,
+}: {
+  available: string[];
+  onAdd: (phaseKey: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState(available[0] ?? '');
+
+  if (available.length === 0) return null;
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setValue(available[0]);
+          setOpen(true);
+        }}
+        className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[var(--text-primary)]"
+        style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 500 }}
+      >
+        + Add Phase
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <select
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="rounded-[3px] border px-2 py-1.5"
+        style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)', fontSize: '0.72rem' }}
+      >
+        {available.map((p) => (
+          <option key={p} value={p}>
+            {PHASE_CONFIG[p as keyof typeof PHASE_CONFIG]?.label ?? p}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={() => {
+          if (value) onAdd(value);
+          setOpen(false);
+        }}
+        style={phaseActionButtonStyle}
+      >
+        Add
+      </button>
+      <button type="button" onClick={() => setOpen(false)} style={phaseActionGhostStyle}>
+        Cancel
+      </button>
     </div>
   );
 }
@@ -423,8 +605,16 @@ export function PhaseTimelineV2({
   editable = false,
   onPhaseStatusChange,
   onPhaseProgressChange,
+  onAddTask,
+  onUpdateTaskTitle,
+  onDeleteTask,
+  onAddPhase,
 }: PhaseTimelineV2Props) {
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
+  // Canonical phases not yet materialized as project_phases rows — the only
+  // phases "Add Phase" can create (the timeline renders the fixed vocab).
+  const presentPhases = new Set(segments.map((s) => s.phase));
+  const availablePhases = ALL_PHASES.filter((p) => !presentPhases.has(p));
   return (
     <div>
       <h3
@@ -535,8 +725,14 @@ export function PhaseTimelineV2({
                 task={task}
                 onToggle={onTaskToggle}
                 isFuture={isFuture}
+                editable={editable}
+                onEditTitle={onUpdateTaskTitle}
+                onDelete={onDeleteTask}
               />
             ))}
+
+            {/* Inline add-task (defaults phase to this row) */}
+            {editable && onAddTask && <AddTaskInline phase={phase} onAdd={onAddTask} />}
 
             {/* Approvals */}
             {phaseApprovals.length > 0 && (
@@ -606,20 +802,12 @@ export function PhaseTimelineV2({
         );
       })}
 
-      <div className="mt-3 flex gap-2">
-        <button
-          className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[var(--text-primary)]"
-          style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 500 }}
-        >
-          + Add Task
-        </button>
-        <button
-          className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[var(--text-primary)]"
-          style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 500 }}
-        >
-          + Add Phase
-        </button>
-      </div>
+      {/* Add Phase — per-phase task adding lives inline above. */}
+      {editable && onAddPhase && availablePhases.length > 0 && (
+        <div className="mt-3 flex gap-2">
+          <AddPhaseInline available={availablePhases} onAdd={onAddPhase} />
+        </div>
+      )}
     </div>
   );
 }
