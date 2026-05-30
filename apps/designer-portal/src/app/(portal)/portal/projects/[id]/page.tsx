@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useMemo, useState } from 'react';
+import { use, useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import {
   useProject,
@@ -18,6 +18,7 @@ import {
   useDeleteTask,
   useUploadProjectDocument,
   useAddProjectRoom,
+  useUpdateProject,
 } from '@/hooks/use-projects';
 import {
   useDecisionsByProject,
@@ -25,6 +26,8 @@ import {
   useCreateProjectPhase,
   useUpdateProjectPhaseStatus,
   useUpdatePaymentMilestoneStatus,
+  useStartProjectThread,
+  useSendMessage,
 } from '@patina/supabase';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
@@ -48,6 +51,7 @@ import {
   RecentActivityPanel,
 } from '@/components/portal/project-detail';
 import { DecisionsPanel } from '@/components/portal/project-detail/decisions-panel';
+import { SendUpdateModal } from '@/components/portal/project-detail/send-update-modal';
 import { TeamPanel } from '@/components/portal/project-detail/team-panel';
 import { ProjectCommunicationsPanel } from '@/components/portal/project-communications-panel';
 import { adaptProjectRooms } from '@/lib/project-room-adapter';
@@ -58,6 +62,18 @@ type AnyProject = any;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const statusActionStyle: CSSProperties = {
+  fontFamily: 'var(--font-body)',
+  fontSize: '0.78rem',
+  fontWeight: 500,
+  padding: '0.5rem 0.85rem',
+  borderRadius: '3px',
+  border: '1px solid var(--border-default)',
+  background: 'transparent',
+  color: 'var(--text-primary)',
+  cursor: 'pointer',
+};
+
 export default function ProjectDetailPage({
   params,
 }: {
@@ -65,6 +81,7 @@ export default function ProjectDetailPage({
 }) {
   const { id } = use(params);
   const [editMode, setEditMode] = useState(true);
+  const [showUpdateComposer, setShowUpdateComposer] = useState(false);
 
   // Core data
   const { data: project, isLoading } = useProject(id) as { data: AnyProject; isLoading: boolean };
@@ -107,6 +124,9 @@ export default function ProjectDetailPage({
   const deleteTask = useDeleteTask();
   const uploadDocument = useUploadProjectDocument();
   const addRoom = useAddProjectRoom();
+  const updateProject = useUpdateProject();
+  const startThread = useStartProjectThread();
+  const sendMessage = useSendMessage();
 
   // Phase / milestone mutations live in @patina/supabase (use-project-v2) and
   // invalidate their OWN query keys, which the portal does not read. We call them
@@ -218,6 +238,28 @@ export default function ProjectDetailPage({
       toast('Task deleted', 'success');
     } catch {
       toast('Could not delete task', 'error');
+    }
+  };
+
+  const handleSendUpdate = async (body: string) => {
+    if (!body.trim()) return;
+    try {
+      const threadId = await startThread.mutateAsync(id);
+      await sendMessage.mutateAsync({ threadId, body: body.trim() });
+      toast('Update sent to client', 'success');
+      setShowUpdateComposer(false);
+    } catch {
+      toast('Could not send update', 'error');
+    }
+  };
+
+  const handleChangeStatus = async (status: string, verb: string) => {
+    try {
+      await updateProject.mutateAsync({ id, data: { status } });
+      refreshProject();
+      toast(`Project ${verb}`, 'success');
+    } catch {
+      toast('Could not update project status', 'error');
     }
   };
 
@@ -363,9 +405,16 @@ export default function ProjectDetailPage({
       {editMode && (
         <EditModeBar
           onToggleClientView={() => setEditMode(false)}
-          onSendUpdate={() => {}}
+          onSendUpdate={() => setShowUpdateComposer(true)}
         />
       )}
+
+      <SendUpdateModal
+        open={showUpdateComposer}
+        sending={startThread.isPending || sendMessage.isPending}
+        onClose={() => setShowUpdateComposer(false)}
+        onSend={handleSendUpdate}
+      />
 
       <div className="pt-8">
         {/* Breadcrumb */}
@@ -550,6 +599,40 @@ export default function ProjectDetailPage({
             >
               Complete Project
             </a>
+          )}
+
+          {/* Lifecycle status — hold / reactivate / archive (real projects). */}
+          {editable && (
+            <div className="ml-auto flex items-center gap-2">
+              <span
+                className="type-meta-small text-[var(--text-muted)]"
+                style={{ textTransform: 'capitalize' }}
+              >
+                {String(project.status ?? 'active').replace('_', ' ')}
+              </span>
+              {project.status === 'active' && (
+                <button type="button" style={statusActionStyle} onClick={() => handleChangeStatus('on_hold', 'put on hold')}>
+                  Put on hold
+                </button>
+              )}
+              {project.status === 'draft' && (
+                <button type="button" style={statusActionStyle} onClick={() => handleChangeStatus('active', 'activated')}>
+                  Activate
+                </button>
+              )}
+              {(project.status === 'on_hold' ||
+                project.status === 'archived' ||
+                project.status === 'completed') && (
+                <button type="button" style={statusActionStyle} onClick={() => handleChangeStatus('active', 'reactivated')}>
+                  Reactivate
+                </button>
+              )}
+              {project.status !== 'archived' && project.status !== 'completed' && (
+                <button type="button" style={statusActionStyle} onClick={() => handleChangeStatus('archived', 'archived')}>
+                  Archive
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
