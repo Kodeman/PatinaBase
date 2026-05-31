@@ -69,6 +69,8 @@ public struct QRScannerView: View {
                                 Circle()
                                     .fill(PatinaColors.Background.secondary.opacity(0.8))
                             )
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                     .accessibilityLabel("Help")
                     .accessibilityHint("Opens the help panel for QR sign-in.")
@@ -254,7 +256,12 @@ public struct QRScannerView: View {
                     Circle()
                         .fill(PatinaColors.Background.secondary.opacity(0.8))
                 )
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
         }
+        .accessibilityLabel("Close")
+        .accessibilityHint("Dismisses the QR scanner.")
+        .accessibilityIdentifier("QRScannerView.CloseButton")
     }
 }
 

@@ -271,7 +271,10 @@ public struct CompanionOverlay: View {
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundStyle(PatinaColors.pearl)
                             )
+                            .contentShape(Rectangle())
                     }
+                    .accessibilityLabel("Close")
+                    .accessibilityHint("Collapses the Companion panel.")
                     .accessibilityIdentifier("companion.close")
                 }
                 .padding(.bottom, 16)

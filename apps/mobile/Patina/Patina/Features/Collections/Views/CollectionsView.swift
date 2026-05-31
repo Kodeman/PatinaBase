@@ -37,7 +37,11 @@ struct CollectionsView: View {
                     Image(systemName: "plus.circle")
                         .font(.system(size: 22))
                         .foregroundStyle(PatinaColors.Text.interactive)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
+                .accessibilityLabel("New board")
+                .accessibilityHint("Creates a new collection board.")
             }
             .padding(.top, 56)
             .padding(.horizontal, 24)

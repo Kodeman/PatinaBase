@@ -59,8 +59,10 @@ public struct InputBar: View {
                         Image(systemName: "arrow.up.circle.fill")
                             .font(.system(size: 24))
                             .foregroundStyle(PatinaColors.Text.interactive)
+                            .contentShape(Rectangle())
                     }
                     .transition(.scale.combined(with: .opacity))
+                    .accessibilityLabel("Send message")
                 }
             }
             .padding(.horizontal, PatinaSpacing.md)

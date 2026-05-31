@@ -116,7 +116,10 @@ struct RecommendationsView: View {
                                         .font(.system(size: 14))
                                         .foregroundStyle(PatinaColors.mocha)
                                 )
+                                .contentShape(Rectangle())
                         }
+                        .accessibilityLabel("Save to favorites")
+                        .accessibilityHint("Saves \(product.name) to your collection.")
                         .padding(8)
                     }
                 }

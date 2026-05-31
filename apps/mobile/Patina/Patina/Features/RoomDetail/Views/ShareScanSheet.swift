@@ -145,7 +145,11 @@ struct ShareScanSheet: View {
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(PatinaColors.Text.muted)
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(Rectangle())
                         }
+                        .accessibilityLabel("Revoke access")
+                        .accessibilityHint("Stops sharing this scan with \(share.designer?.fullName ?? share.designer?.email ?? "this designer").")
                     }
                     .padding(PatinaSpacing.md)
                     .background(PatinaColors.Background.secondary)
@@ -180,7 +184,9 @@ struct ShareScanSheet: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(PatinaColors.Text.muted)
+                            .contentShape(Rectangle())
                     }
+                    .accessibilityLabel("Clear search")
                 }
             }
             .padding(PatinaSpacing.md)

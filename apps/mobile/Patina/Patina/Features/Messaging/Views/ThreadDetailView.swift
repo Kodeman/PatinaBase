@@ -105,8 +105,11 @@ struct ThreadDetailView: View {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 28))
                     .foregroundStyle(canSend ? PatinaColors.Text.interactive : PatinaColors.agedOak.opacity(0.6))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .disabled(!canSend)
+            .accessibilityLabel("Send message")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

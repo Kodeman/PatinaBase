@@ -549,7 +549,11 @@ struct WalkView: View {
                     .foregroundStyle(.white)
                     .padding(PatinaSpacing.sm)
                     .background(Circle().fill(Color.white.opacity(0.15)))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
+            .accessibilityLabel("Close")
+            .accessibilityHint("Ends the walk and returns to the previous screen.")
 
             Spacer()
 
@@ -566,7 +570,10 @@ struct WalkView: View {
                     .foregroundStyle(.white)
                     .padding(PatinaSpacing.sm)
                     .background(Circle().fill(Color.white.opacity(0.15)))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
+            .accessibilityLabel(viewModel.state == .paused ? "Resume walk" : "Pause walk")
         }
     }
 

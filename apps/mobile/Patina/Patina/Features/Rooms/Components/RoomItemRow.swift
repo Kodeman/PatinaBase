@@ -57,8 +57,12 @@ struct RoomItemRow: View {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .fill(PatinaColors.softCream)
                     )
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("More actions")
+            .accessibilityHint("Shows options for \(item.productName).")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
