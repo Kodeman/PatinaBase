@@ -66,7 +66,7 @@ custom_rules:
     name: "Deprecated .foregroundColor"
     regex: '\.foregroundColor\('
     message: "Use .foregroundStyle(...) — .foregroundColor is deprecated (PT-1-6)."
-    severity: warning
+    severity: error
   disallow_font_custom_in_features:
     name: "Untokenized Font.custom in Features/"
     regex: '\.font\(\s*\.custom\(|Font\.custom\('
@@ -77,12 +77,12 @@ custom_rules:
     name: "Deprecated navigationBarHidden"
     regex: '\.navigationBarHidden\('
     message: "Use .toolbar(.hidden, for: .navigationBar) (PT-1-7)."
-    severity: warning
+    severity: error
   disallow_cornerradius:
     name: "Deprecated .cornerRadius"
     regex: '\.cornerRadius\('
     message: "Use .clipShape(.rect(cornerRadius:)) (PT-1-8)."
-    severity: warning
+    severity: error
   disallow_dispatchqueue_main_asyncafter:
     name: "DispatchQueue.main.asyncAfter"
     regex: 'DispatchQueue\.main\.asyncAfter'
