@@ -25,7 +25,7 @@ struct ThreadDetailView: View {
                     LazyVStack(alignment: .leading, spacing: 8) {
                         if viewModel.isLoading && viewModel.messages.isEmpty {
                             ProgressView()
-                                .tint(PatinaColors.clay)
+                                .tint(PatinaColors.Text.interactive)
                                 .padding(.top, 60)
                                 .frame(maxWidth: .infinity)
                         } else if let error = viewModel.error, viewModel.messages.isEmpty {
@@ -104,7 +104,7 @@ struct ThreadDetailView: View {
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 28))
-                    .foregroundStyle(canSend ? PatinaColors.clay : PatinaColors.agedOak.opacity(0.6))
+                    .foregroundStyle(canSend ? PatinaColors.Text.interactive : PatinaColors.agedOak.opacity(0.6))
             }
             .disabled(!canSend)
         }

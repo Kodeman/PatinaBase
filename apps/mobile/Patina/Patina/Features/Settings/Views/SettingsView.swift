@@ -140,7 +140,7 @@ struct SettingsView: View {
             Spacer()
 
             Toggle("", isOn: isOn)
-                .tint(PatinaColors.clay)
+                .tint(PatinaColors.Text.interactive)
                 .labelsHidden()
         }
         .padding(.horizontal, 16)

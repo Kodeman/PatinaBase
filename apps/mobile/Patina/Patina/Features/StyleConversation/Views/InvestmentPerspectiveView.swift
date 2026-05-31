@@ -47,7 +47,7 @@ struct InvestmentPerspectiveView: View {
                     .font(.custom("DMMono-Regular", size: 11))
                     .tracking(0.4)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
             }
             .padding(.vertical, 20)
             .contentShape(Rectangle())

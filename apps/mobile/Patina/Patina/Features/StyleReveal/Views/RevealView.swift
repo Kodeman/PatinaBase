@@ -38,7 +38,7 @@ struct RevealView: View {
                 Text("THE AESTHETE ENGINE")
                     .font(PatinaTypography.mono)
                     .tracking(1.0)
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
 
                 aestheticName
                     .padding(.horizontal, 24)

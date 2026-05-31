@@ -25,7 +25,7 @@ struct ProjectDetailView: View {
                     errorView(error)
                 } else {
                     ProgressView()
-                        .tint(PatinaColors.clay)
+                        .tint(PatinaColors.Text.interactive)
                         .padding(.top, 80)
                         .frame(maxWidth: .infinity)
                 }
@@ -221,7 +221,7 @@ struct ProjectDetailView: View {
                 Task { await viewModel.load(projectId: projectId) }
             }
             .font(PatinaTypography.bodySmallMedium)
-            .foregroundStyle(PatinaColors.clay)
+            .foregroundStyle(PatinaColors.Text.interactive)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 80)

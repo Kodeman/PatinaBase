@@ -40,7 +40,7 @@ struct DecisionListView: View {
     private var content: some View {
         if viewModel.isLoading && viewModel.decisions.isEmpty {
             ProgressView()
-                .tint(PatinaColors.clay)
+                .tint(PatinaColors.Text.interactive)
                 .padding(.top, 60)
                 .frame(maxWidth: .infinity)
         } else if let error = viewModel.error, viewModel.decisions.isEmpty {
@@ -73,7 +73,7 @@ struct DecisionListView: View {
                 if let type = d.decision_type {
                     Text(type.capitalized)
                         .font(PatinaTypography.monoTiny)
-                        .foregroundStyle(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.Text.interactive)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(PatinaColors.clay.opacity(0.1))
@@ -113,7 +113,7 @@ struct DecisionListView: View {
                 .foregroundStyle(PatinaColors.mocha)
             Button("Try Again") { Task { await viewModel.load() } }
                 .font(PatinaTypography.bodySmallMedium)
-                .foregroundStyle(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.Text.interactive)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)

@@ -140,7 +140,7 @@ struct MoveOrCopyItemSheet: View {
                 } else {
                     Text("→")
                         .font(.system(size: 14))
-                        .foregroundStyle(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.Text.interactive)
                 }
             }
             .padding(10)

@@ -36,7 +36,7 @@ struct CollectionsView: View {
                 } label: {
                     Image(systemName: "plus.circle")
                         .font(.system(size: 22))
-                        .foregroundStyle(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.Text.interactive)
                 }
             }
             .padding(.top, 56)

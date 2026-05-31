@@ -190,7 +190,7 @@ struct MockRoomScanView: View {
 
                 Image(systemName: "viewfinder")
                     .font(.system(size: 24))
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
             }
             .onAppear {
                 withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: false)) {

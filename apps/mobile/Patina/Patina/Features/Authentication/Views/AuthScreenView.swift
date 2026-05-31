@@ -83,7 +83,7 @@ struct AuthScreenView: View {
             } label: {
                 Text("Browse as Guest")
                     .font(PatinaTypography.bodySmall)
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
             }
             .accessibilityIdentifier("auth.welcome.guestButton")
 

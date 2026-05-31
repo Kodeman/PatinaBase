@@ -108,7 +108,7 @@ struct StyleQuizView: View {
                 if let nudge, isMultiSelect {
                     Text(nudge)
                         .font(PatinaTypography.uiSmall)
-                        .foregroundStyle(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.Text.interactive)
                 } else {
                     HStack(spacing: 4) {
                         ForEach(1...total, id: \.self) { i in

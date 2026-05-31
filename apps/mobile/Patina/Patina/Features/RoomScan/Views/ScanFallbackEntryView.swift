@@ -127,7 +127,7 @@ struct ScanFallbackEntryView: View {
                 .font(PatinaTypography.mono)
                 .tracking(0.6)
                 .textCase(.uppercase)
-                .foregroundStyle(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.Text.interactive)
             Spacer()
             if text == "Room Dimensions" {
                 unitToggle
@@ -194,7 +194,7 @@ struct ScanFallbackEntryView: View {
             Text(title.uppercased())
                 .font(PatinaTypography.monoSmall)
                 .tracking(0.4)
-                .foregroundStyle(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.Text.interactive)
         }
         .frame(maxWidth: .infinity)
     }

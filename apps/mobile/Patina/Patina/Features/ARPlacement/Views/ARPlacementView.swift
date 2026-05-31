@@ -184,7 +184,7 @@ struct ARPlacementView: View {
 
     private var loadingIndicator: some View {
         ProgressView()
-            .tint(PatinaColors.clay)
+            .tint(PatinaColors.Text.interactive)
             .padding(.bottom, 54)
     }
 

@@ -90,7 +90,7 @@ struct RequestDesignServicesSheet: View {
 
                 Image(systemName: "cube.transparent")
                     .font(.system(size: 24))
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
             }
 
             VStack(alignment: .leading, spacing: 4) {

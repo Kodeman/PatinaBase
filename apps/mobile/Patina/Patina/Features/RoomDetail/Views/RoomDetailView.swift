@@ -203,7 +203,7 @@ struct RoomDetailView: View {
         HStack(spacing: PatinaSpacing.md) {
             Image(systemName: room.hasBeenScanned ? "checkmark.circle.fill" : "camera.viewfinder")
                 .font(.system(size: 24))
-                .foregroundStyle(room.hasBeenScanned ? PatinaColors.clay : PatinaColors.Text.muted)
+                .foregroundStyle(room.hasBeenScanned ? PatinaColors.Text.interactive : PatinaColors.Text.muted)
 
             VStack(alignment: .leading, spacing: PatinaSpacing.xs) {
                 Text(room.hasBeenScanned ? "Room scanned" : "Not yet scanned")

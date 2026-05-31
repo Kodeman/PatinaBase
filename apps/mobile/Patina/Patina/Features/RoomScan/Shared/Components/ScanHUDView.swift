@@ -48,7 +48,7 @@ struct ScanHUDView: View {
                 if isComplete {
                     Image(systemName: "checkmark")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.Text.interactive)
                         .transition(.opacity)
                 } else {
                     Circle()

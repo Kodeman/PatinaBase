@@ -52,7 +52,7 @@ extension View {
 
         Image(systemName: "heart")
             .font(PatinaTypography.bodyMedium)
-            .foregroundStyle(PatinaColors.clay)
+            .foregroundStyle(PatinaColors.Text.interactive)
             .accessibleHitTarget(label: "Save to favorites")
     }
     .padding(PatinaSpacing.xl)

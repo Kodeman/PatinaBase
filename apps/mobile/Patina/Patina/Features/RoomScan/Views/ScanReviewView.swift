@@ -177,7 +177,7 @@ public struct ScanReviewView: View {
                         .font(PatinaTypography.mono)
                         .tracking(0.8)
                         .textCase(.uppercase)
-                        .foregroundStyle(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.Text.interactive)
                 }
             }
             .sheet(isPresented: $showingHeroPicker) {
@@ -328,7 +328,7 @@ public struct ScanReviewView: View {
                     .font(PatinaTypography.monoSmall)
                     .tracking(0.4)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
                     .padding(.top, 8)
 
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -767,7 +767,7 @@ public struct ScanReviewView: View {
             .font(PatinaTypography.mono)
             .tracking(0.6)
             .textCase(.uppercase)
-            .foregroundStyle(PatinaColors.clay)
+            .foregroundStyle(PatinaColors.Text.interactive)
     }
 
     /// Load a photo from the bundle's `photos/` directory. Falls back to a

@@ -76,7 +76,7 @@ struct DailyStoryDetailView: View {
                     .font(.custom("DMMono-Regular", size: 8))
                     .tracking(0.6)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
                 Text(story.title)
                     .font(PatinaTypography.h2)
                     .foregroundStyle(PatinaColors.offWhite)
@@ -110,7 +110,7 @@ struct DailyStoryDetailView: View {
                         .font(.custom("DMMono-Regular", size: 8))
                         .tracking(0.5)
                         .textCase(.uppercase)
-                        .foregroundStyle(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.Text.interactive)
                 }
             }
             .padding(.bottom, 16)

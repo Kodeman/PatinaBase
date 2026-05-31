@@ -223,7 +223,7 @@ struct ProfileView: View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(size: 16))
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
                     .frame(width: 32, height: 32)
                     .background(PatinaColors.clay.opacity(0.12))
                     .clipShape(RoundedRectangle(cornerRadius: 8))

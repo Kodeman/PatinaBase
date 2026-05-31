@@ -58,7 +58,7 @@ public struct InputBar: View {
                     } label: {
                         Image(systemName: "arrow.up.circle.fill")
                             .font(.system(size: 24))
-                            .foregroundStyle(PatinaColors.clay)
+                            .foregroundStyle(PatinaColors.Text.interactive)
                     }
                     .transition(.scale.combined(with: .opacity))
                 }

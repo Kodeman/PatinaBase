@@ -351,7 +351,7 @@ struct DesignerHomeView: View {
         VStack {
             Spacer().frame(height: 60)
             ProgressView()
-                .tint(PatinaColors.clay)
+                .tint(PatinaColors.Text.interactive)
             Spacer()
         }
     }
@@ -390,7 +390,7 @@ private struct Section<Content: View>: View {
                 if let action = showAllAction {
                     Button("See all", action: action)
                         .font(PatinaTypography.uiSmall)
-                        .foregroundStyle(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.Text.interactive)
                 }
             }
             .padding(.horizontal, 24)

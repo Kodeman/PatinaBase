@@ -32,7 +32,7 @@ struct WhisperBarView: View {
                 .font(PatinaTypography.mono)
                 .tracking(0.6)
                 .textCase(.uppercase)
-                .foregroundStyle(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.Text.interactive)
                 .id(state.subtext)
                 .transition(.opacity)
         }

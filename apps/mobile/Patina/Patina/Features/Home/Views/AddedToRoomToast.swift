@@ -27,7 +27,7 @@ struct AddedToRoomToast: View {
             } label: {
                 Text("View")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
             }
             .buttonStyle(.plain)
             .padding(.leading, 4)

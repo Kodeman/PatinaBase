@@ -66,7 +66,7 @@ struct CameraPermissionView: View {
             // Camera icon
             Image(systemName: "camera.fill")
                 .font(.system(size: 48, weight: .light))
-                .foregroundStyle(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.Text.interactive)
                 .padding(.bottom, PatinaSpacing.xl)
 
             // Message
@@ -296,7 +296,7 @@ private struct PrivacyExplanationSheet: View {
                     Button("Done") {
                         dismiss()
                     }
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
                 }
             }
         }
@@ -306,7 +306,7 @@ private struct PrivacyExplanationSheet: View {
         HStack(alignment: .top, spacing: PatinaSpacing.md) {
             Image(systemName: icon)
                 .font(.system(size: 24, weight: .light))
-                .foregroundStyle(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.Text.interactive)
                 .frame(width: 32)
 
             VStack(alignment: .leading, spacing: PatinaSpacing.xs) {

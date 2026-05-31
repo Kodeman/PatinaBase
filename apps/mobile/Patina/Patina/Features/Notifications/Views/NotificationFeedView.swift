@@ -26,7 +26,7 @@ struct NotificationFeedView: View {
                         viewModel.markAllRead()
                     }
                     .font(PatinaTypography.uiSmall)
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
                 }
             }
             .padding(.top, 56)
@@ -74,7 +74,7 @@ struct NotificationFeedView: View {
         VStack {
             Spacer()
             ProgressView()
-                .tint(PatinaColors.clay)
+                .tint(PatinaColors.Text.interactive)
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -108,7 +108,7 @@ struct NotificationFeedView: View {
                 Task { await viewModel.load() }
             }
             .font(PatinaTypography.bodySmallMedium)
-            .foregroundStyle(PatinaColors.clay)
+            .foregroundStyle(PatinaColors.Text.interactive)
             Spacer()
         }
         .padding(.horizontal, 32)

@@ -384,7 +384,7 @@ struct ProductDetailView: View {
         VStack {
             Spacer()
             ProgressView()
-                .tint(PatinaColors.clay)
+                .tint(PatinaColors.Text.interactive)
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -407,7 +407,7 @@ struct ProductDetailView: View {
                     Task { await viewModel.loadProduct(id: productId) }
                 }
                 .font(PatinaTypography.bodySmallMedium)
-                .foregroundStyle(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.Text.interactive)
             }
             Spacer()
         }

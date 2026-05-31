@@ -51,7 +51,7 @@ struct RoomGalleryCard: View {
                     .font(.custom("DMMono-Regular", size: 8))
                     .tracking(0.5)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
             }
             .padding(.horizontal, 14)
             .padding(.bottom, 12)

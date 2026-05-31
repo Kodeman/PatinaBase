@@ -98,7 +98,7 @@ public struct QRApprovalView: View {
             HStack(spacing: PatinaSpacing.lg) {
                 Image(systemName: "laptopcomputer")
                     .font(.system(size: 36))
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
 
                 Image(systemName: "arrow.left.arrow.right")
                     .font(.system(size: 20))
@@ -106,7 +106,7 @@ public struct QRApprovalView: View {
 
                 Image(systemName: "iphone")
                     .font(.system(size: 36))
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {

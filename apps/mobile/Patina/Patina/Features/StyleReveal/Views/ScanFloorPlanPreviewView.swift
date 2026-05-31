@@ -104,12 +104,12 @@ struct ScanFloorPlanPreviewView: View {
         return ZStack {
             Text(String(format: "%.0f ft", widthFt))
                 .font(.custom("DMMono-Regular", size: 11))
-                .foregroundStyle(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.Text.interactive)
                 .offset(y: -(height / 2) - 16)
 
             Text(String(format: "%.0f ft", lengthFt))
                 .font(.custom("DMMono-Regular", size: 11))
-                .foregroundStyle(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.Text.interactive)
                 .rotationEffect(.degrees(-90))
                 .offset(x: -(width / 2) - 16)
         }
@@ -137,7 +137,7 @@ struct ScanFloorPlanPreviewView: View {
                 .font(PatinaTypography.monoSmall)
                 .tracking(0.5)
                 .textCase(.uppercase)
-                .foregroundStyle(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.Text.interactive)
         }
         .frame(maxWidth: .infinity)
     }

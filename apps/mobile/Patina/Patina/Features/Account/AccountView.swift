@@ -89,7 +89,7 @@ struct AccountView: View {
         VStack(spacing: PatinaSpacing.md) {
             Image(systemName: "person.circle.fill")
                 .font(.system(size: 64))
-                .foregroundStyle(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.Text.interactive)
 
             if let email = authService.currentUser?.email {
                 Text(email)

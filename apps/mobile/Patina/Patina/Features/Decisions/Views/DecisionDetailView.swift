@@ -26,7 +26,7 @@ struct DecisionDetailView: View {
                     errorView(error)
                 } else {
                     ProgressView()
-                        .tint(PatinaColors.clay)
+                        .tint(PatinaColors.Text.interactive)
                         .padding(.top, 80)
                         .frame(maxWidth: .infinity)
                 }
@@ -102,7 +102,7 @@ struct DecisionDetailView: View {
                 if isRecommended {
                     Text("Recommended")
                         .font(PatinaTypography.monoTiny)
-                        .foregroundStyle(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.Text.interactive)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(PatinaColors.clay.opacity(0.1))
@@ -150,7 +150,7 @@ struct DecisionDetailView: View {
                 Task { await viewModel.load(decisionId: decisionId) }
             }
             .font(PatinaTypography.bodySmallMedium)
-            .foregroundStyle(PatinaColors.clay)
+            .foregroundStyle(PatinaColors.Text.interactive)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 80)

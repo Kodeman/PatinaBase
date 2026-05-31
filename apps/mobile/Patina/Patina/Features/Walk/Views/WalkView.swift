@@ -121,7 +121,7 @@ struct WalkView: View {
                 VStack(spacing: PatinaSpacing.sm) {
                     Image(systemName: "chevron.up")
                         .font(.system(size: 24, weight: .medium))
-                        .foregroundStyle(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.Text.interactive)
                         .offset(y: swipeHintOffset)
                         .animation(
                             .easeInOut(duration: 1.0).repeatForever(autoreverses: true),
@@ -653,7 +653,7 @@ struct WalkView: View {
                 } label: {
                     Text("Retry")
                         .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.Text.interactive)
                 }
             } else if lastScanData != nil {
                 Image(systemName: "checkmark.circle.fill")

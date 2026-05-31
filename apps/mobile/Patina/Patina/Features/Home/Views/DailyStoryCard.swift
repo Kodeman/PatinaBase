@@ -45,7 +45,7 @@ struct DailyStoryCard: View {
                     .font(.custom("DMMono-Regular", size: 7))
                     .tracking(0.6)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
                     .padding(.bottom, 1)
                 Text(story.title)
                     .font(.custom("PlayfairDisplay-Regular", size: 18))

@@ -145,7 +145,7 @@ public struct QRScannerView: View {
         VStack(spacing: PatinaSpacing.sm) {
             Image(systemName: "qrcode.viewfinder")
                 .font(.system(size: 28))
-                .foregroundStyle(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.Text.interactive)
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("Scan the QR code")
@@ -181,7 +181,7 @@ public struct QRScannerView: View {
         VStack(spacing: PatinaSpacing.xl) {
             Image(systemName: "camera.fill")
                 .font(.system(size: 64))
-                .foregroundStyle(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.Text.interactive)
 
             VStack(spacing: PatinaSpacing.sm) {
                 Text("Camera Access Required")

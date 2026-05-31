@@ -70,7 +70,7 @@ struct RoomProjectView: View {
                             if let nudge = BudgetAssessment.companionNudge(for: level, roomName: room.name) {
                                 Text(nudge)
                                     .font(.custom("PlayfairDisplay-Italic", size: 13))
-                                    .foregroundStyle(PatinaColors.clay)
+                                    .foregroundStyle(PatinaColors.Text.interactive)
                                     .padding(.horizontal, 20)
                                     .padding(.top, 12)
                             }
@@ -139,7 +139,7 @@ struct RoomProjectView: View {
             if case .failed(let msg) = designerLeadState {
                 Text(msg)
                     .font(.system(size: 11))
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
                     .padding(.horizontal, 20)
             }
         }
@@ -268,7 +268,7 @@ struct RoomProjectView: View {
                 Spacer()
                 Text("View in AR →")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
             }
             .padding(.horizontal, 20)
             .padding(.top, 16)
@@ -305,7 +305,7 @@ struct RoomProjectView: View {
                 Spacer()
                 Text("See all →")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
             }
             Text("\"Your seating and surfaces are set. A rug would ground the arrangement.\"")
                 .font(.custom("PlayfairDisplay-Italic", size: 13))

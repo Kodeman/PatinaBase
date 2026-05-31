@@ -202,7 +202,7 @@ struct ShareScanSheet: View {
                 HStack {
                     Spacer()
                     ProgressView()
-                        .tint(PatinaColors.clay)
+                        .tint(PatinaColors.Text.interactive)
                     Spacer()
                 }
                 .padding(.vertical, PatinaSpacing.xl)
@@ -351,7 +351,7 @@ struct ShareScanSheet: View {
                     } label: {
                         Text("Change")
                             .font(PatinaTypography.bodySmall)
-                            .foregroundStyle(PatinaColors.clay)
+                            .foregroundStyle(PatinaColors.Text.interactive)
                     }
                 }
                 .padding(PatinaSpacing.lg)
@@ -389,7 +389,7 @@ struct ShareScanSheet: View {
 
                                 Image(systemName: accessLevel == level ? "checkmark.circle.fill" : "circle")
                                     .font(.system(size: 22))
-                                    .foregroundStyle(accessLevel == level ? PatinaColors.clay : PatinaColors.Text.muted)
+                                    .foregroundStyle(accessLevel == level ? PatinaColors.Text.interactive : PatinaColors.Text.muted)
                             }
                             .padding(PatinaSpacing.md)
                             .background(

@@ -94,7 +94,7 @@ struct StyleResultView: View {
             } label: {
                 Text("Refine your style →")
                     .font(PatinaTypography.bodySmall)
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
             }
             .padding(.top, 12)
 

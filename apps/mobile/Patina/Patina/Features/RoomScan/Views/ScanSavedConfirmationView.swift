@@ -101,7 +101,7 @@ struct ScanSavedConfirmationView: View {
                     .font(PatinaTypography.mono)
                     .tracking(0.6)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
                 Spacer()
                 Text(progressLabel)
                     .font(.custom("DMMono-Regular", size: 11))

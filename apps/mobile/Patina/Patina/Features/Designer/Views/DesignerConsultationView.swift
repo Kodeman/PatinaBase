@@ -215,7 +215,7 @@ struct DesignerConsultationView: View {
                         .frame(width: 76, height: 76)
                     Image(systemName: "checkmark")
                         .font(.system(size: 30, weight: .medium))
-                        .foregroundStyle(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.Text.interactive)
                 }
 
                 Text("Request Submitted")

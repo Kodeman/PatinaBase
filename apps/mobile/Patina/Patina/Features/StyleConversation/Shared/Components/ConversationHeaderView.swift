@@ -47,7 +47,7 @@ struct ConversationHeaderView: View {
             .font(PatinaTypography.mono)
             .tracking(0.6)
             .textCase(.uppercase)
-            .foregroundStyle(PatinaColors.clay)
+            .foregroundStyle(PatinaColors.Text.interactive)
             .padding(.bottom, 20)
     }
 }

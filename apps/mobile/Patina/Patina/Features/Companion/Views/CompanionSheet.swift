@@ -47,7 +47,7 @@ public struct CompanionSheet: View {
             HStack(spacing: PatinaSpacing.sm) {
                 Image(systemName: viewModel.context.contextIcon)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
                     .accessibilityHidden(true)
 
                 Text(viewModel.context.contextSummary)

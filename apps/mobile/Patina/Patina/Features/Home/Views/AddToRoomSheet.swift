@@ -47,7 +47,7 @@ struct AddToRoomSheet: View {
             } label: {
                 Text("+ New Room")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.Text.interactive)
             }
             .buttonStyle(.plain)
             .padding(.top, 14)
@@ -76,12 +76,12 @@ struct AddToRoomSheet: View {
                         .font(.custom("DMMono-Regular", size: 7))
                         .tracking(0.3)
                         .textCase(.uppercase)
-                        .foregroundStyle(isSelected ? PatinaColors.clay : PatinaColors.agedOak)
+                        .foregroundStyle(isSelected ? PatinaColors.Text.interactive : PatinaColors.agedOak)
                 }
                 Spacer()
                 Text("+")
                     .font(.system(size: 15))
-                    .foregroundStyle(isSelected ? PatinaColors.offWhite : PatinaColors.clay)
+                    .foregroundStyle(isSelected ? PatinaColors.offWhite : PatinaColors.Text.interactive)
             }
             .padding(11)
             .background(

@@ -444,7 +444,7 @@ public struct CompanionOverlay: View {
                         .foregroundStyle(PatinaColors.offWhite)
                     Text(hint)
                         .font(PatinaTypography.monoSmall)
-                        .foregroundStyle(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.Text.interactive)
                         .tracking(0.3)
                         .textCase(.uppercase)
                 }

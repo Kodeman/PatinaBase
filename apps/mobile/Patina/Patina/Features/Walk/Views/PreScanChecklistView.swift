@@ -145,7 +145,7 @@ struct PreScanChecklistView: View {
                 } else {
                     Image(systemName: icon)
                         .font(.system(size: 14))
-                        .foregroundStyle(isWarning ? PatinaColors.terracotta : PatinaColors.clay)
+                        .foregroundStyle(isWarning ? PatinaColors.terracotta : PatinaColors.Text.interactive)
                 }
             }
 

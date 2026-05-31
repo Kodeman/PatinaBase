@@ -45,7 +45,7 @@ struct RoomBudgetBar: View {
             }
             .font(.custom("DMMono-Regular", size: 7))
             .tracking(0.3)
-            .foregroundStyle(PatinaColors.clay)
+            .foregroundStyle(PatinaColors.Text.interactive)
         }
         .padding(14)
         .background(
