@@ -126,7 +126,9 @@ final class ARPlacementManager {
             self.isPlaced = true
             self.isLoading = false
 
-            HapticManager.shared.notification(.success)
+            // PT-5-10: the placement-success haptic is now declarative —
+            // ARPlacementView fires `.sensoryFeedback(.success,
+            // trigger: placementManager.isPlaced)` when this flips true.
         } catch {
             self.errorMessage = "Couldn't load 3D model"
             self.isLoading = false
