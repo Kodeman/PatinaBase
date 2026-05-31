@@ -179,7 +179,7 @@ public struct AuthenticationView: View {
             } else {
                 // Display name (sign up only)
                 if viewModel.mode == .signUp {
-                    PatinaTextField(
+                    AuthTextField(
                         "Display Name",
                         text: $viewModel.displayName,
                         icon: "person"
@@ -188,7 +188,7 @@ public struct AuthenticationView: View {
                 }
 
                 // Email
-                PatinaTextField(
+                AuthTextField(
                     "Email",
                     text: $viewModel.email,
                     icon: "envelope",
@@ -199,7 +199,7 @@ public struct AuthenticationView: View {
 
                 // Password (not for reset or magic link)
                 if viewModel.mode != .resetPassword && viewModel.mode != .magicLink {
-                    PatinaTextField(
+                    AuthTextField(
                         "Password",
                         text: $viewModel.password,
                         icon: "lock",
@@ -621,9 +621,15 @@ public struct AuthenticationView: View {
     }
 }
 
-// MARK: - Patina Text Field
+// MARK: - Auth Text Field
+//
+// Auth-screen-local field. The richer, label/helper/error-aware
+// `PatinaTextField` lives in `Design/Components/PatinaTextField.swift`;
+// this lightweight variant is retained for the compact icon-prefixed
+// rows the auth form uses. Renamed from `PatinaTextField` (PT-5-2) to
+// resolve the name collision with the shipped design-system component.
 
-struct PatinaTextField: View {
+struct AuthTextField: View {
     let placeholder: String
     @Binding var text: String
     var icon: String? = nil

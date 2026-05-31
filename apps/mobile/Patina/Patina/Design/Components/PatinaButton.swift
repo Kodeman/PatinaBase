@@ -13,44 +13,75 @@ public enum PatinaButtonStyle {
     case secondary    // Pearl border, transparent bg
     case ghost        // No bg, text only
     case clay         // Clay bg, for "Done" / confirm actions
+    case destructive  // Error-tinted bg, for irreversible actions
 }
 
 /// Patina Design System - Custom Button
+///
+/// Supports a leading `icon`, a `.isLoading` spinner state (taps are
+/// suppressed while loading), and an `.isEnabled` flag that dims the
+/// control and blocks the action without callers needing a separate
+/// `.disabled(...)` modifier (PT-5-6).
 public struct PatinaButton: View {
     let title: String
     let style: PatinaButtonStyle
+    let icon: Image?
+    let isLoading: Bool
+    let isEnabled: Bool
     let action: () -> Void
-
-    @State private var isPressed = false
 
     public init(
         _ title: String,
         style: PatinaButtonStyle = .primary,
+        icon: Image? = nil,
+        isLoading: Bool = false,
+        isEnabled: Bool = true,
         action: @escaping () -> Void
     ) {
         self.title = title
         self.style = style
+        self.icon = icon
+        self.isLoading = isLoading
+        self.isEnabled = isEnabled
         self.action = action
     }
 
+    private var isInteractive: Bool { isEnabled && !isLoading }
+
     public var body: some View {
         Button(action: {
+            guard isInteractive else { return }
             HapticManager.shared.impact(.light)
             action()
         }) {
-            Text(title)
-                .font(PatinaTypography.uiAction)
-                .foregroundStyle(foregroundColor)
-                .frame(maxWidth: style == .ghost ? nil : .infinity)
-                .frame(height: 52)
-                .background(backgroundColor)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(borderColor, lineWidth: style == .secondary ? 1.5 : 0)
-                )
+            HStack(spacing: PatinaSpacing.sm) {
+                if isLoading {
+                    ProgressView()
+                        .tint(foregroundColor)
+                } else {
+                    if let icon {
+                        icon
+                            .font(PatinaTypography.uiAction)
+                    }
+                    Text(title)
+                        .font(PatinaTypography.uiAction)
+                }
+            }
+            .foregroundStyle(foregroundColor)
+            .frame(maxWidth: style == .ghost ? nil : .infinity)
+            .frame(height: 52)
+            .background(backgroundColor)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(borderColor, lineWidth: style == .secondary ? 1.5 : 0)
+            )
+            .opacity(isEnabled ? 1.0 : 0.5)
         }
         .buttonStyle(PressableButtonStyle())
+        .disabled(!isInteractive)
+        .animation(.easeInOut(duration: 0.15), value: isLoading)
+        .animation(.easeInOut(duration: 0.15), value: isEnabled)
     }
 
     private var foregroundColor: Color {
@@ -60,8 +91,10 @@ public struct PatinaButton: View {
         case .secondary:
             return PatinaColors.charcoal
         case .ghost:
-            return PatinaColors.clay
+            return PatinaColors.Text.interactive
         case .clay:
+            return PatinaColors.offWhite
+        case .destructive:
             return PatinaColors.offWhite
         }
     }
@@ -76,6 +109,8 @@ public struct PatinaButton: View {
             return .clear
         case .clay:
             return PatinaColors.clay
+        case .destructive:
+            return PatinaColors.error
         }
     }
 
@@ -89,7 +124,13 @@ public struct PatinaButton: View {
     }
 }
 
-// MARK: - Auth Button (specific style for auth screen)
+// MARK: - Auth Button (thin wrapper retained for the auth screens)
+//
+// Historically a bespoke component; now a thin adapter over `PatinaButton`
+// so the auth surfaces (`AuthScreenView`, `AuthenticationView`) keep their
+// existing call sites while sharing the design-system button (PT-5-6).
+// The remaining feature-view migrations off `AuthButton` are tracked in a
+// later T-DS call-site batch.
 
 struct AuthButton: View {
     let title: String
@@ -101,10 +142,15 @@ struct AuthButton: View {
         case apple, google, email
     }
 
+    private var iconImage: Image? {
+        guard let icon, !icon.isEmpty else { return nil }
+        return Image(systemName: icon)
+    }
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                if let icon {
+                if let icon, !icon.isEmpty {
                     Text(icon)
                         .font(.system(size: 16))
                 }
@@ -141,9 +187,12 @@ struct PressableButtonStyle: ButtonStyle {
 #Preview {
     VStack(spacing: PatinaSpacing.lg) {
         PatinaButton("Start Your Journey", style: .primary) {}
-        PatinaButton("Continue", style: .secondary) {}
+        PatinaButton("Continue", style: .secondary, icon: Image(systemName: "arrow.right")) {}
         PatinaButton("Skip", style: .ghost) {}
         PatinaButton("Done", style: .clay) {}
+        PatinaButton("Delete Room", style: .destructive, icon: Image(systemName: "trash")) {}
+        PatinaButton("Saving…", style: .primary, isLoading: true) {}
+        PatinaButton("Unavailable", style: .primary, isEnabled: false) {}
 
         AuthButton(title: "Continue with Apple", icon: "", style: .apple) {}
         AuthButton(title: "Continue with Google", icon: "G", style: .google) {}
