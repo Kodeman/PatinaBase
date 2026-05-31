@@ -48,11 +48,17 @@ struct CameraPermissionView: View {
 
     // MARK: - Background
 
+    // PT-4-1: the atmospheric `LivingSceneView` (and its Unsplash network
+    // fetch) was deleted with the Threshold folder. The Walk-First camera
+    // primer now uses a static time-of-day gradient — no network image, no
+    // blur cost on first launch.
     private var background: some View {
         ZStack {
-            LivingSceneView(timeOfDay: TimeOfDay.current)
-                .blur(radius: 20)
-
+            LinearGradient(
+                colors: TimeOfDay.current.gradientColors,
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
             Color.black.opacity(0.3)
         }
         .ignoresSafeArea()

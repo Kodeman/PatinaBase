@@ -372,10 +372,16 @@ struct ProductDetailView: View {
         .padding(.horizontal, 24)
         .padding(.top, 16)
         .padding(.bottom, 36)
-        .background(
-            PatinaColors.offWhite
-                .shadow(color: PatinaColors.mocha.opacity(0.08), radius: 8, y: -4)
-        )
+        // PT-5-7: Liquid Glass action bar. `.glassEffect(.regular)` renders
+        // the translucent, light-reactive material behind the bar (iOS 26+),
+        // replacing the flat off-white + shadow. A hairline top divider keeps
+        // the bar grounded against the scroll content above it.
+        .background(alignment: .top) {
+            Rectangle()
+                .frame(height: 0.5)
+                .foregroundStyle(PatinaColors.pearl)
+        }
+        .modifier(GlassActionBarBackground())
     }
 
     // MARK: - Loading
@@ -426,6 +432,25 @@ private extension String {
         case "made_in_usa": return "📍 Made in USA"
         case "sustainable": return "♻️ Sustainable"
         default: return self.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+}
+
+// MARK: - Glass Action Bar Background (PT-5-7)
+
+/// Applies the Liquid Glass material behind the product-detail action bar on
+/// iOS 26+, and falls back to the prior flat off-white + soft shadow on older
+/// OS versions. Gated with `#available` because `.glassEffect` is iOS 26.0+
+/// while the app still deploys to iOS 18.
+private struct GlassActionBarBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular, in: .rect)
+        } else {
+            content.background(
+                PatinaColors.offWhite
+                    .shadow(color: PatinaColors.mocha.opacity(0.08), radius: 8, y: -4)
+            )
         }
     }
 }
