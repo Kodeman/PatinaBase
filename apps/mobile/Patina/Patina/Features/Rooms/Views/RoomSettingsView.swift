@@ -129,7 +129,7 @@ struct RoomSettingsView: View {
                 .foregroundStyle(PatinaColors.agedOak)
             Button {
                 saveIfChanged()
-                coordinator.navigate(to: .rescan(roomId: room.id))
+                coordinator.navigate(to: .scanFlow(reason: .rescan))
             } label: {
                 Text("Re-Scan This Room")
                     .font(.system(size: 12, weight: .medium))
@@ -155,7 +155,7 @@ struct RoomSettingsView: View {
     private var shareButton: some View {
         Button {
             saveIfChanged()
-            coordinator.navigate(to: .designServicesRequest(roomId: roomId))
+            coordinator.presentedSheet = .designServices(roomId: roomId)
         } label: {
             HStack(spacing: 6) {
                 Text("↗")

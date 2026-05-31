@@ -116,7 +116,7 @@ struct YourSpacesView: View {
                 size: 12
             )
             Button {
-                coordinator.navigate(to: .newRoom)
+                coordinator.presentedSheet = .newRoom
             } label: {
                 ZStack {
                     Circle()
@@ -161,7 +161,7 @@ struct YourSpacesView: View {
                 .frame(maxWidth: 260)
                 .padding(.bottom, 8)
             Button {
-                coordinator.navigate(to: .newRoom)
+                coordinator.presentedSheet = .newRoom
             } label: {
                 HStack(spacing: 8) {
                     Text("◎")

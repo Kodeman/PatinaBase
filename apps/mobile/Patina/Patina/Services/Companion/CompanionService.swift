@@ -355,3 +355,21 @@ struct StyleExtractionRequest: Codable {
 struct StyleExtractionResponse: Codable {
     let profile: StyleProfile
 }
+
+// MARK: - Companion Service Protocol
+
+/// Abstraction over the Companion conversation service so call sites
+/// (`CompanionViewModel`) can be tested against a mock.
+///
+/// NOTE: this protocol previously lived in
+/// `Features/Conversation/ViewModels/ConversationViewModel.swift`. When the
+/// dead Conversation *view* layer was removed (Wave 3 nav-core cleanup) the
+/// protocol came with it — but it's still live (the `CompanionService` above
+/// conforms to it and `CompanionViewModel` depends on it), so it was moved
+/// here next to its conformer rather than deleted. Its dependencies
+/// (`ConversationContext`, `Message`, `StyleProfile`) all live in the kept
+/// `Features/Conversation/Models/`.
+public protocol CompanionServiceProtocol {
+    func sendMessage(_ content: String, context: ConversationContext) async throws -> Message
+    func extractStyleProfile(from messages: [Message]) async throws -> StyleProfile?
+}

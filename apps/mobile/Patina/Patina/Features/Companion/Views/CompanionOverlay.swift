@@ -54,11 +54,9 @@ public struct CompanionOverlay: View {
 
         let screen = coordinator.currentScreen
 
-        // Journey mode during walks
-        if case .walk = screen, let progress = coordinator.companionContext.walkProgress {
-            return .journeyMode(progress: Double(progress), step: 2, totalSteps: 4, stepLabel: "Capturing walls")
-        }
-        if case .walkSession = screen, let progress = coordinator.companionContext.walkProgress {
+        // Journey mode during the Quiet Conversation scan walk. The flow
+        // host drives `walkProgress`; when present, surface the journey UI.
+        if case .scanFlow = screen, let progress = coordinator.companionContext.walkProgress {
             let step = Int(progress * 4) + 1
             let labels = ["Scanning room", "Capturing walls", "Finding details", "Almost done"]
             let label = labels[min(step - 1, labels.count - 1)]
@@ -69,10 +67,9 @@ public struct CompanionOverlay: View {
         if case .pieceDetail = screen { return .minimal }
         if case .arPlacement = screen { return .minimal }
 
-        // Minimal during pre-scan and floor plan (they have own UI but the
-        // Companion stays reachable so the user never loses orientation — PT-6-11).
+        // Minimal during pre-scan (it has its own UI but the Companion stays
+        // reachable so the user never loses orientation — PT-6-11).
         if case .preScanChecklist = screen { return .minimal }
-        if case .floorPlanPreview = screen { return .minimal }
 
         // Minimal during quiz (quiz manages its own flow) — keep the Companion
         // present but unobtrusive instead of disappearing entirely (PT-6-11).
@@ -320,11 +317,13 @@ public struct CompanionOverlay: View {
                                     try? await Task.sleep(for: .seconds(0.3))
                                     switch special {
                                     case .openQRScanner:
-                                        coordinator.showingQRScanner = true
+                                        coordinator.presentedSheet = .qr
                                     case .openSettings:
-                                        coordinator.showingSettings = true
+                                        coordinator.presentedSheet = .settings
                                     case .openAuth:
                                         coordinator.presentAuthentication()
+                                    case .openDesignServices(let roomId):
+                                        coordinator.presentedSheet = .designServices(roomId: roomId)
                                     }
                                 }
                             }

@@ -12,6 +12,9 @@ import SwiftData
 struct PatinaApp: App {
     @UIApplicationDelegateAdaptor(PatinaAppDelegate.self) private var appDelegate
     @State private var coordinator: AppCoordinator
+    /// PT-6-16: typed cross-view event bus, replacing two NotificationCenter
+    /// names + the `pendingScanRecovery` UserDefaults flag.
+    @State private var scanEvents = ScanEventChannel()
     @Environment(\.scenePhase) private var scenePhase
 
     /// Whether the app is running in UI test mode
@@ -71,6 +74,7 @@ struct PatinaApp: App {
         WindowGroup {
             ContentView()
                 .environment(\.appCoordinator, coordinator)
+                .environment(\.scanEventChannel, scanEvents)
                 .modelContainer(PersistenceController.shared.container)
                 .onOpenURL { url in
                     DeepLinkHandler.shared.handle(url)
@@ -88,16 +92,11 @@ struct PatinaApp: App {
                     let context = PersistenceController.shared.container.mainContext
                     await ScanDiskBudget.shared.evictIfNeeded(in: context)
                     let candidates = await ScanRecoveryService.shared.scanForRecoverableSessions(in: context)
-                    if !candidates.isEmpty {
-                        UserDefaults.standard.set(true, forKey: "pendingScanRecovery")
-                        NotificationCenter.default.post(
-                            name: .patinaScanRecoveryCandidatesDidAppear,
-                            object: nil,
-                            userInfo: ["count": candidates.count]
-                        )
-                    } else {
-                        UserDefaults.standard.set(false, forKey: "pendingScanRecovery")
-                    }
+                    // PT-6-16: publish onto the typed channel instead of
+                    // posting a NotificationCenter name + writing the
+                    // `pendingScanRecovery` UserDefaults flag. Observers read
+                    // `scanEventChannel.pendingRecoveryCandidateCount`.
+                    scanEvents.setRecoveryCandidateCount(candidates.count)
 
                     // Resume any advanced scan bundles left in syncing/failed
                     // state from a prior session. `uploadAdvancedScanBundle`
@@ -124,15 +123,4 @@ struct PatinaApp: App {
                 }
         }
     }
-}
-
-// MARK: - Notifications
-
-public extension Notification.Name {
-    /// Posted from the launch task when `ScanRecoveryService` finds one or
-    /// more unfinished scan bundles worth offering recovery for. The
-    /// `userInfo` carries `"count": Int`. Views that own the recovery
-    /// prompt observe this; the `pendingScanRecovery` UserDefaults flag is
-    /// also set so late-subscribers can still pick it up.
-    static let patinaScanRecoveryCandidatesDidAppear = Notification.Name("patinaScanRecoveryCandidatesDidAppear")
 }

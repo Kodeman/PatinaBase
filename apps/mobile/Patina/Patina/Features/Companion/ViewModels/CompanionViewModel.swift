@@ -114,7 +114,7 @@ public final class CompanionViewModel {
                 CompanionSuggestion(icon: "text.bubble", title: "Tell me about your space"),
                 CompanionSuggestion(icon: "camera.viewfinder", title: "Take a walk together")
             ]
-            quickActions = QuickActionFactory.actions(for: .conversation)
+            quickActions = QuickActionFactory.actions(for: .heroFrame)
         } else {
             suggestions = [
                 CompanionSuggestion(icon: "rectangle.stack", title: "Show me my table"),
@@ -173,33 +173,23 @@ public final class CompanionViewModel {
     /// Convert AppRoute to API screen identifier
     private func screenIdentifier(for route: AppRoute) -> String {
         switch route {
-        case .threshold: return "threshold"
         case .heroFrame: return "hero_frame"
-        case .conversation: return "conversation"
         case .roomList: return "room_list"
         case .roomDetail: return "room_detail"
         case .roomSavedItems: return "room_saved_items"
-        case .roomOptions: return "room_options"
-        case .walk, .walkSession: return "walk"
-        case .rescan: return "rescan"
+        case .scanFlow(let reason):
+            switch reason {
+            case .fresh: return "scan_walk"
+            case .rescan: return "rescan"
+            case .fromConversation: return "scan_conversation"
+            }
         case .emergence, .roomEmergence: return "emergence"
         case .table: return "table"
         case .pieceDetail: return "piece_detail"
-        case .authentication: return "authentication"
-        case .settings: return "settings"
-        case .designServicesRequest: return "design_services"
-        case .walkInvitation: return "walk_invitation"
-        case .cameraPermission: return "camera_permission"
-        case .walkComplete: return "walk_complete"
-        case .firstEmergence: return "first_emergence"
-        case .roomNaming: return "room_naming"
-        case .qrScanner: return "qr_scanner"
-        case .qrApproval: return "qr_approval"
         case .styleQuiz: return "style_quiz"
         case .styleResult: return "style_result"
         case .arPlacement: return "ar_placement"
         case .preScanChecklist: return "pre_scan"
-        case .floorPlanPreview: return "floor_plan"
         case .profile: return "profile"
         case .notifications: return "notifications"
         case .designerConsultation: return "designer_consultation"
@@ -207,17 +197,7 @@ public final class CompanionViewModel {
         case .roomProject: return "room_project"
         case .roomSettings: return "room_settings"
         case .crossRoom: return "cross_room"
-        case .newRoom: return "new_room"
         case .manualRoomEntry: return "manual_room_entry"
-        case .moveItem: return "move_item"
-        case .scanThreshold: return "scan_threshold"
-        case .scanWalk: return "scan_walk"
-        case .scanReview: return "scan_review"
-        case .scanSoftLanding: return "scan_soft_landing"
-        case .scanConversation: return "scan_conversation"
-        case .scanReveal: return "scan_reveal"
-        case .scanFloorPlan: return "scan_floor_plan"
-        case .scanFallbackEntry: return "scan_fallback_entry"
         case .designerHome: return "designer_home"
         case .projectList: return "project_list"
         case .projectDetail: return "project_detail"

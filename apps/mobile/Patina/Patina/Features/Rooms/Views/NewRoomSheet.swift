@@ -33,7 +33,7 @@ struct NewRoomSheet: View {
                 subtitle: "Walk your room for full spatial intelligence, AR placement, and smart recommendations"
             ) {
                 dismiss()
-                coordinator.navigate(to: .walk)
+                coordinator.navigate(to: .scanFlow(reason: .fresh))
             }
 
             option(

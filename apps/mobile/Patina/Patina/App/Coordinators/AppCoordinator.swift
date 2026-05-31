@@ -28,26 +28,13 @@ public final class AppCoordinator: Coordinator {
     /// Whether the companion sheet is expanded
     public var isCompanionExpanded = false
 
-    /// Whether settings sheet is presented
-    public var showingSettings = false
-
-    /// Whether design services request sheet is presented
-    public var showingDesignServices = false
-
-    /// Room ID for design services request
-    public var designServicesRoomId: UUID?
-
-    /// Whether QR scanner sheet is presented
-    public var showingQRScanner = false
-
-    /// Whether the New Room bottom sheet is presented (Room System)
-    public var showingNewRoom = false
-
-    /// Whether the Move/Copy item sheet is presented (Room System)
-    public var showingMoveItem = false
-
-    /// ID of the SavedItem currently being moved/copied
-    public var movingItemId: UUID?
+    /// The single modal sheet currently presented over the app, if any.
+    /// PT-3-8 / PT-0-5: replaces the five `showing*` booleans and their
+    /// manual `Binding(get:set:)` blocks with one `.sheet(item:)` driver.
+    /// Set via `navigate(to:)` for the sheet-shaped intents; cleared by
+    /// SwiftUI on dismiss (and explicitly on `.auth` / `.launching`
+    /// transitions — PT-3-9).
+    public var presentedSheet: PresentedSheet?
 
     // MARK: - Companion Context
 
@@ -55,7 +42,7 @@ public final class AppCoordinator: Coordinator {
     public var companionContext = CompanionContext()
 
     /// Current screen being viewed (derived from navigation)
-    public private(set) var currentScreen: AppRoute = .threshold
+    public private(set) var currentScreen: AppRoute = .heroFrame
 
     // MARK: - Auth-derived state
 
@@ -181,6 +168,15 @@ public final class AppCoordinator: Coordinator {
                 pendingReturnRoute = currentScreen
             }
 
+            // PT-3-9: tear down any open modal sheet when we leave `.main`
+            // for `.auth` / `.launching`. Otherwise an open sheet (e.g. the
+            // QR scanner) re-presents itself over the auth / splash screen
+            // on the next render, since `.sheet(item:)` keys off a property
+            // that survived the phase flip.
+            if newPhase == .auth || newPhase == .launching {
+                presentedSheet = nil
+            }
+
             withAnimation(.easeInOut(duration: 0.4)) {
                 phase = newPhase
             }
@@ -256,17 +252,11 @@ public final class AppCoordinator: Coordinator {
         // Update current screen tracking
         currentScreen = route
 
-        // Track screen view in PostHog
-        PostHogService.shared.screen(route.displayName)
+        // Track screen view in PostHog (constant screen name for the scan
+        // flow; `reason` rides along as an event property — PT-3-5).
+        trackScreen(for: route)
 
         switch route {
-        case .threshold:
-            // `AppRoute.threshold` is a vestigial route — the threshold
-            // phase no longer exists. Treat it as "go to home" so any
-            // straggling navigate(to: .threshold) callers don't crash.
-            navigationPath = NavigationPath()
-            updateContext(for: route)
-
         case .heroFrame:
             navigationPath = NavigationPath()
             updateContext(for: route)
@@ -287,17 +277,9 @@ public final class AppCoordinator: Coordinator {
             navigationPath.append(route)
             updateContext(for: route)
 
-        case .newRoom:
-            // Presented as sheet via AppCoordinator.showingNewRoom
-            showingNewRoom = true
-
         case .manualRoomEntry:
             navigationPath.append(route)
             updateContext(for: route)
-
-        case .moveItem(let itemId):
-            movingItemId = itemId
-            showingMoveItem = true
 
         case .roomDetail(let roomId):
             navigationPath.append(AppRoute.roomDetail(roomId: roomId))
@@ -307,16 +289,12 @@ public final class AppCoordinator: Coordinator {
             navigationPath.append(AppRoute.roomSavedItems(roomId: roomId))
             updateContext(for: route)
 
-        case .roomOptions:
-            // Show as sheet
-            updateContext(for: route)
-
-        case .conversation, .walk, .walkSession, .table:
+        case .table:
             navigationPath.append(route)
             updateContext(for: route)
 
-        case .rescan(let roomId):
-            navigationPath.append(AppRoute.rescan(roomId: roomId))
+        case .scanFlow:
+            navigationPath.append(route)
             updateContext(for: route)
 
         case .emergence(let pieceId):
@@ -331,44 +309,13 @@ public final class AppCoordinator: Coordinator {
             navigationPath.append(AppRoute.pieceDetail(pieceId: pieceId))
             updateContext(for: route)
 
-        case .authentication:
-            // The `.auth` phase is now the authentication surface. Routes
-            // that intended "navigate to sign-in" should call
-            // `presentAuthentication()` instead. Kept here as a no-op
-            // so deep links and older companion intents still compile.
-            break
-
-        case .settings:
-            showingSettings = true
-
-        case .designServicesRequest(let roomId):
-            designServicesRoomId = roomId
-            showingDesignServices = true
-
-        case .qrScanner:
-            showingQRScanner = true
-
-        case .qrApproval:
-            // Approval is shown as part of QR scanner flow, not separately
-            break
-
         case .styleQuiz, .styleResult:
             navigationPath.append(route)
             updateContext(for: route)
 
-        case .arPlacement, .preScanChecklist, .floorPlanPreview,
+        case .arPlacement, .preScanChecklist,
              .profile, .notifications, .designerConsultation:
             navigationPath.append(route)
-            updateContext(for: route)
-
-        case .scanThreshold, .scanWalk, .scanReview, .scanSoftLanding,
-             .scanConversation, .scanReveal, .scanFloorPlan,
-             .scanFallbackEntry:
-            navigationPath.append(route)
-            updateContext(for: route)
-
-        // First Launch routes are handled by FirstLaunchContainerView
-        case .walkInvitation, .cameraPermission, .walkComplete, .firstEmergence, .roomNaming:
             updateContext(for: route)
 
         // MVP v1 expanded routes
@@ -384,6 +331,18 @@ public final class AppCoordinator: Coordinator {
         }
     }
 
+    /// PostHog screen-view properties for a route. For `.scanFlow` this
+    /// attaches the entry `reason` so the single "Quiet Conversation"
+    /// screen name can be segmented in dashboards (PT-3-5).
+    private func screenProperties(for route: AppRoute) -> [String: Any]? {
+        switch route {
+        case .scanFlow(let reason):
+            return ["reason": reason.rawValue]
+        default:
+            return nil
+        }
+    }
+
     /// Update `currentScreen` and companion context WITHOUT touching the
     /// navigation path. Use this from `.onAppear` when the view is already
     /// the navigation root (so we don't dirty `navigationPath` and trigger
@@ -392,8 +351,30 @@ public final class AppCoordinator: Coordinator {
     /// must still go through `navigate(to:)`.
     public func setCurrentScreen(_ route: AppRoute) {
         currentScreen = route
-        PostHogService.shared.screen(route.displayName)
+        trackScreen(for: route)
         updateContext(for: route)
+    }
+
+    /// Emit the PostHog screen-view event(s) for a route.
+    ///
+    /// PT-3-5: the canonical screen name for `.scanFlow` is the constant
+    /// "Quiet Conversation" with `reason` as a property — this fixes the
+    /// three-screen-name funnel corruption ("Walk" / "Walking" /
+    /// "Re-scan Room").
+    ///
+    /// Transition safety: while the `ios_screen_name_v2` flag is OFF we ALSO
+    /// emit the legacy per-reason screen name so existing funnel dashboards
+    /// keep receiving data until they've been rebuilt against the new name.
+    /// Once the flag is flipped ON for a project, only the new name is sent.
+    /// Remove this dual-emit a wave after dashboards are migrated.
+    private func trackScreen(for route: AppRoute) {
+        PostHogService.shared.screen(route.analyticsScreenName, properties: screenProperties(for: route))
+
+        if case .scanFlow = route,
+           !PostHogService.shared.isFeatureEnabled("ios_screen_name_v2"),
+           let legacyName = route.legacyScreenName {
+            PostHogService.shared.screen(legacyName, properties: screenProperties(for: route))
+        }
     }
 
     public func goBack() {
@@ -412,14 +393,15 @@ public final class AppCoordinator: Coordinator {
 
         // Clear context that's no longer relevant
         switch route {
-        case .threshold, .heroFrame, .roomList, .conversation:
+        case .heroFrame, .roomList:
             companionContext.viewingPiece = nil
             companionContext.walkProgress = nil
-        case .roomDetail, .roomSavedItems, .roomOptions:
+        case .roomDetail, .roomSavedItems:
             companionContext.viewingPiece = nil
             companionContext.walkProgress = nil
-        case .walk, .walkSession, .rescan:
+        case .scanFlow:
             companionContext.viewingPiece = nil
+            companionContext.walkProgress = nil
         case .emergence, .roomEmergence, .pieceDetail:
             companionContext.walkProgress = nil
         case .table:
@@ -430,35 +412,16 @@ public final class AppCoordinator: Coordinator {
             companionContext.walkProgress = nil
         case .arPlacement:
             companionContext.walkProgress = nil
-        case .preScanChecklist, .floorPlanPreview:
+        case .preScanChecklist:
             companionContext.viewingPiece = nil
         case .profile, .notifications, .designerConsultation:
-            companionContext.viewingPiece = nil
-            companionContext.walkProgress = nil
-        case .authentication, .settings, .designServicesRequest, .qrScanner, .qrApproval:
-            break
-
-        case .scanThreshold, .scanWalk, .scanReview, .scanSoftLanding,
-             .scanConversation, .scanReveal, .scanFloorPlan,
-             .scanFallbackEntry:
             companionContext.viewingPiece = nil
             companionContext.walkProgress = nil
 
         // Room System routes
         case .yourSpaces, .roomProject, .roomSettings, .crossRoom,
-             .newRoom, .manualRoomEntry, .moveItem:
+             .manualRoomEntry:
             companionContext.viewingPiece = nil
-            companionContext.walkProgress = nil
-
-        // First Launch routes
-        case .walkInvitation, .cameraPermission:
-            companionContext.viewingPiece = nil
-            companionContext.walkProgress = nil
-        case .walkComplete:
-            companionContext.viewingPiece = nil
-        case .firstEmergence:
-            companionContext.walkProgress = nil
-        case .roomNaming:
             companionContext.walkProgress = nil
 
         // MVP v1 expanded routes — clear viewing context.
@@ -516,13 +479,9 @@ public final class AppCoordinator: Coordinator {
     public func handleIntent(_ intent: NavigationIntent) -> Bool {
         switch intent {
         case .walkRoom(let roomId):
-            if let roomId = roomId {
-                // Navigate to specific room walk
-                navigate(to: .walkSession)
-            } else {
-                // Start new walk
-                navigate(to: .walk)
-            }
+            // Both branches enter the Quiet Conversation flow; a known
+            // roomId means we're re-walking an existing room.
+            navigate(to: .scanFlow(reason: roomId == nil ? .fresh : .rescan))
             return true
 
         case .showEmergence:
@@ -550,7 +509,7 @@ public final class AppCoordinator: Coordinator {
             return false
 
         case .requestDesignServices(let roomId):
-            navigate(to: .designServicesRequest(roomId: roomId))
+            presentedSheet = .designServices(roomId: roomId)
             return true
 
         case .viewRecommendations(let roomId):
@@ -562,11 +521,11 @@ public final class AppCoordinator: Coordinator {
             return true
 
         case .webSignIn:
-            showingQRScanner = true
+            presentedSheet = .qr
             return true
 
         case .showSettings:
-            navigate(to: .settings)
+            presentedSheet = .settings
             return true
 
         // Screen-specific intents (don't navigate, just return)
@@ -619,17 +578,10 @@ public final class AppCoordinator: Coordinator {
     /// Picks the LiDAR or manual-entry path, then drives the linear sequence.
     /// Per `docs/specs/IOS Scann/quiet-conversation-prd.md`.
     public func startRoomScanFlow() {
-        #if canImport(RoomPlan)
-        let hasLidar = RoomCaptureService.isSupported
-        #else
-        let hasLidar = false
-        #endif
-
-        if hasLidar {
-            navigate(to: .scanThreshold)
-        } else {
-            navigate(to: .scanFallbackEntry)
-        }
+        // The flow host (`QuietConversationFlowHost`) detects LiDAR support
+        // itself and forks to the threshold (LiDAR) or fallback-entry
+        // (manual) path. A fresh scan is the canonical entry.
+        navigate(to: .scanFlow(reason: .fresh))
     }
 
     // MARK: - Phase Transitions
@@ -651,6 +603,39 @@ public final class AppCoordinator: Coordinator {
             isCompanionExpanded.toggle()
         }
         HapticManager.shared.companionPulse()
+    }
+}
+
+// MARK: - Presented Sheet
+
+extension AppCoordinator {
+    /// The set of app-level modal sheets. PT-3-8 / PT-0-5: replaces five
+    /// `showing*` booleans with a single `Identifiable` enum driving one
+    /// `.sheet(item:)` in `ContentView`. Associated values carry the data
+    /// the sheet needs so we no longer keep parallel `*RoomId` / `*ItemId`
+    /// properties on the coordinator.
+    public enum PresentedSheet: Identifiable, Hashable {
+        /// App settings (notifications, haptics, cellular upload). PT-0-5:
+        /// mounts `SettingsView`; `AccountView` is reachable from within it.
+        case settings
+        /// QR code scanner for web sign-in.
+        case qr
+        /// "Request design help" form, optionally scoped to a room.
+        case designServices(roomId: UUID?)
+        /// "Add a room" bottom sheet (Room System).
+        case newRoom
+        /// Move / copy a saved item between rooms (Room System).
+        case moveItem(itemId: UUID)
+
+        public var id: String {
+            switch self {
+            case .settings: return "settings"
+            case .qr: return "qr"
+            case .designServices(let roomId): return "designServices-\(roomId?.uuidString ?? "none")"
+            case .newRoom: return "newRoom"
+            case .moveItem(let itemId): return "moveItem-\(itemId.uuidString)"
+            }
+        }
     }
 }
 

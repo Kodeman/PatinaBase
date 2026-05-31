@@ -24,34 +24,49 @@ public protocol Coordinator: AnyObject {
     func goBack()
 }
 
-/// Navigation destinations in the app
+/// Why the Quiet Conversation scan flow is being entered. Carried into
+/// PostHog as the `reason` property so the single "Quiet Conversation"
+/// screen name funnel can be segmented without forking the screen name
+/// itself (PT-3-5). The flow host (`QuietConversationFlowHost`) picks the
+/// LiDAR vs. manual-entry path on its own; `reason` is purely intent.
+public enum ScanReason: String, Hashable {
+    /// First scan of a brand-new room (Walk / Walk-First / "Scan a room").
+    case fresh
+    /// Re-scanning a room the user already has.
+    case rescan
+    /// Entered from the style conversation ("Update my style" / refine).
+    case fromConversation
+}
+
+/// User-facing navigation destinations.
+///
+/// PT-3-6: every case here resolves to a *real* `navigationDestination`
+/// (or a root-reset for the home surfaces). Sheet-only presentations live
+/// on `AppCoordinator.PresentedSheet`; the internal scan-movement steps
+/// (threshold → walk → review → … → floorPlan) live on
+/// `QuietConversationFlowHost.InternalFlowStep`. The old `EmptyView()`
+/// destination arms are gone.
+///
+/// PT-3-5: the five legacy scan-entry cases collapsed into a single
+/// `.scanFlow(reason:)`.
 public enum AppRoute: Hashable {
-    case threshold
-    case heroFrame           // New: Hero Frame home screen
-    case conversation
+    case heroFrame                          // Home / DailyRoom root
     case roomList
     case yourSpaces                         // Room System: gallery
     case roomDetail(roomId: UUID)
     case roomProject(roomId: UUID)          // Room System: full project view
     case roomSettings(roomId: UUID)         // Room System: settings
     case crossRoom                          // Room System: all items
-    case newRoom                            // Room System: create sheet
     case manualRoomEntry                    // Room System: manual entry form
-    case moveItem(savedItemId: UUID)        // Room System: move/copy sheet
-    case roomSavedItems(roomId: UUID)  // New: Saved items for a room
-    case roomOptions(roomId: UUID)     // New: Room options menu
-    case walk
-    case walkSession
-    case rescan(roomId: UUID)          // New: Re-scan a specific room
+    case roomSavedItems(roomId: UUID)       // Saved items for a room
     case emergence(pieceId: String?)
-    case roomEmergence(roomId: UUID)   // New: Emergence for a specific room
+    case roomEmergence(roomId: UUID)        // Emergence for a specific room
     case table
     case pieceDetail(pieceId: String)
-    case authentication
-    case settings
-    case designServicesRequest(roomId: UUID?)
-    case qrScanner           // QR code scanner for web authentication
-    case qrApproval          // QR authentication approval (sheet)
+
+    // Quiet Conversation — Room Scan & Style Discovery (v2.0). One canonical
+    // entry; `QuietConversationFlowHost` owns the internal step sequence.
+    case scanFlow(reason: ScanReason)
 
     // Style Quiz routes
     case styleQuiz
@@ -60,17 +75,6 @@ public enum AppRoute: Hashable {
     // AR & Scan Enhancement routes
     case arPlacement(productId: String, roomRemoteId: String? = nil)
     case preScanChecklist
-    case floorPlanPreview
-
-    // Quiet Conversation — Room Scan & Style Discovery redesign (v2.0)
-    case scanThreshold             // Screen 01: camera fade-in
-    case scanWalk(sessionId: UUID) // Screens 02-06: the active walk
-    case scanReview(scanId: UUID)  // Screen 08: user review before finalize (Wave 4)
-    case scanSoftLanding(sessionId: UUID)  // Screen 09: the transition
-    case scanConversation(sessionId: UUID) // Movement 2: 5-question container
-    case scanReveal(profileId: String)     // Screen 16: the Reveal
-    case scanFloorPlan(sessionId: UUID)    // Screen 17: new floor plan preview
-    case scanFallbackEntry         // Screen 18: non-LiDAR manual entry
 
     // Phase 6 routes
     case profile
@@ -89,63 +93,35 @@ public enum AppRoute: Hashable {
     // Procurement (Sprint 2 W2.4)
     case receiveDelivery                              // designer-on-site receiving
 
-    // First Launch routes
-    case walkInvitation
-    case cameraPermission
-    case walkComplete
-    case firstEmergence
-    case roomNaming
-
-    /// Display name for the route
+    /// Display name for the route. Used for debugging / companion context.
+    ///
+    /// NOTE (PT-3-5): the PostHog *screen name* for the scan flow is the
+    /// constant `ScanAnalyticsScreen.quietConversation` ("Quiet
+    /// Conversation"), NOT this `displayName`. See
+    /// `AppRoute.analyticsScreenName`.
     public var displayName: String {
         switch self {
-        case .threshold: return "Threshold"
         case .heroFrame: return "Home"
-        case .conversation: return "Conversation"
         case .roomList: return "Your Rooms"
         case .yourSpaces: return "Your Spaces"
         case .roomDetail: return "Room Detail"
         case .roomProject: return "Room"
         case .roomSettings: return "Room Settings"
         case .crossRoom: return "All Items"
-        case .newRoom: return "New Room"
         case .manualRoomEntry: return "Room Details"
-        case .moveItem: return "Move Item"
         case .roomSavedItems: return "Saved Items"
-        case .roomOptions: return "Room Options"
-        case .walk: return "Walk"
-        case .walkSession: return "Walking"
-        case .rescan: return "Re-scan Room"
         case .emergence: return "Emergence"
         case .roomEmergence: return "Emergence"
         case .table: return "Your Table"
         case .pieceDetail: return "Piece Detail"
-        case .authentication: return "Sign In"
-        case .settings: return "Settings"
-        case .designServicesRequest: return "Request Design Help"
-        case .qrScanner: return "Scan QR Code"
-        case .qrApproval: return "Approve Sign In"
+        case .scanFlow: return "Quiet Conversation"
         case .styleQuiz: return "Style Quiz"
         case .styleResult: return "Your Style"
         case .arPlacement: return "AR Placement"
         case .preScanChecklist: return "Pre-Scan"
-        case .floorPlanPreview: return "Floor Plan"
-        case .scanThreshold: return "Scan"
-        case .scanWalk: return "Walking"
-        case .scanReview: return "Review"
-        case .scanSoftLanding: return "Transition"
-        case .scanConversation: return "Style Discovery"
-        case .scanReveal: return "Your Style"
-        case .scanFloorPlan: return "Floor Plan"
-        case .scanFallbackEntry: return "Room Details"
         case .profile: return "Profile"
         case .notifications: return "Notifications"
         case .designerConsultation: return "Designer"
-        case .walkInvitation: return "Walk Invitation"
-        case .cameraPermission: return "Camera Permission"
-        case .walkComplete: return "Walk Complete"
-        case .firstEmergence: return "First Emergence"
-        case .roomNaming: return "Room Naming"
         case .designerHome: return "Designer Home"
         case .receiveDelivery: return "Receive Delivery"
         case .projectList: return "Projects"
@@ -156,24 +132,52 @@ public enum AppRoute: Hashable {
         case .threadDetail: return "Conversation"
         }
     }
+}
 
-    /// Whether this is a first-launch route
-    public var isFirstLaunchRoute: Bool {
+/// PostHog screen-name constants. Centralised so the route → screen-name
+/// mapping can be pinned by `RouteAnalyticsParityTests` (PT-3-5).
+public enum ScanAnalyticsScreen {
+    /// The single, stable screen name for the entire scan / style-discovery
+    /// flow. Replaces the three distinct names ("Walk", "Walking",
+    /// "Re-scan Room") that previously corrupted the funnel.
+    public static let quietConversation = "Quiet Conversation"
+}
+
+public extension AppRoute {
+    /// The PostHog screen name for this route. For `.scanFlow` this is the
+    /// constant "Quiet Conversation" regardless of `reason` — the `reason`
+    /// rides along as an event property instead (see
+    /// `AppCoordinator.screenProperties(for:)`). Every other route uses its
+    /// `displayName`.
+    var analyticsScreenName: String {
         switch self {
-        case .threshold, .walkInvitation, .cameraPermission, .walkComplete, .firstEmergence, .roomNaming:
-            return true
+        case .scanFlow:
+            return ScanAnalyticsScreen.quietConversation
         default:
-            return false
+            return displayName
         }
     }
 
-    /// Whether this route should be presented as a sheet
-    public var isSheetRoute: Bool {
+    /// The pre-consolidation PostHog screen name for this route, if it had a
+    /// distinct one. Used ONLY for the `ios_screen_name_v2` dual-emit
+    /// transition (PT-3-5) so legacy funnel dashboards keep receiving data
+    /// while they're rebuilt against the new constant name. Returns `nil`
+    /// for routes whose name didn't change.
+    ///
+    /// The three legacy names that previously corrupted the single scan
+    /// funnel were "Walk", "Walking", and "Re-scan Room"; "Style Discovery"
+    /// was the conversation-entry name. Keep this in sync with
+    /// `RouteAnalyticsParityTests`.
+    var legacyScreenName: String? {
         switch self {
-        case .designServicesRequest, .roomOptions, .qrScanner, .qrApproval, .newRoom, .moveItem:
-            return true
+        case .scanFlow(let reason):
+            switch reason {
+            case .fresh: return "Walking"
+            case .rescan: return "Re-scan Room"
+            case .fromConversation: return "Style Discovery"
+            }
         default:
-            return false
+            return nil
         }
     }
 }

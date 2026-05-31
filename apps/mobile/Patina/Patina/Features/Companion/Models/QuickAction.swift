@@ -105,12 +105,9 @@ public enum QuickActionFactory {
         switch screen {
         case .heroFrame:
             return heroFrameActions(context: context)
-        case .conversation:
-            return conversationActions()
-        case .walk:
-            return walkActions(isComplete: false, context: context)
-        case .walkSession:
-            return walkActions(isComplete: context?.walkProgress ?? 0 >= 1.0, context: context)
+        case .scanFlow:
+            // Quiet Conversation flow owns its own controls — Companion stays quiet.
+            return []
         case .emergence, .roomEmergence:
             return emergenceActions(context: context)
         case .table:
@@ -119,35 +116,20 @@ public enum QuickActionFactory {
             return roomListActions()
         case .pieceDetail:
             return pieceDetailActions(context: context)
-        case .threshold:
-            return [] // No actions during threshold
-        case .authentication, .settings, .designServicesRequest, .qrScanner, .qrApproval:
-            return [] // No actions on modal screens
-        case .walkInvitation, .cameraPermission, .walkComplete, .firstEmergence, .roomNaming:
-            return [] // First launch screens have their own UI
         case .roomDetail(let roomId):
             return roomDetailActions(roomId: roomId)
         case .roomSavedItems(let roomId):
             return roomSavedItemsActions(roomId: roomId)
-        case .roomOptions:
-            return [] // Room options is a modal
-        case .rescan:
-            return walkActions(isComplete: false, context: context)
         case .styleQuiz, .styleResult:
             return [] // Quiz has its own navigation
         case .arPlacement:
             return [] // AR has its own controls
-        case .preScanChecklist, .floorPlanPreview:
+        case .preScanChecklist:
             return [] // Scan flow has its own UI
         case .profile, .notifications, .designerConsultation:
             return [] // These screens have their own navigation
         case .yourSpaces, .roomProject, .roomSettings, .crossRoom,
-             .newRoom, .manualRoomEntry, .moveItem:
-            return []
-        case .scanThreshold, .scanWalk, .scanReview, .scanSoftLanding,
-             .scanConversation, .scanReveal, .scanFloorPlan,
-             .scanFallbackEntry:
-            // Quiet Conversation flow owns its own controls — Companion stays quiet.
+             .manualRoomEntry:
             return []
         case .designerHome,
              .projectList, .projectDetail,
@@ -259,69 +241,6 @@ public enum QuickActionFactory {
                 intent: .goBack
             )
         ]
-    }
-
-    private static func conversationActions() -> [QuickAction] {
-        [
-            QuickAction(
-                title: "Walk a room",
-                icon: "figure.walk",
-                intent: .walkRoom(roomId: nil),
-                isPrimary: true
-            ),
-            QuickAction(
-                title: "Skip ahead",
-                icon: "forward",
-                intent: .skipAhead
-            ),
-            QuickAction(
-                title: "Start fresh",
-                icon: "arrow.counterclockwise",
-                intent: .startFresh
-            )
-        ]
-    }
-
-    private static func walkActions(isComplete: Bool, context: CompanionContext? = nil) -> [QuickAction] {
-        if isComplete {
-            return [
-                QuickAction(
-                    title: "See what surfaced",
-                    icon: "sparkles",
-                    intent: .viewRecommendations(roomId: context?.activeRoom?.id),
-                    isPrimary: true
-                ),
-                QuickAction(
-                    title: "Get design help",
-                    icon: "wand.and.stars",
-                    intent: .requestDesignServices(roomId: context?.activeRoom?.id)
-                ),
-                QuickAction(
-                    title: "Walk another",
-                    icon: "figure.walk",
-                    intent: .walkRoom(roomId: nil)
-                )
-            ]
-        } else {
-            return [
-                QuickAction(
-                    title: "Continue",
-                    icon: "play",
-                    intent: .continueWalk,
-                    isPrimary: true
-                ),
-                QuickAction(
-                    title: "Save progress",
-                    icon: "square.and.arrow.down",
-                    intent: .saveWalkProgress
-                ),
-                QuickAction(
-                    title: "Start over",
-                    icon: "arrow.counterclockwise",
-                    intent: .startOver
-                )
-            ]
-        }
     }
 
     private static func emergenceActions(context: CompanionContext? = nil) -> [QuickAction] {

@@ -52,10 +52,7 @@ public struct ContextBar: View {
 
     private var contextLabel: String {
         switch context.currentScreen {
-        case .conversation:
-            return "Getting to know you"
-
-        case .walk, .walkSession:
+        case .scanFlow:
             if let room = context.activeRoom {
                 let progress = Int((context.walkProgress ?? 0) * 100)
                 return "Walking: \(room.name) (\(progress)% complete)"

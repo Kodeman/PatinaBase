@@ -161,10 +161,10 @@ struct ProfileView: View {
                         coordinator.navigate(to: .styleQuiz)
                     }
                     profileActionRow(icon: "bubble.left", label: "Work with a Designer") {
-                        coordinator.navigate(to: .designServicesRequest(roomId: nil))
+                        coordinator.presentedSheet = .designServices(roomId: nil)
                     }
                     profileActionRow(icon: "gearshape", label: "Settings") {
-                        coordinator.showingSettings = true
+                        coordinator.presentedSheet = .settings
                     }
                 }
                 .padding(.horizontal, 24)

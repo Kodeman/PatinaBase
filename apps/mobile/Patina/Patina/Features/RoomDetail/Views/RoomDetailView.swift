@@ -261,7 +261,7 @@ struct RoomDetailView: View {
                         )
                     )
                 }
-                coordinator.navigate(to: .walk)
+                coordinator.navigate(to: .scanFlow(reason: .rescan))
             } label: {
                 HStack(spacing: PatinaSpacing.sm) {
                     Image(systemName: "figure.walk")

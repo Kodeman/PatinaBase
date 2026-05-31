@@ -93,8 +93,8 @@ public struct QRScannerView: View {
             viewModel.stopScanning()
         }
         .onChange(of: viewModel.shouldDismiss) { _, shouldDismiss in
-            if shouldDismiss {
-                coordinator.showingQRScanner = false
+            if shouldDismiss, coordinator.presentedSheet == .qr {
+                coordinator.presentedSheet = nil
             }
         }
         // Contextual help panel — surfaces every Sanity article whose

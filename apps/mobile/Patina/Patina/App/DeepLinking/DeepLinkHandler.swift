@@ -155,7 +155,7 @@ public final class DeepLinkHandler {
 
             if handled {
                 // Show approval sheet
-                coordinator?.showingQRScanner = true
+                coordinator?.presentedSheet = .qr
             }
         }
 
