@@ -5,6 +5,17 @@
 //  Service wrapping Apple's RoomPlan framework for room scanning.
 //  Handles RoomCaptureSession and emits detected features.
 //
+//  PT-6-2: this type is now a thin FAÇADE composing three collaborators —
+//    • RoomCaptureSessionDriver  — RoomPlan view + RoomCaptureSession/ARSession
+//                                  lifecycle (create / run / stop)
+//    • RoomCaptureAnalyzer       — coverage / quality / completion metrics +
+//                                  pure-geometry helpers
+//    • RoomCaptureBundleAdapter  — writes captured data into the on-disk bundle
+//  The public API (consumed by WalkView / RoomCaptureViewRepresentable /
+//  ScanViewModel) is unchanged; the service owns the @Observable state, the
+//  RoomCaptureSessionDelegate + ARSessionDelegate conformances, and feature
+//  emission, delegating mechanics/analysis/IO to the collaborators.
+//
 
 import Foundation
 import CoreGraphics
@@ -103,19 +114,21 @@ public final class RoomCaptureService: NSObject {
 
     // MARK: - RoomPlan Components
 
-    /// The capture view - creates and owns the session
-    private var captureView: RoomCaptureView?
+    /// Drives the RoomPlan view + RoomCaptureSession/ARSession lifecycle.
+    private var sessionDriver: RoomCaptureSessionDriver!
 
     /// Access to the capture session (from the view)
     public var captureSession: RoomCaptureSession? {
-        captureView?.captureSession
+        sessionDriver.captureSession
     }
 
-    // MARK: - Analyzers (NEW)
+    // MARK: - Collaborators (NEW)
 
-    private let coverageAnalyzer = CoverageAnalyzer()
-    private let qualityMonitor = QualityMonitor()
-    private let completionAnalyzer = CompletionAnalyzer()
+    /// Coverage / quality / completion metrics + pure-geometry helpers.
+    private let analyzer = RoomCaptureAnalyzer()
+
+    /// Writes captured scan data into the on-disk bundle.
+    private let bundleAdapter = RoomCaptureBundleAdapter()
 
     // MARK: - Internal State
 
@@ -153,14 +166,10 @@ public final class RoomCaptureService: NSObject {
 
     public override init() {
         super.init()
-        setupCaptureView()
-    }
-
-    private func setupCaptureView() {
-        // Create view first - it owns the session
-        let view = RoomCaptureView(frame: UIScreen.main.bounds)
-        view.captureSession.delegate = self
-        captureView = view
+        // The driver creates the RoomCaptureView and wires `self` as the
+        // RoomCaptureSession + ARSession delegate. (PT-6-7: the view is now
+        // created at `.zero`; the embedding container sizes it.)
+        sessionDriver = RoomCaptureSessionDriver(delegate: self)
     }
 
     // MARK: - Public Methods
@@ -172,22 +181,12 @@ public final class RoomCaptureService: NSObject {
 
     /// Get the RoomCaptureView for embedding in SwiftUI
     public func getRoomCaptureView() -> RoomCaptureView {
-        // View is created in init, just return it
-        guard let view = captureView else {
-            // Fallback - create if somehow nil
-            setupCaptureView()
-            return captureView!
-        }
-        return view
+        sessionDriver.getRoomCaptureView()
     }
 
     /// Start room capture session
     public func startCapture(scanId: UUID = UUID(), roomLocalId: UUID? = nil, roomName: String = "Room") {
         guard !isScanning else { return }
-        guard let view = captureView else {
-            errorMessage = "Capture view not initialized"
-            return
-        }
 
         // Reset state
         scanProgress = 0
@@ -206,9 +205,7 @@ public final class RoomCaptureService: NSObject {
 
         // Reset analyzers
         Task {
-            await coverageAnalyzer.reset()
-            await qualityMonitor.reset()
-            await completionAnalyzer.reset()
+            await analyzer.reset()
         }
 
         // Drop any anchors from a previous run.
@@ -273,12 +270,12 @@ public final class RoomCaptureService: NSObject {
         // Start hero frame capture (legacy, still useful for in-memory scoring)
         frameCaptureService.startCapture()
 
-        // Configure and start the session from the view
-        let config = RoomCaptureSession.Configuration()
-        view.captureSession.run(configuration: config)
-
-        // Set up AR session delegate for frame capture
-        view.captureSession.arSession.delegate = self
+        // Configure and start the session from the view (wires the ARSession
+        // delegate for frame capture).
+        guard sessionDriver.run() else {
+            errorMessage = "Capture view not initialized"
+            return
+        }
 
         isScanning = true
 
@@ -299,7 +296,7 @@ public final class RoomCaptureService: NSObject {
         frameCaptureService.stopCapture()
         posedPhotoService?.stop()
 
-        captureView?.captureSession.stop()
+        sessionDriver.stop()
         isScanning = false
     }
 
@@ -315,7 +312,7 @@ public final class RoomCaptureService: NSObject {
         // both AR/RoomPlan + frame/photo services are released.
         frameCaptureService.stopCapture()
         posedPhotoService?.stop()
-        captureView?.captureSession.stop()
+        sessionDriver.stop()
         isScanning = false
         sessionFailure = nil
         errorMessage = nil
@@ -338,7 +335,7 @@ public final class RoomCaptureService: NSObject {
     public func processRoom() -> FirstWalkRoomData? {
         guard let room = capturedRoom else { return nil }
 
-        let dimensions = extractDimensions(from: room)
+        let dimensions = analyzer.extractDimensions(from: room)
         let scanDuration = scanStartTime.map { Date().timeIntervalSince($0) } ?? 0
 
         return FirstWalkRoomData(
@@ -388,32 +385,7 @@ public final class RoomCaptureService: NSObject {
     /// Export the captured room as USDZ data
     /// - Returns: USDZ file data, or nil if export fails
     public func exportUSDZ() async -> Data? {
-        guard let room = capturedRoom else {
-            PatinaLog.scan.debug("exportUSDZ: No captured room available")
-            return nil
-        }
-
-        do {
-            // Create temporary URL for export
-            let tempURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("\(UUID().uuidString).usdz")
-
-            // Export using RoomPlan's built-in export
-            try room.export(to: tempURL, exportOptions: .model)
-
-            // Read the exported file data
-            let data = try Data(contentsOf: tempURL)
-
-            // Clean up temporary file
-            try? FileManager.default.removeItem(at: tempURL)
-
-            PatinaLog.scan.debug("exportUSDZ: Successfully exported \(data.count) bytes")
-            return data
-
-        } catch {
-            PatinaLog.scan.error("exportUSDZ: Failed to export - \(error.localizedDescription)")
-            return nil
-        }
+        await bundleAdapter.exportUSDZ(capturedRoom: capturedRoom)
     }
 
     /// Export CapturedRoom as JSON (authoritative geometry —
@@ -425,82 +397,26 @@ public final class RoomCaptureService: NSObject {
     /// writes USDA — not JSON — and rejects a `.json` extension.
     @discardableResult
     public func exportCapturedRoomJSON() async -> ScanManifest.Artifact? {
-        guard let room = capturedRoom, let writer = bundleWriter else { return nil }
-        do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.sortedKeys]
-            let data = try encoder.encode(room)
-            return try writer.writeArtifact(
-                kind: .capturedRoomJson,
-                data: data,
-                mimeType: "application/json"
-            )
-        } catch {
-            PatinaLog.scan.error("[RoomCaptureService] CapturedRoom JSON export failed: \(error.localizedDescription)")
-            return nil
-        }
+        await bundleAdapter.exportCapturedRoomJSON(capturedRoom: capturedRoom, writer: bundleWriter)
     }
 
     /// Export the beautified USDZ into the current bundle as the `.usdz` artifact.
     @discardableResult
     public func exportUSDZToBundle() async -> ScanManifest.Artifact? {
-        guard let writer = bundleWriter, let data = await exportUSDZ() else { return nil }
-        do {
-            return try writer.writeArtifact(
-                kind: .usdz,
-                data: data,
-                mimeType: "model/vnd.usdz+zip"
-            )
-        } catch {
-            PatinaLog.scan.error("[RoomCaptureService] USDZ bundle write failed: \(error.localizedDescription)")
-            return nil
-        }
+        await bundleAdapter.exportUSDZToBundle(capturedRoom: capturedRoom, writer: bundleWriter)
     }
 
     /// Get the current quality grade
     public func getCurrentQualityGrade() async -> QualityMonitor.QualityGrade {
-        return await qualityMonitor.finalMetrics().grade
+        await analyzer.finalQualityGrade()
     }
 
     /// Check if the scan can be completed now
     public func canComplete() async -> Bool {
-        return await completionAnalyzer.canComplete()
+        await analyzer.canComplete()
     }
 
     // MARK: - Private Methods
-
-    private func extractDimensions(from room: CapturedRoom) -> WalkRoomDimensions {
-        // Calculate room bounds from walls
-        var minX: Float = .greatestFiniteMagnitude
-        var maxX: Float = -.greatestFiniteMagnitude
-        var minZ: Float = .greatestFiniteMagnitude
-        var maxZ: Float = -.greatestFiniteMagnitude
-        var maxY: Float = 2.7 // Default ceiling height
-
-        for wall in room.walls {
-            let transform = wall.transform
-            let position = SIMD3<Float>(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z)
-            let halfWidth = wall.dimensions.x / 2
-            let halfDepth = wall.dimensions.z / 2
-
-            minX = min(minX, position.x - halfWidth)
-            maxX = max(maxX, position.x + halfWidth)
-            minZ = min(minZ, position.z - halfDepth)
-            maxZ = max(maxZ, position.z + halfDepth)
-            maxY = max(maxY, position.y + wall.dimensions.y)
-        }
-
-        let width = maxX - minX
-        let length = maxZ - minZ
-        let height = maxY
-
-        // Clamp to reasonable values
-        return WalkRoomDimensions(
-            width: max(2.0, min(width, 20.0)),
-            length: max(2.0, min(length, 20.0)),
-            height: max(2.0, min(height, 5.0))
-        )
-    }
 
     private func processDetectedObjects(from room: CapturedRoom) {
         let now = Date()
@@ -538,13 +454,13 @@ public final class RoomCaptureService: NSObject {
             guard !processedObjectIds.contains(object.identifier) else { continue }
             processedObjectIds.insert(object.identifier)
 
-            if let feature = mapObjectToFeature(object) {
+            if let feature = analyzer.mapObjectToFeature(object) {
                 emitFeatureIfReady(feature, at: now)
             }
         }
 
         // Check ceiling height
-        let dimensions = extractDimensions(from: room)
+        let dimensions = analyzer.extractDimensions(from: room)
         if dimensions.height > 2.74 && !detectedFeatures.contains(where: { $0.category == .tallCeiling }) {
             let feature = DetectedFeature(category: .tallCeiling, value: dimensions.height)
             emitFeatureIfReady(feature, at: now)
@@ -561,23 +477,6 @@ public final class RoomCaptureService: NSObject {
             $0.category == .window || $0.category == .largeWindow
         }) {
             // Already handled individual windows above
-        }
-    }
-
-    private func mapObjectToFeature(_ object: CapturedRoom.Object) -> DetectedFeature? {
-        switch object.category {
-        case .fireplace:
-            return DetectedFeature(category: .fireplace)
-        case .storage:
-            // Check if it might be a bookshelf based on dimensions
-            if object.dimensions.y > 1.0 && object.dimensions.x > 0.5 {
-                return DetectedFeature(category: .bookshelf)
-            }
-            return nil
-        case .sofa, .chair:
-            return DetectedFeature(category: .seatingArea)
-        default:
-            return nil
         }
     }
 
@@ -621,40 +520,28 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
             // without waiting for the final didEndWith / RoomBuilder pass.
             self.capturedRoom = room
 
-            // Analyze coverage using CoverageAnalyzer
-            let coverage = await self.coverageAnalyzer.analyze(room)
-            self.coverageResult = coverage
-
-            // Update progress based on coverage (more accurate than simple heuristic)
-            self.scanProgress = coverage.overallCoverage
-            self.onProgressUpdate?(coverage.overallCoverage)
-
-            // Evaluate quality
-            await self.qualityMonitor.evaluate(room)
-            let quality = await self.qualityMonitor.finalMetrics()
-            self.qualityMetrics = quality
-
-            // Analyze completion status — extend the pure-geometry gate
-            // with ambient lighting + motion snapshots so low-light or
-            // shaky-pan scans can't auto-complete prematurely.
-            let frame = session.arSession.currentFrame
-            let envSnapshot = CaptureEnvironmentSnapshot(
-                lightEstimateLumens: frame?.lightEstimate.map { Double($0.ambientIntensity) } ?? nil,
-                motionGrade: quality.grade
-            )
-            let completion = await self.completionAnalyzer.analyze(
+            // Run the coverage → quality → completion pipeline. Ambient
+            // lighting + motion are folded in so low-light / shaky-pan scans
+            // can't auto-complete prematurely.
+            let result = await self.analyzer.analyze(
                 room: room,
-                coverage: coverage,
-                quality: quality,
-                environment: envSnapshot
+                frame: session.arSession.currentFrame
             )
+
+            // Apply coverage to observable state + progress.
+            self.coverageResult = result.coverage
+            self.scanProgress = result.coverage.overallCoverage
+            self.onProgressUpdate?(result.coverage.overallCoverage)
+
+            // Apply quality metrics.
+            self.qualityMetrics = result.quality
 
             // Only update if status changed
-            if self.completionStatus?.recommendation != completion.recommendation {
-                self.completionStatus = completion
-                self.onCompletionStatusChanged?(completion)
+            if self.completionStatus?.recommendation != result.completion.recommendation {
+                self.completionStatus = result.completion
+                self.onCompletionStatusChanged?(result.completion)
             } else {
-                self.completionStatus = completion
+                self.completionStatus = result.completion
             }
 
             // Process detected objects for narration
@@ -758,7 +645,7 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
             // Telemetry uses whatever progress we have. Quality grade is
             // still meaningful from optical/coverage analyzers.
             let scanDuration = self.scanStartTime.map { Date().timeIntervalSince($0) } ?? 0
-            let qualityGrade = await self.qualityMonitor.finalMetrics().grade
+            let qualityGrade = await self.analyzer.finalQualityGrade()
             WalkAnalytics.shared.trackRoomScanCompleted(
                 roomType: "living_room",
                 scanDuration: scanDuration,
@@ -778,151 +665,26 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
         }
     }
 
-    /// Freeze the on-disk scan bundle: CapturedRoom JSON, USDZ, ARWorldMap,
-    /// scene mesh, depth archive + index, coverage heatmap, photo thumbnail
-    /// index, environment snapshot. Does NOT seal the manifest — that's the
-    /// job of `finalizeBundleAfterReview(...)` after the user reviews the
-    /// scan. Swallows per-artifact failures so the scan flow continues even
-    /// if (e.g.) the world map isn't available yet.
+    /// Freeze the on-disk scan bundle via `RoomCaptureBundleAdapter`. Does NOT
+    /// seal the manifest — that's the job of `finalizeBundleAfterReview(...)`.
     @MainActor
     private func freezeBundleArtifacts(arSession: ARSession) async {
         guard let writer = bundleWriter else {
             UploadDiagnosticsLog.shared.log(event: "freeze.no_writer")
             return
         }
-        let scanId = writer.scanId
-        UploadDiagnosticsLog.shared.log(event: "freeze.start", scanId: scanId)
-
-        // 1. CapturedRoom parametric JSON (authoritative geometry)
-        let crj = await exportCapturedRoomJSON()
-        UploadDiagnosticsLog.shared.log(
-            event: crj != nil ? "freeze.captured_room_json.ok" : "freeze.captured_room_json.skipped",
-            scanId: scanId,
-            extra: ["has_captured_room": capturedRoom == nil ? "false" : "true"]
-        )
-
-        // 2. USDZ (beautified mesh for ARQuickLook)
-        let usdz = await exportUSDZToBundle()
-        UploadDiagnosticsLog.shared.log(
-            event: usdz != nil ? "freeze.usdz.ok" : "freeze.usdz.skipped",
-            scanId: scanId,
-            extra: ["has_captured_room": capturedRoom == nil ? "false" : "true"]
-        )
-
-        // 3. ARWorldMap
-        let wm = await WorldMapExporter.exportToBundle(session: arSession, bundle: writer)
-        UploadDiagnosticsLog.shared.log(
-            event: wm != nil ? "freeze.world_map.ok" : "freeze.world_map.failed",
-            scanId: scanId
-        )
-
-        // 4. Scene mesh from accumulated ARMeshAnchors. Using the cached
-        // set (built up during the scan via didAdd/didUpdate) instead of
-        // `arSession.currentFrame?.anchors` — by the time didEndWith fires
-        // the session has usually cleared its anchor list.
-        let anchors = Array(meshAnchors.values)
-        let mesh = SceneMeshExporter.exportToBundle(anchors: anchors, bundle: writer)
-        UploadDiagnosticsLog.shared.log(
-            event: mesh != nil ? "freeze.mesh.ok" : "freeze.mesh.failed",
-            scanId: scanId,
-            extra: ["anchor_count": String(anchors.count)]
-        )
-
-        // 5. Flush the depth recorder so its NDJSON index is fully on disk
-        //    before we zip the depth/ directory or register the index as
-        //    an artifact.
-        depthRecorder?.finishSession()
-
-        // 6. Score the posed photos and fold scores into manifest entries.
-        if let posed = posedPhotoService, !posed.emittedPhotos.isEmpty {
-            var scored = posed.emittedPhotos
-            for i in scored.indices {
-                // Best-effort scoring — matching photo to a hero frame is
-                // already handled by FrameScoringEngine for the legacy path;
-                // for v2 we leave qualityScore nil when we can't map it and
-                // let the server treat it as unscored.
-                scored[i].qualityScore = scored[i].qualityScore ?? 0
-            }
-            try? writer.replacePhotos(scored)
-        }
-
-        // 7. Coverage heatmap artifact (JSON grid snapshot).
-        var coverageHeatmapPresent = false
-        do {
-            let heatmap = await coverageAnalyzer.currentHeatmap()
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.sortedKeys]
-            let data = try encoder.encode(heatmap)
-            _ = try writer.writeArtifact(
-                kind: .coverageHeatmap,
-                data: data,
-                mimeType: "application/json"
+        await bundleAdapter.freezeBundleArtifacts(
+            RoomCaptureBundleAdapter.FreezeContext(
+                writer: writer,
+                arSession: arSession,
+                capturedRoom: capturedRoom,
+                analyzer: analyzer,
+                meshAnchors: Array(meshAnchors.values),
+                depthRecorder: depthRecorder,
+                posedPhotoService: posedPhotoService,
+                qualityMetrics: qualityMetrics
             )
-            coverageHeatmapPresent = true
-        } catch {
-            PatinaLog.scan.error("[RoomCaptureService] coverage heatmap write failed: \(error.localizedDescription)")
-        }
-
-        // 8. Depth index + depth.zip — only if the recorder wrote anything.
-        let framesWritten = depthRecorder?.framesWritten ?? 0
-        if framesWritten > 0 {
-            // Register the existing NDJSON file as a depthIndex artifact.
-            registerExistingDepthIndex(writer: writer)
-
-            // Best-effort zip of depth/ → depth.zip using NSFileCoordinator.
-            if let zipURL = try? zipDepthDirectory(at: writer.bundleURL) {
-                do {
-                    let data = try Data(contentsOf: zipURL)
-                    _ = try writer.writeArtifact(
-                        kind: .depthArchive,
-                        data: data,
-                        mimeType: "application/zip"
-                    )
-                } catch {
-                    PatinaLog.scan.error("[RoomCaptureService] depth archive register failed: \(error.localizedDescription)")
-                }
-                try? FileManager.default.removeItem(at: zipURL)
-            }
-        }
-
-        // 9. Photo-thumbnails index — register after all photos are locked in.
-        do {
-            try writer.registerPhotoThumbnailsIndex()
-        } catch {
-            PatinaLog.scan.error("[RoomCaptureService] photo thumbnails index failed: \(error.localizedDescription)")
-        }
-
-        // 10. Environment snapshot. optical flow mean is left nil — the
-        //     FrameScoringEngine does not yet expose a running mean, and we
-        //     prefer nil over an inaccurate estimate.
-        let env = ScanManifest.CaptureEnvironment(
-            lightEstimate: arSession.currentFrame?.lightEstimate.map { Double($0.ambientIntensity) } ?? nil,
-            thermalState: String(describing: ProcessInfo.processInfo.thermalState),
-            batteryLevel: Double(UIDevice.current.batteryLevel),
-            motionQuality: String(describing: qualityMetrics?.grade ?? .poor),
-            opticalFlowMean: nil,
-            sceneDepthFrameCount: framesWritten > 0 ? framesWritten : nil,
-            coverageHeatmapPresent: coverageHeatmapPresent
         )
-        try? writer.updateCaptureEnvironment(env)
-
-        // Diagnostic line: total artifact count at freeze end. If this lands
-        // as zero, every individual exporter above silently failed and the
-        // upload pipeline will refuse to mark the scan complete (see
-        // RoomScanSyncService.swift uploadRoomScan's empty-artifacts guard).
-        let frozenArtifacts = writer.currentManifest().artifacts.map { $0.kind.rawValue }
-        UploadDiagnosticsLog.shared.log(
-            event: "freeze.end",
-            scanId: scanId,
-            extra: [
-                "artifact_count": String(frozenArtifacts.count),
-                "kinds": frozenArtifacts.joined(separator: ",")
-            ]
-        )
-
-        // NOTE: manifest is NOT finalized here. `finalizeBundleAfterReview`
-        // writes annotations, applies user hero/order selection, then seals
-        // the manifest via `writer.finalize(hashArtifacts: true)`.
     }
 
     /// Apply user-supplied review data (annotations, hero selection, photo
@@ -938,119 +700,21 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
     ) async throws {
         guard let writer = bundleWriter else { return }
 
-        // 1. Persist annotations.
-        try writer.setAnnotations(annotations)
-
-        // 2. Apply hero selection + reorder + per-photo captions.
-        var photos = writer.currentManifest().photos
-        if let heroId = heroPhotoId {
-            for i in photos.indices {
-                photos[i].isUserSelectedHero = (photos[i].id == heroId)
-            }
-        }
-        if !reorderedPhotoIds.isEmpty {
-            // Build an index → orderIndex map from the caller's ordering.
-            var orderLookup: [UUID: Int] = [:]
-            for (idx, id) in reorderedPhotoIds.enumerated() {
-                orderLookup[id] = idx
-            }
-            for i in photos.indices {
-                if let idx = orderLookup[photos[i].id] {
-                    photos[i].orderIndex = idx
-                }
-            }
-        }
-        if !photoAnnotations.isEmpty {
-            for i in photos.indices {
-                if let caption = photoAnnotations[photos[i].id] {
-                    let trimmed = caption.trimmingCharacters(in: .whitespacesAndNewlines)
-                    photos[i].userAnnotation = trimmed.isEmpty ? nil : trimmed
-                }
-            }
-        }
-        if heroPhotoId != nil || !reorderedPhotoIds.isEmpty || !photoAnnotations.isEmpty {
-            try writer.replacePhotos(photos)
-        }
-
-        // 3. Seal the manifest (recomputes sizes + hashes artifacts).
-        _ = try writer.finalize(hashArtifacts: true)
+        // Steps 1–3 (persist annotations, apply hero/reorder/captions, seal
+        // the manifest) live in the bundle adapter.
+        try bundleAdapter.applyReviewAndSeal(
+            writer: writer,
+            annotations: annotations,
+            heroPhotoId: heroPhotoId,
+            reorderedPhotoIds: reorderedPhotoIds,
+            photoAnnotations: photoAnnotations
+        )
 
         // 4. Fire the legacy onScanComplete callback so downstream
         //    coordinators (ScanCompletionCoordinator, etc.) can proceed.
         if let room = capturedRoom {
             onScanComplete?(room)
         }
-    }
-
-    /// Best-effort: compute the NDJSON index size on disk and upsert it into
-    /// the manifest as a `.depthIndex` artifact. The recorder writes the
-    /// file directly; ScanBundleWriter's public API surface has no "register
-    /// existing file as artifact" helper, so we read + rewrite via
-    /// `writeArtifact` (which preserves the same path via `fileName`).
-    @MainActor
-    private func registerExistingDepthIndex(writer: ScanBundleWriter) {
-        let indexURL = writer.bundleURL.appendingPathComponent("depth/depth_index.ndjson")
-        guard let data = try? Data(contentsOf: indexURL), !data.isEmpty else { return }
-        do {
-            _ = try writer.writeArtifact(
-                kind: .depthIndex,
-                data: data,
-                mimeType: "application/x-ndjson",
-                fileName: "depth/depth_index.ndjson"
-            )
-        } catch {
-            PatinaLog.scan.error("[RoomCaptureService] depth index register failed: \(error.localizedDescription)")
-        }
-    }
-
-    /// Zip the `<bundleURL>/depth/` directory into a sibling `depth.zip`
-    /// using `NSFileCoordinator`'s `forUploading` option. Returns the URL
-    /// of the coordinator-provided zip in a temp location (caller is
-    /// responsible for cleanup).
-    @MainActor
-    private func zipDepthDirectory(at bundleURL: URL) throws -> URL {
-        let depthDir = bundleURL.appendingPathComponent("depth", isDirectory: true)
-        guard FileManager.default.fileExists(atPath: depthDir.path) else {
-            throw NSError(
-                domain: "RoomCaptureService",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "depth directory missing"]
-            )
-        }
-        let coordinator = NSFileCoordinator()
-        var coordError: NSError?
-        var producedURL: URL?
-        var innerError: Error?
-        coordinator.coordinate(
-            readingItemAt: depthDir,
-            options: [.forUploading],
-            error: &coordError
-        ) { zippedTempURL in
-            // `zippedTempURL` lives in a system temp dir and is valid only
-            // within this block. Move it to our own temp location so the
-            // caller can read it after the closure returns.
-            let destURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("\(UUID().uuidString)-depth.zip")
-            do {
-                if FileManager.default.fileExists(atPath: destURL.path) {
-                    try FileManager.default.removeItem(at: destURL)
-                }
-                try FileManager.default.moveItem(at: zippedTempURL, to: destURL)
-                producedURL = destURL
-            } catch {
-                innerError = error
-            }
-        }
-        if let coordError { throw coordError }
-        if let innerError { throw innerError }
-        guard let url = producedURL else {
-            throw NSError(
-                domain: "RoomCaptureService",
-                code: 2,
-                userInfo: [NSLocalizedDescriptionKey: "zip coordinator returned no URL"]
-            )
-        }
-        return url
     }
 
     nonisolated public func captureSession(_ session: RoomCaptureSession, didProvide instruction: RoomCaptureSession.Instruction) {
@@ -1114,8 +778,7 @@ extension RoomCaptureService: ARSessionDelegate {
             for anchor in newMeshes {
                 self.meshAnchors[anchor.identifier] = anchor
             }
-            await self.coverageAnalyzer.ingestMeshAnchorCentroids(centroids)
-            let hint = await self.coverageAnalyzer.nextCoachingHint()
+            let hint = await self.analyzer.ingestMeshAnchorCentroids(centroids)
             self.coachingHint = hint
         }
     }
@@ -1131,8 +794,7 @@ extension RoomCaptureService: ARSessionDelegate {
             for anchor in updatedMeshes {
                 self.meshAnchors[anchor.identifier] = anchor
             }
-            await self.coverageAnalyzer.ingestMeshAnchorCentroids(centroids)
-            let hint = await self.coverageAnalyzer.nextCoachingHint()
+            let hint = await self.analyzer.ingestMeshAnchorCentroids(centroids)
             self.coachingHint = hint
         }
     }
