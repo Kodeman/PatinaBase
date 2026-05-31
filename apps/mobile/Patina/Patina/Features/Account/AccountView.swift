@@ -11,6 +11,7 @@ import Auth
 /// Account screen presented as a sheet
 struct AccountView: View {
     @Environment(\.appCoordinator) private var coordinator
+    @Environment(\.dismiss) private var dismiss
     @State private var showingSignOutAlert = false
     @State private var homeMode: SettingsService.HomeMode = SettingsService.shared.preferredHomeMode
 
@@ -65,7 +66,7 @@ struct AccountView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {
-                        coordinator.showingSettings = false
+                        dismiss()
                     }
                     .font(PatinaTypography.bodyMedium)
                     .foregroundStyle(PatinaColors.mocha)
@@ -83,7 +84,9 @@ struct AccountView: View {
                     // splash window. The phase observer will pick up
                     // the `.signedOut` event from `AuthService` and
                     // land on `.auth` once the splash deadline elapses.
-                    coordinator.showingSettings = false
+                    // (PT-3-9 also clears `presentedSheet` on the `.auth`
+                    // transition as a backstop.)
+                    coordinator.presentedSheet = nil
                     coordinator.beginSplashTransition()
                     try? await authService.signOut()
                 }
@@ -193,11 +196,10 @@ struct AccountView: View {
             VStack(spacing: PatinaSpacing.md) {
                 // Sign in to Web
                 Button {
-                    coordinator.showingSettings = false
-                    Task {
-                        try? await Task.sleep(for: .seconds(0.3))
-                        coordinator.showingQRScanner = true
-                    }
+                    // Swap the active sheet from Account → QR scanner.
+                    // `.sheet(item:)` animates the change; no manual delay
+                    // needed now that a single sheet drives presentation.
+                    coordinator.presentedSheet = .qr
                 } label: {
                     HStack {
                         Image(systemName: "qrcode.viewfinder")

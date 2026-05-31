@@ -75,7 +75,7 @@ struct RoomProjectView: View {
                                     .padding(.top, 12)
                             }
                             cta(primary: "Work with a Designer on This Room") {
-                                coordinator.navigate(to: .designServicesRequest(roomId: room.id))
+                                coordinator.presentedSheet = .designServices(roomId: room.id)
                             }
                             sendToDesignersButton(for: room)
                         }
@@ -368,7 +368,7 @@ struct RoomProjectView: View {
         case .viewDetail:
             coordinator.navigate(to: .pieceDetail(pieceId: item.productId))
         case .move, .copy:
-            coordinator.navigate(to: .moveItem(savedItemId: item.id))
+            coordinator.presentedSheet = .moveItem(itemId: item.id)
         case .findSimilar:
             coordinator.navigate(to: .pieceDetail(pieceId: item.productId))
         case .remove:

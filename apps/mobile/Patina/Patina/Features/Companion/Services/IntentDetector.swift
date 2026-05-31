@@ -197,8 +197,9 @@ public final class IntentDetector {
     public func isValid(intent: NavigationIntent, fromScreen: AppRoute) -> Bool {
         switch intent {
         case .continueWalk, .saveWalkProgress:
-            // Only valid from walk screens
-            return fromScreen == .walk || fromScreen == .walkSession
+            // Only valid from the scan flow.
+            if case .scanFlow = fromScreen { return true }
+            return false
         case .explainPiece, .seeInRoom, .letDrift:
             // Only valid from emergence or piece detail
             if case .emergence = fromScreen { return true }

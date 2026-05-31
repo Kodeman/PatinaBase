@@ -36,7 +36,7 @@ struct DailyRoomView: View {
 
             if viewModel.rooms.isEmpty {
                 DailyRoomEmptyState {
-                    coordinator.navigate(to: .walk)
+                    coordinator.navigate(to: .scanFlow(reason: .fresh))
                 }
             } else {
                 content
@@ -114,7 +114,7 @@ struct DailyRoomView: View {
                 },
                 onNewRoom: {
                     viewModel.presentingAddFor = nil
-                    coordinator.navigate(to: .newRoom)
+                    coordinator.presentedSheet = .newRoom
                 }
             )
         }

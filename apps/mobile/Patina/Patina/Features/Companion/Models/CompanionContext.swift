@@ -51,7 +51,7 @@ public struct CompanionContext: Equatable {
     // MARK: - Initialization
 
     public init(
-        currentScreen: AppRoute = .conversation,
+        currentScreen: AppRoute = .heroFrame,
         viewingPiece: ViewingPieceContext? = nil,
         activeRoom: ActiveRoomContext? = nil,
         walkProgress: Float? = nil,
@@ -75,28 +75,27 @@ public struct CompanionContext: Equatable {
     /// Human-readable context for display in the Companion header
     public var contextSummary: String {
         switch currentScreen {
-        case .threshold:
-            return "Entering Patina"
         case .heroFrame:
             if let room = activeRoom {
                 return room.name
             }
             return "Your Space"
-        case .conversation:
-            return "Getting to know you"
         case .roomList:
             return "Your Rooms: \(roomCount) spaces"
-        case .walk, .walkSession:
-            if let room = activeRoom, let progress = walkProgress {
-                let percent = Int(progress * 100)
-                return "Walking: \(room.name) (\(percent)% complete)"
+        case .scanFlow(let reason):
+            switch reason {
+            case .rescan:
+                if let room = activeRoom {
+                    return "Re-scanning: \(room.name)"
+                }
+                return "Re-scanning room"
+            case .fresh, .fromConversation:
+                if let room = activeRoom, let progress = walkProgress {
+                    let percent = Int(progress * 100)
+                    return "Walking: \(room.name) (\(percent)% complete)"
+                }
+                return "Walking a room"
             }
-            return "Walking a room"
-        case .rescan:
-            if let room = activeRoom {
-                return "Re-scanning: \(room.name)"
-            }
-            return "Re-scanning room"
         case .emergence, .roomEmergence:
             if let piece = viewingPiece {
                 return "Viewing: \(piece.name) by \(piece.maker)"
@@ -109,18 +108,6 @@ public struct CompanionContext: Equatable {
             return "Piece details"
         case .table:
             return "Your Table: \(tableItemCount) pieces gathering"
-        case .authentication:
-            return "Signing in"
-        case .settings:
-            return "Settings"
-        case .walkInvitation:
-            return "Welcome to Patina"
-        case .cameraPermission:
-            return "Camera Permission"
-        case .walkComplete:
-            return "Walk Complete"
-        case .firstEmergence:
-            return "Something's emerging..."
         case .roomDetail:
             if let room = activeRoom {
                 return "Viewing: \(room.name)"
@@ -131,16 +118,6 @@ public struct CompanionContext: Equatable {
                 return "Saved items in \(room.name)"
             }
             return "Saved items"
-        case .roomOptions:
-            return "Room options"
-        case .roomNaming:
-            return "Naming your room"
-        case .designServicesRequest:
-            return "Requesting design help"
-        case .qrScanner:
-            return "Scanning QR code"
-        case .qrApproval:
-            return "Approving sign-in"
         case .styleQuiz:
             return "Discovering your style"
         case .styleResult:
@@ -149,8 +126,6 @@ public struct CompanionContext: Equatable {
             return "Placing furniture"
         case .preScanChecklist:
             return "Preparing to scan"
-        case .floorPlanPreview:
-            return "Your floor plan"
         case .profile:
             return "Your profile"
         case .notifications:
@@ -166,30 +141,7 @@ public struct CompanionContext: Equatable {
             return "Room settings"
         case .crossRoom:
             return "All items across your home"
-        case .newRoom:
-            return "Add a room"
         case .manualRoomEntry:
-            return "Entering room details"
-        case .moveItem:
-            return "Move item"
-        case .scanThreshold:
-            return "Preparing to scan"
-        case .scanWalk:
-            if let progress = walkProgress {
-                return "Walking: \(Int(progress * 100))% complete"
-            }
-            return "Walking your room"
-        case .scanReview:
-            return "Reviewing your scan"
-        case .scanSoftLanding:
-            return "Making space to talk"
-        case .scanConversation:
-            return "Discovering your style"
-        case .scanReveal:
-            return "Your style, revealed"
-        case .scanFloorPlan:
-            return "Your floor plan"
-        case .scanFallbackEntry:
             return "Entering room details"
         case .designerHome:
             return "Designer dashboard"
@@ -213,46 +165,22 @@ public struct CompanionContext: Equatable {
     /// Icon for the current context
     public var contextIcon: String {
         switch currentScreen {
-        case .threshold:
-            return "door.left.hand.open"
         case .heroFrame:
             return "photo"
-        case .conversation:
-            return "bubble.left.and.bubble.right"
         case .roomList:
             return "house"
-        case .walk, .walkSession, .rescan:
+        case .scanFlow:
             return "figure.walk"
-        case .emergence, .roomEmergence, .firstEmergence:
+        case .emergence, .roomEmergence:
             return "sparkles"
         case .pieceDetail:
             return "chair.lounge"
         case .table:
             return "rectangle.stack"
-        case .authentication:
-            return "person.circle"
-        case .settings:
-            return "gearshape"
-        case .walkInvitation:
-            return "hand.wave"
-        case .cameraPermission:
-            return "camera"
-        case .walkComplete:
-            return "checkmark.circle"
         case .roomDetail:
             return "square.split.bottomrightquarter"
         case .roomSavedItems:
             return "bookmark.fill"
-        case .roomOptions:
-            return "ellipsis.circle"
-        case .roomNaming:
-            return "pencil"
-        case .designServicesRequest:
-            return "sparkles"
-        case .qrScanner:
-            return "qrcode.viewfinder"
-        case .qrApproval:
-            return "checkmark.shield"
         case .styleQuiz:
             return "paintpalette"
         case .styleResult:
@@ -261,8 +189,6 @@ public struct CompanionContext: Equatable {
             return "arkit"
         case .preScanChecklist:
             return "checklist"
-        case .floorPlanPreview:
-            return "square.split.bottomrightquarter"
         case .profile:
             return "person.circle"
         case .notifications:
@@ -270,22 +196,8 @@ public struct CompanionContext: Equatable {
         case .designerConsultation:
             return "bubble.left.and.bubble.right"
         case .yourSpaces, .roomProject, .roomSettings, .crossRoom,
-             .newRoom, .manualRoomEntry, .moveItem:
+             .manualRoomEntry:
             return "house"
-        case .scanThreshold, .scanWalk:
-            return "figure.walk"
-        case .scanReview:
-            return "checkmark.seal"
-        case .scanSoftLanding:
-            return "leaf"
-        case .scanConversation:
-            return "bubble.left.and.bubble.right"
-        case .scanReveal:
-            return "sparkles"
-        case .scanFloorPlan:
-            return "square.split.bottomrightquarter"
-        case .scanFallbackEntry:
-            return "pencil.and.ruler"
         case .designerHome:
             return "rectangle.stack"
         case .projectList, .projectDetail:

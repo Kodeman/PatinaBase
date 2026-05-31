@@ -26,6 +26,8 @@ struct WalkView: View {
     @Environment(\.firstLaunchCoordinator) private var firstLaunchCoordinator
     @Environment(\.modelContext) private var modelContext
     @Environment(\.appCoordinator) private var coordinator
+    /// PT-6-16: typed channel that replaced `.mockScanCompleted`.
+    @Environment(\.scanEventChannel) private var scanEvents
 
     // RoomPlan integration
     @State private var captureService = RoomCaptureService()
@@ -152,10 +154,11 @@ struct WalkView: View {
         .onDisappear {
             captureService.stopCapture()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .mockScanCompleted)) { notification in
-            // Handle mock scan completion from simulator
-            if let roomData = notification.userInfo?["roomData"] as? FirstWalkRoomData {
-                handleMockScanCompletion(roomData: roomData)
+        .onChange(of: scanEvents.mockScanCompleted) { _, event in
+            // Handle mock scan completion from simulator (PT-6-16: typed
+            // channel replaced the `.mockScanCompleted` notification).
+            if let event {
+                handleMockScanCompletion(roomData: event.roomData)
             }
         }
     }

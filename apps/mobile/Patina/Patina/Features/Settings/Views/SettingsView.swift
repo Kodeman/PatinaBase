@@ -16,6 +16,16 @@ struct SettingsView: View {
     @AppStorage("patina.scanUploadOnCellularEnabled") private var uploadOnCellular = false
 
     var body: some View {
+        // PT-0-5: this is the real settings sheet (was previously
+        // AccountView). It's wrapped in a NavigationStack so the "Account"
+        // row can push `AccountView` — keeping account details reachable
+        // while the toggles (notifications / haptics / cellular) live here.
+        NavigationStack {
+            settingsContent
+        }
+    }
+
+    private var settingsContent: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
                 // Header
@@ -28,7 +38,12 @@ struct SettingsView: View {
 
                 // Account group
                 settingsGroup(title: "Account") {
-                    settingsRow(icon: "person.circle", iconColor: PatinaColors.clay, label: "Profile")
+                    NavigationLink {
+                        AccountView()
+                    } label: {
+                        settingsRow(icon: "person.circle", iconColor: PatinaColors.clay, label: "Account")
+                    }
+                    .buttonStyle(.plain)
                     settingsRow(icon: "paintpalette", iconColor: PatinaColors.sage, label: "Style Preferences")
                     settingsRow(icon: "qrcode.viewfinder", iconColor: PatinaColors.dustyBlue, label: "Connected Portals")
                 }

@@ -102,7 +102,7 @@ struct CrossRoomView: View {
 
     private func row(_ item: SavedItem) -> some View {
         Button {
-            coordinator.navigate(to: .moveItem(savedItemId: item.id))
+            coordinator.presentedSheet = .moveItem(itemId: item.id)
         } label: {
             HStack(spacing: 12) {
                 item.placeholderGradient

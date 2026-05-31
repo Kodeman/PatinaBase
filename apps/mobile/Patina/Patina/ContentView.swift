@@ -68,43 +68,40 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.5), value: coordinator.phase)
-        .sheet(isPresented: Binding(
-            get: { coordinator.showingDesignServices },
-            set: { coordinator.showingDesignServices = $0 }
-        )) {
-            RequestDesignServicesSheet(
-                roomId: coordinator.designServicesRoomId,
-                roomName: nil,
-                onDismiss: { coordinator.showingDesignServices = false }
-            )
+        // PT-3-8 / PT-0-5: one sheet driver for all app-level modals,
+        // replacing five boolean flags + five manual `Binding(get:set:)`
+        // blocks. SwiftUI clears `presentedSheet` on dismiss.
+        .sheet(item: Binding(
+            get: { coordinator.presentedSheet },
+            set: { coordinator.presentedSheet = $0 }
+        )) { sheet in
+            sheetContent(for: sheet)
         }
-        .sheet(isPresented: Binding(
-            get: { coordinator.showingQRScanner },
-            set: { coordinator.showingQRScanner = $0 }
-        )) {
+    }
+
+    // MARK: - Sheet Content
+
+    @ViewBuilder
+    private func sheetContent(for sheet: AppCoordinator.PresentedSheet) -> some View {
+        switch sheet {
+        case .settings:
+            // PT-0-5: the real SettingsView (notifications / haptics /
+            // cellular upload). AccountView is reachable from inside it.
+            SettingsView()
+        case .qr:
             QRScannerView()
-        }
-        .sheet(isPresented: Binding(
-            get: { coordinator.showingSettings },
-            set: { coordinator.showingSettings = $0 }
-        )) {
-            AccountView()
-        }
-        .sheet(isPresented: Binding(
-            get: { coordinator.showingNewRoom },
-            set: { coordinator.showingNewRoom = $0 }
-        )) {
+        case .designServices(let roomId):
+            RequestDesignServicesSheet(
+                roomId: roomId,
+                roomName: nil,
+                onDismiss: { coordinator.presentedSheet = nil }
+            )
+        case .newRoom:
             NewRoomSheet()
                 .presentationDetents([.medium])
-        }
-        .sheet(isPresented: Binding(
-            get: { coordinator.showingMoveItem },
-            set: { coordinator.showingMoveItem = $0 }
-        )) {
-            if let id = coordinator.movingItemId {
-                MoveOrCopyItemSheet(itemId: id)
-                    .presentationDetents([.medium, .large])
-            }
+        case .moveItem(let itemId):
+            MoveOrCopyItemSheet(itemId: itemId)
+                .presentationDetents([.medium, .large])
         }
     }
 
@@ -179,11 +176,10 @@ struct ContentView: View {
     private func destinationView(for route: AppRoute) -> some View {
         switch route {
         case .heroFrame:
+            // `.heroFrame` is a root-reset (it clears the nav path); it is
+            // never pushed as a destination, so this arm is unreachable.
+            // The home surface is rendered by `mainHomeView`.
             EmptyView()
-
-        case .conversation:
-            ConversationView()
-                .toolbarTitleDisplayMode(.inline)
 
         case .roomList, .yourSpaces:
             YourSpacesView()
@@ -205,19 +201,16 @@ struct ContentView: View {
             ManualRoomEntryView()
                 .toolbar(.hidden, for: .navigationBar)
 
-        case .newRoom, .moveItem:
-            EmptyView()
-
         case .roomSavedItems:
             CollectionsView()
                 .toolbarTitleDisplayMode(.inline)
 
-        case .roomOptions:
-            EmptyView()
-
-        case .walk, .walkSession, .rescan:
-            // Legacy entry points — route into the new Quiet Conversation flow
-            quietConversationEntry
+        case .scanFlow:
+            // The single Quiet Conversation entry. The host owns the entire
+            // internal step sequence (threshold → walk → review → … →
+            // floorPlan) so the movements share one RoomScanSession without
+            // the nav stack losing data between steps (PT-3-5 / PT-3-6).
+            QuietConversationFlowHost()
                 .toolbar(.hidden, for: .navigationBar)
 
         case .emergence(let pieceId):
@@ -241,18 +234,6 @@ struct ContentView: View {
             ProductDetailView(productId: pieceId)
                 .toolbar(.hidden, for: .navigationBar)
 
-        case .settings:
-            EmptyView()
-
-        case .designServicesRequest:
-            EmptyView()
-
-        case .threshold, .authentication:
-            EmptyView()
-
-        case .qrScanner, .qrApproval:
-            EmptyView()
-
         case .styleQuiz:
             StyleQuizView()
                 .toolbar(.hidden, for: .navigationBar)
@@ -267,13 +248,9 @@ struct ContentView: View {
 
         case .preScanChecklist:
             PreScanChecklistView {
-                coordinator.navigate(to: .walk)
+                coordinator.navigate(to: .scanFlow(reason: .fresh))
             }
             .toolbar(.hidden, for: .navigationBar)
-
-        case .floorPlanPreview:
-            // FloorPlanPreview needs room data passed from Walk; placeholder for now
-            EmptyView()
 
         case .profile:
             ProfileView()
@@ -285,37 +262,6 @@ struct ContentView: View {
 
         case .designerConsultation:
             DesignerConsultationView()
-                .toolbar(.hidden, for: .navigationBar)
-
-        case .walkInvitation, .cameraPermission, .walkComplete, .firstEmergence, .roomNaming:
-            EmptyView()
-
-        // MARK: - Quiet Conversation flow (v2.0)
-
-        case .scanThreshold:
-            quietConversationEntry
-                .toolbar(.hidden, for: .navigationBar)
-
-        case .scanWalk:
-            EmptyView()    // handled inline via quietConversationEntry state
-
-        case .scanReview:
-            EmptyView()    // handled inline via quietConversationEntry state
-
-        case .scanSoftLanding:
-            EmptyView()    // handled inline via quietConversationEntry state
-
-        case .scanConversation:
-            EmptyView()    // handled inline via quietConversationEntry state
-
-        case .scanReveal:
-            EmptyView()    // handled inline via quietConversationEntry state
-
-        case .scanFloorPlan:
-            EmptyView()    // handled inline via quietConversationEntry state
-
-        case .scanFallbackEntry:
-            quietConversationEntry
                 .toolbar(.hidden, for: .navigationBar)
 
         case .designerHome:
@@ -350,15 +296,6 @@ struct ContentView: View {
             ReceiveDeliveryView()
                 .toolbar(.hidden, for: .navigationBar)
         }
-    }
-
-    // MARK: - Quiet Conversation Entry
-
-    /// Single container that owns the entire Quiet Conversation flow state
-    /// so the 5 movements can share a RoomScanSession without the nav stack
-    /// losing data between routes.
-    private var quietConversationEntry: some View {
-        QuietConversationFlowHost()
     }
 }
 

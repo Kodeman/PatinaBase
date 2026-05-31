@@ -13,6 +13,9 @@ struct MockRoomScanView: View {
     var captureService: RoomCaptureService
     var narrationService: WalkNarrationService
 
+    /// PT-6-16: typed channel that replaced `.mockScanCompleted`.
+    @Environment(\.scanEventChannel) private var scanEvents
+
     @State private var scanProgress: CGFloat = 0
     @State private var detectedItems: [MockDetectedItem] = []
     @State private var showingGrid = true
@@ -322,12 +325,9 @@ struct MockRoomScanView: View {
         // Notify completion (using a mock CapturedRoom is complex, so we'll trigger via different mechanism)
         // The captureService.onScanComplete expects CapturedRoom, but we'll set the processed data directly
 
-        // For simulator, we need to manually complete the walk
-        NotificationCenter.default.post(
-            name: .mockScanCompleted,
-            object: nil,
-            userInfo: ["roomData": mockRoomData]
-        )
+        // For simulator, we need to manually complete the walk. PT-6-16:
+        // publish on the typed channel instead of NotificationCenter.
+        scanEvents.postMockScanCompleted(roomData: mockRoomData)
     }
 }
 
@@ -341,10 +341,6 @@ struct MockDetectedItem: Identifiable {
     let width: CGFloat
     let height: CGFloat
     let color: Color
-}
-
-extension Notification.Name {
-    static let mockScanCompleted = Notification.Name("mockScanCompleted")
 }
 
 // MARK: - Preview

@@ -23,6 +23,9 @@ struct CompanionActionItem: Identifiable {
         case openQRScanner
         case openSettings
         case openAuth
+        /// Present the "Request design help" sheet (PT-3-8: design services
+        /// is a `PresentedSheet`, not a navigation route).
+        case openDesignServices(roomId: UUID?)
     }
 
     init(icon: String, label: String, hint: String, isSuggested: Bool = false, route: AppRoute) {
@@ -58,7 +61,7 @@ enum CompanionActionProvider {
                 CompanionActionItem(
                     icon: "viewfinder", label: "Scan a room",
                     hint: "Suggested next step", isSuggested: true,
-                    route: .walk
+                    route: .scanFlow(reason: .fresh)
                 ),
                 CompanionActionItem(
                     icon: "sparkles", label: "Your recommendations",
@@ -130,7 +133,7 @@ enum CompanionActionProvider {
                 CompanionActionItem(
                     icon: "viewfinder", label: "Scan another room",
                     hint: "Add rooms to your profile",
-                    route: .walk
+                    route: .scanFlow(reason: .fresh)
                 ),
             ]
 
@@ -145,7 +148,7 @@ enum CompanionActionProvider {
                 CompanionActionItem(
                     icon: "bubble.left", label: "Ask a designer",
                     hint: "Get expert advice",
-                    route: .designServicesRequest(roomId: nil)
+                    specialAction: .openDesignServices(roomId: nil)
                 ),
             ]
 
@@ -154,12 +157,12 @@ enum CompanionActionProvider {
                 CompanionActionItem(
                     icon: "sparkles", label: "Start a project",
                     hint: "From your saved items", isSuggested: true,
-                    route: .designServicesRequest(roomId: nil)
+                    specialAction: .openDesignServices(roomId: nil)
                 ),
                 CompanionActionItem(
                     icon: "viewfinder", label: "Scan a room",
                     hint: "Add context for your saves",
-                    route: .walk
+                    route: .scanFlow(reason: .fresh)
                 ),
             ]
 
@@ -168,7 +171,7 @@ enum CompanionActionProvider {
                 CompanionActionItem(
                     icon: "viewfinder", label: "Scan a new room",
                     hint: "Add another space", isSuggested: true,
-                    route: .walk
+                    route: .scanFlow(reason: .fresh)
                 ),
             ]
 
@@ -182,21 +185,7 @@ enum CompanionActionProvider {
                 CompanionActionItem(
                     icon: "arrow.counterclockwise", label: "Rescan room",
                     hint: "Capture updates",
-                    route: .walk
-                ),
-            ]
-
-        case .conversation:
-            items = [
-                CompanionActionItem(
-                    icon: "viewfinder", label: "Scan a room",
-                    hint: "Show me your space",
-                    route: .walk
-                ),
-                CompanionActionItem(
-                    icon: "sparkles", label: "Recommendations",
-                    hint: "See what fits",
-                    route: .emergence(pieceId: nil)
+                    route: .scanFlow(reason: .rescan)
                 ),
             ]
 
@@ -214,20 +203,6 @@ enum CompanionActionProvider {
                 ),
             ]
 
-        case .settings:
-            items = [
-                CompanionActionItem(
-                    icon: "person.circle", label: "Your profile",
-                    hint: "Style · Rooms",
-                    route: .profile
-                ),
-                CompanionActionItem(
-                    icon: "viewfinder", label: "Scan a room",
-                    hint: "Add a new space",
-                    route: .walk
-                ),
-            ]
-
         default:
             items = [
                 CompanionActionItem(
@@ -238,14 +213,13 @@ enum CompanionActionProvider {
             ]
         }
 
-        // Always append "Connect to portal" and "Profile" unless on those screens
-        if screen != .qrScanner && screen != .qrApproval {
-            items.append(CompanionActionItem(
-                icon: "qrcode.viewfinder", label: "Connect to portal",
-                hint: "Scan QR · patina.cloud",
-                specialAction: .openQRScanner
-            ))
-        }
+        // Always append "Connect to portal". (Settings / QR are now sheets,
+        // not screens, so there's no screen to suppress this on — PT-3-8.)
+        items.append(CompanionActionItem(
+            icon: "qrcode.viewfinder", label: "Connect to portal",
+            hint: "Scan QR · patina.cloud",
+            specialAction: .openQRScanner
+        ))
 
         if !isAuthenticated {
             items.append(CompanionActionItem(
@@ -269,11 +243,11 @@ enum CompanionActionProvider {
     /// PT-6-10.
     static func panelTitle(for screen: AppRoute, context: CompanionContext) -> String {
         switch screen {
-        case .heroFrame, .threshold:
+        case .heroFrame:
             return context.roomCount == 0 ? "Where to begin?" : "Where to next?"
-        case .walk, .walkSession, .scanWalk, .rescan:
+        case .scanFlow:
             return "Keep scanning?"
-        case .emergence, .roomEmergence, .firstEmergence:
+        case .emergence, .roomEmergence:
             // After a save the user lands back here with a fuller table.
             return context.tableItemCount > 0 ? "Want another recommendation?" : "Want a recommendation?"
         case .pieceDetail:
@@ -284,13 +258,13 @@ enum CompanionActionProvider {
             return "Which room next?"
         case .roomDetail, .roomProject:
             return "What's next for this room?"
-        case .styleResult, .scanReveal:
+        case .styleResult:
             return "Where to from here?"
         case .designerHome, .projectList, .decisionList:
             return "What's on your plate?"
         case .threadList, .threadDetail:
             return "Anything else?"
-        case .profile, .settings:
+        case .profile:
             return "What would you like to do?"
         default:
             return "What next?"

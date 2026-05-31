@@ -21,7 +21,7 @@ struct QuietConversationFlowHost: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.modelContext) private var modelContext
 
-    @State private var step: Step = .initial
+    @State private var step: InternalFlowStep = .initial
     @State private var scanViewModel: ScanViewModel?
     @State private var session: RoomScanSession?
     @State private var profile: StyleProfileResponse?
@@ -50,7 +50,12 @@ struct QuietConversationFlowHost: View {
         let id: UUID
     }
 
-    private enum Step: Equatable {
+    /// The internal movement steps of the Quiet Conversation flow. PT-3-6:
+    /// these used to leak into `AppRoute` (`.scanWalk`, `.scanReview`, …)
+    /// where they rendered `EmptyView()` because the host actually owns
+    /// them. They now live here, driven by `@State`, and the nav layer only
+    /// knows about the single `.scanFlow(reason:)` entry route.
+    enum InternalFlowStep: Equatable {
         case initial
         case threshold
         case fallback
