@@ -59,6 +59,27 @@ public struct LingerModifier: ViewModifier {
                         stopLingering()
                     }
             )
+            // Accessible alternative: a sustained linger is impractical under
+            // VoiceOver, so a single tap (and an explicit custom action)
+            // reveals every stage at once (PT-2-4).
+            .accessibilityAction(named: Text("Reveal details")) {
+                revealAllStages()
+            }
+            .modifier(VoiceOverTapModifier { revealAllStages() })
+    }
+
+    /// Reveal every stage immediately — used under VoiceOver, where the
+    /// progressive timed reveal cannot be performed with a held touch.
+    private func revealAllStages() {
+        lingerTask?.cancel()
+        lingerTask = nil
+        isLingering = false
+        for stage in 1...max(1, stages) {
+            currentStage = stage
+            onReveal(stage)
+        }
+        HapticManager.shared.companionPulse()
+        onComplete()
     }
 
     private func startLingering() {

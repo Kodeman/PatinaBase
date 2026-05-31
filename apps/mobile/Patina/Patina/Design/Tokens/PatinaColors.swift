@@ -65,21 +65,57 @@ public enum PatinaColors {
     /// Error states
     public static let error = Color(hex: "C77B6E")
 
+    // MARK: - Dark Mode Palette
+    //
+    // Warm-graphite (not pure-black) dark surfaces and warmed text so the
+    // brand reads as "aged warmth in the dark" rather than a cold OLED
+    // void. Light values below are byte-identical to the historical
+    // hard-coded tokens; only the dark side is new (PT-5-9).
+
+    enum DarkPalette {
+        /// Primary dark canvas — warm graphite, not #000
+        static let background = Color(hex: "211E1B")
+        /// Card / secondary surface — one notch lighter than the canvas
+        static let backgroundSecondary = Color(hex: "2C2926")
+        /// Primary text on dark — warm near-white
+        static let textPrimary = Color(hex: "F2EDE6")
+        /// Secondary text on dark — warm light clay
+        static let textSecondary = Color(hex: "D8C9B4")
+        /// Muted text on dark — kept above AA against the graphite canvas
+        static let textMuted = Color(hex: "B5A487")
+        /// Interactive text on dark — lighter clay reads better than clayDeep
+        static let textInteractive = clay
+    }
+
     // MARK: - Semantic Colors
 
     public enum Background {
-        public static let primary = offWhite
-        public static let secondary = softCream
+        /// Primary canvas — light off-white / dark warm-graphite.
+        public static let primary = Color.patinaDynamic(
+            light: offWhite, dark: DarkPalette.background
+        )
+        /// Secondary surface (cards) — light soft-cream / dark warm-graphite.
+        public static let secondary = Color.patinaDynamic(
+            light: softCream, dark: DarkPalette.backgroundSecondary
+        )
         public static let tertiary = warmWhite
         public static let dark = charcoal
     }
 
     public enum Text {
-        public static let primary = charcoal
-        public static let secondary = mocha
-        public static let muted = agedOak
+        public static let primary = Color.patinaDynamic(
+            light: charcoal, dark: DarkPalette.textPrimary
+        )
+        public static let secondary = Color.patinaDynamic(
+            light: mocha, dark: DarkPalette.textSecondary
+        )
+        public static let muted = Color.patinaDynamic(
+            light: agedOak, dark: DarkPalette.textMuted
+        )
         public static let inverse = offWhite
-        public static let interactive = clayDeep
+        public static let interactive = Color.patinaDynamic(
+            light: clayDeep, dark: DarkPalette.textInteractive
+        )
     }
 
     public enum Interactive {
@@ -94,6 +130,22 @@ public enum PatinaColors {
         public static let line1 = mocha
         public static let line2 = clay
         public static let line3 = clay.opacity(0.5)
+    }
+}
+
+// MARK: - Dynamic (light / dark) Color Resolution
+
+extension Color {
+    /// Build a color that resolves to `light` in light mode and `dark` in
+    /// dark mode, by bridging through `UIColor`'s trait-aware provider.
+    /// Used by the semantic tokens so the brand adapts to system dark mode
+    /// without every call site branching on the color scheme (PT-5-9).
+    static func patinaDynamic(light: Color, dark: Color) -> Color {
+        Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(dark)
+                : UIColor(light)
+        })
     }
 }
 

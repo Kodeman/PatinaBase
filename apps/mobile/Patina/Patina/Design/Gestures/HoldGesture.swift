@@ -47,6 +47,28 @@ public struct HoldableModifier: ViewModifier {
                         cancelHold()
                     }
             )
+            // Accessible alternative: a press-and-hold is impractical under
+            // VoiceOver, so a single tap (and an explicit custom action)
+            // completes the threshold immediately (PT-2-4).
+            .accessibilityAction(named: Text("Activate")) {
+                accessibleComplete()
+            }
+            .accessibilityValue(Text("\(Int(progress * 100)) percent"))
+            .modifier(VoiceOverTapModifier { accessibleComplete() })
+    }
+
+    /// Skip the timed hold and fire completion directly — used when
+    /// VoiceOver is running, where a sustained drag cannot be performed.
+    private func accessibleComplete() {
+        holdTask?.cancel()
+        holdTask = nil
+        progress = 1
+        onProgress(1)
+        HapticManager.shared.notification(.success)
+        onComplete()
+        withAnimation(.easeOut(duration: 0.2)) {
+            resetState()
+        }
     }
 
     private func startHold() {
@@ -88,6 +110,29 @@ public struct HoldableModifier: ViewModifier {
         isHolding = false
         progress = 0
         onProgress(0)
+    }
+}
+
+// MARK: - VoiceOver Tap Alternative
+//
+// Shared helper for the hold/linger gestures: when VoiceOver is running a
+// sustained drag is impractical, so a single tap stands in as the
+// accessible activation path. Plain pointer users keep the original
+// press-and-hold behavior because the tap is only wired up while
+// VoiceOver is active (PT-2-4).
+struct VoiceOverTapModifier: ViewModifier {
+    let action: () -> Void
+
+    @Environment(\.accessibilityVoiceOverEnabled) private var isVoiceOverEnabled
+
+    func body(content: Content) -> some View {
+        if isVoiceOverEnabled {
+            content.onTapGesture {
+                action()
+            }
+        } else {
+            content
+        }
     }
 }
 

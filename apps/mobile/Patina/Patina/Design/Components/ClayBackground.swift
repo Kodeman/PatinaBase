@@ -8,6 +8,30 @@
 
 import SwiftUI
 
+// MARK: - Seeded RNG
+//
+// `Canvas`'s draw closure runs on every render. The old implementation
+// sampled `CGFloat.random` / `Bool.random` directly, so the texture
+// re-rolled (and visibly twitched) on every animation tick. A fixed-seed
+// SplitMix64 generator makes the same texture deterministic across renders
+// while staying cheap enough to regenerate inline (PT-6-6).
+struct SeededGenerator: RandomNumberGenerator {
+    private var state: UInt64
+
+    init(seed: UInt64) {
+        // Avoid a zero state (SplitMix64 degenerate seed).
+        self.state = seed == 0 ? 0x9E3779B97F4A7C15 : seed
+    }
+
+    mutating func next() -> UInt64 {
+        state &+= 0x9E3779B97F4A7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9
+        z = (z ^ (z >> 27)) &* 0x94D049BB133111EB
+        return z ^ (z >> 31)
+    }
+}
+
 /// Clay-textured background for Companion button and panel
 public struct ClayBackground: View {
     var cornerRadius: CGFloat
@@ -66,15 +90,22 @@ struct ClayTextureOverlay: View {
     var body: some View {
         GeometryReader { geometry in
             Canvas { context, size in
+                // Seed deterministically from the surface size so the
+                // texture is stable across renders (no per-frame re-roll)
+                // yet still varies with the surface dimensions (PT-6-6).
+                var rng = SeededGenerator(
+                    seed: UInt64(max(1, size.width * size.height))
+                )
+
                 // Create subtle noise pattern
                 let dotCount = Int(size.width * size.height * 0.0015 * intensity)
                 for _ in 0..<dotCount {
-                    let x = CGFloat.random(in: 0...size.width)
-                    let y = CGFloat.random(in: 0...size.height)
-                    let alpha = Double.random(in: 0.03...0.10) * intensity
+                    let x = CGFloat.random(in: 0...size.width, using: &rng)
+                    let y = CGFloat.random(in: 0...size.height, using: &rng)
+                    let alpha = Double.random(in: 0.03...0.10, using: &rng) * intensity
 
                     // Mix of lighter and darker spots for texture
-                    let isDark = Bool.random()
+                    let isDark = Bool.random(using: &rng)
                     let color = isDark
                         ? PatinaColors.mocha.opacity(alpha)
                         : Color.white.opacity(alpha * 0.5)
@@ -99,12 +130,20 @@ struct PaperTextureOverlay: View {
     var body: some View {
         GeometryReader { geometry in
             Canvas { context, size in
+                // Deterministic seed so the grain + fibers are stable
+                // across renders instead of twitching every frame (PT-6-6).
+                // Offset the seed from ClayTextureOverlay so the two layers
+                // don't share an identical pattern.
+                var rng = SeededGenerator(
+                    seed: UInt64(max(1, size.width * size.height)) &+ 0x5A5A
+                )
+
                 // Paper grain - tiny random dots
                 let grainCount = Int(size.width * size.height * 0.002 * intensity)
                 for _ in 0..<grainCount {
-                    let x = CGFloat.random(in: 0...size.width)
-                    let y = CGFloat.random(in: 0...size.height)
-                    let alpha = Double.random(in: 0.02...0.06) * intensity
+                    let x = CGFloat.random(in: 0...size.width, using: &rng)
+                    let y = CGFloat.random(in: 0...size.height, using: &rng)
+                    let alpha = Double.random(in: 0.02...0.06, using: &rng) * intensity
 
                     // Warm beige tint for paper feel
                     let color = PatinaColors.clay.opacity(alpha)
@@ -118,11 +157,11 @@ struct PaperTextureOverlay: View {
                 // Paper fibers - occasional thin lines
                 let fiberCount = Int(size.width * 0.05 * intensity)
                 for _ in 0..<fiberCount {
-                    let x = CGFloat.random(in: 0...size.width)
-                    let y = CGFloat.random(in: 0...size.height)
-                    let length = CGFloat.random(in: 8...20)
-                    let angle = CGFloat.random(in: -0.3...0.3) // Mostly horizontal
-                    let alpha = Double.random(in: 0.03...0.08) * intensity
+                    let x = CGFloat.random(in: 0...size.width, using: &rng)
+                    let y = CGFloat.random(in: 0...size.height, using: &rng)
+                    let length = CGFloat.random(in: 8...20, using: &rng)
+                    let angle = CGFloat.random(in: -0.3...0.3, using: &rng) // Mostly horizontal
+                    let alpha = Double.random(in: 0.03...0.08, using: &rng) * intensity
 
                     var path = Path()
                     path.move(to: CGPoint(x: x, y: y))
