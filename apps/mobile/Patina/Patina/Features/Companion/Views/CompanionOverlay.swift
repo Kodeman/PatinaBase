@@ -245,7 +245,8 @@ public struct CompanionOverlay: View {
                         // foreground; deferring the sheet ensures the
                         // animation doesn't fight the dismissal.
                         collapseToButton()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        Task {
+                            try? await Task.sleep(for: .seconds(0.3))
                             isHelpPanelPresented = true
                         }
                     } label: {
@@ -303,7 +304,8 @@ public struct CompanionOverlay: View {
                                 handleNavigate(to: route)
                             } else if let special = item.specialAction {
                                 collapseToButton()
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                Task {
+                                    try? await Task.sleep(for: .seconds(0.3))
                                     switch special {
                                     case .openQRScanner:
                                         coordinator.showingQRScanner = true
@@ -502,7 +504,8 @@ public struct CompanionOverlay: View {
 
     private func handleNavigate(to route: AppRoute) {
         collapseToButton()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        Task {
+            try? await Task.sleep(for: .seconds(0.3))
             coordinator.navigate(to: route)
         }
     }

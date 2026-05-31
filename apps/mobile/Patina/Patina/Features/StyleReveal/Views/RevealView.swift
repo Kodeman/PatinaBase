@@ -163,22 +163,26 @@ struct RevealView: View {
 
         let total = profile.aestheticName.count
         for i in 0..<total {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.05) {
+            Task {
+                try? await Task.sleep(for: .seconds(Double(i) * 0.05))
                 revealedLetters = i + 1
             }
         }
 
         // Spectrum after the name finishes
-        DispatchQueue.main.asyncAfter(deadline: .now() + Double(total) * 0.05 + 0.1) {
+        Task {
+            try? await Task.sleep(for: .seconds(Double(total) * 0.05 + 0.1))
             withAnimation(.spring(response: 0.5)) {
                 spectrumScale = 1
             }
         }
 
         // Tags after the spectrum
-        DispatchQueue.main.asyncAfter(deadline: .now() + Double(total) * 0.05 + 0.7) {
+        Task {
+            try? await Task.sleep(for: .seconds(Double(total) * 0.05 + 0.7))
             for i in 0..<profile.tags.count {
-                DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.1) {
+                Task {
+                    try? await Task.sleep(for: .seconds(Double(i) * 0.1))
                     tagsVisible = i + 1
                 }
             }

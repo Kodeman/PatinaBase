@@ -74,7 +74,8 @@ public final class StyleConversationViewModel {
         analytics.track(.q1Answered(selection: choice.rawValue))
         haptics.imageOrPillSelect()
         // Auto-advance after 0.6s per PRD §4.6.1
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.6))
             self?.advance()
         }
     }
@@ -122,7 +123,8 @@ public final class StyleConversationViewModel {
         analytics.track(.q4Answered(tier: tier.rawValue))
         haptics.imageOrPillSelect()
         // Deferred advance onto next run loop — same pattern as Q1
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.6))
             guard let self else { return }
             self.currentQuestion = min(self.currentQuestion + 1, 5)
         }
@@ -133,11 +135,10 @@ public final class StyleConversationViewModel {
         analytics.track(.q5Answered(selection: choice.rawValue))
         haptics.prioritySelect()
         // Auto-advance after 0.8s per PRD §4.6.5
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.8))
             guard let self else { return }
-            Task { @MainActor in
-                await self.finish()
-            }
+            await self.finish()
         }
     }
 

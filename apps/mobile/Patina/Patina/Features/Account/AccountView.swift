@@ -184,7 +184,8 @@ struct AccountView: View {
                 // Sign in to Web
                 Button {
                     coordinator.showingSettings = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    Task {
+                        try? await Task.sleep(for: .seconds(0.3))
                         coordinator.showingQRScanner = true
                     }
                 } label: {

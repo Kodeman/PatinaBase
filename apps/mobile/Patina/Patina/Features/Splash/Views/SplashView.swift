@@ -49,10 +49,11 @@ struct SplashView: View {
                 strataOpacity = 1
             }
 
-            // Complete after 2 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                onComplete()
-            }
+            // Note: the transition out of `.launching` is driven by the phase
+            // observer in AppCoordinator (gated on auth readiness +
+            // `splashMinimumDeadline`), so this view does not self-complete.
+            // The `onComplete` closure is retained for API compatibility but
+            // is intentionally not invoked here.
         }
     }
 

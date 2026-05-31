@@ -72,7 +72,8 @@ public struct QRApprovalView: View {
         .interactiveDismissDisabled(viewModel.isApproving)
         .onChange(of: viewModel.authState) { _, newState in
             if newState == .approved || newState == .denied || newState == .idle {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
                     handleDismiss()
                 }
             }

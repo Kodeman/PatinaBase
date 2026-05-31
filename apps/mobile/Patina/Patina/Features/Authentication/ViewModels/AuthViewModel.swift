@@ -161,7 +161,8 @@ public final class AuthViewModel {
             successMessage = "Check your email for a password reset link"
             showResetSuccess = true
             // Return to sign in mode after showing success
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(2))
                 self?.mode = .signIn
                 self?.showResetSuccess = false
                 self?.successMessage = nil

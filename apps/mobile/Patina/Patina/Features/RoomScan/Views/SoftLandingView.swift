@@ -63,7 +63,8 @@ struct SoftLandingView: View {
 
     private func runSequence() {
         // T=0.4: transition text fades in + bg crossfade to off-white
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+        Task {
+            try? await Task.sleep(for: .seconds(0.4))
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.4)) {
                 showTransitionText = true
                 backgroundIsOffWhite = true
@@ -72,21 +73,24 @@ struct SoftLandingView: View {
 
         // T=0.8: HUD fades out (no-op here since we don't render the HUD,
         // but we keep the timing marker for consistency with PRD §4.5)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+        Task {
+            try? await Task.sleep(for: .seconds(0.8))
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
                 hudFadedOut = true
             }
         }
 
         // T=1.0: transition text fades out
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        Task {
+            try? await Task.sleep(for: .seconds(1.0))
             withAnimation(reduceMotion ? nil : .easeIn(duration: 0.2)) {
                 transitionTextFadedOut = true
             }
         }
 
         // T=1.2: advance OR show returning-user prompt
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+        Task {
+            try? await Task.sleep(for: .seconds(1.2))
             if StyleProfileStore.shared.hasCompletedProfile, existingProfile != nil {
                 // Returning user — show the fork, don't auto-advance
                 withAnimation(reduceMotion ? nil : .spring(response: 0.45)) {

@@ -77,7 +77,8 @@ final class StyleQuizViewModel {
         // Auto-advance for single-select after brief delay
         if questions[question].type.isSingleSelect {
             recordTiming()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(0.5))
                 self?.advance()
             }
         }
