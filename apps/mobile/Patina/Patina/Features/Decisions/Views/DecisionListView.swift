@@ -91,6 +91,17 @@ struct DecisionListView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(PatinaColors.softCream)
         .clipShape(RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(decisionAccessibilityLabel(d))
+    }
+
+    /// Aggregated VoiceOver label for a decision card: title + type + description,
+    /// so focus lands once instead of stopping on each Text.
+    private func decisionAccessibilityLabel(_ d: RemoteClientDecision) -> String {
+        var parts: [String] = [d.title ?? "Decision"]
+        if let type = d.decision_type { parts.append(type.capitalized) }
+        if let description = d.description, !description.isEmpty { parts.append(description) }
+        return parts.joined(separator: ", ")
     }
 
     private var emptyView: some View {
@@ -111,7 +122,7 @@ struct DecisionListView: View {
             Text(msg)
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.mocha)
-            Button("Try Again") { Task { await viewModel.load() } }
+            Button("Let's try that again") { Task { await viewModel.load() } }
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.interactive)
         }

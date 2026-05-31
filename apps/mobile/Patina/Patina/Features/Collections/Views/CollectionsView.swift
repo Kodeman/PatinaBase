@@ -156,6 +156,8 @@ struct CollectionsView: View {
                 Spacer()
                 MonoLabel(text: "\(board.itemCount) items")
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(board.name), \(board.itemCount) item\(board.itemCount == 1 ? "" : "s")")
 
             // Grid placeholder (items would show product thumbnails)
             let columns = [

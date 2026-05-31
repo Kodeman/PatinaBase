@@ -21,17 +21,17 @@ struct RoomBudgetBar: View {
                     .foregroundStyle(PatinaColors.pearl)
                 Spacer()
                 Text(formatted(totalCents))
-                    .font(.custom("PlayfairDisplay-Medium", size: 22))
+                    .font(.custom("PlayfairDisplay-Medium", size: 22, relativeTo: .title2))
                     .foregroundStyle(PatinaColors.offWhite)
             }
 
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(PatinaColors.offWhite.opacity(0.15))
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(PatinaColors.offWhite.opacity(0.15))
+                if fillFraction > 0 {
                     Capsule()
                         .fill(PatinaColors.clay)
-                        .frame(width: geo.size.width * fillFraction)
+                        .frame(maxWidth: fillFraction * .infinity)
                 }
             }
             .frame(height: 4)
@@ -43,7 +43,7 @@ struct RoomBudgetBar: View {
                 Spacer()
                 Text(formatted(maxCents * 2))
             }
-            .font(.custom("DMMono-Regular", size: 7))
+            .font(.custom("DMMono-Regular", size: 7, relativeTo: .caption2))
             .tracking(0.3)
             .foregroundStyle(PatinaColors.Text.interactive)
         }

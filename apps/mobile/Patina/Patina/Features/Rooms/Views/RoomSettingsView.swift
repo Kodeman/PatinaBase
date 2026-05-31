@@ -81,7 +81,7 @@ struct RoomSettingsView: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(PatinaColors.mocha)
             TextField("Room name", text: $name)
-                .font(.custom("PlayfairDisplay-Regular", size: 16))
+                .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body))
                 .foregroundStyle(PatinaColors.charcoal)
                 .padding(.horizontal, 14)
                 .frame(height: 46)
@@ -119,7 +119,7 @@ struct RoomSettingsView: View {
                     .foregroundStyle(PatinaColors.charcoal)
                 Spacer()
                 Text(scanDate(room))
-                    .font(.custom("DMMono-Regular", size: 8))
+                    .font(.custom("DMMono-Regular", size: 8, relativeTo: .caption2))
                     .tracking(0.3)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.agedOak)
@@ -201,10 +201,15 @@ struct RoomSettingsView: View {
     }
 
     private func scanDate(_ room: RoomModel) -> String {
+        Self.scanDateFormatter.string(from: room.updatedAt)
+    }
+
+    /// Shared formatter — avoids a `DateFormatter` allocation on every render of `scanCard`.
+    private static let scanDateFormatter: DateFormatter = {
         let fmt = DateFormatter()
         fmt.dateFormat = "MMM d, yyyy"
-        return fmt.string(from: room.updatedAt)
-    }
+        return fmt
+    }()
 
     private func scanSummary(_ room: RoomModel) -> String {
         var parts: [String] = []
