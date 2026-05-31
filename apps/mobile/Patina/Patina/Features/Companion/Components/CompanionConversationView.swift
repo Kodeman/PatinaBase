@@ -75,13 +75,13 @@ public struct CompanionMessageBubble: View {
                 if isPatina {
                     Text("Patina")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(PatinaColors.Text.muted)
+                        .foregroundStyle(PatinaColors.Text.muted)
                 }
 
                 // Message content
                 Text(message.content)
                     .font(isPatina ? PatinaTypography.patinaVoice : PatinaTypography.body)  // Spec: Playfair Italic 14pt vs Inter 14pt
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .lineSpacing(4)
                     .padding(.horizontal, PatinaSpacing.md)
                     .padding(.vertical, PatinaSpacing.sm)

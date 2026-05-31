@@ -46,12 +46,12 @@ struct RoomGalleryCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(room.name)
                     .font(.custom("PlayfairDisplay-Regular", size: 20))
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
                 Text(room.galleryMetaLine)
                     .font(.custom("DMMono-Regular", size: 8))
                     .tracking(0.5)
                     .textCase(.uppercase)
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
             }
             .padding(.horizontal, 14)
             .padding(.bottom, 12)
@@ -77,7 +77,7 @@ struct RoomGalleryCard: View {
             .font(.custom("DMMono-Regular", size: 7))
             .tracking(0.4)
             .textCase(.uppercase)
-            .foregroundColor(PatinaColors.offWhite)
+            .foregroundStyle(PatinaColors.offWhite)
             .padding(.vertical, 3)
             .padding(.horizontal, 8)
             .background(Capsule().fill(color))
@@ -107,12 +107,12 @@ struct RoomGalleryCard: View {
         VStack(spacing: 2) {
             Text(value)
                 .font(.custom("PlayfairDisplay-Medium", size: 16))
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
             Text(label)
                 .font(.custom("DMMono-Regular", size: 7))
                 .tracking(0.6)
                 .textCase(.uppercase)
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
         }
         .frame(maxWidth: .infinity)
     }

@@ -30,7 +30,7 @@ struct StyleQuizView: View {
                 // Question text
                 Text(viewModel.currentQuestionData.title)
                     .font(PatinaTypography.h3)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                     .padding(.top, 72)
                     .padding(.horizontal, 24)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -90,14 +90,14 @@ struct StyleQuizView: View {
 
                     Text("\(Int(progress * 100))%")
                         .font(.custom("PlayfairDisplay-Medium", size: 13))
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
                 }
 
                 // Text
                 VStack(alignment: .leading, spacing: 1) {
                     Text(label)
                         .font(PatinaTypography.uiSmall)
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
 
                     MonoLabel(text: "Question \(step) of \(total)", size: PatinaTypography.monoSmall, color: PatinaColors.clay)
                 }
@@ -108,7 +108,7 @@ struct StyleQuizView: View {
                 if let nudge, isMultiSelect {
                     Text(nudge)
                         .font(PatinaTypography.uiSmall)
-                        .foregroundColor(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.clay)
                 } else {
                     HStack(spacing: 4) {
                         ForEach(1...total, id: \.self) { i in
@@ -167,7 +167,7 @@ struct StyleQuizView: View {
                             .frame(minHeight: 120)
                         Text(option.label)
                             .font(PatinaTypography.uiSmall)
-                            .foregroundColor(selections.contains(index) ? .white : PatinaColors.charcoal)
+                            .foregroundStyle(selections.contains(index) ? .white : PatinaColors.charcoal)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 10)
                             .frame(maxWidth: .infinity)
@@ -213,11 +213,11 @@ struct StyleQuizView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(option.label)
                                     .font(PatinaTypography.uiAction)
-                                    .foregroundColor(selections.contains(index) ? .white : PatinaColors.charcoal)
+                                    .foregroundStyle(selections.contains(index) ? .white : PatinaColors.charcoal)
                                 if let subtitle = option.subtitle {
                                     Text(subtitle)
                                         .font(PatinaTypography.caption)
-                                        .foregroundColor(selections.contains(index) ? .white.opacity(0.8) : PatinaColors.agedOak)
+                                        .foregroundStyle(selections.contains(index) ? .white.opacity(0.8) : PatinaColors.agedOak)
                                 }
                             }
                             Spacer()
@@ -253,11 +253,11 @@ struct StyleQuizView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(option.label)
                                     .font(PatinaTypography.uiAction)
-                                    .foregroundColor(selections.contains(index) ? .white : PatinaColors.charcoal)
+                                    .foregroundStyle(selections.contains(index) ? .white : PatinaColors.charcoal)
                                 if let subtitle = option.subtitle {
                                     Text(subtitle)
                                         .font(PatinaTypography.caption)
-                                        .foregroundColor(selections.contains(index) ? .white.opacity(0.8) : PatinaColors.agedOak)
+                                        .foregroundStyle(selections.contains(index) ? .white.opacity(0.8) : PatinaColors.agedOak)
                                 }
                             }
                             Spacer()

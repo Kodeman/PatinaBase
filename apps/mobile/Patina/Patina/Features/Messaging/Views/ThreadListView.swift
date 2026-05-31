@@ -30,7 +30,7 @@ struct ThreadListView: View {
                 .tracking(2)
             Text(viewModel.threads.isEmpty ? "No conversations yet" : "Conversations")
                 .font(PatinaTypography.h3)
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
         }
         .padding(.top, 56)
         .padding(.horizontal, 24)
@@ -70,15 +70,15 @@ struct ThreadListView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(thread.title ?? thread.kind.capitalized)
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 Text(thread.last_message_at ?? "—")
                     .font(PatinaTypography.monoTiny)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
             Spacer()
             Image(systemName: "chevron.right")
                 .font(.system(size: 12))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
         }
         .padding(.vertical, 14)
         .padding(.horizontal, 16)
@@ -91,10 +91,10 @@ struct ThreadListView: View {
         VStack(spacing: 8) {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 28))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
             Text("Start a project to begin messaging")
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 80)
@@ -104,10 +104,10 @@ struct ThreadListView: View {
         VStack(spacing: 10) {
             Text(msg)
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
             Button("Try Again") { Task { await viewModel.load() } }
                 .font(PatinaTypography.bodySmallMedium)
-                .foregroundColor(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.clay)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)

@@ -34,7 +34,7 @@ struct BackChevronButton: View {
         Button(action: action) {
             Image(systemName: "chevron.left")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(foreground)
+                .foregroundStyle(foreground)
                 .frame(width: 36, height: 36)
                 .background(Circle().fill(background))
                 .overlay(Circle().stroke(stroke, lineWidth: 0.5))

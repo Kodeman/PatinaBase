@@ -201,7 +201,7 @@ public struct CompanionOverlay: View {
             // Floating label
             Text(label)
                 .font(PatinaTypography.caption)
-                .foregroundColor(PatinaColors.offWhite)
+                .foregroundStyle(PatinaColors.offWhite)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
                 .background(PatinaColors.charcoal)
@@ -224,7 +224,7 @@ public struct CompanionOverlay: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("What next?")
                         .font(.custom("PlayfairDisplay-Italic", size: 16))
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
 
                     // Contextual help: explains the Companion concept —
                     // a context-aware action menu that replaces the
@@ -255,7 +255,7 @@ public struct CompanionOverlay: View {
                             .overlay(
                                 Image(systemName: "questionmark")
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(PatinaColors.pearl)
+                                    .foregroundStyle(PatinaColors.pearl)
                             )
                     }
                     .accessibilityLabel("Help")
@@ -269,7 +269,7 @@ public struct CompanionOverlay: View {
                             .overlay(
                                 Image(systemName: "xmark")
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(PatinaColors.pearl)
+                                    .foregroundStyle(PatinaColors.pearl)
                             )
                     }
                     .accessibilityIdentifier("companion.close")
@@ -342,14 +342,14 @@ public struct CompanionOverlay: View {
 
                 Text("\(Int(progress * 100))%")
                     .font(.custom("PlayfairDisplay-Medium", size: 13))
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
             }
 
             // Text
             VStack(alignment: .leading, spacing: 1) {
                 Text(stepLabel)
                     .font(PatinaTypography.uiSmall)
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
 
                 MonoLabel(text: "Step \(step) of \(totalSteps)", size: PatinaTypography.monoSmall, color: PatinaColors.clay)
             }
@@ -434,17 +434,17 @@ public struct CompanionOverlay: View {
                         .frame(width: 36, height: 36)
                     Image(systemName: icon)
                         .font(.system(size: 16))
-                        .foregroundColor(isSuggested ? PatinaColors.offWhite : PatinaColors.pearl)
+                        .foregroundStyle(isSuggested ? PatinaColors.offWhite : PatinaColors.pearl)
                 }
 
                 // Text
                 VStack(alignment: .leading, spacing: 1) {
                     Text(label)
                         .font(PatinaTypography.bodySmallMedium)
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
                     Text(hint)
                         .font(PatinaTypography.monoSmall)
-                        .foregroundColor(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.clay)
                         .tracking(0.3)
                         .textCase(.uppercase)
                 }
@@ -453,7 +453,7 @@ public struct CompanionOverlay: View {
 
                 Text("\u{203A}")
                     .font(.system(size: 14))
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)

@@ -93,16 +93,16 @@ public struct ProductCard: View {
                         .font(.custom("DMMono-Regular", size: 7))
                         .tracking(0.5)
                         .textCase(.uppercase)
-                        .foregroundColor(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.agedOak)
                 }
                 Text(data.name)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                     .lineLimit(2)
                 if let price = data.formattedPrice {
                     Text(price)
                         .font(.custom("PlayfairDisplay-Medium", size: 16))
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                         .padding(.top, 2)
                 }
             }
@@ -111,7 +111,7 @@ public struct ProductCard: View {
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
         }
         .padding(12)
         .background(PatinaColors.softCream)
@@ -128,7 +128,7 @@ public struct ProductCard: View {
                 if let price = data.formattedPrice {
                     Text(price)
                         .font(.custom("PlayfairDisplay-Medium", size: 11))
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(

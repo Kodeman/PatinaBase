@@ -61,16 +61,16 @@ struct RoomPlanUnsupportedView: View {
         VStack(spacing: PatinaSpacing.xl) {
             Image(systemName: "camera.viewfinder")
                 .font(.system(size: 48, weight: .light))
-                .foregroundColor(PatinaColors.Text.muted)
+                .foregroundStyle(PatinaColors.Text.muted)
 
             VStack(spacing: PatinaSpacing.md) {
                 Text("Room Scanning Not Available")
                     .font(PatinaTypography.h2)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 Text("Your device doesn't support room scanning. You can still explore Patina and see what pieces might work for your space.")
                     .font(PatinaTypography.body)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .multilineTextAlignment(.center)
             }
             .padding(.horizontal, PatinaSpacing.xl)
@@ -78,7 +78,7 @@ struct RoomPlanUnsupportedView: View {
             Button(action: onContinue) {
                 Text("Continue")
                     .font(PatinaTypography.bodyMedium)
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PatinaSpacing.md)
                     .background(PatinaColors.clay)

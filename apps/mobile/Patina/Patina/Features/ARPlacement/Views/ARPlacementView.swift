@@ -42,7 +42,7 @@ struct ARPlacementView: View {
                     if let product = viewModel.product {
                         Text(product.name)
                             .font(PatinaTypography.h5)
-                            .foregroundColor(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.charcoal)
                             .padding(.horizontal, 18)
                             .padding(.vertical, 8)
                             .background(.ultraThinMaterial)
@@ -108,7 +108,7 @@ struct ARPlacementView: View {
     private func toastPill(text: String, tint: Color) -> some View {
         Text(text)
             .font(.system(size: 13, weight: .medium))
-            .foregroundColor(PatinaColors.offWhite)
+            .foregroundStyle(PatinaColors.offWhite)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .background(Capsule().fill(tint.opacity(0.95)))
@@ -146,7 +146,7 @@ struct ARPlacementView: View {
             } label: {
                 Text("Save View")
                     .font(PatinaTypography.uiAction)
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
                     .padding(.horizontal, 24)
                     .frame(height: 48)
                     .background(PatinaColors.charcoal)
@@ -173,7 +173,7 @@ struct ARPlacementView: View {
         } label: {
             Text("Tap a surface to place")
                 .font(PatinaTypography.uiAction)
-                .foregroundColor(PatinaColors.offWhite)
+                .foregroundStyle(PatinaColors.offWhite)
                 .padding(.horizontal, 24)
                 .frame(height: 48)
                 .background(PatinaColors.charcoal.opacity(0.8))
@@ -191,7 +191,7 @@ struct ARPlacementView: View {
     private var noModelMessage: some View {
         Text("3D model not available for this product")
             .font(PatinaTypography.bodySmall)
-            .foregroundColor(PatinaColors.offWhite)
+            .foregroundStyle(PatinaColors.offWhite)
             .padding(.horizontal, 24)
             .padding(.vertical, 10)
             .background(.ultraThinMaterial)
@@ -208,7 +208,7 @@ struct ARPlacementView: View {
             .overlay(
                 Image(systemName: icon)
                     .font(.system(size: 18))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
             )
     }
 }

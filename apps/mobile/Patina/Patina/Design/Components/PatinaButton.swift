@@ -40,7 +40,7 @@ public struct PatinaButton: View {
         }) {
             Text(title)
                 .font(PatinaTypography.uiAction)
-                .foregroundColor(foregroundColor)
+                .foregroundStyle(foregroundColor)
                 .frame(maxWidth: style == .ghost ? nil : .infinity)
                 .frame(height: 52)
                 .background(backgroundColor)
@@ -111,7 +111,7 @@ struct AuthButton: View {
                 Text(title)
                     .font(PatinaTypography.uiAction)
             }
-            .foregroundColor(style == .apple ? PatinaColors.offWhite : PatinaColors.charcoal)
+            .foregroundStyle(style == .apple ? PatinaColors.offWhite : PatinaColors.charcoal)
             .frame(maxWidth: .infinity)
             .frame(height: 50)
             .background(style == .apple ? PatinaColors.charcoal : PatinaColors.offWhite)

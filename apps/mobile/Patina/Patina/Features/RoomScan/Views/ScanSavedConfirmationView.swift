@@ -43,22 +43,22 @@ struct ScanSavedConfirmationView: View {
                 VStack(spacing: 16) {
                     Image(systemName: "checkmark.circle")
                         .font(.system(size: 52, weight: .light))
-                        .foregroundColor(PatinaColors.charcoal.opacity(0.85))
+                        .foregroundStyle(PatinaColors.charcoal.opacity(0.85))
 
                     Text("Saved to your rooms")
                         .font(.custom("PlayfairDisplay-Italic", size: 24))
-                        .foregroundColor(PatinaColors.charcoal.opacity(0.9))
+                        .foregroundStyle(PatinaColors.charcoal.opacity(0.9))
                         .multilineTextAlignment(.center)
 
                     if let name = displayRoomName, !name.isEmpty {
                         Text(name)
                             .font(.custom("Inter-Medium", size: 14))
-                            .foregroundColor(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.agedOak)
                     }
 
                     Text("Your scan is on this phone. We'll finish uploading it quietly in the background — you can close this anytime.")
                         .font(.custom("Inter-Regular", size: 13))
-                        .foregroundColor(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.agedOak)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)
                         .fixedSize(horizontal: false, vertical: true)
@@ -79,7 +79,7 @@ struct ScanSavedConfirmationView: View {
                     Button(action: onSetStyle) {
                         Text("Set my style")
                             .font(.custom("Inter-Medium", size: 14))
-                            .foregroundColor(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.agedOak)
                             .frame(maxWidth: .infinity)
                             .frame(height: 44)
                     }
@@ -101,11 +101,11 @@ struct ScanSavedConfirmationView: View {
                     .font(.custom("DMMono-Regular", size: 10))
                     .tracking(0.6)
                     .textCase(.uppercase)
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
                 Spacer()
                 Text(progressLabel)
                     .font(.custom("DMMono-Regular", size: 11))
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
 
             GeometryReader { proxy in
@@ -123,7 +123,7 @@ struct ScanSavedConfirmationView: View {
             if let hint = progressHint {
                 Text(hint)
                     .font(.custom("Inter-Regular", size: 12))
-                    .foregroundColor(PatinaColors.agedOak.opacity(0.85))
+                    .foregroundStyle(PatinaColors.agedOak.opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

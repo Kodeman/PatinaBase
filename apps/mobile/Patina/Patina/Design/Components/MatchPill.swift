@@ -15,7 +15,7 @@ struct MatchPill: View {
             .font(PatinaTypography.monoTiny)
             .tracking(0.5)
             .textCase(.uppercase)
-            .foregroundColor(PatinaColors.mocha)
+            .foregroundStyle(PatinaColors.mocha)
             .padding(.vertical, 3)
             .padding(.horizontal, 8)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6, style: .continuous))

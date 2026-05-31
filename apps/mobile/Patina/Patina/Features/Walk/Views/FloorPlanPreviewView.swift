@@ -21,7 +21,7 @@ struct FloorPlanPreviewView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Your Room")
                     .font(PatinaTypography.h3)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
 
                 MonoLabel(text: "\(roomData.roomName.uppercased()) · \(confidenceLabel)")
             }
@@ -54,13 +54,13 @@ struct FloorPlanPreviewView: View {
                     // Width label (bottom)
                     Text(String(format: "%.1fm", dimensions.width))
                         .font(PatinaTypography.monoTiny)
-                        .foregroundColor(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.agedOak)
                         .offset(y: roomHeight / 2 + 14)
 
                     // Length label (right)
                     Text(String(format: "%.1fm", dimensions.length))
                         .font(PatinaTypography.monoTiny)
-                        .foregroundColor(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.agedOak)
                         .offset(x: roomWidth / 2 + 20)
                 }
 
@@ -92,7 +92,7 @@ struct FloorPlanPreviewView: View {
                 Button(action: onRescan) {
                     Text("Rescan")
                         .font(PatinaTypography.uiAction)
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
                         .background(PatinaColors.softCream)
@@ -102,7 +102,7 @@ struct FloorPlanPreviewView: View {
                 Button(action: onUseScan) {
                     Text("Use This Scan")
                         .font(PatinaTypography.uiAction)
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
                         .background(PatinaColors.charcoal)
@@ -133,7 +133,7 @@ struct FloorPlanPreviewView: View {
 
         return Text("✓ \(confidenceLabel)")
             .font(PatinaTypography.monoTiny)
-            .foregroundColor(.white)
+            .foregroundStyle(.white)
             .tracking(0.5)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
@@ -197,11 +197,11 @@ struct FloorPlanPreviewView: View {
         VStack(spacing: 2) {
             Text(value)
                 .font(PatinaTypography.h5)
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
 
             Text(label.uppercased())
                 .font(PatinaTypography.monoTiny)
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
                 .tracking(0.5)
         }
         .frame(maxWidth: .infinity)

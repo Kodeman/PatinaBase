@@ -24,7 +24,7 @@ struct WhisperBarView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(state.text)
                 .font(.custom("PlayfairDisplay-Italic", size: 17))
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
                 .id(state.text)
                 .transition(.opacity)
 
@@ -32,7 +32,7 @@ struct WhisperBarView: View {
                 .font(.custom("DMMono-Regular", size: 10))
                 .tracking(0.6)
                 .textCase(.uppercase)
-                .foregroundColor(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.clay)
                 .id(state.subtext)
                 .transition(.opacity)
         }

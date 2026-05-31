@@ -19,7 +19,7 @@ struct FilterChip: View {
         } label: {
             Text(title)
                 .font(PatinaTypography.caption)
-                .foregroundColor(isActive ? PatinaColors.offWhite : PatinaColors.mocha)
+                .foregroundStyle(isActive ? PatinaColors.offWhite : PatinaColors.mocha)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
                 .background(isActive ? PatinaColors.charcoal : PatinaColors.softCream)

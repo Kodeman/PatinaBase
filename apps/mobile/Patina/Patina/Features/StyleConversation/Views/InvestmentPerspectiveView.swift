@@ -35,10 +35,10 @@ struct InvestmentPerspectiveView: View {
                             isDiscussRow ? "PlayfairDisplay-Italic" : "PlayfairDisplay-Regular",
                             size: 18
                         ))
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                     Text(tier.descriptionText)
                         .font(.custom("Inter-Light", size: 12))
-                        .foregroundColor(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.agedOak)
                 }
 
                 Spacer()
@@ -47,7 +47,7 @@ struct InvestmentPerspectiveView: View {
                     .font(.custom("DMMono-Regular", size: 11))
                     .tracking(0.4)
                     .textCase(.uppercase)
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
             }
             .padding(.vertical, 20)
             .contentShape(Rectangle())

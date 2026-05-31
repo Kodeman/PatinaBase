@@ -18,7 +18,7 @@ struct MonoLabel: View {
     var body: some View {
         Text(text)
             .font(size)
-            .foregroundColor(color)
+            .foregroundStyle(color)
             .tracking(tracking)
             .modifier(UppercaseModifier(isUppercase: uppercase))
     }

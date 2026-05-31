@@ -97,7 +97,7 @@ public struct ScanReviewView: View {
                 .tint(PatinaColors.charcoal)
             Text("Preparing your scan…")
                 .font(.custom("Inter-Regular", size: 14))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
             Spacer()
         }
     }
@@ -107,24 +107,24 @@ public struct ScanReviewView: View {
             Spacer()
             Text("Something went wrong")
                 .font(.custom("PlayfairDisplay-Italic", size: 22))
-                .foregroundColor(PatinaColors.charcoal.opacity(0.8))
+                .foregroundStyle(PatinaColors.charcoal.opacity(0.8))
             if let loadError {
                 Text(loadError)
                     .font(.custom("Inter-Regular", size: 13))
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
             }
             Text("Your other rooms are safe — this only affects this scan.")
                 .font(.custom("Inter-Regular", size: 12))
-                .foregroundColor(PatinaColors.agedOak.opacity(0.8))
+                .foregroundStyle(PatinaColors.agedOak.opacity(0.8))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
             Spacer()
             Button(action: onCancel) {
                 Text("Discard this scan")
                     .font(.custom("Inter-Medium", size: 15))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
                     .background(
@@ -168,7 +168,7 @@ public struct ScanReviewView: View {
                     Button(action: onCancel) {
                         Text("Discard")
                             .font(.custom("Inter-Regular", size: 14))
-                            .foregroundColor(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.agedOak)
                     }
                     .buttonStyle(.plain)
                 }
@@ -177,7 +177,7 @@ public struct ScanReviewView: View {
                         .font(.custom("DMMono-Regular", size: 10))
                         .tracking(0.8)
                         .textCase(.uppercase)
-                        .foregroundColor(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.clay)
                 }
             }
             .sheet(isPresented: $showingHeroPicker) {
@@ -199,10 +199,10 @@ public struct ScanReviewView: View {
         HStack(spacing: 12) {
             Image(systemName: "checkmark.seal")
                 .font(.system(size: 18, weight: .regular))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
             Text("No photos captured — the scan shape is still saved.")
                 .font(.custom("Inter-Regular", size: 13))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
@@ -219,15 +219,15 @@ public struct ScanReviewView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Your room, your way")
                 .font(.custom("PlayfairDisplay-Italic", size: 22))
-                .foregroundColor(PatinaColors.charcoal.opacity(0.85))
+                .foregroundStyle(PatinaColors.charcoal.opacity(0.85))
             Text("Give the room a name, pick the photo you love most, and jot down anything worth remembering. You can share it later.")
                 .font(.custom("Inter-Regular", size: 13))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
                 .fixedSize(horizontal: false, vertical: true)
 
             TextField("Room name", text: $roomName)
                 .font(.custom("Inter-Regular", size: 15))
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
                 .padding(.horizontal, 16)
                 .frame(height: 48)
                 .background(
@@ -260,7 +260,7 @@ public struct ScanReviewView: View {
                         Text("Change")
                             .font(.custom("Inter-Medium", size: 12))
                     }
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(
@@ -291,7 +291,7 @@ public struct ScanReviewView: View {
                             Text("Reorder")
                                 .font(.custom("Inter-Medium", size: 11))
                         }
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(Capsule().stroke(PatinaColors.pearl, lineWidth: 1))
@@ -301,14 +301,14 @@ public struct ScanReviewView: View {
                 }
                 Text("\(visibleSupportingPhotos(manifest: manifest).count)")
                     .font(.custom("DMMono-Regular", size: 10))
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
 
             let supporting = visibleSupportingPhotos(manifest: manifest)
             if supporting.isEmpty {
                 Text("No additional photos captured.")
                     .font(.custom("Inter-Regular", size: 13))
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
                     .padding(.vertical, 16)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -328,7 +328,7 @@ public struct ScanReviewView: View {
                     .font(.custom("DMMono-Regular", size: 9))
                     .tracking(0.4)
                     .textCase(.uppercase)
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
                     .padding(.top, 8)
 
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -342,7 +342,7 @@ public struct ScanReviewView: View {
                                         .opacity(0.45)
                                     Image(systemName: "arrow.uturn.backward")
                                         .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(PatinaColors.offWhite)
+                                        .foregroundStyle(PatinaColors.offWhite)
                                 }
                             }
                             .buttonStyle(.plain)
@@ -369,7 +369,7 @@ public struct ScanReviewView: View {
                             Text("Note")
                                 .font(.custom("Inter-Medium", size: 10))
                         }
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Capsule().fill(PatinaColors.offWhite.opacity(0.92)))
@@ -387,7 +387,7 @@ public struct ScanReviewView: View {
             Button(action: { hidePhoto(photo.id) }) {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
                     .frame(width: 22, height: 22)
                     .background(Circle().fill(PatinaColors.charcoal.opacity(0.7)))
             }
@@ -410,7 +410,7 @@ public struct ScanReviewView: View {
                 if roomNotes.isEmpty {
                     Text("Anything worth remembering? (private to you for now)")
                         .font(.custom("Inter-Regular", size: 14))
-                        .foregroundColor(PatinaColors.agedOak.opacity(0.7))
+                        .foregroundStyle(PatinaColors.agedOak.opacity(0.7))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 14)
                         .allowsHitTesting(false)
@@ -418,7 +418,7 @@ public struct ScanReviewView: View {
 
                 TextEditor(text: $roomNotes)
                     .font(.custom("Inter-Regular", size: 14))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -438,7 +438,7 @@ public struct ScanReviewView: View {
             Button(action: { Task { await submit(skipping: true) } }) {
                 Text("Save without notes")
                     .font(.custom("Inter-Medium", size: 14))
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
                     .frame(maxWidth: .infinity)
                     .frame(height: 44)
             }
@@ -460,11 +460,11 @@ public struct ScanReviewView: View {
                     HStack {
                         Text(row.label)
                             .font(.custom("Inter-Regular", size: 13))
-                            .foregroundColor(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.agedOak)
                         Spacer()
                         Text(row.value)
                             .font(.custom("DMMono-Regular", size: 12))
-                            .foregroundColor(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.charcoal)
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
@@ -592,7 +592,7 @@ public struct ScanReviewView: View {
                                 if isEffectiveHero(photoId: photo.id, manifest: manifest) {
                                     Image(systemName: "checkmark.circle.fill")
                                         .font(.system(size: 18))
-                                        .foregroundColor(PatinaColors.charcoal)
+                                        .foregroundStyle(PatinaColors.charcoal)
                                         .padding(8)
                                 }
                             }
@@ -608,7 +608,7 @@ public struct ScanReviewView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { showingHeroPicker = false }
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                 }
             }
         }
@@ -631,19 +631,19 @@ public struct ScanReviewView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(reorderableTitle(for: photo))
                                     .font(.custom("Inter-Medium", size: 13))
-                                    .foregroundColor(PatinaColors.charcoal)
+                                    .foregroundStyle(PatinaColors.charcoal)
                                 if let caption = captions[photo.id] ?? photo.userAnnotation,
                                    !caption.isEmpty {
                                     Text(caption)
                                         .font(.custom("Inter-Regular", size: 11))
-                                        .foregroundColor(PatinaColors.agedOak)
+                                        .foregroundStyle(PatinaColors.agedOak)
                                         .lineLimit(1)
                                 }
                             }
                             Spacer()
                             Image(systemName: "line.3.horizontal")
                                 .font(.system(size: 14, weight: .regular))
-                                .foregroundColor(PatinaColors.agedOak.opacity(0.6))
+                                .foregroundStyle(PatinaColors.agedOak.opacity(0.6))
                         }
                         .padding(.vertical, 4)
                     }
@@ -661,7 +661,7 @@ public struct ScanReviewView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { showingReorderSheet = false }
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                 }
             }
         }
@@ -730,7 +730,7 @@ public struct ScanReviewView: View {
                     if binding.wrappedValue.isEmpty {
                         Text("What's worth noticing here?")
                             .font(.custom("Inter-Regular", size: 14))
-                            .foregroundColor(PatinaColors.agedOak.opacity(0.7))
+                            .foregroundStyle(PatinaColors.agedOak.opacity(0.7))
                             .padding(.horizontal, 16)
                             .padding(.vertical, 14)
                             .allowsHitTesting(false)
@@ -738,7 +738,7 @@ public struct ScanReviewView: View {
 
                     TextEditor(text: binding)
                         .font(.custom("Inter-Regular", size: 14))
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                         .scrollContentBackground(.hidden)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
@@ -753,7 +753,7 @@ public struct ScanReviewView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { editingPhotoId = nil }
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                 }
             }
         }
@@ -767,7 +767,7 @@ public struct ScanReviewView: View {
             .font(.custom("DMMono-Regular", size: 10))
             .tracking(0.6)
             .textCase(.uppercase)
-            .foregroundColor(PatinaColors.clay)
+            .foregroundStyle(PatinaColors.clay)
     }
 
     /// Load a photo from the bundle's `photos/` directory. Falls back to a
@@ -787,7 +787,7 @@ public struct ScanReviewView: View {
                     .overlay(
                         Image(systemName: "photo")
                             .font(.system(size: 28))
-                            .foregroundColor(PatinaColors.agedOak.opacity(0.5))
+                            .foregroundStyle(PatinaColors.agedOak.opacity(0.5))
                     )
             }
         }

@@ -46,7 +46,7 @@ struct ScanFloorPlanPreviewView: View {
                     Button(action: onRescan) {
                         Text("Rescan")
                             .font(.custom("Inter-Medium", size: 15))
-                            .foregroundColor(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.charcoal)
                             .padding(.horizontal, 28)
                             .frame(height: 52)
                             .background(
@@ -59,7 +59,7 @@ struct ScanFloorPlanPreviewView: View {
                     Button(action: onAccept) {
                         Text("This Looks Right")
                             .font(.custom("Inter-Medium", size: 15))
-                            .foregroundColor(PatinaColors.offWhite)
+                            .foregroundStyle(PatinaColors.offWhite)
                             .frame(maxWidth: .infinity)
                             .frame(height: 52)
                             .background(RoundedRectangle(cornerRadius: 26).fill(PatinaColors.charcoal))
@@ -104,12 +104,12 @@ struct ScanFloorPlanPreviewView: View {
         return ZStack {
             Text(String(format: "%.0f ft", widthFt))
                 .font(.custom("DMMono-Regular", size: 11))
-                .foregroundColor(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.clay)
                 .offset(y: -(height / 2) - 16)
 
             Text(String(format: "%.0f ft", lengthFt))
                 .font(.custom("DMMono-Regular", size: 11))
-                .foregroundColor(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.clay)
                 .rotationEffect(.degrees(-90))
                 .offset(x: -(width / 2) - 16)
         }
@@ -132,12 +132,12 @@ struct ScanFloorPlanPreviewView: View {
         VStack(spacing: 4) {
             Text(value)
                 .font(.custom("PlayfairDisplay-Medium", size: 24))
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
             Text(label)
                 .font(.custom("DMMono-Regular", size: 9))
                 .tracking(0.5)
                 .textCase(.uppercase)
-                .foregroundColor(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.clay)
         }
         .frame(maxWidth: .infinity)
     }

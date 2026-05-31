@@ -45,7 +45,7 @@ struct MoveOrCopyItemSheet: View {
 
                 Text("Select destination room")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.mocha)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 24)
                     .padding(.bottom, 6)
@@ -61,7 +61,7 @@ struct MoveOrCopyItemSheet: View {
                 .padding(.bottom, 24)
             } else {
                 Text("Item not found")
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
                     .padding()
             }
         }
@@ -76,11 +76,11 @@ struct MoveOrCopyItemSheet: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.productName)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 Text("\(item.makerName) · \(item.fullFormattedPrice)")
                     .font(.custom("DMMono-Regular", size: 8))
                     .tracking(0.3)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
             Spacer(minLength: 0)
         }
@@ -103,7 +103,7 @@ struct MoveOrCopyItemSheet: View {
         return Button { mode = value } label: {
             Text(title)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(selected ? .white : PatinaColors.mocha)
+                .foregroundStyle(selected ? .white : PatinaColors.mocha)
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)
                 .background(
@@ -129,18 +129,18 @@ struct MoveOrCopyItemSheet: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 Text(room.name)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 Spacer()
                 if isCurrent {
                     Text("Current")
                         .font(.custom("DMMono-Regular", size: 7))
                         .tracking(0.3)
                         .textCase(.uppercase)
-                        .foregroundColor(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.agedOak)
                 } else {
                     Text("→")
                         .font(.system(size: 14))
-                        .foregroundColor(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.clay)
                 }
             }
             .padding(10)

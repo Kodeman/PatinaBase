@@ -99,7 +99,7 @@ struct ScanFallbackEntryView: View {
                         Text(label)
                             .font(.custom("Inter-Medium", size: 12))
                     }
-                    .foregroundColor(selectedType == id ? PatinaColors.offWhite : PatinaColors.charcoal)
+                    .foregroundStyle(selectedType == id ? PatinaColors.offWhite : PatinaColors.charcoal)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(
@@ -127,7 +127,7 @@ struct ScanFallbackEntryView: View {
                 .font(.custom("DMMono-Regular", size: 10))
                 .tracking(0.6)
                 .textCase(.uppercase)
-                .foregroundColor(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.clay)
             Spacer()
             if text == "Room Dimensions" {
                 unitToggle
@@ -145,19 +145,19 @@ struct ScanFallbackEntryView: View {
             }) {
                 Text("ft")
                     .font(.custom("DMMono-Regular", size: 10))
-                    .foregroundColor(unit == .feet ? PatinaColors.charcoal : PatinaColors.agedOak)
+                    .foregroundStyle(unit == .feet ? PatinaColors.charcoal : PatinaColors.agedOak)
             }
             .buttonStyle(.plain)
             Text("/")
                 .font(.custom("DMMono-Regular", size: 10))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
             Button(action: {
                 unit = .meters
                 UserDefaults.standard.set(unit.rawValue, forKey: unitKey)
             }) {
                 Text("m")
                     .font(.custom("DMMono-Regular", size: 10))
-                    .foregroundColor(unit == .meters ? PatinaColors.charcoal : PatinaColors.agedOak)
+                    .foregroundStyle(unit == .meters ? PatinaColors.charcoal : PatinaColors.agedOak)
             }
             .buttonStyle(.plain)
         }
@@ -177,7 +177,7 @@ struct ScanFallbackEntryView: View {
             TextField("", text: text)
                 .keyboardType(.decimalPad)
                 .font(.custom("Inter-Regular", size: 15))
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
                 .padding(.horizontal, 16)
                 .frame(height: 48)
                 .background(
@@ -194,7 +194,7 @@ struct ScanFallbackEntryView: View {
             Text(title.uppercased())
                 .font(.custom("DMMono-Regular", size: 9))
                 .tracking(0.4)
-                .foregroundColor(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.clay)
         }
         .frame(maxWidth: .infinity)
     }
@@ -212,24 +212,24 @@ struct ScanFallbackEntryView: View {
         HStack {
             Text(title)
                 .font(.custom("Inter-Medium", size: 13))
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
             Spacer()
             Button(action: { if value.wrappedValue > 0 { value.wrappedValue -= 1 } }) {
                 Image(systemName: "minus")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(PatinaColors.softCream))
             }
             .buttonStyle(.plain)
             Text("\(value.wrappedValue)")
                 .font(.custom("DMMono-Regular", size: 14))
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
                 .frame(minWidth: 20)
             Button(action: { value.wrappedValue += 1 }) {
                 Image(systemName: "plus")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(PatinaColors.softCream))
             }

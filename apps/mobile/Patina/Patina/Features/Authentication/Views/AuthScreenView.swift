@@ -23,7 +23,7 @@ struct AuthScreenView: View {
             // PATINA wordmark
             Text("PATINA")
                 .font(PatinaTypography.authLogo)
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
                 .tracking(6)
 
             // Strata mini mark
@@ -38,12 +38,12 @@ struct AuthScreenView: View {
             // Welcome text
             Text("Welcome home")
                 .font(PatinaTypography.h3)
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
                 .padding(.bottom, 6)
 
             Text("Join thousands of design enthusiasts")
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
                 .padding(.bottom, 32)
 
             // Auth buttons
@@ -71,7 +71,7 @@ struct AuthScreenView: View {
                 Rectangle().fill(PatinaColors.pearl).frame(height: 1)
                 Text("or")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
                 Rectangle().fill(PatinaColors.pearl).frame(height: 1)
             }
             .padding(.horizontal, 28)
@@ -83,7 +83,7 @@ struct AuthScreenView: View {
             } label: {
                 Text("Browse as Guest")
                     .font(PatinaTypography.bodySmall)
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
             }
             .accessibilityIdentifier("auth.welcome.guestButton")
 
@@ -92,7 +92,7 @@ struct AuthScreenView: View {
             // Footer
             Text("By continuing, you agree to our Terms of Service\nand Privacy Policy")
                 .font(.system(size: 11))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
                 .multilineTextAlignment(.center)
                 .lineSpacing(2)
                 .padding(.bottom, 40)

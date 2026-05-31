@@ -27,7 +27,7 @@ struct CollectionsView: View {
             HStack {
                 Text("Collections")
                     .font(PatinaTypography.h2)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
 
                 Spacer()
 
@@ -36,7 +36,7 @@ struct CollectionsView: View {
                 } label: {
                     Image(systemName: "plus.circle")
                         .font(.system(size: 22))
-                        .foregroundColor(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.clay)
                 }
             }
             .padding(.top, 56)
@@ -54,7 +54,7 @@ struct CollectionsView: View {
                         VStack(spacing: 0) {
                             Text(tab)
                                 .font(PatinaTypography.bodySmall)
-                                .foregroundColor(tab == viewModel.activeTab ? PatinaColors.charcoal : PatinaColors.agedOak)
+                                .foregroundStyle(tab == viewModel.activeTab ? PatinaColors.charcoal : PatinaColors.agedOak)
                                 .fontWeight(tab == viewModel.activeTab ? .medium : .regular)
                                 .padding(.vertical, 12)
 
@@ -115,15 +115,15 @@ struct CollectionsView: View {
             Spacer().frame(height: 40)
             Image(systemName: "rectangle.stack")
                 .font(.system(size: 36))
-                .foregroundColor(PatinaColors.clay.opacity(0.5))
+                .foregroundStyle(PatinaColors.clay.opacity(0.5))
 
             Text("No boards yet")
                 .font(PatinaTypography.h5)
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
 
             Text("Save pieces from recommendations to create your first board")
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 260)
 
@@ -132,7 +132,7 @@ struct CollectionsView: View {
             } label: {
                 Text("Create Board")
                     .font(PatinaTypography.uiAction)
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
                     .padding(.horizontal, 24)
                     .frame(height: 44)
                     .background(PatinaColors.charcoal)
@@ -148,7 +148,7 @@ struct CollectionsView: View {
             HStack {
                 Text(board.name)
                     .font(PatinaTypography.h5)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 Spacer()
                 MonoLabel(text: "\(board.itemCount) items")
             }
@@ -184,7 +184,7 @@ struct CollectionsView: View {
                     .overlay(
                         Text("Empty board")
                             .font(PatinaTypography.caption)
-                            .foregroundColor(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.agedOak)
                     )
             }
         }
@@ -199,10 +199,10 @@ struct CollectionsView: View {
                     Spacer().frame(height: 40)
                     Text("No saved items yet")
                         .font(PatinaTypography.h5)
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                     Text("Browse recommendations and save pieces you love")
                         .font(PatinaTypography.bodySmall)
-                        .foregroundColor(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.agedOak)
                 }
                 .frame(maxWidth: .infinity)
             } else {

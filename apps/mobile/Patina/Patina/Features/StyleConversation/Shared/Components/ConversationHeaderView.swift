@@ -26,14 +26,14 @@ struct ConversationHeaderView: View {
 
             Text(question)
                 .font(.custom("PlayfairDisplay-Italic", size: 26))
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
 
             if let subtext {
                 Text(subtext)
                     .font(.custom("Inter-Light", size: 13))
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
                     .padding(.top, 8)
             }
         }
@@ -47,7 +47,7 @@ struct ConversationHeaderView: View {
             .font(.custom("DMMono-Regular", size: 10))
             .tracking(0.6)
             .textCase(.uppercase)
-            .foregroundColor(PatinaColors.clay)
+            .foregroundStyle(PatinaColors.clay)
             .padding(.bottom, 20)
     }
 }

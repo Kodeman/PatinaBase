@@ -34,11 +34,11 @@ struct RoomContextBar: View {
         let strong = Color(PatinaColors.charcoal)
         let muted = Color(PatinaColors.agedOak)
         return (
-            Text("\(room.squareFeet) sq ft").foregroundColor(strong).fontWeight(.medium)
-            + Text(" · ").foregroundColor(muted)
-            + Text(room.orientation).foregroundColor(strong).fontWeight(.medium)
-            + Text(" · ").foregroundColor(muted)
-            + Text("\(room.windowCount) window\(room.windowCount == 1 ? "" : "s")").foregroundColor(strong).fontWeight(.medium)
+            Text("\(room.squareFeet) sq ft").foregroundStyle(strong).fontWeight(.medium)
+            + Text(" · ").foregroundStyle(muted)
+            + Text(room.orientation).foregroundStyle(strong).fontWeight(.medium)
+            + Text(" · ").foregroundStyle(muted)
+            + Text("\(room.windowCount) window\(room.windowCount == 1 ? "" : "s")").foregroundStyle(strong).fontWeight(.medium)
         )
         .font(.system(size: 10))
     }
@@ -50,7 +50,7 @@ struct RoomContextBar: View {
         } label: {
             Text(filter.label)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundColor(isActive ? PatinaColors.offWhite : PatinaColors.mocha)
+                .foregroundStyle(isActive ? PatinaColors.offWhite : PatinaColors.mocha)
                 .padding(.vertical, 3)
                 .padding(.horizontal, 9)
                 .background(

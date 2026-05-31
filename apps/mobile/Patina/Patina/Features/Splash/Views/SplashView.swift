@@ -23,7 +23,7 @@ struct SplashView: View {
                 // PATINA wordmark
                 Text("PATINA")
                     .font(PatinaTypography.wordmark)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                     .tracking(8)
                     .opacity(wordmarkOpacity)
                     .offset(y: wordmarkOffset)

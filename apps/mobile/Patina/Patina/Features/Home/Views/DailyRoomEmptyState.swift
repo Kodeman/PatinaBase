@@ -17,18 +17,18 @@ struct DailyRoomEmptyState: View {
                     .frame(width: 80, height: 80)
                 Image(systemName: "house")
                     .font(.system(size: 32, weight: .light))
-                    .foregroundColor(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.mocha)
             }
             .padding(.bottom, 16)
 
             Text("Start your first room")
                 .font(.custom("PlayfairDisplay-Regular", size: 20))
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
                 .padding(.bottom, 6)
 
             Text("Capture a room to see daily picks tailored to your space")
                 .font(.system(size: 13))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
                 .multilineTextAlignment(.center)
                 .lineSpacing(2)
                 .frame(maxWidth: 260)
@@ -39,7 +39,7 @@ struct DailyRoomEmptyState: View {
             } label: {
                 Text("Scan a Room")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
                     .padding(.vertical, 12)
                     .padding(.horizontal, 28)
                     .background(Capsule().fill(PatinaColors.charcoal))

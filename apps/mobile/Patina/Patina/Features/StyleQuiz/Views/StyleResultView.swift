@@ -36,7 +36,7 @@ struct StyleResultView: View {
             // Style name
             Text(result.displayName)
                 .font(PatinaTypography.h1)
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
                 .padding(.bottom, 4)
 
             // Subtitle
@@ -80,7 +80,7 @@ struct StyleResultView: View {
             } label: {
                 Text("View Recommendations")
                     .font(PatinaTypography.uiAction)
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
                     .background(PatinaColors.charcoal)
@@ -94,7 +94,7 @@ struct StyleResultView: View {
             } label: {
                 Text("Refine your style →")
                     .font(PatinaTypography.bodySmall)
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
             }
             .padding(.top, 12)
 
@@ -111,11 +111,11 @@ struct StyleResultView: View {
         VStack(spacing: 2) {
             Text(value)
                 .font(PatinaTypography.h3)
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
 
             Text(label.uppercased())
                 .font(PatinaTypography.monoTiny)
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
         }
     }
 }

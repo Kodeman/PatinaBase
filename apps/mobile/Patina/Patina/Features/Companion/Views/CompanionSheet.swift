@@ -47,12 +47,12 @@ public struct CompanionSheet: View {
             HStack(spacing: PatinaSpacing.sm) {
                 Image(systemName: viewModel.context.contextIcon)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
                     .accessibilityHidden(true)
 
                 Text(viewModel.context.contextSummary)
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.mocha)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility2) // Cap at 150% per spec
             }
             .padding(.horizontal, PatinaSpacing.lg)
@@ -123,7 +123,7 @@ struct QuickActionButton: View {
             // Ensure minimum touch target (44pt per Apple HIG)
             .frame(maxWidth: .infinity, minHeight: 44)
             .background(action.isPrimary ? PatinaColors.clay : Color.clear)
-            .foregroundColor(action.isPrimary ? PatinaColors.offWhite : PatinaColors.charcoal)
+            .foregroundStyle(action.isPrimary ? PatinaColors.offWhite : PatinaColors.charcoal)
             .cornerRadius(PatinaRadius.lg)
             .overlay(
                 RoundedRectangle(cornerRadius: PatinaRadius.lg)

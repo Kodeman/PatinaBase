@@ -39,7 +39,7 @@ struct SpatialMetadataRow: View {
             Text(icon).font(.system(size: 14))
             Text(text)
                 .font(.system(size: 11, weight: bold ? .medium : .regular))
-                .foregroundColor(bold ? PatinaColors.charcoal : PatinaColors.mocha)
+                .foregroundStyle(bold ? PatinaColors.charcoal : PatinaColors.mocha)
         }
     }
 

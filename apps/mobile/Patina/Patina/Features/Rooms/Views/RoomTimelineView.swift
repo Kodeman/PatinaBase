@@ -59,7 +59,7 @@ struct RoomTimelineView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Room Through Time")
                     .font(.custom("PlayfairDisplay-Regular", size: 22))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
 
@@ -67,11 +67,11 @@ struct RoomTimelineView: View {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
                 } else if let err = viewModel.error {
                     Text("Couldn't load timeline: \(err)")
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 20)
                 } else if viewModel.events.isEmpty {
                     Text("No activity yet. Scan and start saving picks to see your room emerge.")
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 20)
                 } else {
                     ForEach(viewModel.events) { event in
@@ -99,10 +99,10 @@ private struct TimelineRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.label)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 Text(event.at.prefix(10))
                     .font(.system(size: 11))
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
             Spacer()
         }

@@ -26,13 +26,13 @@ struct PreScanChecklistView: View {
             // Header
             Text("Before we begin")
                 .font(PatinaTypography.h3)
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
                 .padding(.top, 56)
                 .padding(.horizontal, 24)
 
             Text("A quick check to get the best results")
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
                 .padding(.top, 4)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 24)
@@ -141,22 +141,22 @@ struct PreScanChecklistView: View {
                 if isReady {
                     Image(systemName: "checkmark")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(PatinaColors.success)
+                        .foregroundStyle(PatinaColors.success)
                 } else {
                     Image(systemName: icon)
                         .font(.system(size: 14))
-                        .foregroundColor(isWarning ? PatinaColors.terracotta : PatinaColors.clay)
+                        .foregroundStyle(isWarning ? PatinaColors.terracotta : PatinaColors.clay)
                 }
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(PatinaTypography.uiAction)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
 
                 Text(subtitle)
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
 
             Spacer()

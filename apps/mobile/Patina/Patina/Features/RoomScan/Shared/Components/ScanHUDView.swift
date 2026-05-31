@@ -48,7 +48,7 @@ struct ScanHUDView: View {
                 if isComplete {
                     Image(systemName: "checkmark")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.clay)
                         .transition(.opacity)
                 } else {
                     Circle()
@@ -67,7 +67,7 @@ struct ScanHUDView: View {
                 .font(.custom("DMMono-Regular", size: 10))
                 .tracking(0.5)
                 .textCase(.uppercase)
-                .foregroundColor(isFastMovementWarning
+                .foregroundStyle(isFastMovementWarning
                     ? PatinaColors.terracotta
                     : Color.white.opacity(0.6))
         }

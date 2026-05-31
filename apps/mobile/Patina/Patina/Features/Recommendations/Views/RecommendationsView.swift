@@ -19,11 +19,11 @@ struct RecommendationsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Perfect for your space")
                     .font(PatinaTypography.h4)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
 
                 Text(viewModel.headerSubtitle)
                     .font(PatinaTypography.uiSmall)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
             .padding(.top, 56)
             .padding(.horizontal, 24)
@@ -93,7 +93,7 @@ struct RecommendationsView: View {
                 // Match badge
                 Text(product.matchLabel)
                     .font(PatinaTypography.monoSmall)
-                    .foregroundColor(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.mocha)
                     .tracking(0.3)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
@@ -114,7 +114,7 @@ struct RecommendationsView: View {
                                 .overlay(
                                     Image(systemName: "heart")
                                         .font(.system(size: 14))
-                                        .foregroundColor(PatinaColors.mocha)
+                                        .foregroundStyle(PatinaColors.mocha)
                                 )
                         }
                         .padding(8)
@@ -128,13 +128,13 @@ struct RecommendationsView: View {
 
                 Text(product.name)
                     .font(PatinaTypography.uiSmall)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                     .lineLimit(2)
                     .padding(.top, 2)
 
                 Text(product.fullFormattedPrice)
                     .font(PatinaTypography.h5)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                     .padding(.top, 4)
             }
             .padding(.horizontal, 12)
@@ -182,7 +182,7 @@ struct RecommendationsView: View {
             }
             Text("Curating your pieces...")
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
             Spacer()
         }
         .frame(maxWidth: .infinity)

@@ -52,10 +52,10 @@ struct PriorityView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(card.label)
                     .font(.custom("PlayfairDisplay-Regular", size: 16))
-                    .foregroundColor(isSelected ? PatinaColors.offWhite : PatinaColors.charcoal)
+                    .foregroundStyle(isSelected ? PatinaColors.offWhite : PatinaColors.charcoal)
                 Text(card.subtext)
                     .font(.custom("Inter-Light", size: 12))
-                    .foregroundColor(isSelected ? PatinaColors.pearl : PatinaColors.agedOak)
+                    .foregroundStyle(isSelected ? PatinaColors.pearl : PatinaColors.agedOak)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 20)

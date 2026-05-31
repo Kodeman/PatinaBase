@@ -18,11 +18,11 @@ struct RoomBudgetBar: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("Room investment")
                     .font(.system(size: 11))
-                    .foregroundColor(PatinaColors.pearl)
+                    .foregroundStyle(PatinaColors.pearl)
                 Spacer()
                 Text(formatted(totalCents))
                     .font(.custom("PlayfairDisplay-Medium", size: 22))
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
             }
 
             GeometryReader { geo in
@@ -45,7 +45,7 @@ struct RoomBudgetBar: View {
             }
             .font(.custom("DMMono-Regular", size: 7))
             .tracking(0.3)
-            .foregroundColor(PatinaColors.clay)
+            .foregroundStyle(PatinaColors.clay)
         }
         .padding(14)
         .background(

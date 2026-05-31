@@ -38,7 +38,7 @@ struct RevealView: View {
                 Text("THE AESTHETE ENGINE")
                     .font(.custom("DMMono-Regular", size: 10))
                     .tracking(1.0)
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
 
                 aestheticName
                     .padding(.horizontal, 24)
@@ -64,7 +64,7 @@ struct RevealView: View {
                             Image(systemName: "arrow.right")
                         }
                         .font(.custom("Inter-Regular", size: 12))
-                        .foregroundColor(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.agedOak)
                     }
                     .buttonStyle(.plain)
                 }
@@ -93,7 +93,7 @@ struct RevealView: View {
             ForEach(chars.indices, id: \.self) { i in
                 Text(String(chars[i]))
                     .font(.custom("PlayfairDisplay-Light", size: 42))
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
                     .opacity(reduceMotion ? 1 : (i < revealedLetters ? 1 : 0))
             }
         }
@@ -135,7 +135,7 @@ struct RevealView: View {
             ForEach(Array(profile.tags.enumerated()), id: \.offset) { index, tag in
                 Text(tag)
                     .font(.custom("Inter-Regular", size: 12))
-                    .foregroundColor(PatinaColors.pearl)
+                    .foregroundStyle(PatinaColors.pearl)
                     .padding(.vertical, 7)
                     .padding(.horizontal, 16)
                     .overlay(

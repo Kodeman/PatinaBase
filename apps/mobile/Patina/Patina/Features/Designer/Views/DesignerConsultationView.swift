@@ -27,11 +27,11 @@ struct DesignerConsultationView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Work with a designer")
                         .font(PatinaTypography.h2)
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
 
                     Text("Share your vision and rooms. A Patina designer will reach out within 48 hours to help bring your space to life.")
                         .font(PatinaTypography.bodySmall)
-                        .foregroundColor(PatinaColors.pearl)
+                        .foregroundStyle(PatinaColors.pearl)
                         .lineSpacing(4)
                 }
                 .padding(24)
@@ -48,12 +48,12 @@ struct DesignerConsultationView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Which rooms?")
                         .font(PatinaTypography.bodySmallMedium)
-                        .foregroundColor(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.mocha)
 
                     if rooms.isEmpty {
                         Text("No rooms scanned yet — scan a room first for better recommendations")
                             .font(PatinaTypography.caption)
-                            .foregroundColor(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.agedOak)
                     } else {
                         FlowLayout(spacing: 8) {
                             ForEach(rooms) { room in
@@ -69,13 +69,13 @@ struct DesignerConsultationView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Your vision")
                         .font(PatinaTypography.bodySmallMedium)
-                        .foregroundColor(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.mocha)
 
                     ZStack(alignment: .topLeading) {
                         if visionText.isEmpty {
                             Text("I want a space that feels...")
                                 .font(PatinaTypography.bodySmall)
-                                .foregroundColor(PatinaColors.agedOak)
+                                .foregroundStyle(PatinaColors.agedOak)
                                 .italic()
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 12)
@@ -83,7 +83,7 @@ struct DesignerConsultationView: View {
 
                         TextEditor(text: $visionText)
                             .font(PatinaTypography.bodySmall)
-                            .foregroundColor(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.charcoal)
                             .scrollContentBackground(.hidden)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 8)
@@ -131,13 +131,13 @@ struct DesignerConsultationView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Matched Designer")
                     .font(PatinaTypography.h5)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
 
                 MonoLabel(text: "Based on your style profile")
 
                 Text("We'll pair you with a designer who understands your aesthetic")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.mocha)
                     .lineSpacing(2)
             }
         }
@@ -160,7 +160,7 @@ struct DesignerConsultationView: View {
         } label: {
             Text(room.name)
                 .font(PatinaTypography.caption)
-                .foregroundColor(isSelected ? .white : PatinaColors.mocha)
+                .foregroundStyle(isSelected ? .white : PatinaColors.mocha)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
                 .background(isSelected ? PatinaColors.clay : PatinaColors.softCream)
@@ -215,16 +215,16 @@ struct DesignerConsultationView: View {
                         .frame(width: 76, height: 76)
                     Image(systemName: "checkmark")
                         .font(.system(size: 30, weight: .medium))
-                        .foregroundColor(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.clay)
                 }
 
                 Text("Request Submitted")
                     .font(PatinaTypography.h3)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
 
                 Text("A designer will reach out within 48 hours")
                     .font(PatinaTypography.bodySmall)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
                     .multilineTextAlignment(.center)
 
                 PatinaButton("Done", style: .primary) {

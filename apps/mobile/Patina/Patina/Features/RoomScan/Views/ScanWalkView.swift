@@ -142,16 +142,16 @@ struct ScanWalkView: View {
 
                 Image(systemName: "viewfinder.trianglebadge.exclamationmark")
                     .font(.system(size: 56, weight: .light))
-                    .foregroundColor(PatinaColors.offWhite.opacity(0.85))
+                    .foregroundStyle(PatinaColors.offWhite.opacity(0.85))
 
                 VStack(spacing: 12) {
                     Text("Lost the room")
                         .font(.custom("PlayfairDisplay-Italic", size: 26))
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
 
                     Text("Tracking dropped — usually from a sudden move or a featureless wall. Let's try once more from where you stand.")
                         .font(.custom("Inter-Regular", size: 14))
-                        .foregroundColor(PatinaColors.offWhite.opacity(0.75))
+                        .foregroundStyle(PatinaColors.offWhite.opacity(0.75))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                 }
@@ -162,7 +162,7 @@ struct ScanWalkView: View {
                     Button(action: viewModel.didTapRetryAfterSessionLost) {
                         Text("Try again")
                             .font(.custom("Inter-Medium", size: 15))
-                            .foregroundColor(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.charcoal)
                             .frame(maxWidth: .infinity)
                             .frame(height: 52)
                             .background(RoundedRectangle(cornerRadius: 26).fill(PatinaColors.offWhite))
@@ -172,7 +172,7 @@ struct ScanWalkView: View {
                     Button(action: viewModel.didTapCancelAfterSessionLost) {
                         Text("Cancel scan")
                             .font(.custom("Inter-Medium", size: 15))
-                            .foregroundColor(PatinaColors.offWhite)
+                            .foregroundStyle(PatinaColors.offWhite)
                             .frame(maxWidth: .infinity)
                             .frame(height: 52)
                             .background(
@@ -197,7 +197,7 @@ struct ScanWalkView: View {
                 Button(action: viewModel.didChooseFinishIdle) {
                     Text("Finish with this")
                         .font(.custom("Inter-Medium", size: 15))
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)
                         .background(RoundedRectangle(cornerRadius: 26).fill(PatinaColors.charcoal))
@@ -207,7 +207,7 @@ struct ScanWalkView: View {
                 Button(action: viewModel.didChooseKeepGoing) {
                     Text("Keep going")
                         .font(.custom("Inter-Medium", size: 15))
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)
                         .background(

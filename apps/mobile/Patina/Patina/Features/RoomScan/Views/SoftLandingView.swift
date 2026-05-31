@@ -42,7 +42,7 @@ struct SoftLandingView: View {
                 if showTransitionText && !transitionTextFadedOut {
                     Text("Now let's talk about you.")
                         .font(.custom("PlayfairDisplay-Italic", size: 22))
-                        .foregroundColor(PatinaColors.charcoal.opacity(0.8))
+                        .foregroundStyle(PatinaColors.charcoal.opacity(0.8))
                         .transition(.opacity)
                 }
                 Spacer()
@@ -103,15 +103,15 @@ struct SoftLandingView: View {
         VStack(spacing: 16) {
             Text("You've done this before.")
                 .font(.custom("PlayfairDisplay-Italic", size: 18))
-                .foregroundColor(PatinaColors.charcoal.opacity(0.8))
+                .foregroundStyle(PatinaColors.charcoal.opacity(0.8))
             Text("Your style: \(profile.aestheticName)")
                 .font(.custom("Inter-Regular", size: 13))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
 
             Button(action: { onOutcome(.skipToFloorPlan(profile)) }) {
                 Text("Use my style")
                     .font(.custom("Inter-Medium", size: 15))
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
                     .background(RoundedRectangle(cornerRadius: 26).fill(PatinaColors.charcoal))
@@ -121,7 +121,7 @@ struct SoftLandingView: View {
             Button(action: { onOutcome(.startConversation) }) {
                 Text("Update my style")
                     .font(.custom("Inter-Medium", size: 15))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
                     .background(

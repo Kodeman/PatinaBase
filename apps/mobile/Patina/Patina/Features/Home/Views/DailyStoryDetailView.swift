@@ -76,10 +76,10 @@ struct DailyStoryDetailView: View {
                     .font(.custom("DMMono-Regular", size: 8))
                     .tracking(0.6)
                     .textCase(.uppercase)
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
                 Text(story.title)
                     .font(.custom("PlayfairDisplay-Regular", size: 26))
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
                     .lineSpacing(2)
             }
             .padding(.horizontal, 20)
@@ -105,19 +105,19 @@ struct DailyStoryDetailView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(story.makerName)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
                     Text(story.makerLocation)
                         .font(.custom("DMMono-Regular", size: 8))
                         .tracking(0.5)
                         .textCase(.uppercase)
-                        .foregroundColor(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.clay)
                 }
             }
             .padding(.bottom, 16)
 
             Text(story.body)
                 .font(.system(size: 14))
-                .foregroundColor(PatinaColors.pearl)
+                .foregroundStyle(PatinaColors.pearl)
                 .lineSpacing(8)
                 .padding(.bottom, 18)
 
@@ -166,15 +166,15 @@ struct DailyStoryDetailView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(product.name)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
                     Text(product.formattedPrice)
                         .font(.custom("PlayfairDisplay-Medium", size: 16))
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
                 }
                 Spacer()
                 Text("View")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
                     .padding(.vertical, 8)
                     .padding(.horizontal, 14)
                     .background(Capsule().fill(PatinaColors.clay))

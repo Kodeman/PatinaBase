@@ -31,7 +31,7 @@ struct ThreadDetailView: View {
                         } else if let error = viewModel.error, viewModel.messages.isEmpty {
                             Text(error)
                                 .font(PatinaTypography.bodySmall)
-                                .foregroundColor(PatinaColors.mocha)
+                                .foregroundStyle(PatinaColors.mocha)
                                 .frame(maxWidth: .infinity)
                                 .padding(.top, 60)
                         } else {
@@ -70,7 +70,7 @@ struct ThreadDetailView: View {
             if isOwn { Spacer() }
             Text(message.body)
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(fg)
+                .foregroundStyle(fg)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(bg)
@@ -92,7 +92,7 @@ struct ThreadDetailView: View {
         HStack(spacing: 10) {
             TextField("Type a message…", text: $viewModel.draft, axis: .vertical)
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(PatinaColors.softCream)
@@ -104,7 +104,7 @@ struct ThreadDetailView: View {
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 28))
-                    .foregroundColor(canSend ? PatinaColors.clay : PatinaColors.agedOak.opacity(0.6))
+                    .foregroundStyle(canSend ? PatinaColors.clay : PatinaColors.agedOak.opacity(0.6))
             }
             .disabled(!canSend)
         }

@@ -33,7 +33,7 @@ struct StyleSwatchCell: View {
 
                     Text(label)
                         .font(.custom("Inter-SemiBold", size: 11))
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                         .shadow(color: Color.black.opacity(0.6), radius: 2, x: 0, y: 1)
                         .padding(14)
                 }
@@ -73,7 +73,7 @@ struct StyleSwatchCell: View {
                 .frame(width: 22, height: 22)
             Image(systemName: "checkmark")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
         }
     }
 }

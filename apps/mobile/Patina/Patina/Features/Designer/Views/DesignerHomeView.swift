@@ -72,7 +72,7 @@ struct DesignerHomeView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("Your studio today")
                         .font(PatinaTypography.h2)
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                     // Contextual help: explains what the "studio today"
                     // dashboard shows — the morning brief of designer state
                     // across projects, leads, decisions, and conversations.
@@ -84,7 +84,7 @@ struct DesignerHomeView: View {
                 }
                 Text("\(viewModel.activeProjects.count) active · \(viewModel.leads.count) open lead\(viewModel.leads.count == 1 ? "" : "s") · \(viewModel.pendingDecisions.count) decision\(viewModel.pendingDecisions.count == 1 ? "" : "s")")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
             Spacer()
             // `?` help-panel trigger — surfaces every help article for the
@@ -131,19 +131,19 @@ struct DesignerHomeView: View {
                 HStack(spacing: 10) {
                     Image(systemName: "shippingbox")
                         .font(.system(size: 16))
-                        .foregroundColor(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.mocha)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Receive delivery")
                             .font(PatinaTypography.bodySmallMedium)
-                            .foregroundColor(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.charcoal)
                         Text("Inspect arriving POs on-site")
                             .font(PatinaTypography.caption)
-                            .foregroundColor(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.agedOak)
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12))
-                        .foregroundColor(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.agedOak)
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -162,15 +162,15 @@ struct DesignerHomeView: View {
                 HStack {
                     Image(systemName: icon)
                         .font(.system(size: 16))
-                        .foregroundColor(color)
+                        .foregroundStyle(color)
                     Spacer()
                     Text("\(value)")
                         .font(PatinaTypography.h4)
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                 }
                 Text(title)
                     .font(PatinaTypography.uiSmall)
-                    .foregroundColor(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.mocha)
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -249,20 +249,20 @@ struct DesignerHomeView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(project.name)
                         .font(PatinaTypography.bodySmallMedium)
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                     Text(project.current_phase ?? project.status?.capitalized ?? "—")
                         .font(PatinaTypography.caption)
-                        .foregroundColor(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.agedOak)
                 }
                 Spacer()
                 if let total = project.total_amount_cents ?? project.budget_cents {
                     Text(formatPrice(total))
                         .font(PatinaTypography.monoTiny)
-                        .foregroundColor(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.mocha)
                 }
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12))
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
             .padding(.vertical, 12)
             .padding(.horizontal, 16)
@@ -275,16 +275,16 @@ struct DesignerHomeView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(lead.project_type?.replacingOccurrences(of: "_", with: " ").capitalized ?? "Consultation")
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 Text(lead.project_description ?? "No description")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
                     .lineLimit(2)
             }
             Spacer()
             Text(lead.budget_range ?? "")
                 .font(PatinaTypography.monoTiny)
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 16)
@@ -298,16 +298,16 @@ struct DesignerHomeView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(decision.title ?? "Untitled decision")
                         .font(PatinaTypography.bodySmallMedium)
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                     Text(decision.description ?? "")
                         .font(PatinaTypography.caption)
-                        .foregroundColor(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.agedOak)
                         .lineLimit(2)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12))
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
             .padding(.vertical, 12)
             .padding(.horizontal, 16)
@@ -323,15 +323,15 @@ struct DesignerHomeView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(thread.title ?? thread.kind.capitalized)
                         .font(PatinaTypography.bodySmallMedium)
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                     Text(thread.last_message_at ?? "")
                         .font(PatinaTypography.monoTiny)
-                        .foregroundColor(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.agedOak)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12))
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
             .padding(.vertical, 12)
             .padding(.horizontal, 16)
@@ -342,7 +342,7 @@ struct DesignerHomeView: View {
     private func emptyRow(_ message: String) -> some View {
         Text(message)
             .font(PatinaTypography.caption)
-            .foregroundColor(PatinaColors.agedOak)
+            .foregroundStyle(PatinaColors.agedOak)
             .padding(.vertical, 16)
             .padding(.horizontal, 16)
     }
@@ -390,7 +390,7 @@ private struct Section<Content: View>: View {
                 if let action = showAllAction {
                     Button("See all", action: action)
                         .font(PatinaTypography.uiSmall)
-                        .foregroundColor(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.clay)
                 }
             }
             .padding(.horizontal, 24)

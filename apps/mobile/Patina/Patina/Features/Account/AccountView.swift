@@ -58,7 +58,7 @@ struct AccountView: View {
                         coordinator.showingSettings = false
                     }
                     .font(PatinaTypography.bodyMedium)
-                    .foregroundColor(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.mocha)
                 }
             }
         }
@@ -89,16 +89,16 @@ struct AccountView: View {
         VStack(spacing: PatinaSpacing.md) {
             Image(systemName: "person.circle.fill")
                 .font(.system(size: 64))
-                .foregroundColor(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.clay)
 
             if let email = authService.currentUser?.email {
                 Text(email)
                     .font(PatinaTypography.bodyMedium)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
             } else {
                 Text("Not signed in")
                     .font(PatinaTypography.bodyMedium)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
             }
         }
         .padding(.top, PatinaSpacing.md)
@@ -135,7 +135,7 @@ struct AccountView: View {
                 HStack {
                     Text("Mode")
                         .font(PatinaTypography.body)
-                        .foregroundColor(PatinaColors.Text.secondary)
+                        .foregroundStyle(PatinaColors.Text.secondary)
                     Spacer()
                     Menu {
                         Button("Auto") { applyHomeMode(.auto) }
@@ -145,10 +145,10 @@ struct AccountView: View {
                         HStack(spacing: 6) {
                             Text(homeModeLabel(homeMode))
                                 .font(PatinaTypography.body)
-                                .foregroundColor(PatinaColors.Text.primary)
+                                .foregroundStyle(PatinaColors.Text.primary)
                             Image(systemName: "chevron.up.chevron.down")
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(PatinaColors.Text.muted)
+                                .foregroundStyle(PatinaColors.Text.muted)
                         }
                     }
                 }
@@ -196,9 +196,9 @@ struct AccountView: View {
                         Spacer()
                         Image(systemName: "chevron.right")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(PatinaColors.Text.muted)
+                            .foregroundStyle(PatinaColors.Text.muted)
                     }
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .padding(PatinaSpacing.md)
                     .background(PaperBackground(cornerRadius: PatinaRadius.lg))
                 }
@@ -218,7 +218,7 @@ struct AccountView: View {
     private var footerSection: some View {
         Text("Patina \(AppConfiguration.fullVersion)")
             .font(PatinaTypography.caption)
-            .foregroundColor(PatinaColors.Text.muted)
+            .foregroundStyle(PatinaColors.Text.muted)
             .padding(.top, PatinaSpacing.lg)
     }
 
@@ -227,7 +227,7 @@ struct AccountView: View {
     private func sectionHeader(_ title: String) -> some View {
         Text(title.uppercased())
             .font(PatinaTypography.caption)
-            .foregroundColor(PatinaColors.Text.muted)
+            .foregroundStyle(PatinaColors.Text.muted)
             .padding(.horizontal, PatinaSpacing.sm)
             .padding(.bottom, PatinaSpacing.sm)
     }
@@ -236,11 +236,11 @@ struct AccountView: View {
         HStack {
             Text(label)
                 .font(PatinaTypography.body)
-                .foregroundColor(PatinaColors.Text.secondary)
+                .foregroundStyle(PatinaColors.Text.secondary)
             Spacer()
             Text(value)
                 .font(PatinaTypography.body)
-                .foregroundColor(PatinaColors.Text.primary)
+                .foregroundStyle(PatinaColors.Text.primary)
         }
         .padding(PatinaSpacing.md)
     }

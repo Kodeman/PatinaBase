@@ -23,7 +23,7 @@ struct StylePillButton: View {
                 Text(label)
                     .font(.custom("Inter-Regular", size: 14))
             }
-            .foregroundColor(isSelected ? PatinaColors.offWhite : PatinaColors.charcoal)
+            .foregroundStyle(isSelected ? PatinaColors.offWhite : PatinaColors.charcoal)
             .padding(.vertical, 14)
             .padding(.horizontal, 18)
             .background(

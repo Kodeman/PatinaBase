@@ -30,7 +30,7 @@ struct ProjectListView: View {
                 .tracking(2)
             Text(viewModel.projects.isEmpty ? "No projects yet" : "\(viewModel.projects.count) project\(viewModel.projects.count == 1 ? "" : "s")")
                 .font(PatinaTypography.h3)
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
         }
         .padding(.top, 56)
         .padding(.horizontal, 24)
@@ -68,12 +68,12 @@ struct ProjectListView: View {
             HStack {
                 Text(project.name)
                     .font(PatinaTypography.h5)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 Spacer()
                 if let status = project.status {
                     Text(status.capitalized)
                         .font(PatinaTypography.monoTiny)
-                        .foregroundColor(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.clay)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(PatinaColors.clay.opacity(0.1))
@@ -100,7 +100,7 @@ struct ProjectListView: View {
             MonoLabel(text: caption)
             Text(value)
                 .font(PatinaTypography.bodySmallMedium)
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
         }
     }
 
@@ -108,10 +108,10 @@ struct ProjectListView: View {
         VStack(spacing: 8) {
             Image(systemName: "rectangle.stack")
                 .font(.system(size: 28))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
             Text("No projects to show yet")
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 80)
@@ -121,12 +121,12 @@ struct ProjectListView: View {
         VStack(spacing: 10) {
             Text(msg)
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
             Button("Try Again") {
                 Task { await viewModel.load() }
             }
             .font(PatinaTypography.bodySmallMedium)
-            .foregroundColor(PatinaColors.clay)
+            .foregroundStyle(PatinaColors.clay)
         }
         .padding(.top, 60)
         .frame(maxWidth: .infinity)

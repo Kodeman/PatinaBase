@@ -59,7 +59,7 @@ struct WalkQuestionOverlay: View {
             // Question text
             Text(question.text)
                 .font(PatinaTypography.patinaVoice)
-                .foregroundColor(PatinaColors.Text.primary)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, PatinaSpacing.md)
 
@@ -90,7 +90,7 @@ struct WalkQuestionOverlay: View {
                 }) {
                     Text(option.text)
                         .font(PatinaTypography.bodySmall)
-                        .foregroundColor(PatinaColors.Text.primary)
+                        .foregroundStyle(PatinaColors.Text.primary)
                         .padding(.horizontal, PatinaSpacing.md)
                         .padding(.vertical, PatinaSpacing.sm)
                         .background(
@@ -109,7 +109,7 @@ struct WalkQuestionOverlay: View {
         VStack(spacing: PatinaSpacing.md) {
             TextField("One word...", text: $textInput)
                 .font(PatinaTypography.body)
-                .foregroundColor(PatinaColors.Text.primary)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .multilineTextAlignment(.center)
                 .textFieldStyle(.plain)
                 .padding(.horizontal, PatinaSpacing.md)
@@ -133,7 +133,7 @@ struct WalkQuestionOverlay: View {
                 }) {
                     Text("Done")
                         .font(PatinaTypography.bodySmall)
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
                         .padding(.horizontal, PatinaSpacing.lg)
                         .padding(.vertical, PatinaSpacing.sm)
                         .background(PatinaColors.clay)

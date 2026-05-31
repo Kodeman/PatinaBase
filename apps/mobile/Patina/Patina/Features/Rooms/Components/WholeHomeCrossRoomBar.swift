@@ -23,15 +23,15 @@ struct WholeHomeCrossRoomBar: View {
                         .frame(width: 44, height: 44)
                     Text("⌂")
                         .font(.system(size: 18))
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Whole Home")
                         .font(.custom("PlayfairDisplay-Regular", size: 15))
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
                     Text(summary)
                         .font(.system(size: 11))
-                        .foregroundColor(PatinaColors.pearl)
+                        .foregroundStyle(PatinaColors.pearl)
                 }
                 Spacer(minLength: 0)
             }

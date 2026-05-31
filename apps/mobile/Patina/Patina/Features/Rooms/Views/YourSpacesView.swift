@@ -79,7 +79,7 @@ struct YourSpacesView: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("Your Spaces")
                     .font(.custom("PlayfairDisplay-Regular", size: 24))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 // Contextual help: explains the "Your Spaces" model —
                 // every captured room as a gallery card with budget +
                 // item count, plus a Whole Home aggregate at the top.
@@ -124,7 +124,7 @@ struct YourSpacesView: View {
                         .frame(width: 36, height: 36)
                     Text("+")
                         .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
                 }
             }
             .buttonStyle(.plain)
@@ -144,7 +144,7 @@ struct YourSpacesView: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("No rooms yet")
                     .font(.custom("PlayfairDisplay-Regular", size: 20))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 // Empty-state help: explains why scanning matters. The
                 // copy below is a CTA; this tooltip explains the *why*
                 // for a designer-curious user not ready to scan yet.
@@ -156,7 +156,7 @@ struct YourSpacesView: View {
             }
             Text("Scan a room and Patina fills it with furniture that knows your space — your light, your walls, your style.")
                 .font(.system(size: 13))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 260)
                 .padding(.bottom, 8)
@@ -168,7 +168,7 @@ struct YourSpacesView: View {
                     Text("Scan Your First Room")
                 }
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(PatinaColors.offWhite)
+                .foregroundStyle(PatinaColors.offWhite)
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
                 .background(Capsule().fill(PatinaColors.charcoal))

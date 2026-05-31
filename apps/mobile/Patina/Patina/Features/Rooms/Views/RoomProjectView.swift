@@ -70,7 +70,7 @@ struct RoomProjectView: View {
                             if let nudge = BudgetAssessment.companionNudge(for: level, roomName: room.name) {
                                 Text(nudge)
                                     .font(.custom("PlayfairDisplay-Italic", size: 13))
-                                    .foregroundColor(PatinaColors.clay)
+                                    .foregroundStyle(PatinaColors.clay)
                                     .padding(.horizontal, 20)
                                     .padding(.top, 12)
                             }
@@ -85,7 +85,7 @@ struct RoomProjectView: View {
                 .ignoresSafeArea(edges: .top)
             } else {
                 Text("Room not found")
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
         }
         .sheet(item: $actionItem) { item in
@@ -123,7 +123,7 @@ struct RoomProjectView: View {
                     Text(buttonLabel)
                         .font(.system(size: 14, weight: .medium))
                 }
-                .foregroundColor(PatinaColors.offWhite)
+                .foregroundStyle(PatinaColors.offWhite)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
                 .background(
@@ -139,7 +139,7 @@ struct RoomProjectView: View {
             if case .failed(let msg) = designerLeadState {
                 Text(msg)
                     .font(.system(size: 11))
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
                     .padding(.horizontal, 20)
             }
         }
@@ -176,7 +176,7 @@ struct RoomProjectView: View {
                 } label: {
                     Text("⚙")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(PatinaColors.offWhite.opacity(0.92)))
                         .overlay(Circle().stroke(PatinaColors.pearl, lineWidth: 0.5))
@@ -204,12 +204,12 @@ struct RoomProjectView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(room.name)
                 .font(.custom("PlayfairDisplay-Regular", size: 26))
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
             Text(metaLine(for: room))
                 .font(.custom("DMMono-Regular", size: 9))
                 .tracking(0.4)
                 .textCase(.uppercase)
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 16)
@@ -242,12 +242,12 @@ struct RoomProjectView: View {
         VStack(spacing: 2) {
             Text(value)
                 .font(.custom("PlayfairDisplay-Medium", size: 20))
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
             Text(label)
                 .font(.custom("DMMono-Regular", size: 7))
                 .tracking(0.6)
                 .textCase(.uppercase)
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
         }
         .frame(maxWidth: .infinity)
         .padding(12)
@@ -264,11 +264,11 @@ struct RoomProjectView: View {
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(1.0)
                     .textCase(.uppercase)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
                 Spacer()
                 Text("View in AR →")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
             }
             .padding(.horizontal, 20)
             .padding(.top, 16)
@@ -301,15 +301,15 @@ struct RoomProjectView: View {
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(1.0)
                     .textCase(.uppercase)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
                 Spacer()
                 Text("See all →")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
             }
             Text("\"Your seating and surfaces are set. A rug would ground the arrangement.\"")
                 .font(.custom("PlayfairDisplay-Italic", size: 13))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
         }
         .padding(.horizontal, 20)
         .padding(.top, 20)
@@ -321,10 +321,10 @@ struct RoomProjectView: View {
             Text("✦").font(.system(size: 40))
             Text("A blank canvas")
                 .font(.custom("PlayfairDisplay-Regular", size: 18))
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
             Text("We've already found pieces that would fit this space. Browse your Daily Room to start building this room.")
                 .font(.system(size: 12))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 240)
             cta(primary: "Browse Picks for This Room") {
@@ -340,7 +340,7 @@ struct RoomProjectView: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(PatinaColors.offWhite)
+                .foregroundStyle(PatinaColors.offWhite)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
                 .background(Capsule().fill(PatinaColors.charcoal))

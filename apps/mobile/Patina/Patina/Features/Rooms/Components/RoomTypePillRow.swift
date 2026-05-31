@@ -29,7 +29,7 @@ struct RoomTypePillRow: View {
                 } label: {
                     Text(item.label)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(isSelected ? .white : PatinaColors.mocha)
+                        .foregroundStyle(isSelected ? .white : PatinaColors.mocha)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
                         .background(

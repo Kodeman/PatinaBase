@@ -25,7 +25,7 @@ struct RoomItemRow: View {
                         .overlay(
                             Text("◎")
                                 .font(.system(size: 9))
-                                .foregroundColor(PatinaColors.offWhite)
+                                .foregroundStyle(PatinaColors.offWhite)
                         )
                         .padding(3)
                 }
@@ -36,14 +36,14 @@ struct RoomItemRow: View {
                     .font(PatinaTypography.bodySmall)
                     .tracking(0.5)
                     .textCase(.uppercase)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
                 Text(item.productName)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                     .lineLimit(2)
                 Text(item.fullFormattedPrice)
                     .font(.custom("PlayfairDisplay-Medium", size: 15))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
             }
 
             Spacer(minLength: 0)
@@ -51,7 +51,7 @@ struct RoomItemRow: View {
             Button(action: onActions) {
                 Text("⋯")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                     .frame(width: 28, height: 28)
                     .background(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)

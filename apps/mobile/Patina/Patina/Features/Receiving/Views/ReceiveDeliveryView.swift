@@ -42,7 +42,7 @@ struct ReceiveDeliveryView: View {
                 .tracking(2)
             Text(viewModel.arrivingPOs.isEmpty ? "Nothing arriving" : "Arriving deliveries")
                 .font(PatinaTypography.h3)
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
         }
         .padding(.top, 56)
         .padding(.horizontal, 24)
@@ -82,11 +82,11 @@ struct ReceiveDeliveryView: View {
             HStack {
                 Text(po.vendor?.name ?? "Vendor")
                     .font(PatinaTypography.h5)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 Spacer()
                 Text(po.status.replacing("_", with: " ").capitalized)
                     .font(PatinaTypography.monoTiny)
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(PatinaColors.clay.opacity(0.1))
@@ -95,22 +95,22 @@ struct ReceiveDeliveryView: View {
             if let project = po.project?.name {
                 Text(project)
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
             HStack(spacing: 6) {
                 if let eta = po.confirmed_eta {
                     Image(systemName: "calendar")
                         .font(.system(size: 11))
-                        .foregroundColor(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.mocha)
                     Text("ETA \(eta)")
                         .font(PatinaTypography.monoTiny)
-                        .foregroundColor(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.mocha)
                 }
                 if let poNumber = po.vendor_po_number {
                     Spacer().frame(width: 12)
                     Text("PO \(poNumber)")
                         .font(PatinaTypography.monoTiny)
-                        .foregroundColor(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.mocha)
                 }
             }
         }
@@ -126,10 +126,10 @@ struct ReceiveDeliveryView: View {
         VStack(spacing: 8) {
             Image(systemName: "shippingbox")
                 .font(.system(size: 28))
-                .foregroundColor(PatinaColors.sage)
+                .foregroundStyle(PatinaColors.sage)
             Text("No deliveries arriving")
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 80)
@@ -139,10 +139,10 @@ struct ReceiveDeliveryView: View {
         VStack(spacing: 10) {
             Text(msg)
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
             Button("Try Again") { Task { await viewModel.loadArriving() } }
                 .font(PatinaTypography.bodySmallMedium)
-                .foregroundColor(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.clay)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
@@ -210,22 +210,22 @@ struct ReceiveInspectionSheet: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(purchaseOrder.vendor?.name ?? "Vendor")
                 .font(PatinaTypography.h4)
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
             if let project = purchaseOrder.project?.name {
                 Text(project)
                     .font(PatinaTypography.bodySmall)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
             HStack(spacing: 10) {
                 if let poNumber = purchaseOrder.vendor_po_number {
                     Text("PO \(poNumber)")
                         .font(PatinaTypography.monoTiny)
-                        .foregroundColor(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.mocha)
                 }
                 if let eta = purchaseOrder.confirmed_eta {
                     Text("ETA \(eta)")
                         .font(PatinaTypography.monoTiny)
-                        .foregroundColor(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.mocha)
                 }
             }
         }
@@ -240,7 +240,7 @@ struct ReceiveInspectionSheet: View {
             HStack {
                 Text("Photos (\(viewModel.photos.count) / \(viewModel.maxPhotos))")
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 Spacer()
                 if viewModel.photos.count < viewModel.maxPhotos {
                     PhotosPicker(
@@ -253,7 +253,7 @@ struct ReceiveInspectionSheet: View {
                             Text("Add")
                         }
                         .font(PatinaTypography.bodySmallMedium)
-                        .foregroundColor(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.clay)
                     }
                 }
             }
@@ -285,7 +285,7 @@ struct ReceiveInspectionSheet: View {
             }
             Text("Photos help the desktop team triage. Capture damage from multiple angles.")
                 .font(PatinaTypography.caption)
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
         }
     }
 
@@ -296,10 +296,10 @@ struct ReceiveInspectionSheet: View {
             .overlay(
                 VStack(spacing: 4) {
                     Image(systemName: "camera")
-                        .foregroundColor(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.agedOak)
                     Text("Tap Add to capture photos")
                         .font(PatinaTypography.caption)
-                        .foregroundColor(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.agedOak)
                 }
             )
     }
@@ -308,7 +308,7 @@ struct ReceiveInspectionSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Notes (optional)")
                 .font(PatinaTypography.bodySmallMedium)
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
             TextEditor(text: $viewModel.notes)
                 .font(PatinaTypography.body)
                 .frame(minHeight: 96)
@@ -345,7 +345,7 @@ struct ReceiveInspectionSheet: View {
                     }
                 }
                 .frame(maxWidth: .infinity, minHeight: 48)
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
                 .background(viewModel.outcome == nil ? PatinaColors.agedOak.opacity(0.5) : PatinaColors.charcoal)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
@@ -367,14 +367,14 @@ struct ReceiveInspectionSheet: View {
             HStack(spacing: 10) {
                 Image(systemName: systemImage)
                     .font(.system(size: 18))
-                    .foregroundColor(accent)
+                    .foregroundStyle(accent)
                 Text(title)
                     .font(PatinaTypography.bodyMedium)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 Spacer()
                 if isSelected {
                     Image(systemName: "checkmark")
-                        .foregroundColor(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.clay)
                 }
             }
             .padding(16)
@@ -398,14 +398,14 @@ struct ReceiveInspectionSheet: View {
         if let error = viewModel.error {
             Text(error)
                 .font(PatinaTypography.caption)
-                .foregroundColor(PatinaColors.error)
+                .foregroundStyle(PatinaColors.error)
         } else if viewModel.didSubmitSuccessfully {
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(PatinaColors.success)
+                    .foregroundStyle(PatinaColors.success)
                 Text("Inspection saved")
                     .font(PatinaTypography.bodySmall)
-                    .foregroundColor(PatinaColors.success)
+                    .foregroundStyle(PatinaColors.success)
             }
         }
     }

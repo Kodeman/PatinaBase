@@ -30,7 +30,7 @@ struct DecisionListView: View {
                 .tracking(2)
             Text(viewModel.decisions.isEmpty ? "Nothing waiting on you" : "Awaiting your call")
                 .font(PatinaTypography.h3)
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
         }
         .padding(.top, 56)
         .padding(.horizontal, 24)
@@ -68,12 +68,12 @@ struct DecisionListView: View {
             HStack {
                 Text(d.title ?? "Decision")
                     .font(PatinaTypography.h5)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 Spacer()
                 if let type = d.decision_type {
                     Text(type.capitalized)
                         .font(PatinaTypography.monoTiny)
-                        .foregroundColor(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.clay)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(PatinaColors.clay.opacity(0.1))
@@ -83,7 +83,7 @@ struct DecisionListView: View {
             if let description = d.description, !description.isEmpty {
                 Text(description)
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
                     .lineLimit(3)
             }
         }
@@ -97,10 +97,10 @@ struct DecisionListView: View {
         VStack(spacing: 8) {
             Image(systemName: "checkmark.circle")
                 .font(.system(size: 28))
-                .foregroundColor(PatinaColors.sage)
+                .foregroundStyle(PatinaColors.sage)
             Text("All caught up")
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 80)
@@ -110,10 +110,10 @@ struct DecisionListView: View {
         VStack(spacing: 10) {
             Text(msg)
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
             Button("Try Again") { Task { await viewModel.load() } }
                 .font(PatinaTypography.bodySmallMedium)
-                .foregroundColor(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.clay)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)

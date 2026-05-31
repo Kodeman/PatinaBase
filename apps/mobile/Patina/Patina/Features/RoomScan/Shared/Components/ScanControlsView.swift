@@ -28,7 +28,7 @@ struct ScanControlsView: View {
         Button(action: action) {
             Image(systemName: system)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Color.white.opacity(0.7))
+                .foregroundStyle(Color.white.opacity(0.7))
                 .frame(width: 36, height: 36)
                 .background(
                     Circle()

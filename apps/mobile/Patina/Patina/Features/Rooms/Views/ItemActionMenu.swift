@@ -50,11 +50,11 @@ struct ItemActionMenu: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.productName)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 Text("\(item.makerName) · \(item.fullFormattedPrice)")
                     .font(.custom("DMMono-Regular", size: 8))
                     .tracking(0.3)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
             Spacer(minLength: 0)
         }
@@ -77,7 +77,7 @@ struct ItemActionMenu: View {
                     .font(.system(size: 13))
                 Spacer()
             }
-            .foregroundColor(destructive ? PatinaColors.terracotta : PatinaColors.charcoal)
+            .foregroundStyle(destructive ? PatinaColors.terracotta : PatinaColors.charcoal)
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)

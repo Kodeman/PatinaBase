@@ -65,7 +65,7 @@ struct RequestDesignServicesSheet: View {
                     Button("Cancel") {
                         onDismiss()
                     }
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                 }
             }
             .overlay(alignment: .bottom) {
@@ -90,17 +90,17 @@ struct RequestDesignServicesSheet: View {
 
                 Image(systemName: "cube.transparent")
                     .font(.system(size: 24))
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Getting help for")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.Text.muted)
+                    .foregroundStyle(PatinaColors.Text.muted)
 
                 Text(name)
                     .font(PatinaTypography.h3)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
             }
 
             Spacer()
@@ -116,7 +116,7 @@ struct RequestDesignServicesSheet: View {
         VStack(alignment: .leading, spacing: PatinaSpacing.md) {
             Text("What do you need?")
                 .font(PatinaTypography.eyebrow)
-                .foregroundColor(PatinaColors.Text.muted)
+                .foregroundStyle(PatinaColors.Text.muted)
 
             VStack(spacing: PatinaSpacing.sm) {
                 ForEach(DesignServiceType.allCases, id: \.self) { serviceType in
@@ -129,7 +129,7 @@ struct RequestDesignServicesSheet: View {
                         HStack(spacing: PatinaSpacing.md) {
                             Image(systemName: serviceType.icon)
                                 .font(.system(size: 20))
-                                .foregroundColor(
+                                .foregroundStyle(
                                     selectedService == serviceType
                                         ? PatinaColors.clay
                                         : PatinaColors.Text.secondary
@@ -139,11 +139,11 @@ struct RequestDesignServicesSheet: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(serviceType.displayName)
                                     .font(PatinaTypography.bodyMedium)
-                                    .foregroundColor(PatinaColors.Text.primary)
+                                    .foregroundStyle(PatinaColors.Text.primary)
 
                                 Text(serviceType.description)
                                     .font(PatinaTypography.caption)
-                                    .foregroundColor(PatinaColors.Text.muted)
+                                    .foregroundStyle(PatinaColors.Text.muted)
                                     .lineLimit(2)
                             }
 
@@ -151,7 +151,7 @@ struct RequestDesignServicesSheet: View {
 
                             Image(systemName: selectedService == serviceType ? "checkmark.circle.fill" : "circle")
                                 .font(.system(size: 22))
-                                .foregroundColor(
+                                .foregroundStyle(
                                     selectedService == serviceType
                                         ? PatinaColors.clay
                                         : PatinaColors.Text.muted
@@ -183,20 +183,20 @@ struct RequestDesignServicesSheet: View {
         VStack(alignment: .leading, spacing: PatinaSpacing.md) {
             Text("Tell us about your vision")
                 .font(PatinaTypography.eyebrow)
-                .foregroundColor(PatinaColors.Text.muted)
+                .foregroundStyle(PatinaColors.Text.muted)
 
             ZStack(alignment: .topLeading) {
                 if projectDescription.isEmpty {
                     Text("What style are you drawn to? Any specific pieces you're looking for? What feeling do you want the space to have?")
                         .font(PatinaTypography.body)
-                        .foregroundColor(PatinaColors.Text.muted)
+                        .foregroundStyle(PatinaColors.Text.muted)
                         .padding(.horizontal, 4)
                         .padding(.top, 8)
                 }
 
                 TextEditor(text: $projectDescription)
                     .font(PatinaTypography.body)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 120)
             }
@@ -212,7 +212,7 @@ struct RequestDesignServicesSheet: View {
         VStack(alignment: .leading, spacing: PatinaSpacing.md) {
             Text("When do you want to start?")
                 .font(PatinaTypography.eyebrow)
-                .foregroundColor(PatinaColors.Text.muted)
+                .foregroundStyle(PatinaColors.Text.muted)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: PatinaSpacing.sm) {
@@ -225,7 +225,7 @@ struct RequestDesignServicesSheet: View {
                         } label: {
                             Text(timeline.displayName)
                                 .font(PatinaTypography.bodySmall)
-                                .foregroundColor(
+                                .foregroundStyle(
                                     selectedTimeline == timeline
                                         ? PatinaColors.offWhite
                                         : PatinaColors.Text.secondary
@@ -251,7 +251,7 @@ struct RequestDesignServicesSheet: View {
         VStack(alignment: .leading, spacing: PatinaSpacing.md) {
             Text("Budget range")
                 .font(PatinaTypography.eyebrow)
-                .foregroundColor(PatinaColors.Text.muted)
+                .foregroundStyle(PatinaColors.Text.muted)
 
             VStack(spacing: PatinaSpacing.sm) {
                 ForEach(DesignBudget.allCases, id: \.self) { budget in
@@ -264,13 +264,13 @@ struct RequestDesignServicesSheet: View {
                         HStack {
                             Text(budget.displayName)
                                 .font(PatinaTypography.bodyMedium)
-                                .foregroundColor(PatinaColors.Text.primary)
+                                .foregroundStyle(PatinaColors.Text.primary)
 
                             Spacer()
 
                             Image(systemName: selectedBudget == budget ? "checkmark.circle.fill" : "circle")
                                 .font(.system(size: 20))
-                                .foregroundColor(
+                                .foregroundStyle(
                                     selectedBudget == budget
                                         ? PatinaColors.clay
                                         : PatinaColors.Text.muted
@@ -298,7 +298,7 @@ struct RequestDesignServicesSheet: View {
             if let error = errorMessage {
                 Text(error)
                     .font(PatinaTypography.caption)
-                    .foregroundColor(.red)
+                    .foregroundStyle(.red)
                     .padding(.top, PatinaSpacing.sm)
             }
         }
@@ -322,7 +322,7 @@ struct RequestDesignServicesSheet: View {
                 }
             }
             .font(PatinaTypography.bodyMedium)
-            .foregroundColor(PatinaColors.offWhite)
+            .foregroundStyle(PatinaColors.offWhite)
             .frame(maxWidth: .infinity)
             .padding(.vertical, PatinaSpacing.md)
             .background(
@@ -367,17 +367,17 @@ struct RequestDesignServicesSheet: View {
 
                 Text("Request Sent!")
                     .font(PatinaTypography.h2)
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
 
                 Text("We'll match you with designers who specialize in \(selectedService.displayName.lowercased())")
                     .font(PatinaTypography.body)
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundStyle(.white.opacity(0.8))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, PatinaSpacing.xl)
 
                 Text("You'll hear back within 24 hours")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundStyle(.white.opacity(0.6))
             }
             .padding(PatinaSpacing.xxl)
         }

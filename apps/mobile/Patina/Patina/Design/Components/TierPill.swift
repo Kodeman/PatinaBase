@@ -18,7 +18,7 @@ struct TierPill: View {
                 .font(PatinaTypography.monoTiny)
                 .tracking(0.5)
                 .textCase(.uppercase)
-                .foregroundColor(PatinaColors.offWhite)
+                .foregroundStyle(PatinaColors.offWhite)
                 .padding(.vertical, 3)
                 .padding(.horizontal, 8)
                 .background(PatinaColors.clay.opacity(0.85))

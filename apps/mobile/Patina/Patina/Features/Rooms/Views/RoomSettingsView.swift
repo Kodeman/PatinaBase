@@ -65,13 +65,13 @@ struct RoomSettingsView: View {
             .padding(.top, 20)
             Text("Room Settings")
                 .font(.custom("PlayfairDisplay-Regular", size: 22))
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
                 .padding(.top, 12)
             Text(room?.name ?? "")
                 .font(.custom("DMMono-Regular", size: 9))
                 .tracking(0.4)
                 .textCase(.uppercase)
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
         }
     }
 
@@ -79,10 +79,10 @@ struct RoomSettingsView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Room Name")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
             TextField("Room name", text: $name)
                 .font(.custom("PlayfairDisplay-Regular", size: 16))
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
                 .padding(.horizontal, 14)
                 .frame(height: 46)
                 .background(
@@ -101,7 +101,7 @@ struct RoomSettingsView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Room Type")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
             RoomTypePillRow(selected: $roomType)
                 .onChange(of: roomType) { _, new in
                     if let room {
@@ -116,24 +116,24 @@ struct RoomSettingsView: View {
             HStack {
                 Text("Scan Data")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 Spacer()
                 Text(scanDate(room))
                     .font(.custom("DMMono-Regular", size: 8))
                     .tracking(0.3)
                     .textCase(.uppercase)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
             Text(scanSummary(room))
                 .font(.system(size: 11))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
             Button {
                 saveIfChanged()
                 coordinator.navigate(to: .rescan(roomId: room.id))
             } label: {
                 Text("Re-Scan This Room")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                     .frame(maxWidth: .infinity)
                     .frame(height: 40)
                     .background(
@@ -162,7 +162,7 @@ struct RoomSettingsView: View {
                 Text("Share with Designer")
             }
             .font(.system(size: 13, weight: .medium))
-            .foregroundColor(PatinaColors.offWhite)
+            .foregroundStyle(PatinaColors.offWhite)
             .frame(maxWidth: .infinity)
             .frame(height: 46)
             .background(
@@ -179,7 +179,7 @@ struct RoomSettingsView: View {
         } label: {
             Text("Delete This Room")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(PatinaColors.terracotta)
+                .foregroundStyle(PatinaColors.terracotta)
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
         }

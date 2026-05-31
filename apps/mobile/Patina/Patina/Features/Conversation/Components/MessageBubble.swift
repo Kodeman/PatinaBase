@@ -28,7 +28,7 @@ struct MessageBubble: View {
                     // Main bubble
                     Text(message.content)
                         .font(isFromUser ? PatinaTypography.body : PatinaTypography.patinaVoice)
-                        .foregroundColor(bubbleTextColor)
+                        .foregroundStyle(bubbleTextColor)
                         .padding(.horizontal, PatinaSpacing.md)
                         .padding(.vertical, PatinaSpacing.sm + 4)
                         .background(bubbleBackground)
@@ -37,7 +37,7 @@ struct MessageBubble: View {
                     // Timestamp
                     Text(message.formattedTime)
                         .font(PatinaTypography.caption)
-                        .foregroundColor(PatinaColors.Text.muted)
+                        .foregroundStyle(PatinaColors.Text.muted)
                         .padding(.horizontal, PatinaSpacing.xs)
                 }
 
@@ -88,7 +88,7 @@ struct MessageBubble: View {
                     } label: {
                         Text(suggestion)
                             .font(PatinaTypography.bodySmall)
-                            .foregroundColor(PatinaColors.mocha)
+                            .foregroundStyle(PatinaColors.mocha)
                             .padding(.horizontal, PatinaSpacing.md)
                             .padding(.vertical, PatinaSpacing.sm)
                             .background(

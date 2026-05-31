@@ -17,17 +17,17 @@ struct AddedToRoomToast: View {
                     .frame(width: 24, height: 24)
                 Image(systemName: "checkmark")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
             }
             Text(message)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(PatinaColors.offWhite)
+                .foregroundStyle(PatinaColors.offWhite)
             Button {
                 onView()
             } label: {
                 Text("View")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
             }
             .buttonStyle(.plain)
             .padding(.leading, 4)

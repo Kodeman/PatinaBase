@@ -66,19 +66,19 @@ struct CameraPermissionView: View {
             // Camera icon
             Image(systemName: "camera.fill")
                 .font(.system(size: 48, weight: .light))
-                .foregroundColor(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.clay)
                 .padding(.bottom, PatinaSpacing.xl)
 
             // Message
             VStack(spacing: PatinaSpacing.md) {
                 Text("To walk together, I'll need to see through your camera.")
                     .font(PatinaTypography.patinaVoice)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .multilineTextAlignment(.center)
 
                 Text("I only look at the shape of your space — nothing personal.")
                     .font(PatinaTypography.body)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .multilineTextAlignment(.center)
             }
             .padding(.horizontal, PatinaSpacing.xl)
@@ -88,7 +88,7 @@ struct CameraPermissionView: View {
             Button(action: requestPermission) {
                 Text("Continue")
                     .font(PatinaTypography.bodyMedium)
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PatinaSpacing.md)
                     .background(PatinaColors.clay)
@@ -104,11 +104,11 @@ struct CameraPermissionView: View {
                 HStack(spacing: PatinaSpacing.xs) {
                     Text("Privacy: What Patina sees")
                         .font(PatinaTypography.bodySmall)
-                        .foregroundColor(PatinaColors.Text.muted)
+                        .foregroundStyle(PatinaColors.Text.muted)
 
                     Image(systemName: "arrow.right")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(PatinaColors.Text.muted)
+                        .foregroundStyle(PatinaColors.Text.muted)
                 }
             }
             .accessibilityIdentifier("cameraPermission.privacyLink")
@@ -133,16 +133,16 @@ struct CameraPermissionView: View {
             VStack(spacing: PatinaSpacing.md) {
                 Text("No problem.")
                     .font(PatinaTypography.patinaVoice)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 Text("When you're ready to walk, I'll be here.")
                     .font(PatinaTypography.body)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .multilineTextAlignment(.center)
 
                 Text("You can enable camera access in Settings anytime.")
                     .font(PatinaTypography.bodySmall)
-                    .foregroundColor(PatinaColors.Text.muted)
+                    .foregroundStyle(PatinaColors.Text.muted)
                     .multilineTextAlignment(.center)
                     .padding(.top, PatinaSpacing.sm)
             }
@@ -153,7 +153,7 @@ struct CameraPermissionView: View {
             Button(action: openSettings) {
                 Text("Open Settings")
                     .font(PatinaTypography.bodyMedium)
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PatinaSpacing.md)
                     .background(PatinaColors.clay)
@@ -167,7 +167,7 @@ struct CameraPermissionView: View {
             Button(action: exploreFirst) {
                 Text("Explore first")
                     .font(PatinaTypography.body)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PatinaSpacing.md)
                     .background(Color.clear)
@@ -254,11 +254,11 @@ private struct PrivacyExplanationSheet: View {
                     VStack(alignment: .leading, spacing: PatinaSpacing.sm) {
                         Text("What Patina Sees")
                             .font(PatinaTypography.h2)
-                            .foregroundColor(PatinaColors.Text.primary)
+                            .foregroundStyle(PatinaColors.Text.primary)
 
                         Text("Your privacy matters to us.")
                             .font(PatinaTypography.body)
-                            .foregroundColor(PatinaColors.Text.secondary)
+                            .foregroundStyle(PatinaColors.Text.secondary)
                     }
                     .padding(.bottom, PatinaSpacing.md)
 
@@ -296,7 +296,7 @@ private struct PrivacyExplanationSheet: View {
                     Button("Done") {
                         dismiss()
                     }
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
                 }
             }
         }
@@ -306,17 +306,17 @@ private struct PrivacyExplanationSheet: View {
         HStack(alignment: .top, spacing: PatinaSpacing.md) {
             Image(systemName: icon)
                 .font(.system(size: 24, weight: .light))
-                .foregroundColor(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.clay)
                 .frame(width: 32)
 
             VStack(alignment: .leading, spacing: PatinaSpacing.xs) {
                 Text(title)
                     .font(PatinaTypography.bodyMedium)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 Text(description)
                     .font(PatinaTypography.bodySmall)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

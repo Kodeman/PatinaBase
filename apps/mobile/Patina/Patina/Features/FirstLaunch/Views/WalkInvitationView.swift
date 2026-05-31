@@ -123,13 +123,13 @@ struct WalkInvitationView: View {
         VStack(spacing: PatinaSpacing.md) {
             Text("Shall we walk your space together?")
                 .font(PatinaTypography.patinaVoice)
-                .foregroundColor(PatinaColors.Text.primary)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .multilineTextAlignment(.center)
                 .accessibilityIdentifier("walkInvitation.message")
 
             Text("I'd love to see where you live.")
                 .font(PatinaTypography.patinaVoice)
-                .foregroundColor(PatinaColors.Text.secondary)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .multilineTextAlignment(.center)
         }
         .padding(.horizontal, PatinaSpacing.md)
@@ -147,7 +147,7 @@ struct WalkInvitationView: View {
             }) {
                 Text("Let's walk")
                     .font(PatinaTypography.bodyMedium)
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PatinaSpacing.md)
                     .background(PatinaColors.clay)
@@ -163,7 +163,7 @@ struct WalkInvitationView: View {
             }) {
                 Text("Not yet")
                     .font(PatinaTypography.body)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PatinaSpacing.md)
                     .background(Color.clear)

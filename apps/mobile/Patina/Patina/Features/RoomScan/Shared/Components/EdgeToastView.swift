@@ -52,16 +52,16 @@ struct EdgeToastView: View {
                     .frame(width: 32, height: 32)
                 Image(systemName: kind.icon)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(PatinaColors.warning)
+                    .foregroundStyle(PatinaColors.warning)
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(kind.title)
                     .font(.custom("PlayfairDisplay-Medium", size: 15))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 Text(kind.body)
                     .font(.custom("Inter-Regular", size: 12))
-                    .foregroundColor(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.mocha)
                 if let label = actionLabel, let action = onAction {
                     Button(action: action) {
                         HStack(spacing: 4) {
@@ -69,7 +69,7 @@ struct EdgeToastView: View {
                             Image(systemName: "arrow.right")
                         }
                         .font(.custom("Inter-SemiBold", size: 12))
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                         .padding(.top, 6)
                     }
                     .buttonStyle(.plain)

@@ -31,7 +31,7 @@ struct ManualRoomEntryView: View {
                 group(title: "Room Name") {
                     TextField("e.g. Living Room", text: $name)
                         .font(.custom("PlayfairDisplay-Regular", size: 16))
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                         .padding(.horizontal, 14)
                         .frame(height: 46)
                         .background(fieldBackground)
@@ -40,7 +40,7 @@ struct ManualRoomEntryView: View {
                     HStack(spacing: 8) {
                         dimensionField(value: $lengthFeet, label: "Length")
                         Text("×")
-                            .foregroundColor(PatinaColors.pearl)
+                            .foregroundStyle(PatinaColors.pearl)
                             .padding(.bottom, 14)
                         dimensionField(value: $widthFeet, label: "Width")
                     }
@@ -65,7 +65,7 @@ struct ManualRoomEntryView: View {
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.center)
                             .font(.custom("PlayfairDisplay-Regular", size: 16))
-                            .foregroundColor(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.charcoal)
                             .frame(width: 60, height: 46)
                             .background(fieldBackground)
                         Picker("Orientation", selection: $orientationRaw) {
@@ -86,7 +86,7 @@ struct ManualRoomEntryView: View {
                 Button(action: save) {
                     Text("Save Room")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
                         .background(Capsule().fill(PatinaColors.charcoal))
@@ -111,13 +111,13 @@ struct ManualRoomEntryView: View {
             .padding(.top, 20)
             Text("Room details")
                 .font(.custom("PlayfairDisplay-Regular", size: 22))
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
                 .padding(.top, 12)
             Text("Help us understand your space")
                 .font(.custom("DMMono-Regular", size: 9))
                 .tracking(0.4)
                 .textCase(.uppercase)
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
         }
     }
 
@@ -125,7 +125,7 @@ struct ManualRoomEntryView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
             content()
         }
     }
@@ -136,7 +136,7 @@ struct ManualRoomEntryView: View {
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.center)
                 .font(.custom("PlayfairDisplay-Regular", size: 16))
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
                 .background(fieldBackground)
@@ -144,7 +144,7 @@ struct ManualRoomEntryView: View {
                 .font(.custom("DMMono-Regular", size: 7))
                 .tracking(0.4)
                 .textCase(.uppercase)
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
         }
     }
 

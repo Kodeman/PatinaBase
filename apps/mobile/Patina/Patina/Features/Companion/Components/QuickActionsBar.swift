@@ -81,7 +81,7 @@ public struct QuickActionChip: View {
                 Text(action.title)
                     .font(.system(size: 12, weight: .medium))  // Spec: Inter Medium 12pt
             }
-            .foregroundColor(action.isPrimary ? .white : PatinaColors.mocha)
+            .foregroundStyle(action.isPrimary ? .white : PatinaColors.mocha)
             .padding(.horizontal, 14)  // Spec: 14px horizontal
             .padding(.vertical, 8)      // Spec: 8px vertical
             .background(
@@ -117,13 +117,13 @@ public struct ContextIndicator: View {
 
                 Image(systemName: context.contextIcon)
                     .font(.system(size: 12))
-                    .foregroundColor(hasNotification ? .white : PatinaColors.mocha)
+                    .foregroundStyle(hasNotification ? .white : PatinaColors.mocha)
             }
 
             // Context text
             Text(context.contextSummary)
                 .font(PatinaTypography.caption)
-                .foregroundColor(hasNotification ? .white : PatinaColors.Text.secondary)
+                .foregroundStyle(hasNotification ? .white : PatinaColors.Text.secondary)
                 .lineLimit(1)
 
             Spacer()
@@ -160,7 +160,7 @@ public struct CompanionNotificationBanner: View {
             // Notification message
             Text(notification.message)
                 .font(PatinaTypography.patinaVoice)
-                .foregroundColor(PatinaColors.Text.primary)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .lineSpacing(4)
 
             // Quick actions
@@ -170,7 +170,7 @@ public struct CompanionNotificationBanner: View {
                     onShow()
                 }
                 .font(PatinaTypography.bodySmallMedium)
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
                 .padding(.horizontal, PatinaSpacing.md)
                 .padding(.vertical, PatinaSpacing.sm)
                 .background(PatinaColors.clay)
@@ -180,13 +180,13 @@ public struct CompanionNotificationBanner: View {
                     onDismiss()
                 }
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.Text.muted)
+                .foregroundStyle(PatinaColors.Text.muted)
 
                 Button("Tell me more first") {
                     onTellMore()
                 }
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.Text.secondary)
+                .foregroundStyle(PatinaColors.Text.secondary)
             }
         }
         .padding(PatinaSpacing.lg)

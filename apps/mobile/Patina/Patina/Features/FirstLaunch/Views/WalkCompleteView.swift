@@ -48,7 +48,7 @@ struct WalkCompleteView: View {
                 // Header message
                 Text("I'm beginning to understand\nthis space — and you.")
                     .font(PatinaTypography.patinaVoice)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, PatinaSpacing.xl)
                     .padding(.bottom, PatinaSpacing.xxl)
@@ -62,7 +62,7 @@ struct WalkCompleteView: View {
                 // Transition message
                 Text("Something's already surfacing\nthat might belong here.")
                     .font(PatinaTypography.body)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, PatinaSpacing.xl)
                     .padding(.bottom, PatinaSpacing.xl)
@@ -76,7 +76,7 @@ struct WalkCompleteView: View {
                 }) {
                     Text("Show me")
                         .font(PatinaTypography.bodyMedium)
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, PatinaSpacing.md)
                         .background(PatinaColors.clay)
@@ -174,7 +174,7 @@ struct WalkCompleteView: View {
 
             Text(insight)
                 .font(PatinaTypography.body)
-                .foregroundColor(PatinaColors.Text.primary)
+                .foregroundStyle(PatinaColors.Text.primary)
         }
         .opacity(index < insightsVisible.count && insightsVisible[index] ? 1 : 0)
         .offset(x: index < insightsVisible.count && insightsVisible[index] ? 0 : -20)

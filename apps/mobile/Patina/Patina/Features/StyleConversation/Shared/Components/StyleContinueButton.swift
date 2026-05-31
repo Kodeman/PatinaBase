@@ -31,7 +31,7 @@ struct StyleContinueButton: View {
             Text(title)
                 .font(.custom("Inter-Medium", size: 15))
                 .tracking(0.3)
-                .foregroundColor(PatinaColors.offWhite)
+                .foregroundStyle(PatinaColors.offWhite)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
                 .background(

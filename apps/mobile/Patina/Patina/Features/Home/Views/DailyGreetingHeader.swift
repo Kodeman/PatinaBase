@@ -23,11 +23,11 @@ struct DailyGreetingHeader: View {
                     .font(PatinaTypography.monoTiny)
                     .tracking(0.5)
                     .textCase(.uppercase)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("Your Daily Room")
                         .font(.custom("PlayfairDisplay-Regular", size: 21))
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                         .lineSpacing(0)
                     // Contextual help: explains what the "Daily Room" feed
                     // is — a curated mix of one editorial story and a stream
@@ -66,7 +66,7 @@ struct DailyGreetingHeader: View {
                     .frame(width: 36, height: 36)
                 Text(monogram)
                     .font(.custom("PlayfairDisplay-Medium", size: 14))
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
             }
             // First-launch tour anchor — Step 3 popover attaches to the
             // profile monogram avatar. Once the iOS app gets a dedicated

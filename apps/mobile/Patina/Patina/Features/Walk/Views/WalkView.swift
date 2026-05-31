@@ -102,11 +102,11 @@ struct WalkView: View {
                 VStack(spacing: PatinaSpacing.md) {
                     Text("The Walk")
                         .font(PatinaTypography.h1)
-                        .foregroundColor(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.offWhite)
 
                     Text("Let's explore your space together.\nI'll observe the light, the shapes, the possibilities.")
                         .font(PatinaTypography.body)
-                        .foregroundColor(PatinaColors.offWhite.opacity(0.7))
+                        .foregroundStyle(PatinaColors.offWhite.opacity(0.7))
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
                         .padding(.horizontal, PatinaSpacing.xl)
@@ -121,7 +121,7 @@ struct WalkView: View {
                 VStack(spacing: PatinaSpacing.sm) {
                     Image(systemName: "chevron.up")
                         .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.clay)
                         .offset(y: swipeHintOffset)
                         .animation(
                             .easeInOut(duration: 1.0).repeatForever(autoreverses: true),
@@ -133,7 +133,7 @@ struct WalkView: View {
 
                     Text("Swipe up to begin")
                         .font(PatinaTypography.caption)
-                        .foregroundColor(PatinaColors.offWhite.opacity(0.7))
+                        .foregroundStyle(PatinaColors.offWhite.opacity(0.7))
                 }
                 .padding(.bottom, PatinaSpacing.xl)
             }
@@ -165,7 +165,7 @@ struct WalkView: View {
 
             Text("Preparing to observe...")
                 .font(PatinaTypography.patinaVoice)
-                .foregroundColor(PatinaColors.offWhite.opacity(0.8))
+                .foregroundStyle(PatinaColors.offWhite.opacity(0.8))
 
             Spacer()
         }
@@ -258,7 +258,7 @@ struct WalkView: View {
         VStack(spacing: PatinaSpacing.sm) {
             Text(text)
                 .font(PatinaTypography.patinaVoice)
-                .foregroundColor(PatinaColors.offWhite)
+                .foregroundStyle(PatinaColors.offWhite)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, PatinaSpacing.xl)
                 .padding(.vertical, PatinaSpacing.md)
@@ -495,7 +495,7 @@ struct WalkView: View {
                         dash: [8, 8]
                     )
                 )
-                .foregroundColor(PatinaColors.clay.opacity(0.4))
+                .foregroundStyle(PatinaColors.clay.opacity(0.4))
                 .frame(height: 200)
 
             // Corner markers
@@ -519,11 +519,11 @@ struct WalkView: View {
             VStack(spacing: PatinaSpacing.sm) {
                 Image(systemName: "viewfinder")
                     .font(.system(size: 24))
-                    .foregroundColor(PatinaColors.clay.opacity(0.6))
+                    .foregroundStyle(PatinaColors.clay.opacity(0.6))
 
                 Text("Point at a wall")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.offWhite.opacity(0.5))
+                    .foregroundStyle(PatinaColors.offWhite.opacity(0.5))
             }
         }
     }
@@ -531,7 +531,7 @@ struct WalkView: View {
     private func cornerMarker(rotation: Double) -> some View {
         Image(systemName: "viewfinder.trianglebadge.exclamationmark")
             .font(.system(size: 16))
-            .foregroundColor(PatinaColors.clay.opacity(0.6))
+            .foregroundStyle(PatinaColors.clay.opacity(0.6))
             .rotationEffect(.degrees(rotation))
     }
 
@@ -546,7 +546,7 @@ struct WalkView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .padding(PatinaSpacing.sm)
                     .background(Circle().fill(Color.white.opacity(0.15)))
             }
@@ -563,7 +563,7 @@ struct WalkView: View {
             } label: {
                 Image(systemName: viewModel.state == .paused ? "play.fill" : "pause.fill")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .padding(PatinaSpacing.sm)
                     .background(Circle().fill(Color.white.opacity(0.15)))
             }
@@ -586,11 +586,11 @@ struct WalkView: View {
             VStack(spacing: PatinaSpacing.md) {
                 Text("Walk Complete")
                     .font(PatinaTypography.h2)
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
 
                 Text("I've observed your space.\nSomething may emerge from what I've seen.")
                     .font(PatinaTypography.body)
-                    .foregroundColor(PatinaColors.offWhite.opacity(0.7))
+                    .foregroundStyle(PatinaColors.offWhite.opacity(0.7))
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
 
@@ -615,7 +615,7 @@ struct WalkView: View {
                 } label: {
                     Text("Walk Again")
                         .font(PatinaTypography.body)
-                        .foregroundColor(PatinaColors.offWhite.opacity(0.6))
+                        .foregroundStyle(PatinaColors.offWhite.opacity(0.6))
                 }
             }
             .padding(.horizontal, PatinaSpacing.xl)
@@ -634,14 +634,14 @@ struct WalkView: View {
                     .scaleEffect(0.8)
                 Text("Saving to cloud...")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.offWhite.opacity(0.6))
+                    .foregroundStyle(PatinaColors.offWhite.opacity(0.6))
             } else if let error = syncError {
                 Image(systemName: "exclamationmark.triangle")
-                    .foregroundColor(.orange)
+                    .foregroundStyle(.orange)
                     .font(.system(size: 14))
                 Text("Saved locally")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.offWhite.opacity(0.6))
+                    .foregroundStyle(PatinaColors.offWhite.opacity(0.6))
 
                 Button {
                     // Retry sync
@@ -653,15 +653,15 @@ struct WalkView: View {
                 } label: {
                     Text("Retry")
                         .font(PatinaTypography.caption)
-                        .foregroundColor(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.clay)
                 }
             } else if lastScanData != nil {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
+                    .foregroundStyle(.green)
                     .font(.system(size: 14))
                 Text("Saved to cloud")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.offWhite.opacity(0.6))
+                    .foregroundStyle(PatinaColors.offWhite.opacity(0.6))
             }
         }
         .padding(.top, PatinaSpacing.sm)

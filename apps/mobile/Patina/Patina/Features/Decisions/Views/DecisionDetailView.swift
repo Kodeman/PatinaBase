@@ -43,11 +43,11 @@ struct DecisionDetailView: View {
                 .tracking(2)
             Text(decision.title ?? "Decision")
                 .font(PatinaTypography.h2)
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
             if let description = decision.description {
                 Text(description)
                     .font(PatinaTypography.bodySmall)
-                    .foregroundColor(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.mocha)
             }
         }
         .padding(.top, 56)
@@ -91,18 +91,18 @@ struct DecisionDetailView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(option.title ?? "Option")
                         .font(PatinaTypography.h5)
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                     if let description = option.description {
                         Text(description)
                             .font(PatinaTypography.caption)
-                            .foregroundColor(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.agedOak)
                     }
                 }
                 Spacer()
                 if isRecommended {
                     Text("Recommended")
                         .font(PatinaTypography.monoTiny)
-                        .foregroundColor(PatinaColors.clay)
+                        .foregroundStyle(PatinaColors.clay)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(PatinaColors.clay.opacity(0.1))
@@ -114,16 +114,16 @@ struct DecisionDetailView: View {
                 if let price = option.price_cents {
                     Text("$\((price / 100).formatted())")
                         .font(PatinaTypography.bodySmallMedium)
-                        .foregroundColor(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.mocha)
                 }
                 Spacer()
                 if isApproved {
                     HStack(spacing: 6) {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(PatinaColors.sage)
+                            .foregroundStyle(PatinaColors.sage)
                         Text("Approved")
                             .font(PatinaTypography.bodySmallMedium)
-                            .foregroundColor(PatinaColors.sage)
+                            .foregroundStyle(PatinaColors.sage)
                     }
                 } else {
                     PatinaButton(viewModel.isApproving ? "Submitting…" : "Approve", style: .primary) {
@@ -145,12 +145,12 @@ struct DecisionDetailView: View {
         VStack(spacing: 12) {
             Text(msg)
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
             Button("Try Again") {
                 Task { await viewModel.load(decisionId: decisionId) }
             }
             .font(PatinaTypography.bodySmallMedium)
-            .foregroundColor(PatinaColors.clay)
+            .foregroundStyle(PatinaColors.clay)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 80)

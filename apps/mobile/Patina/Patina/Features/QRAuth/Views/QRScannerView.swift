@@ -63,7 +63,7 @@ public struct QRScannerView: View {
                     } label: {
                         Image(systemName: "questionmark")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(PatinaColors.Text.primary)
+                            .foregroundStyle(PatinaColors.Text.primary)
                             .frame(width: 36, height: 36)
                             .background(
                                 Circle()
@@ -145,12 +145,12 @@ public struct QRScannerView: View {
         VStack(spacing: PatinaSpacing.sm) {
             Image(systemName: "qrcode.viewfinder")
                 .font(.system(size: 28))
-                .foregroundColor(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.clay)
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("Scan the QR code")
                     .font(PatinaTypography.h3)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 // Contextual help: explains the cross-device sign-in
                 // handshake — the phone proves the human at the browser
                 // is the same human holding the device.
@@ -163,7 +163,7 @@ public struct QRScannerView: View {
 
             Text("Point your camera at the QR code on the Patina website")
                 .font(PatinaTypography.body)
-                .foregroundColor(PatinaColors.Text.secondary)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .multilineTextAlignment(.center)
         }
         .padding(PatinaSpacing.lg)
@@ -181,16 +181,16 @@ public struct QRScannerView: View {
         VStack(spacing: PatinaSpacing.xl) {
             Image(systemName: "camera.fill")
                 .font(.system(size: 64))
-                .foregroundColor(PatinaColors.clay)
+                .foregroundStyle(PatinaColors.clay)
 
             VStack(spacing: PatinaSpacing.sm) {
                 Text("Camera Access Required")
                     .font(PatinaTypography.h2)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 Text("Patina needs camera access to scan QR codes for secure sign-in.")
                     .font(PatinaTypography.body)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .multilineTextAlignment(.center)
             }
 
@@ -215,17 +215,17 @@ public struct QRScannerView: View {
         VStack(spacing: PatinaSpacing.lg) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 48))
-                .foregroundColor(PatinaColors.Warning.primary)
+                .foregroundStyle(PatinaColors.Warning.primary)
 
             VStack(spacing: PatinaSpacing.sm) {
                 Text("Invalid QR Code")
                     .font(PatinaTypography.h3)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 if let errorMessage = viewModel.errorMessage {
                     Text(errorMessage)
                         .font(PatinaTypography.body)
-                        .foregroundColor(PatinaColors.Text.secondary)
+                        .foregroundStyle(PatinaColors.Text.secondary)
                         .multilineTextAlignment(.center)
                 }
             }
@@ -248,7 +248,7 @@ public struct QRScannerView: View {
         Button(action: { dismiss() }) {
             Image(systemName: "xmark")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(PatinaColors.Text.primary)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .frame(width: 36, height: 36)
                 .background(
                     Circle()

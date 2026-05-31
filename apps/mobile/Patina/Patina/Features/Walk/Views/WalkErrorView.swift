@@ -68,11 +68,11 @@ struct WalkErrorOverlay: View {
             VStack(spacing: PatinaSpacing.sm) {
                 Text("I lost my bearings for a moment.")
                     .font(PatinaTypography.patinaVoice)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 Text("Hold still and I'll try to find my way.")
                     .font(PatinaTypography.body)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .multilineTextAlignment(.center)
             }
 
@@ -80,11 +80,11 @@ struct WalkErrorOverlay: View {
             VStack(spacing: PatinaSpacing.sm) {
                 Text("I'd love to see a bit more.")
                     .font(PatinaTypography.patinaVoice)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 Text("Mind walking toward the areas I haven't seen yet?")
                     .font(PatinaTypography.body)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .multilineTextAlignment(.center)
             }
 
@@ -92,11 +92,11 @@ struct WalkErrorOverlay: View {
             VStack(spacing: PatinaSpacing.sm) {
                 Text("Welcome back.")
                     .font(PatinaTypography.patinaVoice)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 Text("Want to pick up where we left off?")
                     .font(PatinaTypography.body)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .multilineTextAlignment(.center)
             }
 
@@ -104,11 +104,11 @@ struct WalkErrorOverlay: View {
             VStack(spacing: PatinaSpacing.sm) {
                 Text("I understand.")
                     .font(PatinaTypography.patinaVoice)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 Text("When you're ready to walk together, you can enable camera access in Settings.")
                     .font(PatinaTypography.body)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .multilineTextAlignment(.center)
             }
 
@@ -116,11 +116,11 @@ struct WalkErrorOverlay: View {
             VStack(spacing: PatinaSpacing.sm) {
                 Text("Room scanning isn't available on this device.")
                     .font(PatinaTypography.patinaVoice)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 Text("You can still explore Patina and discover pieces that might fit your space.")
                     .font(PatinaTypography.body)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .multilineTextAlignment(.center)
             }
         }
@@ -171,7 +171,7 @@ struct WalkErrorOverlay: View {
         }) {
             Text(title)
                 .font(PatinaTypography.bodyMedium)
-                .foregroundColor(PatinaColors.offWhite)
+                .foregroundStyle(PatinaColors.offWhite)
                 .padding(.horizontal, PatinaSpacing.lg)
                 .padding(.vertical, PatinaSpacing.sm)
                 .background(PatinaColors.clay)
@@ -186,7 +186,7 @@ struct WalkErrorOverlay: View {
         }) {
             Text(title)
                 .font(PatinaTypography.body)
-                .foregroundColor(PatinaColors.Text.secondary)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .padding(.horizontal, PatinaSpacing.lg)
                 .padding(.vertical, PatinaSpacing.sm)
                 .background(Color.clear)

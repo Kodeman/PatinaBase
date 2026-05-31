@@ -33,15 +33,15 @@ public struct ScanUploadProgressView: View {
             HStack(spacing: 8) {
                 Image(systemName: headerIcon)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(headerColor)
+                    .foregroundStyle(headerColor)
                 Text(headerText)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(headerColor)
+                    .foregroundStyle(headerColor)
                 Spacer()
                 if state.photosTotal > 0 {
                     Text("\(state.photosUploaded)/\(state.photosTotal) photos")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -60,7 +60,7 @@ public struct ScanUploadProgressView: View {
                package.status == .failed || package.status == .pending {
                 Text(err)
                     .font(.system(size: 11))
-                    .foregroundColor(.orange)
+                    .foregroundStyle(.orange)
                     .lineLimit(2)
             }
         }
@@ -108,7 +108,7 @@ public struct ScanUploadProgressView: View {
             Text(shortLabel(for: artifact.kind))
                 .font(.system(size: 10, weight: .medium))
         }
-        .foregroundColor(color)
+        .foregroundStyle(color)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(
@@ -222,7 +222,7 @@ public struct ScanUploadBadgeView: View {
                 Text("\(badge.syncingCount) uploading")
                     .font(.system(size: 11, weight: .medium))
             }
-            .foregroundColor(.white)
+            .foregroundStyle(.white)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(

@@ -61,11 +61,11 @@ struct RoomDetailView: View {
                                 HStack {
                                     Text("Room Through Time")
                                         .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(PatinaColors.charcoal)
+                                        .foregroundStyle(PatinaColors.charcoal)
                                     Spacer()
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 12, weight: .semibold))
-                                        .foregroundColor(PatinaColors.agedOak)
+                                        .foregroundStyle(PatinaColors.agedOak)
                                 }
                                 .padding(16)
                                 .background(
@@ -112,13 +112,13 @@ struct RoomDetailView: View {
             // Room name
             Text(room?.name ?? "Your Room")
                 .font(PatinaTypography.h1)
-                .foregroundColor(PatinaColors.Text.primary)
+                .foregroundStyle(PatinaColors.Text.primary)
 
             // Room type badge
             if let room = room {
                 Text(room.roomType)
                     .font(PatinaTypography.eyebrow)
-                    .foregroundColor(PatinaColors.Text.muted)
+                    .foregroundStyle(PatinaColors.Text.muted)
                     .padding(.horizontal, PatinaSpacing.md)
                     .padding(.vertical, PatinaSpacing.xs)
                     .background(PatinaColors.Background.secondary)
@@ -147,7 +147,7 @@ struct RoomDetailView: View {
         VStack(alignment: .leading, spacing: PatinaSpacing.md) {
             Text("Dimensions")
                 .font(PatinaTypography.eyebrow)
-                .foregroundColor(PatinaColors.Text.muted)
+                .foregroundStyle(PatinaColors.Text.muted)
 
             HStack(spacing: PatinaSpacing.lg) {
                 if let width = room.width, let length = room.length {
@@ -184,18 +184,18 @@ struct RoomDetailView: View {
             HStack(alignment: .lastTextBaseline, spacing: 2) {
                 Text(value)
                     .font(PatinaTypography.h2)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 if !unit.isEmpty {
                     Text(unit)
                         .font(PatinaTypography.bodySmall)
-                        .foregroundColor(PatinaColors.Text.muted)
+                        .foregroundStyle(PatinaColors.Text.muted)
                 }
             }
 
             Text(label)
                 .font(PatinaTypography.caption)
-                .foregroundColor(PatinaColors.Text.muted)
+                .foregroundStyle(PatinaColors.Text.muted)
         }
     }
 
@@ -203,17 +203,17 @@ struct RoomDetailView: View {
         HStack(spacing: PatinaSpacing.md) {
             Image(systemName: room.hasBeenScanned ? "checkmark.circle.fill" : "camera.viewfinder")
                 .font(.system(size: 24))
-                .foregroundColor(room.hasBeenScanned ? PatinaColors.clay : PatinaColors.Text.muted)
+                .foregroundStyle(room.hasBeenScanned ? PatinaColors.clay : PatinaColors.Text.muted)
 
             VStack(alignment: .leading, spacing: PatinaSpacing.xs) {
                 Text(room.hasBeenScanned ? "Room scanned" : "Not yet scanned")
                     .font(PatinaTypography.bodyMedium)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 if room.hasBeenScanned {
                     Text("Last updated \(room.updatedAt.formatted(date: .abbreviated, time: .shortened))")
                         .font(PatinaTypography.caption)
-                        .foregroundColor(PatinaColors.Text.muted)
+                        .foregroundStyle(PatinaColors.Text.muted)
                 }
             }
 
@@ -240,7 +240,7 @@ struct RoomDetailView: View {
                         Text("Share with Designer")
                     }
                     .font(PatinaTypography.bodyMedium)
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PatinaSpacing.md)
                     .background(PatinaColors.clay)
@@ -268,7 +268,7 @@ struct RoomDetailView: View {
                     Text("Walk this room again")
                 }
                 .font(PatinaTypography.bodyMedium)
-                .foregroundColor(room?.hasBeenScanned == true ? PatinaColors.Text.secondary : PatinaColors.offWhite)
+                .foregroundStyle(room?.hasBeenScanned == true ? PatinaColors.Text.secondary : PatinaColors.offWhite)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, PatinaSpacing.md)
                 .background(room?.hasBeenScanned == true ? PatinaColors.Background.secondary : PatinaColors.clay)
@@ -283,7 +283,7 @@ struct RoomDetailView: View {
             } label: {
                 Text("View all rooms")
                     .font(PatinaTypography.bodyMedium)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PatinaSpacing.md)
                     .background(PatinaColors.Background.secondary)

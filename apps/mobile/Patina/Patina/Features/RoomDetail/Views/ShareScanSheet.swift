@@ -85,7 +85,7 @@ struct ShareScanSheet: View {
                     Button("Cancel") {
                         onDismiss()
                     }
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                 }
             }
             .overlay(alignment: .bottom) {
@@ -110,7 +110,7 @@ struct ShareScanSheet: View {
         VStack(alignment: .leading, spacing: PatinaSpacing.md) {
             Text("Shared With")
                 .font(PatinaTypography.eyebrow)
-                .foregroundColor(PatinaColors.Text.muted)
+                .foregroundStyle(PatinaColors.Text.muted)
 
             VStack(spacing: PatinaSpacing.sm) {
                 ForEach(currentShares) { share in
@@ -122,17 +122,17 @@ struct ShareScanSheet: View {
                             .overlay {
                                 Text(share.designer?.fullName?.prefix(1).uppercased() ?? "?")
                                     .font(PatinaTypography.bodyMedium)
-                                    .foregroundColor(PatinaColors.Text.primary)
+                                    .foregroundStyle(PatinaColors.Text.primary)
                             }
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(share.designer?.fullName ?? share.designer?.email ?? "Unknown")
                                 .font(PatinaTypography.bodyMedium)
-                                .foregroundColor(PatinaColors.Text.primary)
+                                .foregroundStyle(PatinaColors.Text.primary)
 
                             Text(share.accessLevel.capitalized)
                                 .font(PatinaTypography.caption)
-                                .foregroundColor(PatinaColors.Text.muted)
+                                .foregroundStyle(PatinaColors.Text.muted)
                         }
 
                         Spacer()
@@ -144,7 +144,7 @@ struct ShareScanSheet: View {
                             }
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(PatinaColors.Text.muted)
+                                .foregroundStyle(PatinaColors.Text.muted)
                         }
                     }
                     .padding(PatinaSpacing.md)
@@ -161,15 +161,15 @@ struct ShareScanSheet: View {
         VStack(alignment: .leading, spacing: PatinaSpacing.md) {
             Text("Share With Designer")
                 .font(PatinaTypography.eyebrow)
-                .foregroundColor(PatinaColors.Text.muted)
+                .foregroundStyle(PatinaColors.Text.muted)
 
             HStack(spacing: PatinaSpacing.sm) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundColor(PatinaColors.Text.muted)
+                    .foregroundStyle(PatinaColors.Text.muted)
 
                 TextField("Search by name or email...", text: $searchQuery)
                     .font(PatinaTypography.body)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .autocapitalization(.none)
                     .autocorrectionDisabled()
 
@@ -179,7 +179,7 @@ struct ShareScanSheet: View {
                         searchResults = []
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(PatinaColors.Text.muted)
+                            .foregroundStyle(PatinaColors.Text.muted)
                     }
                 }
             }
@@ -209,7 +209,7 @@ struct ShareScanSheet: View {
             } else if !searchQuery.isEmpty && !searchResults.isEmpty {
                 Text("Search Results")
                     .font(PatinaTypography.eyebrow)
-                    .foregroundColor(PatinaColors.Text.muted)
+                    .foregroundStyle(PatinaColors.Text.muted)
 
                 designerList(searchResults)
             } else if !searchQuery.isEmpty && searchResults.isEmpty && searchQuery.count >= 3 {
@@ -217,7 +217,7 @@ struct ShareScanSheet: View {
             } else if !recentDesigners.isEmpty {
                 Text("Recent")
                     .font(PatinaTypography.eyebrow)
-                    .foregroundColor(PatinaColors.Text.muted)
+                    .foregroundStyle(PatinaColors.Text.muted)
 
                 designerList(recentDesigners)
             } else {
@@ -243,22 +243,22 @@ struct ShareScanSheet: View {
                             .overlay {
                                 Text(designer.fullName?.prefix(1).uppercased() ?? designer.email.prefix(1).uppercased())
                                     .font(PatinaTypography.bodyMedium)
-                                    .foregroundColor(PatinaColors.Text.primary)
+                                    .foregroundStyle(PatinaColors.Text.primary)
                             }
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(designer.fullName ?? designer.email)
                                 .font(PatinaTypography.bodyMedium)
-                                .foregroundColor(PatinaColors.Text.primary)
+                                .foregroundStyle(PatinaColors.Text.primary)
 
                             if let businessName = designer.businessName {
                                 Text(businessName)
                                     .font(PatinaTypography.caption)
-                                    .foregroundColor(PatinaColors.Text.muted)
+                                    .foregroundStyle(PatinaColors.Text.muted)
                             } else if designer.fullName != nil {
                                 Text(designer.email)
                                     .font(PatinaTypography.caption)
-                                    .foregroundColor(PatinaColors.Text.muted)
+                                    .foregroundStyle(PatinaColors.Text.muted)
                             }
                         }
 
@@ -266,7 +266,7 @@ struct ShareScanSheet: View {
 
                         Image(systemName: "chevron.right")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(PatinaColors.Text.muted)
+                            .foregroundStyle(PatinaColors.Text.muted)
                     }
                     .padding(PatinaSpacing.md)
                     .background(PatinaColors.Background.secondary)
@@ -280,15 +280,15 @@ struct ShareScanSheet: View {
         VStack(spacing: PatinaSpacing.md) {
             Image(systemName: "person.crop.circle.badge.questionmark")
                 .font(.system(size: 40))
-                .foregroundColor(PatinaColors.Text.muted)
+                .foregroundStyle(PatinaColors.Text.muted)
 
             Text("No designers found")
                 .font(PatinaTypography.bodyMedium)
-                .foregroundColor(PatinaColors.Text.secondary)
+                .foregroundStyle(PatinaColors.Text.secondary)
 
             Text("Try searching with a different name or email")
                 .font(PatinaTypography.caption)
-                .foregroundColor(PatinaColors.Text.muted)
+                .foregroundStyle(PatinaColors.Text.muted)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -299,15 +299,15 @@ struct ShareScanSheet: View {
         VStack(spacing: PatinaSpacing.md) {
             Image(systemName: "person.2")
                 .font(.system(size: 40))
-                .foregroundColor(PatinaColors.Text.muted)
+                .foregroundStyle(PatinaColors.Text.muted)
 
             Text("Search for a designer")
                 .font(PatinaTypography.bodyMedium)
-                .foregroundColor(PatinaColors.Text.secondary)
+                .foregroundStyle(PatinaColors.Text.secondary)
 
             Text("Enter their name or email to share your room scan")
                 .font(PatinaTypography.caption)
-                .foregroundColor(PatinaColors.Text.muted)
+                .foregroundStyle(PatinaColors.Text.muted)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -327,18 +327,18 @@ struct ShareScanSheet: View {
                         .overlay {
                             Text(designer.fullName?.prefix(1).uppercased() ?? designer.email.prefix(1).uppercased())
                                 .font(PatinaTypography.h3)
-                                .foregroundColor(PatinaColors.Text.primary)
+                                .foregroundStyle(PatinaColors.Text.primary)
                         }
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(designer.fullName ?? designer.email)
                             .font(PatinaTypography.bodyMedium)
-                            .foregroundColor(PatinaColors.Text.primary)
+                            .foregroundStyle(PatinaColors.Text.primary)
 
                         if let businessName = designer.businessName {
                             Text(businessName)
                                 .font(PatinaTypography.caption)
-                                .foregroundColor(PatinaColors.Text.muted)
+                                .foregroundStyle(PatinaColors.Text.muted)
                         }
                     }
 
@@ -351,7 +351,7 @@ struct ShareScanSheet: View {
                     } label: {
                         Text("Change")
                             .font(PatinaTypography.bodySmall)
-                            .foregroundColor(PatinaColors.clay)
+                            .foregroundStyle(PatinaColors.clay)
                     }
                 }
                 .padding(PatinaSpacing.lg)
@@ -363,7 +363,7 @@ struct ShareScanSheet: View {
             VStack(alignment: .leading, spacing: PatinaSpacing.md) {
                 Text("Access Level")
                     .font(PatinaTypography.eyebrow)
-                    .foregroundColor(PatinaColors.Text.muted)
+                    .foregroundStyle(PatinaColors.Text.muted)
 
                 VStack(spacing: PatinaSpacing.sm) {
                     ForEach(ScanAccessLevel.allCases, id: \.self) { level in
@@ -377,11 +377,11 @@ struct ShareScanSheet: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(level.displayName)
                                         .font(PatinaTypography.bodyMedium)
-                                        .foregroundColor(PatinaColors.Text.primary)
+                                        .foregroundStyle(PatinaColors.Text.primary)
 
                                     Text(level.description)
                                         .font(PatinaTypography.caption)
-                                        .foregroundColor(PatinaColors.Text.muted)
+                                        .foregroundStyle(PatinaColors.Text.muted)
                                         .lineLimit(2)
                                 }
 
@@ -389,7 +389,7 @@ struct ShareScanSheet: View {
 
                                 Image(systemName: accessLevel == level ? "checkmark.circle.fill" : "circle")
                                     .font(.system(size: 22))
-                                    .foregroundColor(accessLevel == level ? PatinaColors.clay : PatinaColors.Text.muted)
+                                    .foregroundStyle(accessLevel == level ? PatinaColors.clay : PatinaColors.Text.muted)
                             }
                             .padding(PatinaSpacing.md)
                             .background(
@@ -414,7 +414,7 @@ struct ShareScanSheet: View {
             VStack(alignment: .leading, spacing: PatinaSpacing.md) {
                 Text("Expires")
                     .font(PatinaTypography.eyebrow)
-                    .foregroundColor(PatinaColors.Text.muted)
+                    .foregroundStyle(PatinaColors.Text.muted)
 
                 HStack(spacing: PatinaSpacing.sm) {
                     ForEach(ExpirationOption.allCases, id: \.self) { option in
@@ -426,7 +426,7 @@ struct ShareScanSheet: View {
                         } label: {
                             Text(option.rawValue)
                                 .font(PatinaTypography.bodySmall)
-                                .foregroundColor(
+                                .foregroundStyle(
                                     expirationOption == option
                                         ? PatinaColors.offWhite
                                         : PatinaColors.Text.secondary
@@ -448,7 +448,7 @@ struct ShareScanSheet: View {
             if let error = errorMessage {
                 Text(error)
                     .font(PatinaTypography.caption)
-                    .foregroundColor(.red)
+                    .foregroundStyle(.red)
                     .padding(.top, PatinaSpacing.sm)
             }
         }
@@ -472,7 +472,7 @@ struct ShareScanSheet: View {
                 }
             }
             .font(PatinaTypography.bodyMedium)
-            .foregroundColor(PatinaColors.offWhite)
+            .foregroundStyle(PatinaColors.offWhite)
             .frame(maxWidth: .infinity)
             .padding(.vertical, PatinaSpacing.md)
             .background(PatinaColors.clay)
@@ -503,15 +503,15 @@ struct ShareScanSheet: View {
             VStack(spacing: PatinaSpacing.lg) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 60))
-                    .foregroundColor(.green)
+                    .foregroundStyle(.green)
 
                 Text("Scan Shared!")
                     .font(PatinaTypography.h2)
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
 
                 Text("Your room scan has been shared with \(selectedDesigner?.fullName ?? "the designer")")
                     .font(PatinaTypography.body)
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundStyle(.white.opacity(0.8))
                     .multilineTextAlignment(.center)
             }
             .padding(PatinaSpacing.xxl)

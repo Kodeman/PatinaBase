@@ -24,12 +24,12 @@ struct AddToRoomSheet: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Add to Room")
                     .font(.custom("PlayfairDisplay-Regular", size: 17))
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 Text("Choose Destination")
                     .font(.custom("DMMono-Regular", size: 8))
                     .tracking(0.4)
                     .textCase(.uppercase)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
                     .padding(.bottom, 14)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -47,7 +47,7 @@ struct AddToRoomSheet: View {
             } label: {
                 Text("+ New Room")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
             }
             .buttonStyle(.plain)
             .padding(.top, 14)
@@ -71,17 +71,17 @@ struct AddToRoomSheet: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(room.name)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(isSelected ? PatinaColors.offWhite : PatinaColors.charcoal)
+                        .foregroundStyle(isSelected ? PatinaColors.offWhite : PatinaColors.charcoal)
                     Text("\(room.itemCount) items · \(room.squareFeet) sq ft")
                         .font(.custom("DMMono-Regular", size: 7))
                         .tracking(0.3)
                         .textCase(.uppercase)
-                        .foregroundColor(isSelected ? PatinaColors.clay : PatinaColors.agedOak)
+                        .foregroundStyle(isSelected ? PatinaColors.clay : PatinaColors.agedOak)
                 }
                 Spacer()
                 Text("+")
                     .font(.system(size: 15))
-                    .foregroundColor(isSelected ? PatinaColors.offWhite : PatinaColors.clay)
+                    .foregroundStyle(isSelected ? PatinaColors.offWhite : PatinaColors.clay)
             }
             .padding(11)
             .background(

@@ -49,13 +49,13 @@ struct ProfileView: View {
                         .overlay(
                             Text(viewModel.userInitial)
                                 .font(.custom("PlayfairDisplay-Medium", size: 28))
-                                .foregroundColor(PatinaColors.offWhite)
+                                .foregroundStyle(PatinaColors.offWhite)
                         )
                         .padding(.bottom, 16)
 
                     Text(viewModel.userName)
                         .font(PatinaTypography.h3)
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                         .padding(.bottom, 4)
 
                     // "Member since…" — wrapped in HelpTooltip because the
@@ -81,7 +81,7 @@ struct ProfileView: View {
                             Text("✦")
                             Text(viewModel.styleBadge)
                                 .font(PatinaTypography.uiSmall)
-                                .foregroundColor(PatinaColors.mocha)
+                                .foregroundStyle(PatinaColors.mocha)
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 6)
@@ -130,7 +130,7 @@ struct ProfileView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("YOUR ROOMS")
                             .font(PatinaTypography.monoMedium)
-                            .foregroundColor(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.agedOak)
                             .tracking(1)
 
                         ScrollView(.horizontal, showsIndicators: false) {
@@ -184,7 +184,7 @@ struct ProfileView: View {
         VStack(spacing: 2) {
             Text(value)
                 .font(.custom("PlayfairDisplay-Medium", size: 22))
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
             MonoLabel(text: label, size: PatinaTypography.monoTiny)
         }
         .frame(maxWidth: .infinity)
@@ -204,7 +204,7 @@ struct ProfileView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(room.name)
                     .font(PatinaTypography.uiSmall)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
 
                 let formatter = DateFormatter()
                 let _ = formatter.dateFormat = "MMM d"
@@ -223,20 +223,20 @@ struct ProfileView: View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(size: 16))
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
                     .frame(width: 32, height: 32)
                     .background(PatinaColors.clay.opacity(0.12))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
 
                 Text(label)
                     .font(PatinaTypography.uiAction)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
 
                 Spacer()
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 13))
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
             .padding(14)
             .background(PatinaColors.softCream)

@@ -60,7 +60,7 @@ struct RoomNamingView: View {
                     // Header message
                     Text("What shall we call\nthis space?")
                         .font(PatinaTypography.patinaVoice)
-                        .foregroundColor(PatinaColors.Text.primary)
+                        .foregroundStyle(PatinaColors.Text.primary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, PatinaSpacing.xl)
                         .padding(.bottom, PatinaSpacing.xxl)
@@ -71,7 +71,7 @@ struct RoomNamingView: View {
                     VStack(alignment: .leading, spacing: PatinaSpacing.sm) {
                         Text("Room name")
                             .font(PatinaTypography.eyebrow)
-                            .foregroundColor(PatinaColors.Text.muted)
+                            .foregroundStyle(PatinaColors.Text.muted)
 
                         TextField("e.g., Master Bedroom", text: $roomName)
                             .font(PatinaTypography.body)
@@ -90,7 +90,7 @@ struct RoomNamingView: View {
                     VStack(alignment: .leading, spacing: PatinaSpacing.sm) {
                         Text("Room type")
                             .font(PatinaTypography.eyebrow)
-                            .foregroundColor(PatinaColors.Text.muted)
+                            .foregroundStyle(PatinaColors.Text.muted)
 
                         LazyVGrid(columns: [
                             GridItem(.flexible()),
@@ -110,7 +110,7 @@ struct RoomNamingView: View {
                     Button(action: saveRoom) {
                         Text("Save this room")
                             .font(PatinaTypography.bodyMedium)
-                            .foregroundColor(PatinaColors.offWhite)
+                            .foregroundStyle(PatinaColors.offWhite)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, PatinaSpacing.md)
                             .background(
@@ -172,7 +172,7 @@ struct RoomNamingView: View {
                         ? PatinaColors.clay.opacity(0.2)
                         : PatinaColors.Background.secondary.opacity(0.8)
                 )
-                .foregroundColor(
+                .foregroundStyle(
                     selectedType == type
                         ? PatinaColors.clay
                         : PatinaColors.Text.secondary

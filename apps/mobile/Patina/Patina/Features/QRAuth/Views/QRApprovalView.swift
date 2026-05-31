@@ -98,21 +98,21 @@ public struct QRApprovalView: View {
             HStack(spacing: PatinaSpacing.lg) {
                 Image(systemName: "laptopcomputer")
                     .font(.system(size: 36))
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
 
                 Image(systemName: "arrow.left.arrow.right")
                     .font(.system(size: 20))
-                    .foregroundColor(PatinaColors.Text.muted)
+                    .foregroundStyle(PatinaColors.Text.muted)
 
                 Image(systemName: "iphone")
                     .font(.system(size: 36))
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("Sign In Request")
                     .font(PatinaTypography.h2)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 // Contextual help: explains the cross-device sign-in.
                 // The browser session is gated on this approval — without
                 // a tap on the phone, the browser session never starts.
@@ -125,7 +125,7 @@ public struct QRApprovalView: View {
 
             Text("Confirm this sign-in with your iPhone")
                 .font(PatinaTypography.body)
-                .foregroundColor(PatinaColors.Text.secondary)
+                .foregroundStyle(PatinaColors.Text.secondary)
         }
         .padding(.top, PatinaSpacing.lg)
     }
@@ -138,11 +138,11 @@ public struct QRApprovalView: View {
                 // Browser info
                 HStack {
                     Image(systemName: "globe")
-                        .foregroundColor(PatinaColors.Text.secondary)
+                        .foregroundStyle(PatinaColors.Text.secondary)
 
                     Text(session.browserInfo?.displayString ?? "Web browser")
                         .font(PatinaTypography.body)
-                        .foregroundColor(PatinaColors.Text.primary)
+                        .foregroundStyle(PatinaColors.Text.primary)
 
                     Spacer()
                 }
@@ -153,11 +153,11 @@ public struct QRApprovalView: View {
                 if let location = session.browserInfo?.location {
                     HStack {
                         Image(systemName: "location")
-                            .foregroundColor(PatinaColors.Text.secondary)
+                            .foregroundStyle(PatinaColors.Text.secondary)
 
                         Text(location)
                             .font(PatinaTypography.body)
-                            .foregroundColor(PatinaColors.Text.primary)
+                            .foregroundStyle(PatinaColors.Text.primary)
 
                         Spacer()
                     }
@@ -168,16 +168,16 @@ public struct QRApprovalView: View {
                 // Expiry countdown
                 HStack {
                     Image(systemName: "clock")
-                        .foregroundColor(viewModel.isExpiryWarning ? PatinaColors.Warning.primary : PatinaColors.Text.secondary)
+                        .foregroundStyle(viewModel.isExpiryWarning ? PatinaColors.Warning.primary : PatinaColors.Text.secondary)
 
                     if viewModel.isExpired {
                         Text("Expired")
                             .font(PatinaTypography.body)
-                            .foregroundColor(PatinaColors.Error.primary)
+                            .foregroundStyle(PatinaColors.Error.primary)
                     } else {
                         Text("Expires in \(viewModel.formatTime(viewModel.secondsRemaining))")
                             .font(PatinaTypography.body)
-                            .foregroundColor(viewModel.isExpiryWarning ? PatinaColors.Warning.primary : PatinaColors.Text.primary)
+                            .foregroundStyle(viewModel.isExpiryWarning ? PatinaColors.Warning.primary : PatinaColors.Text.primary)
                     }
 
                     Spacer()
@@ -196,11 +196,11 @@ public struct QRApprovalView: View {
     private var expiryWarning: some View {
         HStack(spacing: PatinaSpacing.sm) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(PatinaColors.Warning.primary)
+                .foregroundStyle(PatinaColors.Warning.primary)
 
             Text("This request will expire soon")
                 .font(PatinaTypography.caption)
-                .foregroundColor(PatinaColors.Warning.primary)
+                .foregroundStyle(PatinaColors.Warning.primary)
         }
         .padding(PatinaSpacing.md)
         .background(
@@ -221,11 +221,11 @@ public struct QRApprovalView: View {
         ) {
             HStack(spacing: PatinaSpacing.sm) {
                 Image(systemName: viewModel.biometricType.iconName)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
 
                 Text(viewModel.biometricType.actionVerb + " to approve")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
             }
             .accessibilityLabel("\(viewModel.biometricType.actionVerb) to approve. More information available.")
         }
@@ -259,7 +259,7 @@ public struct QRApprovalView: View {
                 }) {
                     Text("Deny")
                         .font(PatinaTypography.bodyMedium)
-                        .foregroundColor(PatinaColors.Error.primary)
+                        .foregroundStyle(PatinaColors.Error.primary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, PatinaSpacing.md)
                 }
@@ -278,7 +278,7 @@ public struct QRApprovalView: View {
             VStack(spacing: PatinaSpacing.lg) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 72))
-                    .foregroundColor(PatinaColors.Success.primary)
+                    .foregroundStyle(PatinaColors.Success.primary)
 
                 // Wrapped in HelpTooltip so a tap surfaces "what happens next"
                 // — the browser session is live, the phone is paired, and
@@ -289,12 +289,12 @@ public struct QRApprovalView: View {
                 ) {
                     Text("Signed In")
                         .font(PatinaTypography.h2)
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                 }
 
                 Text("You can now use Patina on your browser")
                     .font(PatinaTypography.body)
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundStyle(.white.opacity(0.8))
                     .multilineTextAlignment(.center)
             }
             .padding(PatinaSpacing.xl)
@@ -312,16 +312,16 @@ public struct QRApprovalView: View {
             VStack(spacing: PatinaSpacing.lg) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 64))
-                    .foregroundColor(PatinaColors.Error.primary)
+                    .foregroundStyle(PatinaColors.Error.primary)
 
                 Text("Sign In Failed")
                     .font(PatinaTypography.h2)
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
 
                 if let errorMessage = viewModel.errorMessage {
                     Text(errorMessage)
                         .font(PatinaTypography.body)
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundStyle(.white.opacity(0.8))
                         .multilineTextAlignment(.center)
                 }
 

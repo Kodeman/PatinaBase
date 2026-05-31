@@ -218,7 +218,7 @@ struct WalkProgressIndicatorCompact: View {
 
                 Text("\(Int(progress * 100))%")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
     }

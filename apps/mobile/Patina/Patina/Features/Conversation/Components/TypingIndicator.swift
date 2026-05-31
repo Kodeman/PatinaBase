@@ -38,7 +38,7 @@ struct TypingIndicator: View {
                 // Label
                 Text("Patina is thinking...")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.Text.muted)
+                    .foregroundStyle(PatinaColors.Text.muted)
                     .italic()
                     .padding(.leading, PatinaSpacing.xs)
             }
@@ -94,7 +94,7 @@ struct TypingIndicatorWave: View {
 
                 Text("Patina is thinking...")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.Text.muted)
+                    .foregroundStyle(PatinaColors.Text.muted)
                     .italic()
                     .padding(.leading, PatinaSpacing.xs)
             }
@@ -135,7 +135,7 @@ struct TypingIndicatorBreathing: View {
 
                 Text("Patina is thinking...")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.Text.muted)
+                    .foregroundStyle(PatinaColors.Text.muted)
                     .italic()
                     .padding(.leading, PatinaSpacing.xs)
             }

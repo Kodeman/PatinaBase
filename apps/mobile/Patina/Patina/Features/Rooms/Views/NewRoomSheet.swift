@@ -20,7 +20,7 @@ struct NewRoomSheet: View {
 
             Text("Add a new room")
                 .font(.custom("PlayfairDisplay-Regular", size: 18))
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 16)
@@ -64,15 +64,15 @@ struct NewRoomSheet: View {
                         .frame(width: 48, height: 48)
                     Text(icon)
                         .font(.system(size: 22))
-                        .foregroundColor(iconForeground)
+                        .foregroundStyle(iconForeground)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.charcoal)
                     Text(subtitle)
                         .font(.system(size: 11))
-                        .foregroundColor(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.agedOak)
                         .multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 0)

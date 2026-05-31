@@ -41,11 +41,11 @@ struct ConversationView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Patina")
                         .font(PatinaTypography.h2)
-                        .foregroundColor(PatinaColors.Text.primary)
+                        .foregroundStyle(PatinaColors.Text.primary)
 
                     Text(viewModel.phase.description)
                         .font(PatinaTypography.caption)
-                        .foregroundColor(PatinaColors.Text.muted)
+                        .foregroundStyle(PatinaColors.Text.muted)
                 }
 
                 Spacer()
@@ -122,7 +122,7 @@ struct ConversationView: View {
                 HStack(alignment: .bottom) {
                     TextField("Share your thoughts...", text: $viewModel.inputText, axis: .vertical)
                         .font(PatinaTypography.body)
-                        .foregroundColor(PatinaColors.Text.primary)
+                        .foregroundStyle(PatinaColors.Text.primary)
                         .lineLimit(1...5)
                         .focused($isInputFocused)
                         .submitLabel(.send)
@@ -148,7 +148,7 @@ struct ConversationView: View {
                 } label: {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 32))
-                        .foregroundColor(
+                        .foregroundStyle(
                             viewModel.inputText.trimmingCharacters(in: .whitespaces).isEmpty
                             ? PatinaColors.clay.opacity(0.5)
                             : PatinaColors.mocha

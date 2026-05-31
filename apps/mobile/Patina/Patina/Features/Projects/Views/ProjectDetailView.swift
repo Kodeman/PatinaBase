@@ -44,11 +44,11 @@ struct ProjectDetailView: View {
                 .tracking(2)
             Text(project.name)
                 .font(PatinaTypography.h2)
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
             if let phase = project.current_phase {
                 Text("Currently: \(phase)")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
         }
         .padding(.top, 56)
@@ -65,7 +65,7 @@ struct ProjectDetailView: View {
             if viewModel.phases.isEmpty {
                 Text("No phases yet")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
                     .padding(.horizontal, 24)
             } else {
                 VStack(spacing: 0) {
@@ -88,16 +88,16 @@ struct ProjectDetailView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(phase.name ?? phase.phase_key.capitalized)
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 Text((phase.status ?? "pending").capitalized)
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
             }
             Spacer()
             if let fee = phase.fee_cents {
                 Text(formatPrice(fee))
                     .font(PatinaTypography.monoTiny)
-                    .foregroundColor(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.mocha)
             }
         }
         .padding(.vertical, 14)
@@ -128,7 +128,7 @@ struct ProjectDetailView: View {
             if viewModel.milestones.isEmpty {
                 Text("No payment milestones yet")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
                     .padding(.horizontal, 24)
             } else {
                 VStack(spacing: 0) {
@@ -148,18 +148,18 @@ struct ProjectDetailView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(m.title ?? "Payment")
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                 if let due = m.due_date {
                     Text("Due \(due)")
                         .font(PatinaTypography.caption)
-                        .foregroundColor(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.agedOak)
                 }
             }
             Spacer()
             if let amount = m.amount_cents {
                 Text(formatPrice(amount))
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundColor(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.mocha)
             }
         }
         .padding(.vertical, 14)
@@ -180,7 +180,7 @@ struct ProjectDetailView: View {
             if viewModel.ffe.isEmpty {
                 Text("No FF&E items yet")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.agedOak)
                     .padding(.horizontal, 24)
             } else {
                 VStack(spacing: 0) {
@@ -188,12 +188,12 @@ struct ProjectDetailView: View {
                         HStack {
                             Text(item.name ?? "Item")
                                 .font(PatinaTypography.bodySmall)
-                                .foregroundColor(PatinaColors.charcoal)
+                                .foregroundStyle(PatinaColors.charcoal)
                             Spacer()
                             if let total = item.line_total_cents {
                                 Text(formatPrice(total))
                                     .font(PatinaTypography.monoTiny)
-                                    .foregroundColor(PatinaColors.mocha)
+                                    .foregroundStyle(PatinaColors.mocha)
                             }
                         }
                         .padding(.vertical, 12)
@@ -216,12 +216,12 @@ struct ProjectDetailView: View {
         VStack(spacing: 12) {
             Text(msg)
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
             Button("Try Again") {
                 Task { await viewModel.load(projectId: projectId) }
             }
             .font(PatinaTypography.bodySmallMedium)
-            .foregroundColor(PatinaColors.clay)
+            .foregroundStyle(PatinaColors.clay)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 80)

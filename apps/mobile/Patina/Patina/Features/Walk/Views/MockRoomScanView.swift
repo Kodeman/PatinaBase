@@ -163,7 +163,7 @@ struct MockRoomScanView: View {
             // Label
             Text(item.label)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(item.color)
+                .foregroundStyle(item.color)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2)
                 .background(Color.black.opacity(0.6))
@@ -190,7 +190,7 @@ struct MockRoomScanView: View {
 
                 Image(systemName: "viewfinder")
                     .font(.system(size: 24))
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
             }
             .onAppear {
                 withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: false)) {
@@ -201,12 +201,12 @@ struct MockRoomScanView: View {
             // Progress text
             Text("Scanning... \(Int(scanProgress * 100))%")
                 .font(PatinaTypography.caption)
-                .foregroundColor(PatinaColors.offWhite.opacity(0.7))
+                .foregroundStyle(PatinaColors.offWhite.opacity(0.7))
 
             // Simulator notice
             Text("(Simulator Mode)")
                 .font(.system(size: 10))
-                .foregroundColor(PatinaColors.clay.opacity(0.5))
+                .foregroundStyle(PatinaColors.clay.opacity(0.5))
         }
     }
 

@@ -27,7 +27,7 @@ struct PauseMenuView: View {
             VStack(spacing: 32) {
                 Text("Paused")
                     .font(.custom("PlayfairDisplay-Regular", size: 28))
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
 
                 VStack(spacing: 0) {
                     menuRow(label: "Resume Scanning", action: onResume)
@@ -53,7 +53,7 @@ struct PauseMenuView: View {
         Button(action: action) {
             Text(label)
                 .font(.custom("Inter-Regular", size: 16))
-                .foregroundColor(foreground)
+                .foregroundStyle(foreground)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .padding(.vertical, 14)
         }

@@ -17,7 +17,7 @@ struct NotificationFeedView: View {
             HStack {
                 Text("Notifications")
                     .font(PatinaTypography.h3)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
 
                 Spacer()
 
@@ -26,7 +26,7 @@ struct NotificationFeedView: View {
                         viewModel.markAllRead()
                     }
                     .font(PatinaTypography.uiSmall)
-                    .foregroundColor(PatinaColors.clay)
+                    .foregroundStyle(PatinaColors.clay)
                 }
             }
             .padding(.top, 56)
@@ -85,10 +85,10 @@ struct NotificationFeedView: View {
             Spacer()
             Image(systemName: "bell.slash")
                 .font(.system(size: 28))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
             Text("You're all caught up")
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -99,16 +99,16 @@ struct NotificationFeedView: View {
             Spacer()
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 28))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
             Text(message)
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
                 .multilineTextAlignment(.center)
             Button("Try Again") {
                 Task { await viewModel.load() }
             }
             .font(PatinaTypography.bodySmallMedium)
-            .foregroundColor(PatinaColors.clay)
+            .foregroundStyle(PatinaColors.clay)
             Spacer()
         }
         .padding(.horizontal, 32)
@@ -140,19 +140,19 @@ struct NotificationFeedView: View {
 
                 Image(systemName: notification.icon)
                     .font(.system(size: 17))
-                    .foregroundColor(notification.iconColor)
+                    .foregroundStyle(notification.iconColor)
             }
 
             // Content
             VStack(alignment: .leading, spacing: 2) {
                 Text(notification.title)
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
 
                 if !notification.body.isEmpty {
                     Text(notification.body)
                         .font(PatinaTypography.caption)
-                        .foregroundColor(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.agedOak)
                         .lineLimit(2)
                 }
             }
@@ -162,7 +162,7 @@ struct NotificationFeedView: View {
             // Timestamp
             Text(notification.timeAgo)
                 .font(PatinaTypography.monoTiny)
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
                 .tracking(0.3)
         }
         .padding(.horizontal, 24)

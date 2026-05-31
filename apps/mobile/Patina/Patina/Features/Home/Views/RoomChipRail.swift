@@ -43,10 +43,10 @@ struct RoomChipRail: View {
                 }
                 Text(room.name)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(isActive ? PatinaColors.offWhite : PatinaColors.charcoal)
+                    .foregroundStyle(isActive ? PatinaColors.offWhite : PatinaColors.charcoal)
                 Text("\(room.itemCount)")
                     .font(.custom("DMMono-Regular", size: 7))
-                    .foregroundColor(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.offWhite)
                     .padding(.vertical, 1)
                     .padding(.horizontal, 5)
                     .background(

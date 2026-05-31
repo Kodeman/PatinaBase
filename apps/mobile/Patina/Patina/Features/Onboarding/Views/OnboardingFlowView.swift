@@ -56,7 +56,7 @@ struct OnboardingFlowView: View {
                             onSkip()
                         }
                         .font(PatinaTypography.uiSmall)
-                        .foregroundColor(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.agedOak)
                         .padding(.top, 58)
                         .padding(.trailing, 24)
                     }
@@ -91,13 +91,13 @@ struct OnboardingFlowView: View {
             VStack(spacing: 0) {
                 Text(page.title)
                     .font(PatinaTypography.h2)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                     .multilineTextAlignment(.center)
                     .padding(.bottom, 12)
 
                 Text(page.body)
                     .font(PatinaTypography.uiAction)
-                    .foregroundColor(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.mocha)
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
                     .frame(maxWidth: 300)
@@ -191,17 +191,17 @@ struct OnboardingFlowView: View {
 
                 Image(systemName: "camera.fill")
                     .font(.system(size: 32))
-                    .foregroundColor(PatinaColors.mocha.opacity(0.6))
+                    .foregroundStyle(PatinaColors.mocha.opacity(0.6))
             }
 
             HStack(spacing: 6) {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 12))
-                    .foregroundColor(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.mocha)
 
                 Text("Your room stays private")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.mocha)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 6)

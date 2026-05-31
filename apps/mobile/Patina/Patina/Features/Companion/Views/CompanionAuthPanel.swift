@@ -63,7 +63,7 @@ public struct CompanionAuthPanel: View {
             // Title
             Text("Your design journey awaits")
                 .font(PatinaTypography.h3)
-                .foregroundColor(PatinaColors.Text.primary)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .multilineTextAlignment(.center)
                 .dynamicTypeSize(...DynamicTypeSize.accessibility2) // Cap at 150%
                 .accessibilityAddTraits(.isHeader)
@@ -75,7 +75,7 @@ public struct CompanionAuthPanel: View {
     private var valueProp: some View {
         Text("Sign in to unlock personalized recommendations, save your scanned rooms, and get assistance tailored to your unique style.")
             .font(PatinaTypography.body)
-            .foregroundColor(PatinaColors.Text.secondary)
+            .foregroundStyle(PatinaColors.Text.secondary)
             .multilineTextAlignment(.center)
             .lineSpacing(4)
             .dynamicTypeSize(...DynamicTypeSize.accessibility2) // Cap at 150%
@@ -86,7 +86,7 @@ public struct CompanionAuthPanel: View {
     private func errorView(_ message: String) -> some View {
         Text(message)
             .font(PatinaTypography.bodySmall)
-            .foregroundColor(.red)
+            .foregroundStyle(.red)
             .padding(PatinaSpacing.sm)
             .frame(maxWidth: .infinity)
             .background(Color.red.opacity(0.1))
@@ -121,7 +121,7 @@ public struct CompanionAuthPanel: View {
                         .font(PatinaTypography.bodyMedium)
                         .dynamicTypeSize(...DynamicTypeSize.accessibility2)
                 }
-                .foregroundColor(PatinaColors.Text.primary)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .frame(maxWidth: .infinity, minHeight: 44) // Minimum touch target
                 .padding(.vertical, PatinaSpacing.md)
                 .background(Color.clear)
@@ -144,14 +144,14 @@ public struct CompanionAuthPanel: View {
         HStack(spacing: PatinaSpacing.xs) {
             Text("Already have an account?")
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.Text.muted)
+                .foregroundStyle(PatinaColors.Text.muted)
                 .dynamicTypeSize(...DynamicTypeSize.accessibility2)
 
             Button("Sign In") {
                 showEmailAuth()
             }
             .font(PatinaTypography.bodySmallMedium)
-            .foregroundColor(PatinaColors.mocha)
+            .foregroundStyle(PatinaColors.mocha)
             .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             .accessibilityLabel("Sign in to existing account")
         }

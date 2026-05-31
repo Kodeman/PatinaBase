@@ -21,7 +21,7 @@ struct SettingsView: View {
                 // Header
                 Text("Settings")
                     .font(PatinaTypography.h3)
-                    .foregroundColor(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.charcoal)
                     .padding(.top, 56)
                     .padding(.horizontal, 24)
                     .padding(.bottom, 24)
@@ -101,18 +101,18 @@ struct SettingsView: View {
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
                     .font(.system(size: 14))
-                    .foregroundColor(iconColor)
+                    .foregroundStyle(iconColor)
             }
 
             Text(label)
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
 
             Spacer()
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 14))
-                .foregroundColor(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.agedOak)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -130,12 +130,12 @@ struct SettingsView: View {
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
                     .font(.system(size: 14))
-                    .foregroundColor(iconColor)
+                    .foregroundStyle(iconColor)
             }
 
             Text(label)
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.charcoal)
 
             Spacer()
 

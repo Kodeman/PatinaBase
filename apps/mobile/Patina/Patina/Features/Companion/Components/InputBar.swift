@@ -44,7 +44,7 @@ public struct InputBar: View {
             HStack {
                 TextField(placeholder, text: $text)
                     .font(PatinaTypography.body)  // Spec: 13pt placeholder
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .focused($isFocused)
                     .submitLabel(.send)
                     .onSubmit {
@@ -58,7 +58,7 @@ public struct InputBar: View {
                     } label: {
                         Image(systemName: "arrow.up.circle.fill")
                             .font(.system(size: 24))
-                            .foregroundColor(PatinaColors.clay)
+                            .foregroundStyle(PatinaColors.clay)
                     }
                     .transition(.scale.combined(with: .opacity))
                 }
@@ -125,7 +125,7 @@ public struct VoiceButton: View {
                 .overlay(
                     Image(systemName: isActive ? "mic.fill" : "mic")
                         .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                 )
                 .scaleEffect(isPressing ? 0.95 : 1.0)
         }

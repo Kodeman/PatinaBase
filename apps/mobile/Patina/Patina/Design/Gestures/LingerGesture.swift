@@ -166,14 +166,14 @@ struct LingerDemoView: View {
                     HStack {
                         Image(systemName: "chair.lounge")
                             .font(.system(size: 32))
-                            .foregroundColor(PatinaColors.mocha)
+                            .foregroundStyle(PatinaColors.mocha)
 
                         VStack(alignment: .leading) {
                             Text("Edo Lounge Chair")
                                 .font(PatinaTypography.h3)
                             Text("Thos. Moser")
                                 .font(PatinaTypography.caption)
-                                .foregroundColor(PatinaColors.Text.secondary)
+                                .foregroundStyle(PatinaColors.Text.secondary)
                         }
                     }
 
@@ -181,7 +181,7 @@ struct LingerDemoView: View {
                     if revealStage >= 1 {
                         Text("$4,850")
                             .font(PatinaTypography.body)
-                            .foregroundColor(PatinaColors.Text.primary)
+                            .foregroundStyle(PatinaColors.Text.primary)
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     }
 
@@ -204,7 +204,7 @@ struct LingerDemoView: View {
                     if revealStage >= 3 {
                         Text("Hand-shaped in Auburn, Maine from sustainably harvested cherry. Each piece develops unique character over decades of use.")
                             .font(PatinaTypography.bodySmall)
-                            .foregroundColor(PatinaColors.Text.secondary)
+                            .foregroundStyle(PatinaColors.Text.secondary)
                             .multilineTextAlignment(.center)
                             .lineSpacing(2)
                             .transition(.opacity.combined(with: .move(edge: .top)))
@@ -237,7 +237,7 @@ struct LingerDemoView: View {
                 // Instructions
                 Text(isComplete ? "Fully revealed" : "Hold to reveal more...")
                     .font(PatinaTypography.caption)
-                    .foregroundColor(PatinaColors.Text.muted)
+                    .foregroundStyle(PatinaColors.Text.muted)
 
                 // Stage indicators
                 HStack(spacing: PatinaSpacing.sm) {

@@ -105,21 +105,21 @@ extension View {
     public func patinaDisplay(_ style: Font = PatinaTypography.display1) -> some View {
         self
             .font(style)
-            .foregroundColor(PatinaColors.Text.primary)
+            .foregroundStyle(PatinaColors.Text.primary)
     }
 
     /// Apply Patina body style
     public func patinaBody(_ style: Font = PatinaTypography.body) -> some View {
         self
             .font(style)
-            .foregroundColor(PatinaColors.Text.secondary)
+            .foregroundStyle(PatinaColors.Text.secondary)
     }
 
     /// Apply eyebrow style (uppercase, tracked)
     public func patinaEyebrow() -> some View {
         self
             .font(PatinaTypography.eyebrow)
-            .foregroundColor(PatinaColors.Text.muted)
+            .foregroundStyle(PatinaColors.Text.muted)
             .textCase(.uppercase)
             .tracking(1.5)
     }
@@ -128,7 +128,7 @@ extension View {
     public func patinaMono(_ size: Font = PatinaTypography.mono) -> some View {
         self
             .font(size)
-            .foregroundColor(PatinaColors.agedOak)
+            .foregroundStyle(PatinaColors.agedOak)
             .textCase(.uppercase)
             .tracking(0.5)
     }

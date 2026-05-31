@@ -27,7 +27,7 @@ struct ContemplativePauseView: View {
             VStack(spacing: 32) {
                 Text("Let me think about this.")
                     .font(.custom("PlayfairDisplay-Italic", size: 20))
-                    .foregroundColor(PatinaColors.charcoal.opacity(0.6))
+                    .foregroundStyle(PatinaColors.charcoal.opacity(0.6))
 
                 HStack(spacing: 6) {
                     ForEach(0..<3, id: \.self) { i in

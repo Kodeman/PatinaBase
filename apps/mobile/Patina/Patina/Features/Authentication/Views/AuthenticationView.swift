@@ -50,7 +50,7 @@ public struct AuthenticationView: View {
                     Button("Cancel") {
                         dismiss()
                     }
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                 }
             }
             .task {
@@ -103,11 +103,11 @@ public struct AuthenticationView: View {
 
             Text(headerTitle)
                 .font(PatinaTypography.h2)
-                .foregroundColor(PatinaColors.Text.primary)
+                .foregroundStyle(PatinaColors.Text.primary)
 
             Text(headerSubtitle)
                 .font(PatinaTypography.body)
-                .foregroundColor(PatinaColors.Text.secondary)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .multilineTextAlignment(.center)
         }
         .padding(.top, PatinaSpacing.xl)
@@ -144,10 +144,10 @@ public struct AuthenticationView: View {
             if let success = viewModel.successMessage {
                 HStack(spacing: PatinaSpacing.sm) {
                     Image(systemName: viewModel.magicLinkSent ? "envelope.fill" : "checkmark.circle.fill")
-                        .foregroundColor(.green)
+                        .foregroundStyle(.green)
                     Text(success)
                         .font(PatinaTypography.bodySmall)
-                        .foregroundColor(.green)
+                        .foregroundStyle(.green)
                 }
                 .padding(PatinaSpacing.md)
                 .frame(maxWidth: .infinity)
@@ -159,7 +159,7 @@ public struct AuthenticationView: View {
             if let error = viewModel.errorMessage {
                 Text(error)
                     .font(PatinaTypography.bodySmall)
-                    .foregroundColor(.red)
+                    .foregroundStyle(.red)
                     .padding(PatinaSpacing.md)
                     .background(Color.red.opacity(0.1))
                     .cornerRadius(PatinaRadius.md)
@@ -221,24 +221,24 @@ public struct AuthenticationView: View {
             // Email icon
             Image(systemName: "envelope.open.fill")
                 .font(.system(size: 48))
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
                 .padding(.bottom, PatinaSpacing.sm)
 
             Text("Check your email")
                 .font(PatinaTypography.h3)
-                .foregroundColor(PatinaColors.Text.primary)
+                .foregroundStyle(PatinaColors.Text.primary)
 
             Text("We sent a magic link to")
                 .font(PatinaTypography.body)
-                .foregroundColor(PatinaColors.Text.secondary)
+                .foregroundStyle(PatinaColors.Text.secondary)
 
             Text(viewModel.magicLinkEmail)
                 .font(PatinaTypography.bodyMedium)
-                .foregroundColor(PatinaColors.Text.primary)
+                .foregroundStyle(PatinaColors.Text.primary)
 
             Text("Click the link in the email to sign in.")
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.Text.muted)
+                .foregroundStyle(PatinaColors.Text.muted)
                 .multilineTextAlignment(.center)
 
             // Resend button
@@ -258,7 +258,7 @@ public struct AuthenticationView: View {
                     }
                 }
                 .font(PatinaTypography.bodyMedium)
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, PatinaSpacing.md)
                 .background(PatinaColors.Background.secondary)
@@ -279,7 +279,7 @@ public struct AuthenticationView: View {
             } label: {
                 Text("Enter code instead")
                     .font(PatinaTypography.bodySmall)
-                    .foregroundColor(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.mocha)
             }
             .accessibilityIdentifier("auth.magicLink.enterCodeButton")
 
@@ -290,7 +290,7 @@ public struct AuthenticationView: View {
             } label: {
                 Text("Use a different email")
                     .font(PatinaTypography.bodySmall)
-                    .foregroundColor(PatinaColors.Text.muted)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
         }
         .padding(.vertical, PatinaSpacing.lg)
@@ -303,21 +303,21 @@ public struct AuthenticationView: View {
             // Number-pad / lock icon
             Image(systemName: "number")
                 .font(.system(size: 48))
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
                 .padding(.bottom, PatinaSpacing.sm)
 
             Text("Enter your sign-in code")
                 .font(PatinaTypography.h3)
-                .foregroundColor(PatinaColors.Text.primary)
+                .foregroundStyle(PatinaColors.Text.primary)
 
             Text("Enter the 6-digit code from your email")
                 .font(PatinaTypography.body)
-                .foregroundColor(PatinaColors.Text.secondary)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .multilineTextAlignment(.center)
 
             Text(viewModel.magicLinkEmail)
                 .font(PatinaTypography.bodyMedium)
-                .foregroundColor(PatinaColors.Text.primary)
+                .foregroundStyle(PatinaColors.Text.primary)
 
             // 6-digit code field
             TextField("000000", text: $viewModel.otpToken)
@@ -360,7 +360,7 @@ public struct AuthenticationView: View {
                     }
                 }
                 .font(PatinaTypography.bodyMedium)
-                .foregroundColor(PatinaColors.Text.inverse)
+                .foregroundStyle(PatinaColors.Text.inverse)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, PatinaSpacing.md)
                 .background(
@@ -382,7 +382,7 @@ public struct AuthenticationView: View {
             } label: {
                 Text("← Back to email")
                     .font(PatinaTypography.bodySmall)
-                    .foregroundColor(PatinaColors.Text.muted)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
             .accessibilityIdentifier("auth.otp.backButton")
         }
@@ -398,25 +398,25 @@ public struct AuthenticationView: View {
             // Inbox icon
             Image(systemName: "envelope.badge.fill")
                 .font(.system(size: 48))
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
                 .padding(.bottom, PatinaSpacing.sm)
 
             Text("Check your inbox")
                 .font(PatinaTypography.h3)
-                .foregroundColor(PatinaColors.Text.primary)
+                .foregroundStyle(PatinaColors.Text.primary)
 
             Text("We sent a verification link to")
                 .font(PatinaTypography.body)
-                .foregroundColor(PatinaColors.Text.secondary)
+                .foregroundStyle(PatinaColors.Text.secondary)
 
             Text(unverifiedEmail)
                 .font(PatinaTypography.bodyMedium)
-                .foregroundColor(PatinaColors.Text.primary)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .accessibilityIdentifier("auth.verification.emailLabel")
 
             Text("Tap the link in that email, then come back here to sign in.")
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.Text.muted)
+                .foregroundStyle(PatinaColors.Text.muted)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -424,10 +424,10 @@ public struct AuthenticationView: View {
             if viewModel.verificationResendSuccess {
                 HStack(spacing: PatinaSpacing.sm) {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
+                        .foregroundStyle(.green)
                     Text("Verification email sent")
                         .font(PatinaTypography.bodySmall)
-                        .foregroundColor(.green)
+                        .foregroundStyle(.green)
                 }
                 .padding(PatinaSpacing.md)
                 .frame(maxWidth: .infinity)
@@ -452,7 +452,7 @@ public struct AuthenticationView: View {
                     }
                 }
                 .font(PatinaTypography.bodyMedium)
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, PatinaSpacing.md)
                 .background(PatinaColors.Background.secondary)
@@ -474,7 +474,7 @@ public struct AuthenticationView: View {
             } label: {
                 Text("Use a different email")
                     .font(PatinaTypography.bodySmall)
-                    .foregroundColor(PatinaColors.Text.muted)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
             .accessibilityIdentifier("auth.verification.useDifferentEmailButton")
         }
@@ -496,7 +496,7 @@ public struct AuthenticationView: View {
                 }
             }
             .font(PatinaTypography.bodyMedium)
-            .foregroundColor(PatinaColors.Text.inverse)
+            .foregroundStyle(PatinaColors.Text.inverse)
             .frame(maxWidth: .infinity)
             .padding(.vertical, PatinaSpacing.md)
             .background(viewModel.isFormValid ? PatinaColors.charcoal : PatinaColors.clay)
@@ -549,7 +549,7 @@ public struct AuthenticationView: View {
 
             Text("or")
                 .font(PatinaTypography.caption)
-                .foregroundColor(PatinaColors.Text.muted)
+                .foregroundStyle(PatinaColors.Text.muted)
 
             Rectangle()
                 .fill(PatinaColors.clay.opacity(0.3))
@@ -578,17 +578,17 @@ public struct AuthenticationView: View {
                         viewModel.clearForm()
                     }
                     .font(PatinaTypography.bodySmall)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
 
                     Text("·")
-                        .foregroundColor(PatinaColors.Text.muted)
+                        .foregroundStyle(PatinaColors.Text.muted)
 
                     Button("Use magic link") {
                         viewModel.mode = .magicLink
                         viewModel.clearForm()
                     }
                     .font(PatinaTypography.bodySmall)
-                    .foregroundColor(PatinaColors.Text.secondary)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                 }
             }
 
@@ -598,7 +598,7 @@ public struct AuthenticationView: View {
                     viewModel.clearForm()
                 }
                 .font(PatinaTypography.bodySmall)
-                .foregroundColor(PatinaColors.Text.secondary)
+                .foregroundStyle(PatinaColors.Text.secondary)
             }
 
             HStack(spacing: PatinaSpacing.xs) {
@@ -606,14 +606,14 @@ public struct AuthenticationView: View {
                      ? "Don't have an account?"
                      : "Already have an account?")
                     .font(PatinaTypography.bodySmall)
-                    .foregroundColor(PatinaColors.Text.muted)
+                    .foregroundStyle(PatinaColors.Text.muted)
 
                 Button(viewModel.mode == .signIn || viewModel.mode == .magicLink ? "Sign Up" : "Sign In") {
                     viewModel.mode = (viewModel.mode == .signIn || viewModel.mode == .magicLink) ? .signUp : .signIn
                     viewModel.clearForm()
                 }
                 .font(PatinaTypography.bodySmallMedium)
-                .foregroundColor(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.mocha)
                 .accessibilityIdentifier("auth.form.modeSwitcherButton")
             }
         }
@@ -651,19 +651,19 @@ struct PatinaTextField: View {
         HStack(spacing: PatinaSpacing.md) {
             if let icon {
                 Image(systemName: icon)
-                    .foregroundColor(PatinaColors.Text.muted)
+                    .foregroundStyle(PatinaColors.Text.muted)
                     .frame(width: 20)
             }
 
             if isSecure {
                 SecureField(placeholder, text: $text)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .tint(PatinaColors.mocha)
             } else {
                 TextField(placeholder, text: $text)
                     .keyboardType(keyboardType)
                     .textInputAutocapitalization(autocapitalization)
-                    .foregroundColor(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .tint(PatinaColors.mocha)
             }
         }

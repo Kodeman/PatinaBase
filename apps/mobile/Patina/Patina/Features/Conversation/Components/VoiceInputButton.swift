@@ -37,7 +37,7 @@ struct VoiceInputButton: View {
 
                 Image(systemName: isActive ? "waveform" : "mic")
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(isActive ? .white : PatinaColors.mocha)
+                    .foregroundStyle(isActive ? .white : PatinaColors.mocha)
             }
         }
         .disabled(!isAuthorized)
