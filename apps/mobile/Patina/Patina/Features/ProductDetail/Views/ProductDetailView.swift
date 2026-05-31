@@ -403,7 +403,7 @@ struct ProductDetailView: View {
                 .foregroundStyle(PatinaColors.mocha)
                 .multilineTextAlignment(.center)
             if let productId {
-                Button("Try Again") {
+                Button("Let's try that again") {
                     Task { await viewModel.loadProduct(id: productId) }
                 }
                 .font(PatinaTypography.bodySmallMedium)

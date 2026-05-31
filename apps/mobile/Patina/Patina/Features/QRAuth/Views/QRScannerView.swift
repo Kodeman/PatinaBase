@@ -232,7 +232,7 @@ public struct QRScannerView: View {
                 }
             }
 
-            PatinaButton("Try Again", style: .secondary, action: viewModel.dismissError)
+            PatinaButton("Once more", style: .secondary, action: viewModel.dismissError)
         }
         .padding(PatinaSpacing.xl)
         .background(

@@ -17,6 +17,16 @@ struct AccountView: View {
     private var authService: AuthService { AuthService.shared }
     private var profileService: ProfileService { ProfileService.shared }
 
+    /// Shared formatter for the "member since" date. `static let` so the
+    /// formatter is allocated once rather than on every body re-render
+    /// (PT-6-5).
+    private static let memberSinceFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter
+    }()
+
     /// Show the Workspace section only when the signed-in user actually
     /// has both designer and consumer roles. Solo-role users have a
     /// deterministic home, so the toggle would be confusing.
@@ -250,10 +260,7 @@ struct AccountView: View {
         guard let createdAt = authService.currentUser?.createdAt else {
             return "—"
         }
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        return formatter.string(from: createdAt)
+        return Self.memberSinceFormatter.string(from: createdAt)
     }
 }
 
