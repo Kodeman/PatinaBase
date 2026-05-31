@@ -30,7 +30,7 @@ struct ConversationView: View {
                 inputArea
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     // MARK: - Header

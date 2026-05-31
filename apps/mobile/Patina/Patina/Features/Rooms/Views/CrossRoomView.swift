@@ -43,7 +43,7 @@ struct CrossRoomView: View {
             }
         }
         .background(PatinaColors.offWhite.ignoresSafeArea())
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     // MARK: - Header / Tabs

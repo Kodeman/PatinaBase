@@ -183,34 +183,34 @@ struct ContentView: View {
 
         case .conversation:
             ConversationView()
-                .navigationBarTitleDisplayMode(.inline)
+                .toolbarTitleDisplayMode(.inline)
 
         case .roomList, .yourSpaces:
             YourSpacesView()
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
 
         case .roomDetail(let roomId), .roomProject(let roomId):
             RoomProjectView(roomId: roomId)
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
 
         case .roomSettings(let roomId):
             RoomSettingsView(roomId: roomId)
-                .navigationBarTitleDisplayMode(.inline)
+                .toolbarTitleDisplayMode(.inline)
 
         case .crossRoom:
             CrossRoomView()
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
 
         case .manualRoomEntry:
             ManualRoomEntryView()
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
 
         case .newRoom, .moveItem:
             EmptyView()
 
         case .roomSavedItems:
             CollectionsView()
-                .navigationBarTitleDisplayMode(.inline)
+                .toolbarTitleDisplayMode(.inline)
 
         case .roomOptions:
             EmptyView()
@@ -218,28 +218,28 @@ struct ContentView: View {
         case .walk, .walkSession, .rescan:
             // Legacy entry points — route into the new Quiet Conversation flow
             quietConversationEntry
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
 
         case .emergence(let pieceId):
             if let pieceId {
                 ProductDetailView(productId: pieceId)
-                    .navigationBarHidden(true)
+                    .toolbar(.hidden, for: .navigationBar)
             } else {
                 RecommendationsView()
-                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbarTitleDisplayMode(.inline)
             }
 
         case .roomEmergence:
             RecommendationsView()
-                .navigationBarTitleDisplayMode(.inline)
+                .toolbarTitleDisplayMode(.inline)
 
         case .table:
             CollectionsView()
-                .navigationBarTitleDisplayMode(.inline)
+                .toolbarTitleDisplayMode(.inline)
 
         case .pieceDetail(let pieceId):
             ProductDetailView(productId: pieceId)
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
 
         case .settings:
             EmptyView()
@@ -255,21 +255,21 @@ struct ContentView: View {
 
         case .styleQuiz:
             StyleQuizView()
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
 
         case .styleResult(let result):
             StyleResultView(result: result)
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
 
         case .arPlacement(let productId, let roomRemoteId):
             ARPlacementView(productId: productId, roomRemoteId: roomRemoteId)
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
 
         case .preScanChecklist:
             PreScanChecklistView {
                 coordinator.navigate(to: .walk)
             }
-            .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
 
         case .floorPlanPreview:
             // FloorPlanPreview needs room data passed from Walk; placeholder for now
@@ -277,15 +277,15 @@ struct ContentView: View {
 
         case .profile:
             ProfileView()
-                .navigationBarTitleDisplayMode(.inline)
+                .toolbarTitleDisplayMode(.inline)
 
         case .notifications:
             NotificationFeedView()
-                .navigationBarTitleDisplayMode(.inline)
+                .toolbarTitleDisplayMode(.inline)
 
         case .designerConsultation:
             DesignerConsultationView()
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
 
         case .walkInvitation, .cameraPermission, .walkComplete, .firstEmergence, .roomNaming:
             EmptyView()
@@ -294,7 +294,7 @@ struct ContentView: View {
 
         case .scanThreshold:
             quietConversationEntry
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
 
         case .scanWalk:
             EmptyView()    // handled inline via quietConversationEntry state
@@ -316,39 +316,39 @@ struct ContentView: View {
 
         case .scanFallbackEntry:
             quietConversationEntry
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
 
         case .designerHome:
             DesignerHomeView()
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
 
         case .projectList:
             ProjectListView()
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
 
         case .projectDetail(let projectId):
             ProjectDetailView(projectId: projectId)
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
 
         case .decisionList:
             DecisionListView()
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
 
         case .decisionDetail(let decisionId):
             DecisionDetailView(decisionId: decisionId)
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
 
         case .threadList:
             ThreadListView()
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
 
         case .threadDetail(let threadId):
             ThreadDetailView(threadId: threadId)
-                .navigationBarTitleDisplayMode(.inline)
+                .toolbarTitleDisplayMode(.inline)
 
         case .receiveDelivery:
             ReceiveDeliveryView()
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
         }
     }
 

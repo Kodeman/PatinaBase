@@ -89,7 +89,7 @@ struct RoomDetailView: View {
                 CompanionOverlay()
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             loadRoom()
             animateEntrance()

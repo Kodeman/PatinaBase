@@ -63,7 +63,7 @@ struct WalkView: View {
                 completedContent
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     // MARK: - Background

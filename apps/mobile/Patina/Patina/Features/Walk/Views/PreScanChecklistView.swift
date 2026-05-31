@@ -118,7 +118,7 @@ struct PreScanChecklistView: View {
             .opacity(cameraReady || !hasCheckedPermission ? 1 : 0.5)
         }
         .background(PatinaColors.offWhite)
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     // MARK: - Checklist Item

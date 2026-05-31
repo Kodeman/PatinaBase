@@ -59,7 +59,7 @@ struct ThreadDetailView: View {
             viewModel.startLiveUpdates()
         }
         .onDisappear { viewModel.stopLiveUpdates() }
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbarTitleDisplayMode(.inline)
     }
 
     private func bubble(_ message: RemoteCommsMessage) -> some View {

@@ -44,7 +44,7 @@ public struct AuthenticationView: View {
                 .padding(PatinaSpacing.xl)
             }
             .background(PatinaColors.Background.primary)
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Cancel") {

@@ -51,7 +51,7 @@ struct AccountView: View {
             }
             .background(PatinaColors.Background.primary)
             .navigationTitle("Account")
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {

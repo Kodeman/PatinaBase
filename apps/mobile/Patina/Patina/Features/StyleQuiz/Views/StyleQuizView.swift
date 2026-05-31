@@ -46,7 +46,7 @@ struct StyleQuizView: View {
                 .padding(.bottom, 28)
         }
         .background(PatinaColors.offWhite)
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .onChange(of: viewModel.isComplete) { _, complete in
             if complete, let result = viewModel.result {
                 if let onComplete {

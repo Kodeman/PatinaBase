@@ -97,7 +97,7 @@ struct ManualRoomEntryView: View {
             .padding(20)
         }
         .background(PatinaColors.offWhite.ignoresSafeArea())
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     // MARK: - Pieces

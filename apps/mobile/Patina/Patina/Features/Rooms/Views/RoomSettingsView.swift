@@ -41,7 +41,7 @@ struct RoomSettingsView: View {
             .padding(20)
         }
         .background(PatinaColors.offWhite.ignoresSafeArea())
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             if let room {
                 name = room.name

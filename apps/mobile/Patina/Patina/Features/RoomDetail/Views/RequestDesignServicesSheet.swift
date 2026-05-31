@@ -59,7 +59,7 @@ struct RequestDesignServicesSheet: View {
             }
             .background(PatinaColors.Background.primary)
             .navigationTitle("Get Design Help")
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {

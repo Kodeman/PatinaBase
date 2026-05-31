@@ -162,7 +162,7 @@ public struct ScanReviewView: View {
                 .padding(.bottom, 32)
             }
             .background(PatinaColors.offWhite.ignoresSafeArea())
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: onCancel) {
@@ -604,7 +604,7 @@ public struct ScanReviewView: View {
             }
             .background(PatinaColors.offWhite.ignoresSafeArea())
             .navigationTitle("Pick Hero Photo")
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { showingHeroPicker = false }
@@ -657,7 +657,7 @@ public struct ScanReviewView: View {
             .background(PatinaColors.offWhite.ignoresSafeArea())
             .scrollContentBackground(.hidden)
             .navigationTitle("Reorder Photos")
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { showingReorderSheet = false }
@@ -749,7 +749,7 @@ public struct ScanReviewView: View {
             }
             .padding(24)
             .background(PatinaColors.offWhite.ignoresSafeArea())
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { editingPhotoId = nil }

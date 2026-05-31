@@ -68,7 +68,7 @@ struct SettingsView: View {
             }
         }
         .background(PatinaColors.offWhite)
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbarTitleDisplayMode(.inline)
         .task {
             await settings.load()
         }

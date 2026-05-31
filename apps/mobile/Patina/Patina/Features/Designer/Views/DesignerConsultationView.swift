@@ -111,7 +111,7 @@ struct DesignerConsultationView: View {
             }
         }
         .background(PatinaColors.offWhite)
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbarTitleDisplayMode(.inline)
         .onAppear { loadRooms() }
         .overlay {
             if showSuccess {

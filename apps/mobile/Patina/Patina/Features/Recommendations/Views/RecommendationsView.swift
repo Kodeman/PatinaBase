@@ -64,7 +64,7 @@ struct RecommendationsView: View {
             }
         }
         .background(PatinaColors.offWhite)
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbarTitleDisplayMode(.inline)
         .task {
             await viewModel.loadRecommendations()
         }

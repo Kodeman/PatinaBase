@@ -81,7 +81,7 @@ struct CollectionsView: View {
             }
         }
         .background(PatinaColors.offWhite)
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbarTitleDisplayMode(.inline)
         .onAppear {
             viewModel.loadData(context: modelContext)
         }

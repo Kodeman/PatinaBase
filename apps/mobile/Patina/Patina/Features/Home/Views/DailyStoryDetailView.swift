@@ -42,7 +42,7 @@ struct DailyStoryDetailView: View {
                 chromeVisible = true
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .statusBar(hidden: true)
         .toolbar(.hidden, for: .navigationBar)
     }

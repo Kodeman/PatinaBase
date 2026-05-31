@@ -114,7 +114,7 @@ struct FloorPlanPreviewView: View {
             .padding(.bottom, 100) // Companion space
         }
         .background(PatinaColors.offWhite)
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     // MARK: - Confidence

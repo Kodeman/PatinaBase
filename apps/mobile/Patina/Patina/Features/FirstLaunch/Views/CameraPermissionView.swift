@@ -290,7 +290,7 @@ private struct PrivacyExplanationSheet: View {
                 .padding(PatinaSpacing.xl)
             }
             .background(PatinaColors.Background.primary)
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {

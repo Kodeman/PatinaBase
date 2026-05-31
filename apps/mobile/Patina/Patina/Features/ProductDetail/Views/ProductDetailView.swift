@@ -44,7 +44,7 @@ struct ProductDetailView: View {
             }
         }
         .background(PatinaColors.offWhite)
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         // Contextual help panel — `?` floating button in the top bar
         // toggles `isHelpPanelPresented`. Empty state ships until Sanity
         // authoring catches up (Sprint 2 expectation).

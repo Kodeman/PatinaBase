@@ -104,7 +104,7 @@ public struct HelpPanelSheet: View {
         NavigationStack {
             content
                 .navigationTitle("Help")
-                .navigationBarTitleDisplayMode(.inline)
+                .toolbarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
@@ -273,7 +273,7 @@ public struct HelpArticleStubView: View {
             .padding(.vertical, 16)
         }
         .navigationTitle(article.title)
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbarTitleDisplayMode(.inline)
     }
 }
 

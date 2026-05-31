@@ -177,7 +177,7 @@ struct ReceiveInspectionSheet: View {
             }
             .background(PatinaColors.offWhite)
             .navigationTitle("Inspect delivery")
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {

@@ -102,7 +102,7 @@ struct StyleResultView: View {
         }
         .padding(.horizontal, 28)
         .background(PatinaColors.offWhite)
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     // MARK: - Attribute Column

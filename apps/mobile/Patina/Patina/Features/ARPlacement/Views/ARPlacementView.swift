@@ -76,7 +76,7 @@ struct ARPlacementView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .overlay(alignment: .top) { saveToast }
         .task {
             if let roomRemoteId {

@@ -82,7 +82,7 @@ struct DailyRoomView: View {
             }
         }
         .animation(.easeOut(duration: 0.25), value: viewModel.toastMessage)
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .task {
             viewModel.modelContext = modelContext
             if viewModel.rooms.isEmpty {

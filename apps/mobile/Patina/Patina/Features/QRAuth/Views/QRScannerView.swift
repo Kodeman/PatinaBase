@@ -80,7 +80,7 @@ public struct QRScannerView: View {
             }
             .padding(PatinaSpacing.lg)
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $viewModel.showApproval) {
             QRApprovalView(onDismiss: viewModel.onApprovalDismissed)
         }

@@ -79,7 +79,7 @@ struct ShareScanSheet: View {
             }
             .background(PatinaColors.Background.primary)
             .navigationTitle("Share \(scanName)")
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
