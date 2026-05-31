@@ -7,18 +7,19 @@
 //
 
 import Foundation
-import Combine
+import Observation
 import CoreGraphics
 import RoomPlan
 
 /// Service for computing style signals from walk data
 @MainActor
-public final class StyleSignalService: ObservableObject {
+@Observable
+public final class StyleSignalService {
 
     // MARK: - Published State
 
-    @Published public private(set) var signals = FirstWalkStyleSignals()
-    @Published public private(set) var insights: [String] = []
+    public private(set) var signals = FirstWalkStyleSignals()
+    public private(set) var insights: [String] = []
 
     // MARK: - Behavior Tracking
 

@@ -10,8 +10,8 @@ import SwiftUI
 
 /// Mock scanning view for simulator testing
 struct MockRoomScanView: View {
-    @ObservedObject var captureService: RoomCaptureService
-    @ObservedObject var narrationService: WalkNarrationService
+    var captureService: RoomCaptureService
+    var narrationService: WalkNarrationService
 
     @State private var scanProgress: CGFloat = 0
     @State private var detectedItems: [MockDetectedItem] = []

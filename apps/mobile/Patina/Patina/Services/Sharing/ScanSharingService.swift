@@ -7,7 +7,7 @@
 //
 
 import Foundation
-import Combine
+import Observation
 import Supabase
 
 /// Access level for shared room scans
@@ -148,13 +148,14 @@ public enum ScanSharingError: Error, LocalizedError {
 
 /// Service for sharing room scans with designers
 @MainActor
-public final class ScanSharingService: ObservableObject {
+@Observable
+public final class ScanSharingService {
     public static let shared = ScanSharingService()
 
     // MARK: - Published State
 
-    @Published public private(set) var isLoading = false
-    @Published public private(set) var lastError: ScanSharingError?
+    public private(set) var isLoading = false
+    public private(set) var lastError: ScanSharingError?
 
     // MARK: - Initialization
 

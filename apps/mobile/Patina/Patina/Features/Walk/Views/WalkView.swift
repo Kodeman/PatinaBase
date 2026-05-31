@@ -18,10 +18,14 @@ struct WalkView: View {
     @Environment(\.appCoordinator) private var coordinator
 
     // RoomPlan integration
-    @StateObject private var captureService = RoomCaptureService()
-    @StateObject private var narrationService = WalkNarrationService()
-    @StateObject private var styleService = StyleSignalService()
-    @StateObject private var syncService = RoomScanSyncService.shared
+    @State private var captureService = RoomCaptureService()
+    @State private var narrationService = WalkNarrationService()
+    @State private var styleService = StyleSignalService()
+    // PT-3-2: `RoomScanSyncService.shared` is a singleton; holding it in
+    // `@State` (rather than the old `@StateObject = .shared` misuse) keeps the
+    // shared instance — `@State` of an `@Observable` reference type stores and
+    // observes the same object without taking ownership of its lifecycle.
+    @State private var syncService = RoomScanSyncService.shared
 
     // Question system
     @State private var currentQuestion: WalkQuestion?

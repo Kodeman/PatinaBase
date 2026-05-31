@@ -8,7 +8,7 @@
 
 import Foundation
 import SwiftUI
-import Combine
+import Observation
 import Supabase
 import Network
 import SwiftData
@@ -305,7 +305,8 @@ private final class UploadCompletionRouter {
 
 /// Service for syncing room scans to Supabase
 @MainActor
-public final class RoomScanSyncService: ObservableObject {
+@Observable
+public final class RoomScanSyncService {
 
     public static let shared = RoomScanSyncService()
 
@@ -316,10 +317,10 @@ public final class RoomScanSyncService: ObservableObject {
 
     // MARK: - Published State
 
-    @Published public private(set) var isSyncing = false
-    @Published public private(set) var lastError: RoomScanSyncError?
-    @Published public private(set) var pendingUploads: Int = 0
-    @Published public private(set) var isNetworkAvailable = true
+    public private(set) var isSyncing = false
+    public private(set) var lastError: RoomScanSyncError?
+    public private(set) var pendingUploads: Int = 0
+    public private(set) var isNetworkAvailable = true
 
     // MARK: - Private State
 

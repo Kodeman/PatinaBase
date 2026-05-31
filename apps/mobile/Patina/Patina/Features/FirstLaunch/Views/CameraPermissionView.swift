@@ -13,7 +13,8 @@ struct CameraPermissionView: View {
 
     // MARK: - Dependencies
 
-    @StateObject private var permissionService = CameraPermissionService.shared
+    // PT-3-2: shared singleton held in `@State` (was `@StateObject = .shared`).
+    @State private var permissionService = CameraPermissionService.shared
 
     // MARK: - Actions
 

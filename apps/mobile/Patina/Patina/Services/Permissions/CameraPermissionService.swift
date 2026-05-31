@@ -7,12 +7,13 @@
 //
 
 import AVFoundation
-import Combine
+import Observation
 import UIKit
 
 /// Service for managing camera permissions
 @MainActor
-public final class CameraPermissionService: ObservableObject {
+@Observable
+public final class CameraPermissionService {
 
     // MARK: - Singleton
 
@@ -20,8 +21,8 @@ public final class CameraPermissionService: ObservableObject {
 
     // MARK: - Published State
 
-    @Published public private(set) var status: AVAuthorizationStatus
-    @Published public private(set) var isRequesting = false
+    public private(set) var status: AVAuthorizationStatus
+    public private(set) var isRequesting = false
 
     // MARK: - Computed Properties
 

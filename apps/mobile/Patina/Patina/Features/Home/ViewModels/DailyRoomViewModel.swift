@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 
+@MainActor
 @Observable
 final class DailyRoomViewModel {
 
@@ -122,10 +123,11 @@ final class DailyRoomViewModel {
         storyTask = Task { [weak self] in
             do {
                 let remote = try await EditorialStoriesAPIClient.shared.fetchTodaysStory()
-                await MainActor.run {
-                    guard let self else { return }
-                    self.todayStory = remote.map { DailyStory(from: $0) }
-                }
+                // `Task` inherits the enclosing `@MainActor` isolation, so the
+                // continuation already resumes on the main actor — no explicit
+                // `MainActor.run` bounce needed (PT-3-4).
+                guard let self else { return }
+                self.todayStory = remote.map { DailyStory(from: $0) }
             } catch {
                 #if DEBUG
                 PatinaLog.ui.error("[DailyRoomVM] story fetch failed: \(error)")
@@ -148,24 +150,21 @@ final class DailyRoomViewModel {
         feedTask = Task { [weak self] in
             do {
                 let response = try await FeedAPIClient.shared.fetchFeed(roomId: remoteId)
-                await MainActor.run {
-                    guard let self else { return }
-                    self.spatialContext = Dictionary(
-                        uniqueKeysWithValues: response.products.map {
-                            ($0.id, $0.spatial_context ?? [:])
-                        }
-                    )
-                    self.allRecommendations = response.products.map { fp in
-                        DailyRoomViewModel.recommendation(from: fp)
+                // Inherits `@MainActor` isolation (PT-3-4) — no bounce needed.
+                guard let self else { return }
+                self.spatialContext = Dictionary(
+                    uniqueKeysWithValues: response.products.map {
+                        ($0.id, $0.spatial_context ?? [:])
                     }
+                )
+                self.allRecommendations = response.products.map { fp in
+                    DailyRoomViewModel.recommendation(from: fp)
                 }
             } catch {
                 #if DEBUG
                 PatinaLog.ui.error("[DailyRoomVM] feed fetch failed: \(error)")
                 #endif
-                await MainActor.run { [weak self] in
-                    self?.allRecommendations = []
-                }
+                self?.allRecommendations = []
             }
         }
     }
@@ -256,10 +255,9 @@ final class DailyRoomViewModel {
         toastTask?.cancel()
         toastTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 2_400_000_000)
-            await MainActor.run {
-                guard !Task.isCancelled else { return }
-                self?.toastMessage = nil
-            }
+            // Inherits `@MainActor` isolation (PT-3-4) — no bounce needed.
+            guard !Task.isCancelled else { return }
+            self?.toastMessage = nil
         }
     }
 }

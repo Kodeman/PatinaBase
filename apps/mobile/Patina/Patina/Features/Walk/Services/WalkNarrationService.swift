@@ -7,25 +7,26 @@
 //
 
 import Foundation
-import Combine
+import Observation
 import SwiftUI
 
 /// Service managing walk narration and observations
 @MainActor
-public final class WalkNarrationService: ObservableObject {
+@Observable
+public final class WalkNarrationService {
 
     // MARK: - Published State
 
-    @Published public private(set) var currentNarration: String?
-    @Published public private(set) var isThinking = false
-    @Published public private(set) var observationHistory: [WalkObservation] = []
+    public private(set) var currentNarration: String?
+    public private(set) var isThinking = false
+    public private(set) var observationHistory: [WalkObservation] = []
 
     // MARK: - State
 
     private var lastNarrationTime: Date = .distantPast
     private var narrationCount: Int = 0
     private var narrationCountResetTime: Date = Date()
-    private var displayTask: Task<Void, Never>?
+    @ObservationIgnored private var displayTask: Task<Void, Never>?
     private var openingNarrationPlayed = false
 
     // MARK: - Constants

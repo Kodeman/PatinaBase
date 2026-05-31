@@ -8,18 +8,19 @@
 //  every screen.
 //
 //  Any feature that needs to react to room selection should observe
-//  `@Published var selectedLocalId` / `selectedRemoteId`.
+//  `selectedLocalId` / `selectedRemoteId`.
 //
 
 import Foundation
-import Combine
+import Observation
 
 @MainActor
-public final class RoomSelectionStore: ObservableObject {
+@Observable
+public final class RoomSelectionStore {
     public static let shared = RoomSelectionStore()
 
-    @Published public private(set) var selectedLocalId: UUID?
-    @Published public private(set) var selectedRemoteId: String?
+    public private(set) var selectedLocalId: UUID?
+    public private(set) var selectedRemoteId: String?
 
     private init() {}
 

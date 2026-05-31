@@ -7,7 +7,7 @@
 //
 
 import Foundation
-import Combine
+import Observation
 import SwiftUI
 
 /// An observation made during the walk
@@ -95,12 +95,13 @@ extension FeatureCategory {
 /// flood the queue (rejected observations are silently dropped — they're
 /// triggered by feature detection and will surface again if the feature
 /// is re-detected later).
-public class ObservationQueue: ObservableObject {
-    @Published public private(set) var currentObservation: WalkObservation?
-    @Published public private(set) var history: [WalkObservation] = []
+@Observable
+public class ObservationQueue {
+    public private(set) var currentObservation: WalkObservation?
+    public private(set) var history: [WalkObservation] = []
 
     private var pendingObservations: [WalkObservation] = []
-    private var displayTask: Task<Void, Never>?
+    @ObservationIgnored private var displayTask: Task<Void, Never>?
 
     /// Timestamps of recent observation *display starts* used to enforce
     /// the rolling-window cap. Trimmed on each enqueue.

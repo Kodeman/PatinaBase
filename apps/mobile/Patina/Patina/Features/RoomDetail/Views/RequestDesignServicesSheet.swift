@@ -27,7 +27,8 @@ struct RequestDesignServicesSheet: View {
     @State private var showSuccess = false
     @State private var errorMessage: String?
 
-    @StateObject private var service = DesignServicesService.shared
+    // PT-3-2: shared singleton held in `@State` (was `@StateObject = .shared`).
+    @State private var service = DesignServicesService.shared
 
     // MARK: - Body
 
