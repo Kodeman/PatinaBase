@@ -12,7 +12,8 @@ import ARKit
 
 struct PreScanChecklistView: View {
     @Environment(\.appCoordinator) private var coordinator
-    @StateObject private var cameraService = CameraPermissionService.shared
+    // PT-3-2: shared singleton held in `@State` (was `@StateObject = .shared`).
+    @State private var cameraService = CameraPermissionService.shared
     @State private var hasCheckedPermission = false
 
     var onReadyToScan: () -> Void

@@ -7,7 +7,7 @@
 
 import Foundation
 import ARKit
-import Combine
+import Observation
 import CoreMotion
 import UIKit
 import os.log
@@ -15,21 +15,22 @@ import os.log
 /// Service responsible for capturing, scoring, and selecting hero frames during AR Walk sessions.
 /// Frames are captured at regular intervals and scored on quality metrics to select the best one.
 @MainActor
-public final class FrameCaptureService: ObservableObject {
+@Observable
+public final class FrameCaptureService {
 
     // MARK: - Published Properties
 
     /// Candidate frames captured during the current session (in-memory only)
-    @Published public private(set) var candidateFrames: [CapturedFrame] = []
+    public private(set) var candidateFrames: [CapturedFrame] = []
 
     /// The selected hero frame after scoring
-    @Published public private(set) var selectedHeroFrame: CapturedFrame?
+    public private(set) var selectedHeroFrame: CapturedFrame?
 
     /// Current capture state
-    @Published public private(set) var isCapturing = false
+    public private(set) var isCapturing = false
 
     /// Number of frames captured in current session
-    @Published public private(set) var captureCount: Int = 0
+    public private(set) var captureCount: Int = 0
 
     // MARK: - Configuration
 

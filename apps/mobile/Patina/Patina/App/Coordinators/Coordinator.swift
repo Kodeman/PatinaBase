@@ -7,7 +7,13 @@
 
 import SwiftUI
 
-/// Base protocol for all coordinators
+/// Base protocol for all coordinators.
+///
+/// PT-3-4: `@MainActor`-isolated so the sole conformer (`AppCoordinator`) can
+/// itself be a class-level `@MainActor` `@Observable` without per-method
+/// isolation annotations. All call sites (SwiftUI views, `DeepLinkHandler`)
+/// already run on the main actor.
+@MainActor
 public protocol Coordinator: AnyObject {
     associatedtype Route: Hashable
 

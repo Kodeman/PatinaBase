@@ -11,37 +11,38 @@ import CoreGraphics
 import UIKit
 import RoomPlan
 import ARKit
-import Combine
+import Observation
 import simd
 
 /// Service for capturing room data using RoomPlan
 @MainActor
-public final class RoomCaptureService: NSObject, ObservableObject {
+@Observable
+public final class RoomCaptureService: NSObject {
 
     // MARK: - Published State
 
-    @Published public private(set) var isScanning = false
-    @Published public private(set) var scanProgress: Float = 0
-    @Published public private(set) var capturedRoom: CapturedRoom?
-    @Published public private(set) var detectedFeatures: [DetectedFeature] = []
-    @Published public private(set) var errorMessage: String?
+    public private(set) var isScanning = false
+    public private(set) var scanProgress: Float = 0
+    public private(set) var capturedRoom: CapturedRoom?
+    public private(set) var detectedFeatures: [DetectedFeature] = []
+    public private(set) var errorMessage: String?
 
     /// Non-nil when the current RoomPlan or ARKit session has failed in a
     /// non-recoverable way (e.g. `RSError` drift detection, ARKit world-
     /// tracking failure). Consumers (ScanViewModel) surface this to the user
     /// with a retry/cancel affordance; cleared by `retryAfterFailure()`.
-    @Published public private(set) var sessionFailure: (any Error)?
+    public private(set) var sessionFailure: (any Error)?
 
     // MARK: - Analysis Results (NEW)
 
     /// Current coverage analysis result
-    @Published public private(set) var coverageResult: CoverageAnalyzer.CoverageResult?
+    public private(set) var coverageResult: CoverageAnalyzer.CoverageResult?
 
     /// Current quality metrics
-    @Published public private(set) var qualityMetrics: QualityMonitor.QualityMetrics?
+    public private(set) var qualityMetrics: QualityMonitor.QualityMetrics?
 
     /// Current completion status
-    @Published public private(set) var completionStatus: CompletionAnalyzer.CompletionStatus?
+    public private(set) var completionStatus: CompletionAnalyzer.CompletionStatus?
 
     // MARK: - Hero Frame Capture
 
@@ -49,17 +50,17 @@ public final class RoomCaptureService: NSObject, ObservableObject {
     public let frameCaptureService = FrameCaptureService()
 
     /// The selected hero frame after scan completes
-    @Published public private(set) var heroFrame: CapturedFrame?
+    public private(set) var heroFrame: CapturedFrame?
 
     // MARK: - Advanced Scan Bundle (v2)
 
     /// On-disk bundle writer for the current scan (v2 advanced pipeline).
     /// Created lazily on startCapture; nil before the first scan.
-    @Published public private(set) var bundleWriter: ScanBundleWriter?
+    public private(set) var bundleWriter: ScanBundleWriter?
 
     /// Posed-photo service — auto sampler + user shutter. Runs alongside the
     /// existing FrameCaptureService; both read ARFrames from the same session.
-    @Published public private(set) var posedPhotoService: PosedPhotoService?
+    public private(set) var posedPhotoService: PosedPhotoService?
 
     /// Records sampled sceneDepth frames into the bundle's `depth/` directory
     /// at ~1 Hz while a scan is live. Nil unless the device supports scene
@@ -78,7 +79,7 @@ public final class RoomCaptureService: NSObject, ObservableObject {
     /// Latest coaching hint from CoverageAnalyzer, refreshed as mesh
     /// anchors flow in. The view layer observes this to render a directional
     /// cue toward under-covered areas.
-    @Published public private(set) var coachingHint: CoverageAnalyzer.CoachingHint?
+    public private(set) var coachingHint: CoverageAnalyzer.CoachingHint?
 
     // MARK: - Callbacks
 
@@ -138,7 +139,7 @@ public final class RoomCaptureService: NSObject, ObservableObject {
     private let multiImageSelectionEngine = MultiImageSelectionEngine()
 
     /// The selected image collection after scan completes
-    @Published public private(set) var imageCollection: RoomImageCollection?
+    public private(set) var imageCollection: RoomImageCollection?
 
     // MARK: - Constants
 

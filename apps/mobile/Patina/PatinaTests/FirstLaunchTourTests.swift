@@ -446,11 +446,11 @@ struct FirstLaunchTourTests {
     // Compile-time proof that the public API surface assembles is provided by
     // the parent target's build (the orchestrator is wired into
     // `DailyRoomView` and `DailyGreetingHeader`). We do NOT evaluate `.body`
-    // on a `FirstLaunchTour` here because the type uses `@StateObject`, whose
-    // storage is only valid inside SwiftUI's render lifecycle — touching it
-    // from an XCTest harness crashes the process with a `SIGTRAP`. Render-
-    // level coverage is covered by manual on-device smoke testing per the
-    // task brief precedent.
+    // on a `FirstLaunchTour` here because the type uses `@State` storage (for
+    // its `@Observable` model), which is only valid inside SwiftUI's render
+    // lifecycle — touching it from an XCTest harness crashes the process with a
+    // `SIGTRAP`. Render-level coverage is covered by manual on-device smoke
+    // testing per the task brief precedent.
 
     @Test
     func tourStepHelper_constructsWithFallback() {

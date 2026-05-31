@@ -7,7 +7,7 @@
 //
 
 import Foundation
-import Combine
+import Observation
 import Supabase
 
 // MARK: - Design Service Types
@@ -149,14 +149,15 @@ public enum DesignServicesError: Error, LocalizedError {
 
 /// Service for submitting design service requests
 @MainActor
-public final class DesignServicesService: ObservableObject {
+@Observable
+public final class DesignServicesService {
     public static let shared = DesignServicesService()
 
     // MARK: - Published State
 
-    @Published public private(set) var isLoading = false
-    @Published public private(set) var lastError: DesignServicesError?
-    @Published public private(set) var lastSubmittedRequest: DesignServiceRequest?
+    public private(set) var isLoading = false
+    public private(set) var lastError: DesignServicesError?
+    public private(set) var lastSubmittedRequest: DesignServiceRequest?
 
     // MARK: - Initialization
 

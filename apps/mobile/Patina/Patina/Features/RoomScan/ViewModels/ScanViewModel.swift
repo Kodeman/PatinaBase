@@ -16,7 +16,7 @@
 
 import Foundation
 import SwiftUI
-import Combine
+import Observation
 import RoomPlan
 import ARKit
 import CoreMotion
@@ -87,9 +87,16 @@ public final class ScanViewModel {
     /// Tracks which progress milestones (25/50/75) have already been reported.
     private var reportedMilestones: Set<Int> = []
 
-    private var progressObservation: AnyCancellable?
-    private var coachingHintObservation: AnyCancellable?
-    private var sessionFailureObservation: AnyCancellable?
+    /// True while the `withObservationTracking` re-arm loop bridging
+    /// `captureService`'s @Observable state into this view model is live.
+    /// Set false in `teardown()` to stop re-arming after the final fire.
+    @ObservationIgnored private var isObservingCaptureService = false
+
+    /// Last-seen snapshots used by the observation bridge to dispatch only
+    /// the handler(s) whose underlying property actually changed.
+    @ObservationIgnored private var lastObservedProgress: Float = 0
+    @ObservationIgnored private var lastObservedCoachingHint: CoverageAnalyzer.CoachingHint?
+    @ObservationIgnored private var lastObservedSessionFailureIsSet = false
 
     /// Non-nil while the user is staring at a session-lost overlay; bound to
     /// `captureService.sessionFailure`. The underlying error's
@@ -138,10 +145,8 @@ public final class ScanViewModel {
     /// Called when the view disappears (or coordinator resets).
     public func teardown() {
         stopMotionDetection()
-        progressObservation?.cancel()
-        progressObservation = nil
-        coachingHintObservation?.cancel()
-        coachingHintObservation = nil
+        // Stop the @Observable bridge from re-arming after its next fire.
+        isObservingCaptureService = false
 
         if !isComplete {
             analytics.track(.scanAbandoned(progress: scanProgress))
@@ -250,41 +255,85 @@ public final class ScanViewModel {
 
     // MARK: - Observation
 
+    /// Bridge `captureService`'s `@Observable` state into this view model.
+    ///
+    /// `RoomCaptureService` migrated from `ObservableObject`/`@Published` to
+    /// `@Observable`, so there is no longer a Combine `$property` publisher to
+    /// `.sink` on. Instead we re-arm a `withObservationTracking` observation:
+    /// the `apply` closure reads the three properties we care about (which
+    /// registers them with the Observation runtime), and `onChange` fires once
+    /// when ANY of them mutates. We then snapshot the current values, dispatch
+    /// the handler(s) whose value actually changed, and re-arm — exactly
+    /// reproducing the per-property Combine behaviour.
+    ///
+    /// Both classes are `@MainActor`, so `onChange` (delivered on the actor
+    /// that mutated the property) runs on the main actor; we hop through a
+    /// `Task { @MainActor in }` for strict-concurrency cleanliness because
+    /// `onChange` itself is a non-isolated closure.
     private func observeCaptureService() {
-        // The service is an ObservableObject that publishes scanProgress.
-        // We bridge to the Observable view model via an explicit sink.
-        progressObservation = captureService.$scanProgress
-            .receive(on: RunLoop.main)
-            .sink { [weak self] progress in
-                self?.handleProgress(progress)
-            }
+        isObservingCaptureService = true
+        // Seed the snapshots so the first re-arm doesn't spuriously dispatch.
+        lastObservedProgress = captureService.scanProgress
+        lastObservedCoachingHint = captureService.coachingHint
+        lastObservedSessionFailureIsSet = captureService.sessionFailure != nil
+        armCaptureServiceObservation()
+    }
 
-        // Bridge the coverage coaching hint for the UI layer.
-        coachingHintObservation = captureService.$coachingHint
-            .receive(on: RunLoop.main)
-            .sink { [weak self] hint in
-                self?.coachingHint = hint
+    private func armCaptureServiceObservation() {
+        guard isObservingCaptureService else { return }
+        withObservationTracking {
+            // Touch each tracked property so Observation registers them.
+            _ = captureService.scanProgress
+            _ = captureService.coachingHint
+            _ = captureService.sessionFailure
+        } onChange: { [weak self] in
+            // onChange is a nonisolated closure; hop back onto the main actor
+            // (where both @Observable classes live) to read + dispatch.
+            Task { @MainActor [weak self] in
+                guard let self, self.isObservingCaptureService else { return }
+                self.dispatchCaptureServiceChanges()
+                // Re-arm for the next mutation.
+                self.armCaptureServiceObservation()
             }
+        }
+    }
 
-        // Surface terminal session failures (RSError drift detection, ARKit
-        // world-tracking failure, etc.) as a `sessionLost` tracking state so
-        // the Walk UI can offer a Try Again / Cancel affordance instead of
-        // letting the user stare at a frozen camera.
-        sessionFailureObservation = captureService.$sessionFailure
-            .receive(on: RunLoop.main)
-            .sink { [weak self] error in
-                guard let self else { return }
-                if let error {
-                    self.sessionFailureMessage = error.localizedDescription
-                    self.trackingState = .sessionLost
-                    self.analytics.track(
-                        .scanAbandoned(progress: self.scanProgress)
-                    )
-                } else if self.trackingState == .sessionLost {
-                    self.sessionFailureMessage = nil
-                    self.trackingState = .normal
-                }
-            }
+    /// Compare the latest `captureService` values against the last snapshot and
+    /// invoke the matching handler for each property that changed.
+    private func dispatchCaptureServiceChanges() {
+        let progress = captureService.scanProgress
+        if progress != lastObservedProgress {
+            lastObservedProgress = progress
+            handleProgress(progress)
+        }
+
+        let hint = captureService.coachingHint
+        if hint != lastObservedCoachingHint {
+            lastObservedCoachingHint = hint
+            coachingHint = hint
+        }
+
+        let failure = captureService.sessionFailure
+        let failureIsSet = failure != nil
+        if failureIsSet != lastObservedSessionFailureIsSet {
+            lastObservedSessionFailureIsSet = failureIsSet
+            handleSessionFailure(failure)
+        }
+    }
+
+    /// Surface terminal session failures (RSError drift detection, ARKit
+    /// world-tracking failure, etc.) as a `sessionLost` tracking state so the
+    /// Walk UI can offer a Try Again / Cancel affordance instead of letting the
+    /// user stare at a frozen camera.
+    private func handleSessionFailure(_ error: (any Error)?) {
+        if let error {
+            sessionFailureMessage = error.localizedDescription
+            trackingState = .sessionLost
+            analytics.track(.scanAbandoned(progress: scanProgress))
+        } else if trackingState == .sessionLost {
+            sessionFailureMessage = nil
+            trackingState = .normal
+        }
     }
 
     private func handleProgress(_ progress: Float) {

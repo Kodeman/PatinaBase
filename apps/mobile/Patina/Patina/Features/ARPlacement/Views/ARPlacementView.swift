@@ -14,7 +14,7 @@ struct ARPlacementView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel = ARPlacementViewModel()
-    @StateObject private var placementManager = ARPlacementManager()
+    @State private var placementManager = ARPlacementManager()
 
     let productId: String
     /// Remote room id (Supabase `rooms.id`) — when present, the session

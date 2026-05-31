@@ -9,22 +9,24 @@ import Foundation
 import RealityKit
 import ARKit
 import Combine
+import Observation
 
 @MainActor
-final class ARPlacementManager: ObservableObject {
+@Observable
+final class ARPlacementManager {
 
     // MARK: - State
 
-    @Published var isPlaced = false
-    @Published var isLoading = false
-    @Published var errorMessage: String?
+    var isPlaced = false
+    var isLoading = false
+    var errorMessage: String?
 
     // MARK: - Entities
 
-    private var cancellables = Set<AnyCancellable>()
-    private var placedEntity: ModelEntity?
-    private var anchor: AnchorEntity?
-    private weak var arView: ARView?
+    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored private var placedEntity: ModelEntity?
+    @ObservationIgnored private var anchor: AnchorEntity?
+    @ObservationIgnored private weak var arView: ARView?
 
     // MARK: - Setup
 

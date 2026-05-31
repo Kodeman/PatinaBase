@@ -9,7 +9,7 @@
 //
 
 import Foundation
-import Combine
+import Observation
 import SwiftUI
 import SwiftData
 
@@ -158,18 +158,19 @@ public struct ScanUploadProgressView: View {
 // MARK: - Global "N scans uploading" badge
 
 /// Observable that counts `RoomScanPackage` rows currently in `.syncing`
-/// state. Views bind to this via `@StateObject` (or `@ObservedObject`) and
+/// state. Views bind to this via `@State` (or read it directly) and
 /// trigger refresh on SwiftData `.didSave` notifications.
 ///
 /// Constructed with a `ModelContainer` rather than a `ModelContext` so
 /// background refreshes always fetch against the main-context thread.
 @MainActor
-public final class ScanUploadBadge: ObservableObject {
+@Observable
+public final class ScanUploadBadge {
 
-    @Published public private(set) var syncingCount: Int = 0
+    public private(set) var syncingCount: Int = 0
 
-    private let container: ModelContainer
-    private var observer: NSObjectProtocol?
+    @ObservationIgnored private let container: ModelContainer
+    @ObservationIgnored private var observer: NSObjectProtocol?
 
     public init(container: ModelContainer) {
         self.container = container
@@ -208,7 +209,7 @@ public final class ScanUploadBadge: ObservableObject {
 /// Small pill to render `ScanUploadBadge.syncingCount` in a tab bar / home
 /// header. Returns `EmptyView` when the count is zero.
 public struct ScanUploadBadgeView: View {
-    @ObservedObject public var badge: ScanUploadBadge
+    public var badge: ScanUploadBadge
 
     public init(badge: ScanUploadBadge) {
         self.badge = badge

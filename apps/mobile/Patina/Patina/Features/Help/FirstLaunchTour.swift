@@ -59,7 +59,7 @@
 //
 
 import Auth
-import Combine
+import Observation
 import Supabase
 import SwiftUI
 
@@ -106,7 +106,8 @@ public struct FirstLaunchTourStep: Sendable {
 /// the modifier and the host share a single source of truth even though the
 /// modifier mounts deep inside the subtree.
 @MainActor
-public final class FirstLaunchTourModel: ObservableObject {
+@Observable
+public final class FirstLaunchTourModel {
     /// Unique key used for persistence + analytics. Defaults to
     /// `"ios-first-launch-tour"` (the value the spec calls out).
     public let tourKey: String
@@ -116,23 +117,23 @@ public final class FirstLaunchTourModel: ObservableObject {
 
     /// Zero-based active step index. When `isActive == true` the anchor
     /// matching `steps[currentStep].anchor` displays its popover.
-    @Published public private(set) var currentStep: Int = 0
+    public private(set) var currentStep: Int = 0
 
     /// Whether the tour is currently driving any popover. Driven by the
     /// first-launch detector — flips to `true` once on the first launch and
     /// back to `false` after `complete()` or `skip()`.
-    @Published public private(set) var isActive: Bool = false
+    public private(set) var isActive: Bool = false
 
     /// Set of step indexes the user actually viewed. Surfaced as the
     /// `steps_viewed` property on `help.tour.completed`.
-    private var viewedSteps: Set<Int> = []
+    @ObservationIgnored private var viewedSteps: Set<Int> = []
 
     /// Monotonic clock reading taken on auto-start. Used to compute
     /// `duration_ms` for `help.tour.completed`.
-    private var startedAt: Date?
+    @ObservationIgnored private var startedAt: Date?
 
     /// Cached analytics facade so tests can swap in a stub.
-    private let analytics: HelpAnalytics
+    @ObservationIgnored private let analytics: HelpAnalytics
 
     /// Optional Supabase-backed help-state adapter (S4-1). When non-nil the
     /// model consults the adapter's cached entry before UserDefaults during
@@ -140,7 +141,7 @@ public final class FirstLaunchTourModel: ObservableObject {
     /// Supabase via `Task { … }`. Set via `enableSupabaseSync(_:)` once the
     /// user is authenticated; anonymous + pre-hydration callers fall back to
     /// UserDefaults only (same behaviour as v1 / Sprint 3).
-    private var supabaseAdapter: SupabaseHelpStateAdapter?
+    @ObservationIgnored private var supabaseAdapter: SupabaseHelpStateAdapter?
 
     public init(
         tourKey: String = FirstLaunchTourModel.defaultTourKey,
@@ -392,9 +393,9 @@ public final class FirstLaunchTourModel: ObservableObject {
 
 /// SwiftUI host view that wraps a screen's content, owns a
 /// `FirstLaunchTourModel`, and exposes it to descendant anchor modifiers via
-/// `.environmentObject(...)`. On first launch the model auto-starts; on every
-/// subsequent launch the persisted state is consulted and the tour stays
-/// dormant.
+/// the `\.firstLaunchTourModel` environment value. On first launch the model
+/// auto-starts; on every subsequent launch the persisted state is consulted
+/// and the tour stays dormant.
 ///
 /// ```swift
 /// FirstLaunchTour {
@@ -403,7 +404,7 @@ public final class FirstLaunchTourModel: ObservableObject {
 /// }
 /// ```
 public struct FirstLaunchTour<Content: View>: View {
-    @StateObject private var model: FirstLaunchTourModel
+    @State private var model: FirstLaunchTourModel
     private let content: () -> Content
 
     public init(
@@ -411,19 +412,19 @@ public struct FirstLaunchTour<Content: View>: View {
         steps: [FirstLaunchTourStep] = FirstLaunchTourModel.defaultSteps,
         @ViewBuilder content: @escaping () -> Content
     ) {
-        self._model = StateObject(
+        self._model = State(
             wrappedValue: FirstLaunchTourModel(tourKey: tourKey, steps: steps)
         )
         self.content = content
     }
 
     /// Test seam — accepts an externally-constructed model so unit tests can
-    /// drive the orchestrator without standing up a `@StateObject` storage.
+    /// drive the orchestrator without standing up a `@State` storage.
     public init(
         model: FirstLaunchTourModel,
         @ViewBuilder content: @escaping () -> Content
     ) {
-        self._model = StateObject(wrappedValue: model)
+        self._model = State(wrappedValue: model)
         self.content = content
     }
 
@@ -432,11 +433,10 @@ public struct FirstLaunchTour<Content: View>: View {
             // `.environment(\.firstLaunchTourModel, …)` is the load-bearing
             // injection — the anchor modifier reads via `@Environment` so
             // previews of anchored views render outside a tour host without
-            // crashing. `.environmentObject` is also installed so any future
-            // descendant that wants a strongly-typed `@EnvironmentObject`
-            // binding can opt in without us threading a second key.
+            // crashing. (Pre-migration this also installed `.environmentObject`,
+            // but with `@Observable` the optional-keyed `@Environment` value is
+            // the single injection path.)
             .environment(\.firstLaunchTourModel, model)
-            .environmentObject(model)
             .task {
                 // S4-1 — install the Supabase adapter when the user is
                 // authenticated. Read once at task spin-up; on sign-in the
@@ -492,48 +492,31 @@ private extension EnvironmentValues {
 private struct FirstLaunchTourAnchorModifier: ViewModifier {
     let anchor: FirstLaunchTourAnchor
     @Environment(\.firstLaunchTourModel) private var model: FirstLaunchTourModel?
-    /// Local mirror of the active flag — needed because `@Environment` doesn't
-    /// subscribe to `@Published` changes on its own. We bridge via `onReceive`
-    /// to the model's `objectWillChange` publisher.
-    @State private var isShown: Bool = false
 
     func body(content: Content) -> some View {
         content
-            .popover(isPresented: $isShown, arrowEdge: .top) {
+            .popover(isPresented: isShownBinding, arrowEdge: .top) {
                 popoverContent
                     .presentationCompactAdaptation(.popover)
             }
-            .onChange(of: isShown) { _, newValue in
-                // SwiftUI flipped the popover off — user tapped outside.
-                // Treat as abandoned at the current step.
+    }
+
+    /// Drives the popover directly off the `@Observable` model. The getter
+    /// reads `model.isShowingPopover(forAnchor:)` (a tracked computed value);
+    /// because that read happens while SwiftUI evaluates `body`, the modifier
+    /// re-renders whenever `isActive`/`currentStep` mutate — no Combine
+    /// `objectWillChange` bridge or local `@State` mirror required. The setter
+    /// treats a SwiftUI-initiated dismiss (outside tap) as a "skip".
+    private var isShownBinding: Binding<Bool> {
+        Binding(
+            get: { model?.isShowingPopover(forAnchor: anchor) ?? false },
+            set: { newValue in
                 guard let model else { return }
                 if !newValue && model.isShowingPopover(forAnchor: anchor) {
                     model.skip()
                 }
             }
-            .onReceive(modelPublisher) { _ in
-                refreshIsShown()
-            }
-            .onAppear { refreshIsShown() }
-    }
-
-    /// Publisher that fires whenever the orchestrator's `@Published` state
-    /// changes. Falls back to an empty publisher when the model is absent so
-    /// `.onReceive` is well-typed in either case.
-    private var modelPublisher: AnyPublisher<Void, Never> {
-        if let model {
-            return model.objectWillChange
-                .map { _ in () }
-                .eraseToAnyPublisher()
-        }
-        return Empty(completeImmediately: false).eraseToAnyPublisher()
-    }
-
-    private func refreshIsShown() {
-        let desired = model?.isShowingPopover(forAnchor: anchor) ?? false
-        if desired != isShown {
-            isShown = desired
-        }
+        )
     }
 
     @ViewBuilder

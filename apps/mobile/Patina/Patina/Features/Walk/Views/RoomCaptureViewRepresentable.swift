@@ -12,7 +12,7 @@ import RoomPlan
 /// SwiftUI wrapper for RoomCaptureView
 struct RoomCaptureViewRepresentable: UIViewRepresentable {
 
-    @ObservedObject var captureService: RoomCaptureService
+    var captureService: RoomCaptureService
 
     func makeUIView(context: Context) -> RoomCaptureView {
         let view = captureService.getRoomCaptureView()

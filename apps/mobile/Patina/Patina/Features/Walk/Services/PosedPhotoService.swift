@@ -19,7 +19,7 @@
 
 import Foundation
 import ARKit
-import Combine
+import Observation
 import UIKit
 import CoreImage
 import ImageIO
@@ -30,13 +30,14 @@ import simd
 import os.log
 
 @MainActor
-public final class PosedPhotoService: NSObject, ObservableObject {
+@Observable
+public final class PosedPhotoService: NSObject {
 
     // MARK: - Published state
 
-    @Published public private(set) var isActive = false
-    @Published public private(set) var autoCount: Int = 0
-    @Published public private(set) var userShutterCount: Int = 0
+    public private(set) var isActive = false
+    public private(set) var autoCount: Int = 0
+    public private(set) var userShutterCount: Int = 0
 
     // MARK: - Config
 

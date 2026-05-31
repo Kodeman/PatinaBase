@@ -9,6 +9,7 @@ import SwiftUI
 import SwiftData
 
 /// Root coordinator managing the app's navigation state
+@MainActor
 @Observable
 public final class AppCoordinator: Coordinator {
     public typealias Route = AppRoute
@@ -100,17 +101,15 @@ public final class AppCoordinator: Coordinator {
         companionContext.currentScreen = .heroFrame
 
         // Start observing AuthService + AppSettings so `phase` derives
-        // from auth state, and schedule the splash-deadline tick. Both
-        // run on MainActor; init itself isn't MainActor-isolated, so we
-        // hop in via Task.
-        Task { @MainActor in
-            self.observePhaseInputs()
-            // Fire a recompute when the initial splash window closes —
-            // the observer only wakes for tracked-property changes, and
-            // `Date()` isn't one, so without this tick we'd stay on
-            // `.launching` forever when auth state lands during splash.
-            self.scheduleSplashDeadlineRecompute()
-        }
+        // from auth state, and schedule the splash-deadline tick. PT-3-4:
+        // the class is now `@MainActor`, so `init` is main-actor-isolated and
+        // these run directly — no `Task { @MainActor in }` hop needed.
+        observePhaseInputs()
+        // Fire a recompute when the initial splash window closes —
+        // the observer only wakes for tracked-property changes, and
+        // `Date()` isn't one, so without this tick we'd stay on
+        // `.launching` forever when auth state lands during splash.
+        scheduleSplashDeadlineRecompute()
     }
 
     /// Wakes the phase observer when `splashMinimumDeadline` elapses.
@@ -118,7 +117,6 @@ public final class AppCoordinator: Coordinator {
     /// transitions (sign-out) get the same handling.
     private var splashDeadlineTask: Task<Void, Never>?
 
-    @MainActor
     private func scheduleSplashDeadlineRecompute() {
         splashDeadlineTask?.cancel()
         let deadline = splashMinimumDeadline
@@ -143,7 +141,6 @@ public final class AppCoordinator: Coordinator {
     /// (Swift Observation semantics), which is why the recompute is
     /// scheduled on a Task — by the time it runs, the new value has
     /// landed on MainActor.
-    @MainActor
     private func observePhaseInputs() {
         withObservationTracking {
             _ = AuthService.shared.isAuthStateReady
@@ -162,7 +159,6 @@ public final class AppCoordinator: Coordinator {
     /// (auth ready, authenticated, guest opt-in, onboarding complete,
     /// splash deadline). Called by the observation loop above and
     /// directly from `beginSplashTransition()` to force `.launching`.
-    @MainActor
     public func recomputePhase() {
         let newPhase = derivePhase()
 
@@ -214,7 +210,6 @@ public final class AppCoordinator: Coordinator {
         }
     }
 
-    @MainActor
     private func derivePhase() -> AppPhase {
         let splashStillPlaying = Date() < splashMinimumDeadline
         if !AuthService.shared.isAuthStateReady || splashStillPlaying {
@@ -233,7 +228,6 @@ public final class AppCoordinator: Coordinator {
     /// Force a splash transition — used by sign-out to land back at
     /// `.auth` via a brief splash instead of leaving the home view
     /// visible while the session tears down.
-    @MainActor
     public func beginSplashTransition(duration: TimeInterval = splashMinimumDuration) {
         splashMinimumDeadline = Date().addingTimeInterval(duration)
         scheduleSplashDeadlineRecompute()
@@ -245,7 +239,6 @@ public final class AppCoordinator: Coordinator {
     /// return `.auth` on its next tick because the user has no session.
     /// No-op for already-authenticated users — they'd need to sign out
     /// first.
-    @MainActor
     public func presentAuthentication() {
         guard !AuthService.shared.isAuthenticated else { return }
         guestModeOptIn = false

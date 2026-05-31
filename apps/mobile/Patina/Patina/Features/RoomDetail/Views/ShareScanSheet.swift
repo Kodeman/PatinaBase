@@ -31,7 +31,8 @@ struct ShareScanSheet: View {
     @State private var errorMessage: String?
     @State private var showSuccess = false
 
-    @StateObject private var sharingService = ScanSharingService.shared
+    // PT-3-2: shared singleton held in `@State` (was `@StateObject = .shared`).
+    @State private var sharingService = ScanSharingService.shared
 
     // MARK: - Types
 
