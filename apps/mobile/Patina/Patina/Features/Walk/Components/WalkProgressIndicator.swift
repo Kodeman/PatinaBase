@@ -45,6 +45,14 @@ struct WalkProgressIndicator: View {
             RoundedRectangle(cornerRadius: 16)
                 .fill(.ultraThinMaterial.opacity(0.5))
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(Text("\(progressPercent) percent"))
+    }
+
+    /// Scan progress as a 0–100 percentage of areas covered.
+    private var progressPercent: Int {
+        guard total > 0 else { return 0 }
+        return Int((Double(current) / Double(total) * 100).rounded())
     }
 }
 

@@ -9,6 +9,12 @@
 //  `RoomCaptureService.finalizeBundleAfterReview(...)` which seals the
 //  manifest; the coordinator saves locally and hands off the background upload.
 //
+//  PT-6-3: this view is the thin façade that owns all editing state. The
+//  header, scan-details table, and the three sheets (hero picker, reorder,
+//  caption editor) are extracted into their own View types — see
+//  ScanReviewHeader, ScanDetailsSection, HeroPickerSheet, PhotoReorderSheet,
+//  CaptionEditorSheet, and the shared ScanReviewSupport helpers.
+//
 
 import SwiftUI
 import UIKit
@@ -52,6 +58,11 @@ public struct ScanReviewView: View {
     @State private var editingPhotoId: UUID?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Resolves bundle photos for this scan (shared with the extracted sheets).
+    private var photoLoader: ScanReviewPhotoLoader {
+        ScanReviewPhotoLoader(scanId: scanId)
+    }
 
     // MARK: - Init
 
@@ -110,13 +121,13 @@ public struct ScanReviewView: View {
                 .foregroundStyle(PatinaColors.charcoal.opacity(0.8))
             if let loadError {
                 Text(loadError)
-                    .font(.custom("Inter-Regular", size: 13))
+                    .font(.custom("Inter-Regular", size: 13, relativeTo: .footnote))
                     .foregroundStyle(PatinaColors.agedOak)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
             }
             Text("Your other rooms are safe — this only affects this scan.")
-                .font(.custom("Inter-Regular", size: 12))
+                .font(.custom("Inter-Regular", size: 12, relativeTo: .caption))
                 .foregroundStyle(PatinaColors.agedOak.opacity(0.8))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
@@ -145,7 +156,7 @@ public struct ScanReviewView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
-                    headerSection
+                    ScanReviewHeader(roomName: $roomName)
                     if manifest.photos.isEmpty {
                         emptyPhotosNote
                     } else {
@@ -153,7 +164,7 @@ public struct ScanReviewView: View {
                         gallerySection(manifest: manifest)
                     }
                     notesSection
-                    scanDetailsSection(manifest: manifest)
+                    ScanDetailsSection(manifest: manifest, session: session)
                     Spacer(minLength: 8)
                     ctaSection
                 }
@@ -181,16 +192,39 @@ public struct ScanReviewView: View {
                 }
             }
             .sheet(isPresented: $showingHeroPicker) {
-                heroPickerSheet(manifest: manifest)
+                HeroPickerSheet(
+                    manifest: manifest,
+                    photoLoader: photoLoader,
+                    selectedHeroPhotoId: selectedHeroPhotoId,
+                    onSelect: { id in
+                        selectedHeroPhotoId = id
+                        showingHeroPicker = false
+                    },
+                    onDismiss: { showingHeroPicker = false }
+                )
             }
             .sheet(isPresented: $showingReorderSheet) {
-                reorderSheet(manifest: manifest)
+                PhotoReorderSheet(
+                    manifest: manifest,
+                    photoLoader: photoLoader,
+                    heroId: effectiveHeroEntry(manifest: manifest)?.id,
+                    hiddenPhotoIds: hiddenPhotoIds,
+                    captions: captions,
+                    workingOrder: $workingOrder,
+                    onDismiss: { showingReorderSheet = false }
+                )
             }
             .sheet(item: Binding(
-                get: { editingPhotoId.map { PhotoIdWrapper(id: $0) } },
+                get: { editingPhotoId.map { ScanReviewPhotoIdWrapper(id: $0) } },
                 set: { editingPhotoId = $0?.id }
             )) { wrapped in
-                captionSheet(photoId: wrapped.id, manifest: manifest)
+                CaptionEditorSheet(
+                    photoId: wrapped.id,
+                    manifest: manifest,
+                    photoLoader: photoLoader,
+                    caption: captionBinding(for: wrapped.id, manifest: manifest),
+                    onDismiss: { editingPhotoId = nil }
+                )
             }
         }
     }
@@ -201,7 +235,7 @@ public struct ScanReviewView: View {
                 .font(.system(size: 18, weight: .regular))
                 .foregroundStyle(PatinaColors.agedOak)
             Text("No photos captured — the scan shape is still saved.")
-                .font(.custom("Inter-Regular", size: 13))
+                .font(.custom("Inter-Regular", size: 13, relativeTo: .footnote))
                 .foregroundStyle(PatinaColors.agedOak)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -215,41 +249,14 @@ public struct ScanReviewView: View {
 
     // MARK: - Sections
 
-    private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Your room, your way")
-                .font(PatinaTypography.patinaVoiceLarge)
-                .foregroundStyle(PatinaColors.charcoal.opacity(0.85))
-            Text("Give the room a name, pick the photo you love most, and jot down anything worth remembering. You can share it later.")
-                .font(.custom("Inter-Regular", size: 13))
-                .foregroundStyle(PatinaColors.agedOak)
-                .fixedSize(horizontal: false, vertical: true)
-
-            TextField("Room name", text: $roomName)
-                .font(.custom("Inter-Regular", size: 15))
-                .foregroundStyle(PatinaColors.charcoal)
-                .padding(.horizontal, 16)
-                .frame(height: 48)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(PatinaColors.softCream)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(PatinaColors.pearl, lineWidth: 1.5)
-                )
-                .padding(.top, 8)
-        }
-    }
-
     private func heroSection(manifest: ScanManifest) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionLabel("Hero Photo")
+            scanReviewSectionLabel("Hero Photo")
 
             let heroEntry = effectiveHeroEntry(manifest: manifest)
             Button(action: { showingHeroPicker = true }) {
                 ZStack(alignment: .bottomLeading) {
-                    photoImage(for: heroEntry)
+                    photoLoader.image(for: heroEntry)
                         .frame(height: 240)
                         .frame(maxWidth: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -281,7 +288,7 @@ public struct ScanReviewView: View {
     private func gallerySection(manifest: ScanManifest) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                sectionLabel("Supporting Photos")
+                scanReviewSectionLabel("Supporting Photos")
                 Spacer()
                 if visibleSupportingPhotos(manifest: manifest).count > 1 {
                     Button(action: { showingReorderSheet = true }) {
@@ -289,7 +296,7 @@ public struct ScanReviewView: View {
                             Image(systemName: "arrow.up.arrow.down")
                                 .font(.system(size: 10, weight: .medium))
                             Text("Reorder")
-                                .font(.custom("Inter-Medium", size: 11))
+                                .font(.custom("Inter-Medium", size: 11, relativeTo: .caption2))
                         }
                         .foregroundStyle(PatinaColors.charcoal)
                         .padding(.horizontal, 10)
@@ -307,7 +314,7 @@ public struct ScanReviewView: View {
             let supporting = visibleSupportingPhotos(manifest: manifest)
             if supporting.isEmpty {
                 Text("No additional photos captured.")
-                    .font(.custom("Inter-Regular", size: 13))
+                    .font(.custom("Inter-Regular", size: 13, relativeTo: .footnote))
                     .foregroundStyle(PatinaColors.agedOak)
                     .padding(.vertical, 16)
             } else {
@@ -336,7 +343,7 @@ public struct ScanReviewView: View {
                         ForEach(hidden, id: \.id) { photo in
                             Button(action: { restorePhoto(photo.id) }) {
                                 ZStack {
-                                    photoImage(for: photo)
+                                    photoLoader.image(for: photo)
                                         .frame(width: 80, height: 80)
                                         .clipShape(RoundedRectangle(cornerRadius: 10))
                                         .opacity(0.45)
@@ -359,7 +366,7 @@ public struct ScanReviewView: View {
         return ZStack(alignment: .topTrailing) {
             Button(action: { editingPhotoId = photo.id }) {
                 ZStack(alignment: .bottomLeading) {
-                    photoImage(for: photo)
+                    photoLoader.image(for: photo)
                         .frame(width: 132, height: 180)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                     if hasCaption {
@@ -367,7 +374,7 @@ public struct ScanReviewView: View {
                             Image(systemName: "text.bubble")
                                 .font(.system(size: 9, weight: .medium))
                             Text("Note")
-                                .font(.custom("Inter-Medium", size: 10))
+                                .font(.custom("Inter-Medium", size: 10, relativeTo: .caption2))
                         }
                         .foregroundStyle(PatinaColors.charcoal)
                         .padding(.horizontal, 8)
@@ -399,7 +406,7 @@ public struct ScanReviewView: View {
 
     private var notesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionLabel("Room Notes")
+            scanReviewSectionLabel("Room Notes")
 
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 12)
@@ -448,349 +455,17 @@ public struct ScanReviewView: View {
         .padding(.top, 8)
     }
 
-    // MARK: - Scan details
+    // MARK: - Caption binding
 
-    private func scanDetailsSection(manifest: ScanManifest) -> some View {
-        let rows = scanDetailRows(manifest: manifest)
-        return VStack(alignment: .leading, spacing: 12) {
-            sectionLabel("Scan Details")
-            VStack(spacing: 0) {
-                ForEach(rows.indices, id: \.self) { idx in
-                    let row = rows[idx]
-                    HStack {
-                        Text(row.label)
-                            .font(.custom("Inter-Regular", size: 13))
-                            .foregroundStyle(PatinaColors.agedOak)
-                        Spacer()
-                        Text(row.value)
-                            .font(.custom("DMMono-Regular", size: 12))
-                            .foregroundStyle(PatinaColors.charcoal)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    if idx < rows.count - 1 {
-                        Rectangle()
-                            .fill(PatinaColors.pearl.opacity(0.6))
-                            .frame(height: 1)
-                            .padding(.horizontal, 14)
-                    }
-                }
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(PatinaColors.softCream)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(PatinaColors.pearl, lineWidth: 1)
-            )
-        }
-    }
-
-    private struct DetailRow {
-        let label: String
-        let value: String
-    }
-
-    private func scanDetailRows(manifest: ScanManifest) -> [DetailRow] {
-        var rows: [DetailRow] = []
-
-        rows.append(DetailRow(label: "Photos", value: "\(manifest.photos.count)"))
-
-        if let session {
-            let dims = session.dimensions
-            let length = dims.length
-            let width = dims.width
-            if length > 0 && width > 0 {
-                if let height = dims.height, height > 0 {
-                    rows.append(DetailRow(
-                        label: "Dimensions",
-                        value: String(format: "%.1f × %.1f × %.1f m", length, width, height)
-                    ))
-                } else {
-                    rows.append(DetailRow(
-                        label: "Dimensions",
-                        value: String(format: "%.1f × %.1f m", length, width)
-                    ))
-                }
-            }
-            if dims.area > 0 {
-                rows.append(DetailRow(
-                    label: "Floor area",
-                    value: String(format: "%.1f m²", dims.area)
-                ))
-            }
-
-            let windows = session.features.windowCount
-            let doors = session.features.doorCount
-            if windows > 0 || doors > 0 {
-                rows.append(DetailRow(
-                    label: "Openings",
-                    value: "\(windows) window\(windows == 1 ? "" : "s"), \(doors) door\(doors == 1 ? "" : "s")"
-                ))
-            }
-
-            if !session.detectedObjects.isEmpty {
-                rows.append(DetailRow(
-                    label: "Objects detected",
-                    value: "\(session.detectedObjects.count)"
-                ))
-            }
-
-            rows.append(DetailRow(
-                label: "Method",
-                value: session.scanMethod == .lidar ? "LiDAR" : "Manual"
-            ))
-        }
-
-        let totalBytes = manifest.artifacts.reduce(0) { $0 + $1.sizeBytes }
-            + manifest.photos.reduce(0) { $0 + $1.sizeBytes }
-        if totalBytes > 0 {
-            rows.append(DetailRow(label: "Captured", value: formattedSize(bytes: totalBytes)))
-        }
-
-        return rows
-    }
-
-    private func formattedSize(bytes: Int) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        formatter.allowedUnits = [.useMB, .useKB, .useGB]
-        return formatter.string(fromByteCount: Int64(bytes))
-    }
-
-    // MARK: - Sheets
-
-    private func heroPickerSheet(manifest: ScanManifest) -> some View {
-        let ranked = topPhotosByScore(manifest: manifest, limit: 10)
-        return NavigationStack {
-            ScrollView {
-                LazyVGrid(
-                    columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
-                    spacing: 12
-                ) {
-                    ForEach(ranked, id: \.id) { photo in
-                        Button(action: {
-                            selectedHeroPhotoId = photo.id
-                            showingHeroPicker = false
-                        }) {
-                            ZStack(alignment: .topTrailing) {
-                                photoImage(for: photo)
-                                    .frame(height: 180)
-                                    .frame(maxWidth: .infinity)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(
-                                                isEffectiveHero(photoId: photo.id, manifest: manifest)
-                                                    ? PatinaColors.charcoal
-                                                    : PatinaColors.pearl,
-                                                lineWidth: isEffectiveHero(photoId: photo.id, manifest: manifest) ? 2 : 1
-                                            )
-                                    )
-
-                                if isEffectiveHero(photoId: photo.id, manifest: manifest) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 18))
-                                        .foregroundStyle(PatinaColors.charcoal)
-                                        .padding(8)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(16)
-            }
-            .background(PatinaColors.offWhite.ignoresSafeArea())
-            .navigationTitle("Pick Hero Photo")
-            .toolbarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { showingHeroPicker = false }
-                        .foregroundStyle(PatinaColors.charcoal)
-                }
-            }
-        }
-        .presentationDetents([.large])
-    }
-
-    private func reorderSheet(manifest: ScanManifest) -> some View {
-        let heroId = effectiveHeroEntry(manifest: manifest)?.id
-        let reorderable = workingOrder.filter { id in
-            id != heroId && !hiddenPhotoIds.contains(id)
-        }
-        return NavigationStack {
-            List {
-                ForEach(reorderable, id: \.self) { photoId in
-                    if let photo = manifest.photos.first(where: { $0.id == photoId }) {
-                        HStack(spacing: 12) {
-                            photoImage(for: photo)
-                                .frame(width: 56, height: 56)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(reorderableTitle(for: photo))
-                                    .font(PatinaTypography.uiSmall)
-                                    .foregroundStyle(PatinaColors.charcoal)
-                                if let caption = captions[photo.id] ?? photo.userAnnotation,
-                                   !caption.isEmpty {
-                                    Text(caption)
-                                        .font(.custom("Inter-Regular", size: 11))
-                                        .foregroundStyle(PatinaColors.agedOak)
-                                        .lineLimit(1)
-                                }
-                            }
-                            Spacer()
-                            Image(systemName: "line.3.horizontal")
-                                .font(.system(size: 14, weight: .regular))
-                                .foregroundStyle(PatinaColors.agedOak.opacity(0.6))
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-                .onMove { indices, newOffset in
-                    applyReorder(indices: indices, newOffset: newOffset, heroId: heroId)
-                }
-            }
-            .listStyle(.plain)
-            .environment(\.editMode, .constant(.active))
-            .background(PatinaColors.offWhite.ignoresSafeArea())
-            .scrollContentBackground(.hidden)
-            .navigationTitle("Reorder Photos")
-            .toolbarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { showingReorderSheet = false }
-                        .foregroundStyle(PatinaColors.charcoal)
-                }
-            }
-        }
-        .presentationDetents([.large])
-    }
-
-    /// Apply a reorder delta from a SwiftUI List `.onMove` against the subset
-    /// of `workingOrder` that is currently visible (non-hero, non-hidden).
-    private func applyReorder(indices: IndexSet, newOffset: Int, heroId: UUID?) {
-        var visible = workingOrder.filter { id in
-            id != heroId && !hiddenPhotoIds.contains(id)
-        }
-        visible.move(fromOffsets: indices, toOffset: newOffset)
-
-        // Reassemble workingOrder: keep hero at its current slot, preserve
-        // hidden photos at their current positions, splice the reordered
-        // visible sequence into the remaining slots in order.
-        var result: [UUID] = []
-        var visibleIter = visible.makeIterator()
-        for id in workingOrder {
-            if id == heroId || hiddenPhotoIds.contains(id) {
-                result.append(id)
-            } else if let next = visibleIter.next() {
-                result.append(next)
-            }
-        }
-        workingOrder = result
-    }
-
-    private func reorderableTitle(for photo: ScanManifest.PhotoEntry) -> String {
-        if let feature = photo.associatedFeatureCategory, !feature.isEmpty {
-            return feature.capitalized
-        }
-        switch photo.kind {
-        case .hero: return "Hero"
-        case .auto: return "Photo"
-        case .user: return "Tapped"
-        case .feature: return "Feature"
-        }
-    }
-
-    private func captionSheet(photoId: UUID, manifest: ScanManifest) -> some View {
+    /// Build the same get/set binding the inline caption editor used: read the
+    /// user-entered caption, falling back to the photo's existing annotation;
+    /// write into `captions`.
+    private func captionBinding(for photoId: UUID, manifest: ScanManifest) -> Binding<String> {
         let photo = manifest.photos.first(where: { $0.id == photoId })
-        return NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                if let photo = photo {
-                    photoImage(for: photo)
-                        .frame(height: 280)
-                        .frame(maxWidth: .infinity)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                }
-
-                sectionLabel("Note for this photo")
-
-                ZStack(alignment: .topLeading) {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(PatinaColors.softCream)
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(PatinaColors.pearl, lineWidth: 1.5)
-
-                    let binding = Binding<String>(
-                        get: { captions[photoId] ?? photo?.userAnnotation ?? "" },
-                        set: { captions[photoId] = $0 }
-                    )
-
-                    if binding.wrappedValue.isEmpty {
-                        Text("What's worth noticing here?")
-                            .font(PatinaTypography.bodySmall)
-                            .foregroundStyle(PatinaColors.agedOak.opacity(0.7))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 14)
-                            .allowsHitTesting(false)
-                    }
-
-                    TextEditor(text: binding)
-                        .font(PatinaTypography.bodySmall)
-                        .foregroundStyle(PatinaColors.charcoal)
-                        .scrollContentBackground(.hidden)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                }
-                .frame(minHeight: 120)
-
-                Spacer()
-            }
-            .padding(24)
-            .background(PatinaColors.offWhite.ignoresSafeArea())
-            .toolbarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { editingPhotoId = nil }
-                        .foregroundStyle(PatinaColors.charcoal)
-                }
-            }
-        }
-        .presentationDetents([.large])
-    }
-
-    // MARK: - Small components
-
-    private func sectionLabel(_ text: String) -> some View {
-        Text(text)
-            .font(PatinaTypography.mono)
-            .tracking(0.6)
-            .textCase(.uppercase)
-            .foregroundStyle(PatinaColors.Text.interactive)
-    }
-
-    /// Load a photo from the bundle's `photos/` directory. Falls back to a
-    /// neutral placeholder when we can't find the file.
-    private func photoImage(for entry: ScanManifest.PhotoEntry?) -> some View {
-        Group {
-            if let entry = entry,
-               let url = photoURL(for: entry),
-               let data = try? Data(contentsOf: url),
-               let uiImage = UIImage(data: data) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Rectangle()
-                    .fill(PatinaColors.softCream)
-                    .overlay(
-                        Image(systemName: "photo")
-                            .font(.system(size: 28))
-                            .foregroundStyle(PatinaColors.agedOak.opacity(0.5))
-                    )
-            }
-        }
+        return Binding<String>(
+            get: { captions[photoId] ?? photo?.userAnnotation ?? "" },
+            set: { captions[photoId] = $0 }
+        )
     }
 
     // MARK: - Data helpers
@@ -885,11 +560,6 @@ public struct ScanReviewView: View {
             .appendingPathComponent(scanId.uuidString, isDirectory: true)
     }
 
-    private func photoURL(for entry: ScanManifest.PhotoEntry) -> URL? {
-        let url = bundleURL(for: scanId).appendingPathComponent(entry.relativePath)
-        return FileManager.default.fileExists(atPath: url.path) ? url : nil
-    }
-
     /// Returns the photo currently treated as "hero" in the UI.
     private func effectiveHeroEntry(manifest: ScanManifest) -> ScanManifest.PhotoEntry? {
         if let id = selectedHeroPhotoId,
@@ -905,10 +575,6 @@ public struct ScanReviewView: View {
         return manifest.photos.first
     }
 
-    private func isEffectiveHero(photoId: UUID, manifest: ScanManifest) -> Bool {
-        effectiveHeroEntry(manifest: manifest)?.id == photoId
-    }
-
     private func visibleSupportingPhotos(manifest: ScanManifest) -> [ScanManifest.PhotoEntry] {
         let heroId = effectiveHeroEntry(manifest: manifest)?.id
         return workingOrder
@@ -918,25 +584,6 @@ public struct ScanReviewView: View {
 
     private func hiddenSupportingPhotos(manifest: ScanManifest) -> [ScanManifest.PhotoEntry] {
         hiddenPhotoIds.compactMap { id in manifest.photos.first(where: { $0.id == id }) }
-    }
-
-    /// Top photos by quality score — falls back to capture order when scores
-    /// are nil so the picker always has something to show.
-    private func topPhotosByScore(manifest: ScanManifest, limit: Int) -> [ScanManifest.PhotoEntry] {
-        let ranked = manifest.photos.sorted { lhs, rhs in
-            let l = Self.rankingKey(for: lhs)
-            let r = Self.rankingKey(for: rhs)
-            return l > r
-        }
-        return Array(ranked.prefix(limit))
-    }
-
-    /// Ranking fallback: quality score when available, otherwise a small
-    /// negative based on capture order so later shots lose the tiebreaker.
-    private static func rankingKey(for photo: ScanManifest.PhotoEntry) -> Float {
-        if let score = photo.qualityScore { return score }
-        if let idx = photo.orderIndex { return -Float(idx) / 1000.0 }
-        return -Float(photo.timestampSeconds) / 1000.0
     }
 
     // MARK: - User actions
@@ -995,12 +642,3 @@ public struct ScanReviewView: View {
         }
     }
 }
-
-// MARK: - Supporting types
-
-/// Sheet(item:) requires Identifiable; UUID isn't directly Identifiable on
-/// its own, so wrap it.
-private struct PhotoIdWrapper: Identifiable, Equatable {
-    let id: UUID
-}
-

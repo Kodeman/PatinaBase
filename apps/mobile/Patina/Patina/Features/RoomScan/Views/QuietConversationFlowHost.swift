@@ -27,6 +27,12 @@ struct QuietConversationFlowHost: View {
     @State private var profile: StyleProfileResponse?
     @State private var flaggedForDesigner: Bool = false
     @State private var conversationViewModel: StyleConversationViewModel?
+    /// PT-4-8: set when a returning user explicitly asks to refine their style
+    /// ("Refine my style" / "Update my style"). Without this, a user who
+    /// already has a saved StyleProfile skips Movement 2 (the style
+    /// conversation) entirely — Walk → SavedConfirmation → SoftLanding →
+    /// FloorPlan — so they don't re-take the quiz they already finished.
+    @State private var refineRequested: Bool = false
     /// Scan id the review step operates on; populated when the Walk finishes
     /// so the ScanReviewView can read the on-disk manifest for that bundle.
     /// Driven as an `Identifiable` item for `.fullScreenCover(item:)` so the
@@ -212,6 +218,11 @@ struct QuietConversationFlowHost: View {
                 SoftLandingView(session: session) { outcome in
                     switch outcome {
                     case .startConversation:
+                        // The user explicitly chose to (re)take the style
+                        // conversation ("Update my style"). Treat this as an
+                        // explicit refine so the Movement-2 skip guard lets the
+                        // conversation through even for returning users.
+                        refineRequested = true
                         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
                             step = .conversation
                         }
@@ -225,7 +236,18 @@ struct QuietConversationFlowHost: View {
             }
 
         case .conversation:
-            if let session = session {
+            // PT-4-8: returning users with a saved StyleProfile skip Movement 2
+            // unless they explicitly asked to refine it. This guards every
+            // route into `.conversation` (not just the SoftLanding fork), so a
+            // returning user is never silently funneled back into the quiz.
+            if !refineRequested, let existingProfile = StyleProfileStore.shared.currentProfile {
+                ProfileSkipBridge {
+                    profile = existingProfile
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
+                        step = .floorPlan
+                    }
+                }
+            } else if let session = session {
                 let vm = ensureConversationViewModel(for: session)
                 StyleConversationContainerView(viewModel: vm, onComplete: { resolved in
                     profile = resolved
@@ -291,6 +313,7 @@ struct QuietConversationFlowHost: View {
         conversationViewModel = nil
         reviewScan = nil
         savedScanId = nil
+        refineRequested = false
         step = .initial
     }
 
@@ -318,5 +341,21 @@ struct QuietConversationFlowHost: View {
             remoteRoomId: nil,
             modelContext: modelContext
         )
+    }
+}
+
+/// PT-4-8: invisible bridge that runs a one-shot skip action on appear. Used
+/// when a returning user lands on the `.conversation` step but already has a
+/// saved StyleProfile — we route them past Movement 2 without rendering the
+/// conversation. Mutating host state from `.onAppear` (rather than inline in
+/// the body) keeps SwiftUI from complaining about state changes during view
+/// evaluation.
+private struct ProfileSkipBridge: View {
+    let action: () -> Void
+
+    var body: some View {
+        PatinaColors.offWhite
+            .ignoresSafeArea()
+            .onAppear(perform: action)
     }
 }

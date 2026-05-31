@@ -117,7 +117,9 @@ struct WalkProgressView: View {
             pulseScale = 1.1
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+        // Structured concurrency replaces DispatchQueue.main.asyncAfter (PT-3-3).
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 150_000_000) // 0.15 seconds
             withAnimation(.easeIn(duration: 0.2)) {
                 pulseScale = 1.0
             }

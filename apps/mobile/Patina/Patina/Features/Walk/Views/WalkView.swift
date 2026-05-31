@@ -4,6 +4,16 @@
 //
 //  AR room scanning walk experience
 //
+//  PT-6-4: the welcome / walking / completed content are extracted into
+//  dedicated View types (WalkWelcomeContent, WalkWalkingContent,
+//  WalkCompletedContent). This view is the façade that owns the capture-service
+//  lifecycle, the question state machine, and the mock-scan completion handler.
+//
+//  PT-4-6: the deprecated v1 remote-sync path (`syncRoomScan`) has been removed.
+//  The live `.walk` route runs through `QuietConversationFlowHost`, which owns
+//  the real upload pipeline via `RoomUploadService`. WalkView/WalkViewModel/
+//  MockRoomScanView are retained because WalkView still composes them.
+//
 
 import SwiftUI
 import RoomPlan
@@ -21,11 +31,6 @@ struct WalkView: View {
     @State private var captureService = RoomCaptureService()
     @State private var narrationService = WalkNarrationService()
     @State private var styleService = StyleSignalService()
-    // PT-3-2: `RoomScanSyncService.shared` is a singleton; holding it in
-    // `@State` (rather than the old `@StateObject = .shared` misuse) keeps the
-    // shared instance — `@State` of an `@Observable` reference type stores and
-    // observes the same object without taking ownership of its lifecycle.
-    @State private var syncService = RoomScanSyncService.shared
 
     // Question system
     @State private var currentQuestion: WalkQuestion?
@@ -36,9 +41,8 @@ struct WalkView: View {
     @State private var lastMotionTime: Date = Date()
     @State private var isStationary = false
 
-    // Sync state
-    @State private var isSyncing = false
-    @State private var syncError: String?
+    // Status state
+    @State private var statusError: String?
     @State private var lastScanData: FirstWalkRoomData?
     @State private var lastStyleSignals: FirstWalkStyleSignals?
 
@@ -55,7 +59,7 @@ struct WalkView: View {
             // Content based on state
             switch viewModel.state {
             case .notStarted:
-                welcomeContent
+                WalkWelcomeContent(onBegin: { viewModel.startWalk() })
 
             case .starting:
                 startingContent
@@ -64,7 +68,20 @@ struct WalkView: View {
                 walkingContent
 
             case .completed:
-                completedContent
+                WalkCompletedContent(
+                    hasScan: lastScanData != nil,
+                    statusError: statusError,
+                    onSeeEmergence: {
+                        // Would navigate to Emergence
+                        dismiss()
+                    },
+                    onWalkAgain: {
+                        viewModel.reset()
+                        lastScanData = nil
+                        lastStyleSignals = nil
+                        statusError = nil
+                    }
+                )
             }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -83,75 +100,6 @@ struct WalkView: View {
             endPoint: .bottom
         )
         .ignoresSafeArea()
-    }
-
-    // MARK: - Welcome Content
-
-    @State private var swipeHintOffset: CGFloat = 0
-
-    private var welcomeContent: some View {
-        VStack(spacing: 0) {
-            // Top spacer
-            Spacer()
-
-            // Main content
-            VStack(spacing: PatinaSpacing.xl) {
-                // Breathing companion mark
-                StrataMarkView(
-                    color: PatinaColors.clay,
-                    scale: 1.2,
-                    breathing: true
-                )
-
-                VStack(spacing: PatinaSpacing.md) {
-                    Text("The Walk")
-                        .font(PatinaTypography.h1)
-                        .foregroundStyle(PatinaColors.offWhite)
-
-                    Text("Let's explore your space together.\nI'll observe the light, the shapes, the possibilities.")
-                        .font(PatinaTypography.body)
-                        .foregroundStyle(PatinaColors.offWhite.opacity(0.7))
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(4)
-                        .padding(.horizontal, PatinaSpacing.xl)
-                }
-            }
-
-            Spacer()
-
-            // Bottom section - Swipe up to begin
-            VStack(spacing: PatinaSpacing.lg) {
-                // Swipe up indicator
-                VStack(spacing: PatinaSpacing.sm) {
-                    Image(systemName: "chevron.up")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundStyle(PatinaColors.Text.interactive)
-                        .offset(y: swipeHintOffset)
-                        .animation(
-                            .easeInOut(duration: 1.0).repeatForever(autoreverses: true),
-                            value: swipeHintOffset
-                        )
-                        .onAppear {
-                            swipeHintOffset = -8
-                        }
-
-                    Text("Swipe up to begin")
-                        .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.offWhite.opacity(0.7))
-                }
-                .padding(.bottom, PatinaSpacing.xl)
-            }
-            .gesture(
-                DragGesture(minimumDistance: 50)
-                    .onEnded { value in
-                        // Swipe up detected (negative height = upward)
-                        if value.translation.height < -50 {
-                            viewModel.startWalk()
-                        }
-                    }
-            )
-        }
-        .padding(.horizontal, PatinaSpacing.lg)
     }
 
     // MARK: - Starting Content
@@ -178,70 +126,26 @@ struct WalkView: View {
     // MARK: - Walking Content
 
     private var walkingContent: some View {
-        ZStack {
-            // AR Camera View (or mock scanning if RoomPlan not available or in UI test mode)
-            if RoomCaptureService.isSupported && !PatinaApp.useMockAR {
-                RoomCaptureViewRepresentable(captureService: captureService)
-                    .ignoresSafeArea()
-            } else {
-                // Mock scanning view for simulator/UI testing
-                MockRoomScanView(
-                    captureService: captureService,
-                    narrationService: narrationService
-                )
-                .ignoresSafeArea()
-            }
-
-            // UI Overlay
-            VStack(spacing: 0) {
-                // Top bar
-                topBar
-                    .padding(.horizontal, PatinaSpacing.lg)
-                    .padding(.top, PatinaSpacing.lg)
-
-                Spacer()
-
-                // Narration overlay (from narration service)
-                if let narration = narrationService.currentNarration {
-                    narrationOverlay(narration)
-                        .padding(.bottom, PatinaSpacing.xxxl)
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                } else if viewModel.currentNarration != nil {
-                    // Fallback to viewModel narration
-                    WalkNarrationOverlay(
-                        narration: viewModel.currentNarration,
-                        isThinking: viewModel.isThinking
-                    )
-                    .padding(.bottom, PatinaSpacing.xxxl)
+        WalkWalkingContent(
+            captureService: captureService,
+            narrationService: narrationService,
+            viewModel: viewModel,
+            currentQuestion: currentQuestion,
+            isPaused: viewModel.state == .paused,
+            onAnswer: { answer in handleQuestionAnswer(answer) },
+            onDismissQuestion: { handleQuestionIgnored() },
+            onClose: {
+                viewModel.reset()
+                dismiss()
+            },
+            onPauseToggle: {
+                if viewModel.state == .paused {
+                    viewModel.resumeWalk()
+                } else {
+                    viewModel.pauseWalk()
                 }
-
-                // Organic water-fill progress indicator
-                WalkProgressView(
-                    coveragePercentage: captureService.coverageResult?.overallCoverage ?? captureService.scanProgress,
-                    displayPhase: captureService.coverageResult?.displayPhase ?? .beginning
-                )
-                .padding(.bottom, PatinaSpacing.xl)
-
-                // Bottom companion mark
-                StrataMarkView(
-                    color: PatinaColors.clay.opacity(0.8),
-                    scale: 0.6,
-                    breathing: true
-                )
-                .padding(.bottom, PatinaSpacing.xl)
             }
-
-            // Question overlay (when applicable)
-            WalkQuestionOverlay(
-                question: currentQuestion,
-                onAnswer: { answer in
-                    handleQuestionAnswer(answer)
-                },
-                onDismiss: {
-                    handleQuestionIgnored()
-                }
-            )
-        }
+        )
         .onAppear {
             setupCaptureService()
         }
@@ -253,23 +157,6 @@ struct WalkView: View {
             if let roomData = notification.userInfo?["roomData"] as? FirstWalkRoomData {
                 handleMockScanCompletion(roomData: roomData)
             }
-        }
-    }
-
-    // MARK: - Narration Overlay
-
-    private func narrationOverlay(_ text: String) -> some View {
-        VStack(spacing: PatinaSpacing.sm) {
-            Text(text)
-                .font(PatinaTypography.patinaVoice)
-                .foregroundStyle(PatinaColors.offWhite)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, PatinaSpacing.xl)
-                .padding(.vertical, PatinaSpacing.md)
-                .background(
-                    RoundedRectangle(cornerRadius: PatinaRadius.lg)
-                        .fill(Color.black.opacity(0.6))
-                )
         }
     }
 
@@ -287,7 +174,7 @@ struct WalkView: View {
             let permissionResult = await CameraPermissionService.shared.requestPermission()
             guard permissionResult == .granted else {
                 // Permission denied - show error or redirect to settings
-                syncError = "Camera permission is required for room scanning"
+                statusError = "Camera permission is required for room scanning"
                 captureService.stopCapture()
                 return
             }
@@ -331,7 +218,7 @@ struct WalkView: View {
             if let roomData = captureService.processRoom() {
                 let finalSignals = styleService.finalizeSignals()
 
-                // Store for sync
+                // Store for the completed-state indicator.
                 lastScanData = roomData
                 lastStyleSignals = finalSignals
 
@@ -340,77 +227,9 @@ struct WalkView: View {
                     roomData: roomData,
                     styleSignals: finalSignals
                 )
-
-                // Sync to Supabase in background
-                Task {
-                    await syncRoomScan(roomData: roomData, styleSignals: finalSignals)
-                }
             }
 
             viewModel.completeWalk()
-        }
-    }
-
-    // MARK: - Local + Remote Sync
-
-    /// Two-phase scan save:
-    ///   1. Insert (or update) a local `RoomModel` via `RoomStore.saveScan`
-    ///      so the UI has the room immediately, even offline.
-    ///   2. Kick off the remote upload; on success, stamp the local row with
-    ///      the server-side `remoteId` / `remoteScanId`. On failure, mark the
-    ///      local row as `.failed` and hand the raw payload to the persistent
-    ///      `SyncQueueItem` store so it gets retried later.
-    @available(*, deprecated, message: "Use RoomScan flow via AppCoordinator.scanReview — v1 WalkView is kept only for legacy rows.")
-    private func syncRoomScan(roomData: FirstWalkRoomData, styleSignals: FirstWalkStyleSignals) async {
-        isSyncing = true
-        syncError = nil
-
-        // Phase 1: save locally. This must run on the main actor because the
-        // SwiftData ModelContext is main-actor isolated.
-        let store = RoomStore(context: modelContext)
-        _ = store.saveScan(roomData: roomData)
-
-        // Export USDZ model if available (may be nil in simulator)
-        let usdzData = await captureService.exportUSDZ()
-
-        // Phase 2: remote upload.
-        do {
-            let result = try await RoomScanSyncService.shared.uploadRoomScan(
-                roomData: roomData,
-                styleSignals: styleSignals,
-                thumbnail: nil,
-                projectId: nil,
-                existingRoomRemoteId: nil,
-                usdzData: usdzData
-            )
-
-            store.markRoomSynced(
-                localId: roomData.roomId,
-                remoteRoomId: result.roomId,
-                remoteScanId: result.scanId
-            )
-
-            isSyncing = false
-            PatinaLog.scan.debug("[WalkView] Room scan synced — room=\(result.roomId) scan=\(result.scanId)")
-        } catch {
-            isSyncing = false
-            syncError = error.localizedDescription
-            PatinaLog.scan.error("[WalkView] Remote sync failed: \(error)")
-
-            store.markRoomSyncFailed(localId: roomData.roomId)
-
-            // Queue persistently for later retry (survives app restart).
-            do {
-                try await RoomScanSyncService.shared.queueUploadPersistent(
-                    roomData: roomData,
-                    styleSignals: styleSignals,
-                    usdzData: usdzData,
-                    thumbnailData: nil
-                )
-                PatinaLog.scan.debug("[WalkView] Queued room scan for later sync")
-            } catch {
-                PatinaLog.scan.error("[WalkView] Failed to enqueue room scan: \(error)")
-            }
         }
     }
 
@@ -430,7 +249,7 @@ struct WalkView: View {
         styleSignals.roomFeeling = "spacious and airy"
         styleSignals.scanPace = .medium
 
-        // Store for sync
+        // Store for the completed-state indicator.
         lastScanData = roomData
         lastStyleSignals = styleSignals
 
@@ -439,11 +258,6 @@ struct WalkView: View {
             roomData: roomData,
             styleSignals: styleSignals
         )
-
-        // Sync to Supabase in background
-        Task {
-            await syncRoomScan(roomData: roomData, styleSignals: styleSignals)
-        }
 
         viewModel.completeWalk()
     }
@@ -485,197 +299,6 @@ struct WalkView: View {
         withAnimation {
             currentQuestion = nil
         }
-    }
-
-    // MARK: - Wall Detection Overlay
-
-    private var wallDetectionOverlay: some View {
-        ZStack {
-            // Dashed rectangle representing wall detection
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(
-                    style: StrokeStyle(
-                        lineWidth: 2,
-                        dash: [8, 8]
-                    )
-                )
-                .foregroundStyle(PatinaColors.clay.opacity(0.4))
-                .frame(height: 200)
-
-            // Corner markers
-            VStack {
-                HStack {
-                    cornerMarker(rotation: 0)
-                    Spacer()
-                    cornerMarker(rotation: 90)
-                }
-                Spacer()
-                HStack {
-                    cornerMarker(rotation: -90)
-                    Spacer()
-                    cornerMarker(rotation: 180)
-                }
-            }
-            .padding(PatinaSpacing.md)
-            .frame(height: 200)
-
-            // Scanning hint
-            VStack(spacing: PatinaSpacing.sm) {
-                Image(systemName: "viewfinder")
-                    .font(.system(size: 24))
-                    .foregroundStyle(PatinaColors.clay.opacity(0.6))
-
-                Text("Point at a wall")
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.offWhite.opacity(0.5))
-            }
-        }
-    }
-
-    private func cornerMarker(rotation: Double) -> some View {
-        Image(systemName: "viewfinder.trianglebadge.exclamationmark")
-            .font(.system(size: 16))
-            .foregroundStyle(PatinaColors.clay.opacity(0.6))
-            .rotationEffect(.degrees(rotation))
-    }
-
-    // MARK: - Top Bar
-
-    private var topBar: some View {
-        HStack {
-            // Close button
-            Button {
-                viewModel.reset()
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(.white)
-                    .padding(PatinaSpacing.sm)
-                    .background(Circle().fill(Color.white.opacity(0.15)))
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel("Close")
-            .accessibilityHint("Ends the walk and returns to the previous screen.")
-
-            Spacer()
-
-            // Pause/Resume button
-            Button {
-                if viewModel.state == .paused {
-                    viewModel.resumeWalk()
-                } else {
-                    viewModel.pauseWalk()
-                }
-            } label: {
-                Image(systemName: viewModel.state == .paused ? "play.fill" : "pause.fill")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white)
-                    .padding(PatinaSpacing.sm)
-                    .background(Circle().fill(Color.white.opacity(0.15)))
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel(viewModel.state == .paused ? "Resume walk" : "Pause walk")
-        }
-    }
-
-    // MARK: - Completed Content
-
-    private var completedContent: some View {
-        VStack(spacing: PatinaSpacing.xl) {
-            Spacer()
-
-            // Success animation
-            StrataMarkView(
-                color: PatinaColors.clay,
-                scale: 1.5,
-                breathing: true
-            )
-
-            VStack(spacing: PatinaSpacing.md) {
-                Text("Walk Complete")
-                    .font(PatinaTypography.h2)
-                    .foregroundStyle(PatinaColors.offWhite)
-
-                Text("I've observed your space.\nSomething may emerge from what I've seen.")
-                    .font(PatinaTypography.body)
-                    .foregroundStyle(PatinaColors.offWhite.opacity(0.7))
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(4)
-
-                // Sync status indicator
-                syncStatusView
-            }
-
-            Spacer()
-
-            // Actions
-            VStack(spacing: PatinaSpacing.md) {
-                PatinaButton("See What Emerged", style: .primary) {
-                    // Would navigate to Emergence
-                    dismiss()
-                }
-
-                Button {
-                    viewModel.reset()
-                    lastScanData = nil
-                    lastStyleSignals = nil
-                    syncError = nil
-                } label: {
-                    Text("Walk Again")
-                        .font(PatinaTypography.body)
-                        .foregroundStyle(PatinaColors.offWhite.opacity(0.6))
-                }
-            }
-            .padding(.horizontal, PatinaSpacing.xl)
-            .padding(.bottom, PatinaSpacing.xxxl)
-        }
-    }
-
-    // MARK: - Sync Status View
-
-    @ViewBuilder
-    private var syncStatusView: some View {
-        HStack(spacing: PatinaSpacing.sm) {
-            if isSyncing {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: PatinaColors.clay))
-                    .scaleEffect(0.8)
-                Text("Saving to cloud...")
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.offWhite.opacity(0.6))
-            } else if let error = syncError {
-                Image(systemName: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
-                    .font(.system(size: 14))
-                Text("Saved locally")
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.offWhite.opacity(0.6))
-
-                Button {
-                    // Retry sync
-                    if let data = lastScanData, let signals = lastStyleSignals {
-                        Task {
-                            await syncRoomScan(roomData: data, styleSignals: signals)
-                        }
-                    }
-                } label: {
-                    Text("Retry")
-                        .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.Text.interactive)
-                }
-            } else if lastScanData != nil {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(.system(size: 14))
-                Text("Saved to cloud")
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.offWhite.opacity(0.6))
-            }
-        }
-        .padding(.top, PatinaSpacing.sm)
     }
 }
 

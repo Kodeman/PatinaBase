@@ -176,7 +176,7 @@ struct ScanFallbackEntryView: View {
         VStack(alignment: .leading, spacing: 4) {
             TextField("", text: text)
                 .keyboardType(.decimalPad)
-                .font(.custom("Inter-Regular", size: 15))
+                .font(.custom("Inter-Regular", size: 15, relativeTo: .subheadline))
                 .foregroundStyle(PatinaColors.charcoal)
                 .padding(.horizontal, 16)
                 .frame(height: 48)
@@ -223,7 +223,7 @@ struct ScanFallbackEntryView: View {
             }
             .buttonStyle(.plain)
             Text("\(value.wrappedValue)")
-                .font(.custom("DMMono-Regular", size: 14))
+                .font(.custom("DMMono-Regular", size: 14, relativeTo: .subheadline))
                 .foregroundStyle(PatinaColors.charcoal)
                 .frame(minWidth: 20)
             Button(action: { value.wrappedValue += 1 }) {
