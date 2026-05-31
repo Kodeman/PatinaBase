@@ -33,18 +33,19 @@ struct InvestmentPerspectiveView: View {
                     Text(tier.displayName)
                         .font(.custom(
                             isDiscussRow ? "PlayfairDisplay-Italic" : "PlayfairDisplay-Regular",
-                            size: 18
+                            size: 18,
+                            relativeTo: .body
                         ))
                         .foregroundStyle(PatinaColors.charcoal)
                     Text(tier.descriptionText)
-                        .font(.custom("Inter-Light", size: 12))
+                        .font(.custom("Inter-Light", size: 12, relativeTo: .caption))
                         .foregroundStyle(PatinaColors.agedOak)
                 }
 
                 Spacer()
 
                 Text(tier.rangeLabel)
-                    .font(.custom("DMMono-Regular", size: 11))
+                    .font(.custom("DMMono-Regular", size: 11, relativeTo: .caption2))
                     .tracking(0.4)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.Text.interactive)

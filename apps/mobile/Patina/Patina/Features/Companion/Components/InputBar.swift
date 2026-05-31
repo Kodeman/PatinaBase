@@ -100,6 +100,8 @@ public struct VoiceButton: View {
     var onStart: () -> Void
     var onEnd: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var isPressing = false
     @State private var pulseScale: CGFloat = 1.0
 
@@ -114,6 +116,7 @@ public struct VoiceButton: View {
                     .fill(PatinaColors.clay.opacity(0.3))
                     .frame(width: buttonSize * pulseScale, height: buttonSize * pulseScale)
                     .onAppear {
+                        guard !reduceMotion else { return }
                         withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
                             pulseScale = 1.3
                         }
@@ -162,8 +165,15 @@ public struct VoiceButton: View {
                 onStart()
             }
         }
-        .animation(.easeInOut(duration: 0.15), value: isPressing)
-        .animation(.easeInOut(duration: 0.2), value: isActive)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isPressing)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isActive)
+        // VoiceOver can't perform a long-press to begin dictation; expose an
+        // explicit action so it's reachable from the rotor.
+        .accessibilityLabel(isActive ? "Voice input active" : "Voice input")
+        .accessibilityAction(named: "Start voice input") {
+            HapticManager.shared.impact(.medium)
+            if !isActive { onStart() }
+        }
     }
 }
 

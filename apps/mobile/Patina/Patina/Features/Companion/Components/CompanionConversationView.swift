@@ -64,6 +64,13 @@ public struct CompanionMessageBubble: View {
         message.sender == .patina
     }
 
+    /// Aggregated VoiceOver label: sender + text + (Patina/you) so focus
+    /// stops once per bubble rather than on each Text.
+    private var accessibilityText: String {
+        let sender = isPatina ? "Patina" : "You"
+        return "\(sender) said: \(message.content)"
+    }
+
     public var body: some View {
         HStack {
             if !isPatina {
@@ -95,6 +102,8 @@ public struct CompanionMessageBubble: View {
                 Spacer(minLength: 60)
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityText)
     }
 }
 
@@ -102,7 +111,10 @@ public struct CompanionMessageBubble: View {
 
 /// Animated typing indicator for when Patina is "thinking"
 public struct CompanionTypingIndicator: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var animationPhase: Int = 0
+    @State private var timer: Timer?
 
     public var body: some View {
         HStack {
@@ -111,7 +123,8 @@ public struct CompanionTypingIndicator: View {
                     Circle()
                         .fill(PatinaColors.clay)
                         .frame(width: 6, height: 6)
-                        .opacity(animationPhase == index ? 1.0 : 0.4)
+                        // Reduce Motion: hold all dots at full opacity (static).
+                        .opacity(reduceMotion ? 0.8 : (animationPhase == index ? 1.0 : 0.4))
                 }
             }
             .padding(.horizontal, PatinaSpacing.md)
@@ -123,13 +136,19 @@ public struct CompanionTypingIndicator: View {
 
             Spacer()
         }
+        .accessibilityLabel("Patina is typing")
         .onAppear {
+            guard !reduceMotion else { return }
             startAnimation()
+        }
+        .onDisappear {
+            timer?.invalidate()
+            timer = nil
         }
     }
 
     private func startAnimation() {
-        Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { _ in
             withAnimation(.easeInOut(duration: 0.2)) {
                 animationPhase = (animationPhase + 1) % 3
             }

@@ -51,10 +51,10 @@ struct PriorityView: View {
         return Button(action: { viewModel.answerQ5(card.id) }) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(card.label)
-                    .font(.custom("PlayfairDisplay-Regular", size: 16))
+                    .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .callout))
                     .foregroundStyle(isSelected ? PatinaColors.offWhite : PatinaColors.charcoal)
                 Text(card.subtext)
-                    .font(.custom("Inter-Light", size: 12))
+                    .font(.custom("Inter-Light", size: 12, relativeTo: .caption))
                     .foregroundStyle(isSelected ? PatinaColors.pearl : PatinaColors.agedOak)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

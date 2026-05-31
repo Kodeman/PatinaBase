@@ -63,7 +63,7 @@ struct VisualResonanceView: View {
                     VStack {
                         Spacer()
                         Text(choice.displayName)
-                            .font(.custom("Inter-SemiBold", size: 11))
+                            .font(.custom("Inter-SemiBold", size: 11, relativeTo: .caption2))
                             .foregroundStyle(.white)
                             .shadow(color: Color.black.opacity(0.6), radius: 2)
                             .padding(14)
