@@ -99,9 +99,13 @@ struct ContentView: View {
         case .newRoom:
             NewRoomSheet()
                 .presentationDetents([.medium])
+                // PT-5-11: every detent sheet sets the 24pt corner radius.
+                .presentationCornerRadius(24)
         case .moveItem(let itemId):
             MoveOrCopyItemSheet(itemId: itemId)
                 .presentationDetents([.medium, .large])
+                // PT-5-11: every detent sheet sets the 24pt corner radius.
+                .presentationCornerRadius(24)
         }
     }
 

@@ -2,7 +2,12 @@
 //  TimeOfDay.swift
 //  Patina
 //
-//  Time of day model for atmospheric lighting and Hero Frame color grading
+//  Time of day model for atmospheric lighting and Hero Frame color grading.
+//
+//  PT-4-1: relocated from the now-deleted `Features/Threshold/` folder to
+//  `Design/Tokens/` because it's still referenced by the Companion voice +
+//  greeting services (`CompanionVoice`, `CompanionService`) even though the
+//  `.threshold` route and `LivingSceneView` are gone.
 //
 
 import SwiftUI

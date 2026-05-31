@@ -12,12 +12,24 @@ struct DailyRoomView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel = DailyRoomViewModel()
+    /// PT-3-7: drives the bell unread-count badge in the greeting header.
+    @State private var notificationsViewModel = NotificationsViewModel()
     @State private var expandedStory: DailyStory?
     @State private var expandedRecommendation: DailyRecommendation?
     /// Drives the contextual help-panel sheet attached to the Home surface.
     /// Set true by the `?` affordance in `DailyGreetingHeader`.
     @State private var isHelpPanelPresented: Bool = false
+    /// PT-4-9: the most recent saved, in-progress scan that the user can
+    /// resume. Populated from `ScanRecoveryService` on appear; cleared when
+    /// the user dismisses the resume card or continues the scan.
+    @State private var resumableScan: ScanRecoveryService.RecoveryCandidate?
     @Namespace private var cardNamespace
+    /// PT-4-10: dual-role gate for the header mode-switch chip. Designers who
+    /// also hold the consumer role can flip between the two home surfaces.
+    private var isDualRole: Bool {
+        let roles = ProfileService.shared.roles
+        return roles.contains("designer") && (roles.contains("consumer") || roles.isEmpty)
+    }
 
     var body: some View {
         // First-launch tour wraps the entire screen so the three coachmark
@@ -35,8 +47,27 @@ struct DailyRoomView: View {
             PatinaColors.offWhite.ignoresSafeArea()
 
             if viewModel.rooms.isEmpty {
-                DailyRoomEmptyState {
-                    coordinator.navigate(to: .scanFlow(reason: .fresh))
+                VStack(spacing: 16) {
+                    // PT-4-9: resume card sits above the empty state so a user
+                    // who abandoned a scan mid-walk can pick it back up.
+                    if let resumableScan {
+                        ContinueScanCard(
+                            photosCount: resumableScan.photosCount,
+                            createdAt: resumableScan.createdAt,
+                            onContinue: { continueSavedScan() },
+                            onDismiss: { dismissSavedScan() }
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.top, 60)
+                    }
+                    DailyRoomEmptyState {
+                        // PT-4-7: a scan started from the empty home counts
+                        // toward the first-session activation funnel — this is
+                        // the quiz-first variant's numerator (no-op after the
+                        // first scan of the launch).
+                        OnboardingFunnel.shared.markFirstSessionScanStarted()
+                        coordinator.navigate(to: .scanFlow(reason: .fresh))
+                    }
                 }
             } else {
                 content
@@ -89,6 +120,17 @@ struct DailyRoomView: View {
                 viewModel.load()
             }
         }
+        // PT-3-7: hydrate the unread count for the header bell badge.
+        .task {
+            await notificationsViewModel.load()
+        }
+        // PT-4-9: surface the most recent resumable in-progress scan, if any.
+        .task {
+            let candidates = await ScanRecoveryService.shared
+                .scanForRecoverableSessions(in: modelContext)
+            // Newest first; the service returns oldest-first.
+            resumableScan = candidates.max(by: { $0.createdAt < $1.createdAt })
+        }
         .onAppear {
             // mainHomeView can resolve to DailyRoomView implicitly (no
             // navigate call), e.g. when a dual-role user flips Workspace
@@ -133,8 +175,31 @@ struct DailyRoomView: View {
                 DailyGreetingHeader(
                     dateString: viewModel.greetingDate.uppercased(),
                     monogram: "K",
-                    onHelpTap: { isHelpPanelPresented = true }
+                    onHelpTap: { isHelpPanelPresented = true },
+                    // PT-0-6: monogram is now the Profile entry point.
+                    onMonogramTap: { coordinator.navigate(to: .profile) },
+                    // PT-3-7: bell → notifications, badge from unread count.
+                    onBellTap: { coordinator.navigate(to: .notifications) },
+                    unreadCount: notificationsViewModel.notifications.filter { !$0.isRead }.count,
+                    // PT-4-10: dual-role users get a chip to switch to the
+                    // designer home. Tapping persists the preference (which
+                    // re-routes `mainHomeView`) and captures the switch.
+                    roleChip: isDualRole
+                        ? .init(label: "DESIGNER", onTap: { switchToDesignerHome() })
+                        : nil
                 )
+
+                // PT-4-9: resume card for a saved, in-progress scan.
+                if let resumableScan {
+                    ContinueScanCard(
+                        photosCount: resumableScan.photosCount,
+                        createdAt: resumableScan.createdAt,
+                        onContinue: { continueSavedScan() },
+                        onDismiss: { dismissSavedScan() }
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                }
 
                 if let story = viewModel.todayStory {
                     Button {
@@ -198,6 +263,49 @@ struct DailyRoomView: View {
 
                 Spacer().frame(height: 120)
             }
+        }
+    }
+
+    /// PT-4-10: flip the saved home preference to `.designer` and capture the
+    /// switch. Because `SettingsService` is `@Observable` and `mainHomeView`
+    /// reads `preferredHomeMode`, this re-routes the root home surface to
+    /// `DesignerHomeView` on the next render — no imperative navigation needed.
+    private func switchToDesignerHome() {
+        HapticManager.shared.impact(.light)
+        SettingsService.shared.setPreferredHomeMode(.designer)
+        PostHogService.shared.capture("home_mode_switched", properties: [
+            "source": "header",
+            "to": SettingsService.HomeMode.designer.rawValue,
+            "from": SettingsService.HomeMode.consumer.rawValue
+        ])
+    }
+
+    /// PT-4-9: resume the saved in-progress scan. Routes into the Quiet
+    /// Conversation flow (the host re-bootstraps capture). Captures an event
+    /// so resume-rate can be measured against the "Save & continue later"
+    /// affordance that produced the saved bundle.
+    private func continueSavedScan() {
+        guard let resumableScan else { return }
+        HapticManager.shared.impact(.medium)
+        PostHogService.shared.capture("scan_resume_tapped", properties: [
+            "photos_count": resumableScan.photosCount
+        ])
+        // A resumed scan is conceptually a re-scan of work already in flight.
+        coordinator.navigate(to: .scanFlow(reason: .rescan))
+        self.resumableScan = nil
+    }
+
+    /// PT-4-9: dismiss the resume card and permanently discard the saved
+    /// bundle so it doesn't keep reappearing.
+    private func dismissSavedScan() {
+        guard let candidate = resumableScan else { return }
+        HapticManager.shared.impact(.light)
+        let ctx = modelContext
+        Task { @MainActor in
+            await ScanRecoveryService.shared.discard(candidate.id, in: ctx)
+        }
+        withAnimation(.easeOut(duration: 0.2)) {
+            resumableScan = nil
         }
     }
 }

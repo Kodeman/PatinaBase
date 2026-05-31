@@ -87,58 +87,69 @@ public struct CompanionOverlay: View {
     public init() {}
 
     public var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Backdrop when expanded
-                if state.isExpanded {
-                    Color.black.opacity(0.3)
-                        .background(.ultraThinMaterial.opacity(0.5))
-                        .ignoresSafeArea()
-                        .allowsHitTesting(true)
-                        .onTapGesture { collapseToButton() }
-                }
+        // PT-6-8: the GeometryReader that existed only to read
+        // `safeAreaInsets.bottom` (and add it to every dock offset) is gone.
+        // `.safeAreaPadding(.bottom, N)` insets by N *plus* the safe area,
+        // so the home-indicator clearance comes for free without measuring
+        // the proxy.
+        ZStack {
+            // Backdrop when expanded
+            if state.isExpanded {
+                Color.black.opacity(0.3)
+                    .background(.ultraThinMaterial.opacity(0.5))
+                    .ignoresSafeArea()
+                    .allowsHitTesting(true)
+                    .onTapGesture { collapseToButton() }
+            }
 
-                // Dock zone gradient — gives the companion visual breathing room
-                if shouldShowDockGradient {
-                    companionDockGradient(safeAreaBottom: geometry.safeAreaInsets.bottom)
-                        .transition(.opacity)
-                }
+            // Dock zone gradient — gives the companion visual breathing room
+            if shouldShowDockGradient {
+                companionDockGradient
+                    .transition(.opacity)
+            }
 
-                // Render based on display mode
-                switch displayMode {
-                case .hidden:
-                    EmptyView()
+            // Render based on display mode
+            switch displayMode {
+            case .hidden:
+                EmptyView()
 
-                case .resting:
-                    restingView
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                        .padding(.bottom, 28 + geometry.safeAreaInsets.bottom)
+            case .resting:
+                restingView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .safeAreaPadding(.bottom, 28)
 
-                case .nudging(let label):
-                    nudgingView(label: label)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                        .padding(.bottom, 28 + geometry.safeAreaInsets.bottom)
+            case .nudging(let label):
+                nudgingView(label: label)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .safeAreaPadding(.bottom, 28)
 
-                case .expanded:
-                    expandedView(geometry: geometry)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                        .padding(.bottom, 24 + geometry.safeAreaInsets.bottom)
+            case .expanded:
+                expandedView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .safeAreaPadding(.bottom, 24)
 
-                case .journeyMode(let progress, let step, let totalSteps, let stepLabel):
-                    journeyModeView(progress: progress, step: step, totalSteps: totalSteps, stepLabel: stepLabel)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                        .padding(.bottom, 28 + geometry.safeAreaInsets.bottom)
+            case .journeyMode(let progress, let step, let totalSteps, let stepLabel):
+                journeyModeView(progress: progress, step: step, totalSteps: totalSteps, stepLabel: stepLabel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .safeAreaPadding(.bottom, 28)
 
-                case .minimal:
-                    minimalView
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                        .padding(.bottom, 28 + geometry.safeAreaInsets.bottom)
-                        .padding(.trailing, 20)
-                }
+            case .minimal:
+                minimalView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .safeAreaPadding(.bottom, 28)
+                    .padding(.trailing, 20)
             }
         }
-        .ignoresSafeArea(edges: .bottom)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: displayMode)
+        // PT-5-10: expand/collapse haptics are now declarative, keyed on the
+        // expanded state. Expanding fires the soft companion pulse; collapsing
+        // fires a light impact — matching the prior imperative calls in
+        // `expandToPanel()` / `collapseToButton()`.
+        .sensoryFeedback(trigger: state.isExpanded) { _, expanded in
+            expanded
+                ? .impact(flexibility: .soft, intensity: 0.5)
+                : .impact(weight: .light)
+        }
         .onChange(of: coordinator.companionContext) { _, newContext in
             viewModel.updateContext(newContext)
         }
@@ -182,12 +193,14 @@ public struct CompanionOverlay: View {
         }
     }
 
-    /// Subtle gradient fade that gives the companion button visual breathing room
-    private func companionDockGradient(safeAreaBottom: CGFloat) -> some View {
+    /// Subtle gradient fade that gives the companion button visual breathing
+    /// room. PT-6-8: drops the explicit `safeAreaBottom` parameter — the
+    /// gradient bleeds to the screen edge via `.ignoresSafeArea`, which is
+    /// what we want for the fade, so no inset measurement is needed.
+    private var companionDockGradient: some View {
         PatinaGradients.companionDock()
             .frame(height: 140)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .padding(.bottom, safeAreaBottom)
             .allowsHitTesting(false)
             .ignoresSafeArea(edges: .bottom)
     }
@@ -222,7 +235,9 @@ public struct CompanionOverlay: View {
 
     // MARK: - State 3: Expanded
 
-    private func expandedView(geometry: GeometryProxy) -> some View {
+    // PT-6-8: the unused `geometry: GeometryProxy` parameter is dropped now
+    // that the body no longer threads a GeometryReader proxy through.
+    private var expandedView: some View {
         VStack(spacing: 0) {
             // Panel
             VStack(spacing: 0) {
@@ -438,11 +453,17 @@ public struct CompanionOverlay: View {
     private var minimalView: some View {
         Button { expandToPanel() } label: {
             ZStack {
-                Circle()
-                    .fill(PatinaColors.charcoal.opacity(0.7))
+                // PT-5-7: Liquid Glass minimal pill. A charcoal tint keeps
+                // the Strata mark legible while letting the glass pick up
+                // the camera / content behind it, replacing the prior
+                // charcoal-fill-over-`.ultraThinMaterial` stack.
+                // `CompanionOverlay` is a `public` View, so the compiler
+                // infers the module's API availability floor here (below the
+                // iOS-26 `glassEffect`); the `#available` guard satisfies it
+                // while still always taking the glass path on our 26.2 target.
+                Color.clear
                     .frame(width: 44, height: 44)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Circle())
+                    .companionGlassCircle()
 
                 VStack(spacing: 2.5) {
                     Capsule().fill(PatinaColors.offWhite).frame(width: 16, height: 1.5)
@@ -527,7 +548,8 @@ public struct CompanionOverlay: View {
     // MARK: - Actions
 
     private func expandToPanel() {
-        HapticManager.shared.companionPulse()
+        // PT-5-10: the soft pulse is fired declaratively via
+        // `.sensoryFeedback(trigger: state.isExpanded)` below.
         CompanionAnalytics.shared.trackFABTapped(screen: coordinator.currentScreen.displayName)
 
         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
@@ -556,7 +578,8 @@ public struct CompanionOverlay: View {
     }
 
     private func collapseToButton() {
-        HapticManager.shared.impact(.light)
+        // PT-5-10: the light-impact collapse haptic is fired declaratively
+        // via `.sensoryFeedback(trigger: state.isExpanded)` below.
         let dwellTime = panelOpenTime.map { Date().timeIntervalSince($0) } ?? 0
         CompanionAnalytics.shared.trackPanelClosed(
             screen: coordinator.currentScreen.displayName,
@@ -588,6 +611,29 @@ public struct CompanionOverlay: View {
         if step < currentStep { return PatinaColors.clay }
         if step == currentStep { return PatinaColors.offWhite }
         return Color.white.opacity(0.2)
+    }
+}
+
+// MARK: - Liquid Glass helper (PT-5-7)
+
+private extension View {
+    /// Applies the charcoal-tinted Liquid Glass circle used by the Companion
+    /// minimal pill. Factored into a helper with an explicit `#available`
+    /// guard because `CompanionOverlay` is a `public` View — the compiler
+    /// infers the module API-availability floor on inline `glassEffect`
+    /// calls, which sits below iOS 26. On our 26.2 target the glass path is
+    /// always taken; the `.ultraThinMaterial` arm is a compile-floor
+    /// fallback only.
+    @ViewBuilder
+    func companionGlassCircle() -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(.regular.tint(PatinaColors.charcoal.opacity(0.7)), in: .circle)
+        } else {
+            self
+                .background(PatinaColors.charcoal.opacity(0.7))
+                .background(.ultraThinMaterial)
+                .clipShape(Circle())
+        }
     }
 }
 

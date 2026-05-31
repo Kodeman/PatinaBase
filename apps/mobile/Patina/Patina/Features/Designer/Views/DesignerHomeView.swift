@@ -12,9 +12,22 @@ import SwiftUI
 struct DesignerHomeView: View {
     @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel = DesignerHomeViewModel()
+    /// PT-3-7: drives the bell unread-count badge in the dashboard header.
+    @State private var notificationsViewModel = NotificationsViewModel()
     /// Drives the contextual help-panel sheet attached to the Designer surface.
     /// Toggled by the `?` button in the dashboard header.
     @State private var isHelpPanelPresented: Bool = false
+
+    /// PT-4-10: dual-role gate for the header mode-switch chip. A designer who
+    /// also holds the consumer role can flip back to the consumer home.
+    private var isDualRole: Bool {
+        let roles = ProfileService.shared.roles
+        return roles.contains("designer") && (roles.contains("consumer") || roles.isEmpty)
+    }
+
+    private var unreadCount: Int {
+        notificationsViewModel.notifications.filter { !$0.isRead }.count
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -35,6 +48,8 @@ struct DesignerHomeView: View {
         }
         .background(PatinaColors.offWhite)
         .task { await viewModel.load() }
+        // PT-3-7: hydrate the unread count for the header bell badge.
+        .task { await notificationsViewModel.load() }
         .refreshable { await viewModel.load() }
         .onAppear {
             // mainHomeView resolves to DesignerHomeView implicitly (without
@@ -87,24 +102,100 @@ struct DesignerHomeView: View {
                     .foregroundStyle(PatinaColors.agedOak)
             }
             Spacer()
-            // `?` help-panel trigger — surfaces every help article for the
-            // Designer-mode home surface in a sheet.
-            Button {
-                isHelpPanelPresented = true
-            } label: {
-                Image(systemName: "questionmark.circle")
-                    .font(.system(size: 17, weight: .regular))
-                    .foregroundStyle(PatinaColors.mocha)
-                    .frame(width: 36, height: 36)
-                    .contentShape(Rectangle())
+            HStack(spacing: 4) {
+                // PT-4-10: dual-role users can flip back to the consumer home.
+                if isDualRole {
+                    Button {
+                        switchToConsumerHome()
+                    } label: {
+                        MonoLabel(text: "CONSUMER", size: PatinaTypography.monoSmall, color: PatinaColors.mocha, tracking: 1.5)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(PatinaColors.softCream))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Switch home mode")
+                    .accessibilityHint("Switches to your consumer home.")
+                    .accessibilityIdentifier("DesignerHomeView.RoleChip")
+                }
+                // PT-3-7: bell → notifications, badge from unread count.
+                Button {
+                    coordinator.navigate(to: .notifications)
+                } label: {
+                    Image(systemName: "bell")
+                        .font(.system(size: 17, weight: .regular))
+                        .foregroundStyle(PatinaColors.mocha)
+                        .frame(width: 36, height: 36)
+                        .overlay(alignment: .topTrailing) {
+                            if unreadCount > 0 {
+                                Text(unreadCount > 9 ? "9+" : "\(unreadCount)")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundStyle(PatinaColors.offWhite)
+                                    .padding(.horizontal, 4)
+                                    .frame(minWidth: 14, minHeight: 14)
+                                    .background(Capsule().fill(PatinaColors.clay))
+                                    .offset(x: -4, y: 4)
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Notifications")
+                .accessibilityValue(unreadCount > 0 ? "\(unreadCount) unread" : "No unread notifications")
+                .accessibilityHint("Opens your notifications.")
+                .accessibilityIdentifier("DesignerHomeView.BellButton")
+                // `?` help-panel trigger — surfaces every help article for the
+                // Designer-mode home surface in a sheet.
+                Button {
+                    isHelpPanelPresented = true
+                } label: {
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 17, weight: .regular))
+                        .foregroundStyle(PatinaColors.mocha)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Help")
+                .accessibilityHint("Opens the help panel for the designer dashboard.")
+                .accessibilityIdentifier("DesignerHomeView.HelpButton")
+                // PT-0-6: profile monogram entry point.
+                Button {
+                    coordinator.navigate(to: .profile)
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(PatinaGradients.earth)
+                            .frame(width: 36, height: 36)
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(PatinaColors.offWhite)
+                    }
+                    .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Profile")
+                .accessibilityHint("Opens your profile and account settings.")
+                .accessibilityIdentifier("DesignerHomeView.ProfileButton")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Help")
-            .accessibilityHint("Opens the help panel for the designer dashboard.")
-            .accessibilityIdentifier("DesignerHomeView.HelpButton")
         }
         .padding(.top, 56)
         .padding(.horizontal, 24)
+    }
+
+    /// PT-4-10: flip the saved home preference to `.consumer` and capture the
+    /// switch. `SettingsService` is `@Observable`; `mainHomeView` reads
+    /// `preferredHomeMode`, so this re-routes the root to `DailyRoomView`.
+    private func switchToConsumerHome() {
+        HapticManager.shared.impact(.light)
+        SettingsService.shared.setPreferredHomeMode(.consumer)
+        PostHogService.shared.capture("home_mode_switched", properties: [
+            "source": "header",
+            "to": SettingsService.HomeMode.consumer.rawValue,
+            "from": SettingsService.HomeMode.designer.rawValue
+        ])
     }
 
     // MARK: - Quick actions
