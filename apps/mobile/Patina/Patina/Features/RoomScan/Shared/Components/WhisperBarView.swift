@@ -29,7 +29,7 @@ struct WhisperBarView: View {
                 .transition(.opacity)
 
             Text(state.subtext)
-                .font(.custom("DMMono-Regular", size: 10))
+                .font(PatinaTypography.mono)
                 .tracking(0.6)
                 .textCase(.uppercase)
                 .foregroundStyle(PatinaColors.clay)

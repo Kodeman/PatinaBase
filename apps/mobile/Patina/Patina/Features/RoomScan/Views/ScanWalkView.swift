@@ -150,7 +150,7 @@ struct ScanWalkView: View {
                         .foregroundStyle(PatinaColors.offWhite)
 
                     Text("Tracking dropped — usually from a sudden move or a featureless wall. Let's try once more from where you stand.")
-                        .font(.custom("Inter-Regular", size: 14))
+                        .font(PatinaTypography.bodySmall)
                         .foregroundStyle(PatinaColors.offWhite.opacity(0.75))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
@@ -161,7 +161,7 @@ struct ScanWalkView: View {
                 VStack(spacing: 12) {
                     Button(action: viewModel.didTapRetryAfterSessionLost) {
                         Text("Try again")
-                            .font(.custom("Inter-Medium", size: 15))
+                            .font(PatinaTypography.uiAction)
                             .foregroundStyle(PatinaColors.charcoal)
                             .frame(maxWidth: .infinity)
                             .frame(height: 52)
@@ -171,7 +171,7 @@ struct ScanWalkView: View {
 
                     Button(action: viewModel.didTapCancelAfterSessionLost) {
                         Text("Cancel scan")
-                            .font(.custom("Inter-Medium", size: 15))
+                            .font(PatinaTypography.uiAction)
                             .foregroundStyle(PatinaColors.offWhite)
                             .frame(maxWidth: .infinity)
                             .frame(height: 52)
@@ -196,7 +196,7 @@ struct ScanWalkView: View {
             VStack(spacing: 12) {
                 Button(action: viewModel.didChooseFinishIdle) {
                     Text("Finish with this")
-                        .font(.custom("Inter-Medium", size: 15))
+                        .font(PatinaTypography.uiAction)
                         .foregroundStyle(PatinaColors.offWhite)
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)
@@ -206,7 +206,7 @@ struct ScanWalkView: View {
 
                 Button(action: viewModel.didChooseKeepGoing) {
                     Text("Keep going")
-                        .font(.custom("Inter-Medium", size: 15))
+                        .font(PatinaTypography.uiAction)
                         .foregroundStyle(PatinaColors.charcoal)
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)

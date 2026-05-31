@@ -48,7 +48,7 @@ struct ProfileView: View {
                         .frame(width: 80, height: 80)
                         .overlay(
                             Text(viewModel.userInitial)
-                                .font(.custom("PlayfairDisplay-Medium", size: 28))
+                                .font(PatinaTypography.displaySmall)
                                 .foregroundStyle(PatinaColors.offWhite)
                         )
                         .padding(.bottom, 16)

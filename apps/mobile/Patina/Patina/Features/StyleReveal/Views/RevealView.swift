@@ -36,7 +36,7 @@ struct RevealView: View {
                 Spacer()
 
                 Text("THE AESTHETE ENGINE")
-                    .font(.custom("DMMono-Regular", size: 10))
+                    .font(PatinaTypography.mono)
                     .tracking(1.0)
                     .foregroundStyle(PatinaColors.clay)
 

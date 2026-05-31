@@ -110,11 +110,11 @@ struct ManualRoomEntryView: View {
             }
             .padding(.top, 20)
             Text("Room details")
-                .font(.custom("PlayfairDisplay-Regular", size: 22))
+                .font(PatinaTypography.h4)
                 .foregroundStyle(PatinaColors.charcoal)
                 .padding(.top, 12)
             Text("Help us understand your space")
-                .font(.custom("DMMono-Regular", size: 9))
+                .font(PatinaTypography.monoSmall)
                 .tracking(0.4)
                 .textCase(.uppercase)
                 .foregroundStyle(PatinaColors.agedOak)

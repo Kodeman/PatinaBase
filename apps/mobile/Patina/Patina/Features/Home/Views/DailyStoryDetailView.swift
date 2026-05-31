@@ -78,7 +78,7 @@ struct DailyStoryDetailView: View {
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.clay)
                 Text(story.title)
-                    .font(.custom("PlayfairDisplay-Regular", size: 26))
+                    .font(PatinaTypography.h2)
                     .foregroundStyle(PatinaColors.offWhite)
                     .lineSpacing(2)
             }

@@ -68,7 +68,7 @@ struct EdgeToastView: View {
                             Text(label)
                             Image(systemName: "arrow.right")
                         }
-                        .font(.custom("Inter-SemiBold", size: 12))
+                        .font(PatinaTypography.captionMedium)
                         .foregroundStyle(PatinaColors.charcoal)
                         .padding(.top, 6)
                     }

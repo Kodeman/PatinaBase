@@ -44,7 +44,7 @@ struct ConversationHeaderView: View {
 
     private var whisperLabel: some View {
         Text(whisperTop)
-            .font(.custom("DMMono-Regular", size: 10))
+            .font(PatinaTypography.mono)
             .tracking(0.6)
             .textCase(.uppercase)
             .foregroundStyle(PatinaColors.clay)

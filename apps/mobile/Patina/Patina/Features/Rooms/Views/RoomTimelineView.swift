@@ -58,7 +58,7 @@ struct RoomTimelineView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Room Through Time")
-                    .font(.custom("PlayfairDisplay-Regular", size: 22))
+                    .font(PatinaTypography.h4)
                     .foregroundStyle(PatinaColors.charcoal)
                     .padding(.horizontal, 20)
                     .padding(.top, 12)

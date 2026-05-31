@@ -21,7 +21,7 @@ struct StylePillButton: View {
                 Text(emoji)
                     .font(.system(size: 18))
                 Text(label)
-                    .font(.custom("Inter-Regular", size: 14))
+                    .font(PatinaTypography.bodySmall)
             }
             .foregroundStyle(isSelected ? PatinaColors.offWhite : PatinaColors.charcoal)
             .padding(.vertical, 14)

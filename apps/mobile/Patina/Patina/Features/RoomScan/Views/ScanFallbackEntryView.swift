@@ -97,7 +97,7 @@ struct ScanFallbackEntryView: View {
                     VStack(spacing: 6) {
                         Text(emoji).font(.system(size: 20))
                         Text(label)
-                            .font(.custom("Inter-Medium", size: 12))
+                            .font(PatinaTypography.caption)
                     }
                     .foregroundStyle(selectedType == id ? PatinaColors.offWhite : PatinaColors.charcoal)
                     .frame(maxWidth: .infinity)
@@ -124,7 +124,7 @@ struct ScanFallbackEntryView: View {
     private func sectionLabel(_ text: String) -> some View {
         HStack {
             Text(text)
-                .font(.custom("DMMono-Regular", size: 10))
+                .font(PatinaTypography.mono)
                 .tracking(0.6)
                 .textCase(.uppercase)
                 .foregroundStyle(PatinaColors.clay)
@@ -144,19 +144,19 @@ struct ScanFallbackEntryView: View {
                 UserDefaults.standard.set(unit.rawValue, forKey: unitKey)
             }) {
                 Text("ft")
-                    .font(.custom("DMMono-Regular", size: 10))
+                    .font(PatinaTypography.mono)
                     .foregroundStyle(unit == .feet ? PatinaColors.charcoal : PatinaColors.agedOak)
             }
             .buttonStyle(.plain)
             Text("/")
-                .font(.custom("DMMono-Regular", size: 10))
+                .font(PatinaTypography.mono)
                 .foregroundStyle(PatinaColors.agedOak)
             Button(action: {
                 unit = .meters
                 UserDefaults.standard.set(unit.rawValue, forKey: unitKey)
             }) {
                 Text("m")
-                    .font(.custom("DMMono-Regular", size: 10))
+                    .font(PatinaTypography.mono)
                     .foregroundStyle(unit == .meters ? PatinaColors.charcoal : PatinaColors.agedOak)
             }
             .buttonStyle(.plain)
@@ -192,7 +192,7 @@ struct ScanFallbackEntryView: View {
                         )
                 )
             Text(title.uppercased())
-                .font(.custom("DMMono-Regular", size: 9))
+                .font(PatinaTypography.monoSmall)
                 .tracking(0.4)
                 .foregroundStyle(PatinaColors.clay)
         }
@@ -211,7 +211,7 @@ struct ScanFallbackEntryView: View {
     private func stepper(title: String, value: Binding<Int>) -> some View {
         HStack {
             Text(title)
-                .font(.custom("Inter-Medium", size: 13))
+                .font(PatinaTypography.uiSmall)
                 .foregroundStyle(PatinaColors.charcoal)
             Spacer()
             Button(action: { if value.wrappedValue > 0 { value.wrappedValue -= 1 } }) {

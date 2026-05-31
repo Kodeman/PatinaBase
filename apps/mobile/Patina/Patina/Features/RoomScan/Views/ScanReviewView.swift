@@ -96,7 +96,7 @@ public struct ScanReviewView: View {
             ProgressView()
                 .tint(PatinaColors.charcoal)
             Text("Preparing your scan…")
-                .font(.custom("Inter-Regular", size: 14))
+                .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.agedOak)
             Spacer()
         }
@@ -106,7 +106,7 @@ public struct ScanReviewView: View {
         VStack(spacing: 16) {
             Spacer()
             Text("Something went wrong")
-                .font(.custom("PlayfairDisplay-Italic", size: 22))
+                .font(PatinaTypography.patinaVoiceLarge)
                 .foregroundStyle(PatinaColors.charcoal.opacity(0.8))
             if let loadError {
                 Text(loadError)
@@ -123,7 +123,7 @@ public struct ScanReviewView: View {
             Spacer()
             Button(action: onCancel) {
                 Text("Discard this scan")
-                    .font(.custom("Inter-Medium", size: 15))
+                    .font(PatinaTypography.uiAction)
                     .foregroundStyle(PatinaColors.charcoal)
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
@@ -167,14 +167,14 @@ public struct ScanReviewView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: onCancel) {
                         Text("Discard")
-                            .font(.custom("Inter-Regular", size: 14))
+                            .font(PatinaTypography.bodySmall)
                             .foregroundStyle(PatinaColors.agedOak)
                     }
                     .buttonStyle(.plain)
                 }
                 ToolbarItem(placement: .principal) {
                     Text("Review")
-                        .font(.custom("DMMono-Regular", size: 10))
+                        .font(PatinaTypography.mono)
                         .tracking(0.8)
                         .textCase(.uppercase)
                         .foregroundStyle(PatinaColors.clay)
@@ -218,7 +218,7 @@ public struct ScanReviewView: View {
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Your room, your way")
-                .font(.custom("PlayfairDisplay-Italic", size: 22))
+                .font(PatinaTypography.patinaVoiceLarge)
                 .foregroundStyle(PatinaColors.charcoal.opacity(0.85))
             Text("Give the room a name, pick the photo you love most, and jot down anything worth remembering. You can share it later.")
                 .font(.custom("Inter-Regular", size: 13))
@@ -258,7 +258,7 @@ public struct ScanReviewView: View {
                         Image(systemName: "photo.on.rectangle")
                             .font(.system(size: 11, weight: .medium))
                         Text("Change")
-                            .font(.custom("Inter-Medium", size: 12))
+                            .font(PatinaTypography.caption)
                     }
                     .foregroundStyle(PatinaColors.charcoal)
                     .padding(.horizontal, 12)
@@ -300,7 +300,7 @@ public struct ScanReviewView: View {
                     .accessibilityLabel("Reorder supporting photos")
                 }
                 Text("\(visibleSupportingPhotos(manifest: manifest).count)")
-                    .font(.custom("DMMono-Regular", size: 10))
+                    .font(PatinaTypography.mono)
                     .foregroundStyle(PatinaColors.agedOak)
             }
 
@@ -325,7 +325,7 @@ public struct ScanReviewView: View {
             let hidden = hiddenSupportingPhotos(manifest: manifest)
             if !hidden.isEmpty {
                 Text("Hidden from your designer (\(hidden.count))")
-                    .font(.custom("DMMono-Regular", size: 9))
+                    .font(PatinaTypography.monoSmall)
                     .tracking(0.4)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.clay)
@@ -409,7 +409,7 @@ public struct ScanReviewView: View {
 
                 if roomNotes.isEmpty {
                     Text("Anything worth remembering? (private to you for now)")
-                        .font(.custom("Inter-Regular", size: 14))
+                        .font(PatinaTypography.bodySmall)
                         .foregroundStyle(PatinaColors.agedOak.opacity(0.7))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 14)
@@ -417,7 +417,7 @@ public struct ScanReviewView: View {
                 }
 
                 TextEditor(text: $roomNotes)
-                    .font(.custom("Inter-Regular", size: 14))
+                    .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.charcoal)
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, 12)
@@ -437,7 +437,7 @@ public struct ScanReviewView: View {
 
             Button(action: { Task { await submit(skipping: true) } }) {
                 Text("Save without notes")
-                    .font(.custom("Inter-Medium", size: 14))
+                    .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.agedOak)
                     .frame(maxWidth: .infinity)
                     .frame(height: 44)
@@ -630,7 +630,7 @@ public struct ScanReviewView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(reorderableTitle(for: photo))
-                                    .font(.custom("Inter-Medium", size: 13))
+                                    .font(PatinaTypography.uiSmall)
                                     .foregroundStyle(PatinaColors.charcoal)
                                 if let caption = captions[photo.id] ?? photo.userAnnotation,
                                    !caption.isEmpty {
@@ -729,7 +729,7 @@ public struct ScanReviewView: View {
 
                     if binding.wrappedValue.isEmpty {
                         Text("What's worth noticing here?")
-                            .font(.custom("Inter-Regular", size: 14))
+                            .font(PatinaTypography.bodySmall)
                             .foregroundStyle(PatinaColors.agedOak.opacity(0.7))
                             .padding(.horizontal, 16)
                             .padding(.vertical, 14)
@@ -737,7 +737,7 @@ public struct ScanReviewView: View {
                     }
 
                     TextEditor(text: binding)
-                        .font(.custom("Inter-Regular", size: 14))
+                        .font(PatinaTypography.bodySmall)
                         .foregroundStyle(PatinaColors.charcoal)
                         .scrollContentBackground(.hidden)
                         .padding(.horizontal, 12)
@@ -764,7 +764,7 @@ public struct ScanReviewView: View {
 
     private func sectionLabel(_ text: String) -> some View {
         Text(text)
-            .font(.custom("DMMono-Regular", size: 10))
+            .font(PatinaTypography.mono)
             .tracking(0.6)
             .textCase(.uppercase)
             .foregroundStyle(PatinaColors.clay)

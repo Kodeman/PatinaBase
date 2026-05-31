@@ -45,7 +45,7 @@ struct ScanFloorPlanPreviewView: View {
                 HStack(spacing: 12) {
                     Button(action: onRescan) {
                         Text("Rescan")
-                            .font(.custom("Inter-Medium", size: 15))
+                            .font(PatinaTypography.uiAction)
                             .foregroundStyle(PatinaColors.charcoal)
                             .padding(.horizontal, 28)
                             .frame(height: 52)
@@ -58,7 +58,7 @@ struct ScanFloorPlanPreviewView: View {
 
                     Button(action: onAccept) {
                         Text("This Looks Right")
-                            .font(.custom("Inter-Medium", size: 15))
+                            .font(PatinaTypography.uiAction)
                             .foregroundStyle(PatinaColors.offWhite)
                             .frame(maxWidth: .infinity)
                             .frame(height: 52)
@@ -131,10 +131,10 @@ struct ScanFloorPlanPreviewView: View {
     private func stat(value: String, label: String) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.custom("PlayfairDisplay-Medium", size: 24))
+                .font(PatinaTypography.headlineSerif)
                 .foregroundStyle(PatinaColors.charcoal)
             Text(label)
-                .font(.custom("DMMono-Regular", size: 9))
+                .font(PatinaTypography.monoSmall)
                 .tracking(0.5)
                 .textCase(.uppercase)
                 .foregroundStyle(PatinaColors.clay)

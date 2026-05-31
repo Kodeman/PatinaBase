@@ -203,10 +203,10 @@ struct RoomProjectView: View {
     private func header(for room: RoomModel) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(room.name)
-                .font(.custom("PlayfairDisplay-Regular", size: 26))
+                .font(PatinaTypography.h2)
                 .foregroundStyle(PatinaColors.charcoal)
             Text(metaLine(for: room))
-                .font(.custom("DMMono-Regular", size: 9))
+                .font(PatinaTypography.monoSmall)
                 .tracking(0.4)
                 .textCase(.uppercase)
                 .foregroundStyle(PatinaColors.agedOak)

@@ -64,11 +64,11 @@ struct RoomSettingsView: View {
             }
             .padding(.top, 20)
             Text("Room Settings")
-                .font(.custom("PlayfairDisplay-Regular", size: 22))
+                .font(PatinaTypography.h4)
                 .foregroundStyle(PatinaColors.charcoal)
                 .padding(.top, 12)
             Text(room?.name ?? "")
-                .font(.custom("DMMono-Regular", size: 9))
+                .font(PatinaTypography.monoSmall)
                 .tracking(0.4)
                 .textCase(.uppercase)
                 .foregroundStyle(PatinaColors.agedOak)

@@ -52,7 +52,7 @@ struct PauseMenuView: View {
     ) -> some View {
         Button(action: action) {
             Text(label)
-                .font(.custom("Inter-Regular", size: 16))
+                .font(PatinaTypography.body)
                 .foregroundStyle(foreground)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .padding(.vertical, 14)

@@ -159,7 +159,7 @@ struct ProductDetailView: View {
                         // cues, and palette).
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
                             Text(product.fullFormattedPrice)
-                                .font(.custom("PlayfairDisplay-Medium", size: 28))
+                                .font(PatinaTypography.displaySmall)
                                 .foregroundStyle(PatinaColors.charcoal)
 
                             HelpTooltip(

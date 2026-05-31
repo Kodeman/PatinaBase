@@ -29,7 +29,7 @@ struct StyleContinueButton: View {
             if isEnabled { action() }
         }) {
             Text(title)
-                .font(.custom("Inter-Medium", size: 15))
+                .font(PatinaTypography.uiAction)
                 .tracking(0.3)
                 .foregroundStyle(PatinaColors.offWhite)
                 .frame(maxWidth: .infinity)

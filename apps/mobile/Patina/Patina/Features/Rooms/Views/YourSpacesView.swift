@@ -78,7 +78,7 @@ struct YourSpacesView: View {
         HStack(alignment: .firstTextBaseline) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("Your Spaces")
-                    .font(.custom("PlayfairDisplay-Regular", size: 24))
+                    .font(PatinaTypography.h3)
                     .foregroundStyle(PatinaColors.charcoal)
                 // Contextual help: explains the "Your Spaces" model —
                 // every captured room as a gallery card with budget +

@@ -64,7 +64,7 @@ struct ScanHUDView: View {
             .frame(width: 36, height: 36)
 
             Text(label)
-                .font(.custom("DMMono-Regular", size: 10))
+                .font(PatinaTypography.mono)
                 .tracking(0.5)
                 .textCase(.uppercase)
                 .foregroundStyle(isFastMovementWarning

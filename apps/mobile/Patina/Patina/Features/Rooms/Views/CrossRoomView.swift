@@ -54,10 +54,10 @@ struct CrossRoomView: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Text("All Items")
-                    .font(.custom("PlayfairDisplay-Regular", size: 22))
+                    .font(PatinaTypography.h4)
                     .foregroundStyle(PatinaColors.charcoal)
                 Text(summary)
-                    .font(.custom("DMMono-Regular", size: 9))
+                    .font(PatinaTypography.monoSmall)
                     .tracking(0.4)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.agedOak)

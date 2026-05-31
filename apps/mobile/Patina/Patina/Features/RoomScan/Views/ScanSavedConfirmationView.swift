@@ -52,7 +52,7 @@ struct ScanSavedConfirmationView: View {
 
                     if let name = displayRoomName, !name.isEmpty {
                         Text(name)
-                            .font(.custom("Inter-Medium", size: 14))
+                            .font(PatinaTypography.bodySmallMedium)
                             .foregroundStyle(PatinaColors.agedOak)
                     }
 
@@ -78,7 +78,7 @@ struct ScanSavedConfirmationView: View {
 
                     Button(action: onSetStyle) {
                         Text("Set my style")
-                            .font(.custom("Inter-Medium", size: 14))
+                            .font(PatinaTypography.bodySmallMedium)
                             .foregroundStyle(PatinaColors.agedOak)
                             .frame(maxWidth: .infinity)
                             .frame(height: 44)
@@ -98,7 +98,7 @@ struct ScanSavedConfirmationView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Uploading")
-                    .font(.custom("DMMono-Regular", size: 10))
+                    .font(PatinaTypography.mono)
                     .tracking(0.6)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.clay)

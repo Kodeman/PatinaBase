@@ -96,7 +96,7 @@ struct DailyProductDetailView: View {
             VStack {
                 Spacer()
                 Text(recommendation.whyCopy)
-                    .font(.custom("PlayfairDisplay-Italic", size: 18))
+                    .font(PatinaTypography.patinaVoice)
                     .foregroundStyle(PatinaColors.offWhite)
                     .lineSpacing(4)
                     .padding(.horizontal, 24)
@@ -222,7 +222,7 @@ struct DailyProductDetailView: View {
     private var description: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("About this piece")
-                .font(.custom("DMMono-Regular", size: 9))
+                .font(PatinaTypography.monoSmall)
                 .tracking(0.8)
                 .textCase(.uppercase)
                 .foregroundStyle(PatinaColors.agedOak)
@@ -236,7 +236,7 @@ struct DailyProductDetailView: View {
     private var specsGrid: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Details")
-                .font(.custom("DMMono-Regular", size: 9))
+                .font(PatinaTypography.monoSmall)
                 .tracking(0.8)
                 .textCase(.uppercase)
                 .foregroundStyle(PatinaColors.agedOak)
