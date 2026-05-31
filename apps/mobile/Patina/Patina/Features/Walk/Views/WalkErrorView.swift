@@ -175,7 +175,7 @@ struct WalkErrorOverlay: View {
                 .padding(.horizontal, PatinaSpacing.lg)
                 .padding(.vertical, PatinaSpacing.sm)
                 .background(PatinaColors.clay)
-                .cornerRadius(PatinaRadius.lg)
+                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
         }
     }
 

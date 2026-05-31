@@ -151,7 +151,7 @@ struct WalkInvitationView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PatinaSpacing.md)
                     .background(PatinaColors.clay)
-                    .cornerRadius(PatinaRadius.lg)
+                    .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
             }
             .accessibilityIdentifier("walkInvitation.letsWalkButton")
             .buttonStyle(ScaleButtonStyle())

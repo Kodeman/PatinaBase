@@ -77,7 +77,7 @@ struct RoomNamingView: View {
                             .font(PatinaTypography.body)
                             .padding(PatinaSpacing.md)
                             .background(PatinaColors.Background.secondary.opacity(0.8))
-                            .cornerRadius(PatinaRadius.md)
+                            .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md))
                             .focused($isNameFocused)
                             .accessibilityIdentifier("roomNaming.nameField")
                     }
@@ -118,7 +118,7 @@ struct RoomNamingView: View {
                                     ? PatinaColors.clay.opacity(0.5)
                                     : PatinaColors.clay
                             )
-                            .cornerRadius(PatinaRadius.lg)
+                            .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
                     }
                     .accessibilityIdentifier("roomNaming.saveButton")
                     .disabled(roomName.isEmpty)
@@ -177,7 +177,7 @@ struct RoomNamingView: View {
                         ? PatinaColors.clay
                         : PatinaColors.Text.secondary
                 )
-                .cornerRadius(PatinaRadius.md)
+                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md))
                 .overlay(
                     RoundedRectangle(cornerRadius: PatinaRadius.md)
                         .stroke(

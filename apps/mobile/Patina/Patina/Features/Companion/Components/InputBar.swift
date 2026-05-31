@@ -66,7 +66,7 @@ public struct InputBar: View {
             .padding(.horizontal, PatinaSpacing.md)
             .padding(.vertical, PatinaSpacing.sm)
             .background(PatinaColors.Background.secondary)
-            .cornerRadius(PatinaRadius.xl)
+            .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.xl))
 
             // Voice input button (spec: 44×44px)
             VoiceButton(

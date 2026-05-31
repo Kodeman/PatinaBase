@@ -122,7 +122,7 @@ struct RoomDetailView: View {
                     .padding(.horizontal, PatinaSpacing.md)
                     .padding(.vertical, PatinaSpacing.xs)
                     .background(PatinaColors.Background.secondary)
-                    .cornerRadius(PatinaRadius.sm)
+                    .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.sm))
             }
         }
         .padding(.horizontal, PatinaSpacing.xl)
@@ -176,7 +176,7 @@ struct RoomDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(PatinaSpacing.lg)
         .background(PatinaColors.Background.secondary)
-        .cornerRadius(PatinaRadius.lg)
+        .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
     }
 
     private func dimensionItem(value: String, unit: String, label: String) -> some View {
@@ -222,7 +222,7 @@ struct RoomDetailView: View {
         .frame(maxWidth: .infinity)
         .padding(PatinaSpacing.lg)
         .background(PatinaColors.Background.secondary)
-        .cornerRadius(PatinaRadius.lg)
+        .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
     }
 
     // MARK: - Actions Section
@@ -244,7 +244,7 @@ struct RoomDetailView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PatinaSpacing.md)
                     .background(PatinaColors.clay)
-                    .cornerRadius(PatinaRadius.lg)
+                    .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
@@ -272,7 +272,7 @@ struct RoomDetailView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, PatinaSpacing.md)
                 .background(room?.hasBeenScanned == true ? PatinaColors.Background.secondary : PatinaColors.clay)
-                .cornerRadius(PatinaRadius.lg)
+                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
             }
             .buttonStyle(ScaleButtonStyle())
 
@@ -287,7 +287,7 @@ struct RoomDetailView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PatinaSpacing.md)
                     .background(PatinaColors.Background.secondary)
-                    .cornerRadius(PatinaRadius.lg)
+                    .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
             }
             .buttonStyle(ScaleButtonStyle())
         }

@@ -152,7 +152,7 @@ public struct AuthenticationView: View {
                 .padding(PatinaSpacing.md)
                 .frame(maxWidth: .infinity)
                 .background(Color.green.opacity(0.1))
-                .cornerRadius(PatinaRadius.md)
+                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md))
             }
 
             // Error message
@@ -162,7 +162,7 @@ public struct AuthenticationView: View {
                     .foregroundStyle(.red)
                     .padding(PatinaSpacing.md)
                     .background(Color.red.opacity(0.1))
-                    .cornerRadius(PatinaRadius.md)
+                    .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md))
                     .accessibilityIdentifier("auth.form.errorBanner")
             }
 
@@ -262,7 +262,7 @@ public struct AuthenticationView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, PatinaSpacing.md)
                 .background(PatinaColors.Background.secondary)
-                .cornerRadius(PatinaRadius.lg)
+                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
                 .overlay(
                     RoundedRectangle(cornerRadius: PatinaRadius.lg)
                         .stroke(PatinaColors.mocha, lineWidth: 1)
@@ -327,7 +327,7 @@ public struct AuthenticationView: View {
                 .multilineTextAlignment(.center)
                 .padding(PatinaSpacing.md)
                 .background(PatinaColors.Background.secondary)
-                .cornerRadius(PatinaRadius.lg)
+                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
                 .overlay(
                     RoundedRectangle(cornerRadius: PatinaRadius.lg)
                         .stroke(PatinaColors.clay.opacity(0.2), lineWidth: 1)
@@ -368,7 +368,7 @@ public struct AuthenticationView: View {
                     ? PatinaColors.charcoal
                     : PatinaColors.clay
                 )
-                .cornerRadius(PatinaRadius.lg)
+                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
             }
             .disabled(viewModel.otpToken.count != 6 || viewModel.isVerifyingOtp)
             .accessibilityIdentifier("auth.otp.verifyButton")
@@ -432,7 +432,7 @@ public struct AuthenticationView: View {
                 .padding(PatinaSpacing.md)
                 .frame(maxWidth: .infinity)
                 .background(Color.green.opacity(0.1))
-                .cornerRadius(PatinaRadius.md)
+                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md))
             }
 
             // Resend button
@@ -456,7 +456,7 @@ public struct AuthenticationView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, PatinaSpacing.md)
                 .background(PatinaColors.Background.secondary)
-                .cornerRadius(PatinaRadius.lg)
+                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
                 .overlay(
                     RoundedRectangle(cornerRadius: PatinaRadius.lg)
                         .stroke(PatinaColors.mocha, lineWidth: 1)
@@ -500,7 +500,7 @@ public struct AuthenticationView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, PatinaSpacing.md)
             .background(viewModel.isFormValid ? PatinaColors.charcoal : PatinaColors.clay)
-            .cornerRadius(PatinaRadius.lg)
+            .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
         }
         .disabled(!viewModel.isFormValid || viewModel.isLoading)
         .accessibilityIdentifier("auth.form.primaryButton")
@@ -670,7 +670,7 @@ struct PatinaTextField: View {
         .font(PatinaTypography.body)
         .padding(PatinaSpacing.md)
         .background(PatinaColors.Background.secondary)
-        .cornerRadius(PatinaRadius.lg)
+        .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
         .overlay(
             RoundedRectangle(cornerRadius: PatinaRadius.lg)
                 .stroke(PatinaColors.clay.opacity(0.2), lineWidth: 1)

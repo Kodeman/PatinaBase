@@ -90,7 +90,7 @@ public struct CompanionAuthPanel: View {
             .padding(PatinaSpacing.sm)
             .frame(maxWidth: .infinity)
             .background(Color.red.opacity(0.1))
-            .cornerRadius(PatinaRadius.md)
+            .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md))
     }
 
     // MARK: - Auth Buttons
@@ -125,7 +125,7 @@ public struct CompanionAuthPanel: View {
                 .frame(maxWidth: .infinity, minHeight: 44) // Minimum touch target
                 .padding(.vertical, PatinaSpacing.md)
                 .background(Color.clear)
-                .cornerRadius(PatinaRadius.lg)
+                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
                 .overlay(
                     RoundedRectangle(cornerRadius: PatinaRadius.lg)
                         .stroke(PatinaColors.clay, lineWidth: 1.5)

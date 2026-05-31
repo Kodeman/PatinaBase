@@ -167,7 +167,7 @@ struct MockRoomScanView: View {
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2)
                 .background(Color.black.opacity(0.6))
-                .cornerRadius(2)
+                .clipShape(RoundedRectangle(cornerRadius: 2))
                 .offset(y: -(item.height / 2 + 12))
         }
         .position(position)

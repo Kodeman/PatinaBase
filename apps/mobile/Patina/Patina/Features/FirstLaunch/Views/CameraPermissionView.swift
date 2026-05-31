@@ -92,7 +92,7 @@ struct CameraPermissionView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PatinaSpacing.md)
                     .background(PatinaColors.clay)
-                    .cornerRadius(PatinaRadius.lg)
+                    .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
             }
             .accessibilityIdentifier("cameraPermission.continueButton")
             .buttonStyle(ScaleButtonStyle())
@@ -157,7 +157,7 @@ struct CameraPermissionView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PatinaSpacing.md)
                     .background(PatinaColors.clay)
-                    .cornerRadius(PatinaRadius.lg)
+                    .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
             }
             .buttonStyle(ScaleButtonStyle())
             .padding(.horizontal, PatinaSpacing.xl)

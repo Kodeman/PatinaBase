@@ -89,7 +89,7 @@ public struct QuickActionChip: View {
                     ? AnyShapeStyle(PatinaColors.clay)
                     : AnyShapeStyle(PatinaColors.Background.secondary)
             )
-            .cornerRadius(PatinaRadius.xl)
+            .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.xl))
         }
         .buttonStyle(PressableButtonStyle())
     }
@@ -174,7 +174,7 @@ public struct CompanionNotificationBanner: View {
                 .padding(.horizontal, PatinaSpacing.md)
                 .padding(.vertical, PatinaSpacing.sm)
                 .background(PatinaColors.clay)
-                .cornerRadius(PatinaRadius.lg)
+                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
 
                 Button("Later") {
                     onDismiss()
@@ -191,7 +191,7 @@ public struct CompanionNotificationBanner: View {
         }
         .padding(PatinaSpacing.lg)
         .background(PatinaColors.Background.secondary)
-        .cornerRadius(PatinaRadius.lg)
+        .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
     }
 }
 

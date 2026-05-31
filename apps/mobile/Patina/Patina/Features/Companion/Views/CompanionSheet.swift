@@ -124,7 +124,7 @@ struct QuickActionButton: View {
             .frame(maxWidth: .infinity, minHeight: 44)
             .background(action.isPrimary ? PatinaColors.clay : Color.clear)
             .foregroundStyle(action.isPrimary ? PatinaColors.offWhite : PatinaColors.charcoal)
-            .cornerRadius(PatinaRadius.lg)
+            .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
             .overlay(
                 RoundedRectangle(cornerRadius: PatinaRadius.lg)
                     .strokeBorder(

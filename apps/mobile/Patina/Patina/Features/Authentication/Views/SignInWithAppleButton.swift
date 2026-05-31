@@ -25,7 +25,7 @@ public struct PatinaSignInWithAppleButton: View {
         .signInWithAppleButtonStyle(.black)
         .frame(maxWidth: .infinity, minHeight: 50, maxHeight: 50)
         .fixedSize(horizontal: false, vertical: true)
-        .cornerRadius(PatinaRadius.lg)
+        .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
     }
 }
 

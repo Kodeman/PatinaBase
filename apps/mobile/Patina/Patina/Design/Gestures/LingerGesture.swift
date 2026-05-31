@@ -194,7 +194,7 @@ struct LingerDemoView: View {
                                     .padding(.horizontal, PatinaSpacing.sm)
                                     .padding(.vertical, PatinaSpacing.xs)
                                     .background(PatinaColors.Background.tertiary)
-                                    .cornerRadius(PatinaRadius.sm)
+                                    .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.sm))
                             }
                         }
                         .transition(.opacity.combined(with: .move(edge: .top)))
@@ -213,7 +213,7 @@ struct LingerDemoView: View {
                 .padding(PatinaSpacing.lg)
                 .frame(maxWidth: .infinity)
                 .background(PatinaColors.Background.secondary)
-                .cornerRadius(PatinaRadius.lg)
+                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
                 .lingerable(
                     stages: 3,
                     stageDuration: 1.0,

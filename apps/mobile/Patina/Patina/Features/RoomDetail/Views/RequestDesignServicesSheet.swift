@@ -107,7 +107,7 @@ struct RequestDesignServicesSheet: View {
         }
         .padding(PatinaSpacing.lg)
         .background(PatinaColors.Background.secondary)
-        .cornerRadius(PatinaRadius.lg)
+        .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
     }
 
     // MARK: - Service Type Section
@@ -163,7 +163,7 @@ struct RequestDesignServicesSheet: View {
                                 ? PatinaColors.clay.opacity(0.1)
                                 : PatinaColors.Background.secondary
                         )
-                        .cornerRadius(PatinaRadius.md)
+                        .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md))
                         .overlay(
                             RoundedRectangle(cornerRadius: PatinaRadius.md)
                                 .stroke(
@@ -202,7 +202,7 @@ struct RequestDesignServicesSheet: View {
             }
             .padding(PatinaSpacing.md)
             .background(PatinaColors.Background.secondary)
-            .cornerRadius(PatinaRadius.md)
+            .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md))
         }
     }
 
@@ -237,7 +237,7 @@ struct RequestDesignServicesSheet: View {
                                         ? PatinaColors.clay
                                         : PatinaColors.Background.secondary
                                 )
-                                .cornerRadius(PatinaRadius.sm)
+                                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.sm))
                         }
                     }
                 }
@@ -282,7 +282,7 @@ struct RequestDesignServicesSheet: View {
                                 ? PatinaColors.clay.opacity(0.1)
                                 : PatinaColors.Background.secondary
                         )
-                        .cornerRadius(PatinaRadius.md)
+                        .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md))
                         .overlay(
                             RoundedRectangle(cornerRadius: PatinaRadius.md)
                                 .stroke(
@@ -330,7 +330,7 @@ struct RequestDesignServicesSheet: View {
                     ? PatinaColors.clay.opacity(0.5)
                     : PatinaColors.clay
             )
-            .cornerRadius(PatinaRadius.lg)
+            .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
         }
         .disabled(isSubmitting || projectDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         .padding(.horizontal, PatinaSpacing.xl)

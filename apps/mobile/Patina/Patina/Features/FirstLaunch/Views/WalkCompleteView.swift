@@ -80,7 +80,7 @@ struct WalkCompleteView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, PatinaSpacing.md)
                         .background(PatinaColors.clay)
-                        .cornerRadius(PatinaRadius.lg)
+                        .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
                 }
                 .accessibilityIdentifier("walkComplete.showMeButton")
                 .buttonStyle(ScaleButtonStyle())

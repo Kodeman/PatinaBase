@@ -137,7 +137,7 @@ struct WalkQuestionOverlay: View {
                         .padding(.horizontal, PatinaSpacing.lg)
                         .padding(.vertical, PatinaSpacing.sm)
                         .background(PatinaColors.clay)
-                        .cornerRadius(PatinaRadius.md)
+                        .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md))
                 }
                 .buttonStyle(ScaleButtonStyle())
                 .transition(.opacity)

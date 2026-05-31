@@ -149,7 +149,7 @@ struct ShareScanSheet: View {
                     }
                     .padding(PatinaSpacing.md)
                     .background(PatinaColors.Background.secondary)
-                    .cornerRadius(PatinaRadius.md)
+                    .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md))
                 }
             }
         }
@@ -185,7 +185,7 @@ struct ShareScanSheet: View {
             }
             .padding(PatinaSpacing.md)
             .background(PatinaColors.Background.secondary)
-            .cornerRadius(PatinaRadius.md)
+            .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md))
         }
         .onChange(of: searchQuery) { _, newValue in
             Task {
@@ -270,7 +270,7 @@ struct ShareScanSheet: View {
                     }
                     .padding(PatinaSpacing.md)
                     .background(PatinaColors.Background.secondary)
-                    .cornerRadius(PatinaRadius.md)
+                    .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md))
                 }
             }
         }
@@ -356,7 +356,7 @@ struct ShareScanSheet: View {
                 }
                 .padding(PatinaSpacing.lg)
                 .background(PatinaColors.Background.secondary)
-                .cornerRadius(PatinaRadius.lg)
+                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
             }
 
             // Access level picker
@@ -397,7 +397,7 @@ struct ShareScanSheet: View {
                                     ? PatinaColors.clay.opacity(0.1)
                                     : PatinaColors.Background.secondary
                             )
-                            .cornerRadius(PatinaRadius.md)
+                            .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md))
                             .overlay(
                                 RoundedRectangle(cornerRadius: PatinaRadius.md)
                                     .stroke(
@@ -438,7 +438,7 @@ struct ShareScanSheet: View {
                                         ? PatinaColors.clay
                                         : PatinaColors.Background.secondary
                                 )
-                                .cornerRadius(PatinaRadius.sm)
+                                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.sm))
                         }
                     }
                 }
@@ -476,7 +476,7 @@ struct ShareScanSheet: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, PatinaSpacing.md)
             .background(PatinaColors.clay)
-            .cornerRadius(PatinaRadius.lg)
+            .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
         }
         .disabled(isSharing || selectedDesigner == nil)
         .padding(.horizontal, PatinaSpacing.xl)

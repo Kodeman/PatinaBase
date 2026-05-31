@@ -82,7 +82,7 @@ struct RoomPlanUnsupportedView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PatinaSpacing.md)
                     .background(PatinaColors.clay)
-                    .cornerRadius(PatinaRadius.lg)
+                    .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
             }
             .padding(.horizontal, PatinaSpacing.xl)
         }
