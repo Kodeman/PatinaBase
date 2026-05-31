@@ -481,15 +481,8 @@ public struct FirstLaunchTour<Content: View>: View {
 /// `@EnvironmentObject` means descendants outside a `FirstLaunchTour` host
 /// (e.g. SwiftUI previews of the anchored subview) DO NOT crash — the model
 /// resolves to `nil` and the modifier becomes a structural no-op.
-private struct FirstLaunchTourModelKey: EnvironmentKey {
-    static let defaultValue: FirstLaunchTourModel? = nil
-}
-
 private extension EnvironmentValues {
-    var firstLaunchTourModel: FirstLaunchTourModel? {
-        get { self[FirstLaunchTourModelKey.self] }
-        set { self[FirstLaunchTourModelKey.self] = newValue }
-    }
+    @Entry var firstLaunchTourModel: FirstLaunchTourModel? = nil
 }
 
 /// Tags a view as the anchor for a specific tour step. When the orchestrator

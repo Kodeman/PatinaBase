@@ -40,7 +40,7 @@ private struct UppercaseModifier: ViewModifier {
     VStack(alignment: .leading, spacing: 16) {
         MonoLabel(text: "Chilton Furniture")
         MonoLabel(text: "92% match", size: PatinaTypography.monoSmall)
-        MonoLabel(text: "Scanned Apr 2", size: PatinaTypography.monoTiny)
+        MonoLabel(text: "Scanned Apr 2", size: PatinaTypography.monoLabel)
         MonoLabel(text: "Step 2 of 4", size: PatinaTypography.monoSmall, color: PatinaColors.clay)
     }
     .padding()

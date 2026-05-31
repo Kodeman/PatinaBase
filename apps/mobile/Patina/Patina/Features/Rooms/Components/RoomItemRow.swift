@@ -33,7 +33,7 @@ struct RoomItemRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.makerName)
-                    .font(.custom("DMMono-Regular", size: 7))
+                    .font(PatinaTypography.bodySmall)
                     .tracking(0.5)
                     .textCase(.uppercase)
                     .foregroundColor(PatinaColors.agedOak)

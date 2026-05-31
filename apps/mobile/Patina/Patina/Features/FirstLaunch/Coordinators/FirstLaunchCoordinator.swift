@@ -246,13 +246,6 @@ public final class FirstLaunchCoordinator {
 
 // MARK: - Environment Key
 
-private struct FirstLaunchCoordinatorKey: EnvironmentKey {
-    static let defaultValue: FirstLaunchCoordinator? = nil
-}
-
 extension EnvironmentValues {
-    public var firstLaunchCoordinator: FirstLaunchCoordinator? {
-        get { self[FirstLaunchCoordinatorKey.self] }
-        set { self[FirstLaunchCoordinatorKey.self] = newValue }
-    }
+    @Entry public var firstLaunchCoordinator: FirstLaunchCoordinator? = nil
 }

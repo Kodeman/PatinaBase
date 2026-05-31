@@ -104,13 +104,6 @@ public final class CameraPermissionService: ObservableObject {
 
 import SwiftUI
 
-private struct CameraPermissionServiceKey: EnvironmentKey {
-    static let defaultValue = CameraPermissionService.shared
-}
-
 extension EnvironmentValues {
-    public var cameraPermissionService: CameraPermissionService {
-        get { self[CameraPermissionServiceKey.self] }
-        set { self[CameraPermissionServiceKey.self] = newValue }
-    }
+    @Entry public var cameraPermissionService: CameraPermissionService = .shared
 }

@@ -663,13 +663,22 @@ public final class AppCoordinator: Coordinator {
 
 // MARK: - Environment Key
 
-private struct AppCoordinatorKey: EnvironmentKey {
-    static let defaultValue: AppCoordinator = AppCoordinator()
+extension AppCoordinator {
+    /// The default the environment falls back to when no coordinator was
+    /// injected. In DEBUG (previews, tests) we spin up a throwaway instance so
+    /// isolated views still render. In release this is a programmer error —
+    /// reading the coordinator without injection used to silently create a
+    /// second coordinator (its own splash task, phase observer, nav path), so
+    /// we trap instead.
+    static var environmentDefault: AppCoordinator {
+        #if DEBUG
+        return AppCoordinator()
+        #else
+        fatalError("AppCoordinator was read from the environment without being injected")
+        #endif
+    }
 }
 
 extension EnvironmentValues {
-    public var appCoordinator: AppCoordinator {
-        get { self[AppCoordinatorKey.self] }
-        set { self[AppCoordinatorKey.self] = newValue }
-    }
+    @Entry public var appCoordinator: AppCoordinator = .environmentDefault
 }
