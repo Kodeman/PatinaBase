@@ -53,3 +53,43 @@ identifier_name:
     - x
     - y
     - z
+
+# ---------------------------------------------------------------------------
+# Patina parallel-delivery custom rules (PT-1-5).
+# All are WARNINGS until the matching codemod reaches 0 hits, then promoted to
+# error in Wave 4 (PT-6-17). They back each sweep's "0 remaining" acceptance
+# and feed the `scripts/ios-gate.sh lint-delta` per-file regression check.
+# ---------------------------------------------------------------------------
+custom_rules:
+  disallow_foregroundcolor:
+    name: "Deprecated .foregroundColor"
+    regex: '\.foregroundColor\('
+    message: "Use .foregroundStyle(...) — .foregroundColor is deprecated (PT-1-6)."
+    severity: warning
+  disallow_font_custom_in_features:
+    name: "Untokenized Font.custom in Features/"
+    regex: '\.font\(\s*\.custom\(|Font\.custom\('
+    included: '.*/Features/.*\.swift'
+    message: "Use a PatinaTypography token (with relativeTo:) instead of inline Font.custom (PT-1-1)."
+    severity: warning
+  disallow_navigation_bar_hidden:
+    name: "Deprecated navigationBarHidden"
+    regex: '\.navigationBarHidden\('
+    message: "Use .toolbar(.hidden, for: .navigationBar) (PT-1-7)."
+    severity: warning
+  disallow_cornerradius:
+    name: "Deprecated .cornerRadius"
+    regex: '\.cornerRadius\('
+    message: "Use .clipShape(.rect(cornerRadius:)) (PT-1-8)."
+    severity: warning
+  disallow_dispatchqueue_main_asyncafter:
+    name: "DispatchQueue.main.asyncAfter"
+    regex: 'DispatchQueue\.main\.asyncAfter'
+    message: "Use a structured Task + Task.sleep instead (PT-3-3)."
+    severity: warning
+  disallow_raw_print:
+    name: "Raw print()"
+    regex: '(^|[^A-Za-z0-9_.])print\('
+    excluded: '.*/(PatinaTests|PatinaUITests|Generated)/.*'
+    message: "Use PatinaLog (os.Logger) instead of print (PT-6-15)."
+    severity: warning
