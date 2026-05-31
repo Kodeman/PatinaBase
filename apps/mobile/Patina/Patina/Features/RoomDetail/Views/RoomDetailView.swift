@@ -203,7 +203,7 @@ struct RoomDetailView: View {
         HStack(spacing: PatinaSpacing.md) {
             Image(systemName: room.hasBeenScanned ? "checkmark.circle.fill" : "camera.viewfinder")
                 .font(.system(size: 24))
-                .foregroundColor(room.hasBeenScanned ? PatinaColors.clayBeige : PatinaColors.Text.muted)
+                .foregroundColor(room.hasBeenScanned ? PatinaColors.clay : PatinaColors.Text.muted)
 
             VStack(alignment: .leading, spacing: PatinaSpacing.xs) {
                 Text(room.hasBeenScanned ? "Room scanned" : "Not yet scanned")
@@ -243,7 +243,7 @@ struct RoomDetailView: View {
                     .foregroundColor(PatinaColors.offWhite)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PatinaSpacing.md)
-                    .background(PatinaColors.clayBeige)
+                    .background(PatinaColors.clay)
                     .cornerRadius(PatinaRadius.lg)
                 }
                 .buttonStyle(ScaleButtonStyle())
@@ -271,7 +271,7 @@ struct RoomDetailView: View {
                 .foregroundColor(room?.hasBeenScanned == true ? PatinaColors.Text.secondary : PatinaColors.offWhite)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, PatinaSpacing.md)
-                .background(room?.hasBeenScanned == true ? PatinaColors.Background.secondary : PatinaColors.clayBeige)
+                .background(room?.hasBeenScanned == true ? PatinaColors.Background.secondary : PatinaColors.clay)
                 .cornerRadius(PatinaRadius.lg)
             }
             .buttonStyle(ScaleButtonStyle())

@@ -85,12 +85,12 @@ struct RequestDesignServicesSheet: View {
         HStack(spacing: PatinaSpacing.md) {
             ZStack {
                 RoundedRectangle(cornerRadius: PatinaRadius.md)
-                    .fill(PatinaColors.clayBeige.opacity(0.2))
+                    .fill(PatinaColors.clay.opacity(0.2))
                     .frame(width: 60, height: 60)
 
                 Image(systemName: "cube.transparent")
                     .font(.system(size: 24))
-                    .foregroundColor(PatinaColors.clayBeige)
+                    .foregroundColor(PatinaColors.clay)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -131,7 +131,7 @@ struct RequestDesignServicesSheet: View {
                                 .font(.system(size: 20))
                                 .foregroundColor(
                                     selectedService == serviceType
-                                        ? PatinaColors.clayBeige
+                                        ? PatinaColors.clay
                                         : PatinaColors.Text.secondary
                                 )
                                 .frame(width: 28)
@@ -153,21 +153,21 @@ struct RequestDesignServicesSheet: View {
                                 .font(.system(size: 22))
                                 .foregroundColor(
                                     selectedService == serviceType
-                                        ? PatinaColors.clayBeige
+                                        ? PatinaColors.clay
                                         : PatinaColors.Text.muted
                                 )
                         }
                         .padding(PatinaSpacing.md)
                         .background(
                             selectedService == serviceType
-                                ? PatinaColors.clayBeige.opacity(0.1)
+                                ? PatinaColors.clay.opacity(0.1)
                                 : PatinaColors.Background.secondary
                         )
                         .cornerRadius(PatinaRadius.md)
                         .overlay(
                             RoundedRectangle(cornerRadius: PatinaRadius.md)
                                 .stroke(
-                                    selectedService == serviceType ? PatinaColors.clayBeige : Color.clear,
+                                    selectedService == serviceType ? PatinaColors.clay : Color.clear,
                                     lineWidth: 1.5
                                 )
                         )
@@ -234,7 +234,7 @@ struct RequestDesignServicesSheet: View {
                                 .padding(.vertical, PatinaSpacing.sm)
                                 .background(
                                     selectedTimeline == timeline
-                                        ? PatinaColors.clayBeige
+                                        ? PatinaColors.clay
                                         : PatinaColors.Background.secondary
                                 )
                                 .cornerRadius(PatinaRadius.sm)
@@ -272,21 +272,21 @@ struct RequestDesignServicesSheet: View {
                                 .font(.system(size: 20))
                                 .foregroundColor(
                                     selectedBudget == budget
-                                        ? PatinaColors.clayBeige
+                                        ? PatinaColors.clay
                                         : PatinaColors.Text.muted
                                 )
                         }
                         .padding(PatinaSpacing.md)
                         .background(
                             selectedBudget == budget
-                                ? PatinaColors.clayBeige.opacity(0.1)
+                                ? PatinaColors.clay.opacity(0.1)
                                 : PatinaColors.Background.secondary
                         )
                         .cornerRadius(PatinaRadius.md)
                         .overlay(
                             RoundedRectangle(cornerRadius: PatinaRadius.md)
                                 .stroke(
-                                    selectedBudget == budget ? PatinaColors.clayBeige : Color.clear,
+                                    selectedBudget == budget ? PatinaColors.clay : Color.clear,
                                     lineWidth: 1.5
                                 )
                         )
@@ -327,8 +327,8 @@ struct RequestDesignServicesSheet: View {
             .padding(.vertical, PatinaSpacing.md)
             .background(
                 projectDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    ? PatinaColors.clayBeige.opacity(0.5)
-                    : PatinaColors.clayBeige
+                    ? PatinaColors.clay.opacity(0.5)
+                    : PatinaColors.clay
             )
             .cornerRadius(PatinaRadius.lg)
         }
@@ -359,7 +359,7 @@ struct RequestDesignServicesSheet: View {
                     .font(.system(size: 60))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [PatinaColors.clayBeige, PatinaColors.softCream],
+                            colors: [PatinaColors.clay, PatinaColors.softCream],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )

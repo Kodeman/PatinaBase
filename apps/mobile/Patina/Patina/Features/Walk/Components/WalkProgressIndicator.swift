@@ -27,7 +27,7 @@ struct WalkProgressIndicator: View {
             HStack(spacing: 8) {
                 ForEach(0..<total, id: \.self) { index in
                     Circle()
-                        .fill(index < current ? PatinaColors.clayBeige : .white.opacity(0.3))
+                        .fill(index < current ? PatinaColors.clay : .white.opacity(0.3))
                         .frame(width: 8, height: 8)
                         .scaleEffect(index == current - 1 ? 1.2 : 1.0)
                         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: current)
@@ -66,7 +66,7 @@ struct WalkProgressBar: View {
                 Capsule()
                     .fill(
                         LinearGradient(
-                            colors: [PatinaColors.clayBeige, PatinaColors.mochaBrown],
+                            colors: [PatinaColors.clay, PatinaColors.mocha],
                             startPoint: .leading,
                             endPoint: .trailing
                         )

@@ -117,7 +117,7 @@ struct ShareScanSheet: View {
                     HStack(spacing: PatinaSpacing.md) {
                         // Designer avatar
                         Circle()
-                            .fill(PatinaColors.clayBeige.opacity(0.3))
+                            .fill(PatinaColors.clay.opacity(0.3))
                             .frame(width: 40, height: 40)
                             .overlay {
                                 Text(share.designer?.fullName?.prefix(1).uppercased() ?? "?")
@@ -202,7 +202,7 @@ struct ShareScanSheet: View {
                 HStack {
                     Spacer()
                     ProgressView()
-                        .tint(PatinaColors.clayBeige)
+                        .tint(PatinaColors.clay)
                     Spacer()
                 }
                 .padding(.vertical, PatinaSpacing.xl)
@@ -238,7 +238,7 @@ struct ShareScanSheet: View {
                     HStack(spacing: PatinaSpacing.md) {
                         // Avatar
                         Circle()
-                            .fill(PatinaColors.clayBeige.opacity(0.3))
+                            .fill(PatinaColors.clay.opacity(0.3))
                             .frame(width: 44, height: 44)
                             .overlay {
                                 Text(designer.fullName?.prefix(1).uppercased() ?? designer.email.prefix(1).uppercased())
@@ -322,7 +322,7 @@ struct ShareScanSheet: View {
             if let designer = selectedDesigner {
                 HStack(spacing: PatinaSpacing.md) {
                     Circle()
-                        .fill(PatinaColors.clayBeige.opacity(0.3))
+                        .fill(PatinaColors.clay.opacity(0.3))
                         .frame(width: 50, height: 50)
                         .overlay {
                             Text(designer.fullName?.prefix(1).uppercased() ?? designer.email.prefix(1).uppercased())
@@ -351,7 +351,7 @@ struct ShareScanSheet: View {
                     } label: {
                         Text("Change")
                             .font(PatinaTypography.bodySmall)
-                            .foregroundColor(PatinaColors.clayBeige)
+                            .foregroundColor(PatinaColors.clay)
                     }
                 }
                 .padding(PatinaSpacing.lg)
@@ -389,19 +389,19 @@ struct ShareScanSheet: View {
 
                                 Image(systemName: accessLevel == level ? "checkmark.circle.fill" : "circle")
                                     .font(.system(size: 22))
-                                    .foregroundColor(accessLevel == level ? PatinaColors.clayBeige : PatinaColors.Text.muted)
+                                    .foregroundColor(accessLevel == level ? PatinaColors.clay : PatinaColors.Text.muted)
                             }
                             .padding(PatinaSpacing.md)
                             .background(
                                 accessLevel == level
-                                    ? PatinaColors.clayBeige.opacity(0.1)
+                                    ? PatinaColors.clay.opacity(0.1)
                                     : PatinaColors.Background.secondary
                             )
                             .cornerRadius(PatinaRadius.md)
                             .overlay(
                                 RoundedRectangle(cornerRadius: PatinaRadius.md)
                                     .stroke(
-                                        accessLevel == level ? PatinaColors.clayBeige : Color.clear,
+                                        accessLevel == level ? PatinaColors.clay : Color.clear,
                                         lineWidth: 1.5
                                     )
                             )
@@ -435,7 +435,7 @@ struct ShareScanSheet: View {
                                 .padding(.vertical, PatinaSpacing.sm)
                                 .background(
                                     expirationOption == option
-                                        ? PatinaColors.clayBeige
+                                        ? PatinaColors.clay
                                         : PatinaColors.Background.secondary
                                 )
                                 .cornerRadius(PatinaRadius.sm)
@@ -475,7 +475,7 @@ struct ShareScanSheet: View {
             .foregroundColor(PatinaColors.offWhite)
             .frame(maxWidth: .infinity)
             .padding(.vertical, PatinaSpacing.md)
-            .background(PatinaColors.clayBeige)
+            .background(PatinaColors.clay)
             .cornerRadius(PatinaRadius.lg)
         }
         .disabled(isSharing || selectedDesigner == nil)

@@ -43,7 +43,7 @@ struct WalkProgressView: View {
             // Outer ring (background)
             Circle()
                 .stroke(
-                    PatinaColors.clayBeige.opacity(0.2),
+                    PatinaColors.clay.opacity(0.2),
                     lineWidth: Constants.strokeWidth
                 )
                 .frame(width: Constants.size, height: Constants.size)
@@ -87,8 +87,8 @@ struct WalkProgressView: View {
     private var fillGradient: LinearGradient {
         LinearGradient(
             colors: [
-                PatinaColors.clayBeige.opacity(0.3),
-                PatinaColors.clayBeige.opacity(0.6)
+                PatinaColors.clay.opacity(0.3),
+                PatinaColors.clay.opacity(0.6)
             ],
             startPoint: .bottom,
             endPoint: .top
@@ -97,7 +97,7 @@ struct WalkProgressView: View {
 
     private var completionGlow: some View {
         Circle()
-            .stroke(PatinaColors.clayBeige, lineWidth: 2)
+            .stroke(PatinaColors.clay, lineWidth: 2)
             .frame(width: Constants.size, height: Constants.size)
             .blur(radius: 4)
             .opacity(0.8)
@@ -196,7 +196,7 @@ struct WalkProgressIndicatorCompact: View {
         Circle()
             .trim(from: 0, to: CGFloat(progress))
             .stroke(
-                PatinaColors.clayBeige,
+                PatinaColors.clay,
                 style: StrokeStyle(lineWidth: 2, lineCap: .round)
             )
             .frame(width: 24, height: 24)

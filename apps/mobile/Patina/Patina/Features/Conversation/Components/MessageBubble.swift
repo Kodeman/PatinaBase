@@ -71,7 +71,7 @@ struct MessageBubble: View {
             PatinaColors.charcoal
         } else {
             PatinaColors.offWhite
-                .shadow(color: PatinaColors.mochaBrown.opacity(0.08), radius: 4, y: 2)
+                .shadow(color: PatinaColors.mocha.opacity(0.08), radius: 4, y: 2)
         }
     }
 
@@ -88,12 +88,12 @@ struct MessageBubble: View {
                     } label: {
                         Text(suggestion)
                             .font(PatinaTypography.bodySmall)
-                            .foregroundColor(PatinaColors.mochaBrown)
+                            .foregroundColor(PatinaColors.mocha)
                             .padding(.horizontal, PatinaSpacing.md)
                             .padding(.vertical, PatinaSpacing.sm)
                             .background(
                                 Capsule()
-                                    .stroke(PatinaColors.clayBeige, lineWidth: 1)
+                                    .stroke(PatinaColors.clay, lineWidth: 1)
                             )
                     }
                 }

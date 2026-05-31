@@ -27,25 +27,25 @@ public struct ContextBar: View {
             // Context icon (spec: 20×20px rounded square)
             ZStack {
                 RoundedRectangle(cornerRadius: PatinaRadius.sm)
-                    .fill(hasNotification ? PatinaColors.clayBeige : PatinaColors.Background.secondary)
+                    .fill(hasNotification ? PatinaColors.clay : PatinaColors.Background.secondary)
                     .frame(width: 20, height: 20)
 
                 Image(systemName: context.contextIcon)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(hasNotification ? .white : PatinaColors.mochaBrown)
+                    .foregroundColor(hasNotification ? .white : PatinaColors.mocha)
             }
 
             // Context label (spec: 11pt Inter, Mocha Brown)
             Text(contextLabel)
                 .font(.system(size: 11, weight: .regular))  // 11pt Inter
-                .foregroundColor(hasNotification ? .white : PatinaColors.mochaBrown)
+                .foregroundColor(hasNotification ? .white : PatinaColors.mocha)
                 .lineLimit(1)
 
             Spacer()
         }
         .padding(.horizontal, PatinaSpacing.md)
         .frame(height: barHeight)
-        .background(hasNotification ? PatinaColors.clayBeige : PatinaColors.Background.secondary)
+        .background(hasNotification ? PatinaColors.clay : PatinaColors.Background.secondary)
     }
 
     // MARK: - Context Labels (per spec section 5.2)

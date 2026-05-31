@@ -58,7 +58,7 @@ struct AccountView: View {
                         coordinator.showingSettings = false
                     }
                     .font(PatinaTypography.bodyMedium)
-                    .foregroundColor(PatinaColors.mochaBrown)
+                    .foregroundColor(PatinaColors.mocha)
                 }
             }
         }
@@ -89,7 +89,7 @@ struct AccountView: View {
         VStack(spacing: PatinaSpacing.md) {
             Image(systemName: "person.circle.fill")
                 .font(.system(size: 64))
-                .foregroundColor(PatinaColors.clayBeige)
+                .foregroundColor(PatinaColors.clay)
 
             if let email = authService.currentUser?.email {
                 Text(email)

@@ -93,11 +93,11 @@ extension View {
 #Preview {
     VStack(spacing: 40) {
         Circle()
-            .fill(PatinaColors.clayBeige)
+            .fill(PatinaColors.clay)
             .frame(width: 60, height: 60)
             .breathing()
 
-        StrataMarkView(color: PatinaColors.mochaBrown, scale: 1.5)
+        StrataMarkView(color: PatinaColors.mocha, scale: 1.5)
             .breathing(maxScale: 1.08, duration: 2.5)
     }
     .padding(40)

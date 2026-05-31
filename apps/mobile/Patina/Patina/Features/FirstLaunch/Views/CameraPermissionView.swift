@@ -66,7 +66,7 @@ struct CameraPermissionView: View {
             // Camera icon
             Image(systemName: "camera.fill")
                 .font(.system(size: 48, weight: .light))
-                .foregroundColor(PatinaColors.clayBeige)
+                .foregroundColor(PatinaColors.clay)
                 .padding(.bottom, PatinaSpacing.xl)
 
             // Message
@@ -91,7 +91,7 @@ struct CameraPermissionView: View {
                     .foregroundColor(PatinaColors.offWhite)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PatinaSpacing.md)
-                    .background(PatinaColors.clayBeige)
+                    .background(PatinaColors.clay)
                     .cornerRadius(PatinaRadius.lg)
             }
             .accessibilityIdentifier("cameraPermission.continueButton")
@@ -125,7 +125,7 @@ struct CameraPermissionView: View {
             Spacer()
 
             // Strata mark
-            StrataMarkView(color: PatinaColors.clayBeige, scale: 1.0, breathing: true)
+            StrataMarkView(color: PatinaColors.clay, scale: 1.0, breathing: true)
                 .frame(height: 40)
                 .padding(.bottom, PatinaSpacing.xl)
 
@@ -156,7 +156,7 @@ struct CameraPermissionView: View {
                     .foregroundColor(PatinaColors.offWhite)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PatinaSpacing.md)
-                    .background(PatinaColors.clayBeige)
+                    .background(PatinaColors.clay)
                     .cornerRadius(PatinaRadius.lg)
             }
             .buttonStyle(ScaleButtonStyle())
@@ -296,7 +296,7 @@ private struct PrivacyExplanationSheet: View {
                     Button("Done") {
                         dismiss()
                     }
-                    .foregroundColor(PatinaColors.clayBeige)
+                    .foregroundColor(PatinaColors.clay)
                 }
             }
         }
@@ -306,7 +306,7 @@ private struct PrivacyExplanationSheet: View {
         HStack(alignment: .top, spacing: PatinaSpacing.md) {
             Image(systemName: icon)
                 .font(.system(size: 24, weight: .light))
-                .foregroundColor(PatinaColors.clayBeige)
+                .foregroundColor(PatinaColors.clay)
                 .frame(width: 32)
 
             VStack(alignment: .leading, spacing: PatinaSpacing.xs) {

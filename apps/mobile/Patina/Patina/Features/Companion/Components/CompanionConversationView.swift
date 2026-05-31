@@ -87,7 +87,7 @@ public struct CompanionMessageBubble: View {
                     .padding(.vertical, PatinaSpacing.sm)
                     .background(
                         RoundedRectangle(cornerRadius: PatinaRadius.lg)
-                            .fill(isPatina ? PatinaColors.Background.secondary : PatinaColors.clayBeige.opacity(0.15))
+                            .fill(isPatina ? PatinaColors.Background.secondary : PatinaColors.clay.opacity(0.15))
                     )
             }
 
@@ -109,7 +109,7 @@ public struct CompanionTypingIndicator: View {
             HStack(spacing: 4) {
                 ForEach(0..<3) { index in
                     Circle()
-                        .fill(PatinaColors.clayBeige)
+                        .fill(PatinaColors.clay)
                         .frame(width: 6, height: 6)
                         .opacity(animationPhase == index ? 1.0 : 0.4)
                 }

@@ -88,9 +88,9 @@ public struct StrataMarkView: View {
 
 #Preview("Default") {
     VStack(spacing: 40) {
-        StrataMarkView(color: PatinaColors.mochaBrown)
+        StrataMarkView(color: PatinaColors.mocha)
 
-        StrataMarkView(color: PatinaColors.clayBeige, scale: 1.5)
+        StrataMarkView(color: PatinaColors.clay, scale: 1.5)
 
         StrataMarkView(color: .white, scale: 0.8, breathing: true)
     }

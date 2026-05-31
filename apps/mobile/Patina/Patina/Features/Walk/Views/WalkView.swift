@@ -94,7 +94,7 @@ struct WalkView: View {
             VStack(spacing: PatinaSpacing.xl) {
                 // Breathing companion mark
                 StrataMarkView(
-                    color: PatinaColors.clayBeige,
+                    color: PatinaColors.clay,
                     scale: 1.2,
                     breathing: true
                 )
@@ -158,7 +158,7 @@ struct WalkView: View {
 
             // Pulsing companion mark
             StrataMarkView(
-                color: PatinaColors.clayBeige,
+                color: PatinaColors.clay,
                 scale: 1.5,
                 breathing: true
             )
@@ -220,7 +220,7 @@ struct WalkView: View {
 
                 // Bottom companion mark
                 StrataMarkView(
-                    color: PatinaColors.clayBeige.opacity(0.8),
+                    color: PatinaColors.clay.opacity(0.8),
                     scale: 0.6,
                     breathing: true
                 )
@@ -495,7 +495,7 @@ struct WalkView: View {
                         dash: [8, 8]
                     )
                 )
-                .foregroundColor(PatinaColors.clayBeige.opacity(0.4))
+                .foregroundColor(PatinaColors.clay.opacity(0.4))
                 .frame(height: 200)
 
             // Corner markers
@@ -519,7 +519,7 @@ struct WalkView: View {
             VStack(spacing: PatinaSpacing.sm) {
                 Image(systemName: "viewfinder")
                     .font(.system(size: 24))
-                    .foregroundColor(PatinaColors.clayBeige.opacity(0.6))
+                    .foregroundColor(PatinaColors.clay.opacity(0.6))
 
                 Text("Point at a wall")
                     .font(PatinaTypography.caption)
@@ -531,7 +531,7 @@ struct WalkView: View {
     private func cornerMarker(rotation: Double) -> some View {
         Image(systemName: "viewfinder.trianglebadge.exclamationmark")
             .font(.system(size: 16))
-            .foregroundColor(PatinaColors.clayBeige.opacity(0.6))
+            .foregroundColor(PatinaColors.clay.opacity(0.6))
             .rotationEffect(.degrees(rotation))
     }
 
@@ -578,7 +578,7 @@ struct WalkView: View {
 
             // Success animation
             StrataMarkView(
-                color: PatinaColors.clayBeige,
+                color: PatinaColors.clay,
                 scale: 1.5,
                 breathing: true
             )
@@ -630,7 +630,7 @@ struct WalkView: View {
         HStack(spacing: PatinaSpacing.sm) {
             if isSyncing {
                 ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: PatinaColors.clayBeige))
+                    .progressViewStyle(CircularProgressViewStyle(tint: PatinaColors.clay))
                     .scaleEffect(0.8)
                 Text("Saving to cloud...")
                     .font(PatinaTypography.caption)
@@ -653,7 +653,7 @@ struct WalkView: View {
                 } label: {
                     Text("Retry")
                         .font(PatinaTypography.caption)
-                        .foregroundColor(PatinaColors.clayBeige)
+                        .foregroundColor(PatinaColors.clay)
                 }
             } else if lastScanData != nil {
                 Image(systemName: "checkmark.circle.fill")

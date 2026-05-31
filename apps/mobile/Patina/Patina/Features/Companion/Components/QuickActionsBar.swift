@@ -81,12 +81,12 @@ public struct QuickActionChip: View {
                 Text(action.title)
                     .font(.system(size: 12, weight: .medium))  // Spec: Inter Medium 12pt
             }
-            .foregroundColor(action.isPrimary ? .white : PatinaColors.mochaBrown)
+            .foregroundColor(action.isPrimary ? .white : PatinaColors.mocha)
             .padding(.horizontal, 14)  // Spec: 14px horizontal
             .padding(.vertical, 8)      // Spec: 8px vertical
             .background(
                 action.isPrimary
-                    ? AnyShapeStyle(PatinaColors.clayBeige)
+                    ? AnyShapeStyle(PatinaColors.clay)
                     : AnyShapeStyle(PatinaColors.Background.secondary)
             )
             .cornerRadius(PatinaRadius.xl)
@@ -112,12 +112,12 @@ public struct ContextIndicator: View {
             // Context icon
             ZStack {
                 RoundedRectangle(cornerRadius: PatinaRadius.sm)
-                    .fill(hasNotification ? PatinaColors.clayBeige : PatinaColors.Background.secondary)
+                    .fill(hasNotification ? PatinaColors.clay : PatinaColors.Background.secondary)
                     .frame(width: 28, height: 28)
 
                 Image(systemName: context.contextIcon)
                     .font(.system(size: 12))
-                    .foregroundColor(hasNotification ? .white : PatinaColors.mochaBrown)
+                    .foregroundColor(hasNotification ? .white : PatinaColors.mocha)
             }
 
             // Context text
@@ -130,7 +130,7 @@ public struct ContextIndicator: View {
         }
         .padding(.horizontal, PatinaSpacing.md)
         .padding(.vertical, PatinaSpacing.sm)
-        .background(hasNotification ? PatinaColors.clayBeige : PatinaColors.Background.secondary)
+        .background(hasNotification ? PatinaColors.clay : PatinaColors.Background.secondary)
     }
 }
 
@@ -173,7 +173,7 @@ public struct CompanionNotificationBanner: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, PatinaSpacing.md)
                 .padding(.vertical, PatinaSpacing.sm)
-                .background(PatinaColors.clayBeige)
+                .background(PatinaColors.clay)
                 .cornerRadius(PatinaRadius.lg)
 
                 Button("Later") {

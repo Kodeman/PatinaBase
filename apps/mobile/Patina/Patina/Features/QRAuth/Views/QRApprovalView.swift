@@ -98,7 +98,7 @@ public struct QRApprovalView: View {
             HStack(spacing: PatinaSpacing.lg) {
                 Image(systemName: "laptopcomputer")
                     .font(.system(size: 36))
-                    .foregroundColor(PatinaColors.clayBeige)
+                    .foregroundColor(PatinaColors.clay)
 
                 Image(systemName: "arrow.left.arrow.right")
                     .font(.system(size: 20))
@@ -106,7 +106,7 @@ public struct QRApprovalView: View {
 
                 Image(systemName: "iphone")
                     .font(.system(size: 36))
-                    .foregroundColor(PatinaColors.clayBeige)
+                    .foregroundColor(PatinaColors.clay)
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -242,7 +242,7 @@ public struct QRApprovalView: View {
                 // Approve button
                 if viewModel.isApproving {
                     ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: PatinaColors.clayBeige))
+                        .progressViewStyle(CircularProgressViewStyle(tint: PatinaColors.clay))
                         .frame(height: 50)
                 } else {
                     PatinaButton("Approve Sign In", style: .primary) {

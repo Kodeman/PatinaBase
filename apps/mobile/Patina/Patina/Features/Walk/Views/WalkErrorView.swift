@@ -32,7 +32,7 @@ struct WalkErrorOverlay: View {
 
             VStack(spacing: PatinaSpacing.lg) {
                 // Strata mark
-                StrataMarkView(color: PatinaColors.clayBeige, scale: 0.8, breathing: true)
+                StrataMarkView(color: PatinaColors.clay, scale: 0.8, breathing: true)
                     .frame(height: 32)
 
                 // Error message
@@ -174,7 +174,7 @@ struct WalkErrorOverlay: View {
                 .foregroundColor(PatinaColors.offWhite)
                 .padding(.horizontal, PatinaSpacing.lg)
                 .padding(.vertical, PatinaSpacing.sm)
-                .background(PatinaColors.clayBeige)
+                .background(PatinaColors.clay)
                 .cornerRadius(PatinaRadius.lg)
         }
     }

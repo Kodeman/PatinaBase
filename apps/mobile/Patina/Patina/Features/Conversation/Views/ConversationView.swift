@@ -58,7 +58,7 @@ struct ConversationView: View {
             .padding(.bottom, PatinaSpacing.sm)
 
             Divider()
-                .background(PatinaColors.clayBeige.opacity(0.3))
+                .background(PatinaColors.clay.opacity(0.3))
         }
     }
 
@@ -110,7 +110,7 @@ struct ConversationView: View {
     private var inputArea: some View {
         VStack(spacing: 0) {
             Divider()
-                .background(PatinaColors.clayBeige.opacity(0.3))
+                .background(PatinaColors.clay.opacity(0.3))
 
             HStack(alignment: .bottom, spacing: PatinaSpacing.sm) {
                 // Voice input button
@@ -137,7 +137,7 @@ struct ConversationView: View {
                 .background(
                     RoundedRectangle(cornerRadius: 20)
                         .fill(PatinaColors.offWhite)
-                        .shadow(color: PatinaColors.mochaBrown.opacity(0.06), radius: 2, y: 1)
+                        .shadow(color: PatinaColors.mocha.opacity(0.06), radius: 2, y: 1)
                 )
 
                 // Send button
@@ -150,8 +150,8 @@ struct ConversationView: View {
                         .font(.system(size: 32))
                         .foregroundColor(
                             viewModel.inputText.trimmingCharacters(in: .whitespaces).isEmpty
-                            ? PatinaColors.clayBeige.opacity(0.5)
-                            : PatinaColors.mochaBrown
+                            ? PatinaColors.clay.opacity(0.5)
+                            : PatinaColors.mocha
                         )
                 }
                 .disabled(viewModel.inputText.trimmingCharacters(in: .whitespaces).isEmpty || viewModel.isTyping)
@@ -172,7 +172,7 @@ struct PhaseIndicator: View {
         HStack(spacing: 4) {
             ForEach(0..<ConversationPhase.allCases.count, id: \.self) { index in
                 Circle()
-                    .fill(index <= phase.rawValue ? PatinaColors.clayBeige : PatinaColors.clayBeige.opacity(0.3))
+                    .fill(index <= phase.rawValue ? PatinaColors.clay : PatinaColors.clay.opacity(0.3))
                     .frame(width: 6, height: 6)
             }
         }

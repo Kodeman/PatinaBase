@@ -57,7 +57,7 @@ public struct CompanionAuthPanel: View {
     private var header: some View {
         VStack(spacing: PatinaSpacing.md) {
             // Strata Mark
-            StrataMarkView(color: PatinaColors.mochaBrown, scale: 1.2)
+            StrataMarkView(color: PatinaColors.mocha, scale: 1.2)
                 .accessibilityHidden(true)
 
             // Title
@@ -128,7 +128,7 @@ public struct CompanionAuthPanel: View {
                 .cornerRadius(PatinaRadius.lg)
                 .overlay(
                     RoundedRectangle(cornerRadius: PatinaRadius.lg)
-                        .stroke(PatinaColors.clayBeige, lineWidth: 1.5)
+                        .stroke(PatinaColors.clay, lineWidth: 1.5)
                 )
             }
             .buttonStyle(PressableButtonStyle())
@@ -151,7 +151,7 @@ public struct CompanionAuthPanel: View {
                 showEmailAuth()
             }
             .font(PatinaTypography.bodySmallMedium)
-            .foregroundColor(PatinaColors.mochaBrown)
+            .foregroundColor(PatinaColors.mocha)
             .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             .accessibilityLabel("Sign in to existing account")
         }

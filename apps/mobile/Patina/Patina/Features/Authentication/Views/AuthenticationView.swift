@@ -98,7 +98,7 @@ public struct AuthenticationView: View {
 
     private var header: some View {
         VStack(spacing: PatinaSpacing.md) {
-            StrataMarkView(color: PatinaColors.mochaBrown, scale: 1.2)
+            StrataMarkView(color: PatinaColors.mocha, scale: 1.2)
                 .padding(.bottom, PatinaSpacing.sm)
 
             Text(headerTitle)
@@ -221,7 +221,7 @@ public struct AuthenticationView: View {
             // Email icon
             Image(systemName: "envelope.open.fill")
                 .font(.system(size: 48))
-                .foregroundColor(PatinaColors.mochaBrown)
+                .foregroundColor(PatinaColors.mocha)
                 .padding(.bottom, PatinaSpacing.sm)
 
             Text("Check your email")
@@ -250,7 +250,7 @@ public struct AuthenticationView: View {
                 HStack {
                     if viewModel.isLoading {
                         ProgressView()
-                            .tint(PatinaColors.mochaBrown)
+                            .tint(PatinaColors.mocha)
                     } else {
                         Text(viewModel.magicLinkCooldown > 0
                              ? "Resend in \(viewModel.magicLinkCooldown)s"
@@ -258,14 +258,14 @@ public struct AuthenticationView: View {
                     }
                 }
                 .font(PatinaTypography.bodyMedium)
-                .foregroundColor(PatinaColors.mochaBrown)
+                .foregroundColor(PatinaColors.mocha)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, PatinaSpacing.md)
                 .background(PatinaColors.Background.secondary)
                 .cornerRadius(PatinaRadius.lg)
                 .overlay(
                     RoundedRectangle(cornerRadius: PatinaRadius.lg)
-                        .stroke(PatinaColors.mochaBrown, lineWidth: 1)
+                        .stroke(PatinaColors.mocha, lineWidth: 1)
                 )
             }
             .disabled(viewModel.magicLinkCooldown > 0 || viewModel.isLoading)
@@ -279,7 +279,7 @@ public struct AuthenticationView: View {
             } label: {
                 Text("Enter code instead")
                     .font(PatinaTypography.bodySmall)
-                    .foregroundColor(PatinaColors.mochaBrown)
+                    .foregroundColor(PatinaColors.mocha)
             }
             .accessibilityIdentifier("auth.magicLink.enterCodeButton")
 
@@ -303,7 +303,7 @@ public struct AuthenticationView: View {
             // Number-pad / lock icon
             Image(systemName: "number")
                 .font(.system(size: 48))
-                .foregroundColor(PatinaColors.mochaBrown)
+                .foregroundColor(PatinaColors.mocha)
                 .padding(.bottom, PatinaSpacing.sm)
 
             Text("Enter your sign-in code")
@@ -330,7 +330,7 @@ public struct AuthenticationView: View {
                 .cornerRadius(PatinaRadius.lg)
                 .overlay(
                     RoundedRectangle(cornerRadius: PatinaRadius.lg)
-                        .stroke(PatinaColors.clayBeige.opacity(0.2), lineWidth: 1)
+                        .stroke(PatinaColors.clay.opacity(0.2), lineWidth: 1)
                 )
                 .onChange(of: viewModel.otpToken) { _, newValue in
                     // Strip any non-digit characters (paste, autofill,
@@ -366,7 +366,7 @@ public struct AuthenticationView: View {
                 .background(
                     (viewModel.otpToken.count == 6 && !viewModel.isVerifyingOtp)
                     ? PatinaColors.charcoal
-                    : PatinaColors.clayBeige
+                    : PatinaColors.clay
                 )
                 .cornerRadius(PatinaRadius.lg)
             }
@@ -398,7 +398,7 @@ public struct AuthenticationView: View {
             // Inbox icon
             Image(systemName: "envelope.badge.fill")
                 .font(.system(size: 48))
-                .foregroundColor(PatinaColors.mochaBrown)
+                .foregroundColor(PatinaColors.mocha)
                 .padding(.bottom, PatinaSpacing.sm)
 
             Text("Check your inbox")
@@ -444,7 +444,7 @@ public struct AuthenticationView: View {
                 HStack {
                     if viewModel.isResendingVerification {
                         ProgressView()
-                            .tint(PatinaColors.mochaBrown)
+                            .tint(PatinaColors.mocha)
                     } else {
                         Text(viewModel.verificationResendCooldown > 0
                              ? "Resend in \(viewModel.verificationResendCooldown)s"
@@ -452,14 +452,14 @@ public struct AuthenticationView: View {
                     }
                 }
                 .font(PatinaTypography.bodyMedium)
-                .foregroundColor(PatinaColors.mochaBrown)
+                .foregroundColor(PatinaColors.mocha)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, PatinaSpacing.md)
                 .background(PatinaColors.Background.secondary)
                 .cornerRadius(PatinaRadius.lg)
                 .overlay(
                     RoundedRectangle(cornerRadius: PatinaRadius.lg)
-                        .stroke(PatinaColors.mochaBrown, lineWidth: 1)
+                        .stroke(PatinaColors.mocha, lineWidth: 1)
                 )
             }
             .disabled(viewModel.isResendingVerification
@@ -499,7 +499,7 @@ public struct AuthenticationView: View {
             .foregroundColor(PatinaColors.Text.inverse)
             .frame(maxWidth: .infinity)
             .padding(.vertical, PatinaSpacing.md)
-            .background(viewModel.isFormValid ? PatinaColors.charcoal : PatinaColors.clayBeige)
+            .background(viewModel.isFormValid ? PatinaColors.charcoal : PatinaColors.clay)
             .cornerRadius(PatinaRadius.lg)
         }
         .disabled(!viewModel.isFormValid || viewModel.isLoading)
@@ -544,7 +544,7 @@ public struct AuthenticationView: View {
     private var divider: some View {
         HStack(spacing: PatinaSpacing.md) {
             Rectangle()
-                .fill(PatinaColors.clayBeige.opacity(0.3))
+                .fill(PatinaColors.clay.opacity(0.3))
                 .frame(height: 1)
 
             Text("or")
@@ -552,7 +552,7 @@ public struct AuthenticationView: View {
                 .foregroundColor(PatinaColors.Text.muted)
 
             Rectangle()
-                .fill(PatinaColors.clayBeige.opacity(0.3))
+                .fill(PatinaColors.clay.opacity(0.3))
                 .frame(height: 1)
         }
     }
@@ -613,7 +613,7 @@ public struct AuthenticationView: View {
                     viewModel.clearForm()
                 }
                 .font(PatinaTypography.bodySmallMedium)
-                .foregroundColor(PatinaColors.mochaBrown)
+                .foregroundColor(PatinaColors.mocha)
                 .accessibilityIdentifier("auth.form.modeSwitcherButton")
             }
         }
@@ -658,13 +658,13 @@ struct PatinaTextField: View {
             if isSecure {
                 SecureField(placeholder, text: $text)
                     .foregroundColor(PatinaColors.Text.primary)
-                    .tint(PatinaColors.mochaBrown)
+                    .tint(PatinaColors.mocha)
             } else {
                 TextField(placeholder, text: $text)
                     .keyboardType(keyboardType)
                     .textInputAutocapitalization(autocapitalization)
                     .foregroundColor(PatinaColors.Text.primary)
-                    .tint(PatinaColors.mochaBrown)
+                    .tint(PatinaColors.mocha)
             }
         }
         .font(PatinaTypography.body)
@@ -673,7 +673,7 @@ struct PatinaTextField: View {
         .cornerRadius(PatinaRadius.lg)
         .overlay(
             RoundedRectangle(cornerRadius: PatinaRadius.lg)
-                .stroke(PatinaColors.clayBeige.opacity(0.2), lineWidth: 1)
+                .stroke(PatinaColors.clay.opacity(0.2), lineWidth: 1)
         )
     }
 }

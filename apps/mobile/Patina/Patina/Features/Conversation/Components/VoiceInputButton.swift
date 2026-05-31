@@ -26,18 +26,18 @@ struct VoiceInputButton: View {
                 // Pulse animation when recording
                 if isActive {
                     Circle()
-                        .fill(PatinaColors.clayBeige.opacity(0.3))
+                        .fill(PatinaColors.clay.opacity(0.3))
                         .frame(width: 44, height: 44)
                         .scaleEffect(pulseScale)
                 }
 
                 Circle()
-                    .fill(isActive ? PatinaColors.mochaBrown : PatinaColors.clayBeige.opacity(0.2))
+                    .fill(isActive ? PatinaColors.mocha : PatinaColors.clay.opacity(0.2))
                     .frame(width: 36, height: 36)
 
                 Image(systemName: isActive ? "waveform" : "mic")
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(isActive ? .white : PatinaColors.mochaBrown)
+                    .foregroundColor(isActive ? .white : PatinaColors.mocha)
             }
         }
         .disabled(!isAuthorized)

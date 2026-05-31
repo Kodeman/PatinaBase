@@ -15,7 +15,7 @@ public struct PulseAnimation: View {
     @State private var scale: CGFloat = 1.0
     @State private var opacity: Double = 0.8
 
-    public init(color: Color = PatinaColors.clayBeige, isActive: Bool = true) {
+    public init(color: Color = PatinaColors.clay, isActive: Bool = true) {
         self.color = color
         self.isActive = isActive
     }
@@ -69,15 +69,15 @@ public struct PulseAnimation: View {
                     .frame(width: 40, height: 40)
 
                 Circle()
-                    .fill(PatinaColors.clayBeige)
+                    .fill(PatinaColors.clay)
                     .frame(width: 40, height: 40)
             }
 
             ZStack {
-                PulseAnimation(color: PatinaColors.mochaBrown, isActive: true)
+                PulseAnimation(color: PatinaColors.mocha, isActive: true)
                     .frame(width: 60, height: 60)
 
-                StrataMarkView(color: PatinaColors.mochaBrown)
+                StrataMarkView(color: PatinaColors.mocha)
             }
         }
     }

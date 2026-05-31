@@ -14,7 +14,7 @@ public struct ClayBackground: View {
     var textureIntensity: Double
     var color: Color
 
-    public init(cornerRadius: CGFloat = 32, textureIntensity: Double = 0.3, color: Color = PatinaColors.clayBeige) {
+    public init(cornerRadius: CGFloat = 32, textureIntensity: Double = 0.3, color: Color = PatinaColors.clay) {
         self.cornerRadius = cornerRadius
         self.textureIntensity = textureIntensity
         self.color = color
@@ -76,7 +76,7 @@ struct ClayTextureOverlay: View {
                     // Mix of lighter and darker spots for texture
                     let isDark = Bool.random()
                     let color = isDark
-                        ? PatinaColors.mochaBrown.opacity(alpha)
+                        ? PatinaColors.mocha.opacity(alpha)
                         : Color.white.opacity(alpha * 0.5)
 
                     context.fill(
@@ -107,7 +107,7 @@ struct PaperTextureOverlay: View {
                     let alpha = Double.random(in: 0.02...0.06) * intensity
 
                     // Warm beige tint for paper feel
-                    let color = PatinaColors.clayBeige.opacity(alpha)
+                    let color = PatinaColors.clay.opacity(alpha)
 
                     context.fill(
                         Path(ellipseIn: CGRect(x: x, y: y, width: 1, height: 1)),
@@ -133,7 +133,7 @@ struct PaperTextureOverlay: View {
 
                     context.stroke(
                         path,
-                        with: .color(PatinaColors.mochaBrown.opacity(alpha)),
+                        with: .color(PatinaColors.mocha.opacity(alpha)),
                         lineWidth: 0.5
                     )
                 }
@@ -174,12 +174,12 @@ public struct PaperBackground: View {
     VStack(spacing: 40) {
         // Circle button
         ClayCircleBackground(size: 64)
-            .shadow(color: PatinaColors.mochaBrown.opacity(0.15), radius: 8, y: 4)
+            .shadow(color: PatinaColors.mocha.opacity(0.15), radius: 8, y: 4)
 
         // Rounded panel
         ClayBackground(cornerRadius: 24)
             .frame(width: 300, height: 200)
-            .shadow(color: PatinaColors.mochaBrown.opacity(0.15), radius: 12, y: 6)
+            .shadow(color: PatinaColors.mocha.opacity(0.15), radius: 12, y: 6)
     }
     .padding(40)
     .background(PatinaColors.Background.primary)

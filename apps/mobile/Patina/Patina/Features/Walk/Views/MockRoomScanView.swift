@@ -110,7 +110,7 @@ struct MockRoomScanView: View {
                 var path = Path()
                 path.move(to: CGPoint(x: x, y: 0))
                 path.addLine(to: CGPoint(x: x, y: canvasSize.height))
-                context.stroke(path, with: .color(PatinaColors.clayBeige.opacity(0.15)), lineWidth: 0.5)
+                context.stroke(path, with: .color(PatinaColors.clay.opacity(0.15)), lineWidth: 0.5)
             }
 
             // Draw horizontal lines
@@ -118,7 +118,7 @@ struct MockRoomScanView: View {
                 var path = Path()
                 path.move(to: CGPoint(x: 0, y: y))
                 path.addLine(to: CGPoint(x: canvasSize.width, y: y))
-                context.stroke(path, with: .color(PatinaColors.clayBeige.opacity(0.15)), lineWidth: 0.5)
+                context.stroke(path, with: .color(PatinaColors.clay.opacity(0.15)), lineWidth: 0.5)
             }
         }
         .opacity(0.5)
@@ -130,9 +130,9 @@ struct MockRoomScanView: View {
                 LinearGradient(
                     colors: [
                         Color.clear,
-                        PatinaColors.clayBeige.opacity(0.5),
-                        PatinaColors.clayBeige,
-                        PatinaColors.clayBeige.opacity(0.5),
+                        PatinaColors.clay.opacity(0.5),
+                        PatinaColors.clay,
+                        PatinaColors.clay.opacity(0.5),
                         Color.clear
                     ],
                     startPoint: .leading,
@@ -179,18 +179,18 @@ struct MockRoomScanView: View {
             // Pulsing ring
             ZStack {
                 Circle()
-                    .stroke(PatinaColors.clayBeige.opacity(0.3), lineWidth: 2)
+                    .stroke(PatinaColors.clay.opacity(0.3), lineWidth: 2)
                     .frame(width: 80, height: 80)
 
                 Circle()
-                    .stroke(PatinaColors.clayBeige, lineWidth: 2)
+                    .stroke(PatinaColors.clay, lineWidth: 2)
                     .frame(width: 80, height: 80)
                     .scaleEffect(pulseScale)
                     .opacity(2 - pulseScale)
 
                 Image(systemName: "viewfinder")
                     .font(.system(size: 24))
-                    .foregroundColor(PatinaColors.clayBeige)
+                    .foregroundColor(PatinaColors.clay)
             }
             .onAppear {
                 withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: false)) {
@@ -206,7 +206,7 @@ struct MockRoomScanView: View {
             // Simulator notice
             Text("(Simulator Mode)")
                 .font(.system(size: 10))
-                .foregroundColor(PatinaColors.clayBeige.opacity(0.5))
+                .foregroundColor(PatinaColors.clay.opacity(0.5))
         }
     }
 

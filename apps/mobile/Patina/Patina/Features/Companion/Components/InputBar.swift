@@ -58,7 +58,7 @@ public struct InputBar: View {
                     } label: {
                         Image(systemName: "arrow.up.circle.fill")
                             .font(.system(size: 24))
-                            .foregroundColor(PatinaColors.clayBeige)
+                            .foregroundColor(PatinaColors.clay)
                     }
                     .transition(.scale.combined(with: .opacity))
                 }
@@ -109,7 +109,7 @@ public struct VoiceButton: View {
             // Pulse animation when active
             if isActive {
                 Circle()
-                    .fill(PatinaColors.clayBeige.opacity(0.3))
+                    .fill(PatinaColors.clay.opacity(0.3))
                     .frame(width: buttonSize * pulseScale, height: buttonSize * pulseScale)
                     .onAppear {
                         withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
@@ -120,7 +120,7 @@ public struct VoiceButton: View {
 
             // Main button
             Circle()
-                .fill(isActive ? PatinaColors.clayBeige : PatinaColors.mochaBrown)
+                .fill(isActive ? PatinaColors.clay : PatinaColors.mocha)
                 .frame(width: buttonSize, height: buttonSize)
                 .overlay(
                     Image(systemName: isActive ? "mic.fill" : "mic")

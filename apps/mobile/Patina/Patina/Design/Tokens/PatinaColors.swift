@@ -95,14 +95,6 @@ public enum PatinaColors {
         public static let line2 = clay
         public static let line3 = clay.opacity(0.5)
     }
-
-    // MARK: - Deprecated (use new names)
-
-    @available(*, deprecated, renamed: "clay")
-    public static let clayBeige = clay
-
-    @available(*, deprecated, renamed: "mocha")
-    public static let mochaBrown = mocha
 }
 
 // MARK: - Color Extension for Hex Values

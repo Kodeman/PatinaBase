@@ -133,7 +133,7 @@ public struct QRScannerView: View {
 
                 // Corner markers
                 ViewfinderCorners(rect: rect, cornerRadius: 24)
-                    .stroke(PatinaColors.clayBeige, lineWidth: 4)
+                    .stroke(PatinaColors.clay, lineWidth: 4)
             }
         }
         .ignoresSafeArea()
@@ -145,7 +145,7 @@ public struct QRScannerView: View {
         VStack(spacing: PatinaSpacing.sm) {
             Image(systemName: "qrcode.viewfinder")
                 .font(.system(size: 28))
-                .foregroundColor(PatinaColors.clayBeige)
+                .foregroundColor(PatinaColors.clay)
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("Scan the QR code")
@@ -181,7 +181,7 @@ public struct QRScannerView: View {
         VStack(spacing: PatinaSpacing.xl) {
             Image(systemName: "camera.fill")
                 .font(.system(size: 64))
-                .foregroundColor(PatinaColors.clayBeige)
+                .foregroundColor(PatinaColors.clay)
 
             VStack(spacing: PatinaSpacing.sm) {
                 Text("Camera Access Required")

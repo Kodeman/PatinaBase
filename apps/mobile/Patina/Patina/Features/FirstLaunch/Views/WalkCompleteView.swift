@@ -40,7 +40,7 @@ struct WalkCompleteView: View {
                 Spacer()
 
                 // Strata mark
-                StrataMarkView(color: PatinaColors.clayBeige, scale: 1.0, breathing: true)
+                StrataMarkView(color: PatinaColors.clay, scale: 1.0, breathing: true)
                     .frame(height: 40)
                     .padding(.bottom, PatinaSpacing.xl)
                     .opacity(headerVisible ? 1 : 0)
@@ -79,7 +79,7 @@ struct WalkCompleteView: View {
                         .foregroundColor(PatinaColors.offWhite)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, PatinaSpacing.md)
-                        .background(PatinaColors.clayBeige)
+                        .background(PatinaColors.clay)
                         .cornerRadius(PatinaRadius.lg)
                 }
                 .accessibilityIdentifier("walkComplete.showMeButton")
@@ -104,7 +104,7 @@ struct WalkCompleteView: View {
             LinearGradient(
                 colors: [
                     PatinaColors.charcoal,
-                    PatinaColors.mochaBrown.opacity(0.8),
+                    PatinaColors.mocha.opacity(0.8),
                     PatinaColors.Background.primary
                 ],
                 startPoint: .top,
@@ -120,8 +120,8 @@ struct WalkCompleteView: View {
                         .fill(
                             RadialGradient(
                                 colors: [
-                                    PatinaColors.clayBeige.opacity(0.2),
-                                    PatinaColors.clayBeige.opacity(0.05),
+                                    PatinaColors.clay.opacity(0.2),
+                                    PatinaColors.clay.opacity(0.05),
                                     .clear
                                 ],
                                 center: .center,
@@ -169,7 +169,7 @@ struct WalkCompleteView: View {
     private func insightRow(_ insight: String, index: Int) -> some View {
         HStack(spacing: PatinaSpacing.sm) {
             Circle()
-                .fill(PatinaColors.clayBeige)
+                .fill(PatinaColors.clay)
                 .frame(width: 6, height: 6)
 
             Text(insight)

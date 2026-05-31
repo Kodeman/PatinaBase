@@ -23,7 +23,7 @@ struct TypingIndicator: View {
                 HStack(spacing: 6) {
                     ForEach(0..<dotCount, id: \.self) { index in
                         Circle()
-                            .fill(PatinaColors.clayBeige)
+                            .fill(PatinaColors.clay)
                             .frame(width: dotSize, height: dotSize)
                             .scaleEffect(animationPhase == index ? 1.3 : 1.0)
                             .opacity(animationPhase == index ? 1.0 : 0.5)
@@ -33,7 +33,7 @@ struct TypingIndicator: View {
                 .padding(.vertical, PatinaSpacing.sm + 4)
                 .background(PatinaColors.offWhite)
                 .clipShape(MessageBubbleShape(isFromUser: false))
-                .shadow(color: PatinaColors.mochaBrown.opacity(0.08), radius: 4, y: 2)
+                .shadow(color: PatinaColors.mocha.opacity(0.08), radius: 4, y: 2)
 
                 // Label
                 Text("Patina is thinking...")
@@ -75,7 +75,7 @@ struct TypingIndicatorWave: View {
                 HStack(spacing: 6) {
                     ForEach(0..<dotCount, id: \.self) { index in
                         Circle()
-                            .fill(PatinaColors.clayBeige)
+                            .fill(PatinaColors.clay)
                             .frame(width: dotSize, height: dotSize)
                             .offset(y: isAnimating ? -4 : 4)
                             .animation(
@@ -90,7 +90,7 @@ struct TypingIndicatorWave: View {
                 .padding(.vertical, PatinaSpacing.sm + 4)
                 .background(PatinaColors.offWhite)
                 .clipShape(MessageBubbleShape(isFromUser: false))
-                .shadow(color: PatinaColors.mochaBrown.opacity(0.08), radius: 4, y: 2)
+                .shadow(color: PatinaColors.mocha.opacity(0.08), radius: 4, y: 2)
 
                 Text("Patina is thinking...")
                     .font(PatinaTypography.caption)
@@ -121,7 +121,7 @@ struct TypingIndicatorBreathing: View {
                 HStack(spacing: 6) {
                     ForEach(0..<3, id: \.self) { _ in
                         Circle()
-                            .fill(PatinaColors.clayBeige)
+                            .fill(PatinaColors.clay)
                             .frame(width: 8, height: 8)
                     }
                 }
@@ -131,7 +131,7 @@ struct TypingIndicatorBreathing: View {
                 .padding(.vertical, PatinaSpacing.sm + 4)
                 .background(PatinaColors.offWhite)
                 .clipShape(MessageBubbleShape(isFromUser: false))
-                .shadow(color: PatinaColors.mochaBrown.opacity(0.08), radius: 4, y: 2)
+                .shadow(color: PatinaColors.mocha.opacity(0.08), radius: 4, y: 2)
 
                 Text("Patina is thinking...")
                     .font(PatinaTypography.caption)

@@ -108,7 +108,7 @@ struct WalkInvitationView: View {
     private var strataMarkSection: some View {
         VStack(spacing: PatinaSpacing.md) {
             StrataMarkView(
-                color: PatinaColors.clayBeige,
+                color: PatinaColors.clay,
                 scale: 1.0,
                 breathing: true
             )
@@ -150,7 +150,7 @@ struct WalkInvitationView: View {
                     .foregroundColor(PatinaColors.offWhite)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, PatinaSpacing.md)
-                    .background(PatinaColors.clayBeige)
+                    .background(PatinaColors.clay)
                     .cornerRadius(PatinaRadius.lg)
             }
             .accessibilityIdentifier("walkInvitation.letsWalkButton")

@@ -52,7 +52,7 @@ struct RoomNamingView: View {
                     Spacer(minLength: 60)
 
                     // Strata mark
-                    StrataMarkView(color: PatinaColors.clayBeige, scale: 1.0, breathing: true)
+                    StrataMarkView(color: PatinaColors.clay, scale: 1.0, breathing: true)
                         .frame(height: 40)
                         .padding(.bottom, PatinaSpacing.xl)
                         .opacity(headerVisible ? 1 : 0)
@@ -115,8 +115,8 @@ struct RoomNamingView: View {
                             .padding(.vertical, PatinaSpacing.md)
                             .background(
                                 roomName.isEmpty
-                                    ? PatinaColors.clayBeige.opacity(0.5)
-                                    : PatinaColors.clayBeige
+                                    ? PatinaColors.clay.opacity(0.5)
+                                    : PatinaColors.clay
                             )
                             .cornerRadius(PatinaRadius.lg)
                     }
@@ -144,7 +144,7 @@ struct RoomNamingView: View {
         LinearGradient(
             colors: [
                 PatinaColors.charcoal,
-                PatinaColors.mochaBrown.opacity(0.8),
+                PatinaColors.mocha.opacity(0.8),
                 PatinaColors.Background.primary
             ],
             startPoint: .top,
@@ -169,12 +169,12 @@ struct RoomNamingView: View {
                 .padding(PatinaSpacing.md)
                 .background(
                     selectedType == type
-                        ? PatinaColors.clayBeige.opacity(0.2)
+                        ? PatinaColors.clay.opacity(0.2)
                         : PatinaColors.Background.secondary.opacity(0.8)
                 )
                 .foregroundColor(
                     selectedType == type
-                        ? PatinaColors.clayBeige
+                        ? PatinaColors.clay
                         : PatinaColors.Text.secondary
                 )
                 .cornerRadius(PatinaRadius.md)
@@ -182,7 +182,7 @@ struct RoomNamingView: View {
                     RoundedRectangle(cornerRadius: PatinaRadius.md)
                         .stroke(
                             selectedType == type
-                                ? PatinaColors.clayBeige
+                                ? PatinaColors.clay
                                 : Color.clear,
                             lineWidth: 1
                         )

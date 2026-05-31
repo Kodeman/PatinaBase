@@ -166,7 +166,7 @@ struct LingerDemoView: View {
                     HStack {
                         Image(systemName: "chair.lounge")
                             .font(.system(size: 32))
-                            .foregroundColor(PatinaColors.mochaBrown)
+                            .foregroundColor(PatinaColors.mocha)
 
                         VStack(alignment: .leading) {
                             Text("Edo Lounge Chair")
@@ -243,7 +243,7 @@ struct LingerDemoView: View {
                 HStack(spacing: PatinaSpacing.sm) {
                     ForEach(0..<3, id: \.self) { index in
                         Circle()
-                            .fill(index < revealStage ? PatinaColors.mochaBrown : PatinaColors.clayBeige.opacity(0.3))
+                            .fill(index < revealStage ? PatinaColors.mocha : PatinaColors.clay.opacity(0.3))
                             .frame(width: 8, height: 8)
                     }
                 }
