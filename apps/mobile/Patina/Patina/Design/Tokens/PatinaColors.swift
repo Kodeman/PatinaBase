@@ -19,6 +19,9 @@ public enum PatinaColors {
     /// Interactive elements, accents — warm clay gold
     public static let clay = Color(hex: "C4A57B")
 
+    /// Deeper clay for interactive text/affordances (accessible contrast)
+    public static let clayDeep = Color(hex: "9F7E48")
+
     /// Muted text, metadata, secondary interactive
     public static let agedOak = Color(hex: "8B7355")
 
@@ -76,6 +79,7 @@ public enum PatinaColors {
         public static let secondary = mocha
         public static let muted = agedOak
         public static let inverse = offWhite
+        public static let interactive = clayDeep
     }
 
     public enum Interactive {

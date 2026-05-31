@@ -65,7 +65,11 @@ public enum PatinaTypography {
     public static let monoSmall = Font.custom(monoFont + "-Regular", size: 9, relativeTo: .caption2)
 
     /// Tiny metadata — 8px, stat labels, step indicators
+    @available(*, deprecated, message: "use monoLabel (10pt)")
     public static let monoTiny = Font.custom(monoFont + "-Regular", size: 8, relativeTo: .caption2)
+
+    /// Label-floor metadata — 10px floor for mono labels, tracking ~0.3 at call site
+    public static let monoLabel = Font.custom(monoFont + "-Regular", size: 10, relativeTo: .caption2)
 
     /// Medium weight mono — 10px, section titles in settings
     public static let monoMedium = Font.custom(monoFont + "-Medium", size: 10, relativeTo: .caption2)
