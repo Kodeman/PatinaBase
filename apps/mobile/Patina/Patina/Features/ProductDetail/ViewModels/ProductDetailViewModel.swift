@@ -64,7 +64,7 @@ final class ProductDetailViewModel {
                 return
             } catch {
                 #if DEBUG
-                print("[ProductDetail] remote add failed, falling back local: \(error)")
+                PatinaLog.ui.error("[ProductDetail] remote add failed, falling back local: \(error)")
                 #endif
             }
         }
@@ -94,7 +94,7 @@ final class ProductDetailViewModel {
                 self.isLoading = false
             }
             #if DEBUG
-            print("[ProductDetail] load failed: \(error.localizedDescription)")
+            PatinaLog.ui.error("[ProductDetail] load failed: \(error.localizedDescription)")
             #endif
         }
     }

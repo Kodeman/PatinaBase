@@ -257,7 +257,7 @@ public final class RoomStore {
             try context.save()
         } catch {
             #if DEBUG
-            print("[RoomStore] save error: \(error)")
+            PatinaLog.scan.error("[RoomStore] save error: \(error)")
             #endif
         }
     }

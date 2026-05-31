@@ -24,7 +24,7 @@ final class ThreadListViewModel {
         } catch {
             self.error = "Couldn't load conversations"
             #if DEBUG
-            print("[Messaging] threads failed: \(error.localizedDescription)")
+            PatinaLog.ui.error("[Messaging] threads failed: \(error.localizedDescription)")
             #endif
         }
         isLoading = false
@@ -61,7 +61,7 @@ final class ThreadDetailViewModel {
         } catch {
             self.error = "Couldn't load messages"
             #if DEBUG
-            print("[Messaging] thread load failed: \(error.localizedDescription)")
+            PatinaLog.ui.error("[Messaging] thread load failed: \(error.localizedDescription)")
             #endif
         }
         isLoading = false
@@ -83,7 +83,7 @@ final class ThreadDetailViewModel {
             draft = body
             self.error = "Couldn't send"
             #if DEBUG
-            print("[Messaging] send failed: \(error.localizedDescription)")
+            PatinaLog.ui.error("[Messaging] send failed: \(error.localizedDescription)")
             #endif
         }
         isSending = false

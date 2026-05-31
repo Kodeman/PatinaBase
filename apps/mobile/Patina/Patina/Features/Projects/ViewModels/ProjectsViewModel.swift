@@ -22,7 +22,7 @@ final class ProjectsListViewModel {
         } catch {
             self.error = "Couldn't load projects"
             #if DEBUG
-            print("[Projects] list failed: \(error.localizedDescription)")
+            PatinaLog.ui.error("[Projects] list failed: \(error.localizedDescription)")
             #endif
         }
         isLoading = false

@@ -168,7 +168,7 @@ public final class AppCoordinator: Coordinator {
 
         #if DEBUG
         if newPhase != phase {
-            print("[AppCoordinator] phase \(phase) → \(newPhase) (ready=\(AuthService.shared.isAuthStateReady) authed=\(AuthService.shared.isAuthenticated) guest=\(guestModeOptIn) onboarded=\(settings.hasCompletedOnboarding))")
+            PatinaLog.nav.debug("[AppCoordinator] phase \(phase) → \(newPhase) (ready=\(AuthService.shared.isAuthStateReady) authed=\(AuthService.shared.isAuthenticated) guest=\(guestModeOptIn) onboarded=\(settings.hasCompletedOnboarding))")
         }
         #endif
 

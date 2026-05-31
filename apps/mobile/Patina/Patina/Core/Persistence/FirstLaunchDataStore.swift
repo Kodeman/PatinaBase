@@ -40,7 +40,7 @@ public final class FirstLaunchDataStore {
             let data = try encoder.encode(metrics)
             defaults.set(data, forKey: Keys.firstLaunchMetrics)
         } catch {
-            print("[FirstLaunchDataStore] Failed to save metrics: \(error)")
+            PatinaLog.scan.error("[FirstLaunchDataStore] Failed to save metrics: \(error)")
         }
     }
 
@@ -53,7 +53,7 @@ public final class FirstLaunchDataStore {
         do {
             return try decoder.decode(FirstLaunchMetrics.self, from: data)
         } catch {
-            print("[FirstLaunchDataStore] Failed to load metrics: \(error)")
+            PatinaLog.scan.error("[FirstLaunchDataStore] Failed to load metrics: \(error)")
             return nil
         }
     }
@@ -66,7 +66,7 @@ public final class FirstLaunchDataStore {
             let data = try encoder.encode(roomData)
             defaults.set(data, forKey: Keys.firstWalkRoomData)
         } catch {
-            print("[FirstLaunchDataStore] Failed to save room data: \(error)")
+            PatinaLog.scan.error("[FirstLaunchDataStore] Failed to save room data: \(error)")
         }
     }
 
@@ -79,7 +79,7 @@ public final class FirstLaunchDataStore {
         do {
             return try decoder.decode(FirstWalkRoomData.self, from: data)
         } catch {
-            print("[FirstLaunchDataStore] Failed to load room data: \(error)")
+            PatinaLog.scan.error("[FirstLaunchDataStore] Failed to load room data: \(error)")
             return nil
         }
     }
@@ -92,7 +92,7 @@ public final class FirstLaunchDataStore {
             let data = try encoder.encode(signals)
             defaults.set(data, forKey: Keys.firstWalkStyleSignals)
         } catch {
-            print("[FirstLaunchDataStore] Failed to save style signals: \(error)")
+            PatinaLog.scan.error("[FirstLaunchDataStore] Failed to save style signals: \(error)")
         }
     }
 
@@ -105,7 +105,7 @@ public final class FirstLaunchDataStore {
         do {
             return try decoder.decode(FirstWalkStyleSignals.self, from: data)
         } catch {
-            print("[FirstLaunchDataStore] Failed to load style signals: \(error)")
+            PatinaLog.scan.error("[FirstLaunchDataStore] Failed to load style signals: \(error)")
             return nil
         }
     }

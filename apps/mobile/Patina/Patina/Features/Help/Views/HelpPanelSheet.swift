@@ -213,7 +213,7 @@ public struct HelpPanelSheet: View {
             // Invalid surface keys (the only throwing path) are programmer
             // errors — log and present the empty state so the UI stays
             // functional and the bug is caught in QA.
-            print("[HelpPanelSheet] loadArticles failed: \(error)")
+            PatinaLog.ui.error("[HelpPanelSheet] loadArticles failed: \(error)")
             await MainActor.run {
                 self.articles = []
                 self.loadError = true

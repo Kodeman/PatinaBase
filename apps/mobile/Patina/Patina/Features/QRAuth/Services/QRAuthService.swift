@@ -187,12 +187,12 @@ public final class QRAuthService {
                 accessToken = try await supabase.auth.session.accessToken
             } catch {
                 // Token may be expired — try refreshing the session
-                print("QR Auth: access token retrieval failed, attempting refresh: \(error)")
+                PatinaLog.auth.error("QR Auth: access token retrieval failed, attempting refresh: \(error)")
                 do {
                     try await authService.refreshSession()
                     accessToken = try await supabase.auth.session.accessToken
                 } catch {
-                    print("QR Auth: session refresh also failed: \(error)")
+                    PatinaLog.auth.error("QR Auth: session refresh also failed: \(error)")
                 }
             }
 

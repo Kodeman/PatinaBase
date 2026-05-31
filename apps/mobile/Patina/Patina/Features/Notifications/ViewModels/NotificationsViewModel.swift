@@ -31,7 +31,7 @@ final class NotificationsViewModel {
             self.error = "Couldn't load notifications"
             self.isLoading = false
             #if DEBUG
-            print("[Notifications] load failed: \(error.localizedDescription)")
+            PatinaLog.ui.error("[Notifications] load failed: \(error.localizedDescription)")
             #endif
         }
     }
@@ -52,7 +52,7 @@ final class NotificationsViewModel {
                 try await NotificationsAPIClient.shared.markOpened(id: remoteId)
             } catch {
                 #if DEBUG
-                print("[Notifications] markOpened failed: \(error.localizedDescription)")
+                PatinaLog.ui.error("[Notifications] markOpened failed: \(error.localizedDescription)")
                 #endif
                 await MainActor.run { self.notifications = previous }
             }
@@ -73,7 +73,7 @@ final class NotificationsViewModel {
                 try await NotificationsAPIClient.shared.markAllOpened()
             } catch {
                 #if DEBUG
-                print("[Notifications] markAllOpened failed: \(error.localizedDescription)")
+                PatinaLog.ui.error("[Notifications] markAllOpened failed: \(error.localizedDescription)")
                 #endif
                 await MainActor.run { self.notifications = previous }
             }

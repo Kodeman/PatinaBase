@@ -235,6 +235,6 @@ private struct ScaleButtonStyle: ButtonStyle {
     return WalkCompleteView(
         styleSignals: signals,
         roomName: "Living Room",
-        onShowMe: { print("Show me") }
+        onShowMe: { PatinaLog.ui.debug("Show me") }
     )
 }

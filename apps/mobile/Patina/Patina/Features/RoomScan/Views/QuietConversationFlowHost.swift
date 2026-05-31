@@ -62,18 +62,18 @@ struct QuietConversationFlowHost: View {
         }
         .onAppear {
             #if DEBUG
-            print("[QuietConversationFlowHost] host onAppear step=\(step)")
+            PatinaLog.scan.debug("[QuietConversationFlowHost] host onAppear step=\(step)")
             #endif
             bootstrap()
         }
         .onDisappear {
             #if DEBUG
-            print("[QuietConversationFlowHost] host onDisappear step=\(step)")
+            PatinaLog.scan.debug("[QuietConversationFlowHost] host onDisappear step=\(step)")
             #endif
         }
         .onChange(of: step) { oldValue, newValue in
             #if DEBUG
-            print("[QuietConversationFlowHost] step changed \(oldValue) → \(newValue)")
+            PatinaLog.scan.debug("[QuietConversationFlowHost] step changed \(oldValue) → \(newValue)")
             #endif
         }
         .fullScreenCover(item: $reviewScan) { review in
@@ -84,7 +84,7 @@ struct QuietConversationFlowHost: View {
                     session: session,
                     onComplete: {
                         #if DEBUG
-                        print("[QuietConversationFlowHost] review onComplete scanId=\(review.id)")
+                        PatinaLog.scan.debug("[QuietConversationFlowHost] review onComplete scanId=\(review.id)")
                         #endif
                         kickOffReviewUpload(scanId: review.id)
                         savedScanId = review.id
@@ -95,7 +95,7 @@ struct QuietConversationFlowHost: View {
                     },
                     onCancel: {
                         #if DEBUG
-                        print("[QuietConversationFlowHost] review onCancel scanId=\(review.id)")
+                        PatinaLog.scan.debug("[QuietConversationFlowHost] review onCancel scanId=\(review.id)")
                         #endif
                         let ctx = modelContext
                         Task { @MainActor in
@@ -108,7 +108,7 @@ struct QuietConversationFlowHost: View {
                 )
                 .onAppear {
                     #if DEBUG
-                    print("[QuietConversationFlowHost] review cover appeared scanId=\(review.id)")
+                    PatinaLog.scan.debug("[QuietConversationFlowHost] review cover appeared scanId=\(review.id)")
                     #endif
                 }
             }
@@ -155,7 +155,7 @@ struct QuietConversationFlowHost: View {
                     if reason == .userAbandon
                         || vm.captureService.currentScanId == nil {
                         #if DEBUG
-                        print("[QuietConversationFlowHost] .threshold → abandon (reason=\(reason)) — skipping review")
+                        PatinaLog.scan.debug("[QuietConversationFlowHost] .threshold → abandon (reason=\(reason)) — skipping review")
                         #endif
                         dismiss()
                         coordinator.navigate(to: .heroFrame)
@@ -170,7 +170,7 @@ struct QuietConversationFlowHost: View {
                     let resolvedScanId = vm.captureService.currentScanId
                         ?? scanned.sessionId
                     #if DEBUG
-                    print("[QuietConversationFlowHost] .threshold → review cover scanId=\(resolvedScanId) reason=\(reason)")
+                    PatinaLog.scan.debug("[QuietConversationFlowHost] .threshold → review cover scanId=\(resolvedScanId) reason=\(reason)")
                     #endif
                     reviewScan = ReviewBundleID(id: resolvedScanId)
                 }

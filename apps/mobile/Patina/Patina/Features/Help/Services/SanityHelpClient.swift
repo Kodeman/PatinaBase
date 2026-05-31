@@ -192,7 +192,7 @@ public actor SanityHelpClient {
         // for content that genuinely doesn't exist (matches the web hook's
         // SWR semantics where `null` is a valid memoized value).
         cache[cacheKey] = CacheEntry(value: nil, storedAt: now())
-        print(
+        PatinaLog.ui.debug(
             "[SanityHelpClient] No content found surfaceKey=\(surfaceKey)" +
             " contentType=\(contentType) persona=\(persona?.rawValue ?? "all")"
         )
@@ -244,7 +244,7 @@ public actor SanityHelpClient {
         }
 
         guard let url = Self.buildArticleListURL(surfaceKey: surfaceKey) else {
-            print("[SanityHelpClient] Failed to build article-list URL surfaceKey=\(surfaceKey)")
+            PatinaLog.ui.error("[SanityHelpClient] Failed to build article-list URL surfaceKey=\(surfaceKey)")
             articleListCache[surfaceKey] = ArticleListCacheEntry(value: [], storedAt: now())
             return []
         }
@@ -257,7 +257,7 @@ public actor SanityHelpClient {
         do {
             let (data, response) = try await session.data(for: request)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                print(
+                PatinaLog.ui.error(
                     "[SanityHelpClient] Article-list non-2xx status=\(http.statusCode)" +
                     " url=\(url.absoluteString)"
                 )
@@ -268,7 +268,7 @@ public actor SanityHelpClient {
             articleListCache[surfaceKey] = ArticleListCacheEntry(value: summaries, storedAt: now())
             return summaries
         } catch {
-            print("[SanityHelpClient] Article-list fetch failed: \(error)")
+            PatinaLog.ui.error("[SanityHelpClient] Article-list fetch failed: \(error)")
             // Cache the miss briefly so a transient blip doesn't hammer Sanity.
             articleListCache[surfaceKey] = ArticleListCacheEntry(value: [], storedAt: now())
             return []
@@ -478,7 +478,7 @@ public actor SanityHelpClient {
             contentType: contentType,
             personaParam: persona
         ) else {
-            print("[SanityHelpClient] Failed to build query URL surfaceKey=\(surfaceKey)")
+            PatinaLog.ui.error("[SanityHelpClient] Failed to build query URL surfaceKey=\(surfaceKey)")
             return nil
         }
 
@@ -490,12 +490,12 @@ public actor SanityHelpClient {
         do {
             let (data, response) = try await session.data(for: request)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                print("[SanityHelpClient] Non-2xx status=\(http.statusCode) url=\(url.absoluteString)")
+                PatinaLog.ui.error("[SanityHelpClient] Non-2xx status=\(http.statusCode) url=\(url.absoluteString)")
                 return nil
             }
             return try decode(data: data)
         } catch {
-            print("[SanityHelpClient] Sanity fetch failed: \(error)")
+            PatinaLog.ui.error("[SanityHelpClient] Sanity fetch failed: \(error)")
             return nil
         }
     }

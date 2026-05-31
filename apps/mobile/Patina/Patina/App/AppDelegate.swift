@@ -77,7 +77,7 @@ final class PatinaAppDelegate: NSObject, UIApplicationDelegate {
         let resolved = route ?? .notifications
 
         #if DEBUG
-        print("[APNs] tap (\(source)) → \(resolved.displayName) (logId=\(notificationLogId ?? "nil"))")
+        PatinaLog.nav.debug("[APNs] tap (\(source)) → \(resolved.displayName) (logId=\(notificationLogId ?? "nil"))")
         #endif
 
         Task { @MainActor in
@@ -90,7 +90,7 @@ final class PatinaAppDelegate: NSObject, UIApplicationDelegate {
                     try await NotificationsAPIClient.shared.markOpened(id: notificationLogId)
                 } catch {
                     #if DEBUG
-                    print("[APNs] markOpened failed for \(notificationLogId): \(error.localizedDescription)")
+                    PatinaLog.nav.error("[APNs] markOpened failed for \(notificationLogId): \(error.localizedDescription)")
                     #endif
                 }
             }

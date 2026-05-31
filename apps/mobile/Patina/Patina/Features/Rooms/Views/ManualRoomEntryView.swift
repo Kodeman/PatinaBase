@@ -190,7 +190,7 @@ struct ManualRoomEntryView: View {
                     manualEntry: true
                 )
                 #if DEBUG
-                print("[ManualRoomEntry] remote sync failed, created locally only: \(error)")
+                PatinaLog.scan.error("[ManualRoomEntry] remote sync failed, created locally only: \(error)")
                 #endif
             }
             coordinator.goBack()

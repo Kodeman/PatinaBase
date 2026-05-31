@@ -216,7 +216,7 @@ public final class ConversationStorageService {
                 try fileManager.removeItem(at: cacheURL)
             }
         } catch {
-            print("Failed to clear conversation cache: \(error)")
+            PatinaLog.companion.error("Failed to clear conversation cache: \(error)")
         }
     }
 
@@ -249,7 +249,7 @@ public final class ConversationStorageService {
             let data = try Data(contentsOf: cacheURL)
             return try decoder.decode(ConversationCache.self, from: data)
         } catch {
-            print("Failed to load conversation cache: \(error)")
+            PatinaLog.companion.error("Failed to load conversation cache: \(error)")
             return nil
         }
     }
@@ -261,7 +261,7 @@ public final class ConversationStorageService {
             let data = try encoder.encode(cache)
             try data.write(to: cacheURL, options: .atomic)
         } catch {
-            print("Failed to save conversation cache: \(error)")
+            PatinaLog.companion.error("Failed to save conversation cache: \(error)")
         }
     }
 }

@@ -141,7 +141,7 @@ final class StyleQuizViewModel {
                 }
             } catch {
                 #if DEBUG
-                print("[StyleQuiz] Server submission failed; using local result: \(error.localizedDescription)")
+                PatinaLog.ui.error("[StyleQuiz] Server submission failed; using local result: \(error.localizedDescription)")
                 #endif
                 await MainActor.run {
                     guard let self else { return }

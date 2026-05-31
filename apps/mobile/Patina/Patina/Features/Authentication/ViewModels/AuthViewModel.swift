@@ -322,7 +322,7 @@ public final class AuthViewModel {
                 }
             }
         case .failure(let error):
-            print("Apple Sign In failed: \(error.localizedDescription)")
+            PatinaLog.auth.error("Apple Sign In failed: \(error.localizedDescription)")
         }
     }
 

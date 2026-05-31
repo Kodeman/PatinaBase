@@ -50,7 +50,7 @@ public final class PostHogService {
     public func initialize() {
         guard !isInitialized else { return }
         guard !apiKey.isEmpty else {
-            print("[PostHog] No API key configured, analytics disabled")
+            PatinaLog.ui.debug("[PostHog] No API key configured, analytics disabled")
             isEnabled = false
             return
         }
@@ -63,14 +63,14 @@ public final class PostHogService {
 
         PostHogSDK.shared.setup(config)
         isInitialized = true
-        print("[PostHog] Initialized successfully with host: \(hostURL)")
+        PatinaLog.ui.debug("[PostHog] Initialized successfully with host: \(hostURL)")
 
         // Respect App Tracking Transparency
         if #available(iOS 14.5, *) {
             let status = ATTrackingManager.trackingAuthorizationStatus
             if status == .denied || status == .restricted {
                 PostHogSDK.shared.optOut()
-                print("[PostHog] Opted out due to ATT status: \(status.rawValue)")
+                PatinaLog.ui.debug("[PostHog] Opted out due to ATT status: \(status.rawValue)")
             }
         }
     }
@@ -88,7 +88,7 @@ public final class PostHogService {
 
         PostHogSDK.shared.identify(userId, userProperties: properties)
 
-        print("[PostHog] Identified user: \(userId)")
+        PatinaLog.ui.debug("[PostHog] Identified user: \(userId)", privacy: .private)
     }
 
     /// Reset user identification (call on logout)
@@ -97,7 +97,7 @@ public final class PostHogService {
 
         PostHogSDK.shared.reset()
 
-        print("[PostHog] Reset user identification")
+        PatinaLog.ui.debug("[PostHog] Reset user identification")
     }
 
     // MARK: - Event Tracking
@@ -119,7 +119,7 @@ public final class PostHogService {
         PostHogSDK.shared.capture(event, properties: eventProperties)
 
         #if DEBUG
-        print("[PostHog] Event: \(event), Properties: \(eventProperties)")
+        PatinaLog.ui.debug("[PostHog] Event: \(event), Properties: \(eventProperties)")
         #endif
     }
 
@@ -136,7 +136,7 @@ public final class PostHogService {
         PostHogSDK.shared.screen(screenName, properties: screenProperties)
 
         #if DEBUG
-        print("[PostHog] Screen: \(screenName)")
+        PatinaLog.ui.debug("[PostHog] Screen: \(screenName)")
         #endif
     }
 
@@ -172,7 +172,7 @@ public final class PostHogService {
         PostHogSDK.shared.capture("$set", properties: ["$set": [property: value]])
 
         #if DEBUG
-        print("[PostHog] Set user property: \(property) = \(value)")
+        PatinaLog.ui.debug("[PostHog] Set user property: \(property) = \(value)")
         #endif
     }
 
@@ -186,7 +186,7 @@ public final class PostHogService {
         PostHogSDK.shared.capture("$set", properties: ["$set_once": [property: amount]])
 
         #if DEBUG
-        print("[PostHog] Increment user property: \(property) by \(amount)")
+        PatinaLog.ui.debug("[PostHog] Increment user property: \(property) by \(amount)")
         #endif
     }
 
@@ -202,7 +202,7 @@ public final class PostHogService {
             PostHogSDK.shared.optOut()
         }
 
-        print("[PostHog] Analytics \(enabled ? "enabled" : "disabled")")
+        PatinaLog.ui.debug("[PostHog] Analytics \(enabled ? "enabled" : "disabled")")
     }
 
     /// Flush any pending events
@@ -211,7 +211,7 @@ public final class PostHogService {
 
         PostHogSDK.shared.flush()
 
-        print("[PostHog] Flushed events")
+        PatinaLog.ui.debug("[PostHog] Flushed events")
     }
 }
 

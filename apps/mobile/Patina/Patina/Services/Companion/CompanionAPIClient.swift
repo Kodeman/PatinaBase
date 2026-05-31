@@ -223,7 +223,7 @@ public final class CompanionAPIClient {
             do {
                 return try decoder.decode(R.self, from: data)
             } catch {
-                print("Decoding error: \(error)")
+                PatinaLog.companion.error("Decoding error: \(error)")
                 throw CompanionAPIError.decodingError(underlying: error)
             }
 

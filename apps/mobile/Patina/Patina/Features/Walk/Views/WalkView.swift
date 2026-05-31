@@ -387,11 +387,11 @@ struct WalkView: View {
             )
 
             isSyncing = false
-            print("[WalkView] Room scan synced — room=\(result.roomId) scan=\(result.scanId)")
+            PatinaLog.scan.debug("[WalkView] Room scan synced — room=\(result.roomId) scan=\(result.scanId)")
         } catch {
             isSyncing = false
             syncError = error.localizedDescription
-            print("[WalkView] Remote sync failed: \(error)")
+            PatinaLog.scan.error("[WalkView] Remote sync failed: \(error)")
 
             store.markRoomSyncFailed(localId: roomData.roomId)
 
@@ -403,9 +403,9 @@ struct WalkView: View {
                     usdzData: usdzData,
                     thumbnailData: nil
                 )
-                print("[WalkView] Queued room scan for later sync")
+                PatinaLog.scan.debug("[WalkView] Queued room scan for later sync")
             } catch {
-                print("[WalkView] Failed to enqueue room scan: \(error)")
+                PatinaLog.scan.error("[WalkView] Failed to enqueue room scan: \(error)")
             }
         }
     }

@@ -96,7 +96,7 @@ public final class MessagingRealtimeService: @unchecked Sendable {
                     continuation.yield(message)
                 } catch {
                     #if DEBUG
-                    print("[MessagingRealtime] decode failed: \(error.localizedDescription)")
+                    PatinaLog.ui.error("[MessagingRealtime] decode failed: \(error.localizedDescription)")
                     #endif
                 }
             }

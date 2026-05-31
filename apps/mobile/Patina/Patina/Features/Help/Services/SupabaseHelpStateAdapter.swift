@@ -187,7 +187,7 @@ public actor SupabaseHelpStateAdapter {
             hydrated = true
         } catch {
             #if DEBUG
-            print("[help-system] SupabaseHelpStateAdapter.loadState failed (treating as fresh user): \(error.localizedDescription)")
+            PatinaLog.ui.error("[help-system] SupabaseHelpStateAdapter.loadState failed (treating as fresh user): \(error.localizedDescription)")
             #endif
             hydrated = true
         }
@@ -292,7 +292,7 @@ public actor SupabaseHelpStateAdapter {
                 .execute()
         } catch {
             #if DEBUG
-            print("[help-system] SupabaseHelpStateAdapter.performSave failed (write dropped): \(error.localizedDescription)")
+            PatinaLog.ui.error("[help-system] SupabaseHelpStateAdapter.performSave failed (write dropped): \(error.localizedDescription)")
             #endif
         }
     }

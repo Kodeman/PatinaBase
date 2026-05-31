@@ -34,7 +34,7 @@ public struct PatinaSignInWithAppleButton: View {
 #Preview {
     VStack {
         PatinaSignInWithAppleButton { result in
-            print("Apple sign in result: \(result)")
+            PatinaLog.auth.debug("Apple sign in result: \(result)")
         }
         .padding()
     }

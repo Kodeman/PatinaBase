@@ -305,7 +305,7 @@ struct RoomDetailView: View {
             let rooms = try modelContext.fetch(descriptor)
             room = rooms.first
         } catch {
-            print("Error loading room: \(error)")
+            PatinaLog.scan.error("Error loading room: \(error)")
         }
     }
 

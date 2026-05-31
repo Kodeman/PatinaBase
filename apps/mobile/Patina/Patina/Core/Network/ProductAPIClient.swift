@@ -60,7 +60,7 @@ actor ProductAPIClient {
         let (data, response) = try await session.data(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             #if DEBUG
-            print("[ProductAPI] Recommendations HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            PatinaLog.ui.debug("[ProductAPI] Recommendations HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
             #endif
             throw ProductAPIError.http(status: http.statusCode)
         }
@@ -87,7 +87,7 @@ actor ProductAPIClient {
         let (data, response) = try await session.data(for: directRequest)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             #if DEBUG
-            print("[ProductAPI] Product fetch HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            PatinaLog.ui.debug("[ProductAPI] Product fetch HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
             #endif
             throw ProductAPIError.http(status: http.statusCode)
         }
@@ -111,7 +111,7 @@ actor ProductAPIClient {
 
             _ = try await session.data(for: request)
         } catch {
-            print("[ProductAPI] Failed to track interaction: \(error.localizedDescription)")
+            PatinaLog.ui.error("[ProductAPI] Failed to track interaction: \(error.localizedDescription)")
         }
     }
 

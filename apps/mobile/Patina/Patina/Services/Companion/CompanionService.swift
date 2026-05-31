@@ -49,7 +49,7 @@ public final class CompanionService: CompanionServiceProtocol {
                 let response = try await sendMessageViaAPI(content, context: context)
                 return response
             } catch {
-                print("API call failed, falling back to mock: \(error)")
+                PatinaLog.companion.error("API call failed, falling back to mock: \(error)")
                 // Fall through to mock implementation
             }
         }

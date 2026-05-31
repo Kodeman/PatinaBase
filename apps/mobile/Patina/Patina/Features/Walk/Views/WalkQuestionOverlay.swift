@@ -196,8 +196,8 @@ private struct ScaleButtonStyle: ButtonStyle {
 
         WalkQuestionOverlay(
             question: .timeOfDayQuestion,
-            onAnswer: { print("Answer: \($0)") },
-            onDismiss: { print("Dismissed") }
+            onAnswer: { PatinaLog.scan.debug("Answer: \($0)") },
+            onDismiss: { PatinaLog.scan.debug("Dismissed") }
         )
     }
     .ignoresSafeArea()
@@ -209,8 +209,8 @@ private struct ScaleButtonStyle: ButtonStyle {
 
         WalkQuestionOverlay(
             question: .roomFeelingQuestion,
-            onAnswer: { print("Answer: \($0)") },
-            onDismiss: { print("Dismissed") }
+            onAnswer: { PatinaLog.scan.debug("Answer: \($0)") },
+            onDismiss: { PatinaLog.scan.debug("Dismissed") }
         )
     }
     .ignoresSafeArea()

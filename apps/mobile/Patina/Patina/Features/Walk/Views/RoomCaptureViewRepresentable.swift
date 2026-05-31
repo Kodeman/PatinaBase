@@ -99,6 +99,6 @@ struct RoomPlanUnsupportedView: View {
 
 #Preview("Unsupported Device") {
     RoomPlanUnsupportedView {
-        print("Continue")
+        PatinaLog.scan.debug("Continue")
     }
 }

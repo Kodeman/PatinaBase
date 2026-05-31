@@ -212,7 +212,7 @@ private struct ScaleButtonStyle: ButtonStyle {
 
 #Preview("Walk Invitation") {
     WalkInvitationView(
-        onLetsWalk: { print("Let's walk") },
-        onNotYet: { print("Not yet") }
+        onLetsWalk: { PatinaLog.ui.debug("Let's walk") },
+        onNotYet: { PatinaLog.ui.debug("Not yet") }
     )
 }

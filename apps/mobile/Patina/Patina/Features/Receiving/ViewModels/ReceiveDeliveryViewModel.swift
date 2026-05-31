@@ -118,7 +118,7 @@ final class ReceiveDeliveryViewModel {
         } catch {
             self.error = "Couldn't load arriving deliveries"
             #if DEBUG
-            print("[Receiving] loadArriving failed: \(error.localizedDescription)")
+            PatinaLog.ui.error("[Receiving] loadArriving failed: \(error.localizedDescription)")
             #endif
         }
     }
@@ -210,7 +210,7 @@ final class ReceiveDeliveryViewModel {
                 } catch {
                     self.error = "Couldn't upload inspection photo"
                     #if DEBUG
-                    print("[Receiving] photo upload failed: \(error.localizedDescription)")
+                    PatinaLog.ui.error("[Receiving] photo upload failed: \(error.localizedDescription)")
                     #endif
                     return
                 }
@@ -243,7 +243,7 @@ final class ReceiveDeliveryViewModel {
         } catch {
             self.error = "Couldn't save the inspection"
             #if DEBUG
-            print("[Receiving] inspection insert failed: \(error.localizedDescription)")
+            PatinaLog.ui.error("[Receiving] inspection insert failed: \(error.localizedDescription)")
             #endif
             return
         }
@@ -269,7 +269,7 @@ final class ReceiveDeliveryViewModel {
                     .execute()
             } catch {
                 #if DEBUG
-                print("[Receiving] PO update failed (continuing): \(error.localizedDescription)")
+                PatinaLog.ui.error("[Receiving] PO update failed (continuing): \(error.localizedDescription)")
                 #endif
             }
         }
@@ -302,7 +302,7 @@ final class ReceiveDeliveryViewModel {
                 let cleanup = await compensatingDeleteInspection(id: inspectionId)
                 self.error = "Inspection saved but damage report failed. \(cleanup)"
                 #if DEBUG
-                print("[Receiving] damage_claims insert failed: \(error.localizedDescription); cleanup=\(cleanup)")
+                PatinaLog.ui.error("[Receiving] damage_claims insert failed: \(error.localizedDescription); cleanup=\(cleanup)")
                 #endif
                 return
             }
@@ -324,7 +324,7 @@ final class ReceiveDeliveryViewModel {
             return "Inspection rolled back."
         } catch {
             #if DEBUG
-            print("[Receiving] compensating delete failed: \(error.localizedDescription)")
+            PatinaLog.ui.error("[Receiving] compensating delete failed: \(error.localizedDescription)")
             #endif
             return "Inspection rollback also failed — please retry from desktop."
         }

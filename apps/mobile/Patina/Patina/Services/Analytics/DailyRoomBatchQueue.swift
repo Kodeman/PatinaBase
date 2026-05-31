@@ -98,7 +98,7 @@ actor DailyRoomBatchQueue {
             let data = try JSONEncoder.telemetryEncoder.encode(pending)
             try data.write(to: queueFileURL, options: Data.WritingOptions.atomic)
         } catch {
-            print("[DailyRoomBatchQueue] persist failed: \(error)")
+            PatinaLog.ui.error("[DailyRoomBatchQueue] persist failed: \(error)")
         }
     }
 

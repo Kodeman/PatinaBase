@@ -195,7 +195,7 @@ struct DesignerConsultationView: View {
                 isSubmitting = false
                 HapticManager.shared.notification(.error)
                 #if DEBUG
-                print("[DesignerConsultation] submit failed: \(error.localizedDescription)")
+                PatinaLog.ui.error("[DesignerConsultation] submit failed: \(error.localizedDescription)")
                 #endif
             }
         }

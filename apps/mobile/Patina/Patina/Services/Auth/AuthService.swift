@@ -95,14 +95,14 @@ public final class AuthService {
                 // initial fetch landed an empty result (which happens
                 // when the SDK's auth context lags the event by a tick).
                 if let user = session?.user, ProfileService.shared.currentProfile == nil {
-                    print("Hydrating profile for user (event=\(event)): \(user.id.uuidString)")
+                    PatinaLog.auth.debug("Hydrating profile for user (event=\(event)): \(user.id.uuidString)", privacy: .private)
                     await ProfileService.shared.fetchProfile(userId: user.id.uuidString)
                     await SettingsService.shared.load()
                 }
 
                 switch event {
                 case .signedIn:
-                    print("User signed in: \(session?.user.id.uuidString ?? "unknown")")
+                    PatinaLog.auth.debug("User signed in: \(session?.user.id.uuidString ?? "unknown")", privacy: .private)
                     if let user = session?.user {
                         let emailDomain = user.email.map { $0.components(separatedBy: "@").last ?? "" } ?? ""
                         PostHogService.shared.identify(userId: user.id.uuidString, properties: [
@@ -111,11 +111,11 @@ public final class AuthService {
                         ])
                     }
                 case .signedOut:
-                    print("User signed out")
+                    PatinaLog.auth.debug("User signed out")
                     PostHogService.shared.reset()
                     await ProfileService.shared.clear()
                 case .userUpdated:
-                    print("User updated")
+                    PatinaLog.auth.debug("User updated")
                 default:
                     break
                 }

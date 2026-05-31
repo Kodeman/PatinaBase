@@ -507,7 +507,7 @@ public final class RoomScanSyncService: ObservableObject {
             do {
                 thumbnailUrl = try await uploadThumbnail(thumbnail, roomId: roomData.roomId)
             } catch {
-                print("[RoomScanSync] thumbnail upload failed: \(error)")
+                PatinaLog.sync.error("[RoomScanSync] thumbnail upload failed: \(error)")
             }
         }
 
@@ -517,7 +517,7 @@ public final class RoomScanSyncService: ObservableObject {
             do {
                 heroFrameUrl = try await uploadHeroFrame(heroFrameData, roomId: roomData.roomId, userId: userId)
             } catch {
-                print("[RoomScanSync] hero frame upload failed: \(error)")
+                PatinaLog.sync.error("[RoomScanSync] hero frame upload failed: \(error)")
             }
         }
 
@@ -688,7 +688,7 @@ public final class RoomScanSyncService: ObservableObject {
                 try? await Task.sleep(nanoseconds: 500_000_000)
             }
         } catch {
-            print("Failed to fetch queue items: \(error)")
+            PatinaLog.sync.error("Failed to fetch queue items: \(error)")
         }
 
         await countPendingItems()
@@ -764,10 +764,10 @@ public final class RoomScanSyncService: ObservableObject {
                 .from(usdzBucket)
                 .upload(path, data: data, options: FileOptions(contentType: "model/vnd.usdz+zip"))
             let publicUrl = try supabase.storage.from(usdzBucket).getPublicURL(path: path)
-            print("[RoomScanSync] USDZ uploaded: \(path)")
+            PatinaLog.sync.debug("[RoomScanSync] USDZ uploaded: \(path)")
             return publicUrl.absoluteString
         } catch {
-            print("[RoomScanSync] USDZ upload failed: \(error)")
+            PatinaLog.sync.error("[RoomScanSync] USDZ upload failed: \(error)")
             throw RoomScanSyncError.storageError(error)
         }
     }
@@ -821,10 +821,10 @@ public final class RoomScanSyncService: ObservableObject {
                 .from(heroFrameBucket)
                 .getPublicURL(path: path)
 
-            print("Hero frame uploaded successfully: \(path)")
+            PatinaLog.sync.debug("Hero frame uploaded successfully: \(path)")
             return publicUrl.absoluteString
         } catch {
-            print("Hero frame upload failed: \(error)")
+            PatinaLog.sync.error("Hero frame upload failed: \(error)")
             throw RoomScanSyncError.storageError(error)
         }
     }
@@ -889,7 +889,7 @@ public final class RoomScanSyncService: ObservableObject {
 
                 results[image.id] = publicUrl.absoluteString
             } catch {
-                print("Failed to upload image \(filename): \(error)")
+                PatinaLog.sync.error("Failed to upload image \(filename): \(error)")
                 // Continue with other uploads
             }
         }
@@ -1060,7 +1060,7 @@ public final class RoomScanSyncService: ObservableObject {
             try context.save()
             await processQueueIfOnline()
         } catch {
-            print("Failed to retry items: \(error)")
+            PatinaLog.sync.error("Failed to retry items: \(error)")
         }
     }
 
@@ -1082,7 +1082,7 @@ public final class RoomScanSyncService: ObservableObject {
 
             try context.save()
         } catch {
-            print("Failed to clear synced items: \(error)")
+            PatinaLog.sync.error("Failed to clear synced items: \(error)")
         }
     }
 
@@ -1310,7 +1310,7 @@ extension RoomScanSyncService {
             package.status = .pending
             package.lastError = "Waiting for Wi-Fi"
             try? modelContext?.save()
-            print("[RoomScanSync] deferred scan \(package.scanId) — on cellular without opt-in")
+            PatinaLog.sync.debug("[RoomScanSync] deferred scan \(package.scanId) — on cellular without opt-in")
             return UploadResult(
                 roomId: package.remoteRoomId ?? roomData.roomId,
                 scanId: package.scanId
@@ -1449,7 +1449,7 @@ extension RoomScanSyncService {
             )
         } catch {
             photoUploadError = error
-            print("[RoomScanSync] Posed photos upload partial failure: \(error.localizedDescription)")
+            PatinaLog.sync.error("[RoomScanSync] Posed photos upload partial failure: \(error.localizedDescription)")
         }
 
         // Derive room_features from CapturedRoom parametric JSON (ancillary).
@@ -1518,7 +1518,7 @@ extension RoomScanSyncService {
                 ))
                 .execute()
         } catch {
-            print("[RoomScanSync] mark_scan_upload_complete failed (non-fatal): \(error.localizedDescription)")
+            PatinaLog.sync.error("[RoomScanSync] mark_scan_upload_complete failed (non-fatal): \(error.localizedDescription)")
         }
 
         do {
@@ -1528,9 +1528,9 @@ extension RoomScanSyncService {
                     scan_id: package.scanId.uuidString
                 ))
             )
-            print("[RoomScanSync] confirm-scan-bundle: ok")
+            PatinaLog.sync.debug("[RoomScanSync] confirm-scan-bundle: ok")
         } catch {
-            print("[RoomScanSync] confirm-scan-bundle: err \(error.localizedDescription)")
+            PatinaLog.sync.error("[RoomScanSync] confirm-scan-bundle: err \(error.localizedDescription)")
         }
 
         // Also stamp the legacy status=ready / processed_at pair so existing
@@ -1545,7 +1545,7 @@ extension RoomScanSyncService {
                 .eq("id", value: package.scanId.uuidString)
                 .execute()
         } catch {
-            print("[RoomScanSync] Final status patch failed: \(error.localizedDescription)")
+            PatinaLog.sync.error("[RoomScanSync] Final status patch failed: \(error.localizedDescription)")
         }
 
         // 8. Mark synced locally + (optionally) delete the on-disk bundle.
@@ -1585,12 +1585,12 @@ extension RoomScanSyncService {
             d.fetchLimit = 10
             packages = try context.fetch(d)
         } catch {
-            print("[RoomScanSync] resumePendingUploads fetch failed: \(error.localizedDescription)")
+            PatinaLog.sync.error("[RoomScanSync] resumePendingUploads fetch failed: \(error.localizedDescription)")
             return
         }
 
         guard !packages.isEmpty else { return }
-        print("[RoomScanSync] resuming \(packages.count) pending scan(s)")
+        PatinaLog.sync.debug("[RoomScanSync] resuming \(packages.count) pending scan(s)")
 
         for package in packages {
             // Skip if the bundle directory is gone (evicted / deleted).
@@ -1629,7 +1629,7 @@ extension RoomScanSyncService {
                         styleSignals: resumeSignals
                     )
                 } catch {
-                    print("[RoomScanSync] resume upload failed for \(captured.scanId): \(error.localizedDescription)")
+                    PatinaLog.sync.error("[RoomScanSync] resume upload failed for \(captured.scanId): \(error.localizedDescription)")
                 }
             }
         }
@@ -1835,7 +1835,7 @@ extension RoomScanSyncService {
 
                 let progress = await uploadedCounter.add(artifact.sizeBytes, total: totalBytes)
                 if progress.shouldWrite {
-                    print("[RoomScanSync] progress \(progress.percent)%")
+                    PatinaLog.sync.debug("[RoomScanSync] progress \(progress.percent)%")
                     await self.patchUploadProgress(scanId: scanId, progress: progress.percent)
                 }
             } catch {
@@ -1847,7 +1847,7 @@ extension RoomScanSyncService {
                     attempts: capturedState.attempts
                 )
                 await MainActor.run { package.updateArtifact(failed) }
-                print("[RoomScanSync] Artifact \(artifact.kind) upload failed: \(error.localizedDescription)")
+                PatinaLog.sync.error("[RoomScanSync] Artifact \(artifact.kind) upload failed: \(error.localizedDescription)")
                 UploadDiagnosticsLog.shared.log(
                     event: "artifact.failed",
                     scanId: scanId,
@@ -1990,7 +1990,7 @@ extension RoomScanSyncService {
         }
 
         let shaPreview = (artifact.sha256 ?? "").prefix(10)
-        print("[RoomScanSync] uploaded \(artifact.kind.rawValue) via \(strategy) sha=\(shaPreview)")
+        PatinaLog.sync.debug("[RoomScanSync] uploaded \(artifact.kind.rawValue) via \(strategy) sha=\(shaPreview)")
 
         // Merge the sha into room_scans.artifacts_sha256 (best-effort; the
         // RPC lives in migration 00082 — runtime only).
@@ -2004,7 +2004,7 @@ extension RoomScanSyncService {
                     ))
                     .execute()
             } catch {
-                print("[RoomScanSync] merge_scan_artifact_sha256 failed (non-fatal): \(error.localizedDescription)")
+                PatinaLog.sync.error("[RoomScanSync] merge_scan_artifact_sha256 failed (non-fatal): \(error.localizedDescription)")
             }
         }
 
@@ -2363,7 +2363,7 @@ extension RoomScanSyncService {
                         await collector.append(row)
                         await MainActor.run { package.incrementPhotosUploaded() }
                     } catch {
-                        print("[RoomScanSync] Photo upload failed (\(filename)): \(error.localizedDescription)")
+                        PatinaLog.sync.error("[RoomScanSync] Photo upload failed (\(filename)): \(error.localizedDescription)")
                     }
                 }
             }

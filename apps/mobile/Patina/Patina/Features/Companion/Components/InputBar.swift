@@ -174,9 +174,9 @@ public struct VoiceButton: View {
         Spacer()
         InputBar(
             text: .constant(""),
-            onSend: { print("Send: \($0)") },
-            onVoiceStart: { print("Voice start") },
-            onVoiceEnd: { print("Voice end") }
+            onSend: { PatinaLog.companion.debug("Send: \($0)") },
+            onVoiceStart: { PatinaLog.companion.debug("Voice start") },
+            onVoiceEnd: { PatinaLog.companion.debug("Voice end") }
         )
     }
     .background(Color.white)
@@ -187,9 +187,9 @@ public struct VoiceButton: View {
         Spacer()
         InputBar(
             text: .constant("Show me my table"),
-            onSend: { print("Send: \($0)") },
-            onVoiceStart: { print("Voice start") },
-            onVoiceEnd: { print("Voice end") }
+            onSend: { PatinaLog.companion.debug("Send: \($0)") },
+            onVoiceStart: { PatinaLog.companion.debug("Voice start") },
+            onVoiceEnd: { PatinaLog.companion.debug("Voice end") }
         )
     }
     .background(Color.white)
@@ -201,9 +201,9 @@ public struct VoiceButton: View {
         InputBar(
             text: .constant(""),
             isVoiceActive: true,
-            onSend: { print("Send: \($0)") },
-            onVoiceStart: { print("Voice start") },
-            onVoiceEnd: { print("Voice end") }
+            onSend: { PatinaLog.companion.debug("Send: \($0)") },
+            onVoiceStart: { PatinaLog.companion.debug("Voice start") },
+            onVoiceEnd: { PatinaLog.companion.debug("Voice end") }
         )
     }
     .background(Color.white)

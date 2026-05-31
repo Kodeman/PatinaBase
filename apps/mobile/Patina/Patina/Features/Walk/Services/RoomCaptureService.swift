@@ -252,14 +252,14 @@ public final class RoomCaptureService: NSObject, ObservableObject {
                 self.depthRecorder = nil
             }
 
-            print("[RoomCaptureService] v2 scan bundle initialized at \(writer.bundleURL.path)")
+            PatinaLog.scan.debug("[RoomCaptureService] v2 scan bundle initialized at \(writer.bundleURL.path)")
         } catch {
             // v2-only scan path: if the on-disk bundle cannot be prepared the
             // scan is aborted outright instead of silently falling back to the
             // v1 USDZ-only pipeline. The legacy fields remain as stored
             // properties so historical RoomModel rows still hydrate, but we
             // never create a new scan without a bundle.
-            print("[RoomCaptureService] ScanBundleWriter init failed: \(error.localizedDescription) — aborting scan")
+            PatinaLog.scan.error("[RoomCaptureService] ScanBundleWriter init failed: \(error.localizedDescription) — aborting scan")
             self.bundleWriter = nil
             self.posedPhotoService = nil
             self.depthRecorder = nil
@@ -388,7 +388,7 @@ public final class RoomCaptureService: NSObject, ObservableObject {
     /// - Returns: USDZ file data, or nil if export fails
     public func exportUSDZ() async -> Data? {
         guard let room = capturedRoom else {
-            print("exportUSDZ: No captured room available")
+            PatinaLog.scan.debug("exportUSDZ: No captured room available")
             return nil
         }
 
@@ -406,11 +406,11 @@ public final class RoomCaptureService: NSObject, ObservableObject {
             // Clean up temporary file
             try? FileManager.default.removeItem(at: tempURL)
 
-            print("exportUSDZ: Successfully exported \(data.count) bytes")
+            PatinaLog.scan.debug("exportUSDZ: Successfully exported \(data.count) bytes")
             return data
 
         } catch {
-            print("exportUSDZ: Failed to export - \(error.localizedDescription)")
+            PatinaLog.scan.error("exportUSDZ: Failed to export - \(error.localizedDescription)")
             return nil
         }
     }
@@ -435,7 +435,7 @@ public final class RoomCaptureService: NSObject, ObservableObject {
                 mimeType: "application/json"
             )
         } catch {
-            print("[RoomCaptureService] CapturedRoom JSON export failed: \(error.localizedDescription)")
+            PatinaLog.scan.error("[RoomCaptureService] CapturedRoom JSON export failed: \(error.localizedDescription)")
             return nil
         }
     }
@@ -451,7 +451,7 @@ public final class RoomCaptureService: NSObject, ObservableObject {
                 mimeType: "model/vnd.usdz+zip"
             )
         } catch {
-            print("[RoomCaptureService] USDZ bundle write failed: \(error.localizedDescription)")
+            PatinaLog.scan.error("[RoomCaptureService] USDZ bundle write failed: \(error.localizedDescription)")
             return nil
         }
     }
@@ -675,7 +675,7 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
                 self.errorMessage = error.localizedDescription
                 self.sessionFailure = error
                 #if DEBUG
-                print("[RoomCaptureService] capture session ended with error: \(error.localizedDescription)")
+                PatinaLog.scan.error("[RoomCaptureService] capture session ended with error: \(error.localizedDescription)")
                 #endif
                 UploadDiagnosticsLog.shared.log(
                     event: "capture.session_failed",
@@ -744,7 +744,7 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
                     error: message
                 )
                 #if DEBUG
-                print("[RoomCaptureService] RoomBuilder failed after retry: \(message) — continuing with partial freeze")
+                PatinaLog.scan.error("[RoomCaptureService] RoomBuilder failed after retry: \(message) — continuing with partial freeze")
                 #endif
             }
 
@@ -859,7 +859,7 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
             )
             coverageHeatmapPresent = true
         } catch {
-            print("[RoomCaptureService] coverage heatmap write failed: \(error.localizedDescription)")
+            PatinaLog.scan.error("[RoomCaptureService] coverage heatmap write failed: \(error.localizedDescription)")
         }
 
         // 8. Depth index + depth.zip — only if the recorder wrote anything.
@@ -878,7 +878,7 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
                         mimeType: "application/zip"
                     )
                 } catch {
-                    print("[RoomCaptureService] depth archive register failed: \(error.localizedDescription)")
+                    PatinaLog.scan.error("[RoomCaptureService] depth archive register failed: \(error.localizedDescription)")
                 }
                 try? FileManager.default.removeItem(at: zipURL)
             }
@@ -888,7 +888,7 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
         do {
             try writer.registerPhotoThumbnailsIndex()
         } catch {
-            print("[RoomCaptureService] photo thumbnails index failed: \(error.localizedDescription)")
+            PatinaLog.scan.error("[RoomCaptureService] photo thumbnails index failed: \(error.localizedDescription)")
         }
 
         // 10. Environment snapshot. optical flow mean is left nil — the
@@ -998,7 +998,7 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
                 fileName: "depth/depth_index.ndjson"
             )
         } catch {
-            print("[RoomCaptureService] depth index register failed: \(error.localizedDescription)")
+            PatinaLog.scan.error("[RoomCaptureService] depth index register failed: \(error.localizedDescription)")
         }
     }
 
@@ -1153,7 +1153,7 @@ extension RoomCaptureService: ARSessionDelegate {
     nonisolated public func session(_ session: ARSession, didFailWithError error: Error) {
         Task { @MainActor in
             #if DEBUG
-            print("[RoomCaptureService] AR session failed: \(error.localizedDescription)")
+            PatinaLog.scan.error("[RoomCaptureService] AR session failed: \(error.localizedDescription)")
             #endif
             self.errorMessage = error.localizedDescription
             self.sessionFailure = error
@@ -1165,13 +1165,13 @@ extension RoomCaptureService: ARSessionDelegate {
     /// usually call `sessionInterruptionEnded(_:)` and tracking resumes.
     nonisolated public func sessionWasInterrupted(_ session: ARSession) {
         #if DEBUG
-        print("[RoomCaptureService] AR session interrupted")
+        PatinaLog.scan.debug("[RoomCaptureService] AR session interrupted")
         #endif
     }
 
     nonisolated public func sessionInterruptionEnded(_ session: ARSession) {
         #if DEBUG
-        print("[RoomCaptureService] AR session interruption ended")
+        PatinaLog.scan.debug("[RoomCaptureService] AR session interruption ended")
         #endif
     }
 }

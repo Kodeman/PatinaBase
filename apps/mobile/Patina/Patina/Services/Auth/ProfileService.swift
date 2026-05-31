@@ -105,7 +105,7 @@ public final class ProfileService {
             self.roles = userRoleJoins.map { $0.roles.domain }
             self.isLoaded = true
         } catch {
-            print("ProfileService: failed to fetch profile — \(error.localizedDescription)")
+            PatinaLog.auth.error("ProfileService: failed to fetch profile — \(error.localizedDescription)")
             // Non-fatal: user can still use the app without profile data
             self.isLoaded = true
         }

@@ -128,7 +128,7 @@ final class DailyRoomViewModel {
                 }
             } catch {
                 #if DEBUG
-                print("[DailyRoomVM] story fetch failed: \(error)")
+                PatinaLog.ui.error("[DailyRoomVM] story fetch failed: \(error)")
                 #endif
             }
         }
@@ -161,7 +161,7 @@ final class DailyRoomViewModel {
                 }
             } catch {
                 #if DEBUG
-                print("[DailyRoomVM] feed fetch failed: \(error)")
+                PatinaLog.ui.error("[DailyRoomVM] feed fetch failed: \(error)")
                 #endif
                 await MainActor.run { [weak self] in
                     self?.allRecommendations = []

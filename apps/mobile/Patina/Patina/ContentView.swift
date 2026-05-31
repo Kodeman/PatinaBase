@@ -121,7 +121,7 @@ struct ContentView: View {
                 set: { newValue in
                     #if DEBUG
                     if newValue.count != coordinator.navigationPath.count {
-                        print("[ContentView] navigationPath.count \(coordinator.navigationPath.count) → \(newValue.count)")
+                        PatinaLog.nav.debug("[ContentView] navigationPath.count \(coordinator.navigationPath.count) → \(newValue.count)")
                     }
                     #endif
                     coordinator.navigationPath = newValue
@@ -141,7 +141,7 @@ struct ContentView: View {
         }
         .onChange(of: coordinator.phase) { old, new in
             #if DEBUG
-            print("[ContentView] phase \(old) → \(new)")
+            PatinaLog.nav.debug("[ContentView] phase \(old) → \(new)")
             #endif
         }
     }

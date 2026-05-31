@@ -165,7 +165,7 @@ public final class CompanionViewModel {
                 sessionMetrics: getSessionMetrics()
             )
         } catch {
-            print("Failed to fetch API quick actions: \(error)")
+            PatinaLog.companion.error("Failed to fetch API quick actions: \(error)")
             // Keep using local quick actions as fallback
         }
     }
@@ -293,7 +293,7 @@ public final class CompanionViewModel {
     public func handleSuggestion(_ suggestion: CompanionSuggestion) {
         HapticManager.shared.impact(.light)
         // In a full implementation, this would navigate or trigger actions
-        print("Selected suggestion: \(suggestion.title)")
+        PatinaLog.companion.debug("Selected suggestion: \(suggestion.title)")
     }
 
     /// Handle quick action tap
@@ -443,7 +443,7 @@ public final class CompanionViewModel {
         } catch {
             isThinking = false
             errorMessage = "Couldn't reach Patina. Please try again."
-            print("Failed to send message: \(error)")
+            PatinaLog.companion.error("Failed to send message: \(error)")
 
             // Track API error
             let screenName = screenIdentifier(for: context.currentScreen)
@@ -518,7 +518,7 @@ public final class CompanionViewModel {
             isLoadingHistory = false
         } catch {
             isLoadingHistory = false
-            print("Failed to load conversation history: \(error)")
+            PatinaLog.companion.error("Failed to load conversation history: \(error)")
 
             // Fall back to cached messages if available
             if let cachedMessages = storageService.loadMessages(for: userId) {

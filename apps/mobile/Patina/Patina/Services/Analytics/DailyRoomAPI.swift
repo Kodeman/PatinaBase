@@ -46,7 +46,7 @@ actor DailyRoomAPI {
             }
             return false
         } catch {
-            print("[DailyRoomAPI] postBatch failed: \(error)")
+            PatinaLog.ui.error("[DailyRoomAPI] postBatch failed: \(error)")
             return false
         }
     }

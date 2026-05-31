@@ -244,6 +244,6 @@ private struct ScaleButtonStyle: ButtonStyle {
 
 #Preview("Room Naming") {
     RoomNamingView { name, type in
-        print("Room saved: \(name) (\(type))")
+        PatinaLog.ui.debug("Room saved: \(name) (\(type))")
     }
 }

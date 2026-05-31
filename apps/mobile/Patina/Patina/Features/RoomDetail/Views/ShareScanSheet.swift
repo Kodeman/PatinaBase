@@ -535,7 +535,7 @@ struct ShareScanSheet: View {
             currentShares = try await shares
             recentDesigners = try await recent
         } catch {
-            print("Failed to load initial data: \(error)")
+            PatinaLog.scan.error("Failed to load initial data: \(error)")
         }
     }
 
@@ -551,7 +551,7 @@ struct ShareScanSheet: View {
         do {
             searchResults = try await sharingService.searchDesigners(query: query)
         } catch {
-            print("Search failed: \(error)")
+            PatinaLog.scan.error("Search failed: \(error)")
             searchResults = []
         }
     }
@@ -599,7 +599,7 @@ struct ShareScanSheet: View {
             currentShares = try await sharingService.getAssociationsForScan(scanId: scanId)
         } catch {
             HapticManager.shared.notification(.error)
-            print("Failed to revoke: \(error)")
+            PatinaLog.scan.error("Failed to revoke: \(error)")
         }
     }
 }

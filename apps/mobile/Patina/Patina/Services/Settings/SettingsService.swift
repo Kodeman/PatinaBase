@@ -91,7 +91,7 @@ public final class SettingsService {
         } catch {
             // No row yet — defaults already applied.
             #if DEBUG
-            print("[SettingsService] user_settings fetch failed (may not exist yet): \(error.localizedDescription)")
+            PatinaLog.ui.error("[SettingsService] user_settings fetch failed (may not exist yet): \(error.localizedDescription)")
             #endif
         }
 
@@ -110,7 +110,7 @@ public final class SettingsService {
             }
         } catch {
             #if DEBUG
-            print("[SettingsService] notification_preferences fetch failed: \(error.localizedDescription)")
+            PatinaLog.ui.error("[SettingsService] notification_preferences fetch failed: \(error.localizedDescription)")
             #endif
         }
 
@@ -167,7 +167,7 @@ public final class SettingsService {
                 .execute()
         } catch {
             #if DEBUG
-            print("[SettingsService] user_settings upsert failed: \(error.localizedDescription)")
+            PatinaLog.ui.error("[SettingsService] user_settings upsert failed: \(error.localizedDescription)")
             #endif
         }
     }
@@ -185,7 +185,7 @@ public final class SettingsService {
                 .execute()
         } catch {
             #if DEBUG
-            print("[SettingsService] notification_preferences upsert failed: \(error.localizedDescription)")
+            PatinaLog.ui.error("[SettingsService] notification_preferences upsert failed: \(error.localizedDescription)")
             #endif
         }
     }
@@ -204,7 +204,7 @@ public final class SettingsService {
                 .execute()
         } catch {
             #if DEBUG
-            print("[SettingsService] preferred_home_mode upsert failed: \(error.localizedDescription)")
+            PatinaLog.ui.error("[SettingsService] preferred_home_mode upsert failed: \(error.localizedDescription)")
             #endif
         }
     }

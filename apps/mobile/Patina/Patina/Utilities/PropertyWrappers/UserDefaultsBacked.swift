@@ -42,7 +42,7 @@ public struct UserDefaultsBacked<Value: Codable> {
                 let data = try JSONEncoder().encode(newValue)
                 storage.set(data, forKey: key)
             } catch {
-                print("Failed to encode \(key): \(error)")
+                PatinaLog.ui.error("Failed to encode \(key): \(error)")
             }
         }
     }

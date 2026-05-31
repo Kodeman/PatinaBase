@@ -337,7 +337,7 @@ private struct ScaleButtonStyle: ButtonStyle {
 
 #Preview("Camera Permission") {
     CameraPermissionView { result in
-        print("Permission result: \(result)")
+        PatinaLog.ui.debug("Permission result: \(result)")
     }
 }
 

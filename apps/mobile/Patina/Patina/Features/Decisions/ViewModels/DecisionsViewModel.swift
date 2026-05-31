@@ -24,7 +24,7 @@ final class DecisionsListViewModel {
         } catch {
             self.error = "Couldn't load decisions"
             #if DEBUG
-            print("[Decisions] list failed: \(error.localizedDescription)")
+            PatinaLog.ui.error("[Decisions] list failed: \(error.localizedDescription)")
             #endif
         }
         isLoading = false
@@ -64,7 +64,7 @@ final class DecisionDetailViewModel {
         } catch {
             self.error = "Couldn't submit your choice"
             #if DEBUG
-            print("[Decisions] approve failed: \(error.localizedDescription)")
+            PatinaLog.ui.error("[Decisions] approve failed: \(error.localizedDescription)")
             #endif
         }
         isApproving = false

@@ -53,7 +53,7 @@ final class ARPlacementViewModel {
                 }
             } catch {
                 #if DEBUG
-                print("[AR] failed to load room mesh: \(error)")
+                PatinaLog.scan.error("[AR] failed to load room mesh: \(error)")
                 #endif
             }
         }
@@ -104,7 +104,7 @@ final class ARPlacementViewModel {
                 self.isLoading = false
             }
             #if DEBUG
-            print("[ARPlacement] product fetch failed: \(error.localizedDescription)")
+            PatinaLog.scan.error("[ARPlacement] product fetch failed: \(error.localizedDescription)")
             #endif
         }
     }

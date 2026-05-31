@@ -69,7 +69,7 @@ final class ARPlacementManager: ObservableObject {
                 arView.scene.addAnchor(meshAnchor)
             } catch {
                 #if DEBUG
-                print("[ARPlacementManager] failed to load room mesh: \(error)")
+                PatinaLog.scan.error("[ARPlacementManager] failed to load room mesh: \(error)")
                 #endif
             }
         }

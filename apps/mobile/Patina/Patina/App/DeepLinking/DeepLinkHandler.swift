@@ -125,7 +125,7 @@ public final class DeepLinkHandler {
                         AppSettings.shared.hasCompletedOnboarding = true
                     }
                 } catch {
-                    print("Magic link auth failed: \(error)")
+                    PatinaLog.auth.error("Magic link auth failed: \(error)")
                 }
             }
             return true

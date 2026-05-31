@@ -78,7 +78,7 @@ struct VoiceInputButton: View {
                 try speechRecognizer.startRecording()
                 isActive = true
             } catch {
-                print("Failed to start recording: \(error)")
+                PatinaLog.companion.error("Failed to start recording: \(error)")
             }
         }
     }

@@ -202,7 +202,7 @@ public struct CompanionNotificationBanner: View {
         QuickActionsBar(
             actions: QuickActionFactory.actions(for: .roomList),
             onAction: { action in
-                print("Selected: \(action.title)")
+                PatinaLog.companion.debug("Selected: \(action.title)")
             }
         )
         .background(Color.white)

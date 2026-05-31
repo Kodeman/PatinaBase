@@ -235,12 +235,12 @@ public final class FirstLaunchCoordinator {
 
     private func trackTransition(from: FirstLaunchState, to: FirstLaunchState) {
         // Could send analytics event here
-        print("[FirstLaunch] \(from.displayName) → \(to.displayName)")
+        PatinaLog.nav.debug("[FirstLaunch] \(from.displayName) → \(to.displayName)")
     }
 
     private func persistMetrics() {
         // In full implementation, would save to SwiftData or send to backend
-        print("[FirstLaunch] Metrics: \(metrics)")
+        PatinaLog.nav.debug("[FirstLaunch] Metrics: \(metrics)")
     }
 }
 

@@ -53,7 +53,7 @@ final class RecommendationsViewModel {
                 self.isLoading = false
             }
             #if DEBUG
-            print("[Recommendations] load failed: \(error.localizedDescription)")
+            PatinaLog.ui.error("[Recommendations] load failed: \(error.localizedDescription)")
             #endif
         }
     }
@@ -98,7 +98,7 @@ final class RecommendationsViewModel {
                     _ = try await RoomsAPIClient.shared.createItem(payload)
                 } catch {
                     #if DEBUG
-                    print("[Recommendations] save sync failed: \(error.localizedDescription)")
+                    PatinaLog.ui.error("[Recommendations] save sync failed: \(error.localizedDescription)")
                     #endif
                 }
             }
