@@ -77,6 +77,7 @@ struct ScanHUDView: View {
                 ? "Scan complete"
                 : "Scanning, \(Int(progress * 100)) percent captured")
         )
+        .accessibilityValue(Text("\(Int(clamped * 100)) percent"))
     }
 }
 

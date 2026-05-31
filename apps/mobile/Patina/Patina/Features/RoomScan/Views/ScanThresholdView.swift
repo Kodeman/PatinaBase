@@ -60,8 +60,10 @@ struct ScanThresholdView: View {
                 cameraOpacity = 1.0
             }
             // Reveal the overlay after the initial fade so the Whisper Bar
-            // gets a moment of stillness before the scan begins.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            // gets a moment of stillness before the scan begins. Structured
+            // concurrency replaces DispatchQueue.main.asyncAfter (PT-3-3).
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
                 showOverlay = true
             }
         }

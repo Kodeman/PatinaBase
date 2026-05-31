@@ -23,7 +23,7 @@ struct WhisperBarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(state.text)
-                .font(.custom("PlayfairDisplay-Italic", size: 17))
+                .font(.custom("PlayfairDisplay-Italic", size: 17, relativeTo: .body))
                 .foregroundStyle(PatinaColors.charcoal)
                 .id(state.text)
                 .transition(.opacity)

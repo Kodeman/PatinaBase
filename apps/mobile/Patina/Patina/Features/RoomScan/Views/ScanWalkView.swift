@@ -146,7 +146,7 @@ struct ScanWalkView: View {
 
                 VStack(spacing: 12) {
                     Text("Lost the room")
-                        .font(.custom("PlayfairDisplay-Italic", size: 26))
+                        .font(.custom("PlayfairDisplay-Italic", size: 26, relativeTo: .title2))
                         .foregroundStyle(PatinaColors.offWhite)
 
                     Text("Tracking dropped — usually from a sudden move or a featureless wall. Let's try once more from where you stand.")

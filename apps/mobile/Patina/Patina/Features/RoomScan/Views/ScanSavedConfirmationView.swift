@@ -46,7 +46,7 @@ struct ScanSavedConfirmationView: View {
                         .foregroundStyle(PatinaColors.charcoal.opacity(0.85))
 
                     Text("Saved to your rooms")
-                        .font(.custom("PlayfairDisplay-Italic", size: 24))
+                        .font(.custom("PlayfairDisplay-Italic", size: 24, relativeTo: .title2))
                         .foregroundStyle(PatinaColors.charcoal.opacity(0.9))
                         .multilineTextAlignment(.center)
 
@@ -57,7 +57,7 @@ struct ScanSavedConfirmationView: View {
                     }
 
                     Text("Your scan is on this phone. We'll finish uploading it quietly in the background — you can close this anytime.")
-                        .font(.custom("Inter-Regular", size: 13))
+                        .font(.custom("Inter-Regular", size: 13, relativeTo: .footnote))
                         .foregroundStyle(PatinaColors.agedOak)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)
@@ -104,7 +104,7 @@ struct ScanSavedConfirmationView: View {
                     .foregroundStyle(PatinaColors.Text.interactive)
                 Spacer()
                 Text(progressLabel)
-                    .font(.custom("DMMono-Regular", size: 11))
+                    .font(.custom("DMMono-Regular", size: 11, relativeTo: .caption2))
                     .foregroundStyle(PatinaColors.agedOak)
             }
 
@@ -122,7 +122,7 @@ struct ScanSavedConfirmationView: View {
 
             if let hint = progressHint {
                 Text(hint)
-                    .font(.custom("Inter-Regular", size: 12))
+                    .font(.custom("Inter-Regular", size: 12, relativeTo: .caption))
                     .foregroundStyle(PatinaColors.agedOak.opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -136,6 +136,9 @@ struct ScanSavedConfirmationView: View {
             RoundedRectangle(cornerRadius: 14)
                 .stroke(PatinaColors.pearl, lineWidth: 1)
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text("Upload progress"))
+        .accessibilityValue(Text("\(Int((progressFraction * 100).rounded())) percent"))
     }
 
     // MARK: - Derived state

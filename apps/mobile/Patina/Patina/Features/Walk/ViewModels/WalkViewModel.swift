@@ -66,10 +66,14 @@ public final class WalkViewModel {
         state = .starting
         HapticManager.shared.impact(.medium)
 
-        // Transition to walking after brief delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            self?.state = .walking
-            self?.beginNarration()
+        // Transition to walking after a brief delay. Structured concurrency
+        // (Task.sleep) replaces the old DispatchQueue.main.asyncAfter so the
+        // delay is cancellable and stays on the MainActor (PT-3-3).
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1.0 second
+            guard let self else { return }
+            self.state = .walking
+            self.beginNarration()
         }
     }
 
