@@ -168,6 +168,18 @@ struct RecommendationsView: View {
                     }
                 }
         )
+        // PT-2-5: collapse maker/name/price into one VoiceOver stop.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(product.name) by \(product.makerName), \(product.fullFormattedPrice), \(product.matchLabel)")
+        .accessibilityHint("Double-tap to view details.")
+        // PT-2-4: expose the swipe-to-save / swipe-to-skip gestures as
+        // VoiceOver actions, since the swipe itself is inaccessible.
+        .accessibilityAction(named: "Save") {
+            viewModel.saveProduct(product, context: modelContext)
+        }
+        .accessibilityAction(named: "Skip") {
+            viewModel.skipProduct(product)
+        }
     }
 
     // MARK: - Loading View

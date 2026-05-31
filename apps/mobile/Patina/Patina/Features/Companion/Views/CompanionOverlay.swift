@@ -37,6 +37,13 @@ public struct CompanionOverlay: View {
     /// surface. Toggled by the `?` button in the expanded panel header.
     @State private var isHelpPanelPresented: Bool = false
 
+    /// One-shot first-launch coachmark (PT-6-9). Shown over the panel the
+    /// first time the user expands the Companion, then persisted as seen so
+    /// it never reappears. Backed by UserDefaults so it survives relaunches
+    /// even before a Supabase session exists.
+    @AppStorage("patina.companion.coachmarkSeen") private var hasSeenCompanionCoachmark: Bool = false
+    @State private var showCoachmark: Bool = false
+
     /// Computed display mode based on current screen context
     private var displayMode: CompanionDisplayMode {
         // Hidden during certain flows
@@ -62,12 +69,14 @@ public struct CompanionOverlay: View {
         if case .pieceDetail = screen { return .minimal }
         if case .arPlacement = screen { return .minimal }
 
-        // Hidden during pre-scan and floor plan (they have own UI)
-        if case .preScanChecklist = screen { return .hidden }
-        if case .floorPlanPreview = screen { return .hidden }
+        // Minimal during pre-scan and floor plan (they have own UI but the
+        // Companion stays reachable so the user never loses orientation — PT-6-11).
+        if case .preScanChecklist = screen { return .minimal }
+        if case .floorPlanPreview = screen { return .minimal }
 
-        // Hidden during quiz (quiz manages its own flow)
-        if case .styleQuiz = screen { return .hidden }
+        // Minimal during quiz (quiz manages its own flow) — keep the Companion
+        // present but unobtrusive instead of disappearing entirely (PT-6-11).
+        if case .styleQuiz = screen { return .minimal }
         if case .styleResult = screen { return .resting }
 
         // Nudging based on context provider
@@ -222,8 +231,11 @@ public struct CompanionOverlay: View {
             VStack(spacing: 0) {
                 // Header
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("What next?")
-                        .font(.custom("PlayfairDisplay-Italic", size: 16))
+                    Text(CompanionActionProvider.panelTitle(
+                        for: coordinator.currentScreen,
+                        context: coordinator.companionContext
+                    ))
+                        .font(.custom("PlayfairDisplay-Italic", size: 16, relativeTo: .callout))
                         .foregroundStyle(PatinaColors.offWhite)
 
                     // Contextual help: explains the Companion concept —
@@ -324,9 +336,49 @@ public struct CompanionOverlay: View {
             .background(PatinaColors.charcoal)
             .clipShape(RoundedRectangle(cornerRadius: 24))
             .patinaShadow(PatinaShadows.companion)
+            .overlay(alignment: .top) {
+                if showCoachmark {
+                    companionCoachmark
+                        .offset(y: -16)
+                        .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                }
+            }
         }
         .padding(.horizontal, 24)
         .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    // MARK: - First-Launch Coachmark (PT-6-9)
+
+    private var companionCoachmark: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("This is your Companion. Tap any time for what to do next.")
+                .font(.custom("PlayfairDisplay-Italic", size: 15, relativeTo: .subheadline))
+                .foregroundStyle(PatinaColors.charcoal)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                dismissCoachmark()
+            } label: {
+                Text("Got it")
+                    .font(PatinaTypography.bodySmallMedium)
+                    .foregroundStyle(PatinaColors.offWhite)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(PatinaColors.clay)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .frame(maxWidth: 280, alignment: .leading)
+        .background(PatinaColors.offWhite)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .patinaShadow(PatinaShadows.md)
+        .padding(.horizontal, 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("This is your Companion. Tap any time for what to do next.")
+        .accessibilityAddTraits(.isModal)
     }
 
     // MARK: - State 4: Journey Mode
@@ -346,9 +398,13 @@ public struct CompanionOverlay: View {
                     .rotationEffect(.degrees(-90))
 
                 Text("\(Int(progress * 100))%")
-                    .font(.custom("PlayfairDisplay-Medium", size: 13))
+                    .font(.custom("PlayfairDisplay-Medium", size: 13, relativeTo: .footnote))
                     .foregroundStyle(PatinaColors.offWhite)
             }
+            // VoiceOver: surface the scan progress as a spoken value.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Scan progress")
+            .accessibilityValue("\(Int(progress * 100)) percent")
 
             // Text
             VStack(alignment: .leading, spacing: 1) {
@@ -483,6 +539,21 @@ public struct CompanionOverlay: View {
         }
         coordinator.isCompanionExpanded = true
         panelOpenTime = Date()
+
+        // PT-6-9: first time the Companion is expanded, surface a one-shot
+        // coachmark explaining what it is.
+        if !hasSeenCompanionCoachmark {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3).delay(0.35)) {
+                showCoachmark = true
+            }
+        }
+    }
+
+    private func dismissCoachmark() {
+        hasSeenCompanionCoachmark = true
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
+            showCoachmark = false
+        }
     }
 
     private func collapseToButton() {
@@ -494,6 +565,10 @@ public struct CompanionOverlay: View {
             dwellTime: dwellTime
         )
         panelOpenTime = nil
+
+        // Treat collapsing as acknowledging the coachmark so it doesn't
+        // reappear next expansion (PT-6-9).
+        if showCoachmark { dismissCoachmark() }
 
         withAnimation(.easeOut(duration: 0.1)) { contentOpacity = 0 }
         withAnimation(.spring(response: 0.4, dampingFraction: 0.85).delay(0.05)) {

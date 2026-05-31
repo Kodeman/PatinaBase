@@ -104,7 +104,7 @@ struct NotificationFeedView: View {
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.mocha)
                 .multilineTextAlignment(.center)
-            Button("Try Again") {
+            Button("Let's try that again") {
                 Task { await viewModel.load() }
             }
             .font(PatinaTypography.bodySmallMedium)
@@ -159,20 +159,48 @@ struct NotificationFeedView: View {
 
             Spacer()
 
-            // Timestamp
-            Text(notification.timeAgo)
-                .font(PatinaTypography.monoTiny)
-                .foregroundStyle(PatinaColors.agedOak)
-                .tracking(0.3)
+            // Trailing column: unread dot above the timestamp.
+            VStack(alignment: .trailing, spacing: 6) {
+                if !notification.isRead {
+                    Circle()
+                        .fill(PatinaColors.clayDeep)
+                        .frame(width: 8, height: 8)
+                }
+
+                Text(notification.timeAgo)
+                    .font(PatinaTypography.monoTiny)
+                    .foregroundStyle(PatinaColors.agedOak)
+                    .tracking(0.3)
+            }
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
-        .background(notification.isRead ? Color.clear : PatinaColors.clay.opacity(0.04))
+        .background(notification.isRead ? Color.clear : PatinaColors.clayDeep.opacity(0.08))
         .overlay(alignment: .bottom) {
             Rectangle().fill(PatinaColors.pearl).frame(height: 1)
                 .padding(.leading, 78)
         }
         .contentShape(Rectangle())
+        // PT-2-5: collapse title/body/timestamp into one VoiceOver stop.
+        // PT-2-8: prefix the combined label with "Unread. " so the read/
+        // unread state is audible, mirroring the visible dot.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabel(for: notification))
+    }
+
+    /// Build the combined VoiceOver label for a notification row, prefixing
+    /// unread rows with "Unread. " so state is announced first (PT-2-8).
+    private func accessibilityLabel(for notification: AppNotification) -> String {
+        var parts: [String] = []
+        if !notification.isRead {
+            parts.append("Unread.")
+        }
+        parts.append(notification.title)
+        if !notification.body.isEmpty {
+            parts.append(notification.body)
+        }
+        parts.append(notification.timeAgo)
+        return parts.joined(separator: " ")
     }
 }
 

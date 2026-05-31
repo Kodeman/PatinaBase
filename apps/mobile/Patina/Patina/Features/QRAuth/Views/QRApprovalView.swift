@@ -326,7 +326,7 @@ public struct QRApprovalView: View {
                         .multilineTextAlignment(.center)
                 }
 
-                PatinaButton("Try Again", style: .secondary) {
+                PatinaButton("Once more", style: .secondary) {
                     viewModel.reset()
                     handleDismiss()
                 }

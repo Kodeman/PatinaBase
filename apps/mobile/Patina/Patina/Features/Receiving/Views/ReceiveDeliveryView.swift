@@ -140,7 +140,7 @@ struct ReceiveDeliveryView: View {
             Text(msg)
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.mocha)
-            Button("Try Again") { Task { await viewModel.loadArriving() } }
+            Button("Let's try that again") { Task { await viewModel.loadArriving() } }
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.interactive)
         }

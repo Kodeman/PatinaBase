@@ -93,6 +93,20 @@ struct ProjectListView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(PatinaColors.softCream)
         .clipShape(RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(projectAccessibilityLabel(project))
+    }
+
+    /// Aggregated VoiceOver label for a project card: name + status + phase + total,
+    /// so focus lands once instead of stopping on each Text.
+    private func projectAccessibilityLabel(_ project: RemoteProject) -> String {
+        var parts: [String] = [project.name]
+        if let status = project.status { parts.append(status.capitalized) }
+        if let phase = project.current_phase { parts.append("Phase \(phase)") }
+        if let total = project.total_amount_cents ?? project.budget_cents {
+            parts.append("Total \(formatPrice(total))")
+        }
+        return parts.joined(separator: ", ")
     }
 
     private func label(_ caption: String, _ value: String) -> some View {
@@ -122,7 +136,7 @@ struct ProjectListView: View {
             Text(msg)
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.mocha)
-            Button("Try Again") {
+            Button("Let's try that again") {
                 Task { await viewModel.load() }
             }
             .font(PatinaTypography.bodySmallMedium)

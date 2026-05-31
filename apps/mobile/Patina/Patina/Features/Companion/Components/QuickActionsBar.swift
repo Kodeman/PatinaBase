@@ -17,6 +17,8 @@ public struct QuickActionsBar: View {
     let actions: [QuickAction]
     let onAction: (QuickAction) -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var visibleActions: Set<UUID> = []
 
     // Per spec section 4.4: 48px height
@@ -40,6 +42,11 @@ public struct QuickActionsBar: View {
                     .opacity(visibleActions.contains(action.id) ? 1 : 0)
                     .offset(y: visibleActions.contains(action.id) ? 0 : 10)
                     .onAppear {
+                        // Reduce Motion: appear immediately, no staggered spring.
+                        guard !reduceMotion else {
+                            visibleActions.insert(action.id)
+                            return
+                        }
                         // Stagger animation for each chip
                         let delay = 0.05 * Double(index)
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.8).delay(delay)) {

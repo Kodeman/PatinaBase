@@ -264,6 +264,39 @@ enum CompanionActionProvider {
         return items
     }
 
+    /// The header title shown atop the expanded Companion panel. Varies by
+    /// route so the prompt feels contextual rather than a generic "What next?".
+    /// PT-6-10.
+    static func panelTitle(for screen: AppRoute, context: CompanionContext) -> String {
+        switch screen {
+        case .heroFrame, .threshold:
+            return context.roomCount == 0 ? "Where to begin?" : "Where to next?"
+        case .walk, .walkSession, .scanWalk, .rescan:
+            return "Keep scanning?"
+        case .emergence, .roomEmergence, .firstEmergence:
+            // After a save the user lands back here with a fuller table.
+            return context.tableItemCount > 0 ? "Want another recommendation?" : "Want a recommendation?"
+        case .pieceDetail:
+            return "Save this one?"
+        case .table:
+            return "Ready to bring it together?"
+        case .roomList, .yourSpaces:
+            return "Which room next?"
+        case .roomDetail, .roomProject:
+            return "What's next for this room?"
+        case .styleResult, .scanReveal:
+            return "Where to from here?"
+        case .designerHome, .projectList, .decisionList:
+            return "What's on your plate?"
+        case .threadList, .threadDetail:
+            return "Anything else?"
+        case .profile, .settings:
+            return "What would you like to do?"
+        default:
+            return "What next?"
+        }
+    }
+
     /// Get the nudge label for a screen (shown above the Companion mark)
     static func nudge(for screen: AppRoute, context: CompanionContext) -> String? {
         switch screen {

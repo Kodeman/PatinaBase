@@ -16,6 +16,14 @@ struct ProfileView: View {
     /// Toggled by the `?` button in the top-right corner of the header.
     @State private var isHelpPanelPresented: Bool = false
 
+    /// Shared formatter for room-card "Scanned" dates. `static let` so we
+    /// allocate the formatter once instead of per row render (PT-6-5).
+    private static let scannedDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return formatter
+    }()
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
@@ -183,7 +191,7 @@ struct ProfileView: View {
     private func statItem(value: String, label: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.custom("PlayfairDisplay-Medium", size: 22))
+                .font(.custom("PlayfairDisplay-Medium", size: 22, relativeTo: .title2))
                 .foregroundStyle(PatinaColors.charcoal)
             MonoLabel(text: label, size: PatinaTypography.monoTiny)
         }
@@ -206,9 +214,7 @@ struct ProfileView: View {
                     .font(PatinaTypography.uiSmall)
                     .foregroundStyle(PatinaColors.charcoal)
 
-                let formatter = DateFormatter()
-                let _ = formatter.dateFormat = "MMM d"
-                MonoLabel(text: "Scanned \(formatter.string(from: room.createdAt))", size: PatinaTypography.monoTiny)
+                MonoLabel(text: "Scanned \(Self.scannedDateFormatter.string(from: room.createdAt))", size: PatinaTypography.monoTiny)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)

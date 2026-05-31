@@ -105,7 +105,7 @@ struct ThreadListView: View {
             Text(msg)
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.mocha)
-            Button("Try Again") { Task { await viewModel.load() } }
+            Button("Let's try that again") { Task { await viewModel.load() } }
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.interactive)
         }

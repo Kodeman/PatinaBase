@@ -12,6 +12,8 @@ public struct PulseAnimation: View {
     let color: Color
     let isActive: Bool
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var scale: CGFloat = 1.0
     @State private var opacity: Double = 0.8
 
@@ -26,10 +28,11 @@ public struct PulseAnimation: View {
             .scaleEffect(scale)
             .opacity(opacity)
             .onAppear {
-                guard isActive else { return }
+                guard isActive, !reduceMotion else { return }
                 startAnimation()
             }
             .onChange(of: isActive) { _, active in
+                guard !reduceMotion else { return }
                 if active {
                     startAnimation()
                 } else {

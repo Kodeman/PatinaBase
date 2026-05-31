@@ -42,9 +42,11 @@ struct RoomItemRow: View {
                     .foregroundStyle(PatinaColors.charcoal)
                     .lineLimit(2)
                 Text(item.fullFormattedPrice)
-                    .font(.custom("PlayfairDisplay-Medium", size: 15))
+                    .font(.custom("PlayfairDisplay-Medium", size: 15, relativeTo: .subheadline))
                     .foregroundStyle(PatinaColors.charcoal)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(rowAccessibilityLabel)
 
             Spacer(minLength: 0)
 
@@ -66,5 +68,13 @@ struct RoomItemRow: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
+    }
+
+    /// Aggregated VoiceOver label: maker + name + price, with AR state when present,
+    /// so focus lands once on the whole row instead of stopping on each Text.
+    private var rowAccessibilityLabel: String {
+        var parts: [String] = [item.productName, "by \(item.makerName)", item.fullFormattedPrice]
+        if item.hasAR { parts.append("AR ready") }
+        return parts.joined(separator: ", ")
     }
 }

@@ -69,7 +69,7 @@ struct RoomProjectView: View {
                             suggestedNextSection
                             if let nudge = BudgetAssessment.companionNudge(for: level, roomName: room.name) {
                                 Text(nudge)
-                                    .font(.custom("PlayfairDisplay-Italic", size: 13))
+                                    .font(.custom("PlayfairDisplay-Italic", size: 13, relativeTo: .footnote))
                                     .foregroundStyle(PatinaColors.Text.interactive)
                                     .padding(.horizontal, 20)
                                     .padding(.top, 12)
@@ -150,7 +150,7 @@ struct RoomProjectView: View {
         case .idle:    return "Send to designers"
         case .sending: return "Sending…"
         case .sent:    return "Sent ✓"
-        case .failed:  return "Try again"
+        case .failed:  return "Once more"
         }
     }
 
@@ -221,12 +221,17 @@ struct RoomProjectView: View {
         if !room.orientationLabel.isEmpty { parts.append(room.orientationLabel) }
         if room.windowCount > 0 { parts.append("\(room.windowCount) window\(room.windowCount == 1 ? "" : "s")") }
         if room.hasBeenScanned {
-            let fmt = DateFormatter()
-            fmt.dateFormat = "MMM d"
-            parts.append("Scanned \(fmt.string(from: room.updatedAt))")
+            parts.append("Scanned \(Self.scannedDateFormatter.string(from: room.updatedAt))")
         }
         return parts.joined(separator: " · ")
     }
+
+    /// Shared formatter — avoids a `DateFormatter` allocation on every render of `metaLine`.
+    private static let scannedDateFormatter: DateFormatter = {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "MMM d"
+        return fmt
+    }()
 
     private func statRow(for room: RoomModel) -> some View {
         HStack(spacing: 8) {
@@ -241,10 +246,10 @@ struct RoomProjectView: View {
     private func statCell(value: String, label: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.custom("PlayfairDisplay-Medium", size: 20))
+                .font(.custom("PlayfairDisplay-Medium", size: 20, relativeTo: .title3))
                 .foregroundStyle(PatinaColors.charcoal)
             Text(label)
-                .font(.custom("DMMono-Regular", size: 7))
+                .font(.custom("DMMono-Regular", size: 7, relativeTo: .caption2))
                 .tracking(0.6)
                 .textCase(.uppercase)
                 .foregroundStyle(PatinaColors.agedOak)
@@ -308,7 +313,7 @@ struct RoomProjectView: View {
                     .foregroundStyle(PatinaColors.Text.interactive)
             }
             Text("\"Your seating and surfaces are set. A rug would ground the arrangement.\"")
-                .font(.custom("PlayfairDisplay-Italic", size: 13))
+                .font(.custom("PlayfairDisplay-Italic", size: 13, relativeTo: .footnote))
                 .foregroundStyle(PatinaColors.agedOak)
         }
         .padding(.horizontal, 20)
@@ -320,7 +325,7 @@ struct RoomProjectView: View {
         VStack(spacing: 8) {
             Text("✦").font(.system(size: 40))
             Text("A blank canvas")
-                .font(.custom("PlayfairDisplay-Regular", size: 18))
+                .font(.custom("PlayfairDisplay-Regular", size: 18, relativeTo: .title3))
                 .foregroundStyle(PatinaColors.charcoal)
             Text("We've already found pieces that would fit this space. Browse your Daily Room to start building this room.")
                 .font(.system(size: 12))

@@ -25,14 +25,14 @@ struct ConversationHeaderView: View {
             }
 
             Text(question)
-                .font(.custom("PlayfairDisplay-Italic", size: 26))
+                .font(.custom("PlayfairDisplay-Italic", size: 26, relativeTo: .title2))
                 .foregroundStyle(PatinaColors.charcoal)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
 
             if let subtext {
                 Text(subtext)
-                    .font(.custom("Inter-Light", size: 13))
+                    .font(.custom("Inter-Light", size: 13, relativeTo: .footnote))
                     .foregroundStyle(PatinaColors.agedOak)
                     .padding(.top, 8)
             }
