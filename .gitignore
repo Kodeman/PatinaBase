@@ -73,7 +73,9 @@ infra/coolify/missing-coolify-vars.md
 
 # Local agent / scheduler state
 .claude/scheduled_tasks.lock
-.claude/worktrees/agent-*/
+.claude/worktrees/
+.claude/runs/
+.build/
 
 # Recovery sidecars from git lost-found
 .recovery/
@@ -87,3 +89,9 @@ apps/mobile/Patina/.codex/
 # Repo-root scratch
 _tmp_*
 _test_reports/
+
+# Env backups (contain secrets — never commit)
+*.env.bak*
+infra/.env.bak*
+infra/.env.env.bak*
+infra/.env.*.bak*
