@@ -1,5 +1,12 @@
 import { QueryClient, QueryCache, MutationCache } from '@tanstack/react-query';
-import { handleApiError, logError, showErrorToast, isAuthError, isNetworkError } from './error-handler';
+import {
+  handleApiError,
+  logError,
+  showErrorToast,
+  isAuthError,
+  isNetworkError,
+  handleAuthExpiry,
+} from './error-handler';
 
 // Create query cache with error handling
 const queryCache = new QueryCache({
@@ -17,18 +24,18 @@ const queryCache = new QueryCache({
       return;
     }
 
-    // Handle auth errors - but DON'T redirect automatically
-    // Let the API interceptor handle redirects to avoid loops
-    // Only show error if we're not already on an auth page
+    // Handle auth errors. An *expired session* must route to sign-in —
+    // otherwise queries like useDecisionMetrics silently return undefined and
+    // the dashboard renders a misleading "0 open / 100%" healthy state.
+    // `handleAuthExpiry` is idempotent (de-duped + already-on-/auth guard), so
+    // a burst of failing queries triggers exactly one navigation.
     if (isAuthError(appError)) {
-      if (typeof window !== 'undefined') {
-        const isAuthPage = window.location.pathname.startsWith('/auth');
-        // Don't redirect or show error if already on auth page
-        if (!isAuthPage) {
-          // Let individual queries handle auth errors in their UI
-          console.warn('Authentication error in query:', query.queryKey);
-        }
+      if (handleAuthExpiry(error)) {
+        return;
       }
+      // Auth-shaped but not a clear session-expiry (e.g. a 403 forbidden).
+      // Leave it to the individual query's UI rather than bouncing the user.
+      console.warn('Authentication error in query:', query.queryKey);
       return;
     }
 
@@ -50,19 +57,19 @@ const mutationCache = new MutationCache({
       meta: mutation.meta,
     });
 
-    // Handle auth errors - but DON'T redirect automatically
-    // Let the API interceptor handle redirects to avoid loops
+    // Handle auth errors. An expired session routes to sign-in (so a failed
+    // write doesn't leave the user staring at a generic toast on a dead
+    // session); other auth-shaped errors surface a sign-in prompt.
     if (isAuthError(appError)) {
-      if (typeof window !== 'undefined') {
-        const isAuthPage = window.location.pathname.startsWith('/auth');
-        if (!isAuthPage) {
-          console.warn('Authentication error in mutation:', mutation.options.mutationKey);
-          // Show a user-friendly error for mutations
-          showErrorToast({
-            code: 'AUTHENTICATION_REQUIRED',
-            message: 'Please sign in to continue',
-          });
-        }
+      if (handleAuthExpiry(error)) {
+        return;
+      }
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth')) {
+        console.warn('Authentication error in mutation:', mutation.options.mutationKey);
+        showErrorToast({
+          code: 'AUTHENTICATION_REQUIRED',
+          message: 'Please sign in to continue',
+        });
       }
       return;
     }

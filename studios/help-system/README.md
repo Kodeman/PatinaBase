@@ -89,6 +89,47 @@ npx sanity@latest exec --with-user-token ./scripts/migrate-coachmark-s4-4.ts
 
 `ctaLabel` is intentionally left undefined for all eight — pilot-time addition.
 
+## PT-D-2-T6-2 — Decisions dashboard help content
+
+Authors the 9 `helpContent` documents for the Designer-Portal **Decisions**
+dashboard (`/portal/decisions`). Until these exist the page renders only the
+inline `fallback` strings hard-coded in the page component; seeding promotes
+that copy (refined) into Sanity so it is editable without a deploy and so the
+persona-fallback chain has a base to resolve to.
+
+The copy lives in `scripts/decisions-help-content.json` (single source of
+truth, shared by both runners below). Surfaces:
+
+| contentType | surfaceKey | Component |
+|---|---|---|
+| `fieldHelper` | `designer-portal/decisions/list-intro` | `<SectionIntro>` |
+| `tooltip` | `designer-portal/decisions/metric/open-decisions` | `<StrataInfoIcon>` |
+| `tooltip` | `designer-portal/decisions/metric/overdue` | `<StrataInfoIcon>` |
+| `tooltip` | `designer-portal/decisions/metric/avg-response` | `<StrataInfoIcon>` |
+| `tooltip` | `designer-portal/decisions/metric/resolution-rate` | `<StrataInfoIcon>` |
+| `emptyState` | `designer-portal/decisions/empty/all-open` | `<EmptyState>` |
+| `emptyState` | `designer-portal/decisions/empty/overdue` | `<EmptyState>` |
+| `emptyState` | `designer-portal/decisions/empty/due-this-week` | `<EmptyState>` |
+| `emptyState` | `designer-portal/decisions/empty/resolved` | `<EmptyState>` |
+
+All docs are `persona: 'all'` (the dashboard fetches with the default persona),
+use deterministic `_id`s (`helpContent.<slug>`) so re-runs `createOrReplace`
+rather than duplicate, and respect the schema caps (tooltip body ≤160, empty
+heading ≤50, empty description ≤300). The registry already declares these keys
+under `SurfaceKeys.DesignerPortal.Decisions.*`; no schema change is needed
+(`surfaceKey` is a regex-validated string, not an enum).
+
+```bash
+# Inside studios/help-system — preferred (uses the studio's @sanity/client)
+npx sanity@latest exec --with-user-token ./scripts/seed-decisions-help.ts            # dry run
+npx sanity@latest exec --with-user-token ./scripts/seed-decisions-help.ts --commit   # write
+
+# Token-based runner (CI / no interactive session). Dry run needs no token or
+# @sanity/client — it validates the content offline.
+node ./scripts/run-decisions-help-seed.mjs                              # dry run
+SANITY_AUTH_TOKEN=<token> node ./scripts/run-decisions-help-seed.mjs --commit  # write
+```
+
 ## Spec reference
 
 Full content architecture is documented in:
