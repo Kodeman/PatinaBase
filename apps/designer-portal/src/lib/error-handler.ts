@@ -115,17 +115,152 @@ export function isNetworkError(error: unknown): boolean {
 }
 
 /**
- * Check if error is an auth error
+ * Supabase error fingerprints that mean "the caller's session is no longer
+ * valid" — an expired/absent JWT, a refresh-token failure, or a PostgREST
+ * 401/JWT rejection. Supabase surfaces these as plain `PostgrestError` /
+ * `AuthError` objects (NOT Axios-shaped), so `handleApiError` never saw them
+ * as auth errors and the dashboard fell back to "0 open / 100%" instead of an
+ * honest "your session expired" state. Centralised here so the query cache,
+ * mutation cache, and any page-level guard agree on what counts as expiry.
+ */
+const SUPABASE_SESSION_EXPIRED_CODES = new Set([
+  'PGRST301', // PostgREST: JWT expired / invalid
+  'PGRST302', // PostgREST: anonymous access disallowed (no/expired token)
+  'session_not_found',
+  'session_expired',
+  'refresh_token_not_found',
+  'refresh_token_already_used',
+  'bad_jwt',
+  'no_authorization',
+]);
+
+const SESSION_EXPIRED_MESSAGE_FRAGMENTS = [
+  'jwt expired',
+  'jwt is expired',
+  'invalid jwt',
+  'token is expired',
+  'session expired',
+  'session not found',
+  'session from session_id claim in jwt does not exist',
+  'refresh token not found',
+  'refresh_token_not_found',
+];
+
+/**
+ * Extract a normalized `{ code, status, message }` triple from the many error
+ * shapes we encounter: our own `AppError`, Supabase `PostgrestError` /
+ * `AuthError` plain objects, Axios errors, and bare `Error`s.
+ */
+function readErrorParts(error: unknown): {
+  code?: string;
+  status?: number;
+  message: string;
+} {
+  if (error instanceof AppError) {
+    return { code: error.code, status: error.statusCode, message: error.message };
+  }
+  if (error && typeof error === 'object') {
+    const e = error as Record<string, unknown>;
+    // Supabase AuthError uses `status`; PostgrestError uses `code` (PGRST*).
+    // Axios uses `response.status`. Cover all three.
+    const response = e.response as { status?: number } | undefined;
+    const status =
+      typeof e.status === 'number'
+        ? e.status
+        : typeof e.statusCode === 'number'
+          ? (e.statusCode as number)
+          : typeof response?.status === 'number'
+            ? response.status
+            : undefined;
+    return {
+      code: typeof e.code === 'string' ? e.code : undefined,
+      status,
+      message: typeof e.message === 'string' ? e.message : String(error),
+    };
+  }
+  if (typeof error === 'string') return { message: error };
+  return { message: 'An unexpected error occurred' };
+}
+
+/**
+ * Check if an error specifically indicates an expired / invalid Supabase
+ * session (JWT expired, missing refresh token, PostgREST 401). This is the
+ * precise signal that the user must sign in again — distinct from a generic
+ * 403 "you lack permission" which should NOT bounce the user to sign-in.
+ */
+export function isSessionExpiredError(error: unknown): boolean {
+  const { code, status, message } = readErrorParts(error);
+
+  if (status === 401) return true;
+  if (code && SUPABASE_SESSION_EXPIRED_CODES.has(code)) return true;
+
+  const lower = message.toLowerCase();
+  return SESSION_EXPIRED_MESSAGE_FRAGMENTS.some((fragment) =>
+    lower.includes(fragment)
+  );
+}
+
+/**
+ * Check if error is an auth error (expired session, missing token, or a
+ * forbidden/401 response). Now also recognizes Supabase-shaped errors so the
+ * query cache can route an expired session to sign-in rather than swallowing
+ * it and rendering a misleading empty/zeroed dashboard.
  */
 export function isAuthError(error: unknown): boolean {
   if (error instanceof AppError) {
-    return (
+    if (
       error.code === 'UNAUTHORIZED' ||
       error.code === 'TOKEN_EXPIRED' ||
+      error.code === 'AUTHENTICATION_REQUIRED' ||
       error.statusCode === 401
-    );
+    ) {
+      return true;
+    }
   }
-  return false;
+  return isSessionExpiredError(error);
+}
+
+/**
+ * Route the browser to the sign-in page, preserving the current path as a
+ * `callbackUrl` so the user lands back where they were after re-authenticating.
+ * Matches the canonical redirect shape used by `useRequireAuth` /
+ * `middleware.ts` (`/auth/signin?callbackUrl=…`).
+ *
+ * Guards:
+ *  - no-op on the server (no `window`),
+ *  - no-op if we're already on an `/auth/*` page (prevents redirect loops),
+ *  - de-duped via a module-level flag so a burst of failing queries triggers
+ *    exactly one navigation.
+ */
+let signInRedirectInFlight = false;
+
+export function redirectToSignIn(reason?: string): void {
+  if (typeof window === 'undefined') return;
+  if (window.location.pathname.startsWith('/auth')) return;
+  if (signInRedirectInFlight) return;
+  signInRedirectInFlight = true;
+
+  if (reason) {
+    console.warn(`[auth] Redirecting to sign-in: ${reason}`);
+  }
+
+  const callbackUrl = `${window.location.pathname}${window.location.search}`;
+  window.location.assign(
+    `/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`
+  );
+}
+
+/**
+ * If the given error is an expired/invalid session, redirect to sign-in and
+ * return `true`. Otherwise return `false` so the caller can fall through to
+ * normal error handling (toast, inline error state, etc.). Centralizing the
+ * "expired → sign-in" decision here keeps the query cache, mutation cache, and
+ * any page-level guard consistent.
+ */
+export function handleAuthExpiry(error: unknown): boolean {
+  if (!isSessionExpiredError(error)) return false;
+  redirectToSignIn('session expired');
+  return true;
 }
 
 /**
@@ -145,6 +280,31 @@ export function logError(error: unknown, context?: Record<string, any>) {
  * Handle API errors and convert to AppError
  */
 export function handleApiError(error: any): AppError {
+  // Already normalized — pass through untouched so we never re-wrap (and lose
+  // the original statusCode) when a caller double-handles an error.
+  if (error instanceof AppError) {
+    return error;
+  }
+
+  // Supabase-shaped errors (PostgrestError / AuthError) are plain objects with
+  // `.code` / `.status` and NO Axios `.response` / `.request`. Detect an
+  // expired session here so it carries a 401 + TOKEN_EXPIRED code downstream
+  // (isAuthError, the query cache, redirectToSignIn). Without this branch the
+  // error fell through to the generic case, lost its 401-ness, and the
+  // decisions dashboard rendered a misleading "0 open / 100%".
+  if (error && typeof error === 'object' && !error.response && !error.request) {
+    if (isSessionExpiredError(error)) {
+      return new AppError(
+        {
+          code: 'TOKEN_EXPIRED',
+          message: error.message || 'Your session has expired. Please sign in again',
+          details: { code: error.code, status: error.status },
+        },
+        401
+      );
+    }
+  }
+
   // Axios error
   if (error.response) {
     const { status, data } = error.response;
