@@ -22,6 +22,11 @@ import {
   type Facet,
   type FacetSelections,
 } from '@/components/portal/faceted-filter-popover';
+import {
+  BlockedItemsRollup,
+  distinctBlockingDecisionIds,
+  getBlockedItems,
+} from '@/components/portal/procurement/blocked-by-decision-notice';
 import { BulkActionBar, BulkActionButton } from '@/components/portal/bulk-action-bar';
 // F1.7 — FF&E migrated to ambient + reactive help-system layers per spec §12.4.
 // FF&E itself is Patina vocabulary (Furniture, Fixtures & Equipment), and each
@@ -186,6 +191,19 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
     return map;
   }, [filtered]);
 
+  // Decision-Framework blocked-items rollup (PT-D-2-T3-2). Counts items held
+  // by a pending blocks_procurement decision across the whole project. When a
+  // single decision is responsible we deep-link straight to it; otherwise the
+  // rollup links to the decisions list.
+  const blockedRollup = useMemo(() => {
+    const blocked = getBlockedItems(items);
+    const decisionIds = distinctBlockingDecisionIds(blocked);
+    return {
+      count: blocked.length,
+      decisionId: decisionIds.length === 1 ? decisionIds[0] : undefined,
+    };
+  }, [items]);
+
   const drawerItem = drawerItemId ? items.find((it) => it.id === drawerItemId) : null;
 
   const toggleSelect = (id: string) =>
@@ -225,8 +243,30 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
   const activeOrder = poQueue[0] ?? null;
 
   const startGeneratePOs = (sourceItems: AnyItem[]) => {
-    const withVendor = sourceItems.filter((it) => it.vendor_id);
-    const withoutVendor = sourceItems.length - withVendor.length;
+    // Decision-Framework integrity (PT-D-2-T3-1): items held by a pending
+    // blocks_procurement decision are dropped from the batch before it reaches
+    // the Order Assistant, with a toast pointing the designer at the decision.
+    const blocked = sourceItems.filter(
+      (it) => it.blocked && it.blocked_by_decision_id,
+    );
+    const orderable = sourceItems.filter(
+      (it) => !(it.blocked && it.blocked_by_decision_id),
+    );
+    if (blocked.length > 0) {
+      toast(
+        `${blocked.length} item${blocked.length === 1 ? '' : 's'} skipped — blocked pending a client decision.`,
+        'warning',
+      );
+    }
+    if (orderable.length === 0) {
+      if (blocked.length === 0) {
+        toast('Assign a vendor to these items before generating a PO.', 'warning');
+      }
+      return;
+    }
+
+    const withVendor = orderable.filter((it) => it.vendor_id);
+    const withoutVendor = orderable.length - withVendor.length;
     if (withVendor.length === 0) {
       toast('Assign a vendor to these items before generating a PO.', 'warning');
       return;
@@ -262,6 +302,12 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
           name: it.name,
           room: it.room?.name,
           line_total_cents: it.line_total_cents || 0,
+          // Decision-Framework integrity (PT-D-2-T3-1): carry the blocked flag
+          // + decision link so the Order Assistant can refuse ordering and
+          // deep-link the designer to the pending decision.
+          blocked: it.blocked,
+          blocked_by_decision_id: it.blocked_by_decision_id,
+          blocked_reason: it.blocked_reason,
         })),
       };
     });
@@ -313,8 +359,16 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
             fallback="Track each item from specification through install. Move items between stages to keep your client and vendors aligned."
           />
         </div>
-        <div className="type-meta-small text-[var(--text-muted)]">
-          {filtered.length} of {items.length} items
+        <div className="flex items-center gap-3">
+          {/* PT-D-2-T3-2 — surface how many items are held pending a decision. */}
+          <BlockedItemsRollup
+            count={blockedRollup.count}
+            projectId={projectId}
+            decisionId={blockedRollup.decisionId}
+          />
+          <div className="type-meta-small text-[var(--text-muted)]">
+            {filtered.length} of {items.length} items
+          </div>
         </div>
       </div>
 
@@ -530,6 +584,10 @@ function ItemDrawer({
   const room = rooms.find((r) => r.id === item.project_room_id);
   const currentIdx = STAGES.findIndex((s) => s.key === item.status);
   const nextStage = currentIdx >= 0 && currentIdx < STAGES.length - 1 ? STAGES[currentIdx + 1] : null;
+  // Decision-Framework integrity (PT-D-2-T3-1): an item held by a pending
+  // blocks_procurement decision (blocked flag + a blocked_by_decision_id)
+  // cannot be ordered until the client responds.
+  const isOrderBlocked = Boolean(item.blocked) && Boolean(item.blocked_by_decision_id);
 
   return (
     <div className="fixed inset-y-0 right-0 z-40 w-[480px] max-w-[95vw] overflow-y-auto border-l bg-[var(--bg-surface)] shadow-xl"
@@ -603,6 +661,15 @@ function ItemDrawer({
             <p className="type-body text-[0.82rem]">
               {item.blocked_reason || 'Pending decision blocks this item.'}
             </p>
+            {item.blocked_by_decision_id && (
+              <a
+                href={`/portal/decisions/${item.blocked_by_decision_id}`}
+                className="mt-2 inline-block type-meta-small font-medium underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                style={{ color: 'var(--color-terracotta, #D4A090)' }}
+              >
+                View the decision →
+              </a>
+            )}
           </div>
         )}
 
@@ -619,13 +686,19 @@ function ItemDrawer({
           )}
           <button
             type="button"
-            onClick={() => item.vendor_id && onGeneratePO?.()}
-            disabled={!item.vendor_id}
-            title={item.vendor_id ? 'Create a purchase order for this item' : 'Assign a vendor first'}
-            className={`rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem] ${item.vendor_id ? '' : 'cursor-not-allowed opacity-50'}`}
+            onClick={() => item.vendor_id && !isOrderBlocked && onGeneratePO?.()}
+            disabled={!item.vendor_id || isOrderBlocked}
+            title={
+              isOrderBlocked
+                ? 'Ordering is blocked pending a client decision'
+                : item.vendor_id
+                  ? 'Create a purchase order for this item'
+                  : 'Assign a vendor first'
+            }
+            className={`rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem] ${item.vendor_id && !isOrderBlocked ? '' : 'cursor-not-allowed opacity-50'}`}
             style={{ borderColor: 'var(--border-default)' }}
           >
-            Generate PO
+            {isOrderBlocked ? 'Blocked — decision pending' : 'Generate PO'}
           </button>
         </div>
 

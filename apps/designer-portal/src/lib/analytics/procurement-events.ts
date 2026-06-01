@@ -39,6 +39,19 @@ export const procurementEvents = {
     project_id?: string;
   }) => track('procurement_po_created', properties),
 
+  /**
+   * Fired when a designer attempts to order FF&E items that are blocked by a
+   * pending `blocks_procurement` client decision (Decision Framework
+   * PT-D-2-T3-1). The order control refuses and surfaces a deep link to the
+   * decision; this event measures how often the integrity gate fires.
+   */
+  orderBlocked: (properties: {
+    blocked_item_count: number;
+    vendor_id?: string;
+    project_id?: string;
+    is_patina_catalog?: boolean;
+  }) => track('procurement_order_blocked', properties),
+
   /** Fired when useCreateReceivingInspection succeeds. */
   inspectionLogged: (properties: {
     outcome: string;

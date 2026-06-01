@@ -37,6 +37,10 @@ import {
 import { useCreatePurchaseOrder } from '@patina/supabase';
 import { useToast } from '@/components/portal/toast-provider';
 import { procurementEvents } from '@/lib/analytics/procurement-events';
+import {
+  BlockedByDecisionInline,
+  getBlockedItems,
+} from '@/components/portal/procurement/blocked-by-decision-notice';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
@@ -45,7 +49,16 @@ export interface OrderViaPatinaProps {
   onOpenChange: (open: boolean) => void;
   vendor: { id: string; name: string };
   project: { id: string; name: string };
-  ffeItems: Array<{ id: string; name: string; line_total_cents: number }>;
+  ffeItems: Array<{
+    id: string;
+    name: string;
+    line_total_cents: number;
+    // Decision-Framework integrity fields (PT-D-2-T3-1). Optional — callers
+    // without blocking context leave them undefined.
+    blocked?: boolean | null;
+    blocked_by_decision_id?: string | null;
+    blocked_reason?: string | null;
+  }>;
 }
 
 // ─── Formatting ─────────────────────────────────────────────────────────────
@@ -78,9 +91,27 @@ export function OrderViaPatina({
   );
   const itemCount = ffeItems.length;
 
+  // Decision-Framework integrity gate (PT-D-2-T3-1).
+  const blockedItems = useMemo(() => getBlockedItems(ffeItems), [ffeItems]);
+  const hasBlockedItems = blockedItems.length > 0;
+
   const handleConfirm = () => {
     if (itemCount === 0) {
       toast('No items to order.', 'warning');
+      return;
+    }
+
+    if (hasBlockedItems) {
+      procurementEvents.orderBlocked({
+        blocked_item_count: blockedItems.length,
+        vendor_id: vendor.id,
+        project_id: project.id,
+        is_patina_catalog: true,
+      });
+      toast(
+        `${blockedItems.length} item${blockedItems.length === 1 ? ' is' : 's are'} blocked pending a client decision. Resolve the decision before ordering.`,
+        'warning',
+      );
       return;
     }
 
@@ -151,6 +182,15 @@ export function OrderViaPatina({
               Project: {project.name}
             </p>
           )}
+          {/* Integrity gate (PT-D-2-T3-1): refuse the order when any item is
+              held by a pending decision; the Confirm button is disabled too. */}
+          {hasBlockedItems && (
+            <BlockedByDecisionInline
+              blockedItems={blockedItems}
+              projectId={project.id}
+              className="mt-3"
+            />
+          )}
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-0">
           <button
@@ -164,11 +204,20 @@ export function OrderViaPatina({
           <button
             type="button"
             onClick={handleConfirm}
-            disabled={isSubmitting || itemCount === 0}
+            disabled={isSubmitting || itemCount === 0 || hasBlockedItems}
+            title={
+              hasBlockedItems
+                ? 'Ordering is blocked pending a client decision'
+                : undefined
+            }
             className="rounded-[3px] px-4 py-2 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
             style={{ backgroundColor: 'var(--color-clay)' }}
           >
-            {isSubmitting ? 'Placing order…' : 'Confirm order'}
+            {hasBlockedItems
+              ? 'Blocked — decision pending'
+              : isSubmitting
+                ? 'Placing order…'
+                : 'Confirm order'}
           </button>
         </DialogFooter>
       </DialogContent>
