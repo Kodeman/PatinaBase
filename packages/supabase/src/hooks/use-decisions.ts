@@ -607,6 +607,21 @@ export function useUpdateDecision() {
         .eq('id', input.decisionId)
         .single();
       if (error) throw error;
+
+      // Re-notify the client on a material edit to a LIVE (pending) decision.
+      // Draft edits are silent — the client hasn't been told about the decision
+      // yet, so there is nothing to re-announce. notify_decision_updated is
+      // intentionally NOT idempotent (00174): each edit inserts a fresh row.
+      // Non-fatal: a notify failure must not undo a successful edit.
+      if ((data as ClientDecision).status === 'pending') {
+        const { error: notifyError } = await supabase.rpc('notify_decision_updated', {
+          p_decision_id: input.decisionId,
+        });
+        if (notifyError) {
+          console.warn('useUpdateDecision: notify_decision_updated failed', notifyError);
+        }
+      }
+
       return data as ClientDecision;
     },
     onSuccess: (data) => {

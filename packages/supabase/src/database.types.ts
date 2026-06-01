@@ -11420,6 +11420,10 @@ export type Database = {
         Args: { p_decision_id: string }
         Returns: string
       }
+      notify_decision_updated: {
+        Args: { p_decision_id: string }
+        Returns: string
+      }
       process_style_quiz: {
         Args: { quiz_answers: Json; timings?: Json }
         Returns: Json
@@ -11593,6 +11597,7 @@ export type Database = {
         | "decision_required"
         | "decision_overdue"
         | "decision_resolved"
+        | "decision_updated"
       designer_application_status:
         | "pending"
         | "under_review"
@@ -11829,6 +11834,7 @@ export const Constants = {
         "decision_required",
         "decision_overdue",
         "decision_resolved",
+        "decision_updated",
       ],
       designer_application_status: [
         "pending",

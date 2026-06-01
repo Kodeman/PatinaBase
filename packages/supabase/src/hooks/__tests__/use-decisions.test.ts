@@ -754,6 +754,47 @@ describe('useUpdateDecision', () => {
     expect(callsTo(optBuilder, 'delete')).toHaveLength(0);
     expect(callsTo(optBuilder, 'insert')).toHaveLength(0);
   });
+
+  it('fires notify_decision_updated when the edited decision is pending', async () => {
+    setTableResult('client_decisions', {
+      data: { id: 'dec-1', designer_client_id: 'dc-1', project_id: null, status: 'pending' },
+      error: null,
+    });
+
+    const config = useUpdateDecision() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    await config.mutationFn({
+      decisionId: 'dec-1',
+      designerClientId: 'dc-1',
+      title: 'Edited title',
+    });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('notify_decision_updated', {
+      p_decision_id: 'dec-1',
+    });
+  });
+
+  it('does NOT fire notify_decision_updated when the edited decision is a draft', async () => {
+    setTableResult('client_decisions', {
+      data: { id: 'dec-2', designer_client_id: 'dc-1', project_id: null, status: 'draft' },
+      error: null,
+    });
+
+    const config = useUpdateDecision() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    await config.mutationFn({
+      decisionId: 'dec-2',
+      designerClientId: 'dc-1',
+      title: 'Edited draft',
+    });
+
+    expect(supabaseClient.rpc).not.toHaveBeenCalledWith(
+      'notify_decision_updated',
+      expect.anything(),
+    );
+  });
 });
 
 describe('useDeleteDecision', () => {
