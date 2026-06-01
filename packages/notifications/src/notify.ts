@@ -31,6 +31,13 @@ const TYPE_TO_TEMPLATE: Partial<Record<NotificationType, string>> = {
   reengagement: 'campaign-reengagement',
   in_app_message: 'in-app-message',
   in_app_message_mention: 'in-app-message-mention',
+  // Decision framework (Wave 2 · Territory T2). Edge-side delivery uses
+  // supabase/functions/_shared/decision-notify.ts; these mappings let the Node
+  // notify() path (API routes / server code) route the same types through the
+  // center with the right template + channels.
+  decision_required: 'decision-required',
+  decision_overdue: 'decision-overdue',
+  decision_resolved: 'decision-resolved',
 };
 
 /** Default channels per notification type. */
@@ -70,6 +77,12 @@ const DEFAULT_CHANNELS: Record<string, NotificationChannel[]> = {
   // In-app messaging
   in_app_message: ['email', 'in_app'],
   in_app_message_mention: ['email', 'in_app'],
+  // Decision framework — in-app (notification center) + email by default.
+  // decision_required / decision_overdue address the client; decision_resolved
+  // addresses the owning designer.
+  decision_required: ['in_app', 'email'],
+  decision_overdue: ['in_app', 'email'],
+  decision_resolved: ['in_app', 'email'],
 };
 
 interface NotifyContext {

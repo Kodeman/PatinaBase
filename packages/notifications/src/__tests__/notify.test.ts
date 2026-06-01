@@ -157,6 +157,69 @@ describe('notify', () => {
     expect(results).toHaveLength(2);
   });
 
+  it('routes decision_required through in-app + email channels', async () => {
+    const supabase = createMockSupabase();
+    const results = await notify(
+      { supabase, queue },
+      'user-1',
+      'decision_required',
+      { decisionTitle: 'Sofa fabric' }
+    );
+
+    // decision_required defaults to in_app + email.
+    expect(results.length).toBe(2);
+    expect(results.map((r) => r.channel).sort()).toEqual(['email', 'in_app']);
+    expect(results.every((r) => r.success)).toBe(true);
+    expect(queue.enqueue).toHaveBeenCalledTimes(2);
+  });
+
+  it('routes decision_resolved to the designer via in-app + email', async () => {
+    const supabase = createMockSupabase();
+    const results = await notify(
+      { supabase, queue },
+      'designer-1',
+      'decision_resolved',
+      { decisionTitle: 'Sofa fabric' }
+    );
+
+    expect(results.length).toBe(2);
+    expect(results.every((r) => r.success)).toBe(true);
+  });
+
+  it('honours the in-app channel toggle for decision notifications', async () => {
+    const supabase = createMockSupabase({ channels_in_app: false });
+    const results = await notify(
+      { supabase, queue },
+      'user-1',
+      'decision_overdue',
+      { decisionTitle: 'Sofa fabric' }
+    );
+
+    const inApp = results.find((r) => r.channel === 'in_app');
+    expect(inApp?.success).toBe(false);
+    expect(inApp?.error).toContain('disabled');
+  });
+
+  it('defers decision notifications during quiet hours', async () => {
+    const supabase = createMockSupabase({
+      quiet_hours_enabled: true,
+      quiet_hours_start: '00:00',
+      quiet_hours_end: '23:59',
+      timezone: 'UTC',
+    });
+
+    const results = await notify(
+      { supabase, queue },
+      'user-1',
+      'decision_required',
+      { decisionTitle: 'Sofa fabric' }
+    );
+
+    expect(results).toHaveLength(1);
+    expect(results[0].error).toContain('quiet hours');
+    expect(queue.enqueue).not.toHaveBeenCalled();
+  });
+
   it('handles queue errors gracefully', async () => {
     const failingQueue: NotificationQueue = {
       enqueue: vi.fn().mockRejectedValue(new Error('Queue down')),
