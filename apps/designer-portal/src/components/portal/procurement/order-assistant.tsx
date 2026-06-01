@@ -32,6 +32,10 @@ import {
 } from '@patina/supabase';
 import { useToast } from '@/components/portal/toast-provider';
 import { procurementEvents } from '@/lib/analytics/procurement-events';
+import {
+  BlockedByDecisionInline,
+  getBlockedItems,
+} from '@/components/portal/procurement/blocked-by-decision-notice';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
 
@@ -68,6 +72,17 @@ export interface OrderAssistantFFEItem {
    * callers may leave it undefined.
    */
   layer?: 'personal' | 'studio' | 'catalog';
+  /**
+   * Decision-Framework integrity fields (PT-D-2-T3-1). When `blocked` is true
+   * and a `blocked_by_decision_id` is present the item is held by a pending
+   * `blocks_procurement` client decision — the assistant disables ordering and
+   * links the designer to the decision. Optional; callers that don't carry
+   * blocking context (e.g. the By Vendor draft-PO list) leave them undefined
+   * and the assistant behaves exactly as before.
+   */
+  blocked?: boolean | null;
+  blocked_by_decision_id?: string | null;
+  blocked_reason?: string | null;
 }
 
 export interface OrderAssistantProps {
@@ -172,6 +187,13 @@ export function OrderAssistant(props: OrderAssistantProps) {
     [ffeItems]
   );
 
+  // Decision-Framework integrity gate (PT-D-2-T3-1). Any item held by a
+  // pending `blocks_procurement` decision disables ordering for the whole
+  // batch — a PO covers one vendor's items at once, so the safest behaviour is
+  // to refuse the order until the block clears rather than silently splitting.
+  const blockedItems = useMemo(() => getBlockedItems(ffeItems), [ffeItems]);
+  const hasBlockedItems = blockedItems.length > 0;
+
   // Three-layer routing detection (PRD §7.1 / S2.9). Catalog routing wins
   // any time the vendor is Patina-handled OR every item is catalog-layer.
   // Studio routing fires when any non-catalog item is studio. Personal is
@@ -217,6 +239,18 @@ export function OrderAssistant(props: OrderAssistantProps) {
   // on net_30 by default; deposit/balance milestone fields don't apply.
   const handleCatalogSubmit = async () => {
     setSubmitError(null);
+    if (hasBlockedItems) {
+      procurementEvents.orderBlocked({
+        blocked_item_count: blockedItems.length,
+        vendor_id: vendor.id,
+        project_id: project.id,
+        is_patina_catalog: true,
+      });
+      setSubmitError(
+        `${blockedItems.length} item${blockedItems.length === 1 ? ' is' : 's are'} blocked pending a client decision. Resolve the decision before ordering.`,
+      );
+      return;
+    }
     try {
       await createPO.mutateAsync({
         projectId: project.id,
@@ -334,6 +368,19 @@ export function OrderAssistant(props: OrderAssistantProps) {
 
   const handleSubmit = async () => {
     setSubmitError(null);
+
+    if (hasBlockedItems) {
+      procurementEvents.orderBlocked({
+        blocked_item_count: blockedItems.length,
+        vendor_id: vendor.id,
+        project_id: project.id,
+        is_patina_catalog: false,
+      });
+      setSubmitError(
+        `${blockedItems.length} item${blockedItems.length === 1 ? ' is' : 's are'} blocked pending a client decision. Resolve the decision before ordering.`,
+      );
+      return;
+    }
 
     const validationError = validate();
     if (validationError) {
@@ -741,6 +788,18 @@ export function OrderAssistant(props: OrderAssistantProps) {
                 )}
               </section>
 
+              {/* Decision-Framework integrity gate (PT-D-2-T3-1): when any item
+                  in the batch is held by a pending blocks_procurement decision,
+                  surface the reason + a deep link and disable the submit
+                  controls below. */}
+              {hasBlockedItems && (
+                <BlockedByDecisionInline
+                  blockedItems={blockedItems}
+                  projectId={project.id}
+                  className="mb-3"
+                />
+              )}
+
               {submitError && (
                 <div
                   className="mb-3 rounded-[3px] border px-3 py-2 text-[0.7rem]"
@@ -770,8 +829,13 @@ export function OrderAssistant(props: OrderAssistantProps) {
                 <button
                   type="button"
                   onClick={handleCatalogSubmit}
-                  disabled={createPO.isPending}
-                  className="inline-flex items-center gap-2 rounded-[3px] px-4 py-1.5 font-mono text-[0.7rem] uppercase tracking-[0.06em] text-white transition-opacity disabled:opacity-50"
+                  disabled={createPO.isPending || hasBlockedItems}
+                  title={
+                    hasBlockedItems
+                      ? 'Ordering is blocked pending a client decision'
+                      : undefined
+                  }
+                  className="inline-flex items-center gap-2 rounded-[3px] px-4 py-1.5 font-mono text-[0.7rem] uppercase tracking-[0.06em] text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
                   style={{ background: 'var(--color-clay,#C4A57B)' }}
                 >
                   {createPO.isPending && (
@@ -780,16 +844,23 @@ export function OrderAssistant(props: OrderAssistantProps) {
                       aria-hidden="true"
                     />
                   )}
-                  {createPO.isPending
-                    ? 'Placing Patina order…'
-                    : `One-click order via Patina · ${formatDollars(totalCents)}`}
+                  {hasBlockedItems
+                    ? 'Blocked — decision pending'
+                    : createPO.isPending
+                      ? 'Placing Patina order…'
+                      : `One-click order via Patina · ${formatDollars(totalCents)}`}
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  disabled={createPO.isPending}
-                  className="inline-flex items-center gap-2 rounded-[3px] px-4 py-1.5 font-mono text-[0.7rem] uppercase tracking-[0.06em] text-white transition-opacity disabled:opacity-50"
+                  disabled={createPO.isPending || hasBlockedItems}
+                  title={
+                    hasBlockedItems
+                      ? 'Ordering is blocked pending a client decision'
+                      : undefined
+                  }
+                  className="inline-flex items-center gap-2 rounded-[3px] px-4 py-1.5 font-mono text-[0.7rem] uppercase tracking-[0.06em] text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
                   style={{ background: 'var(--accent-primary,#C4A57B)' }}
                 >
                   {createPO.isPending && (
@@ -798,9 +869,11 @@ export function OrderAssistant(props: OrderAssistantProps) {
                       aria-hidden="true"
                     />
                   )}
-                  {createPO.isPending
-                    ? 'Submitting…'
-                    : `Confirm ${ffeItems.length} ordered`}
+                  {hasBlockedItems
+                    ? 'Blocked — decision pending'
+                    : createPO.isPending
+                      ? 'Submitting…'
+                      : `Confirm ${ffeItems.length} ordered`}
                 </button>
               )}
             </div>
