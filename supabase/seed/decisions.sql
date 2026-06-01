@@ -28,6 +28,10 @@ DECLARE
   v_dec_overdue   UUID := 'b0000000-0000-0000-0000-0000000d2c03';
   v_dec_responded UUID := 'b0000000-0000-0000-0000-0000000d2c04';
   v_dec_expired   UUID := 'b0000000-0000-0000-0000-0000000d2c05';
+  -- Room linkage (migration 00172): two rooms so UI/e2e have room-scoped
+  -- decisions to render against.
+  v_room_dining UUID := 'b0000000-0000-0000-0000-0000000d2c0a';
+  v_room_living UUID := 'b0000000-0000-0000-0000-0000000d2c0b';
 BEGIN
   SELECT id INTO v_dc_id
   FROM public.designer_clients
@@ -49,6 +53,13 @@ BEGIN
     );
   END IF;
 
+  -- Project rooms (00172 room linkage). Idempotent.
+  INSERT INTO public.project_rooms (id, project_id, name, room_type, sort_order)
+  VALUES
+    (v_room_dining, v_project_id, 'Dining Room', 'dining_room', 0),
+    (v_room_living, v_project_id, 'Living Room', 'living_room', 1)
+  ON CONFLICT (id) DO NOTHING;
+
   DELETE FROM public.client_decisions
    WHERE id IN (v_dec_draft, v_dec_pending, v_dec_overdue, v_dec_responded, v_dec_expired);
 
@@ -69,13 +80,13 @@ BEGIN
     (v_dec_draft, 'Brushed Brass',  'Warmer, picks up the oak floor.',                 TRUE,  48000, 3, 0),
     (v_dec_draft, 'Blackened Steel','More architectural, recedes against the ceiling.',FALSE, 42000, 3, 1);
 
-  -- PENDING (due in 5 days)
+  -- PENDING (due in 5 days) — scoped to the Dining Room (00172 room_id)
   INSERT INTO public.client_decisions (
-    id, designer_client_id, designer_id, project_id,
+    id, designer_client_id, designer_id, project_id, room_id,
     title, context, due_date, linked_phase,
     decision_type, blocking_status, status, sent_at
   ) VALUES (
-    v_dec_pending, v_dc_id, uid_designer, v_project_id,
+    v_dec_pending, v_dc_id, uid_designer, v_project_id, v_room_dining,
     'Dining chairs - Shaker Oak vs Windsor Elm',
     'Six chairs to pair with the Nordic Atelier table. Both are solid wood - different personalities for the room.',
     (NOW() + INTERVAL '5 days'),
@@ -89,13 +100,13 @@ BEGIN
     (v_dec_pending, 'Shaker Oak',  'Lighter, more casual.',  TRUE,  68000, 6, 0,     0,  0),
     (v_dec_pending, 'Windsor Elm', 'Darker, heirloom feel.', FALSE, 78000, 6, 60000, 14, 1);
 
-  -- PENDING + OVERDUE (due 3 days ago)
+  -- PENDING + OVERDUE (due 3 days ago) — scoped to the Living Room (00172 room_id)
   INSERT INTO public.client_decisions (
-    id, designer_client_id, designer_id, project_id,
+    id, designer_client_id, designer_id, project_id, room_id,
     title, context, due_date, linked_phase,
     decision_type, blocking_status, status, sent_at
   ) VALUES (
-    v_dec_overdue, v_dc_id, uid_designer, v_project_id,
+    v_dec_overdue, v_dc_id, uid_designer, v_project_id, v_room_living,
     'Rug color - Natural vs Sand',
     'The jute rug from Studio Piet. Natural is warmer, Sand is more neutral.',
     (NOW() - INTERVAL '3 days'),
