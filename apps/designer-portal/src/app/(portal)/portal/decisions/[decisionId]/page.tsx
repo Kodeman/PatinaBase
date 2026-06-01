@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   useDecision,
+  useDecisionRealtime,
   useUpdateDecisionStatus,
   useUpdateDecision,
   useDeleteDecision,
@@ -92,6 +93,10 @@ export default function DecisionDetailPage({
   const router = useRouter();
   const { user } = useAuth();
   const { data: decision, isLoading } = useDecision(decisionId);
+  // Live updates: when the client views, selects an option, or comments, the
+  // spine's realtime channel invalidates the decision + comment caches so this
+  // page reflects the response without a manual refresh (PT-D-2-T1-5).
+  useDecisionRealtime(decisionId);
   const updateStatus = useUpdateDecisionStatus();
   const updateDecision = useUpdateDecision();
   const deleteDecision = useDeleteDecision();
