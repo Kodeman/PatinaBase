@@ -2,9 +2,14 @@
 
 import { use, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   useDecision,
+  useDecisionRealtime,
   useUpdateDecisionStatus,
+  useUpdateDecision,
+  useDeleteDecision,
+  usePublishDraftDecision,
   useDecisionOverrides,
   useProjectFFEItems,
   useClient,
@@ -85,13 +90,24 @@ export default function DecisionDetailPage({
   params: Promise<{ decisionId: string }>;
 }) {
   const { decisionId } = use(params);
+  const router = useRouter();
   const { user } = useAuth();
   const { data: decision, isLoading } = useDecision(decisionId);
+  // Live updates: when the client views, selects an option, or comments, the
+  // spine's realtime channel invalidates the decision + comment caches so this
+  // page reflects the response without a manual refresh (PT-D-2-T1-5).
+  useDecisionRealtime(decisionId);
   const updateStatus = useUpdateDecisionStatus();
+  const updateDecision = useUpdateDecision();
+  const deleteDecision = useDeleteDecision();
+  const publishDraft = usePublishDraftDecision();
   const { data: overrides } = useDecisionOverrides(decisionId);
   const { data: ffeItemsRaw } = useProjectFFEItems(decision?.project_id ?? '');
   const { data: decisionClient } = useClient(decision?.designer_client_id ?? '');
   const [overrideOpen, setOverrideOpen] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [extending, setExtending] = useState(false);
+  const [newDueDate, setNewDueDate] = useState('');
 
   if (isLoading) return <LoadingStrata />;
   if (!decision) {
@@ -116,8 +132,61 @@ export default function DecisionDetailPage({
     ? ffeItems.filter((it) => it?.blocked_by_decision_id === decision.id)
     : [];
 
+  // Both responded→pending (reopen) and expired→pending (recovery) are legal
+  // moves under the 00171 guard; passing currentStatus lets the hook reject any
+  // illegal transition before the round trip.
   const handleReopen = () => {
-    updateStatus.mutate({ decisionId: decision.id, status: 'pending' });
+    updateStatus.mutate({
+      decisionId: decision.id,
+      status: 'pending',
+      currentStatus: decision.status,
+    });
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deleteDecision.mutateAsync({
+        decisionId: decision.id,
+        designerClientId: decision.designer_client_id,
+        projectId: decision.project_id,
+      });
+      router.push('/portal/decisions');
+    } catch (err) {
+      console.error('Failed to delete decision:', err);
+      setConfirmingDelete(false);
+    }
+  };
+
+  // Publish a draft → flips to pending, stamps sent_at, and fires
+  // notify_decision_required. The hook's WHERE clause only matches draft rows,
+  // so this is a no-op for anything already sent.
+  const handlePublish = () => {
+    publishDraft.mutate({ decisionId: decision.id });
+  };
+
+  const canPublish = decision.status === 'draft' && (decision.options?.length ?? 0) >= 2;
+
+  // Expired-recovery: extend the deadline and reopen in one gesture. Set the
+  // new due_date first (useUpdateDecision), then run the spine's expired→pending
+  // transition so the client sees a live decision again with a fresh window.
+  const handleExtendAndReopen = async () => {
+    if (!newDueDate) return;
+    try {
+      await updateDecision.mutateAsync({
+        decisionId: decision.id,
+        designerClientId: decision.designer_client_id,
+        dueDate: newDueDate,
+      });
+      await updateStatus.mutateAsync({
+        decisionId: decision.id,
+        status: 'pending',
+        currentStatus: decision.status,
+      });
+      setExtending(false);
+      setNewDueDate('');
+    } catch (err) {
+      console.error('Failed to extend and reopen decision:', err);
+    }
   };
 
   return (
@@ -155,6 +224,110 @@ export default function DecisionDetailPage({
       <p className="type-label-secondary mb-8">
         {typeLabels[decision.decision_type] ?? 'Decision'} {'\u00B7'} {decision.linked_phase ?? 'No phase linked'}
       </p>
+
+      {/* Draft banner \u2014 the client can't see a draft until it's sent. */}
+      {decision.status === 'draft' && (
+        <div
+          className="mb-8 flex flex-wrap items-center justify-between gap-3 rounded-md px-4 py-3"
+          style={{
+            background: 'rgba(139, 115, 85, 0.06)',
+            border: '1px solid rgba(139, 115, 85, 0.18)',
+          }}
+        >
+          <p
+            className="type-body"
+            style={{ fontSize: '0.82rem', color: 'var(--text-body)' }}
+          >
+            This decision is a draft. Your client can&apos;t see it until you send it.
+          </p>
+          <PortalButton
+            variant="primary"
+            onClick={handlePublish}
+            disabled={!canPublish || publishDraft.isPending}
+            title={
+              canPublish
+                ? undefined
+                : 'Add at least two options before sending to the client.'
+            }
+          >
+            {publishDraft.isPending ? 'Sending...' : 'Send to Client'}
+          </PortalButton>
+        </div>
+      )}
+
+      {/* Expired banner — recover by reopening (keeps the old deadline) or
+          extending to a new deadline, both via the spine's expired→pending
+          transition (PT-D-2-T1-3). */}
+      {decision.status === 'expired' && (
+        <div
+          className="mb-8 rounded-md px-4 py-3"
+          style={{
+            background: 'rgba(199, 123, 110, 0.06)',
+            border: '1px solid rgba(199, 123, 110, 0.2)',
+          }}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p
+              className="type-body"
+              style={{ fontSize: '0.82rem', color: 'var(--text-body)' }}
+            >
+              This decision expired{' '}
+              {decision.due_date ? `on ${formatDate(decision.due_date).split(',').slice(0, 2).join(',')}` : ''}{' '}
+              without a response. Reopen it to give your client another chance to respond.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <PortalButton
+                variant="secondary"
+                onClick={handleReopen}
+                disabled={updateStatus.isPending}
+              >
+                {updateStatus.isPending ? 'Reopening...' : 'Reopen'}
+              </PortalButton>
+              {!extending && (
+                <PortalButton variant="ghost" onClick={() => setExtending(true)}>
+                  Extend deadline
+                </PortalButton>
+              )}
+            </div>
+          </div>
+          {extending && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <label className="type-meta-small text-[var(--text-muted)]">
+                New deadline
+              </label>
+              <input
+                type="date"
+                value={newDueDate}
+                onChange={(e) => setNewDueDate(e.target.value)}
+                className="rounded-sm border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1.5 outline-none focus:border-[var(--accent-primary)]"
+                style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '0.82rem',
+                  color: 'var(--text-primary)',
+                }}
+              />
+              <PortalButton
+                variant="primary"
+                onClick={handleExtendAndReopen}
+                disabled={!newDueDate || updateDecision.isPending || updateStatus.isPending}
+              >
+                {updateDecision.isPending || updateStatus.isPending
+                  ? 'Reopening...'
+                  : 'Extend & reopen'}
+              </PortalButton>
+              <PortalButton
+                variant="ghost"
+                onClick={() => {
+                  setExtending(false);
+                  setNewDueDate('');
+                }}
+              >
+                Cancel
+              </PortalButton>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-10 md:grid-cols-[1fr_320px]">
         {/* Left column */}
@@ -464,6 +637,29 @@ export default function DecisionDetailPage({
           {/* Actions */}
           <SectionHeader>Actions</SectionHeader>
           <div className="flex flex-wrap gap-2">
+            {/* Draft → publish CTA. Sends the decision to the client and fires
+                the decision_required notification (PT-D-2-T1-2). */}
+            {decision.status === 'draft' && (
+              <PortalButton
+                variant="primary"
+                onClick={handlePublish}
+                disabled={!canPublish || publishDraft.isPending}
+                title={
+                  canPublish
+                    ? undefined
+                    : 'Add at least two options before sending to the client.'
+                }
+              >
+                {publishDraft.isPending ? 'Sending...' : 'Send to Client'}
+              </PortalButton>
+            )}
+            {/* A resolved decision carries a signed record; editing happens via
+                reopen. Drafts, pending, and expired decisions are editable. */}
+            {decision.status !== 'responded' && (
+              <Link href={`/portal/decisions/${decision.id}/edit`}>
+                <PortalButton variant="secondary">Edit</PortalButton>
+              </Link>
+            )}
             {decision.project_id && (
               <Link href={`/portal/projects/${decision.project_id}`}>
                 <PortalButton variant="secondary">View in Project</PortalButton>
@@ -491,13 +687,49 @@ export default function DecisionDetailPage({
                 Override on client&apos;s behalf
               </PortalButton>
             )}
-            {decision.status === 'responded' && (
+            {(decision.status === 'responded' || decision.status === 'expired') && (
               <PortalButton
                 variant="ghost"
                 onClick={handleReopen}
                 disabled={updateStatus.isPending}
               >
                 {updateStatus.isPending ? 'Reopening...' : 'Reopen Decision'}
+              </PortalButton>
+            )}
+          </div>
+
+          {/* Destructive action — kept visually separate with an inline confirm
+              so a stray click can't delete a decision and its audit trail. */}
+          <div className="mt-4">
+            {confirmingDelete ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="type-meta-small text-[var(--text-muted)]">
+                  Delete this decision and its history?
+                </span>
+                <PortalButton
+                  variant="ghost"
+                  onClick={handleDelete}
+                  disabled={deleteDecision.isPending}
+                >
+                  <span style={{ color: 'var(--color-terracotta)' }}>
+                    {deleteDecision.isPending ? 'Deleting...' : 'Yes, delete'}
+                  </span>
+                </PortalButton>
+                <PortalButton
+                  variant="ghost"
+                  onClick={() => setConfirmingDelete(false)}
+                >
+                  Keep
+                </PortalButton>
+              </div>
+            ) : (
+              <PortalButton
+                variant="ghost"
+                onClick={() => setConfirmingDelete(true)}
+              >
+                <span style={{ color: 'var(--color-terracotta)' }}>
+                  Delete Decision
+                </span>
               </PortalButton>
             )}
           </div>
