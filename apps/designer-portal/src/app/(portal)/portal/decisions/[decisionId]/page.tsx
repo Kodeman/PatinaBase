@@ -7,6 +7,7 @@ import {
   useDecision,
   useUpdateDecisionStatus,
   useDeleteDecision,
+  usePublishDraftDecision,
   useDecisionOverrides,
   useProjectFFEItems,
   useClient,
@@ -92,6 +93,7 @@ export default function DecisionDetailPage({
   const { data: decision, isLoading } = useDecision(decisionId);
   const updateStatus = useUpdateDecisionStatus();
   const deleteDecision = useDeleteDecision();
+  const publishDraft = usePublishDraftDecision();
   const { data: overrides } = useDecisionOverrides(decisionId);
   const { data: ffeItemsRaw } = useProjectFFEItems(decision?.project_id ?? '');
   const { data: decisionClient } = useClient(decision?.designer_client_id ?? '');
@@ -146,6 +148,15 @@ export default function DecisionDetailPage({
     }
   };
 
+  // Publish a draft → flips to pending, stamps sent_at, and fires
+  // notify_decision_required. The hook's WHERE clause only matches draft rows,
+  // so this is a no-op for anything already sent.
+  const handlePublish = () => {
+    publishDraft.mutate({ decisionId: decision.id });
+  };
+
+  const canPublish = decision.status === 'draft' && (decision.options?.length ?? 0) >= 2;
+
   return (
     <div className="pt-8">
       {/* Breadcrumb */}
@@ -181,6 +192,36 @@ export default function DecisionDetailPage({
       <p className="type-label-secondary mb-8">
         {typeLabels[decision.decision_type] ?? 'Decision'} {'\u00B7'} {decision.linked_phase ?? 'No phase linked'}
       </p>
+
+      {/* Draft banner \u2014 the client can't see a draft until it's sent. */}
+      {decision.status === 'draft' && (
+        <div
+          className="mb-8 flex flex-wrap items-center justify-between gap-3 rounded-md px-4 py-3"
+          style={{
+            background: 'rgba(139, 115, 85, 0.06)',
+            border: '1px solid rgba(139, 115, 85, 0.18)',
+          }}
+        >
+          <p
+            className="type-body"
+            style={{ fontSize: '0.82rem', color: 'var(--text-body)' }}
+          >
+            This decision is a draft. Your client can&apos;t see it until you send it.
+          </p>
+          <PortalButton
+            variant="primary"
+            onClick={handlePublish}
+            disabled={!canPublish || publishDraft.isPending}
+            title={
+              canPublish
+                ? undefined
+                : 'Add at least two options before sending to the client.'
+            }
+          >
+            {publishDraft.isPending ? 'Sending...' : 'Send to Client'}
+          </PortalButton>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-10 md:grid-cols-[1fr_320px]">
         {/* Left column */}
@@ -490,6 +531,22 @@ export default function DecisionDetailPage({
           {/* Actions */}
           <SectionHeader>Actions</SectionHeader>
           <div className="flex flex-wrap gap-2">
+            {/* Draft → publish CTA. Sends the decision to the client and fires
+                the decision_required notification (PT-D-2-T1-2). */}
+            {decision.status === 'draft' && (
+              <PortalButton
+                variant="primary"
+                onClick={handlePublish}
+                disabled={!canPublish || publishDraft.isPending}
+                title={
+                  canPublish
+                    ? undefined
+                    : 'Add at least two options before sending to the client.'
+                }
+              >
+                {publishDraft.isPending ? 'Sending...' : 'Send to Client'}
+              </PortalButton>
+            )}
             {/* A resolved decision carries a signed record; editing happens via
                 reopen. Drafts, pending, and expired decisions are editable. */}
             {decision.status !== 'responded' && (
