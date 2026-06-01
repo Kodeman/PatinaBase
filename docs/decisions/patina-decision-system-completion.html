@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Patina · The Decision System — From Choice to Commitment</title>
+<meta name="description" content="A code- and UI-grounded review of Patina's decision lifecycle, and the critical work to close the loop end-to-end." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..600&family=Hanken+Grotesk:wght@300..700&family=Spline+Sans+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F4EEE3; --paper-2:#FAF6EE; --paper-3:#EFE7D8;
+    --ink:#241D17; --ink-soft:#4C4239; --ink-mute:#8C8073; --ink-faint:#B6AB9A;
+    --line:#E0D6C4; --line-soft:#EBE3D5;
+    --sage:#6E9266; --sage-deep:#51764A;
+    --gold:#C39A3F; --gold-bright:#D9B24A;
+    --terra:#C06E5C; --terra-deep:#A8503D;
+    --mocha:#8B7355; --blue:#7C93A5; --pearl:#E7DFD2;
+    --shadow:0 1px 0 rgba(36,29,23,.04), 0 18px 40px -28px rgba(36,29,23,.45);
+    --maxw:1120px;
+    --ease:cubic-bezier(.2,.7,.2,1);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Hanken Grotesk",ui-sans-serif,system-ui,sans-serif;
+    font-weight:400;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    overflow:hidden;
+  }
+  /* paper grain */
+  body::before{
+    content:"";position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.45;mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/></svg>");
+  }
+  /* soft vignette / warm light */
+  body::after{
+    content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(120% 90% at 12% 8%, rgba(255,250,240,.7), rgba(255,250,240,0) 55%),
+      radial-gradient(120% 120% at 92% 100%, rgba(110,146,102,.10), rgba(110,146,102,0) 50%);
+  }
+
+  /* ---------- deck frame ---------- */
+  .deck{position:fixed;inset:0;z-index:2}
+  .slide{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;justify-content:center;
+    padding:clamp(38px,6vw,92px) clamp(28px,7vw,120px);
+    opacity:0;visibility:hidden;transform:scale(.992);
+    transition:opacity .5s var(--ease), transform .6s var(--ease), visibility 0s linear .55s;
+  }
+  .slide.is-active{opacity:1;visibility:visible;transform:none;transition:opacity .55s var(--ease) .05s, transform .7s var(--ease) .05s, visibility 0s}
+  .wrap{width:100%;max-width:var(--maxw);margin:0 auto;position:relative}
+
+  /* chrome */
+  .frame{position:fixed;z-index:6;pointer-events:none;color:var(--ink-mute)}
+  .frame .mark{position:fixed;top:30px;left:clamp(28px,7vw,64px);display:flex;align-items:baseline;gap:12px}
+  .wordmark{font-family:"Fraunces",serif;font-weight:500;letter-spacing:.34em;font-size:13px;text-transform:uppercase;color:var(--ink)}
+  .dot{width:5px;height:5px;border-radius:50%;background:var(--terra);display:inline-block;transform:translateY(-2px)}
+  .sec{font-family:"Spline Sans Mono",monospace;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-mute)}
+  .counter{position:fixed;top:30px;right:clamp(28px,7vw,64px);font-family:"Spline Sans Mono",monospace;font-size:11px;letter-spacing:.12em;color:var(--ink-mute)}
+  .counter b{color:var(--ink);font-weight:500}
+
+  .rail{position:fixed;left:clamp(28px,7vw,64px);right:clamp(28px,7vw,64px);bottom:28px;z-index:6;height:2px;background:var(--line);border-radius:2px;overflow:hidden}
+  .rail i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,var(--mocha),var(--gold));width:0;transition:width .5s var(--ease)}
+  .hint{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:6;font-family:"Spline Sans Mono",monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);transition:opacity .4s}
+
+  /* nav arrows */
+  .nav{position:fixed;z-index:7;bottom:24px;display:flex;gap:8px;right:clamp(28px,7vw,64px)}
+  .nav button{
+    pointer-events:auto;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);
+    background:var(--paper-2);color:var(--ink-soft);cursor:pointer;font-size:15px;line-height:1;
+    display:grid;place-items:center;transition:.2s var(--ease)
+  }
+  .nav button:hover{border-color:var(--mocha);color:var(--ink);transform:translateY(-1px)}
+  .nav button:active{transform:translateY(0)}
+
+  /* ---------- typography ---------- */
+  .eyebrow{font-family:"Spline Sans Mono",monospace;font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--mocha)}
+  .num{font-family:"Spline Sans Mono",monospace;font-size:11px;letter-spacing:.2em;color:var(--ink-faint)}
+  h1{font-family:"Fraunces",serif;font-weight:340;font-size:clamp(40px,7.4vw,104px);line-height:.98;letter-spacing:-.015em;margin:0;color:var(--ink)}
+  h2{font-family:"Fraunces",serif;font-weight:360;font-size:clamp(30px,4.6vw,60px);line-height:1.02;letter-spacing:-.012em;margin:0;color:var(--ink)}
+  h3{font-family:"Fraunces",serif;font-weight:440;font-size:clamp(19px,2vw,25px);line-height:1.12;margin:0;color:var(--ink)}
+  .lead{font-size:clamp(16px,1.55vw,20px);line-height:1.55;color:var(--ink-soft);font-weight:340;max-width:34ch}
+  p{margin:0;line-height:1.55;color:var(--ink-soft)}
+  .serif-it{font-family:"Fraunces",serif;font-style:italic;font-weight:380}
+  .rule{height:1px;background:var(--line);border:0;margin:0}
+  .accent-rule{display:flex;flex-direction:column;gap:4px}
+  .accent-rule i{height:2px;border-radius:2px;display:block}
+  .accent-rule i:nth-child(1){width:62px;background:var(--mocha)}
+  .accent-rule i:nth-child(2){width:46px;background:var(--gold);opacity:.85}
+  .accent-rule i:nth-child(3){width:32px;background:var(--terra);opacity:.6}
+
+  /* reveal animation */
+  .r{opacity:0;transform:translateY(14px)}
+  .is-active .r{animation:rise .7s var(--ease) forwards}
+  .is-active .r{animation-delay:calc(var(--d,0)*1ms)}
+  @keyframes rise{to{opacity:1;transform:none}}
+
+  /* ---------- cover ---------- */
+  .cover .wrap{max-width:1180px}
+  .cover h1{font-size:clamp(48px,10vw,150px);font-weight:300}
+  .cover .sub{font-family:"Fraunces",serif;font-style:italic;font-weight:360;font-size:clamp(20px,3vw,40px);color:var(--mocha)}
+  .cover .meta-row{display:flex;gap:34px;flex-wrap:wrap;margin-top:42px;font-family:"Spline Sans Mono",monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-mute)}
+  .cover .meta-row b{display:block;color:var(--ink);font-family:"Hanken Grotesk";font-weight:500;letter-spacing:.02em;text-transform:none;font-size:14px;margin-top:5px}
+  .spine{position:absolute;right:-10px;top:-40px;bottom:-40px;width:auto;display:flex;align-items:center;gap:10px;opacity:.9}
+  .spine .seg{writing-mode:vertical-rl;font-family:"Spline Sans Mono",monospace;font-size:10px;letter-spacing:.32em;text-transform:uppercase;color:var(--ink-faint)}
+
+  /* generic layout helpers */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:clamp(28px,4vw,66px);align-items:start}
+  .grid-side{display:grid;grid-template-columns:minmax(260px,.82fr) 1.18fr;gap:clamp(30px,4.5vw,70px);align-items:center}
+  .stack{display:flex;flex-direction:column;gap:18px}
+  .tagline{max-width:46ch}
+  .kicker{display:flex;align-items:center;gap:14px;margin-bottom:26px}
+
+  /* feature/check lists */
+  .checks{list-style:none;margin:0;padding:0;display:grid;gap:13px}
+  .checks li{display:grid;grid-template-columns:18px 1fr;gap:13px;align-items:start;font-size:15px;line-height:1.4;color:var(--ink-soft)}
+  .checks li b{color:var(--ink);font-weight:560}
+  .tick{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;margin-top:1px;flex:none;
+    background:rgba(110,146,102,.14);color:var(--sage-deep);font-size:10px}
+
+  /* loop diagram */
+  .loop{display:flex;align-items:stretch;gap:0;flex-wrap:nowrap;margin-top:8px}
+  .step{flex:1;min-width:0;text-align:center;position:relative;padding:0 6px}
+  .step .ring{width:54px;height:54px;border-radius:50%;margin:0 auto 14px;display:grid;place-items:center;
+    border:1.5px solid var(--line);background:var(--paper-2);font-family:"Spline Sans Mono",monospace;font-size:18px;color:var(--mocha);position:relative;z-index:2}
+  .step h4{font-family:"Fraunces",serif;font-weight:480;font-size:16px;margin:0 0 5px}
+  .step p{font-size:12.5px;line-height:1.4;color:var(--ink-mute)}
+  .step:not(:last-child)::after{content:"";position:absolute;top:27px;left:60%;right:-40%;height:1.5px;
+    background:linear-gradient(90deg,var(--line),var(--line));z-index:1}
+  .step.hot .ring{border-color:var(--terra);color:var(--terra-deep);background:rgba(192,110,92,.07);box-shadow:0 0 0 5px rgba(192,110,92,.08)}
+  .step.hot h4{color:var(--terra-deep)}
+  .step.broken:not(:last-child)::after{background:repeating-linear-gradient(90deg,var(--terra) 0 6px,transparent 6px 12px);opacity:.7}
+
+  /* surface matrix */
+  .matrix{width:100%;border-collapse:separate;border-spacing:0;font-size:14px}
+  .matrix th,.matrix td{padding:14px 16px;text-align:left;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+  .matrix thead th{font-family:"Spline Sans Mono",monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-mute);font-weight:400;border-bottom:1px solid var(--line)}
+  .matrix td:first-child,.matrix th:first-child{padding-left:2px}
+  .surface{font-family:"Fraunces",serif;font-size:17px;color:var(--ink);font-weight:460}
+  .pill{display:inline-flex;align-items:center;gap:7px;font-family:"Spline Sans Mono",monospace;font-size:11px;letter-spacing:.06em;padding:4px 11px;border-radius:30px;text-transform:uppercase}
+  .pill::before{content:"";width:7px;height:7px;border-radius:50%}
+  .p-yes{background:rgba(110,146,102,.12);color:var(--sage-deep)} .p-yes::before{background:var(--sage)}
+  .p-part{background:rgba(195,154,63,.14);color:#8a6a18} .p-part::before{background:var(--gold)}
+  .p-no{background:rgba(192,110,92,.12);color:var(--terra-deep)} .p-no::before{background:var(--terra)}
+
+  /* gap slide layout */
+  .gap-head{display:flex;align-items:flex-end;gap:22px;margin-bottom:26px}
+  .gap-badge{font-family:"Fraunces",serif;font-size:clamp(54px,8vw,108px);font-weight:300;line-height:.8;color:var(--terra);opacity:.92}
+  .cost{display:inline-flex;align-items:center;gap:10px;background:var(--paper-2);border:1px solid var(--line);border-left:3px solid var(--terra);
+    padding:13px 18px;border-radius:4px;font-size:14px;color:var(--ink-soft);max-width:60ch}
+  .cost b{color:var(--ink);font-weight:600}
+  .cost .lbl{font-family:"Spline Sans Mono",monospace;font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--terra-deep);flex:none}
+
+  .factbox{background:var(--paper-2);border:1px solid var(--line);border-radius:8px;padding:20px 22px;box-shadow:var(--shadow)}
+  .factbox h5{font-family:"Spline Sans Mono",monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-mute);margin:0 0 12px;font-weight:400}
+  code{font-family:"Spline Sans Mono",monospace;font-size:.86em;background:var(--paper-3);padding:1.5px 6px;border-radius:4px;color:var(--ink);border:1px solid var(--line-soft)}
+  .codeline{font-family:"Spline Sans Mono",monospace;font-size:12.5px;color:var(--ink-soft);line-height:1.7}
+  .codeline .x{color:var(--terra-deep)} .codeline .ok{color:var(--sage-deep)}
+
+  /* mini UI mock (recreations of live states) */
+  .mock{background:var(--paper-2);border:1px solid var(--line);border-radius:9px;overflow:hidden;box-shadow:var(--shadow);font-size:12px}
+  .mock-bar{display:flex;align-items:center;gap:16px;padding:9px 16px;border-bottom:1px solid var(--line-soft);background:#fff}
+  .mock-bar .wm{font-family:"Fraunces",serif;letter-spacing:.22em;font-size:10px;text-transform:uppercase;color:var(--ink)}
+  .mock-bar nav{display:flex;gap:13px;font-size:10px;color:var(--ink-mute)}
+  .mock-bar nav .on{color:var(--ink);border-bottom:1.5px solid var(--terra);padding-bottom:2px}
+  .mock-body{padding:18px 20px;position:relative;min-height:150px}
+  .mock-title{font-family:"Fraunces",serif;font-size:26px;font-weight:340;color:var(--ink)}
+  .mock-sub{font-size:11px;color:var(--ink-mute);margin-top:4px;max-width:52ch;line-height:1.5}
+  .mock-metrics{display:flex;gap:26px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line-soft)}
+  .mock-metric .k{font-family:"Spline Sans Mono",monospace;font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-mute)}
+  .mock-metric .v{font-family:"Fraunces",serif;font-size:24px;color:var(--ink);margin-top:3px}
+  .mock-empty{margin-top:26px;text-align:center;color:var(--ink-mute);font-size:11.5px;padding:14px}
+  .mock-btn{background:var(--ink);color:var(--paper-2);font-size:10px;padding:7px 12px;border-radius:4px;position:absolute;top:18px;right:20px}
+  .toast{position:absolute;right:14px;bottom:14px;background:var(--terra-deep);color:#fff;border-radius:7px;padding:10px 14px;max-width:230px}
+  .toast .t{font-weight:600;font-size:11px;display:flex;align-items:center;gap:7px}
+  .toast .d{font-size:10px;opacity:.9;margin-top:2px}
+  .annot{display:flex;align-items:flex-start;gap:9px;font-size:12.5px;color:var(--terra-deep);margin-top:12px;line-height:1.4}
+  .annot .arr{font-family:"Spline Sans Mono",monospace;flex:none;margin-top:1px}
+
+  /* roadmap */
+  .phases{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:6px}
+  .phase{border:1px solid var(--line);border-radius:9px;background:var(--paper-2);padding:18px 17px;position:relative;overflow:hidden;display:flex;flex-direction:column;gap:11px;box-shadow:var(--shadow)}
+  .phase .cap{height:3px;border-radius:3px;position:absolute;left:0;right:0;top:0}
+  .phase:nth-child(1) .cap{background:var(--terra)} .phase:nth-child(2) .cap{background:var(--gold)}
+  .phase:nth-child(3) .cap{background:var(--blue)} .phase:nth-child(4) .cap{background:var(--sage)}
+  .phase .pnum{font-family:"Spline Sans Mono",monospace;font-size:10px;letter-spacing:.16em;color:var(--ink-mute);text-transform:uppercase}
+  .phase h4{font-family:"Fraunces",serif;font-weight:460;font-size:17px;margin:0;line-height:1.1}
+  .phase .unlocks{font-size:11px;color:var(--ink-mute);font-style:italic;font-family:"Fraunces",serif}
+  .phase ul{list-style:none;margin:4px 0 0;padding:0;display:grid;gap:7px}
+  .phase li{font-size:11.5px;line-height:1.35;color:var(--ink-soft);padding-left:13px;position:relative}
+  .phase li::before{content:"";position:absolute;left:0;top:7px;width:5px;height:5px;border-radius:50%;background:var(--mocha);opacity:.6}
+  .phase .eff{margin-top:auto;font-family:"Spline Sans Mono",monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-mute);padding-top:9px;border-top:1px solid var(--line-soft)}
+
+  /* appendix table */
+  .appx{width:100%;border-collapse:collapse;font-size:12.5px}
+  .appx th{font-family:"Spline Sans Mono",monospace;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-mute);font-weight:400;text-align:left;padding:9px 12px;border-bottom:1px solid var(--line)}
+  .appx td{padding:9px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top;color:var(--ink-soft);line-height:1.4}
+  .appx td:first-child{white-space:nowrap}
+  .ph-tag{font-family:"Spline Sans Mono",monospace;font-size:9px;padding:2px 7px;border-radius:20px;letter-spacing:.05em}
+  .t1{background:rgba(192,110,92,.13);color:var(--terra-deep)} .t2{background:rgba(195,154,63,.16);color:#85631a}
+  .t3{background:rgba(124,147,165,.16);color:#4d6678} .t4{background:rgba(110,146,102,.14);color:var(--sage-deep)}
+
+  .big-quote{font-family:"Fraunces",serif;font-weight:300;font-size:clamp(28px,4.6vw,58px);line-height:1.08;letter-spacing:-.01em;color:var(--ink);max-width:20ch}
+  .big-quote em{font-style:italic;color:var(--terra-deep)}
+
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:20px;font-family:"Spline Sans Mono",monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-mute)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+  .footnote{font-family:"Spline Sans Mono",monospace;font-size:10px;letter-spacing:.04em;color:var(--ink-faint);margin-top:18px;line-height:1.6}
+
+  @media (max-width:880px){
+    .grid2,.grid-side{grid-template-columns:1fr;gap:26px}
+    .loop{flex-wrap:wrap;gap:18px}.step{flex:1 1 40%}.step::after{display:none}
+    .phases{grid-template-columns:1fr 1fr}
+    .spine{display:none}
+    .slide{justify-content:flex-start;overflow-y:auto}
+  }
+
+  /* print → pdf : one slide per page */
+  @media print{
+    body{overflow:visible;background:#fff}
+    body::before,body::after{display:none}
+    .frame,.rail,.hint,.nav,.counter{display:none!important}
+    .deck{position:static}
+    .slide{position:relative;inset:auto;opacity:1!important;visibility:visible!important;transform:none!important;
+      page-break-after:always;min-height:100vh;border-bottom:1px solid #eee}
+    .r{opacity:1!important;transform:none!important;animation:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div class="frame" aria-hidden="true">
+  <div class="mark"><span class="wordmark">Patina</span><span class="dot"></span><span class="sec" id="secLabel">Decision System</span></div>
+  <div class="counter"><b id="cur">01</b> / <span id="tot">14</span></div>
+</div>
+
+<main class="deck" id="deck">
+
+  <!-- 1 · COVER -->
+  <section class="slide cover" data-sec="Cover">
+    <div class="wrap">
+      <div class="spine" aria-hidden="true">
+        <span class="seg">Create → Send → Review → Modify → Decide → Unblock</span>
+      </div>
+      <div class="kicker r" style="--d:60"><span class="eyebrow">A Product Review for the Founders</span></div>
+      <h1 class="r" style="--d:140">The Decision<br>System.</h1>
+      <div class="sub r" style="--d:300">From choice, to commitment.</div>
+      <p class="lead r" style="--d:420;max-width:40ch">The spine of the designer&nbsp;↔&nbsp;client workflow — reviewed end-to-end, from the database to the browser. What's built, what's missing, and the critical work to close the loop.</p>
+      <div class="meta-row r" style="--d:560">
+        <div>Prepared<b>1 June 2026</b></div>
+        <div>Method<b>Code + live UI audit</b></div>
+        <div>Scope<b>Full ecosystem, phased</b></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · THESIS -->
+  <section class="slide" data-sec="The Thesis">
+    <div class="wrap grid-side">
+      <div class="stack">
+        <div class="accent-rule r" style="--d:40"><i></i><i></i><i></i></div>
+        <span class="num r" style="--d:80">01 — Why this matters</span>
+      </div>
+      <div class="stack">
+        <h2 class="r" style="--d:140">A decision is the unit that <span class="serif-it">moves a project forward.</span></h2>
+        <p class="lead r" style="--d:280;max-width:44ch">A designer proposes options — a sofa, a stone, a layout, a budget change, a phase sign-off. The client weighs them and chooses. That choice is recorded — and it <b style="color:var(--ink)">releases procurement and unlocks the next phase.</b></p>
+        <p class="lead r" style="--d:400;max-width:44ch">Every dollar ordered and every deadline kept passes through this loop. If decisions stall, the whole project stalls. So the decision system isn't a feature — <span class="serif-it">it's the backbone.</span></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · THE INTENDED LOOP -->
+  <section class="slide" data-sec="The Loop">
+    <div class="wrap">
+      <div class="kicker r" style="--d:40"><span class="num">02 — The intended lifecycle</span></div>
+      <h2 class="r" style="--d:120;margin-bottom:8px">Six steps, one loop.</h2>
+      <p class="lead r" style="--d:220;max-width:62ch;margin-bottom:40px">This is the journey a decision is meant to take. Five of the six steps are built and working. One — the middle — was never built.</p>
+      <div class="loop r" style="--d:340">
+        <div class="step"><div class="ring">1</div><h4>Create</h4><p>Designer composes options, prices, a recommendation.</p></div>
+        <div class="step"><div class="ring">2</div><h4>Send</h4><p>Decision is delivered to the client.</p></div>
+        <div class="step"><div class="ring">3</div><h4>Review</h4><p>Client compares, asks, weighs the trade-offs.</p></div>
+        <div class="step hot broken"><div class="ring">4</div><h4>Modify</h4><p>Refine the options as the conversation evolves.</p></div>
+        <div class="step"><div class="ring">5</div><h4>Decide</h4><p>Client selects &amp; e-signs; the choice is recorded.</p></div>
+        <div class="step"><div class="ring">6</div><h4>Unblock</h4><p>Procurement &amp; the next phase are released.</p></div>
+      </div>
+      <p class="footnote r" style="--d:520">Step 4 is dashed for a reason — we'll come back to it.</p>
+    </div>
+  </section>
+
+  <!-- 4 · WHERE WE ARE TODAY -->
+  <section class="slide" data-sec="Today">
+    <div class="wrap grid2">
+      <div class="stack">
+        <div class="kicker r" style="--d:40"><span class="num">03 — Where we are today</span></div>
+        <h2 class="r" style="--d:120">The foundation is <span class="serif-it">genuinely strong.</span></h2>
+        <p class="lead r" style="--d:240">This is not a greenfield build. A real, working spine already exists across the database, both web portals, and a daily automation. Credit where due:</p>
+        <ul class="checks r" style="--d:340">
+          <li><span class="tick">✓</span><span><b>Designer compose</b> — multi-option form, 7 decision types, pricing, cost &amp; lead-time deltas, recommendations, draft vs. send.</span></li>
+          <li><span class="tick">✓</span><span><b>Resolution record</b> — a polished detail view: chosen option, value, response time, override audit, discussion.</span></li>
+          <li><span class="tick">✓</span><span><b>Client review &amp; e-sign</b> — select, note, and electronic consent for budget / approval / substitution choices.</span></li>
+          <li><span class="tick">✓</span><span><b>Atomic feed-through</b> — selecting an option auto-unblocks the linked FF&amp;E items in one transaction.</span></li>
+          <li><span class="tick">✓</span><span><b>Override-with-consent, comments, reminders, analytics</b> — all present and wired.</span></li>
+        </ul>
+      </div>
+      <div class="stack r" style="--d:300;margin-top:54px">
+        <div class="mock" aria-label="Recreation of the live Decisions dashboard">
+          <div class="mock-bar"><span class="wm">Patina</span><nav><span>Pipeline</span><span>Procurement</span><span class="on">Clients</span><span>Messages</span></nav></div>
+          <div class="mock-body">
+            <div class="mock-btn">+ New Decision</div>
+            <div class="mock-title">Decisions</div>
+            <div class="mock-sub">Every open decision is a client choice holding up progress — overdue ones block purchase orders and push back delivery dates.</div>
+            <div class="mock-metrics">
+              <div class="mock-metric"><div class="k">Open</div><div class="v">12</div></div>
+              <div class="mock-metric"><div class="k">Overdue</div><div class="v">3</div></div>
+              <div class="mock-metric"><div class="k">Avg Response</div><div class="v">1.4d</div></div>
+              <div class="mock-metric"><div class="k">Resolution</div><div class="v">92%</div></div>
+            </div>
+          </div>
+        </div>
+        <p class="footnote">The live designer dashboard — chrome, metrics &amp; copy as observed in the running portal.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · SURFACE MAP -->
+  <section class="slide" data-sec="Surface Map">
+    <div class="wrap">
+      <div class="kicker r" style="--d:40"><span class="num">04 — Across the ecosystem</span></div>
+      <h2 class="r" style="--d:120;margin-bottom:30px">Strong on web. Thin everywhere else.</h2>
+      <table class="matrix r" style="--d:240">
+        <thead><tr><th>Surface</th><th>Today</th><th>What it can / can't do</th></tr></thead>
+        <tbody>
+          <tr><td class="surface">Designer Portal</td><td><span class="pill p-yes">Complete</span></td><td>Compose, send, override, record, analytics. The strongest surface.</td></tr>
+          <tr><td class="surface">Client Portal</td><td><span class="pill p-yes">Complete</span></td><td>Review, select, comment, electronically consent. The loop works here.</td></tr>
+          <tr><td class="surface">Notifications</td><td><span class="pill p-part">Partial</span></td><td>Email reminders fire from cron — but the in-app notification loop never does.</td></tr>
+          <tr><td class="surface">iOS App</td><td><span class="pill p-part">API only</span></td><td>A network client exists; there is no screen to view or answer a decision.</td></tr>
+          <tr><td class="surface">Chrome Extension</td><td><span class="pill p-no">Absent</span></td><td>Captures products beautifully — but can't turn a capture into a decision.</td></tr>
+        </tbody>
+      </table>
+      <div class="legend r" style="--d:420">
+        <span><i style="background:var(--sage)"></i>Built &amp; working</span>
+        <span><i style="background:var(--gold)"></i>Partial / wired-but-silent</span>
+        <span><i style="background:var(--terra)"></i>Missing</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 · GAP A -->
+  <section class="slide" data-sec="Gap A · The Missing Middle">
+    <div class="wrap grid2">
+      <div class="stack">
+        <div class="gap-head r" style="--d:40"><span class="gap-badge">A</span><div class="accent-rule"><i></i><i></i><i></i></div></div>
+        <span class="eyebrow r" style="--d:90">The missing middle</span>
+        <h2 class="r" style="--d:160">A decision can be created. It can be answered. It <span class="serif-it">cannot be changed.</span></h2>
+        <p class="lead r" style="--d:300">There is no edit screen and no update path. Once a decision exists, its title, context, options, deadline, and blocking status are frozen. A draft can't be revised and then sent — it has to be deleted and rebuilt from scratch.</p>
+        <div class="cost r" style="--d:420"><span class="lbl">Cost</span><span>Step 4 of the loop simply doesn't exist. Designers <b>delete &amp; recreate</b> to fix a typo or add an option — losing the thread, comments, and history.</span></div>
+      </div>
+      <div class="stack r" style="--d:280;gap:16px">
+        <div class="factbox">
+          <h5>In the code</h5>
+          <div class="codeline">routes &nbsp;<span class="ok">new</span> · <span class="ok">[id]</span> · <span class="ok">analytics</span> · <span class="x">[id]/edit ✕ missing</span></div>
+          <div class="codeline">mutations &nbsp;<span class="ok">useCreateDecision</span></div>
+          <div class="codeline">&nbsp;&nbsp;<span class="ok">useUpdateDecisionStatus</span> <span style="color:var(--ink-faint)">(status only)</span></div>
+          <div class="codeline">&nbsp;&nbsp;<span class="x">useUpdateDecision ✕</span> · <span class="x">useDeleteDecision ✕</span></div>
+        </div>
+        <div class="factbox">
+          <h5>What it should be</h5>
+          <p style="font-size:13.5px;line-height:1.5">Reuse the existing <code>DecisionOptionBuilder</code> as an edit form; add <code>useUpdateDecision</code> / <code>useDeleteDecision</code>; surface <b style="color:var(--ink)">Edit</b> and <b style="color:var(--ink)">Publish draft</b> on the detail page, and re-notify the client on a material change.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 · GAP B -->
+  <section class="slide" data-sec="Gap B · The Silent Loop">
+    <div class="wrap grid2">
+      <div class="stack">
+        <div class="gap-head r" style="--d:40"><span class="gap-badge">B</span><div class="accent-rule"><i></i><i></i><i></i></div></div>
+        <span class="eyebrow r" style="--d:90">The silent loop</span>
+        <h2 class="r" style="--d:160">Nobody gets told <span class="serif-it">anything.</span></h2>
+        <p class="lead r" style="--d:300">The notification types <code>decision_required</code> and <code>decision_overdue</code> are defined — and referenced <em class="serif-it">nowhere</em>. No alert when a decision is sent, goes overdue, or is answered. And no realtime: a designer must refresh to discover the client responded.</p>
+        <div class="cost r" style="--d:420"><span class="lbl">Cost</span><span>Clients don't know a choice is waiting on them; designers don't know it landed. The loop runs on <b>luck and manual checking.</b></span></div>
+      </div>
+      <div class="stack r" style="--d:280">
+        <div class="factbox">
+          <h5>Defined, never fired</h5>
+          <div class="codeline">notifications.ts &nbsp;<span class="ok">| 'decision_required'</span></div>
+          <div class="codeline">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ok">| 'decision_overdue'</span></div>
+          <div class="codeline" style="margin-top:8px;color:var(--terra-deep)">grep &rarr; 0 references that emit them</div>
+          <div class="codeline" style="color:var(--terra-deep)">realtime subscriptions &rarr; none</div>
+        </div>
+        <div class="factbox" style="margin-top:14px">
+          <h5>What it should be</h5>
+          <p style="font-size:13.5px;line-height:1.5">Emit <code>decision_required</code> on send, <code>decision_overdue</code> on lapse, and a new <code>decision_resolved</code> back to the designer — through the notification center (in-app + email + preferences). Subscribe to live updates so responses appear instantly.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 · GAP C -->
+  <section class="slide" data-sec="Gap C · Unenforced Integrity">
+    <div class="wrap">
+      <div class="gap-head r" style="--d:40"><span class="gap-badge">C</span><div class="stack" style="gap:6px"><span class="eyebrow">Unenforced integrity</span><h2>The rules exist on paper, not in the system.</h2></div></div>
+      <div class="grid2" style="margin-top:18px">
+        <div class="stack r" style="--d:200">
+          <ul class="checks" style="gap:16px">
+            <li><span class="tick" style="background:rgba(192,110,92,.13);color:var(--terra-deep)">!</span><span><b>Status is a free-for-all.</b> Nothing stops a decision jumping <code>responded → pending → expired</code> in any order. No transition guard.</span></li>
+            <li><span class="tick" style="background:rgba(192,110,92,.13);color:var(--terra-deep)">!</span><span><b>No history.</b> Edits and status changes overwrite silently — there's no audit of what changed, when, or by whom.</span></li>
+            <li><span class="tick" style="background:rgba(192,110,92,.13);color:var(--terra-deep)">!</span><span><b>"Blocking" is decorative.</b> A decision flagged <code>blocks_procurement</code> doesn't actually block procurement. The label is informational only.</span></li>
+          </ul>
+        </div>
+        <div class="stack r" style="--d:340">
+          <div class="cost"><span class="lbl">Cost</span><span>A designer marks a decision as <b>blocking the purchase order</b> — and the order can still be placed anyway. The system promises a guardrail it doesn't enforce.</span></div>
+          <div class="factbox" style="margin-top:6px">
+            <h5>What it should be</h5>
+            <p style="font-size:13.5px;line-height:1.5">A DB-level transition guard, a <code>decision_events</code> history table, and real enforcement: a pending <code>blocks_*</code> decision <b style="color:var(--ink)">halts procurement and phase advancement</b>, surfaced in the procurement UI.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 · GAP D -->
+  <section class="slide" data-sec="Gap D · Incomplete Surfaces">
+    <div class="wrap">
+      <div class="gap-head r" style="--d:40"><span class="gap-badge">D</span><div class="stack" style="gap:6px"><span class="eyebrow">Incomplete surfaces</span><h2>The "ecosystem" stops at the browser.</h2></div></div>
+      <div class="phases r" style="--d:220;grid-template-columns:repeat(3,1fr);margin-top:26px">
+        <div class="phase"><span class="cap" style="background:var(--gold)"></span><div class="pnum">iOS</div><h4>API without a face</h4><p style="font-size:12.5px;color:var(--ink-soft);line-height:1.45">A <code>DecisionsAPIClient</code> ships in the app — but there's no screen to list, view, or answer a decision on mobile. The data path exists; the experience doesn't.</p></div>
+        <div class="phase"><span class="cap" style="background:var(--terra)"></span><div class="pnum">Extension</div><h4>Capture that dead-ends</h4><p style="font-size:12.5px;color:var(--ink-soft);line-height:1.45">The extension captures products from any vendor site — but offers no way to send one into a decision as an option. Capture and decide are disconnected.</p></div>
+        <div class="phase"><span class="cap" style="background:var(--blue)"></span><div class="pnum">Rooms</div><h4>Decisions float free</h4><p style="font-size:12.5px;color:var(--ink-soft);line-height:1.45">Decisions link to a project and phase, but not to a <em>room</em>. The room scans from iOS and the choices made for that room never meet.</p></div>
+      </div>
+      <div class="cost r" style="--d:420;margin-top:26px"><span class="lbl">Cost</span><span>The pitch is a connected ecosystem — capture on the web, scan on the phone, decide together. Today those threads <b>never tie together</b> through a decision.</span></div>
+    </div>
+  </section>
+
+  <!-- 10 · GAP E -->
+  <section class="slide" data-sec="Gap E · Polish & Resilience">
+    <div class="wrap grid2">
+      <div class="stack">
+        <div class="gap-head r" style="--d:40"><span class="gap-badge">E</span><div class="accent-rule"><i></i><i></i><i></i></div></div>
+        <span class="eyebrow r" style="--d:90">Polish &amp; resilience</span>
+        <h2 class="r" style="--d:160">The seams show.</h2>
+        <ul class="checks r" style="--d:280;gap:13px;margin-top:6px">
+          <li><span class="tick" style="background:rgba(195,154,63,.16);color:#8a6a18">›</span><span><b>The primary CTA misroutes.</b> "+ New Decision" drops you on the clients <em>list</em>, not a composer.</span></li>
+          <li><span class="tick" style="background:rgba(195,154,63,.16);color:#8a6a18">›</span><span><b>Auth-expiry shows a raw error.</b> A stale session yields "Decision not found" + a generic error toast instead of a clean re-login — while the dashboard reads a misleading <em>0 open / 100% resolved.</em></span></li>
+          <li><span class="tick" style="background:rgba(195,154,63,.16);color:#8a6a18">›</span><span><b>Help content is unauthored.</b> Every decisions tooltip &amp; empty-state logs <code>No content found</code>.</span></li>
+          <li><span class="tick" style="background:rgba(195,154,63,.16);color:#8a6a18">›</span><span><b>Placeholder copy ships.</b> The clients header still reads "PLACEHOLDER pending Leah review."</span></li>
+        </ul>
+      </div>
+      <div class="stack r" style="--d:300">
+        <div class="mock" aria-label="Recreation of the decision detail page under a stale session">
+          <div class="mock-bar"><span class="wm">Patina</span><nav><span>Clients</span><span class="on">Decisions</span></nav></div>
+          <div class="mock-body" style="min-height:190px;display:flex;align-items:center;justify-content:center">
+            <div style="text-align:center;color:var(--ink-mute);font-size:13px">Decision not found.</div>
+            <div class="toast"><div class="t">⚠ Error</div><div class="d">An unexpected error occurred</div></div>
+          </div>
+        </div>
+        <div class="annot"><span class="arr">↳</span><span>The row exists and is owned by the signed-in designer. A clean session shows it; an expired one dead-ends here. Observed live.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 · ROADMAP -->
+  <section class="slide" data-sec="The Roadmap">
+    <div class="wrap">
+      <div class="kicker r" style="--d:40"><span class="num">05 — The critical work</span></div>
+      <h2 class="r" style="--d:120;margin-bottom:8px">Four phases. Web loop first.</h2>
+      <p class="lead r" style="--d:200;max-width:66ch;margin-bottom:28px">Sequenced so the highest-leverage, lowest-risk work — closing the web loop — ships first, then radiates out to notifications, mobile, and the wider ecosystem.</p>
+      <div class="phases r" style="--d:320">
+        <div class="phase">
+          <span class="cap"></span><div class="pnum">Phase 1</div>
+          <h4>Close the web loop</h4>
+          <div class="unlocks">A complete create → modify → record loop</div>
+          <ul><li>Edit &amp; delete decisions (the missing middle)</li><li>Fix the "+ New Decision" entry point</li><li>Auth-expiry resilience &amp; honest states</li><li>Reopen / extend expired decisions</li></ul>
+          <div class="eff">Effort · S–M &nbsp;|&nbsp; Risk · Low</div>
+        </div>
+        <div class="phase">
+          <span class="cap"></span><div class="pnum">Phase 2</div>
+          <h4>Notify &amp; enforce</h4>
+          <div class="unlocks">Decisions that chase themselves</div>
+          <ul><li>Fire required / overdue / resolved alerts</li><li>Realtime live updates</li><li>Transition guard + history audit</li><li>Make "blocking" actually block</li></ul>
+          <div class="eff">Effort · M &nbsp;|&nbsp; Risk · Med</div>
+        </div>
+        <div class="phase">
+          <span class="cap"></span><div class="pnum">Phase 3</div>
+          <h4>iOS decision surface</h4>
+          <div class="unlocks">Decide from the field</div>
+          <ul><li>SwiftUI list · detail · select · consent</li><li>Push notifications</li><li>Link room scans → decisions</li></ul>
+          <div class="eff">Effort · M–L &nbsp;|&nbsp; Risk · Med</div>
+        </div>
+        <div class="phase">
+          <span class="cap"></span><div class="pnum">Phase 4</div>
+          <h4>Capture → decide</h4>
+          <div class="unlocks">The ecosystem, joined up</div>
+          <ul><li>Extension "send as decision option"</li><li>Product FK + room linkage</li><li>Templates &amp; bulk ops</li><li>Signed approval record (compliance)</li></ul>
+          <div class="eff">Effort · L &nbsp;|&nbsp; Risk · Med</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12 · THE ASK -->
+  <section class="slide" data-sec="The Ask">
+    <div class="wrap grid-side">
+      <div class="stack">
+        <div class="accent-rule r" style="--d:40"><i></i><i></i><i></i></div>
+        <span class="num r" style="--d:80">06 — The ask</span>
+      </div>
+      <div class="stack">
+        <div class="big-quote r" style="--d:160">Build <em>step four</em>, then make the loop speak.</div>
+        <p class="lead r" style="--d:340;max-width:50ch">Phase 1 is small, low-risk, and finishes the lifecycle the product already promises — it's the obvious first commitment. Phase 2 turns a working loop into a <span class="serif-it">self-driving</span> one. Phases 3–4 extend the same proven model to mobile and capture, turning "ecosystem" from a pitch into a fact.</p>
+        <p class="footnote r" style="--d:480">Recommended: greenlight Phase 1 now; scope Phase 2 in parallel. Everything is additive — no rebuild of the strong foundation that already exists.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13 · APPENDIX -->
+  <section class="slide" data-sec="Appendix · Work Items">
+    <div class="wrap">
+      <div class="kicker r" style="--d:40"><span class="num">Appendix — Work items, mapped to the code</span></div>
+      <table class="appx r" style="--d:160">
+        <thead><tr><th>Phase</th><th>Work item</th><th>Where it lands</th></tr></thead>
+        <tbody>
+          <tr><td><span class="ph-tag t1">P1</span></td><td>Edit / delete + publish-draft</td><td><code>use-decisions.ts</code> · <code>decisions/[id]/edit</code> · <code>DecisionOptionBuilder</code></td></tr>
+          <tr><td><span class="ph-tag t1">P1</span></td><td>Fix "+ New Decision" entry point</td><td><code>decisions/page.tsx</code> (link → picker/composer)</td></tr>
+          <tr><td><span class="ph-tag t1">P1</span></td><td>Auth-expiry resilience + honest empty/error states</td><td><code>decisions/[id]/page.tsx</code> · <code>error-handler.ts</code></td></tr>
+          <tr><td><span class="ph-tag t2">P2</span></td><td>Fire required / overdue / resolved notifications</td><td><code>shared/notifications.ts</code> · edge fns · cron</td></tr>
+          <tr><td><span class="ph-tag t2">P2</span></td><td>Realtime + transition guard + <code>decision_events</code></td><td>new migration · <code>use-decisions.ts</code></td></tr>
+          <tr><td><span class="ph-tag t2">P2</span></td><td>Enforce blocking in procurement; author help content</td><td>procurement UI · help-system CMS</td></tr>
+          <tr><td><span class="ph-tag t3">P3</span></td><td>iOS list / detail / select / consent + push</td><td><code>apps/mobile</code> (client <code>DecisionsAPIClient</code> exists)</td></tr>
+          <tr><td><span class="ph-tag t4">P4</span></td><td>Extension capture→option; product FK; room link; templates; signed record</td><td><code>apps/extension</code> · options table · new migrations</td></tr>
+        </tbody>
+      </table>
+      <p class="footnote r" style="--d:360">Every claim in this deck traces to a file, migration, or live capture in the running portal as of 1 June 2026.</p>
+    </div>
+  </section>
+
+  <!-- 14 · CLOSE -->
+  <section class="slide cover" data-sec="Close">
+    <div class="wrap">
+      <div class="kicker r" style="--d:60"><span class="eyebrow">From choice, to commitment</span></div>
+      <h1 class="r" style="--d:140;font-size:clamp(40px,8vw,116px)">Close<br>the loop.</h1>
+      <p class="lead r" style="--d:320;max-width:42ch">The hard part is done. What remains is the connective tissue — the modify step, the alerts, the guardrails, and the surfaces — that turns a strong foundation into a system the whole business can lean on.</p>
+      <div class="meta-row r" style="--d:460">
+        <div>Next<b>Greenlight Phase 1</b></div>
+        <div>Then<b>Scope Phase 2 in parallel</b></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div class="rail" aria-hidden="true"><i id="railFill"></i></div>
+<div class="nav" aria-hidden="true"><button id="prev" title="Previous (←)">‹</button><button id="next" title="Next (→)">›</button></div>
+<div class="hint" id="hint">← / → · space to advance</div>
+
+<script>
+(function(){
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var i = 0, n = slides.length;
+  var cur = document.getElementById('cur'), tot = document.getElementById('tot');
+  var fill = document.getElementById('railFill'), sec = document.getElementById('secLabel');
+  var hint = document.getElementById('hint');
+  tot.textContent = String(n).padStart(2,'0');
+
+  function pad(x){return String(x+1).padStart(2,'0');}
+  function show(idx){
+    idx = Math.max(0, Math.min(n-1, idx));
+    if(idx===i && slides[i].classList.contains('is-active')) {}
+    slides.forEach(function(s,k){
+      var active = k===idx;
+      s.classList.toggle('is-active', active);
+      // restart reveal animations
+      if(active){
+        s.querySelectorAll('.r').forEach(function(el){
+          el.style.animation='none'; void el.offsetWidth; el.style.animation='';
+        });
+      }
+    });
+    i = idx;
+    cur.textContent = pad(i);
+    fill.style.width = (n<2?100:(i/(n-1))*100)+'%';
+    sec.textContent = slides[i].getAttribute('data-sec') || '';
+    if(location.hash !== '#'+(i+1)) history.replaceState(null,'','#'+(i+1));
+  }
+  function next(){show(i+1);}
+  function prev(){show(i-1);}
+
+  document.getElementById('next').addEventListener('click',next);
+  document.getElementById('prev').addEventListener('click',prev);
+
+  document.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'||e.key==='PageDown'||(e.key===' '&&!e.shiftKey)){e.preventDefault();next();}
+    else if(e.key==='ArrowLeft'||e.key==='PageUp'||(e.key===' '&&e.shiftKey)){e.preventDefault();prev();}
+    else if(e.key==='Home'){show(0);} else if(e.key==='End'){show(n-1);}
+    else if(/^[0-9]$/.test(e.key)){var t=parseInt(e.key,10);show(t===0?9:t-1);}
+  });
+
+  // click halves to advance (ignore clicks on controls/links)
+  document.getElementById('deck').addEventListener('click',function(e){
+    if(e.target.closest('a,button')) return;
+    var mid = window.innerWidth/2;
+    if(e.clientX>mid) next(); else prev();
+  });
+
+  // swipe
+  var sx=null;
+  addEventListener('touchstart',function(e){sx=e.touches[0].clientX;},{passive:true});
+  addEventListener('touchend',function(e){
+    if(sx===null)return; var dx=e.changedTouches[0].clientX-sx;
+    if(Math.abs(dx)>50){dx<0?next():prev();} sx=null;
+  },{passive:true});
+
+  // fade the hint after first interaction
+  var faded=false;
+  ['keydown','click','touchstart'].forEach(function(ev){
+    addEventListener(ev,function(){ if(!faded){faded=true; hint.style.opacity='0';}},{once:false});
+  });
+
+  addEventListener('hashchange',function(){
+    var h=parseInt((location.hash||'#1').slice(1),10);
+    if(!isNaN(h) && h-1!==i) show(h-1);
+  });
+
+  var start = parseInt((location.hash||'#1').slice(1),10);
+  show(isNaN(start)?0:start-1);
+})();
+</script>
+</body>
+</html>
