@@ -178,3 +178,80 @@ export function buildCapturePayload(input: BuildCapturePayloadInput) {
     status,
   };
 }
+
+// ─── Decision + Decision Option Insert (PT-D-2-T5-1) ────────────────────────
+//
+// "Send as decision option" turns a captured product into a client decision.
+// The portal does this via useCreateDecision() in @patina/supabase, but the
+// extension can't call React Query hooks (different React tree, no shared
+// query client — same constraint documented on FFESlotPicker). So we mirror
+// that hook's INSERT shape directly against the extension's Supabase client,
+// adding the room/product linkage columns shipped in migration 00172:
+//
+//   • client_decisions.room_id           → scope the decision to a room
+//   • client_decision_options.product_id → link the option to the catalog row
+//
+// designer_id is NOT set here — the set_decision_designer_id trigger (00064)
+// derives it from designer_clients. status defaults to 'pending' so the
+// decision is sent immediately and the client gets notified (the caller fires
+// notify_decision_required after the insert, matching useCreateDecision).
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface BuildDecisionPayloadInput {
+  /** Required FK → designer_clients(id). The decision's owning relationship. */
+  designerClientId: string;
+  /** Optional FK → projects(id). */
+  projectId: string | null;
+  /** Optional FK → project_rooms(id) (migration 00172). */
+  roomId: string | null;
+  title: string;
+  context: string | null;
+  /** ISO string or null. */
+  dueDate: string | null;
+  /** 'draft' keeps it unsent (sent_at null); 'pending' sends it immediately. */
+  status?: 'draft' | 'pending';
+}
+
+export function buildDecisionInsertPayload(input: BuildDecisionPayloadInput) {
+  const status = input.status ?? 'pending';
+
+  return {
+    designer_client_id: input.designerClientId,
+    project_id: input.projectId,
+    room_id: input.roomId,
+    title: input.title,
+    context: input.context,
+    due_date: input.dueDate,
+    decision_type: 'product' as const,
+    blocking_status: 'non_blocking' as const,
+    status,
+    sent_at: status === 'draft' ? null : new Date().toISOString(),
+  };
+}
+
+export interface BuildDecisionOptionPayloadInput {
+  decisionId: string;
+  name: string;
+  imageUrl: string | null;
+  designerNote: string | null;
+  /** FK → products(id) (migration 00172). The captured product. */
+  productId: string | null;
+  /** Retail price in cents, or null. */
+  priceCents: number | null;
+}
+
+export function buildDecisionOptionInsertPayload(
+  input: BuildDecisionOptionPayloadInput
+) {
+  return {
+    decision_id: input.decisionId,
+    name: input.name,
+    image_url: input.imageUrl,
+    designer_note: input.designerNote,
+    product_id: input.productId,
+    is_recommended: true,
+    price: input.priceCents,
+    quantity: 1,
+    sort_order: 0,
+  };
+}

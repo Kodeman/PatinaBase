@@ -19,7 +19,11 @@ import { supabase } from './lib/supabase';
 import { scorePageMode, detectModeFromUrl } from './lib/mode-detection';
 import { validateProductCapture } from './lib/capture-validation';
 import { usePortalSession } from './hooks/use-portal-session';
-import { buildCapturePayload } from './lib/payloads';
+import {
+  buildCapturePayload,
+  buildDecisionInsertPayload,
+  buildDecisionOptionInsertPayload,
+} from './lib/payloads';
 import type { EditableDimensions } from './components/EditableDetails';
 import { dimensionsFromExtracted, dimensionsToPayload } from './components/EditableDetails';
 import { ModeToggle } from './components/ModeToggle';
@@ -132,6 +136,18 @@ function Popup() {
   const [scopeRoomId, setScopeRoomId] = useState<UUID | null>(null);
   const [ffeCategorySlug, setFfeCategorySlug] = useState<string | null>(null);
   const [savingToInbox, setSavingToInbox] = useState(false);
+
+  // PT-D-2-T5-1 — "Send as decision option" targeting (optional)
+  const [sendAsDecision, setSendAsDecision] = useState(false);
+  const [decisionDesignerClientId, setDecisionDesignerClientId] = useState<UUID | null>(null);
+  // Underlying client profile id (designer_clients.client_id) — captured so
+  // resets/handlers stay symmetric even though project scoping is resolved
+  // inside DecisionTargetSelector. Value isn't read directly in the sidepanel.
+  const [, setDecisionClientProfileId] = useState<UUID | null>(null);
+  const [decisionProjectId, setDecisionProjectId] = useState<UUID | null>(null);
+  const [decisionRoomId, setDecisionRoomId] = useState<UUID | null>(null);
+  const [decisionTitle, setDecisionTitle] = useState('');
+  const [savingDecision, setSavingDecision] = useState(false);
 
   // Navigation tracking state
   const [currentUrl, setCurrentUrl] = useState<string>('');
@@ -349,6 +365,13 @@ function Popup() {
     setProposalId(null);
     setScopeRoomId(null);
     setFfeCategorySlug(null);
+    // PT-D-2-T5-1 — clear decision targeting on navigation.
+    setSendAsDecision(false);
+    setDecisionDesignerClientId(null);
+    setDecisionClientProfileId(null);
+    setDecisionProjectId(null);
+    setDecisionRoomId(null);
+    setDecisionTitle('');
     // Wave 3.3 — clear the capture-to-slot state when navigating to a new page.
     setLastCapturedProductId(null);
     setShowFfeSlotPicker(false);
@@ -1111,6 +1134,164 @@ function Popup() {
     }
   };
 
+  // PT-D-2-T5-1 — "Send as decision option".
+  //
+  // Turns the captured product into a single-option client decision so the
+  // client can approve it. Mirrors useCreateDecision() from @patina/supabase
+  // (which the extension can't call — different React tree, no shared query
+  // client) by inserting against the extension's Supabase client directly:
+  //
+  //   1. products       — a real catalog row (status 'published') the option
+  //                        can point at, identical to handleCapture.
+  //   2. client_decisions       — scoped to the chosen client/project/room.
+  //   3. client_decision_options — one option carrying product_id (00172).
+  //   4. notify_decision_required RPC — sends the decision to the client.
+  //
+  // designer_id is derived by the set_decision_designer_id trigger (00064).
+  const handleSendAsDecision = async () => {
+    if (!user || !extractedData) return;
+    if (!decisionDesignerClientId) {
+      setCaptureError('Select a client before sending as a decision.');
+      return;
+    }
+
+    setHasInteracted(true);
+    setSavingDecision(true);
+    setCaptureError('');
+
+    try {
+      const selectedImage = extractedData.images[selectedImageIndex];
+      const images = selectedImage
+        ? [selectedImage.url, ...extractedData.images.filter((_, i) => i !== selectedImageIndex).map(img => img.url)]
+        : extractedData.images.map(img => img.url);
+
+      const vendorId = manufacturer?.id || null;
+      const retailerId = retailer?.id || null;
+      const dimensionsPayload = dimensionsToPayload(editedDimensions);
+      const priceCents = price ? Math.round(parseFloat(price) * 100) : null;
+      const resolvedName = productName || extractedData.productName || 'Untitled Product';
+
+      // 1. Create the catalog product the option will link to.
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .insert({
+          name: resolvedName,
+          description: editedDescription || null,
+          source_url: extractedData.url,
+          images: images.slice(0, 10),
+          price_retail: priceCents,
+          materials: editedMaterials,
+          colors: editedColors.length > 0 ? editedColors : null,
+          finish: editedFinish || null,
+          available_colors: extractedData.availableColors || null,
+          dimensions: dimensionsPayload ? {
+            width: dimensionsPayload.width,
+            height: dimensionsPayload.height,
+            depth: dimensionsPayload.depth,
+            seatHeight: dimensionsPayload.seatHeight,
+            seatDepth: dimensionsPayload.seatDepth,
+            seatWidth: dimensionsPayload.seatWidth,
+            armHeight: dimensionsPayload.armHeight,
+            backHeight: dimensionsPayload.backHeight,
+            legHeight: dimensionsPayload.legHeight,
+            clearance: dimensionsPayload.clearance,
+            unit: dimensionsPayload.unit,
+          } : null,
+          vendor_id: vendorId,
+          retailer_id: retailerId,
+          captured_by: user.id,
+          captured_at: new Date().toISOString(),
+          status: 'published',
+        })
+        .select('id')
+        .single();
+
+      if (productError) throw productError;
+      if (!product) throw new Error('Failed to create product');
+
+      // Style assignments (keep taxonomy consistent across save paths).
+      if (selectedStyleIds.length > 0) {
+        const styleInserts = selectedStyleIds.map((styleId, index) => ({
+          product_id: product.id,
+          style_id: styleId,
+          confidence: 1.0,
+          is_primary: index === 0,
+          source: 'manual',
+          assigned_by: user.id,
+        }));
+        await supabase.from('product_styles').insert(styleInserts);
+      }
+
+      // 2. Create the decision (sent immediately).
+      const { data: decision, error: decisionError } = await supabase
+        .from('client_decisions')
+        .insert(
+          buildDecisionInsertPayload({
+            designerClientId: decisionDesignerClientId,
+            projectId: decisionProjectId,
+            roomId: decisionRoomId,
+            title: decisionTitle.trim() || `Approve: ${resolvedName}`,
+            context: note || null,
+            dueDate: null,
+            status: 'pending',
+          })
+        )
+        .select('id, designer_client_id, project_id')
+        .single();
+
+      if (decisionError) throw decisionError;
+      if (!decision) throw new Error('Failed to create decision');
+
+      // 3. Create the option carrying the product linkage.
+      const { error: optionError } = await supabase
+        .from('client_decision_options')
+        .insert(
+          buildDecisionOptionInsertPayload({
+            decisionId: decision.id,
+            name: resolvedName,
+            imageUrl: images[0] ?? null,
+            designerNote: note || null,
+            productId: product.id,
+            priceCents,
+          })
+        );
+
+      if (optionError) throw optionError;
+
+      // 4. Fire the required-on-send notification. Non-fatal — a notify
+      //    failure must not undo a successfully created decision (matches
+      //    useCreateDecision in @patina/supabase).
+      const { error: notifyError } = await supabase.rpc('notify_decision_required', {
+        p_decision_id: decision.id,
+      });
+      if (notifyError) {
+        console.warn('handleSendAsDecision: notify_decision_required failed', notifyError);
+      }
+
+      setCaptureSuccess(true);
+      if (product?.id) setLastCapturedProductId(product.id);
+      extensionEvents.productCapture({
+        hasImages: (extractedData.images?.length ?? 0) > 0,
+        hasPrice: !!price,
+        confidence: extractedData.confidence || 'unknown',
+        captureMethod: 'new',
+      });
+    } catch (err) {
+      let errorMessage = 'Failed to send as decision';
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (err && typeof err === 'object') {
+        const e = err as { message?: string; details?: string; hint?: string; code?: string };
+        errorMessage = e.message || e.details || e.hint || JSON.stringify(err);
+        if (e.code) errorMessage = `[${e.code}] ${errorMessage}`;
+      }
+      console.error('Send as decision error:', err);
+      setCaptureError(errorMessage);
+    } finally {
+      setSavingDecision(false);
+    }
+  };
+
   // Handle updating an existing product
   const handleUpdate = async () => {
     if (!user || !existingProduct || !extractedData) return;
@@ -1488,6 +1669,17 @@ function Popup() {
             setScopeRoomId={setScopeRoomId}
             ffeCategorySlug={ffeCategorySlug}
             setFfeCategorySlug={setFfeCategorySlug}
+            sendAsDecision={sendAsDecision}
+            setSendAsDecision={setSendAsDecision}
+            decisionDesignerClientId={decisionDesignerClientId}
+            setDecisionDesignerClientId={setDecisionDesignerClientId}
+            setDecisionClientProfileId={setDecisionClientProfileId}
+            decisionProjectId={decisionProjectId}
+            setDecisionProjectId={setDecisionProjectId}
+            decisionRoomId={decisionRoomId}
+            setDecisionRoomId={setDecisionRoomId}
+            decisionTitle={decisionTitle}
+            setDecisionTitle={setDecisionTitle}
           />
         )}
 
@@ -1590,7 +1782,7 @@ function Popup() {
           <div className="space-y-2">
             <button
               onClick={existingProduct ? handleUpdate : handleCapture}
-              disabled={isCapturing || isExtracting || savingToInbox || !extractedData || (productValidation != null && !productValidation.isValid)}
+              disabled={isCapturing || isExtracting || savingToInbox || savingDecision || !extractedData || (productValidation != null && !productValidation.isValid)}
               className={`w-full py-3 px-4 rounded-[3px] text-[0.85rem] font-medium transition-all ${
                 captureSuccess
                   ? 'bg-sage text-white shadow-md'
@@ -1613,7 +1805,7 @@ function Popup() {
               <button
                 type="button"
                 onClick={handleSaveToInbox}
-                disabled={isCapturing || isExtracting || savingToInbox || !extractedData || (productValidation != null && !productValidation.isValid)}
+                disabled={isCapturing || isExtracting || savingToInbox || savingDecision || !extractedData || (productValidation != null && !productValidation.isValid)}
                 className="w-full py-2.5 px-4 rounded-[3px] text-[0.82rem] font-medium border border-pearl bg-off-white text-charcoal hover:border-clay hover:text-mocha transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {savingToInbox
@@ -1623,6 +1815,35 @@ function Popup() {
                   : proposalId && scopeRoomId && ffeCategorySlug
                   ? 'Save to Proposal'
                   : 'Save to Inbox'}
+              </button>
+            )}
+
+            {/* PT-D-2-T5-1 — Send as decision option.
+                Shown when the designer ticks "Send as decision option" in the
+                form. Creates the product + a single-option client decision and
+                notifies the client. Disabled until a client is chosen. */}
+            {!existingProduct && sendAsDecision && (
+              <button
+                type="button"
+                onClick={handleSendAsDecision}
+                disabled={
+                  isCapturing ||
+                  isExtracting ||
+                  savingToInbox ||
+                  savingDecision ||
+                  !extractedData ||
+                  !decisionDesignerClientId ||
+                  (productValidation != null && !productValidation.isValid)
+                }
+                className="w-full py-2.5 px-4 rounded-[3px] text-[0.82rem] font-medium border border-clay bg-clay text-off-white hover:bg-mocha hover:border-mocha transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingDecision
+                  ? 'Sending…'
+                  : captureSuccess
+                  ? 'Decision Sent'
+                  : !decisionDesignerClientId
+                  ? 'Select a client to send'
+                  : 'Send as Decision'}
               </button>
             )}
 

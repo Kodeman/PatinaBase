@@ -19,6 +19,7 @@ import {
 import { StrataMark } from './StrataMark';
 import { ImageCarousel } from './ImageCarousel';
 import { ProposalTargetSelector } from './ProposalTargetSelector';
+import { DecisionTargetSelector } from './DecisionTargetSelector';
 import { StyleChips } from './StyleChips';
 import { ConfidenceIndicator } from './ConfidenceIndicator';
 import { VendorCard } from './VendorCard';
@@ -92,6 +93,18 @@ interface ProductCaptureFormProps {
   setScopeRoomId: (v: UUID | null) => void;
   ffeCategorySlug: string | null;
   setFfeCategorySlug: (v: string | null) => void;
+  // PT-D-2-T5-1 — Send as decision option
+  sendAsDecision: boolean;
+  setSendAsDecision: (v: boolean) => void;
+  decisionDesignerClientId: UUID | null;
+  setDecisionDesignerClientId: (v: UUID | null) => void;
+  setDecisionClientProfileId: (v: UUID | null) => void;
+  decisionProjectId: UUID | null;
+  setDecisionProjectId: (v: UUID | null) => void;
+  decisionRoomId: UUID | null;
+  setDecisionRoomId: (v: UUID | null) => void;
+  decisionTitle: string;
+  setDecisionTitle: (v: string) => void;
 }
 
 export function ProductCaptureForm({
@@ -151,6 +164,17 @@ export function ProductCaptureForm({
   setScopeRoomId,
   ffeCategorySlug,
   setFfeCategorySlug,
+  sendAsDecision,
+  setSendAsDecision,
+  decisionDesignerClientId,
+  setDecisionDesignerClientId,
+  setDecisionClientProfileId,
+  decisionProjectId,
+  setDecisionProjectId,
+  decisionRoomId,
+  setDecisionRoomId,
+  decisionTitle,
+  setDecisionTitle,
 }: ProductCaptureFormProps) {
   const fieldError = (field: string) =>
     validation?.errors.find(e => e.field === field)?.message ?? null;
@@ -448,6 +472,72 @@ export function ProductCaptureForm({
             setFfeCategorySlug(v);
           }}
         />
+      </div>
+
+      {/* Send as decision option (PT-D-2-T5-1) */}
+      <div className="space-y-2 rounded-md border border-pearl bg-off-white px-3 py-2">
+        <label className="flex items-start gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={sendAsDecision}
+            onChange={(e) => {
+              setHasInteracted(true);
+              setSendAsDecision(e.target.checked);
+            }}
+            className="mt-0.5 accent-clay"
+          />
+          <span>
+            <span className="block font-mono text-[0.62rem] uppercase tracking-[0.06em] text-aged-oak">
+              Send as decision option
+            </span>
+            <span className="block text-[0.78rem] text-mocha leading-snug">
+              Turn this capture into a client decision so they can approve it.
+              Links the product to the decision option.
+            </span>
+          </span>
+        </label>
+
+        {sendAsDecision && (
+          <div className="space-y-2 pt-1">
+            <DecisionTargetSelector
+              designerClientId={decisionDesignerClientId}
+              projectId={decisionProjectId}
+              roomId={decisionRoomId}
+              onDesignerClientChange={(dcId, clientId) => {
+                setHasInteracted(true);
+                setDecisionDesignerClientId(dcId as UUID | null);
+                setDecisionClientProfileId(clientId as UUID | null);
+              }}
+              onProjectChange={(v) => {
+                setHasInteracted(true);
+                setDecisionProjectId(v as UUID | null);
+              }}
+              onRoomChange={(v) => {
+                setHasInteracted(true);
+                setDecisionRoomId(v as UUID | null);
+              }}
+            />
+
+            <label className="block">
+              <span className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">
+                Decision title <span className="text-aged-oak">(optional)</span>
+              </span>
+              <input
+                type="text"
+                value={decisionTitle}
+                onChange={(e) => {
+                  setHasInteracted(true);
+                  setDecisionTitle(e.target.value.slice(0, 120));
+                }}
+                placeholder={
+                  productName ? `Approve: ${productName}` : 'Approve this product'
+                }
+                className="w-full px-3 py-2 text-[0.85rem] rounded-[3px] border border-pearl
+                         focus:border-clay focus:ring-1 focus:ring-clay outline-none placeholder-aged-oak"
+              />
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Quick note */}
