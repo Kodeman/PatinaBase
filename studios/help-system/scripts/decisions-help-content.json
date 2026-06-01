@@ -1,0 +1,105 @@
+[
+  {
+    "_id": "helpContent.designer-portal--decisions--list-intro",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/decisions/list-intro",
+    "persona": "all",
+    "contentType": "fieldHelper",
+    "tooltipContent": {
+      "body": "Every open choice waiting on a client, across all your projects. Overdue decisions block procurement and put delivery dates at risk — clear them first."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--decisions--metric--open-decisions",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/decisions/metric/open-decisions",
+    "persona": "all",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "eyebrow": "Open decisions",
+      "body": "Decisions you have sent that are still awaiting a client response. Counted while status is pending — resolved and draft decisions are excluded."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--decisions--metric--overdue",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/decisions/metric/overdue",
+    "persona": "all",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "eyebrow": "Overdue",
+      "body": "A pending decision whose response deadline has passed. Overdue items with a blocking status hold up the linked FF&E items in procurement."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--decisions--metric--avg-response",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/decisions/metric/avg-response",
+    "persona": "all",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "eyebrow": "Avg response",
+      "body": "The average days between sending a decision and the client responding, across resolved decisions. Lower means a faster-moving project."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--decisions--metric--resolution-rate",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/decisions/metric/resolution-rate",
+    "persona": "all",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "eyebrow": "Resolution rate",
+      "body": "The share of decisions resolved on or before their deadline this quarter. A high rate keeps ETAs and procurement on schedule."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--decisions--empty--all-open",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/decisions/empty/all-open",
+    "persona": "all",
+    "contentType": "emptyState",
+    "emptyStateContent": {
+      "icon": "◇",
+      "heading": "No open decisions",
+      "description": "Nothing is waiting on a client right now. When a project needs a client to choose between options, send a decision from the project to track the response here.",
+      "primaryActionLabel": "Go to projects"
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--decisions--empty--overdue",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/decisions/empty/overdue",
+    "persona": "all",
+    "contentType": "emptyState",
+    "emptyStateContent": {
+      "icon": "★",
+      "heading": "Nothing overdue",
+      "description": "Every pending decision is still inside its response window. Keep an eye on the Due This Week tab so nothing slips past its deadline and blocks procurement."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--decisions--empty--due-this-week",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/decisions/empty/due-this-week",
+    "persona": "all",
+    "contentType": "emptyState",
+    "emptyStateContent": {
+      "icon": "◎",
+      "heading": "Nothing due this week",
+      "description": "No pending decisions have a deadline in the next seven days. Decisions appear here as their response windows approach so you can chase them before they go overdue."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--decisions--empty--resolved",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/decisions/empty/resolved",
+    "persona": "all",
+    "contentType": "emptyState",
+    "emptyStateContent": {
+      "icon": "◉",
+      "heading": "No resolved decisions yet",
+      "description": "Once a client responds to a decision it moves here as a record of what was chosen and when. Resolved decisions feed your average-response and resolution-rate metrics."
+    }
+  }
+]
