@@ -68,8 +68,25 @@ async function setupAuthentication(page: Page): Promise<void> {
   );
 }
 
+/**
+ * localStorage key the help-system uses to remember the first-sign-in welcome
+ * modal was already shown (see components/help/first-signin-tour.tsx). The modal
+ * renders a <dialog> that makes the rest of the page inert/aria-hidden, which
+ * breaks specs written before the modal existed. Pre-set it so the modal never
+ * opens during e2e. (The guided tour only starts from the modal's CTA, so
+ * suppressing the modal also suppresses the tour.)
+ */
+const WELCOME_SHOWN_KEY = 'help-system.welcome-shown.first-project-walkthrough';
+
 export const test = base.extend<AuthFixtures>({
   authenticatedPage: async ({ page }, use) => {
+    await page.addInitScript((key) => {
+      try {
+        window.localStorage.setItem(key, '1');
+      } catch {
+        /* localStorage may be unavailable; ignore */
+      }
+    }, WELCOME_SHOWN_KEY);
     await setupAuthentication(page);
     await use(page);
   },
