@@ -91,6 +91,23 @@ function setTableResult(table: string, result: BuilderResult): MockBuilder {
   return b;
 }
 
+// Realtime channel stub — `.channel().on().on().on().subscribe()` chain.
+// `on` returns the channel so it's infinitely chainable; `subscribe` returns it
+// too. `removeChannel` is a spy we assert the cleanup calls.
+const channelOn = vi.fn();
+const channelSubscribe = vi.fn();
+const fakeChannel: Record<string, unknown> = {};
+fakeChannel.on = vi.fn((..._args: unknown[]) => {
+  channelOn(..._args);
+  return fakeChannel;
+});
+fakeChannel.subscribe = vi.fn(() => {
+  channelSubscribe();
+  return fakeChannel;
+});
+const channelFactory = vi.fn(() => fakeChannel);
+const removeChannel = vi.fn();
+
 const supabaseClient = {
   auth: {
     getUser: vi.fn(),
@@ -103,6 +120,8 @@ const supabaseClient = {
     return builders[table];
   }),
   rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+  channel: channelFactory,
+  removeChannel,
 };
 
 vi.mock('@supabase/ssr', () => ({
@@ -118,10 +137,25 @@ vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries }),
 }));
 
+// React stub — only `useEffect` is exercised (by useDecisionRealtime). Run the
+// effect synchronously and stash its cleanup so tests can invoke it.
+let lastEffectCleanup: (() => void) | void;
+vi.mock('react', () => ({
+  useEffect: (fn: () => (() => void) | void) => {
+    lastEffectCleanup = fn();
+  },
+}));
+
 // Import AFTER mocks are wired up.
 import {
   useDecisionMetrics,
   useCreateDecision,
+  useUpdateDecision,
+  useDeleteDecision,
+  usePublishDraftDecision,
+  useDecisionRealtime,
+  useUpdateDecisionStatus,
+  isValidDecisionTransition,
   useSelectDecisionOption,
   useApplyDecisionOverride,
   useMarkDecisionViewed,
@@ -154,6 +188,11 @@ beforeEach(() => {
   supabaseClient.rpc.mockReset();
   supabaseClient.rpc.mockResolvedValue({ data: null, error: null });
   invalidateQueries.mockReset();
+  channelFactory.mockClear();
+  channelOn.mockClear();
+  channelSubscribe.mockClear();
+  removeChannel.mockClear();
+  lastEffectCleanup = undefined;
 });
 
 describe('useDecisionMetrics', () => {
@@ -295,11 +334,14 @@ describe('useSelectDecisionOption', () => {
       decisionId: 'dec-1',
     });
 
-    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
+    // apply_decision + notify_decision_resolved.
     expect(supabaseClient.rpc).toHaveBeenCalledWith('apply_decision', {
       p_decision_id: 'dec-1',
       p_selected_option_id: 'opt-7',
       p_selected_by: 'user-42',
+    });
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('notify_decision_resolved', {
+      p_decision_id: 'dec-1',
     });
   });
 
@@ -397,12 +439,15 @@ describe('useApplyDecisionOverride', () => {
       consent_evidence: 'Client confirmed by phone 2026-04-28',
     });
 
-    // RPC fired with p_selected_by = the looked-up client_id.
-    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
+    // apply_decision fired with p_selected_by = the looked-up client_id,
+    // followed by notify_decision_resolved.
     expect(supabaseClient.rpc).toHaveBeenCalledWith('apply_decision', {
       p_decision_id: 'dec-1',
       p_selected_option_id: 'opt-7',
       p_selected_by: 'client-99',
+    });
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('notify_decision_resolved', {
+      p_decision_id: 'dec-1',
     });
   });
 
@@ -536,5 +581,256 @@ describe('useAllDecisions filters', () => {
     const ins = callsTo(builder, 'in');
     expect(ins).toHaveLength(1);
     expect(ins[0].args).toEqual(['status', ['pending', 'responded']]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PT-D-1-4 — new spine hooks
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useCreateDecision notify wiring', () => {
+  it('fires notify_decision_required when status is pending (default)', async () => {
+    setTableResult('client_decisions', {
+      data: { id: 'dec-1', designer_client_id: 'dc-1', project_id: null },
+      error: null,
+    });
+    const config = useCreateDecision() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    await config.mutationFn({
+      designerClientId: 'dc-1',
+      title: 'Pick a sofa',
+      options: [{ name: 'Velvet' }],
+    });
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('notify_decision_required', {
+      p_decision_id: 'dec-1',
+    });
+  });
+
+  it('does NOT fire notify_decision_required when status is draft', async () => {
+    setTableResult('client_decisions', {
+      data: { id: 'dec-2', designer_client_id: 'dc-1', project_id: null },
+      error: null,
+    });
+    const config = useCreateDecision() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    await config.mutationFn({
+      designerClientId: 'dc-1',
+      title: 'Draft',
+      status: 'draft',
+      options: [],
+    });
+    expect(supabaseClient.rpc).not.toHaveBeenCalledWith(
+      'notify_decision_required',
+      expect.anything(),
+    );
+  });
+});
+
+describe('isValidDecisionTransition', () => {
+  it('accepts the legal transitions', () => {
+    expect(isValidDecisionTransition('draft', 'pending')).toBe(true);
+    expect(isValidDecisionTransition('pending', 'responded')).toBe(true);
+    expect(isValidDecisionTransition('pending', 'expired')).toBe(true);
+    expect(isValidDecisionTransition('responded', 'pending')).toBe(true);
+    expect(isValidDecisionTransition('expired', 'pending')).toBe(true);
+    // no-op is always allowed
+    expect(isValidDecisionTransition('pending', 'pending')).toBe(true);
+  });
+
+  it('rejects illegal transitions', () => {
+    expect(isValidDecisionTransition('draft', 'responded')).toBe(false);
+    expect(isValidDecisionTransition('draft', 'expired')).toBe(false);
+    expect(isValidDecisionTransition('responded', 'expired')).toBe(false);
+    expect(isValidDecisionTransition('expired', 'responded')).toBe(false);
+  });
+});
+
+describe('useUpdateDecisionStatus transition validation', () => {
+  it('throws on an illegal transition when currentStatus is provided', async () => {
+    const config = useUpdateDecisionStatus() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    await expect(
+      config.mutationFn({
+        decisionId: 'dec-1',
+        status: 'responded',
+        currentStatus: 'draft',
+      }),
+    ).rejects.toThrow(/Invalid decision status transition/);
+  });
+
+  it('allows a legal transition and writes the update', async () => {
+    setTableResult('client_decisions', {
+      data: { id: 'dec-1', designer_client_id: 'dc-1' },
+      error: null,
+    });
+    const config = useUpdateDecisionStatus() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    await config.mutationFn({
+      decisionId: 'dec-1',
+      status: 'pending',
+      currentStatus: 'draft',
+    });
+    const builder = builders['client_decisions'];
+    const updates = callsTo(builder, 'update');
+    expect(updates).toHaveLength(1);
+    expect(updates[0].args[0]).toEqual({ status: 'pending' });
+  });
+
+  it('skips client-side validation when currentStatus is omitted', async () => {
+    setTableResult('client_decisions', {
+      data: { id: 'dec-1', designer_client_id: 'dc-1' },
+      error: null,
+    });
+    const config = useUpdateDecisionStatus() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    // No throw even for an otherwise-illegal move — DB guard is the backstop.
+    await expect(
+      config.mutationFn({ decisionId: 'dec-1', status: 'expired' }),
+    ).resolves.toBeTruthy();
+  });
+});
+
+describe('useUpdateDecision', () => {
+  it('patches only provided fields and replaces options when supplied', async () => {
+    setTableResult('client_decisions', {
+      data: { id: 'dec-1', designer_client_id: 'dc-1', project_id: 'proj-1' },
+      error: null,
+    });
+    setTableResult('client_decision_options', { data: null, error: null });
+
+    const config = useUpdateDecision() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    await config.mutationFn({
+      decisionId: 'dec-1',
+      designerClientId: 'dc-1',
+      title: 'New title',
+      dueDate: '2026-07-01T00:00:00Z',
+      options: [{ name: 'Option A', productId: 'prod-9' }],
+    });
+
+    const decBuilder = builders['client_decisions'];
+    const updates = callsTo(decBuilder, 'update');
+    expect(updates).toHaveLength(1);
+    expect(updates[0].args[0]).toEqual({
+      title: 'New title',
+      due_date: '2026-07-01T00:00:00Z',
+    });
+
+    const optBuilder = builders['client_decision_options'];
+    expect(callsTo(optBuilder, 'delete')).toHaveLength(1);
+    const inserts = callsTo(optBuilder, 'insert');
+    expect(inserts).toHaveLength(1);
+    expect((inserts[0].args[0] as Record<string, unknown>[])[0]).toMatchObject({
+      decision_id: 'dec-1',
+      name: 'Option A',
+      product_id: 'prod-9',
+      sort_order: 0,
+    });
+  });
+
+  it('does not delete/replace options when options is omitted', async () => {
+    setTableResult('client_decisions', {
+      data: { id: 'dec-1', designer_client_id: 'dc-1', project_id: null },
+      error: null,
+    });
+    setTableResult('client_decision_options', { data: null, error: null });
+
+    const config = useUpdateDecision() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    await config.mutationFn({
+      decisionId: 'dec-1',
+      designerClientId: 'dc-1',
+      context: 'Updated context',
+    });
+
+    const optBuilder = builders['client_decision_options'];
+    expect(callsTo(optBuilder, 'delete')).toHaveLength(0);
+    expect(callsTo(optBuilder, 'insert')).toHaveLength(0);
+  });
+});
+
+describe('useDeleteDecision', () => {
+  it('deletes the decision and returns its ids', async () => {
+    setTableResult('client_decisions', { data: null, error: null });
+    const config = useDeleteDecision() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    const result = await config.mutationFn({
+      decisionId: 'dec-1',
+      designerClientId: 'dc-1',
+      projectId: 'proj-1',
+    });
+    const builder = builders['client_decisions'];
+    expect(callsTo(builder, 'delete')).toHaveLength(1);
+    const eqs = callsTo(builder, 'eq');
+    expect(eqs[0].args).toEqual(['id', 'dec-1']);
+    expect(result).toEqual({
+      decisionId: 'dec-1',
+      designerClientId: 'dc-1',
+      projectId: 'proj-1',
+    });
+  });
+});
+
+describe('usePublishDraftDecision', () => {
+  it('flips status to pending, stamps sent_at, and fires notify_decision_required', async () => {
+    setTableResult('client_decisions', {
+      data: { id: 'dec-1', designer_client_id: 'dc-1', project_id: null },
+      error: null,
+    });
+    const config = usePublishDraftDecision() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    await config.mutationFn({ decisionId: 'dec-1' });
+
+    const builder = builders['client_decisions'];
+    const updates = callsTo(builder, 'update');
+    expect(updates).toHaveLength(1);
+    const payload = updates[0].args[0] as Record<string, unknown>;
+    expect(payload.status).toBe('pending');
+    expect(typeof payload.sent_at).toBe('string');
+    // guarded to only flip draft rows
+    const eqs = callsTo(builder, 'eq');
+    expect(eqs.some((c) => c.args[0] === 'status' && c.args[1] === 'draft')).toBe(true);
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('notify_decision_required', {
+      p_decision_id: 'dec-1',
+    });
+  });
+});
+
+describe('useDecisionRealtime', () => {
+  it('subscribes to the three decision tables and cleans up on unmount', () => {
+    useDecisionRealtime('dec-1');
+
+    expect(channelFactory).toHaveBeenCalledWith('decision:dec-1');
+    // Three postgres_changes subscriptions: decision row, options, comments.
+    expect(channelOn).toHaveBeenCalledTimes(3);
+    const tables = channelOn.mock.calls.map(
+      (c) => (c[1] as { table: string }).table,
+    );
+    expect(tables).toEqual([
+      'client_decisions',
+      'client_decision_options',
+      'decision_comments',
+    ]);
+    expect(channelSubscribe).toHaveBeenCalledTimes(1);
+
+    // Effect cleanup removes the channel.
+    expect(typeof lastEffectCleanup).toBe('function');
+    (lastEffectCleanup as () => void)();
+    expect(removeChannel).toHaveBeenCalledTimes(1);
+  });
+
+  it('is a no-op when decisionId is undefined', () => {
+    useDecisionRealtime(undefined);
+    expect(channelFactory).not.toHaveBeenCalled();
   });
 });

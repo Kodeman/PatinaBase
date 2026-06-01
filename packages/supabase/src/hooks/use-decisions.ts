@@ -1,7 +1,31 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { createBrowserClient } from '../client';
 
 const getSupabase = () => createBrowserClient();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Status-transition validation (mirrors the DB guard in migration 00171).
+// Validated client-side so the UI can reject illegal moves before the round
+// trip; the DB trigger is the source of truth and rejects anything that slips
+// through. Keep these two in sync.
+// ─────────────────────────────────────────────────────────────────────────────
+const VALID_STATUS_TRANSITIONS: Record<DecisionStatus, DecisionStatus[]> = {
+  draft: ['pending'],
+  pending: ['responded', 'expired'],
+  responded: ['pending'],
+  expired: ['pending'],
+};
+
+/** Returns true when `from → to` is a legal decision status transition. */
+export function isValidDecisionTransition(
+  from: DecisionStatus,
+  to: DecisionStatus,
+): boolean {
+  if (from === to) return true;
+  return VALID_STATUS_TRANSITIONS[from]?.includes(to) ?? false;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -82,6 +106,34 @@ export interface CreateDecisionInput {
     quantity?: number;
     costDeltaCents?: number;
     leadTimeDaysDelta?: number;
+  }[];
+}
+
+export interface UpdateDecisionInput {
+  decisionId: string;
+  /** The designer_client_id, used to scope cache invalidation. */
+  designerClientId: string;
+  projectId?: string | null;
+  title?: string;
+  context?: string | null;
+  dueDate?: string | null;
+  linkedPhase?: string | null;
+  decisionType?: DecisionType;
+  blockingStatus?: BlockingStatus;
+  /**
+   * When provided, the decision's options are fully replaced with this set
+   * (delete-then-insert). Omit to leave options untouched.
+   */
+  options?: {
+    name: string;
+    imageUrl?: string;
+    designerNote?: string;
+    isRecommended?: boolean;
+    price?: number;
+    quantity?: number;
+    costDeltaCents?: number;
+    leadTimeDaysDelta?: number;
+    productId?: string;
   }[];
 }
 
@@ -406,6 +458,18 @@ export function useCreateDecision() {
         }
       }
 
+      // If the decision is sent immediately (not a draft), fire the
+      // decision_required notification to the client. Non-fatal: a notify
+      // failure must not undo a successfully created decision.
+      if ((input.status ?? 'pending') === 'pending') {
+        const { error: notifyError } = await supabase.rpc('notify_decision_required', {
+          p_decision_id: decision.id,
+        });
+        if (notifyError) {
+          console.warn('useCreateDecision: notify_decision_required failed', notifyError);
+        }
+      }
+
       return decision as ClientDecision;
     },
     onSuccess: (data) => {
@@ -430,12 +494,26 @@ export function useUpdateDecisionStatus() {
     mutationFn: async ({
       decisionId,
       status,
+      currentStatus,
     }: {
       decisionId: string;
       status: ClientDecision['status'];
+      /**
+       * The decision's current status, used to validate the transition
+       * client-side before the round trip. When provided and the move is
+       * illegal, the mutation throws without touching the DB. The 00171 DB
+       * trigger is the source of truth and rejects anything that slips through.
+       */
+      currentStatus?: ClientDecision['status'];
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
+
+      if (currentStatus && !isValidDecisionTransition(currentStatus, status)) {
+        throw new Error(
+          `Invalid decision status transition: ${currentStatus} -> ${status}`,
+        );
+      }
 
       const { data, error } = await supabase
         .from('client_decisions')
@@ -454,6 +532,235 @@ export function useUpdateDecisionStatus() {
       queryClient.invalidateQueries({ queryKey: ['decision-metrics'] });
     },
   });
+}
+
+/**
+ * Update a decision's editable fields (title / context / due_date /
+ * decision_type / blocking_status / linked_phase / project_id). When
+ * `options` is supplied, the decision's options are fully replaced
+ * (delete-then-insert). Status is intentionally NOT editable here — use
+ * useUpdateDecisionStatus / usePublishDraftDecision for status moves.
+ */
+export function useUpdateDecision() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: UpdateDecisionInput) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      // Build the patch only from fields the caller actually provided so we
+      // never accidentally null out an untouched column.
+      const patch: Record<string, unknown> = {};
+      if (input.title !== undefined) patch.title = input.title;
+      if (input.context !== undefined) patch.context = input.context;
+      if (input.dueDate !== undefined) patch.due_date = input.dueDate;
+      if (input.linkedPhase !== undefined) patch.linked_phase = input.linkedPhase;
+      if (input.decisionType !== undefined) patch.decision_type = input.decisionType;
+      if (input.blockingStatus !== undefined) patch.blocking_status = input.blockingStatus;
+      if (input.projectId !== undefined) patch.project_id = input.projectId;
+
+      if (Object.keys(patch).length > 0) {
+        const { error: updateError } = await supabase
+          .from('client_decisions')
+          .update(patch)
+          .eq('id', input.decisionId);
+        if (updateError) throw updateError;
+      }
+
+      // Replace options when supplied.
+      if (input.options !== undefined) {
+        const { error: deleteError } = await supabase
+          .from('client_decision_options')
+          .delete()
+          .eq('decision_id', input.decisionId);
+        if (deleteError) throw deleteError;
+
+        if (input.options.length > 0) {
+          const { error: optionsError } = await supabase
+            .from('client_decision_options')
+            .insert(
+              input.options.map((opt, i) => ({
+                decision_id: input.decisionId,
+                name: opt.name,
+                image_url: opt.imageUrl || null,
+                designer_note: opt.designerNote || null,
+                is_recommended: opt.isRecommended || false,
+                price: opt.price ?? null,
+                quantity: opt.quantity ?? 1,
+                cost_delta_cents: opt.costDeltaCents ?? null,
+                lead_time_days_delta: opt.leadTimeDaysDelta ?? null,
+                product_id: opt.productId || null,
+                sort_order: i,
+              })),
+            );
+          if (optionsError) throw optionsError;
+        }
+      }
+
+      const { data, error } = await supabase
+        .from('client_decisions')
+        .select(`
+          *,
+          options:client_decision_options!decision_id(*)
+        `)
+        .eq('id', input.decisionId)
+        .single();
+      if (error) throw error;
+      return data as ClientDecision;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['client-decisions', data.designer_client_id] });
+      queryClient.invalidateQueries({ queryKey: ['client-decision', data.id] });
+      queryClient.invalidateQueries({ queryKey: ['all-decisions'] });
+      queryClient.invalidateQueries({ queryKey: ['decision-metrics'] });
+      if (data.project_id) {
+        queryClient.invalidateQueries({ queryKey: ['project-decisions', data.project_id] });
+      }
+    },
+  });
+}
+
+/**
+ * Delete a decision (and, via ON DELETE CASCADE, its options, comments,
+ * overrides, events, and notifications).
+ */
+export function useDeleteDecision() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      decisionId,
+      designerClientId,
+      projectId,
+    }: {
+      decisionId: string;
+      designerClientId: string;
+      projectId?: string | null;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { error } = await supabase
+        .from('client_decisions')
+        .delete()
+        .eq('id', decisionId);
+      if (error) throw error;
+      return { decisionId, designerClientId, projectId };
+    },
+    onSuccess: ({ designerClientId, decisionId, projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['client-decisions', designerClientId] });
+      queryClient.invalidateQueries({ queryKey: ['client-decision', decisionId] });
+      queryClient.invalidateQueries({ queryKey: ['all-decisions'] });
+      queryClient.invalidateQueries({ queryKey: ['decision-metrics'] });
+      if (projectId) {
+        queryClient.invalidateQueries({ queryKey: ['project-decisions', projectId] });
+      }
+    },
+  });
+}
+
+/**
+ * Publish a draft decision: flip status draft → pending, stamp sent_at, and
+ * fire the decision_required notification to the client. The 00171 DB guard
+ * enforces that only draft rows can be published this way.
+ */
+export function usePublishDraftDecision() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ decisionId }: { decisionId: string }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      const { data, error } = await supabase
+        .from('client_decisions')
+        .update({ status: 'pending', sent_at: new Date().toISOString() })
+        .eq('id', decisionId)
+        .eq('status', 'draft')
+        .select()
+        .single();
+      if (error) throw error;
+
+      const { error: notifyError } = await supabase.rpc('notify_decision_required', {
+        p_decision_id: decisionId,
+      });
+      if (notifyError) {
+        console.warn('usePublishDraftDecision: notify_decision_required failed', notifyError);
+      }
+
+      return data as ClientDecision;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['client-decisions', data.designer_client_id] });
+      queryClient.invalidateQueries({ queryKey: ['client-decision', data.id] });
+      queryClient.invalidateQueries({ queryKey: ['all-decisions'] });
+      queryClient.invalidateQueries({ queryKey: ['decision-metrics'] });
+      if (data.project_id) {
+        queryClient.invalidateQueries({ queryKey: ['project-decisions', data.project_id] });
+      }
+    },
+  });
+}
+
+/**
+ * Subscribe to live changes on a single decision: the decision row itself,
+ * its options, and its comment thread. Invalidates the relevant React Query
+ * caches on any change so the detail page reflects client responses live.
+ *
+ * Mirrors the realtime pattern in use-comms.ts (useThreadRealtime).
+ */
+export function useDecisionRealtime(decisionId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!decisionId) return;
+    const supabase = getSupabase();
+
+    const invalidate = () => {
+      queryClient.invalidateQueries({ queryKey: ['client-decision', decisionId] });
+      queryClient.invalidateQueries({ queryKey: ['decision-comments', decisionId] });
+      queryClient.invalidateQueries({ queryKey: ['all-decisions'] });
+      queryClient.invalidateQueries({ queryKey: ['decision-metrics'] });
+    };
+
+    const channel: RealtimeChannel = supabase
+      .channel(`decision:${decisionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'client_decisions',
+          filter: `id=eq.${decisionId}`,
+        },
+        invalidate,
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'client_decision_options',
+          filter: `decision_id=eq.${decisionId}`,
+        },
+        invalidate,
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'decision_comments',
+          filter: `decision_id=eq.${decisionId}`,
+        },
+        invalidate,
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [decisionId, queryClient]);
 }
 
 /**
@@ -521,6 +828,14 @@ export function useSelectDecisionOption() {
         p_selected_by: user?.id ?? null,
       });
       if (rpcError) throw rpcError;
+
+      // Decision is now resolved — notify the owning designer. Non-fatal.
+      const { error: notifyError } = await supabase.rpc('notify_decision_resolved', {
+        p_decision_id: decisionId,
+      });
+      if (notifyError) {
+        console.warn('useSelectDecisionOption: notify_decision_resolved failed', notifyError);
+      }
 
       const { data, error } = await supabase
         .from('client_decisions')
@@ -600,6 +915,14 @@ export function useApplyDecisionOverride() {
         p_selected_by: clientUserId ?? user.id,
       });
       if (rpcError) throw rpcError;
+
+      // Decision is now resolved — notify the owning designer. Non-fatal.
+      const { error: notifyError } = await supabase.rpc('notify_decision_resolved', {
+        p_decision_id: decisionId,
+      });
+      if (notifyError) {
+        console.warn('useApplyDecisionOverride: notify_decision_resolved failed', notifyError);
+      }
 
       const { data, error } = await supabase
         .from('client_decisions')
