@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina · Procurement Workspace · v1 Scope</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--sf:#FFFFFF;--fd:'Playfair Display',Georgia,serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace}
+body{font-family:var(--fb);color:var(--ch);line-height:1.6;-webkit-font-smoothing:antialiased;background:var(--ch)}
+.slide{min-height:100vh;display:flex;align-items:center;padding:clamp(2rem,5vw,5rem);position:relative;overflow:hidden}
+.in{width:100%;max-width:1180px;margin:0 auto}
+.num{position:absolute;top:2rem;right:2rem;font-family:var(--fm);font-size:0.55rem;letter-spacing:0.08em;text-transform:uppercase}
+.lg{position:absolute;top:2rem;left:2rem;font-family:var(--fd);font-weight:500;font-size:0.62rem;letter-spacing:0.22em;text-transform:uppercase}
+.lt{background:var(--ow)}.lt .num,.lt .lg{color:var(--ao)}
+.dk{background:var(--ch);color:var(--ow)}.dk .num,.dk .lg{color:rgba(250,247,242,0.25)}
+.wm{background:linear-gradient(155deg,#e8ddd0,#ddd0c0 50%,#ede6dc)}.wm .num,.wm .lg{color:var(--ao)}
+
+.strata{display:flex;flex-direction:column;gap:5px;margin-bottom:2rem}
+.strata div{height:2px;border-radius:1px}
+.strata div:nth-child(1){width:100%;background:var(--cl)}
+.strata div:nth-child(2){width:75%;background:var(--cl);opacity:.5}
+.strata div:nth-child(3){width:50%;background:var(--cl);opacity:.25}
+
+.eyebrow{font-family:var(--fm);font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--cl);margin-bottom:0.75rem}
+h1{font-family:var(--fd);font-weight:400;font-size:clamp(2rem,4.5vw,3.4rem);line-height:1.1;letter-spacing:-0.02em;margin-bottom:0.5rem}
+h1 em,h2 em,h3 em{font-style:italic;color:var(--cl)}
+h2{font-family:var(--fd);font-weight:400;font-size:clamp(1.4rem,3vw,2.1rem);line-height:1.2;letter-spacing:-0.02em;margin-bottom:0.5rem}
+h3{font-family:var(--fd);font-weight:500;font-size:1.05rem;margin-bottom:0.4rem}
+.dk h1,.dk h2,.dk h3{color:var(--ow)}
+.body{font-family:var(--fb);font-size:0.92rem;line-height:1.7;color:var(--mo);max-width:640px}
+.dk .body{color:rgba(250,247,242,0.55)}
+.meta{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--ao)}
+.dk .meta{color:rgba(250,247,242,0.3)}
+.lbl{font-family:var(--fb);font-weight:500;font-size:0.74rem;color:var(--ch)}
+.sub{font-family:var(--fb);font-size:0.62rem;color:var(--ao)}
+.dk .lbl{color:var(--ow)}.dk .sub{color:rgba(250,247,242,0.5)}
+
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:2rem}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.25rem}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+@media(max-width:768px){.g2,.g3,.g4{grid-template-columns:1fr}}
+
+.card{padding:1.1rem;border:1px solid var(--pe);border-radius:6px;background:var(--sf)}
+.card-i{font-family:var(--fd);font-size:1.3rem;color:var(--cl);margin-bottom:0.3rem;line-height:1;font-style:italic}
+.card-t{font-family:var(--fb);font-weight:500;font-size:0.85rem;color:var(--ch);margin-bottom:0.25rem}
+.card-d{font-family:var(--fb);font-size:0.72rem;color:var(--ao);line-height:1.55}
+.dk .card{background:rgba(250,247,242,0.03);border-color:rgba(250,247,242,0.08)}
+.dk .card-t{color:var(--ow)}.dk .card-d{color:rgba(250,247,242,0.5)}
+
+.pq{padding:2rem 0;border-top:1px solid var(--pe);border-bottom:1px solid var(--pe);margin:1.5rem 0}
+.pq blockquote{font-family:var(--fd);font-size:clamp(1.05rem,2.2vw,1.45rem);font-style:italic;line-height:1.45;max-width:680px}
+.pq cite{display:block;font-family:var(--fm);font-size:0.55rem;font-style:normal;text-transform:uppercase;letter-spacing:0.06em;color:var(--ao);margin-top:0.6rem}
+.dk .pq{border-color:rgba(250,247,242,0.08)}
+.dk .pq blockquote{color:var(--ow)}
+
+.frame{background:var(--sf);border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04),0 12px 36px rgba(0,0,0,0.08);margin:1rem 0;position:relative}
+.fr-bar{display:flex;align-items:center;padding:0 1rem;height:36px;background:var(--sf);border-bottom:1px solid var(--pe);gap:1rem}
+.fr-bar .ll{font-family:var(--fd);font-weight:500;font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase}
+.fr-bar .nv{display:flex;gap:0.85rem;flex:1}
+.fr-bar .nv span{font-family:var(--fb);font-size:0.62rem;color:var(--ao)}
+.fr-bar .nv span.on{color:var(--ch);border-bottom:2px solid var(--cl);padding-bottom:1px}
+.fr-bar .ut{display:flex;gap:0.4rem;font-size:0.7rem;color:var(--ao);align-items:center}
+.fr-avt{width:20px;height:20px;border-radius:50%;background:var(--pe);display:flex;align-items:center;justify-content:center;font-family:var(--fb);font-weight:500;font-size:0.48rem;color:var(--mo)}
+.fr-sub{padding:0.4rem 1rem;background:var(--ow);border-bottom:1px solid var(--pe);display:flex;align-items:center;gap:0.5rem;font-family:var(--fm);font-size:0.5rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--ao)}
+.fr-sub .seg{padding:0.2rem 0.5rem;border-radius:3px}
+.fr-sub .seg.on{background:rgba(196,165,123,0.1);color:var(--cl);font-weight:600}
+.fr-c{padding:1.25rem;background:var(--ow)}
+
+.st{font-family:var(--fm);font-size:0.45rem;text-transform:uppercase;letter-spacing:0.04em;padding:2px 6px;border-radius:2px;display:inline-block;white-space:nowrap}
+.st-act{color:var(--cl);background:rgba(196,165,123,0.08)}
+.st-dn{color:var(--sa);background:rgba(168,181,160,0.1)}
+.st-pn{color:var(--db);background:rgba(139,156,173,0.08)}
+.st-od{color:var(--te);background:rgba(212,160,144,0.1)}
+.st-wn{color:var(--gh);background:rgba(232,197,71,0.08)}
+
+.prog{height:3px;background:var(--pe);border-radius:2px;overflow:hidden}
+.pf{height:100%;border-radius:2px}
+
+.pain{padding:1.25rem;border-left:3px solid var(--te);background:rgba(212,160,144,0.04);border-radius:0 6px 6px 0;margin-bottom:0.75rem}
+.pain-l{font-family:var(--fm);font-size:0.48rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--te);margin-bottom:0.3rem}
+.pain-t{font-family:var(--fd);font-weight:500;font-size:0.95rem;color:var(--ch);margin-bottom:0.3rem}
+.pain-d{font-family:var(--fb);font-size:0.75rem;color:var(--mo);line-height:1.6}
+.dk .pain{background:rgba(212,160,144,0.06)}
+.dk .pain-t{color:var(--ow)}.dk .pain-d{color:rgba(250,247,242,0.6)}
+
+.decision{padding:1.25rem;border-left:3px solid var(--sa);background:rgba(168,181,160,0.04);border-radius:0 6px 6px 0;margin-bottom:0.75rem}
+.decision-l{font-family:var(--fm);font-size:0.48rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--sa);margin-bottom:0.3rem}
+.decision-t{font-family:var(--fd);font-weight:500;font-size:0.95rem;color:var(--ch);margin-bottom:0.3rem}
+.decision-d{font-family:var(--fb);font-size:0.75rem;color:var(--mo);line-height:1.6}
+.dk .decision{background:rgba(168,181,160,0.06)}
+.dk .decision-t{color:var(--ow)}.dk .decision-d{color:rgba(250,247,242,0.6)}
+
+.row{display:grid;gap:0.6rem;padding:0.55rem 0;border-bottom:1px solid rgba(229,226,221,0.5);align-items:center;font-size:0.7rem}
+.row.head{padding:0.3rem 0;border-bottom:1px solid var(--pe);margin-bottom:0.2rem;font-family:var(--fm);font-size:0.45rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--ao)}
+.row.last{border-bottom:none}
+
+.vbox-n{font-family:var(--fd);font-weight:500;font-size:0.88rem}
+
+.btn{font-family:var(--fb);font-weight:500;font-size:0.7rem;padding:0.4rem 0.75rem;border-radius:3px;display:inline-block;cursor:default}
+.btn-p{background:var(--ch);color:var(--ow)}
+.btn-c{background:var(--cl);color:white}
+.btn-s{border:1px solid var(--pe);color:var(--ch);background:transparent}
+.btn-g{color:var(--ao);background:transparent}
+
+.cal{display:grid;grid-template-columns:80px repeat(7,1fr);gap:1px;background:var(--pe);border:1px solid var(--pe);border-radius:5px;overflow:hidden}
+.cal-h{padding:0.4rem;background:var(--sf);font-family:var(--fm);font-size:0.45rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--ao);text-align:center}
+.cal-h.first{text-align:left;padding-left:0.6rem}
+.cal-r-l{padding:0.5rem 0.6rem;background:var(--sf);font-family:var(--fb);font-weight:500;font-size:0.7rem;border-right:1px solid var(--pe);display:flex;align-items:center}
+.cal-c{padding:0.4rem;background:var(--sf);min-height:50px;font-family:var(--fb);font-size:0.6rem;position:relative;display:flex;flex-direction:column;gap:0.2rem}
+.cal-evt{padding:2px 5px;border-radius:2px;font-family:var(--fb);font-size:0.55rem;font-weight:500;line-height:1.2}
+.cal-evt.del{background:rgba(168,181,160,0.15);color:var(--sa);border-left:2px solid var(--sa)}
+.cal-evt.ins{background:rgba(196,165,123,0.15);color:var(--cl);border-left:2px solid var(--cl)}
+.cal-evt.warn{background:rgba(232,197,71,0.15);color:var(--gh);border-left:2px solid var(--gh)}
+.cal-evt.risk{background:rgba(212,160,144,0.15);color:var(--te);border-left:2px solid var(--te)}
+
+.tab{display:flex;gap:0;border-bottom:1px solid var(--pe);margin-bottom:1rem}
+.tab-i{padding:0.55rem 1rem;font-family:var(--fb);font-size:0.7rem;color:var(--ao);border-bottom:2px solid transparent;cursor:default}
+.tab-i.on{color:var(--ch);font-weight:500;border-bottom-color:var(--cl)}
+
+.kpi{padding:0.85rem;border:1px solid var(--pe);border-radius:5px;background:var(--sf)}
+.kpi-l{font-family:var(--fm);font-size:0.45rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--ao);margin-bottom:0.25rem}
+.kpi-v{font-family:var(--fd);font-weight:600;font-size:1.5rem;line-height:1;color:var(--ch)}
+.kpi-s{font-family:var(--fb);font-size:0.6rem;color:var(--ao);margin-top:0.2rem}
+.kpi-v.warn{color:var(--gh)}
+.kpi-v.risk{color:var(--te)}
+.kpi-v.good{color:var(--sa)}
+
+.flow{display:flex;align-items:center;gap:0.3rem;flex-wrap:wrap;padding:0.5rem 0}
+.fn{padding:0.4rem 0.7rem;border-radius:4px;font-family:var(--fb);font-size:0.62rem;font-weight:500;white-space:nowrap;border:1px solid;display:flex;flex-direction:column;gap:0.1rem}
+.fn-l{font-family:var(--fm);font-size:0.4rem;letter-spacing:0.06em;text-transform:uppercase;opacity:0.7}
+.fa{width:14px;height:1px;background:var(--pe);position:relative;flex-shrink:0}
+.fa::after{content:'';position:absolute;right:0;top:-2px;width:4px;height:4px;border-right:1px solid var(--pe);border-bottom:1px solid var(--pe);transform:rotate(-45deg)}
+
+.scope-table{border:1px solid var(--pe);border-radius:6px;overflow:hidden;background:var(--sf);margin:1rem 0}
+.scope-h{padding:0.6rem 0.9rem;background:rgba(196,165,123,0.04);border-bottom:1px solid var(--pe);font-family:var(--fm);font-size:0.5rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--cl);font-weight:600;display:grid;grid-template-columns:30% 1fr 100px;gap:1rem}
+.scope-r{padding:0.6rem 0.9rem;display:grid;grid-template-columns:30% 1fr 100px;gap:1rem;border-bottom:1px solid rgba(229,226,221,0.5);align-items:start;font-size:0.72rem}
+.scope-r:last-child{border-bottom:none}
+.scope-r-t{font-family:var(--fb);font-weight:500;color:var(--ch);font-size:0.78rem}
+.scope-r-d{font-family:var(--fb);color:var(--mo);font-size:0.7rem;line-height:1.55}
+.scope-r-s{font-family:var(--fm);font-size:0.5rem;text-transform:uppercase;letter-spacing:0.06em;padding:3px 7px;border-radius:2px;text-align:center;font-weight:600}
+.scope-r-s.in{background:rgba(168,181,160,0.12);color:var(--sa)}
+.scope-r-s.out{background:rgba(229,226,221,0.5);color:var(--ao)}
+
+.pay-pill{display:inline-flex;align-items:center;gap:0.3rem;padding:2px 6px;border-radius:2px;font-family:var(--fm);font-size:0.45rem;text-transform:uppercase;letter-spacing:0.04em;font-weight:600}
+.pay-pill.due{background:rgba(212,160,144,0.12);color:var(--te)}
+.pay-pill.paid{background:rgba(168,181,160,0.12);color:var(--sa)}
+.pay-pill.pending{background:rgba(196,165,123,0.08);color:var(--cl)}
+
+.fade{opacity:0;transform:translateY(12px);transition:opacity 0.5s ease,transform 0.5s ease}
+.fade.vis{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- 01 TITLE -->
+<div class="slide dk">
+  <div class="lg">Patina</div><div class="num">01 / 14</div>
+  <div class="in">
+    <div class="eyebrow">Designer Portal · Procurement Workspace · v1 Scope</div>
+    <div class="strata"><div></div><div></div><div></div></div>
+    <h1>From concept <em>to confirmed scope.</em></h1>
+    <p class="body" style="margin:1rem 0 3rem">Following review with the Patina team, v1 scope is locked. This document is the revised proposal — same north star, sharper boundaries. The Procurement Workspace ships as four views plus a QuickBooks-ready bookkeeper export. Payment tracking is built in. Mobile receiving optimizes for the designer-on-the-studio-floor reality, not for third-party receivers. Automated ETA parsing and partner portals defer to v2.</p>
+    <div style="display:flex;gap:3rem;flex-wrap:wrap">
+      <div><div class="meta">Status</div><div style="font-family:var(--fb);font-size:0.82rem;color:rgba(250,247,242,0.55);margin-top:0.15rem">v1 Scope Confirmed · Ready for Build</div></div>
+      <div><div class="meta">Companion docs</div><div style="font-family:var(--fb);font-size:0.82rem;color:rgba(250,247,242,0.55);margin-top:0.15rem">Mobile Receiving Flow · Payment Model & QBO Export</div></div>
+      <div><div class="meta">Build target</div><div style="font-family:var(--fb);font-size:0.82rem;color:rgba(250,247,242,0.55);margin-top:0.15rem">12 weeks · Three sprints</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 02 WHAT CHANGED -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">02 / 14</div>
+  <div class="in">
+    <div class="eyebrow">v1 Scope · What Changed From the Concept</div>
+    <h1>Six decisions <em>sharpened the build.</em></h1>
+    <p class="body" style="margin-bottom:1.5rem">The original concept proposal raised six refinement questions for the Patina team. Each answer ruled out a path. The collective effect is a tighter v1 that ships faster and serves Leah's actual workflow more precisely than the original concept would have.</p>
+
+    <div class="g2">
+      <div>
+        <div class="decision">
+          <div class="decision-l">Decision 1 · Receiving</div>
+          <div class="decision-t">Leah receives on her own — at her studio.</div>
+          <div class="decision-d">Receiving view becomes phone-first from day one, not Phase 2. Optimized for "3 photos, 2 taps, done" rather than third-party receiver documentation. Partner portal drops from v1 entirely.</div>
+        </div>
+        <div class="decision">
+          <div class="decision-l">Decision 2 · Payments</div>
+          <div class="decision-t">Payments track inside the workspace.</div>
+          <div class="decision-d">Vendor payment terms vary — 50/50, 30/70, milestone, NET-30. Payment state lives as a sub-flow on each PO, surfaced in By Vendor and By Status views. Not a separate finance module. See companion doc for the model.</div>
+        </div>
+        <div class="decision">
+          <div class="decision-l">Decision 3 · Calendar</div>
+          <div class="decision-t">Project-axis only. No vendor calendar.</div>
+          <div class="decision-d">Calendar shows deliveries and installs organized by project. Logistics conflict detection (overlapping arrivals, install-after-delivery sequencing) still runs. Vendor-as-axis dropped — not useful at solo-designer scale.</div>
+        </div>
+      </div>
+      <div>
+        <div class="decision">
+          <div class="decision-l">Decision 4 · Vendor entity</div>
+          <div class="decision-t">Company-level only. Contacts are notes.</div>
+          <div class="decision-d">"Sawkille Co" is the record. Person-level contact info attaches as a note on the vendor record. Cuts data model complexity and matches how a solo designer actually thinks about it.</div>
+        </div>
+        <div class="decision">
+          <div class="decision-l">Decision 5 · ETA tracking</div>
+          <div class="decision-t">Manual updates only in v1.</div>
+          <div class="decision-d">Designer updates ETAs through quick-edit when vendor emails arrive. Email parsing and automated ETA capture defer to v2 once we have data on which vendors send predictable confirmation formats.</div>
+        </div>
+        <div class="decision">
+          <div class="decision-l">Decision 6 · Bookkeeper</div>
+          <div class="decision-t">QuickBooks-ready CSV export. No new user role.</div>
+          <div class="decision-d">A single filtered export screen produces a CSV the bookkeeper imports into QuickBooks. No login for them, no permissions matrix to design. See companion doc for column mapping.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 03 v1 SCOPE TABLE -->
+<div class="slide wm fade">
+  <div class="lg">Patina</div><div class="num">03 / 14</div>
+  <div class="in">
+    <div class="eyebrow">v1 Scope · In and Out</div>
+    <h2>What ships, <em>what waits.</em></h2>
+    <p class="body" style="margin-bottom:1rem">v1 ships what Leah needs to make Order Day, Status Tuesday, and Install Week dramatically less painful. v2 expands integrations, automations, and partner-facing surfaces. The boundary is deliberate: build the human-centered foundation first, layer automation on top once we have real usage data.</p>
+
+    <div class="scope-table">
+      <div class="scope-h">
+        <span>Feature</span>
+        <span>Detail</span>
+        <span style="text-align:center">v1</span>
+      </div>
+      <div class="scope-r">
+        <span class="scope-r-t">By Vendor view</span>
+        <span class="scope-r-d">Items grouped by vendor across all active projects. Order Assistant side panel for external vendors. One-click Patina Catalog ordering. Payment status visible per PO line.</span>
+        <span class="scope-r-s in">In</span>
+      </div>
+      <div class="scope-r">
+        <span class="scope-r-t">By Status view</span>
+        <span class="scope-r-d">8-stage FF&E pipeline flattened across all projects. Manual ETA updates. Automatic risk surfacing when remaining lead time falls under buffer threshold.</span>
+        <span class="scope-r-s in">In</span>
+      </div>
+      <div class="scope-r">
+        <span class="scope-r-t">Calendar view · project-axis</span>
+        <span class="scope-r-d">Two-month visual timeline of deliveries and install dates organized by project. Conflict detection for overlapping arrivals and install sequencing.</span>
+        <span class="scope-r-s in">In</span>
+      </div>
+      <div class="scope-r">
+        <span class="scope-r-t">Receiving view · mobile-first</span>
+        <span class="scope-r-d">Phone-only inspection flow. Speed-optimized "3 photos, 2 taps, done." Damage claim auto-draft. Designed for the designer standing next to a carton on her studio floor.</span>
+        <span class="scope-r-s in">In</span>
+      </div>
+      <div class="scope-r">
+        <span class="scope-r-t">Payment tracking per PO</span>
+        <span class="scope-r-d">Flexible payment terms per vendor (50/50, 30/70, milestone, NET-30). State transitions visible across all views. Studio owner role only.</span>
+        <span class="scope-r-s in">In</span>
+      </div>
+      <div class="scope-r">
+        <span class="scope-r-t">Bookkeeper QBO export</span>
+        <span class="scope-r-d">Filtered CSV with QuickBooks-friendly columns (vendor, bill date, due date, PO, item, amount, account category, payment status). Studio owner only.</span>
+        <span class="scope-r-s in">In</span>
+      </div>
+      <div class="scope-r">
+        <span class="scope-r-t">Project Detail FF&E zone collapse</span>
+        <span class="scope-r-d">Existing per-project FF&E table replaced with summary tile linking to Procurement Workspace. Reduces duplication.</span>
+        <span class="scope-r-s in">In</span>
+      </div>
+      <div class="scope-r">
+        <span class="scope-r-t">Today Dashboard procurement card</span>
+        <span class="scope-r-d">Surface count of items needing orders today, deliveries arriving, inspections to complete. Click-through to the relevant Procurement view.</span>
+        <span class="scope-r-s in">In</span>
+      </div>
+      <div class="scope-r">
+        <span class="scope-r-t">3rd-party receiver partner portal</span>
+        <span class="scope-r-d">Login for external receiving warehouses to log inspections directly into Patina. Not needed for Leah's workflow.</span>
+        <span class="scope-r-s out">v2</span>
+      </div>
+      <div class="scope-r">
+        <span class="scope-r-t">Vendor calendar axis</span>
+        <span class="scope-r-d">Calendar grouped by vendor instead of project. Useful at multi-designer studio scale, not solo.</span>
+        <span class="scope-r-s out">v2</span>
+      </div>
+      <div class="scope-r">
+        <span class="scope-r-t">Automated ETA email parsing</span>
+        <span class="scope-r-d">Email connector that parses vendor shipping confirmations and updates ETAs automatically.</span>
+        <span class="scope-r-s out">v2</span>
+      </div>
+      <div class="scope-r">
+        <span class="scope-r-t">QuickBooks Online API integration</span>
+        <span class="scope-r-d">Direct OAuth push of vendor bills into QBO. CSV export covers the same need with less complexity.</span>
+        <span class="scope-r-s out">v2</span>
+      </div>
+      <div class="scope-r">
+        <span class="scope-r-t">Client payment ↔ vendor payment linkage</span>
+        <span class="scope-r-d">Connecting client-side milestones (Project Financials) to vendor-side payment timing. Kept separate in v1.</span>
+        <span class="scope-r-s out">v2</span>
+      </div>
+      <div class="scope-r">
+        <span class="scope-r-t">Vendor person-level contact records</span>
+        <span class="scope-r-d">Each contact person as a first-class entity. Company-only is sufficient for v1.</span>
+        <span class="scope-r-s out">v2</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 04 NAVIGATION -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">04 / 14</div>
+  <div class="in">
+    <div class="eyebrow">Where it lives</div>
+    <h2>A new <em>top-level zone.</em></h2>
+    <p class="body" style="margin-bottom:1.25rem">Procurement becomes the fifth top-level zone in the Designer Portal. It sits between Pipeline (where projects are designed) and Products (where items are captured). The placement is the bridge between specification and reality.</p>
+
+    <div class="frame">
+      <div class="fr-bar">
+        <div class="ll">Patina</div>
+        <div class="nv">
+          <span>Today</span>
+          <span>Pipeline</span>
+          <span class="on">Procurement</span>
+          <span>Products</span>
+          <span>Clients</span>
+        </div>
+        <div class="ut">⌕ ◎ ◆ <span class="fr-avt">LK</span></div>
+      </div>
+      <div class="fr-sub">
+        <span class="seg on">By Vendor · 12</span>
+        <span class="seg">By Status · 47 active</span>
+        <span class="seg">Calendar</span>
+        <span class="seg">Receiving · 3 pending</span>
+        <span style="margin-left:auto;color:var(--cl);font-family:var(--fb);font-size:0.65rem;text-transform:none;letter-spacing:0">+ New PO · Export to QBO ↓</span>
+      </div>
+      <div class="fr-c" style="padding:2rem;min-height:120px;display:flex;align-items:center;justify-content:center">
+        <div style="font-family:var(--fd);font-style:italic;color:var(--ao);font-size:0.9rem">Procurement Workspace · Detail views follow</div>
+      </div>
+    </div>
+
+    <div class="g4" style="margin-top:1.5rem">
+      <div class="card">
+        <div class="meta">View 1</div>
+        <div class="card-t" style="margin-top:0.4rem">By Vendor</div>
+        <div class="card-d">The "order day" view · most-used</div>
+      </div>
+      <div class="card">
+        <div class="meta">View 2</div>
+        <div class="card-t" style="margin-top:0.4rem">By Status</div>
+        <div class="card-d">The "what's in motion" view</div>
+      </div>
+      <div class="card">
+        <div class="meta">View 3</div>
+        <div class="card-t" style="margin-top:0.4rem">Calendar</div>
+        <div class="card-d">The "logistics" view · project-axis</div>
+      </div>
+      <div class="card">
+        <div class="meta">View 4</div>
+        <div class="card-t" style="margin-top:0.4rem">Receiving</div>
+        <div class="card-d">The "incoming" view · mobile-first</div>
+      </div>
+    </div>
+
+    <p class="body" style="margin-top:1.25rem;font-size:0.78rem"><strong>Export to QBO ↓</strong> in the subnav opens the bookkeeper export modal — see companion document for the column mapping and flow.</p>
+  </div>
+</div>
+
+<!-- 05 VIEW 1: BY VENDOR -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">05 / 14</div>
+  <div class="in">
+    <div class="eyebrow">View 1 · By Vendor</div>
+    <h2>The <em>order day</em> view, now with payments.</h2>
+    <p class="body" style="margin-bottom:1rem">Items grouped by vendor across every active project. Each vendor card shows what's ready to order — and what's already been ordered with payment status visible inline. Payment terms appear as small pills. The next financial action ("Deposit due May 8" or "Balance owed $3,400") surfaces without the designer hunting for it.</p>
+
+    <div class="frame">
+      <div class="fr-bar">
+        <div class="ll">Patina</div>
+        <div class="nv"><span>Today</span><span>Pipeline</span><span class="on">Procurement</span><span>Products</span><span>Clients</span></div>
+        <div class="ut">⌕ ◎ ◆ <span class="fr-avt">LK</span></div>
+      </div>
+      <div class="fr-sub">
+        <span class="seg on">By Vendor</span>
+        <span class="seg">By Status</span>
+        <span class="seg">Calendar</span>
+        <span class="seg">Receiving</span>
+        <span style="margin-left:auto;color:var(--cl);font-family:var(--fb);font-size:0.65rem;text-transform:none;letter-spacing:0">+ New PO · Export to QBO ↓</span>
+      </div>
+      <div class="fr-c" style="padding:1.25rem 1.5rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+          <div>
+            <div style="font-family:var(--fd);font-weight:500;font-size:1.1rem">12 vendors with active items</div>
+            <div class="sub">$47,820 ready to order · $18,200 in deposits due · 3 balances coming due this month</div>
+          </div>
+          <div style="display:flex;gap:0.5rem">
+            <span class="btn btn-s">Filter</span>
+            <span class="btn btn-s">Sort: Order-by date</span>
+          </div>
+        </div>
+
+        <!-- Vendor 1 -->
+        <div style="border:1px solid var(--pe);border-radius:6px;background:var(--sf);margin-bottom:0.75rem;overflow:hidden">
+          <div style="padding:0.85rem 1rem;background:rgba(212,160,144,0.04);border-bottom:1px solid var(--pe);display:grid;grid-template-columns:1fr auto auto auto auto;gap:1rem;align-items:center">
+            <div>
+              <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.15rem;flex-wrap:wrap">
+                <span class="vbox-n">Nordic Atelier</span>
+                <span class="st st-od">Order by Fri Apr 12</span>
+                <span class="pay-pill pending">50/50 terms</span>
+              </div>
+              <div class="sub">Trade portal · nordicatelier.com/trade · Account: leah@middlewest.studio</div>
+            </div>
+            <div><div class="meta">Items</div><div style="font-family:var(--fd);font-weight:500;font-size:0.9rem;text-align:center">3</div></div>
+            <div><div class="meta">Projects</div><div style="font-family:var(--fd);font-weight:500;font-size:0.9rem;text-align:center">2</div></div>
+            <div><div class="meta">Total</div><div style="font-family:var(--fd);font-weight:500;font-size:0.9rem">$11,830</div></div>
+            <span class="btn btn-p">Order all 3</span>
+          </div>
+          <div style="padding:0.5rem 1rem">
+            <div class="row" style="grid-template-columns:30px 2fr 1fr 80px 80px 70px">
+              <span><input type="checkbox" checked style="accent-color:var(--cl)"/></span>
+              <div><div class="lbl">Heirloom Oak Dining Table · 6-seat</div><div class="sub">Chen Residence · Dining Room</div></div>
+              <div class="sub">Approved Mar 28 · Lin signed off</div>
+              <div style="text-align:right" class="lbl">$4,200</div>
+              <div style="text-align:right;font-family:var(--fm);font-size:0.55rem;color:var(--ao)">14 wk LT</div>
+              <span class="st st-act">Ready</span>
+            </div>
+            <div class="row last" style="grid-template-columns:30px 2fr 1fr 80px 80px 70px">
+              <span><input type="checkbox" checked style="accent-color:var(--cl)"/></span>
+              <div><div class="lbl">Heirloom Console · Lakeside</div><div class="sub">Olsen Lake House · Living Room</div></div>
+              <div class="sub">Approved Apr 1 · Confirmed via email</div>
+              <div style="text-align:right" class="lbl">$3,400</div>
+              <div style="text-align:right;font-family:var(--fm);font-size:0.55rem;color:var(--ao)">12 wk LT</div>
+              <span class="st st-act">Ready</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vendor 2 - has active PO with payment due -->
+        <div style="border:1px solid var(--pe);border-radius:6px;background:var(--sf);margin-bottom:0.75rem;overflow:hidden">
+          <div style="padding:0.85rem 1rem;border-bottom:1px solid var(--pe);display:grid;grid-template-columns:1fr auto auto auto auto;gap:1rem;align-items:center">
+            <div>
+              <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.15rem;flex-wrap:wrap">
+                <span class="vbox-n">Woodward & Sons</span>
+                <span class="pay-pill due">Balance $3,400 due May 12</span>
+                <span class="pay-pill pending">50/50 terms</span>
+              </div>
+              <div class="sub">Trade portal · woodwardandsons.com · Net production · Shipping in 3 wks</div>
+            </div>
+            <div><div class="meta">Active POs</div><div style="font-family:var(--fd);font-weight:500;font-size:0.9rem;text-align:center">1</div></div>
+            <div><div class="meta">Projects</div><div style="font-family:var(--fd);font-weight:500;font-size:0.9rem;text-align:center">1</div></div>
+            <div><div class="meta">Total</div><div style="font-family:var(--fd);font-weight:500;font-size:0.9rem">$6,800</div></div>
+            <span class="btn btn-s">View PO WS-188</span>
+          </div>
+          <div style="padding:0.5rem 1rem 0.85rem">
+            <div style="display:flex;gap:0.85rem;align-items:center;font-family:var(--fb);font-size:0.7rem;color:var(--mo)">
+              <span><strong>PO WS-188</strong> · Meadow Linen Sectional · Chen Residence</span>
+              <span style="margin-left:auto;display:flex;gap:0.4rem">
+                <span class="pay-pill paid">Deposit $3,400 paid Apr 8</span>
+                <span class="pay-pill due">Balance $3,400 due May 12</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vendor 3 - Patina Catalog -->
+        <div style="border:1px solid var(--pe);border-radius:6px;background:var(--sf);overflow:hidden">
+          <div style="padding:0.85rem 1rem;background:rgba(196,165,123,0.04);display:grid;grid-template-columns:1fr auto auto auto auto;gap:1rem;align-items:center">
+            <div>
+              <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.15rem;flex-wrap:wrap">
+                <span class="vbox-n">Sawkille Co</span>
+                <span class="st st-act">Order by Apr 19</span>
+                <span class="pay-pill pending" style="background:rgba(196,165,123,0.15);color:var(--cl)">Patina Catalog</span>
+              </div>
+              <div class="sub">Direct order through Patina · Patina handles deposit + balance · No external login</div>
+            </div>
+            <div><div class="meta">Items</div><div style="font-family:var(--fd);font-weight:500;font-size:0.9rem;text-align:center">6</div></div>
+            <div><div class="meta">Projects</div><div style="font-family:var(--fd);font-weight:500;font-size:0.9rem;text-align:center">3</div></div>
+            <div><div class="meta">Total</div><div style="font-family:var(--fd);font-weight:500;font-size:0.9rem">$8,400</div></div>
+            <span class="btn btn-c">Order via Patina</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="g3" style="margin-top:1.25rem">
+      <div class="card" style="background:rgba(196,165,123,0.04);border-color:rgba(196,165,123,0.2)">
+        <div class="meta" style="color:var(--cl)">UX detail</div>
+        <div class="card-t" style="margin-top:0.3rem">Payment pills tell the story</div>
+        <div class="card-d">Three states: <strong>pending</strong> (term defined, not yet billable), <strong>due</strong> (action needed by date), <strong>paid</strong> (logged with date). Color-coded so Leah scans for due items in one glance.</div>
+      </div>
+      <div class="card" style="background:rgba(196,165,123,0.04);border-color:rgba(196,165,123,0.2)">
+        <div class="meta" style="color:var(--cl)">UX detail</div>
+        <div class="card-t" style="margin-top:0.3rem">Vendor terms set once, applied to all POs</div>
+        <div class="card-d">Each vendor record stores default payment terms (50/50, 30/70, NET-30, etc.). New POs inherit. Override-able per PO when a vendor offers different terms for a specific item.</div>
+      </div>
+      <div class="card" style="background:rgba(196,165,123,0.04);border-color:rgba(196,165,123,0.2)">
+        <div class="meta" style="color:var(--cl)">UX detail</div>
+        <div class="card-t" style="margin-top:0.3rem">Patina Catalog handles everything</div>
+        <div class="card-d">For Catalog vendors, Patina is the merchant. Deposit and balance both flow through Patina's payment infrastructure. Leah never sees payment pills for these — they just work.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 06 ORDER ASSISTANT -->
+<div class="slide wm fade">
+  <div class="lg">Patina</div><div class="num">06 / 14</div>
+  <div class="in">
+    <div class="eyebrow">View 1 · Ordering flow</div>
+    <h2>Order Assistant — <em>now with deposit logging.</em></h2>
+    <p class="body" style="margin-bottom:1.25rem">For external vendors, Patina can't place the order — but the Order Assistant makes the manual placement maximally fast. New in v1: the confirmation step captures the deposit amount and due date alongside the PO confirmation. Payment state begins the moment the order is logged, not as an afterthought.</p>
+
+    <div class="frame">
+      <div class="fr-c" style="background:rgba(44,41,38,0.5);padding:1.5rem;display:grid;grid-template-columns:1fr 380px;gap:1rem;min-height:520px">
+        <div style="background:rgba(250,247,242,0.05);border-radius:6px;padding:1rem;font-family:var(--fb);font-size:0.7rem;color:rgba(250,247,242,0.4);display:flex;align-items:center;justify-content:center;font-style:italic">By Vendor view dimmed</div>
+
+        <div style="background:var(--sf);border-radius:8px;padding:1.25rem;box-shadow:0 24px 64px rgba(0,0,0,0.18);overflow:auto">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+            <div class="meta" style="color:var(--cl)">Order Assistant · Nordic Atelier</div>
+            <span style="color:var(--ao);font-size:0.85rem;cursor:default">×</span>
+          </div>
+          <div style="font-family:var(--fd);font-weight:500;font-size:1.05rem;margin-bottom:0.85rem">2 items · $7,600 total</div>
+
+          <div style="padding:0.7rem;background:rgba(196,165,123,0.06);border:1px solid rgba(196,165,123,0.2);border-radius:5px;margin-bottom:0.7rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
+              <div class="meta" style="color:var(--cl)">Step 1 · Open vendor portal</div>
+              <span class="btn btn-c" style="font-size:0.6rem;padding:0.25rem 0.6rem">Open in new tab ↗</span>
+            </div>
+            <div style="font-family:var(--fb);font-size:0.65rem;color:var(--mo);line-height:1.5">nordicatelier.com/trade · leah@middlewest.studio</div>
+          </div>
+
+          <div style="padding:0.7rem;border:1px solid var(--pe);border-radius:5px;margin-bottom:0.7rem">
+            <div class="meta" style="margin-bottom:0.4rem">Step 2 · Copy item details</div>
+            <div style="font-family:var(--fb);font-size:0.65rem;color:var(--ch);line-height:1.7;border-left:2px solid var(--pe);padding-left:0.6rem">
+              <strong>1.</strong> Heirloom Oak Dining Table · 6-seat<br>
+              <span class="sub">Ship to: Middlewest Studio · Madison WI</span><br><br>
+              <strong>2.</strong> Heirloom Console · Lakeside<br>
+              <span class="sub">Ship to: Middlewest Studio · Madison WI</span>
+            </div>
+          </div>
+
+          <div style="padding:0.7rem;border:1px solid var(--pe);border-radius:5px;margin-bottom:0.7rem">
+            <div class="meta" style="margin-bottom:0.5rem">Step 3 · Confirm order placed</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;margin-bottom:0.5rem">
+              <div><div class="sub" style="margin-bottom:0.15rem">Vendor PO #</div><input style="width:100%;padding:0.3rem 0.5rem;border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.65rem" placeholder="NA-2026-..."/></div>
+              <div><div class="sub" style="margin-bottom:0.15rem">Confirmed ETA</div><input style="width:100%;padding:0.3rem 0.5rem;border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.65rem" placeholder="Jul 18, 2026"/></div>
+            </div>
+          </div>
+
+          <div style="padding:0.7rem;border:1.5px solid var(--cl);border-radius:5px;background:rgba(196,165,123,0.04);margin-bottom:0.7rem">
+            <div class="meta" style="margin-bottom:0.5rem;color:var(--cl)">Step 4 · Payment terms <span style="text-transform:none;letter-spacing:0;color:var(--ao);font-family:var(--fb);font-size:0.55rem;font-weight:400;font-style:italic">New in v1</span></div>
+            <div style="margin-bottom:0.5rem">
+              <div class="sub" style="margin-bottom:0.15rem">Terms</div>
+              <select style="width:100%;padding:0.3rem 0.5rem;border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.65rem">
+                <option>50% deposit / 50% before ship (Nordic Atelier default)</option>
+                <option>30% deposit / 70% before ship</option>
+                <option>Full payment upfront</option>
+                <option>NET-30 from delivery</option>
+                <option>Custom milestones</option>
+              </select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem">
+              <div><div class="sub" style="margin-bottom:0.15rem">Deposit due</div><input style="width:100%;padding:0.3rem 0.5rem;border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.65rem" value="Apr 12, 2026"/></div>
+              <div><div class="sub" style="margin-bottom:0.15rem">Deposit amount</div><input style="width:100%;padding:0.3rem 0.5rem;border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.65rem" value="$3,800"/></div>
+            </div>
+            <div style="font-family:var(--fb);font-size:0.6rem;color:var(--ao);font-style:italic;margin-top:0.4rem">Balance $3,800 will become due automatically when item enters "Shipped" stage.</div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;padding-top:0.7rem;border-top:1px solid var(--pe)">
+            <span class="btn btn-g" style="font-size:0.65rem">Skip — order externally</span>
+            <span class="btn btn-c" style="font-size:0.7rem">Confirm 2 ordered</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="body" style="margin-top:1.25rem;font-size:0.82rem">The vendor's stored default terms pre-fill. Leah usually clicks through. When a vendor offers off-cycle terms for a specific item, she overrides here. The payment timeline becomes part of the procurement record from day one — not a thing reconstructed three weeks later when the deposit invoice arrives.</p>
+  </div>
+</div>
+
+<!-- 07 VIEW 2 BY STATUS -->
+<div class="slide dk fade">
+  <div class="lg">Patina</div><div class="num">07 / 14</div>
+  <div class="in">
+    <div class="eyebrow">View 2 · By Status</div>
+    <h1>The 8 stages, <em>now financial.</em></h1>
+    <p class="body" style="margin-bottom:1.25rem">The By Status view runs the FF&E pipeline across every active project. Payment state attaches to each item as a parallel track: where is this in procurement, and where is this in money owed. Both surface in the same row so Leah doesn't have to context-switch between operational and financial truth.</p>
+
+    <div class="flow" style="margin-bottom:1rem">
+      <div class="fn" style="border-color:rgba(250,247,242,0.2);color:rgba(250,247,242,0.65)"><span class="fn-l">14</span>Specified</div><div class="fa" style="background:rgba(250,247,242,0.15)"></div>
+      <div class="fn" style="border-color:rgba(250,247,242,0.2);color:rgba(250,247,242,0.65)"><span class="fn-l">8</span>Quoted</div><div class="fa" style="background:rgba(250,247,242,0.15)"></div>
+      <div class="fn" style="border-color:var(--cl);background:rgba(196,165,123,0.1);color:var(--ow)"><span class="fn-l">11</span>Approved</div><div class="fa" style="background:rgba(250,247,242,0.15)"></div>
+      <div class="fn" style="border-color:var(--cl);color:rgba(250,247,242,0.85)"><span class="fn-l">23</span>Ordered</div><div class="fa" style="background:rgba(250,247,242,0.15)"></div>
+      <div class="fn" style="border-color:var(--gh);color:rgba(250,247,242,0.85)"><span class="fn-l">19</span>Production</div><div class="fa" style="background:rgba(250,247,242,0.15)"></div>
+      <div class="fn" style="border-color:var(--gh);background:rgba(232,197,71,0.08);color:rgba(250,247,242,0.85)"><span class="fn-l">5</span>Shipped</div><div class="fa" style="background:rgba(250,247,242,0.15)"></div>
+      <div class="fn" style="border-color:var(--sa);color:rgba(250,247,242,0.85)"><span class="fn-l">3</span>Delivered</div><div class="fa" style="background:rgba(250,247,242,0.15)"></div>
+      <div class="fn" style="border-color:var(--sa);background:rgba(168,181,160,0.1);color:rgba(250,247,242,0.85)"><span class="fn-l">12</span>Installed</div>
+    </div>
+
+    <div class="frame" style="background:rgba(250,247,242,0.03);border:1px solid rgba(250,247,242,0.1);box-shadow:none">
+      <div style="padding:0.85rem 1.25rem;border-bottom:1px solid rgba(250,247,242,0.1);display:flex;justify-content:space-between;align-items:center">
+        <div style="font-family:var(--fd);font-weight:500;font-size:0.95rem;color:var(--ow)">Production · 19 items in flight · $34,200 deposits paid · $34,200 balances coming due</div>
+        <div style="display:flex;gap:0.4rem;color:rgba(250,247,242,0.5);font-family:var(--fb);font-size:0.65rem"><span>Filter: Project</span><span>·</span><span>Filter: Payment status</span></div>
+      </div>
+      <div style="padding:0.5rem 1.25rem">
+        <div class="row" style="grid-template-columns:2fr 1.2fr 90px 1fr 90px;color:rgba(250,247,242,0.6);border-bottom-color:rgba(250,247,242,0.1)">
+          <div><div class="lbl" style="color:var(--ow)">Heirloom Oak Dining Table</div><div class="sub" style="color:rgba(250,247,242,0.5)">Chen Residence · Dining</div></div>
+          <div class="sub" style="color:rgba(250,247,242,0.6)">Nordic Atelier · PO NA-041</div>
+          <div style="text-align:right;font-family:var(--fd);font-size:0.78rem;color:var(--ow)">$4,200</div>
+          <div style="display:flex;flex-direction:column;gap:0.2rem">
+            <span class="pay-pill paid" style="font-size:0.42rem;align-self:flex-start">Deposit paid Apr 12</span>
+            <span class="pay-pill pending" style="font-size:0.42rem;align-self:flex-start;background:rgba(232,197,71,0.12);color:var(--gh)">Balance due before ship</span>
+          </div>
+          <span class="st" style="background:rgba(232,197,71,0.12);color:var(--gh)">13 wk left</span>
+        </div>
+        <div class="row" style="grid-template-columns:2fr 1.2fr 90px 1fr 90px;color:rgba(250,247,242,0.6);border-bottom-color:rgba(250,247,242,0.1)">
+          <div><div class="lbl" style="color:var(--ow)">Meadow Linen Sectional</div><div class="sub" style="color:rgba(250,247,242,0.5)">Chen Residence · Living</div></div>
+          <div class="sub" style="color:rgba(250,247,242,0.6)">Woodward & Sons · PO WS-188</div>
+          <div style="text-align:right;font-family:var(--fd);font-size:0.78rem;color:var(--ow)">$6,800</div>
+          <div style="display:flex;flex-direction:column;gap:0.2rem">
+            <span class="pay-pill paid" style="font-size:0.42rem;align-self:flex-start">Deposit paid Apr 8</span>
+            <span class="pay-pill due" style="font-size:0.42rem;align-self:flex-start">Balance $3,400 due May 12</span>
+          </div>
+          <span class="st" style="background:rgba(232,197,71,0.12);color:var(--gh)">10 wk left</span>
+        </div>
+        <div class="row" style="grid-template-columns:2fr 1.2fr 90px 1fr 90px;color:rgba(250,247,242,0.6);border-bottom-color:rgba(250,247,242,0.1)">
+          <div><div class="lbl" style="color:var(--ow)">Shaker Dining Chairs ×6</div><div class="sub" style="color:rgba(250,247,242,0.5)">Chen Residence · Dining</div></div>
+          <div class="sub" style="color:rgba(250,247,242,0.6)">Sawkille Co · PO SK-087</div>
+          <div style="text-align:right;font-family:var(--fd);font-size:0.78rem;color:var(--ow)">$2,400</div>
+          <div style="display:flex;flex-direction:column;gap:0.2rem">
+            <span class="pay-pill paid" style="font-size:0.42rem;align-self:flex-start;background:rgba(196,165,123,0.15);color:var(--cl)">Patina handled</span>
+          </div>
+          <span class="st" style="background:rgba(212,160,144,0.15);color:var(--te)">9 wk · risk</span>
+        </div>
+        <div class="row last" style="grid-template-columns:2fr 1.2fr 90px 1fr 90px;color:rgba(250,247,242,0.6);border-bottom:none">
+          <div class="sub" style="color:rgba(250,247,242,0.4);font-style:italic">+ 16 more items in Production</div>
+          <span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="g2" style="margin-top:1.5rem">
+      <div class="card" style="background:rgba(212,160,144,0.06);border-color:rgba(212,160,144,0.2)">
+        <div class="meta" style="color:var(--te)">Automatic action surfacing</div>
+        <div class="card-t" style="margin-top:0.3rem">Stage transition triggers payment action</div>
+        <div class="card-d">When Leah moves an item from "Production" to "Shipped" (manual transition or vendor notification), the balance auto-creates a "due now" payment record with a default due date of "before delivery." She still controls when to pay — but the system never lets a balance hide.</div>
+      </div>
+      <div class="card" style="background:rgba(168,181,160,0.06);border-color:rgba(168,181,160,0.2)">
+        <div class="meta" style="color:var(--sa)">Patina Catalog items disappear from payment chasing</div>
+        <div class="card-t" style="margin-top:0.3rem">"Patina handled" replaces three pills</div>
+        <div class="card-d">For Catalog items, Patina handles both deposit and balance internally. The payment column shows a single "Patina handled" pill — visual proof to Leah that this is one less thing to track.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 08 CALENDAR -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">08 / 14</div>
+  <div class="in">
+    <div class="eyebrow">View 3 · Calendar · Project-axis only</div>
+    <h2>Logistics, <em>at a glance.</em></h2>
+    <p class="body" style="margin-bottom:1.25rem">Two-month timeline of expected deliveries and install dates, organized by project. v1 confirmed: project-axis only. Vendor-axis defers to v2 — not useful at solo-designer scale. Conflict detection still surfaces overlapping arrivals and install-after-delivery sequencing.</p>
+
+    <div class="frame">
+      <div class="fr-bar">
+        <div class="ll">Patina</div>
+        <div class="nv"><span>Today</span><span>Pipeline</span><span class="on">Procurement</span><span>Products</span><span>Clients</span></div>
+        <div class="ut">⌕ ◎ ◆ <span class="fr-avt">LK</span></div>
+      </div>
+      <div class="fr-sub">
+        <span class="seg">By Vendor</span>
+        <span class="seg">By Status</span>
+        <span class="seg on">Calendar</span>
+        <span class="seg">Receiving</span>
+        <span style="margin-left:auto;color:var(--ao);font-family:var(--fb);font-size:0.65rem;text-transform:none;letter-spacing:0">Week · Month · Quarter</span>
+      </div>
+      <div class="fr-c" style="padding:1.25rem 1.5rem">
+        <div style="font-family:var(--fd);font-weight:500;font-size:1rem;margin-bottom:0.75rem">May 2026 · 4 weeks shown</div>
+        <div class="cal">
+          <div class="cal-h first">Project</div>
+          <div class="cal-h">Apr 27</div>
+          <div class="cal-h">May 4</div>
+          <div class="cal-h">May 11</div>
+          <div class="cal-h">May 18</div>
+          <div class="cal-h">May 25</div>
+          <div class="cal-h">Jun 1</div>
+          <div class="cal-h">Jun 8</div>
+
+          <div class="cal-r-l">Chen Residence</div>
+          <div class="cal-c"></div>
+          <div class="cal-c"><div class="cal-evt del">Pendant · delivery</div></div>
+          <div class="cal-c"></div>
+          <div class="cal-c"><div class="cal-evt warn">Sectional · ETA</div></div>
+          <div class="cal-c"><div class="cal-evt del">Rug · delivery</div></div>
+          <div class="cal-c"></div>
+          <div class="cal-c"><div class="cal-evt ins">Install begin</div></div>
+
+          <div class="cal-r-l">Whitfield</div>
+          <div class="cal-c"><div class="cal-evt del">Foyer pendants</div></div>
+          <div class="cal-c"></div>
+          <div class="cal-c"><div class="cal-evt warn">Bedroom set ETA</div></div>
+          <div class="cal-c"><div class="cal-evt risk">Sectional · OVERLAP</div></div>
+          <div class="cal-c"></div>
+          <div class="cal-c"></div>
+          <div class="cal-c"><div class="cal-evt ins">Punch list</div></div>
+
+          <div class="cal-r-l">Olsen Lake</div>
+          <div class="cal-c"></div>
+          <div class="cal-c"></div>
+          <div class="cal-c"></div>
+          <div class="cal-c"></div>
+          <div class="cal-c"><div class="cal-evt del">Console · ETA</div></div>
+          <div class="cal-c"><div class="cal-evt del">3 items · ETA</div></div>
+          <div class="cal-c"></div>
+
+          <div class="cal-r-l">Morrison</div>
+          <div class="cal-c"></div>
+          <div class="cal-c"><div class="cal-evt del">Bed frame ETA</div></div>
+          <div class="cal-c"></div>
+          <div class="cal-c"></div>
+          <div class="cal-c"></div>
+          <div class="cal-c"></div>
+          <div class="cal-c"></div>
+        </div>
+
+        <div style="margin-top:0.85rem;padding:0.75rem;background:rgba(212,160,144,0.06);border:1px solid rgba(212,160,144,0.2);border-radius:4px;display:flex;gap:0.85rem;align-items:start">
+          <div style="font-family:var(--fm);font-size:0.55rem;color:var(--te);background:rgba(212,160,144,0.15);padding:3px 7px;border-radius:2px;text-transform:uppercase;letter-spacing:0.06em;font-weight:600">Conflict</div>
+          <div>
+            <div style="font-family:var(--fb);font-weight:500;font-size:0.78rem;color:var(--ch);margin-bottom:0.15rem">May 18: Chen sectional + Whitfield sectional arriving same week</div>
+            <div style="font-family:var(--fb);font-size:0.7rem;color:var(--mo);line-height:1.55">Both pieces need 2 weeks of storage at Middlewest Studio before respective install dates. Suggested resolutions: request Whitfield 1-week ship-delay · upgrade studio overflow storage for the week of May 18 · accept and plan tight rotation.</div>
+          </div>
+        </div>
+
+        <div style="margin-top:0.85rem;display:flex;gap:1rem;flex-wrap:wrap;font-family:var(--fb);font-size:0.62rem;color:var(--ao)">
+          <span style="display:flex;align-items:center;gap:0.35rem"><span style="width:10px;height:10px;background:rgba(168,181,160,0.25);border-left:2px solid var(--sa);border-radius:1px"></span>Expected delivery</span>
+          <span style="display:flex;align-items:center;gap:0.35rem"><span style="width:10px;height:10px;background:rgba(232,197,71,0.25);border-left:2px solid var(--gh);border-radius:1px"></span>ETA confirmation pending</span>
+          <span style="display:flex;align-items:center;gap:0.35rem"><span style="width:10px;height:10px;background:rgba(196,165,123,0.25);border-left:2px solid var(--cl);border-radius:1px"></span>Install milestone</span>
+          <span style="display:flex;align-items:center;gap:0.35rem"><span style="width:10px;height:10px;background:rgba(212,160,144,0.25);border-left:2px solid var(--te);border-radius:1px"></span>Conflict / overlap</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="body" style="margin-top:1.25rem;font-size:0.82rem">Conflict detection runs continuously: overlapping receiving windows, items arriving after their install date, install dates that have drifted out of sequence with construction. Each conflict surfaces resolution options so Leah doesn't have to reason them out from scratch.</p>
+  </div>
+</div>
+
+<!-- 09 RECEIVING -->
+<div class="slide wm fade">
+  <div class="lg">Patina</div><div class="num">09 / 14</div>
+  <div class="in">
+    <div class="eyebrow">View 4 · Receiving · Mobile-first</div>
+    <h2>The view that <em>prevents install-day disasters.</em></h2>
+    <p class="body" style="margin-bottom:1.25rem">v1 confirmed: Leah receives on her own at Middlewest Studio. The Receiving view is designed for a phone in her hand while she stands next to a carton. Speed-optimized for "3 photos, 2 taps, done." The exhaustive inspection checklist becomes optional — surfaced only when something's wrong. See companion document for the full mobile flow.</p>
+
+    <div class="frame">
+      <div class="fr-bar">
+        <div class="ll">Patina</div>
+        <div class="nv"><span>Today</span><span>Pipeline</span><span class="on">Procurement</span><span>Products</span><span>Clients</span></div>
+        <div class="ut">⌕ ◎ ◆ <span class="fr-avt">LK</span></div>
+      </div>
+      <div class="fr-sub">
+        <span class="seg">By Vendor</span>
+        <span class="seg">By Status</span>
+        <span class="seg">Calendar</span>
+        <span class="seg on">Receiving · 3 pending</span>
+        <span style="margin-left:auto;color:var(--cl);font-family:var(--fb);font-size:0.65rem;text-transform:none;letter-spacing:0">+ Log delivery (mobile recommended)</span>
+      </div>
+      <div class="fr-c" style="padding:1.25rem 1.5rem">
+        <div class="g4" style="margin-bottom:1.25rem">
+          <div class="kpi"><div class="kpi-l">Arriving this week</div><div class="kpi-v">3</div><div class="kpi-s">across 2 projects</div></div>
+          <div class="kpi"><div class="kpi-l">Pending inspection</div><div class="kpi-v warn">2</div><div class="kpi-s">received but not checked</div></div>
+          <div class="kpi"><div class="kpi-l">Damage claims open</div><div class="kpi-v risk">1</div><div class="kpi-s">Apparatus pendant chip</div></div>
+          <div class="kpi"><div class="kpi-l">Inspection pass rate</div><div class="kpi-v good">94%</div><div class="kpi-s">last 30 days</div></div>
+        </div>
+
+        <div class="tab">
+          <div class="tab-i on">Arriving (3)</div>
+          <div class="tab-i">Pending Inspection (2)</div>
+          <div class="tab-i">Damage Claims (1)</div>
+          <div class="tab-i">Cleared (47)</div>
+        </div>
+
+        <div style="border:1px solid var(--pe);border-radius:6px;background:var(--sf);overflow:hidden;margin-bottom:0.5rem">
+          <div style="padding:0.85rem 1rem;display:grid;grid-template-columns:1fr auto auto auto auto;gap:1rem;align-items:center;border-bottom:1px solid var(--pe)">
+            <div>
+              <div class="lbl">Meadow Linen Sectional · Chen Residence</div>
+              <div class="sub">Woodward & Sons · PO WS-188 · 1 large carton</div>
+            </div>
+            <div><div class="meta">Expected</div><div class="lbl">Wed, May 6</div></div>
+            <div><div class="meta">Carrier</div><div class="sub">Manna Freight</div></div>
+            <div><div class="meta">Balance due</div><div class="sub" style="color:var(--te)">$3,400 on delivery</div></div>
+            <span class="btn btn-p">Log on phone →</span>
+          </div>
+        </div>
+
+        <div style="border:1px solid var(--pe);border-radius:6px;background:var(--sf);overflow:hidden">
+          <div style="padding:0.85rem 1rem;display:grid;grid-template-columns:1fr auto auto auto auto;gap:1rem;align-items:center;border-left:3px solid var(--te);background:rgba(212,160,144,0.03)">
+            <div>
+              <div class="lbl">Brass Pendant Cluster · Whitfield · <span class="st st-od" style="margin-left:0.4rem">Damage reported</span></div>
+              <div class="sub">Apparatus Studio · PO AP-012 · Chip on canopy noted Apr 28</div>
+            </div>
+            <div><div class="meta">Inspected</div><div class="lbl">Apr 28</div></div>
+            <div><div class="meta">Photos</div><div class="lbl">4</div></div>
+            <div><div class="meta">Claim status</div><div class="sub" style="color:var(--te)">Vendor notified Apr 28</div></div>
+            <span class="btn btn-s">View claim</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="body" style="margin-top:1.25rem;font-size:0.82rem">The desktop Receiving view is the operational dashboard — what's coming, what's been checked, what's in dispute. The actual inspection happens on Leah's phone using the dedicated mobile flow (companion document). The two work together: the desktop schedules and reviews; the phone captures and acts.</p>
+  </div>
+</div>
+
+<!-- 10 PAYMENT MODEL OVERVIEW -->
+<div class="slide dk fade">
+  <div class="lg">Patina</div><div class="num">10 / 14</div>
+  <div class="in">
+    <div class="eyebrow">Payment tracking · Model overview</div>
+    <h1>Vendor terms <em>are the spine.</em></h1>
+    <p class="body" style="margin-bottom:1.5rem">v1 confirmed: payment tracking lives inside the workspace, not as a separate finance module. Each vendor defines default terms. Each PO inherits and can override. Payment state lives as a parallel track to the 8-stage procurement pipeline, with automatic action surfacing at key stage transitions. The full data model and field-level spec is in the companion document.</p>
+
+    <div class="g2">
+      <div>
+        <h3>Five supported payment patterns in v1</h3>
+        <div class="row" style="grid-template-columns:120px 1fr;color:rgba(250,247,242,0.65);border-bottom-color:rgba(250,247,242,0.1)"><span class="lbl" style="color:var(--ow)">50/50</span><span class="sub" style="color:rgba(250,247,242,0.6)">Deposit on order, balance before ship. Most common for custom furniture.</span></div>
+        <div class="row" style="grid-template-columns:120px 1fr;color:rgba(250,247,242,0.65);border-bottom-color:rgba(250,247,242,0.1)"><span class="lbl" style="color:var(--ow)">30/70</span><span class="sub" style="color:rgba(250,247,242,0.6)">Lower deposit, larger balance before ship. Some manufacturers prefer this for cash flow.</span></div>
+        <div class="row" style="grid-template-columns:120px 1fr;color:rgba(250,247,242,0.65);border-bottom-color:rgba(250,247,242,0.1)"><span class="lbl" style="color:var(--ow)">100% upfront</span><span class="sub" style="color:rgba(250,247,242,0.6)">Full payment at order. Common for small custom items, antique purchases, in-stock retail.</span></div>
+        <div class="row" style="grid-template-columns:120px 1fr;color:rgba(250,247,242,0.65);border-bottom-color:rgba(250,247,242,0.1)"><span class="lbl" style="color:var(--ow)">NET-30</span><span class="sub" style="color:rgba(250,247,242,0.6)">Full payment 30 days after delivery. Trade accounts with established vendors.</span></div>
+        <div class="row last" style="grid-template-columns:120px 1fr;color:rgba(250,247,242,0.65);border-bottom:none"><span class="lbl" style="color:var(--ow)">Custom milestones</span><span class="sub" style="color:rgba(250,247,242,0.6)">2–4 payment events with custom amounts and trigger conditions. Complex custom work.</span></div>
+      </div>
+      <div>
+        <h3>How payment state connects to procurement state</h3>
+        <div style="padding:1rem;background:rgba(250,247,242,0.03);border:1px solid rgba(250,247,242,0.1);border-radius:5px">
+          <div style="font-family:var(--fb);font-size:0.7rem;line-height:1.8;color:rgba(250,247,242,0.7)">
+            <strong style="color:var(--cl)">Approved →</strong> No payment activity yet.<br>
+            <strong style="color:var(--cl)">Ordered →</strong> Deposit becomes due. Pill: "Deposit $X due [date]."<br>
+            <strong style="color:var(--cl)">Deposit paid →</strong> Logged with date. Pill flips to "Deposit paid."<br>
+            <strong style="color:var(--cl)">Production →</strong> Balance pre-stages but not yet due.<br>
+            <strong style="color:var(--cl)">Shipped →</strong> Balance becomes due. Pill: "Balance $X due [date]."<br>
+            <strong style="color:var(--cl)">Balance paid →</strong> Logged. Pill flips to "Paid in full."<br>
+            <strong style="color:var(--cl)">Delivered →</strong> NET-30 vendors: balance due-date sets.<br>
+            <strong style="color:var(--cl)">Installed →</strong> Final reconciliation only.
+          </div>
+        </div>
+        <p class="body" style="font-size:0.75rem;margin-top:0.85rem;color:rgba(250,247,242,0.5)">Payment state never blocks procurement state. Leah can advance an item to "Shipped" before paying the balance — the system just flags the balance as due. She controls when to pay.</p>
+      </div>
+    </div>
+
+    <div class="pq" style="border-color:rgba(250,247,242,0.15)">
+      <blockquote style="color:var(--ow)">"Payments don't live in their own world. They live alongside the items they're paying for. The same screen where Leah sees 'Meadow Linen Sectional is shipping next week' shows her 'balance $3,400 is due before that.' One workflow. One source of truth."</blockquote>
+      <cite>Payment model · Design principle</cite>
+    </div>
+  </div>
+</div>
+
+<!-- 11 BOOKKEEPER EXPORT -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">11 / 14</div>
+  <div class="in">
+    <div class="eyebrow">Bookkeeper Export · QuickBooks-ready CSV</div>
+    <h2>One screen. <em>One clean CSV.</em></h2>
+    <p class="body" style="margin-bottom:1.25rem">v1 confirmed: CSV export over QBO API integration. Leah's bookkeeper imports the file using QuickBooks' standard CSV import flow. Works for QBO, QuickBooks Desktop, and Self-Employed. No OAuth dance, no API maintenance, no integration brittleness. See companion document for the column-by-column mapping.</p>
+
+    <div class="frame">
+      <div class="fr-c" style="background:rgba(44,41,38,0.5);padding:2rem;display:flex;align-items:center;justify-content:center;min-height:380px">
+        <div style="background:var(--sf);border-radius:8px;padding:1.5rem;width:100%;max-width:560px;box-shadow:0 24px 64px rgba(0,0,0,0.18)">
+          <div class="meta" style="color:var(--cl);margin-bottom:0.4rem">Export to QuickBooks</div>
+          <h3 class="h2" style="font-size:1.2rem;margin-bottom:1rem">Build the <em>reconciliation pack</em></h3>
+
+          <div style="margin-bottom:0.85rem">
+            <div class="meta" style="margin-bottom:0.35rem">Date range</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem">
+              <input style="width:100%;padding:0.5rem;border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.72rem" value="Apr 1, 2026"/>
+              <input style="width:100%;padding:0.5rem;border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.72rem" value="Apr 30, 2026"/>
+            </div>
+          </div>
+
+          <div style="margin-bottom:0.85rem">
+            <div class="meta" style="margin-bottom:0.35rem">Include</div>
+            <div style="font-family:var(--fb);font-size:0.72rem;line-height:1.7;color:var(--mo)">
+              <label style="display:flex;gap:0.4rem;align-items:center"><input type="checkbox" checked style="accent-color:var(--cl)"/>Deposits paid in this period</label>
+              <label style="display:flex;gap:0.4rem;align-items:center"><input type="checkbox" checked style="accent-color:var(--cl)"/>Balances paid in this period</label>
+              <label style="display:flex;gap:0.4rem;align-items:center"><input type="checkbox" checked style="accent-color:var(--cl)"/>Outstanding payments due</label>
+              <label style="display:flex;gap:0.4rem;align-items:center"><input type="checkbox" style="accent-color:var(--cl)"/>Patina Catalog transactions (Patina handles internally — usually exclude)</label>
+            </div>
+          </div>
+
+          <div style="margin-bottom:0.85rem">
+            <div class="meta" style="margin-bottom:0.35rem">Filter</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem">
+              <select style="width:100%;padding:0.5rem;border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.72rem"><option>All projects</option></select>
+              <select style="width:100%;padding:0.5rem;border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.72rem"><option>All vendors</option></select>
+            </div>
+          </div>
+
+          <div style="padding:0.85rem;background:rgba(196,165,123,0.06);border:1px solid rgba(196,165,123,0.2);border-radius:4px;margin-bottom:1rem">
+            <div class="meta" style="color:var(--cl);margin-bottom:0.3rem">Preview</div>
+            <div style="font-family:var(--fb);font-size:0.7rem;color:var(--mo);line-height:1.55">
+              <strong>23 transactions</strong> · 8 vendors · $42,800 total<br>
+              <strong>15 paid</strong> ($28,400) · <strong>8 outstanding</strong> ($14,400)<br>
+              <span style="font-style:italic;color:var(--ao);font-size:0.65rem">File: patina-vendor-bills-2026-04.csv (4.2 KB)</span>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;padding-top:0.85rem;border-top:1px solid var(--pe)">
+            <span class="btn btn-g">Cancel</span>
+            <span class="btn btn-c">Download CSV</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="g3" style="margin-top:1.25rem">
+      <div class="card">
+        <div class="card-t">Studio owner only</div>
+        <div class="card-d">In v1, only the studio owner role can access the export. No bookkeeper login, no permissions matrix. The owner downloads, the owner forwards.</div>
+      </div>
+      <div class="card">
+        <div class="card-t">QuickBooks-friendly column structure</div>
+        <div class="card-d">Columns map directly to QBO's CSV import expectations: vendor, bill date, due date, PO number, item description, amount, account category, payment status. Bookkeeper does no reformatting.</div>
+      </div>
+      <div class="card">
+        <div class="card-t">Patina Catalog defaults excluded</div>
+        <div class="card-d">Catalog transactions are billed by Patina to Leah (single invoice). Including them in the vendor-bill export would double-book. Off by default; on if the bookkeeper wants the detail.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 12 ROLLOUT -->
+<div class="slide dk fade">
+  <div class="lg">Patina</div><div class="num">12 / 14</div>
+  <div class="in">
+    <div class="eyebrow">Rollout · v1 build plan</div>
+    <h1>Three sprints. <em>Twelve weeks to pilot.</em></h1>
+    <p class="body" style="margin-bottom:1.5rem">The build plan reorganizes around the v1 scope decisions. Phase 1 ships the highest-value views (By Vendor, By Status, payment tracking). Phase 2 adds Calendar and the mobile Receiving flow. Phase 3 closes the loop with bookkeeper export and capture integration.</p>
+
+    <div class="g3">
+      <div class="card">
+        <div class="meta" style="color:var(--cl)">Phase 1 · Weeks 1–4</div>
+        <h3 style="color:var(--ow);margin:0.3rem 0;font-size:1rem">Order day, financial truth</h3>
+        <div class="card-d">
+          • New Procurement zone in top nav<br>
+          • By Vendor view with grouping logic<br>
+          • Order Assistant side panel<br>
+          • One-click Patina Catalog ordering<br>
+          • Vendor entity (company-level) data model<br>
+          • Payment terms model + payment state on POs<br>
+          • By Status view with payment pills<br>
+          • Project Detail FF&E zone collapsed to summary
+        </div>
+      </div>
+      <div class="card">
+        <div class="meta" style="color:var(--cl)">Phase 2 · Weeks 5–8</div>
+        <h3 style="color:var(--ow);margin:0.3rem 0;font-size:1rem">Logistics, mobile inspection</h3>
+        <div class="card-d">
+          • Calendar view (project-axis)<br>
+          • Automated conflict detection<br>
+          • Receiving desktop view (dashboard)<br>
+          • Mobile receiving flow (iOS first)<br>
+          • Damage claim auto-draft<br>
+          • Today Dashboard procurement card<br>
+          • Manual ETA quick-edit UX
+        </div>
+      </div>
+      <div class="card">
+        <div class="meta" style="color:var(--cl)">Phase 3 · Weeks 9–12</div>
+        <h3 style="color:var(--ow);margin:0.3rem 0;font-size:1rem">Bookkeeper, capture loop</h3>
+        <div class="card-d">
+          • Bookkeeper QuickBooks CSV export<br>
+          • Studio owner permissions<br>
+          • Capture-to-slot integration (5-sec capture)<br>
+          • Layer 1 → Layer 2 promotion flow<br>
+          • Layer 2 → Layer 3 nomination flow<br>
+          • Notifications model<br>
+          • Pilot launch with Leah + 2 designers
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:2rem;padding:1.25rem;background:rgba(196,165,123,0.08);border:1px solid rgba(196,165,123,0.2);border-radius:6px">
+      <div class="meta" style="color:var(--cl);margin-bottom:0.3rem">What we measure</div>
+      <p style="font-family:var(--fb);font-size:0.82rem;color:rgba(250,247,242,0.75);line-height:1.7">
+        <strong style="color:var(--ow)">Order-day duration:</strong> target 60% reduction.
+        <strong style="color:var(--ow);margin-left:0.5rem">Damage discovery lag:</strong> under 48 hours.
+        <strong style="color:var(--ow);margin-left:0.5rem">Payment status accuracy:</strong> 100% of POs have payment state visible without manual reconstruction.
+        <strong style="color:var(--ow);margin-left:0.5rem">Bookkeeper handoff time:</strong> minutes, not hours.
+        <strong style="color:var(--ow);margin-left:0.5rem">Calendar conflicts prevented:</strong> count of issues caught before becoming logistics emergencies.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- 13 V2 ROADMAP -->
+<div class="slide wm fade">
+  <div class="lg">Patina</div><div class="num">13 / 14</div>
+  <div class="in">
+    <div class="eyebrow">After v1 · Documented for the future</div>
+    <h2>What we defer, <em>and why.</em></h2>
+    <p class="body" style="margin-bottom:1.5rem">The deferred features aren't forgotten — they're documented as v2 candidates with a clear trigger condition. Each one waits for evidence from v1 usage that the additional complexity is worth the build effort.</p>
+
+    <div class="g2">
+      <div>
+        <div class="card" style="background:rgba(196,165,123,0.04);border-color:rgba(196,165,123,0.2)">
+          <div class="card-t">QuickBooks Online API integration</div>
+          <div class="card-d" style="margin-top:0.3rem"><strong style="color:var(--cl)">Trigger:</strong> Pilot bookkeepers report CSV reformatting taking longer than 15 minutes per export. Or pilot scales to 10+ designers and CSV manual import becomes a bottleneck.</div>
+        </div>
+        <div class="card" style="background:rgba(196,165,123,0.04);border-color:rgba(196,165,123,0.2);margin-top:0.75rem">
+          <div class="card-t">Automated ETA email parsing</div>
+          <div class="card-d" style="margin-top:0.3rem"><strong style="color:var(--cl)">Trigger:</strong> Analysis of manual ETA updates shows 70%+ come from a small set of vendors with predictable email formats. Email connector becomes ROI-positive.</div>
+        </div>
+        <div class="card" style="background:rgba(196,165,123,0.04);border-color:rgba(196,165,123,0.2);margin-top:0.75rem">
+          <div class="card-t">3rd-party receiver partner portal</div>
+          <div class="card-d" style="margin-top:0.3rem"><strong style="color:var(--cl)">Trigger:</strong> Designer pilot expands beyond solo practitioners into studios using professional receivers (Hilldrup, Designers Warehouse). Partner portal requires onboarding flow + permissions model.</div>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="background:rgba(196,165,123,0.04);border-color:rgba(196,165,123,0.2)">
+          <div class="card-t">Vendor person-level contact records</div>
+          <div class="card-d" style="margin-top:0.3rem"><strong style="color:var(--cl)">Trigger:</strong> Multi-designer studios start sharing vendor relationships and need to track which person at the vendor each designer works with. Solo Leah doesn't need this.</div>
+        </div>
+        <div class="card" style="background:rgba(196,165,123,0.04);border-color:rgba(196,165,123,0.2);margin-top:0.75rem">
+          <div class="card-t">Vendor calendar axis</div>
+          <div class="card-d" style="margin-top:0.3rem"><strong style="color:var(--cl)">Trigger:</strong> Studios manage 20+ active vendors with frequent crossover. Vendor-axis becomes useful for "what's happening with Sawkille this month across everything."</div>
+        </div>
+        <div class="card" style="background:rgba(196,165,123,0.04);border-color:rgba(196,165,123,0.2);margin-top:0.75rem">
+          <div class="card-t">Client payment ↔ vendor payment linkage</div>
+          <div class="card-d" style="margin-top:0.3rem"><strong style="color:var(--cl)">Trigger:</strong> Pilot feedback identifies repeated friction around "the client paid me on Friday, I need to pay Sawkille on Monday — when do I know it's safe to release the balance?" Requires designing the cash-flow view.</div>
+        </div>
+      </div>
+    </div>
+
+    <p class="body" style="margin-top:1.5rem;font-size:0.78rem;font-style:italic">Each deferred feature has its own future spec document waiting. v1 ships fast and lean. v2 expands based on what pilot teaches us — not on what we guessed at the start.</p>
+  </div>
+</div>
+
+<!-- 14 CLOSE -->
+<div class="slide lt fade">
+  <div class="lg">Patina</div><div class="num">14 / 14</div>
+  <div class="in">
+    <div class="strata"><div></div><div></div><div></div></div>
+    <div class="pq">
+      <blockquote>"v1 isn't the smaller version of v2. It's the version that ships, gets used, and tells us what v2 should be. Every cut from the concept proposal is a cut that earns Leah's actual workflow priority over our future ambitions."</blockquote>
+      <cite>Scope discipline · The principle behind the cuts</cite>
+    </div>
+
+    <h1 style="margin-top:2rem">Build-ready. <em>Pilot-ready.</em></h1>
+    <p class="body" style="margin-top:1rem;margin-bottom:2rem">v1 scope is locked. Three documents form the complete spec: this proposal (the what), the Mobile Receiving Flow (the on-the-studio-floor experience), and the Payment Model & QBO Export (the data and reconciliation infrastructure). Together they're ready for Claude Code to begin Sprint 1.</p>
+
+    <div class="g3" style="margin-bottom:2rem">
+      <div>
+        <div class="meta" style="margin-bottom:0.4rem">This document</div>
+        <div style="font-family:var(--fb);font-size:0.78rem;color:var(--mo);line-height:1.6">Procurement Workspace · v1 Scope. The four views, navigation, and integration with existing surfaces.</div>
+      </div>
+      <div>
+        <div class="meta" style="margin-bottom:0.4rem">Companion 1</div>
+        <div style="font-family:var(--fb);font-size:0.78rem;color:var(--mo);line-height:1.6">Mobile Receiving Flow. Phone-only inspection at 375px. Designed for the designer standing next to a carton.</div>
+      </div>
+      <div>
+        <div class="meta" style="margin-bottom:0.4rem">Companion 2</div>
+        <div style="font-family:var(--fb);font-size:0.78rem;color:var(--mo);line-height:1.6">Payment Model & QBO Export. Data model, state machine, and column-mapped CSV spec.</div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:2rem;border-top:1px solid var(--pe);flex-wrap:wrap;gap:1rem">
+      <div>
+        <div style="font-family:var(--fd);font-weight:400;font-size:1rem">Patina</div>
+        <div style="font-family:var(--fd);font-style:italic;font-size:0.78rem;color:var(--ao)">Where Time Adds Value</div>
+      </div>
+      <div class="meta">Procurement Workspace · v1 Scope · April 2026</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const f=document.querySelectorAll('.fade');
+const o=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('vis')})},{threshold:0.08,rootMargin:'0px 0px -40px 0px'});
+f.forEach(s=>o.observe(s));
+</script>
+</body>
+</html>

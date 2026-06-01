@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina · Payment Model & QBO Export</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--sf:#FFFFFF;--fd:'Playfair Display',Georgia,serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace}
+html{scroll-behavior:smooth;background:var(--ow)}
+body{font-family:var(--fb);color:var(--ch);line-height:1.6;-webkit-font-smoothing:antialiased}
+.w{max-width:1180px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}
+section{padding:clamp(2rem,4vw,4rem) 0}
+
+.cover{min-height:55vh;display:flex;flex-direction:column;justify-content:flex-end;padding:4rem clamp(1.5rem,5vw,4rem);background:var(--ch);color:var(--ow)}
+.cover h1{font-family:var(--fd);font-weight:400;font-size:clamp(2rem,4.5vw,3.2rem);line-height:1.12;letter-spacing:-0.02em;color:var(--ow)}
+.cover h1 span{display:block;font-style:italic;color:var(--cl);font-weight:400;font-size:0.55em}
+.cover-sub{font-size:0.95rem;color:rgba(250,247,242,0.55);max-width:660px;margin:1rem 0 2.5rem;line-height:1.75}
+.cover-strata{display:flex;flex-direction:column;gap:6px;margin-bottom:2rem}
+.cover-strata div{height:2px;border-radius:1px}
+.cover-strata div:nth-child(1){width:100px;background:var(--cl)}
+.cover-strata div:nth-child(2){width:75px;background:var(--cl);opacity:0.5}
+.cover-strata div:nth-child(3){width:50px;background:var(--cl);opacity:0.25}
+
+h1,.h1{font-family:var(--fd);font-weight:400;font-size:clamp(1.6rem,3.5vw,2.4rem);line-height:1.15;letter-spacing:-0.02em;margin-bottom:0.5rem}
+h2,.h2{font-family:var(--fd);font-weight:400;font-size:clamp(1.3rem,2.8vw,1.85rem);line-height:1.2;letter-spacing:-0.02em;margin-bottom:0.5rem}
+h3,.h3{font-family:var(--fd);font-weight:500;font-size:1.1rem;margin-bottom:0.4rem}
+h4{font-family:var(--fd);font-weight:500;font-size:0.95rem;margin-bottom:0.3rem;color:var(--ch)}
+h1 em,h2 em,h3 em,h4 em{font-style:italic;color:var(--cl)}
+.meta{font-family:var(--fm);font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao)}
+.body{font-family:var(--fb);font-size:0.92rem;line-height:1.7;color:var(--mo);max-width:680px}
+.eyebrow{font-family:var(--fm);font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--cl);margin-bottom:0.75rem}
+.cm{display:flex;gap:3rem;flex-wrap:wrap}.cm .meta{margin-bottom:0.2rem;color:rgba(250,247,242,0.3)}.cm p{font-size:0.85rem;color:rgba(250,247,242,0.7)}
+
+.sm{display:flex;flex-direction:column;gap:4px;padding:1.5rem 0}
+.sm div{height:1.5px;border-radius:1px}
+.sm div:nth-child(1){width:60px;background:var(--mo)}
+.sm div:nth-child(2){width:48px;background:var(--cl);opacity:0.7}
+.sm div:nth-child(3){width:36px;background:var(--cl);opacity:0.35}
+
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:2rem}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.25rem}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+@media(max-width:768px){.g2,.g3,.g4{grid-template-columns:1fr}}
+
+.card{padding:1.1rem;border:1px solid var(--pe);border-radius:6px;background:var(--sf)}
+.card-i{font-family:var(--fd);font-size:1.3rem;color:var(--cl);margin-bottom:0.3rem;line-height:1;font-style:italic}
+.card-t{font-family:var(--fb);font-weight:500;font-size:0.88rem;color:var(--ch);margin-bottom:0.25rem}
+.card-d{font-family:var(--fb);font-size:0.74rem;color:var(--mo);line-height:1.6}
+
+.spec-row{display:grid;grid-template-columns:160px 1fr;gap:1rem;padding:0.6rem 0;border-bottom:1px solid var(--pe);font-size:0.75rem}
+.spec-row:last-child{border-bottom:none}
+.spec-row-l{font-family:var(--fm);font-size:0.5rem;color:var(--ao);text-transform:uppercase;letter-spacing:0.06em;padding-top:0.15rem}
+.spec-row-r{font-family:var(--fb);color:var(--mo);line-height:1.6}
+.spec-row-r strong{color:var(--ch);font-weight:500}
+.spec-row-r code{font-family:var(--fm);font-size:0.68rem;background:var(--pe);padding:1px 5px;border-radius:2px;color:var(--ch)}
+
+.callout{padding:1rem 1.15rem;background:rgba(196,165,123,0.06);border-left:3px solid var(--cl);border-radius:0 5px 5px 0;margin:1.25rem 0}
+.callout-l{display:block;font-family:var(--fm);font-size:0.5rem;color:var(--cl);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.3rem;font-weight:600}
+.callout-d{font-family:var(--fb);font-size:0.78rem;color:var(--mo);line-height:1.65}
+.callout.warn{background:rgba(232,197,71,0.06);border-left-color:var(--gh)}
+.callout.warn .callout-l{color:var(--gh)}
+.callout.te{background:rgba(212,160,144,0.06);border-left-color:var(--te)}
+.callout.te .callout-l{color:var(--te)}
+
+.code{font-family:var(--fm);font-size:0.72rem;background:#2c2926;color:#e5e2dd;padding:1rem 1.25rem;border-radius:6px;line-height:1.7;overflow-x:auto;margin:1rem 0;white-space:pre}
+.code .kw{color:var(--cl)}
+.code .str{color:var(--sa)}
+.code .cm{color:var(--ao);font-style:italic}
+.code .num{color:var(--gh)}
+
+table.spec-table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:0.78rem;background:var(--sf);border:1px solid var(--pe);border-radius:6px;overflow:hidden}
+table.spec-table th{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--cl);padding:0.6rem 0.9rem;text-align:left;background:rgba(196,165,123,0.04);border-bottom:1px solid var(--pe);font-weight:600}
+table.spec-table td{padding:0.65rem 0.9rem;border-bottom:1px solid rgba(229,226,221,0.5);font-family:var(--fb);color:var(--mo);vertical-align:top;line-height:1.6}
+table.spec-table td:first-child{font-family:var(--fb);font-weight:500;color:var(--ch);white-space:nowrap}
+table.spec-table tr:last-child td{border-bottom:none}
+table.spec-table code{font-family:var(--fm);font-size:0.68rem;background:var(--pe);padding:1px 5px;border-radius:2px;color:var(--ch)}
+
+.state-diagram{display:flex;flex-direction:column;gap:0;background:var(--sf);border:1px solid var(--pe);border-radius:6px;padding:1.5rem;margin:1.5rem 0}
+.state-row{display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.3rem}
+.state-node{padding:0.5rem 0.85rem;border-radius:4px;font-family:var(--fb);font-size:0.74rem;font-weight:500;border:1.5px solid}
+.state-node.pending{border-color:var(--pe);background:var(--sf);color:var(--ao)}
+.state-node.due{border-color:var(--te);background:rgba(212,160,144,0.06);color:var(--te)}
+.state-node.paid{border-color:var(--sa);background:rgba(168,181,160,0.08);color:var(--sa)}
+.state-node.paused{border-color:var(--gh);background:rgba(232,197,71,0.08);color:var(--gh)}
+.state-arrow{font-family:var(--fm);font-size:0.55rem;color:var(--ao);letter-spacing:0.04em}
+
+.pay-pill{display:inline-flex;align-items:center;gap:0.3rem;padding:2px 7px;border-radius:2px;font-family:var(--fm);font-size:0.48rem;text-transform:uppercase;letter-spacing:0.04em;font-weight:600}
+.pay-pill.due{background:rgba(212,160,144,0.12);color:var(--te)}
+.pay-pill.paid{background:rgba(168,181,160,0.12);color:var(--sa)}
+.pay-pill.pending{background:rgba(196,165,123,0.08);color:var(--cl)}
+.pay-pill.paused{background:rgba(232,197,71,0.1);color:var(--gh)}
+.pay-pill.patina{background:rgba(139,156,173,0.1);color:var(--db)}
+
+.term-card{padding:1.1rem;background:var(--sf);border:1px solid var(--pe);border-radius:6px;margin-bottom:0.85rem}
+.term-card-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.4rem;flex-wrap:wrap;gap:0.5rem}
+.term-card-n{font-family:var(--fd);font-weight:500;font-size:1rem;color:var(--ch)}
+.term-card-w{font-family:var(--fm);font-size:0.48rem;color:var(--ao);text-transform:uppercase;letter-spacing:0.06em}
+.term-card-d{font-family:var(--fb);font-size:0.75rem;color:var(--mo);line-height:1.6;margin-bottom:0.5rem}
+.term-card-events{display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:0.5rem}
+.term-event{padding:0.35rem 0.65rem;background:var(--ow);border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.65rem;color:var(--ch)}
+.term-event strong{font-family:var(--fb);font-weight:600}
+
+.frame{background:var(--sf);border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04),0 12px 36px rgba(0,0,0,0.08);margin:1.5rem 0}
+.frame-h{padding:0.6rem 1rem;background:var(--ow);border-bottom:1px solid var(--pe);font-family:var(--fm);font-size:0.5rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--ao)}
+.frame-c{padding:1.25rem}
+
+.csv-table{font-family:var(--fm);font-size:0.65rem;width:100%;border-collapse:collapse;background:var(--sf)}
+.csv-table th{padding:0.5rem 0.75rem;background:#2c2926;color:#e5e2dd;text-align:left;font-weight:500;border-right:1px solid #3c3936;letter-spacing:0.03em;font-size:0.62rem}
+.csv-table td{padding:0.5rem 0.75rem;border-bottom:1px solid var(--pe);border-right:1px solid var(--pe);font-size:0.66rem;color:var(--mo);white-space:nowrap}
+.csv-table tr:last-child td{border-bottom:none}
+.csv-wrapper{overflow-x:auto;border:1px solid var(--pe);border-radius:6px;margin:1rem 0}
+
+.pq{padding:2rem 0;border-top:1px solid var(--pe);border-bottom:1px solid var(--pe);margin:2rem 0}
+.pq blockquote{font-family:var(--fd);font-size:clamp(1.05rem,2.2vw,1.4rem);font-style:italic;line-height:1.45;max-width:700px}
+.pq cite{display:block;font-family:var(--fm);font-size:0.55rem;font-style:normal;text-transform:uppercase;letter-spacing:0.06em;color:var(--ao);margin-top:0.6rem}
+
+.fade{opacity:0;transform:translateY(10px);transition:opacity 0.5s ease,transform 0.5s ease}
+.fade.vis{opacity:1;transform:translateY(0)}
+
+.dk-section{background:var(--ch);color:var(--ow)}
+.dk-section .body{color:rgba(250,247,242,0.6)}
+.dk-section h1,.dk-section h2,.dk-section h3{color:var(--ow)}
+.dk-section .card{background:rgba(250,247,242,0.03);border-color:rgba(250,247,242,0.08)}
+.dk-section .card-t{color:var(--ow)}
+.dk-section .card-d{color:rgba(250,247,242,0.55)}
+.dk-section .spec-row{border-bottom-color:rgba(250,247,242,0.08)}
+.dk-section .spec-row-l{color:rgba(250,247,242,0.4)}
+.dk-section .spec-row-r{color:rgba(250,247,242,0.7)}
+.dk-section .spec-row-r strong{color:var(--ow)}
+.dk-section .spec-row-r code{background:rgba(250,247,242,0.08);color:var(--ow)}
+.dk-section .pq{border-color:rgba(250,247,242,0.15)}
+.dk-section .pq blockquote{color:var(--ow)}
+
+.wm-section{background:linear-gradient(155deg,#e8ddd0,#ddd0c0 50%,#ede6dc)}
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <p class="meta" style="margin-bottom:1rem;color:rgba(250,247,242,0.4)">Procurement Workspace · Companion Doc 2 of 2</p>
+  <div class="cover-strata"><div></div><div></div><div></div></div>
+  <h1>Payment Tracking & QBO Export<span>The financial spine of v1</span></h1>
+  <p class="cover-sub">Vendor payment terms are the spine of every procurement relationship. This document defines how Patina models flexible payment terms (50/50, 30/70, NET-30, custom milestones), how payment state runs parallel to the 8-stage procurement pipeline, and how Leah's bookkeeper gets a clean QuickBooks-ready CSV at the end of every month. Grounded in QBO's actual import realities, not what we wish were true.</p>
+  <div class="cm">
+    <div><p class="meta">Status</p><p>v1 Scope · Build-Ready</p></div>
+    <div><p class="meta">Integration target</p><p>QuickBooks Online · Desktop · Self-Employed</p></div>
+    <div><p class="meta">Build order</p><p>Sprint 1 (model) → Sprint 3 (export)</p></div>
+  </div>
+</div>
+
+<!-- WHY THIS LIVES IN THE WORKSPACE -->
+<section class="fade">
+<div class="w">
+  <p class="eyebrow">The design choice</p>
+  <h1>Why payment <em>lives inside procurement.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">A common pattern in design tools is to separate financial tracking into its own zone — a "Finance" or "Invoices" section divorced from the work it pays for. Patina chooses differently. Payment state lives on the PO. The PO lives in the Procurement Workspace. When Leah looks at "what's happening with the Chen sectional," she sees the procurement status <em>and</em> the payment status on the same row. One workflow, not two.</p>
+
+  <div class="pq">
+    <blockquote>"Procurement and payment aren't two things to coordinate. They're two views of the same thing. Money flows because items move; items move because money flows. Modeling them separately is the design error."</blockquote>
+    <cite>Design principle · Payment integration</cite>
+  </div>
+
+  <div class="g3" style="margin-top:1.5rem">
+    <div class="card">
+      <div class="card-i">◆</div>
+      <div class="card-t">Vendor-level defaults</div>
+      <div class="card-d">Payment terms set once per vendor (50/50, 30/70, NET-30, etc.). Every new PO inherits the vendor's defaults. Override per PO when the vendor offers different terms for a specific item.</div>
+    </div>
+    <div class="card">
+      <div class="card-i">◇</div>
+      <div class="card-t">Stage transitions trigger payment events</div>
+      <div class="card-d">When a PO moves from Ordered → Production, the deposit becomes due. When Production → Shipped, the balance pre-stages. The system surfaces "action needed" without Leah hunting.</div>
+    </div>
+    <div class="card">
+      <div class="card-i">▣</div>
+      <div class="card-t">Damage pauses payment automatically</div>
+      <div class="card-d">When the mobile receiving flow logs damage, any open balance auto-pauses until the claim resolves. Protects Leah from paying full price on a partially-resolved problem.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- FIVE PAYMENT PATTERNS -->
+<section class="fade wm-section">
+<div class="w">
+  <p class="eyebrow">Payment patterns supported in v1</p>
+  <h1>Five flexible <em>term templates.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">v1 supports five payment patterns that cover the overwhelming majority of vendor relationships in residential interior design. Each pattern defines a set of payment events with trigger conditions tied to procurement stages. Custom milestones provide an escape valve for vendors with bespoke terms.</p>
+
+  <div class="g2">
+    <div>
+      <div class="term-card">
+        <div class="term-card-h">
+          <div class="term-card-n">50/50</div>
+          <span class="term-card-w">Most common</span>
+        </div>
+        <div class="term-card-d">Deposit at order, balance before ship. The standard for custom furniture and many trade vendors. Most Founding Circle manufacturers will use this.</div>
+        <div class="term-card-events">
+          <div class="term-event"><strong>Deposit 50%</strong> · trigger: Ordered</div>
+          <div class="term-event"><strong>Balance 50%</strong> · trigger: Shipped</div>
+        </div>
+      </div>
+      <div class="term-card">
+        <div class="term-card-h">
+          <div class="term-card-n">30/70</div>
+          <span class="term-card-w">Lower deposit variant</span>
+        </div>
+        <div class="term-card-d">Lower deposit at order, larger balance before ship. Some manufacturers prefer this for cash-flow reasons or to reduce client risk on long lead-time items.</div>
+        <div class="term-card-events">
+          <div class="term-event"><strong>Deposit 30%</strong> · trigger: Ordered</div>
+          <div class="term-event"><strong>Balance 70%</strong> · trigger: Shipped</div>
+        </div>
+      </div>
+      <div class="term-card">
+        <div class="term-card-h">
+          <div class="term-card-n">100% upfront</div>
+          <span class="term-card-w">Retail / antique pattern</span>
+        </div>
+        <div class="term-card-d">Full payment at order. Common for in-stock retail, antique dealer purchases, small custom items, and vendors who don't have a deposit/balance system.</div>
+        <div class="term-card-events">
+          <div class="term-event"><strong>Full 100%</strong> · trigger: Ordered</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="term-card">
+        <div class="term-card-h">
+          <div class="term-card-n">NET-30</div>
+          <span class="term-card-w">Trade account</span>
+        </div>
+        <div class="term-card-d">Full payment due 30 days after delivery. The premium pattern — only offered to designers with established trade accounts. Reduces working-capital pressure.</div>
+        <div class="term-card-events">
+          <div class="term-event"><strong>Full 100%</strong> · trigger: Delivered + 30d</div>
+        </div>
+      </div>
+      <div class="term-card">
+        <div class="term-card-h">
+          <div class="term-card-n">Custom milestones</div>
+          <span class="term-card-w">Escape valve</span>
+        </div>
+        <div class="term-card-d">Two to four payment events with custom amounts (percentage or fixed dollar) and trigger conditions. Used for complex custom work — built-ins, large bespoke pieces, multi-component projects with phased production.</div>
+        <div class="term-card-events">
+          <div class="term-event"><strong>Event 1</strong> · custom amount, custom trigger</div>
+          <div class="term-event"><strong>Event 2</strong> · custom amount, custom trigger</div>
+          <div class="term-event"><strong>Event 3</strong> · optional</div>
+          <div class="term-event"><strong>Event 4</strong> · optional</div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="callout-l">Trigger conditions available</span>
+        <div class="callout-d">
+          <strong>Stage triggers:</strong> Ordered, Production, Shipped, Delivered, Installed.<br>
+          <strong>Date triggers:</strong> Specific date, X days after stage transition.<br>
+          <strong>Manual triggers:</strong> "When Leah marks it ready" (for milestones tied to off-system events like client approval).
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- PAYMENT STATE MACHINE -->
+<section class="fade dk-section">
+<div class="w">
+  <p class="eyebrow">Payment state machine</p>
+  <h1>The four <em>payment states.</em></h1>
+  <p class="body" style="margin-bottom:1rem">Each payment event on a PO transitions through four states. The state machine is the same regardless of payment pattern — what varies is when transitions trigger. This uniformity is what allows the workspace to surface payment status consistently across By Vendor, By Status, and Receiving views.</p>
+
+  <div class="state-diagram" style="background:rgba(250,247,242,0.03);border-color:rgba(250,247,242,0.1)">
+    <div class="state-row">
+      <div class="state-node pending" style="background:rgba(250,247,242,0.05);border-color:rgba(250,247,242,0.2);color:rgba(250,247,242,0.65)">Pending</div>
+      <span class="state-arrow" style="color:rgba(250,247,242,0.5)">→ trigger condition met →</span>
+      <div class="state-node due">Due</div>
+      <span class="state-arrow" style="color:rgba(250,247,242,0.5)">→ payment confirmed →</span>
+      <div class="state-node paid">Paid</div>
+    </div>
+    <div class="state-row" style="margin-top:1rem">
+      <div class="state-node due">Due</div>
+      <span class="state-arrow" style="color:rgba(250,247,242,0.5)">→ damage claim opened →</span>
+      <div class="state-node paused">Paused</div>
+      <span class="state-arrow" style="color:rgba(250,247,242,0.5)">→ claim resolved →</span>
+      <div class="state-node due">Due (resumed)</div>
+    </div>
+  </div>
+
+  <div class="g2" style="margin-top:1.5rem">
+    <div>
+      <h3 style="color:var(--ow)">Pending</h3>
+      <p class="body" style="color:rgba(250,247,242,0.6);font-size:0.82rem">The payment event exists in the system but its trigger condition has not been met. For 50/50 terms with a PO at "Approved" stage, both the deposit and balance events are Pending. Nothing is owed. No action needed.</p>
+    </div>
+    <div>
+      <h3 style="color:var(--ow)">Due</h3>
+      <p class="body" style="color:rgba(250,247,242,0.6);font-size:0.82rem">The trigger condition has been met. The payment is owed. A due-by date is set (default: 7 days from trigger, configurable per vendor). The pill turns Terracotta. By Vendor view surfaces this prominently.</p>
+    </div>
+    <div>
+      <h3 style="color:var(--ow)">Paid</h3>
+      <p class="body" style="color:rgba(250,247,242,0.6);font-size:0.82rem">Payment has been logged. Date, amount, and method are recorded. Optional reference number (check #, transaction ID, wire reference). Pill turns Sage. The event is closed but remains queryable for the bookkeeper export.</p>
+    </div>
+    <div>
+      <h3 style="color:var(--ow)">Paused</h3>
+      <p class="body" style="color:rgba(250,247,242,0.6);font-size:0.82rem">A damage claim or dispute has opened against the PO. Any unpaid balance pauses automatically until the claim resolves. Pill turns Golden Hour. Resolution unpauses (back to Due) or cancels (closes without payment, if vendor accepts return).</p>
+    </div>
+  </div>
+
+  <div class="callout warn" style="background:rgba(232,197,71,0.08);border-left-color:var(--gh)">
+    <span class="callout-l" style="color:var(--gh)">Important: payment state never blocks procurement state</span>
+    <div class="callout-d" style="color:rgba(250,247,242,0.7)">Leah can advance a PO from "Production" to "Shipped" even if the deposit shows as Due (unpaid). The system surfaces the unpaid deposit as a concern but doesn't prevent forward progress. Some vendors begin production on a promise; others won't. The system models reality; it doesn't enforce policy.</div>
+  </div>
+</div>
+</section>
+
+<!-- DATA MODEL -->
+<section class="fade">
+<div class="w">
+  <div class="sm"><div></div><div></div><div></div></div>
+  <p class="eyebrow">Data model</p>
+  <h1>Three new tables, <em>two extended.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">The payment model adds three new tables to the existing Patina schema and extends two. All tables live in the same Supabase instance, share the studio-scoping pattern with the rest of the workspace, and follow established Patina naming conventions.</p>
+
+  <h3>New table · <code style="font-family:var(--fm);font-size:0.85rem;background:var(--pe);padding:2px 7px;border-radius:3px">vendor_payment_terms</code></h3>
+  <table class="spec-table">
+    <thead><tr><th>Column</th><th>Type</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td>id</td><td>uuid PK</td><td>Primary key</td></tr>
+      <tr><td>vendor_id</td><td>uuid FK</td><td>References <code>vendors.id</code>. One-to-one.</td></tr>
+      <tr><td>pattern</td><td>enum</td><td><code>fifty_fifty</code> · <code>thirty_seventy</code> · <code>full_upfront</code> · <code>net_thirty</code> · <code>custom</code></td></tr>
+      <tr><td>default_events</td><td>jsonb</td><td>Array of event definitions when pattern is <code>custom</code>. Null for predefined patterns.</td></tr>
+      <tr><td>net_days</td><td>integer</td><td>Days after trigger before payment is due. Default 7 for stage-triggered; 30 for NET-30 pattern.</td></tr>
+      <tr><td>preferred_method</td><td>enum</td><td><code>ach</code> · <code>wire</code> · <code>check</code> · <code>card</code> · <code>other</code>. Display only; not enforced.</td></tr>
+      <tr><td>notes</td><td>text</td><td>Free-form vendor payment notes (e.g., "Wire to Chase routing 071000013").</td></tr>
+      <tr><td>created_at, updated_at</td><td>timestamptz</td><td>Standard audit fields</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:1.5rem">New table · <code style="font-family:var(--fm);font-size:0.85rem;background:var(--pe);padding:2px 7px;border-radius:3px">po_payment_events</code></h3>
+  <table class="spec-table">
+    <thead><tr><th>Column</th><th>Type</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td>id</td><td>uuid PK</td><td>Primary key</td></tr>
+      <tr><td>po_id</td><td>uuid FK</td><td>References <code>purchase_orders.id</code></td></tr>
+      <tr><td>sequence</td><td>integer</td><td>Order of events within a PO. 1 = first event (usually deposit), 2 = second event, etc.</td></tr>
+      <tr><td>label</td><td>text</td><td>Display name. e.g., "Deposit," "Balance," "Milestone 1: Frame complete"</td></tr>
+      <tr><td>amount_type</td><td>enum</td><td><code>percentage</code> or <code>fixed</code></td></tr>
+      <tr><td>amount_value</td><td>numeric(10,2)</td><td>The percentage (0–100) or fixed dollar amount</td></tr>
+      <tr><td>amount_calculated</td><td>numeric(10,2)</td><td>Cached USD amount. Recalculated when PO total changes.</td></tr>
+      <tr><td>trigger_type</td><td>enum</td><td><code>stage</code> · <code>date</code> · <code>days_after_stage</code> · <code>manual</code></td></tr>
+      <tr><td>trigger_stage</td><td>enum</td><td>Stage value if trigger_type is stage-related. e.g., <code>ordered</code>, <code>shipped</code></td></tr>
+      <tr><td>trigger_date</td><td>date</td><td>Specific date if trigger_type is <code>date</code></td></tr>
+      <tr><td>trigger_offset_days</td><td>integer</td><td>Days after stage if trigger_type is <code>days_after_stage</code></td></tr>
+      <tr><td>state</td><td>enum</td><td><code>pending</code> · <code>due</code> · <code>paid</code> · <code>paused</code> · <code>cancelled</code></td></tr>
+      <tr><td>due_date</td><td>date</td><td>Set when state transitions to <code>due</code>. Calculated from trigger + vendor net_days.</td></tr>
+      <tr><td>paid_at</td><td>timestamptz</td><td>Set when state transitions to <code>paid</code></td></tr>
+      <tr><td>paid_amount</td><td>numeric(10,2)</td><td>Actual amount paid (may differ from amount_calculated)</td></tr>
+      <tr><td>paid_method</td><td>enum</td><td>Method used. Same enum as <code>vendor_payment_terms.preferred_method</code></td></tr>
+      <tr><td>paid_reference</td><td>text</td><td>Optional check #, wire reference, transaction ID</td></tr>
+      <tr><td>paused_reason</td><td>text</td><td>Set when state is <code>paused</code>. Usually "Damage claim WS-188"</td></tr>
+      <tr><td>account_category</td><td>text</td><td>QuickBooks account category. Default: "Cost of Goods Sold: FF&E." Overridable per event.</td></tr>
+      <tr><td>created_at, updated_at</td><td>timestamptz</td><td>Standard audit fields</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:1.5rem">New table · <code style="font-family:var(--fm);font-size:0.85rem;background:var(--pe);padding:2px 7px;border-radius:3px">payment_logs</code></h3>
+  <table class="spec-table">
+    <thead><tr><th>Column</th><th>Type</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td>id</td><td>uuid PK</td><td>Primary key</td></tr>
+      <tr><td>po_payment_event_id</td><td>uuid FK</td><td>References <code>po_payment_events.id</code></td></tr>
+      <tr><td>action</td><td>enum</td><td><code>state_change</code> · <code>amount_change</code> · <code>method_change</code> · <code>note_added</code></td></tr>
+      <tr><td>from_value</td><td>jsonb</td><td>Previous values (whatever changed)</td></tr>
+      <tr><td>to_value</td><td>jsonb</td><td>New values</td></tr>
+      <tr><td>actor_user_id</td><td>uuid FK</td><td>Who made the change. Null for system-triggered changes.</td></tr>
+      <tr><td>actor_source</td><td>enum</td><td><code>user</code> · <code>system_trigger</code> · <code>damage_pause</code> · <code>claim_resume</code></td></tr>
+      <tr><td>created_at</td><td>timestamptz</td><td>When the change happened</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:1.5rem">Extended table · <code style="font-family:var(--fm);font-size:0.85rem;background:var(--pe);padding:2px 7px;border-radius:3px">vendors</code></h3>
+  <table class="spec-table">
+    <thead><tr><th>Column</th><th>Type</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td>billing_email</td><td>text</td><td>Email used for claims, payment confirmations, and vendor bills. Distinct from primary contact email.</td></tr>
+      <tr><td>quickbooks_vendor_name</td><td>text</td><td>How the vendor appears in Leah's QuickBooks. Maps to the QBO "Vendor" field. May differ from Patina display name. Defaults to <code>vendor.name</code> on first export.</td></tr>
+      <tr><td>quickbooks_account_category</td><td>text</td><td>Default QBO account category for this vendor's bills. Overrides the global default. Useful when vendors map to different chart-of-accounts entries.</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:1.5rem">Extended table · <code style="font-family:var(--fm);font-size:0.85rem;background:var(--pe);padding:2px 7px;border-radius:3px">purchase_orders</code></h3>
+  <table class="spec-table">
+    <thead><tr><th>Column</th><th>Type</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td>payment_terms_override</td><td>jsonb</td><td>Set when this specific PO uses different terms than the vendor default. Null when inheriting from <code>vendor_payment_terms</code>.</td></tr>
+      <tr><td>quickbooks_account_category</td><td>text</td><td>Per-PO override for chart of accounts. Most POs use vendor default; some need project-specific categorization.</td></tr>
+      <tr><td>excluded_from_export</td><td>boolean</td><td>Default false. True for Patina Catalog POs (Patina handles billing internally — bookkeeper shouldn't see them in vendor-bill exports).</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout te">
+    <span class="callout-l">Patina Catalog POs are special</span>
+    <div class="callout-d">For POs sourced from the Patina Catalog (Layer 3), <code>excluded_from_export</code> defaults to true. Why: Patina is the merchant for Catalog items, and Leah pays Patina a single consolidated bill, not the underlying vendor. Including these in the vendor-bill export would double-book in QuickBooks. The bookkeeper can toggle them on if she wants the line-item detail visible — but they should be reconciled against the Patina invoice, not paid separately to each underlying vendor.</div>
+  </div>
+</div>
+</section>
+
+<!-- TRIGGER SYSTEM -->
+<section class="fade">
+<div class="w">
+  <p class="eyebrow">Trigger system · How transitions fire</p>
+  <h1>Stage changes <em>are events.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">The connection between procurement stages and payment events runs through a trigger system. When a PO's stage advances, any payment events with matching trigger conditions transition from Pending to Due. Implementation detail: this should be a database trigger or service-layer event handler — not application code scattered across views. One source of truth, one place to debug.</p>
+
+  <div class="frame">
+    <div class="frame-h">Trigger reference</div>
+    <div class="frame-c">
+      <table class="spec-table" style="margin:0;border:none">
+        <thead><tr><th>PO stage</th><th>Triggers</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Approved</td>
+            <td>No payment events</td>
+            <td>All payment events remain Pending</td>
+          </tr>
+          <tr>
+            <td>Ordered</td>
+            <td><code>trigger_type=stage</code> AND <code>trigger_stage=ordered</code></td>
+            <td>Deposit becomes Due (typical). 100% upfront pattern fires here.</td>
+          </tr>
+          <tr>
+            <td>Production</td>
+            <td><code>trigger_type=stage</code> AND <code>trigger_stage=production</code></td>
+            <td>Custom milestone events tied to "start of production" fire here.</td>
+          </tr>
+          <tr>
+            <td>Shipped</td>
+            <td><code>trigger_type=stage</code> AND <code>trigger_stage=shipped</code></td>
+            <td>Balance becomes Due (50/50 and 30/70 patterns).</td>
+          </tr>
+          <tr>
+            <td>Delivered</td>
+            <td><code>trigger_type=stage</code> AND <code>trigger_stage=delivered</code></td>
+            <td>NET-30: due_date set to today + 30. Some milestone events fire here.</td>
+          </tr>
+          <tr>
+            <td>Delivered with damage</td>
+            <td>Special: pauses all Due events on this PO</td>
+            <td>Any Due payment events transition to Paused with reason "Damage claim [ID]"</td>
+          </tr>
+          <tr>
+            <td>Installed</td>
+            <td><code>trigger_type=stage</code> AND <code>trigger_stage=installed</code></td>
+            <td>Final milestone events (rare). NET-30 already due by this point.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h3 style="margin-top:1.5rem">Edge cases</h3>
+  <div class="frame">
+    <div class="frame-c">
+      <div class="spec-row">
+        <span class="spec-row-l">Stage skips</span>
+        <span class="spec-row-r">If a PO jumps from Approved straight to Production (skipping Ordered — rare but possible for in-stock items), all trigger conditions up to and including the new stage fire. Deposit triggers as if Ordered had been recorded.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">Stage reversal</span>
+        <span class="spec-row-r">If a PO is rolled back (e.g., Shipped → Production due to vendor recall), payment events that already transitioned remain at their current state. No retroactive un-firing. Leah handles manually if needed (e.g., reclassify a "Paid" event back to "Pending" via override).</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">Manual triggers</span>
+        <span class="spec-row-r">Custom milestone events with <code>trigger_type=manual</code> never auto-fire. Leah marks them Due explicitly when their off-system condition is met (e.g., "vendor sent frame photos for approval"). Surfaces in the PO detail page as a "fire trigger" button.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">Date triggers in the past</span>
+        <span class="spec-row-r">If a date-triggered event is created with a past date (data backfill scenario), the event immediately transitions to Due with a due_date matching today + vendor net_days.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">Damage claim resolution</span>
+        <span class="spec-row-r">When a damage claim resolves (vendor accepts return / agrees to repair / issues credit), the paused payment events transition based on the resolution: <strong>repair accepted</strong> → resume to Due, <strong>return accepted</strong> → cancel the event, <strong>credit issued</strong> → mark paid with paid_amount reduced by credit value.</span>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- UI INTEGRATION -->
+<section class="fade dk-section">
+<div class="w">
+  <p class="eyebrow">UI Integration</p>
+  <h1>Payment surfaces <em>everywhere it matters.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">Payment state shows up in five places across the workspace. Each surface answers a different question. Together they ensure Leah is never surprised by an unpaid balance and never has to leave a view to find the financial truth of what she's looking at.</p>
+
+  <div class="g2">
+    <div>
+      <h3 style="color:var(--ow)">Surface 1 · By Vendor view</h3>
+      <p class="body" style="color:rgba(250,247,242,0.6);font-size:0.78rem;margin-bottom:0.75rem">Vendor card headers show aggregate payment status: "$3,400 balance due May 12." Within each PO row, a small payment-pills cluster shows event states. The "Order all" button is replaced with payment-aware actions when there's a Due balance.</p>
+      <div style="padding:0.85rem;background:rgba(250,247,242,0.04);border-radius:5px;display:flex;gap:0.4rem;flex-wrap:wrap;align-items:center">
+        <span style="font-family:var(--fb);font-size:0.7rem;color:rgba(250,247,242,0.7)">PO WS-188 · Meadow Sectional</span>
+        <span class="pay-pill paid">Deposit paid Apr 8</span>
+        <span class="pay-pill due">Balance $3,400 due May 12</span>
+      </div>
+    </div>
+
+    <div>
+      <h3 style="color:var(--ow)">Surface 2 · By Status view</h3>
+      <p class="body" style="color:rgba(250,247,242,0.6);font-size:0.78rem;margin-bottom:0.75rem">Each item row in any procurement stage shows its current payment state alongside its procurement state. Filterable by payment state (e.g., "show me all Production-stage items with unpaid deposits").</p>
+      <div style="padding:0.85rem;background:rgba(250,247,242,0.04);border-radius:5px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.4rem">
+        <div>
+          <div style="font-family:var(--fb);font-size:0.75rem;color:var(--ow)">Heirloom Oak Dining Table</div>
+          <div style="font-family:var(--fb);font-size:0.6rem;color:rgba(250,247,242,0.5)">Production · 13 wk left</div>
+        </div>
+        <div style="display:flex;gap:0.3rem;flex-direction:column;align-items:flex-end">
+          <span class="pay-pill paid">Deposit paid</span>
+          <span class="pay-pill pending" style="background:rgba(232,197,71,0.12);color:var(--gh)">Balance due on ship</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3 style="color:var(--ow)">Surface 3 · PO Detail page</h3>
+      <p class="body" style="color:rgba(250,247,242,0.6);font-size:0.78rem;margin-bottom:0.75rem">Full payment timeline on the PO detail page. Each event shown with state, amount, trigger condition, due date, and (if paid) the payment details. Actions: mark paid, log payment manually, override amount, add note.</p>
+    </div>
+
+    <div>
+      <h3 style="color:var(--ow)">Surface 4 · Mobile Receiving</h3>
+      <p class="body" style="color:rgba(250,247,242,0.6);font-size:0.78rem;margin-bottom:0.75rem">When Leah logs a delivery, if the PO has a Due balance triggered by Shipped or Delivered, the receiving flow surfaces it on the success screen ("Balance $3,400 paid logged" or "Balance $3,400 still due — log payment when paid"). Damage path auto-pauses any Due balance.</p>
+    </div>
+
+    <div>
+      <h3 style="color:var(--ow)">Surface 5 · Today Dashboard</h3>
+      <p class="body" style="color:rgba(250,247,242,0.6);font-size:0.78rem;margin-bottom:0.75rem">Daily summary card: "Payments due this week" with count and total. Click-through to filtered By Vendor view showing only Due items. The card appears only when there are Due items — quiet by default.</p>
+    </div>
+
+    <div>
+      <h3 style="color:var(--ow)">Surface 6 · Notifications</h3>
+      <p class="body" style="color:rgba(250,247,242,0.6);font-size:0.78rem;margin-bottom:0.75rem">New event types: payment due in 3 days, payment due today, payment overdue, payment paused due to damage, payment resumed after claim resolution. Studio owner role only — junior designers don't see payment notifications.</p>
+    </div>
+  </div>
+
+  <div class="pq">
+    <blockquote style="color:var(--ow)">"Payment status pills should be a glance, not a click. By the time Leah is looking at a vendor card, the answer to 'how much do I owe this vendor?' should already be visible."</blockquote>
+    <cite>UI principle · Surface-level visibility</cite>
+  </div>
+</div>
+</section>
+
+<!-- QBO REALITY -->
+<section class="fade">
+<div class="w">
+  <div class="sm"><div></div><div></div><div></div></div>
+  <p class="eyebrow">QuickBooks export · The hard truths</p>
+  <h1>QBO's import is <em>messier than we'd like.</em></h1>
+  <p class="body" style="margin-bottom:1rem">Research finding worth flagging: QuickBooks Online US standard editions (Simple Start, Essentials, Plus) do not support native CSV import for vendor bills (accounts payable). The official Intuit support pages document this. Bill import is available natively only in some international editions and in QBO Advanced. For US standard editions, the path is either manual entry by the bookkeeper or a third-party importer like SaasAnt or Skyvia.</p>
+
+  <p class="body" style="margin-bottom:1rem"><strong>What this means for our spec.</strong> The export Patina produces is a "bookkeeper-friendly CSV." The bookkeeper either: (1) uses it as a reference document and enters bills manually in QBO, (2) uses a third-party importer to push the CSV into QBO, or (3) imports it into QBO Advanced or QuickBooks Desktop if Leah's edition supports it. Patina doesn't promise automatic QBO ingest in v1. We promise a CSV that's structured to make whichever path the bookkeeper chooses fast and error-free.</p>
+
+  <div class="callout te">
+    <span class="callout-l">Adjustment from original concept</span>
+    <div class="callout-d">The Procurement Workspace v1 proposal described this as a "QuickBooks-ready CSV." That language was correct in spirit but oversold the mechanism. We're now calling it a <strong>"bookkeeper reconciliation pack"</strong> — a CSV file plus a printable PDF summary. The CSV columns map to QuickBooks bill fields so the bookkeeper's data entry (or third-party import) is mechanical, not interpretive. The PDF gives the bookkeeper a human-readable reference to cross-check against.</div>
+  </div>
+
+  <h3 style="margin-top:1.5rem">What QBO actually expects (when import is available)</h3>
+  <p class="body" style="font-size:0.85rem;margin-bottom:1rem">The QuickBooks Online bill import format (where supported) uses these columns. Our export aligns with this structure so any path forward — native import, third-party importer, or manual entry — works without reformatting.</p>
+
+  <div class="csv-wrapper">
+    <table class="csv-table">
+      <thead>
+        <tr>
+          <th>Bill No.</th>
+          <th>Vendor</th>
+          <th>Bill Date</th>
+          <th>Due Date</th>
+          <th>Terms</th>
+          <th>Memo</th>
+          <th>Category/Account</th>
+          <th>Description</th>
+          <th>Amount</th>
+          <th>Customer/Project</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>WS-188-D</td>
+          <td>Woodward & Sons</td>
+          <td>04/08/2026</td>
+          <td>04/08/2026</td>
+          <td>Due on receipt</td>
+          <td>Deposit · Meadow Linen Sectional</td>
+          <td>COGS: FF&amp;E</td>
+          <td>Meadow Linen Sectional - 50% deposit</td>
+          <td>3400.00</td>
+          <td>Chen Residence</td>
+        </tr>
+        <tr>
+          <td>WS-188-B</td>
+          <td>Woodward & Sons</td>
+          <td>05/06/2026</td>
+          <td>05/12/2026</td>
+          <td>Net 7</td>
+          <td>Balance · Meadow Linen Sectional</td>
+          <td>COGS: FF&amp;E</td>
+          <td>Meadow Linen Sectional - 50% balance</td>
+          <td>3400.00</td>
+          <td>Chen Residence</td>
+        </tr>
+        <tr>
+          <td>NA-041-D</td>
+          <td>Nordic Atelier</td>
+          <td>04/12/2026</td>
+          <td>04/12/2026</td>
+          <td>Due on receipt</td>
+          <td>Deposit · Heirloom Oak Dining Table</td>
+          <td>COGS: FF&amp;E</td>
+          <td>Heirloom Oak Dining Table - 50% deposit</td>
+          <td>2100.00</td>
+          <td>Chen Residence</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- COLUMN MAPPING -->
+<section class="fade wm-section">
+<div class="w">
+  <p class="eyebrow">Column mapping · Patina → QuickBooks</p>
+  <h1>How each Patina field <em>maps to QBO.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">Every column in the export comes from a specific Patina source field. This mapping is the contract that lets Claude Code build the export consistently. Below: the canonical column list with source, transformation, and notes.</p>
+
+  <table class="spec-table">
+    <thead>
+      <tr>
+        <th>QBO Column</th>
+        <th>Patina Source</th>
+        <th>Transform</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Bill No.</td>
+        <td><code>purchase_orders.po_number</code> + event suffix</td>
+        <td><code>{po_number}-{event_code}</code></td>
+        <td>Event codes: D=deposit, B=balance, M1/M2=milestones. Ensures unique bill numbers per payment event.</td>
+      </tr>
+      <tr>
+        <td>Vendor</td>
+        <td><code>vendors.quickbooks_vendor_name</code></td>
+        <td>Fallback to <code>vendors.name</code></td>
+        <td>Must match exactly how the vendor appears in QBO. Bookkeeper sets the canonical name on first export.</td>
+      </tr>
+      <tr>
+        <td>Bill Date</td>
+        <td><code>po_payment_events.due_date</code> when Due, else system date when state changed to Due</td>
+        <td>MM/DD/YYYY format</td>
+        <td>The date the bill was "issued" — typically when the trigger fired, not when paid.</td>
+      </tr>
+      <tr>
+        <td>Due Date</td>
+        <td><code>po_payment_events.due_date</code></td>
+        <td>MM/DD/YYYY format</td>
+        <td>The date the bill is due. For Due-on-receipt events, equals Bill Date.</td>
+      </tr>
+      <tr>
+        <td>Terms</td>
+        <td>Derived from vendor + event</td>
+        <td>"Due on receipt" / "Net 7" / "Net 30"</td>
+        <td>Mapped from <code>vendor_payment_terms.net_days</code>. QBO has predefined terms; we use the closest match.</td>
+      </tr>
+      <tr>
+        <td>Memo</td>
+        <td>Composed</td>
+        <td><code>{event.label} · {item.name}</code></td>
+        <td>e.g., "Deposit · Meadow Linen Sectional." Human-readable identifier for the bookkeeper.</td>
+      </tr>
+      <tr>
+        <td>Category/Account</td>
+        <td><code>purchase_orders.quickbooks_account_category</code> ?? <code>vendors.quickbooks_account_category</code> ?? global default</td>
+        <td>Three-tier fallback</td>
+        <td>Default: "Cost of Goods Sold: FF&amp;E". Override per vendor (e.g., rugs → "COGS: Soft Goods"). Override per PO when needed.</td>
+      </tr>
+      <tr>
+        <td>Description</td>
+        <td>Composed</td>
+        <td><code>{item.name} - {event.label_short}</code></td>
+        <td>The line description that appears on the bill. e.g., "Meadow Linen Sectional - 50% deposit"</td>
+      </tr>
+      <tr>
+        <td>Amount</td>
+        <td><code>po_payment_events.amount_calculated</code></td>
+        <td>Decimal with 2 places, no currency symbol</td>
+        <td>Use <code>paid_amount</code> if event is Paid and differs from calculated amount.</td>
+      </tr>
+      <tr>
+        <td>Customer/Project</td>
+        <td><code>projects.name</code> (via po → project relation)</td>
+        <td>Direct</td>
+        <td>QBO's "Customer/Project" field is how she tracks project profitability. Critical for accurate job-costing.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:1.5rem">Optional supplementary columns</h3>
+  <p class="body" style="font-size:0.82rem;margin-bottom:1rem">The export includes additional columns that QBO doesn't directly consume but the bookkeeper finds useful for reconciliation. These appear after the standard QBO columns.</p>
+
+  <div class="csv-wrapper">
+    <table class="csv-table">
+      <thead>
+        <tr>
+          <th>Patina PO #</th>
+          <th>Payment Event</th>
+          <th>State</th>
+          <th>Paid Date</th>
+          <th>Paid Method</th>
+          <th>Paid Reference</th>
+          <th>Vendor Email</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>WS-188</td>
+          <td>Deposit</td>
+          <td>Paid</td>
+          <td>04/08/2026</td>
+          <td>ACH</td>
+          <td>Ref 8847123</td>
+          <td>billing@woodwardandsons.com</td>
+        </tr>
+        <tr>
+          <td>WS-188</td>
+          <td>Balance</td>
+          <td>Due</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>billing@woodwardandsons.com</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- EXPORT UX -->
+<section class="fade">
+<div class="w">
+  <p class="eyebrow">Export UX · What Leah does</p>
+  <h1>One screen. <em>One filtered file.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">The export is a single modal accessible from any view in the Procurement Workspace (the "Export to QBO ↓" link in the subnav). Studio owner role only. The flow is: filter, preview, download. Three clicks if the defaults are right; longer if Leah needs to customize. The output is the CSV plus a companion PDF summary.</p>
+
+  <div class="frame">
+    <div class="frame-h">Export modal · Visual reference</div>
+    <div class="frame-c">
+      <div style="background:var(--ow);padding:1.5rem;border-radius:5px">
+        <div style="background:var(--sf);max-width:540px;margin:0 auto;padding:1.5rem;border:1px solid var(--pe);border-radius:6px">
+          <div class="meta" style="color:var(--cl);margin-bottom:0.4rem">Bookkeeper Export · Reconciliation Pack</div>
+          <h3 style="font-size:1.1rem;margin-bottom:1rem">Build the <em>April reconciliation</em></h3>
+
+          <div style="margin-bottom:0.85rem">
+            <div class="meta" style="margin-bottom:0.35rem">Date range</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem">
+              <div style="padding:0.5rem;border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.7rem;background:var(--ow)">Apr 1, 2026</div>
+              <div style="padding:0.5rem;border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.7rem;background:var(--ow)">Apr 30, 2026</div>
+            </div>
+            <div class="meta" style="margin-top:0.3rem;font-style:italic;font-size:0.5rem;letter-spacing:0;text-transform:none">Defaults to prior calendar month</div>
+          </div>
+
+          <div style="margin-bottom:0.85rem">
+            <div class="meta" style="margin-bottom:0.35rem">Include events with these states</div>
+            <div style="font-family:var(--fb);font-size:0.72rem;line-height:1.7;color:var(--mo)">
+              <label style="display:flex;gap:0.4rem;align-items:center"><input type="checkbox" checked style="accent-color:var(--cl)"/>Paid in this period</label>
+              <label style="display:flex;gap:0.4rem;align-items:center"><input type="checkbox" checked style="accent-color:var(--cl)"/>Due (open bills)</label>
+              <label style="display:flex;gap:0.4rem;align-items:center"><input type="checkbox" style="accent-color:var(--cl)"/>Paused (damage claims pending)</label>
+              <label style="display:flex;gap:0.4rem;align-items:center"><input type="checkbox" style="accent-color:var(--cl)"/>Patina Catalog (Patina-billed, usually exclude)</label>
+            </div>
+          </div>
+
+          <div style="margin-bottom:0.85rem">
+            <div class="meta" style="margin-bottom:0.35rem">Filter</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem">
+              <div style="padding:0.5rem;border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.7rem;background:var(--ow);color:var(--mo)">All projects</div>
+              <div style="padding:0.5rem;border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.7rem;background:var(--ow);color:var(--mo)">All vendors</div>
+            </div>
+          </div>
+
+          <div style="padding:0.85rem;background:rgba(196,165,123,0.06);border:1px solid rgba(196,165,123,0.2);border-radius:4px;margin-bottom:1rem">
+            <div class="meta" style="color:var(--cl);margin-bottom:0.3rem">Preview</div>
+            <div style="font-family:var(--fb);font-size:0.72rem;color:var(--mo);line-height:1.55">
+              <strong>23 transactions</strong> · 8 vendors · $42,800 total<br>
+              <strong>15 paid</strong> ($28,400) · <strong>8 open bills</strong> ($14,400)<br>
+              <span style="font-style:italic;color:var(--ao);font-size:0.65rem">Files: patina-vendor-bills-2026-04.csv · patina-summary-2026-04.pdf</span>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;padding-top:0.85rem;border-top:1px solid var(--pe)">
+            <span style="font-family:var(--fb);font-weight:500;font-size:0.7rem;color:var(--ao)">Cancel</span>
+            <span style="font-family:var(--fb);font-weight:500;font-size:0.7rem;padding:0.5rem 0.9rem;background:var(--cl);color:white;border-radius:3px">Download reconciliation pack</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:1.5rem">The reconciliation pack contents</h3>
+  <table class="spec-table">
+    <thead><tr><th>File</th><th>Format</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>patina-vendor-bills-YYYY-MM.csv</td>
+        <td>CSV (UTF-8, comma-delimited, RFC 4180)</td>
+        <td>The machine-readable bills file. Bookkeeper imports into QBO (where supported) or third-party tool. Columns match QBO bill import format.</td>
+      </tr>
+      <tr>
+        <td>patina-summary-YYYY-MM.pdf</td>
+        <td>PDF (US Letter, single or multi-page as needed)</td>
+        <td>Human-readable summary. Grouped by vendor, with totals. Bookkeeper uses to cross-check after import. Branded in Patina visual style.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:1.5rem">Studio owner only · Permission model</h3>
+  <div class="frame">
+    <div class="frame-c">
+      <div class="spec-row">
+        <span class="spec-row-l">Who can access</span>
+        <span class="spec-row-r">Users with role <code>studio_owner</code> in the active studio. v1 confirmed: no separate bookkeeper login. Owner downloads, owner forwards.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">Audit trail</span>
+        <span class="spec-row-r">Every export logs to <code>export_audit_log</code> table: who, when, filters used, file checksums, recipient (optional manual entry).</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">Versioning</span>
+        <span class="spec-row-r">Re-exporting the same date range produces a new file with version suffix (<code>-v2</code>, <code>-v3</code>). Patina retains all exports for 7 years (matches IRS retention requirements).</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">Patina Catalog handling</span>
+        <span class="spec-row-r">Off by default. When included, transactions show vendor as "Patina (on behalf of [vendor name])" with a note in Memo explaining the merchant relationship. Avoids confusing bookkeeper into double-paying.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">Email delivery (Phase 3)</span>
+        <span class="spec-row-r">In Sprint 3, add option to email the reconciliation pack directly to the bookkeeper's email address (stored on studio settings). Email goes from a Patina address with the studio owner as Reply-To.</span>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- IMPLEMENTATION NOTES -->
+<section class="fade">
+<div class="w">
+  <div class="sm"><div></div><div></div><div></div></div>
+  <p class="eyebrow">Implementation notes for Claude Code</p>
+  <h1>Build order <em>and dependencies.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">The payment model and bookkeeper export ship across two sprints. The data model and stage-trigger system land in Sprint 1 (because the By Vendor and By Status views depend on them showing payment pills). The export functionality lands in Sprint 3 once enough payment data has accumulated for a meaningful first export.</p>
+
+  <h3>Sprint 1 deliverables (weeks 1–4)</h3>
+  <div class="frame">
+    <div class="frame-c">
+      <div class="spec-row">
+        <span class="spec-row-l">Schema migration</span>
+        <span class="spec-row-r">Create <code>vendor_payment_terms</code>, <code>po_payment_events</code>, <code>payment_logs</code> tables. Extend <code>vendors</code> and <code>purchase_orders</code>. Backfill default terms (50/50) for any existing vendor records.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">Trigger system</span>
+        <span class="spec-row-r">Implement stage→event trigger as a service-layer event handler (not DB trigger — keeps logic visible in code). When a PO stage changes, evaluate all payment events on that PO and transition matching events from Pending to Due.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">Payment terms UI on vendor record</span>
+        <span class="spec-row-r">A vendor edit form section: pattern selector (5 options), net_days input, preferred_method dropdown, notes textarea. Custom pattern reveals an event editor (label, amount type, amount, trigger).</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">Payment pills in views</span>
+        <span class="spec-row-r">Component: <code>&lt;PaymentPill state="due" label="Balance $3,400 due May 12" /&gt;</code>. Used in By Vendor and By Status views per spec.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">PO detail · payment timeline</span>
+        <span class="spec-row-r">On the PO detail page, render the full event list with state, amount, dates, and action buttons (mark paid, log payment, override, add note).</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">Order Assistant integration</span>
+        <span class="spec-row-r">The Order Assistant side panel (existing component) gains a "Payment terms" step. Pre-fills from vendor defaults, allows per-PO override. On confirmation, creates the corresponding <code>po_payment_events</code> records.</span>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:1.5rem">Sprint 2 deliverables (weeks 5–8)</h3>
+  <div class="frame">
+    <div class="frame-c">
+      <div class="spec-row">
+        <span class="spec-row-l">Damage claim integration</span>
+        <span class="spec-row-r">When the mobile receiving flow opens a damage claim, automatically transition any Due payment events on that PO to Paused. Log the transition with reason "Damage claim [ID]." Resume on claim resolution.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">Today Dashboard payment card</span>
+        <span class="spec-row-r">A small card on Today showing "Payments due this week: N items, $X total." Click-through to filtered By Vendor view. Card hides when no Due items exist.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">Notification triggers</span>
+        <span class="spec-row-r">Wire up the payment notification event types to the existing notification system. Studio owner role only — junior designers don't receive payment notifications.</span>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:1.5rem">Sprint 3 deliverables (weeks 9–12)</h3>
+  <div class="frame">
+    <div class="frame-c">
+      <div class="spec-row">
+        <span class="spec-row-l">Export modal</span>
+        <span class="spec-row-r">The bookkeeper export modal with filters, preview, and download. Triggered from "Export to QBO ↓" link in the subnav. Studio owner role only.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">CSV generation</span>
+        <span class="spec-row-r">Server-side CSV generation. Stream-based for large date ranges. RFC 4180 compliant. UTF-8 with BOM (improves Excel compatibility on Windows). Filename pattern: <code>patina-vendor-bills-{studio_slug}-{YYYY-MM}.csv</code>.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">PDF summary generation</span>
+        <span class="spec-row-r">Server-side PDF rendering (React PDF or Puppeteer-based). Grouped by vendor, sorted by date. Includes Patina brand header, summary totals, line-item detail. Matches Patina visual system.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">Export audit log</span>
+        <span class="spec-row-r">Every export creates an <code>export_audit_log</code> record. Visible to studio owner in Settings → Export History. Shows date range, filters, file checksums, download timestamp.</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-row-l">Email delivery option</span>
+        <span class="spec-row-r">Optional checkbox: "Email to my bookkeeper." Bookkeeper email stored in studio settings. Email sent from <code>exports@patina.cloud</code> with studio owner as Reply-To. Files attached.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <span class="callout-l">Pilot validation step</span>
+    <div class="callout-d">Before Sprint 3 begins, send a mock CSV generated from Leah's first month of Sprint 1+2 data to her actual bookkeeper. Get explicit feedback on column structure, vendor name handling, and account category mapping. Real bookkeeper feedback in week 6 prevents export rework in week 11.</div>
+  </div>
+</div>
+</section>
+
+<!-- V2 ROADMAP -->
+<section class="fade wm-section">
+<div class="w">
+  <p class="eyebrow">After v1 · What we'll learn</p>
+  <h1>Payment v2 <em>candidates.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">The payment model in v1 is intentionally constrained. v2 expands based on pilot data and bookkeeper feedback. Each candidate feature waits for evidence that the additional complexity is justified.</p>
+
+  <div class="g2">
+    <div>
+      <div class="card">
+        <div class="card-t">QuickBooks Online API integration</div>
+        <div class="card-d" style="margin-top:0.3rem"><strong style="color:var(--cl)">Trigger:</strong> Bookkeeper reports the CSV → QBO step takes more than 15 minutes per export. Or pilot scales to 10+ studios and manual import becomes a bottleneck. Builds OAuth flow + bill push API integration.</div>
+      </div>
+      <div class="card" style="margin-top:0.85rem">
+        <div class="card-t">Payment reconciliation (round-trip)</div>
+        <div class="card-d" style="margin-top:0.3rem"><strong style="color:var(--cl)">Trigger:</strong> Bookkeepers report wanting to mark events as paid in QBO and have Patina reflect that. Currently one-way (Patina → QBO). Round-trip requires either QBO webhooks or polling, plus reconciliation logic for amount mismatches.</div>
+      </div>
+      <div class="card" style="margin-top:0.85rem">
+        <div class="card-t">Client payment ↔ vendor payment linkage</div>
+        <div class="card-d" style="margin-top:0.3rem"><strong style="color:var(--cl)">Trigger:</strong> Designers report friction around "client paid me Friday, when can I release vendor balance?" Requires modeling cash flow as a first-class concept. Significant scope.</div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="card-t">Tax handling</div>
+        <div class="card-d" style="margin-top:0.3rem"><strong style="color:var(--cl)">Trigger:</strong> v1 assumes vendor bills are pre-tax (designer remits separately). Some vendors charge tax on the bill. v2 adds tax columns to the model and export when designers in tax-charging jurisdictions need them.</div>
+      </div>
+      <div class="card" style="margin-top:0.85rem">
+        <div class="card-t">Multi-currency</div>
+        <div class="card-d" style="margin-top:0.3rem"><strong style="color:var(--cl)">Trigger:</strong> Designers source from international vendors (CAD, EUR, GBP). v1 is USD-only. v2 adds currency on vendor and PO records, with conversion rate captured at payment time for QBO mapping.</div>
+      </div>
+      <div class="card" style="margin-top:0.85rem">
+        <div class="card-t">Automated invoice matching</div>
+        <div class="card-d" style="margin-top:0.3rem"><strong style="color:var(--cl)">Trigger:</strong> Vendors send PDF invoices via email. v2 candidate: forward to a Patina email address, system parses the PDF, auto-matches to a Due payment event, surfaces for one-click confirmation. Big magic, real effort.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- CLOSE -->
+<section class="fade dk-section">
+<div class="w">
+  <div class="cover-strata" style="margin-bottom:1.5rem"><div></div><div></div><div></div></div>
+  <div class="pq" style="border-color:rgba(250,247,242,0.15)">
+    <blockquote style="color:var(--ow)">"Payment tracking earns its place in the workspace by being inseparable from the work it pays for. The deposit isn't a separate concern from the order — it's part of the order. The balance isn't a separate concern from the shipment — it's part of the shipment. Modeling them as one thing is the whole point."</blockquote>
+    <cite>Payment Model · North Star</cite>
+  </div>
+
+  <h2 style="margin-top:2rem">Three documents. <em>One spec.</em></h2>
+  <p class="body" style="margin-top:1rem;margin-bottom:2rem">Together with the Procurement Workspace v1 Scope proposal and the Mobile Receiving Flow companion, this document completes the v1 specification. Sprint 1 begins with the data model and the By Vendor view. Sprint 2 adds the mobile receiving flow and damage-pause logic. Sprint 3 closes the loop with the bookkeeper export and the pilot launch. Twelve weeks from now, Leah is the alpha user of the most demanding workflow Patina supports — and Patina earns its place in her daily practice.</p>
+
+  <div class="g3" style="margin-bottom:2rem">
+    <div>
+      <div class="meta">Document 1</div>
+      <div style="font-family:var(--fb);font-size:0.78rem;color:rgba(250,247,242,0.7);line-height:1.6;margin-top:0.3rem">Procurement Workspace v1 Scope · The four views, navigation, scope boundaries, rollout plan.</div>
+    </div>
+    <div>
+      <div class="meta">Document 2</div>
+      <div style="font-family:var(--fb);font-size:0.78rem;color:rgba(250,247,242,0.7);line-height:1.6;margin-top:0.3rem">Mobile Receiving Flow · Phone-only inspection at 375px. Happy path and damage path.</div>
+    </div>
+    <div>
+      <div class="meta">Document 3 (this one)</div>
+      <div style="font-family:var(--fb);font-size:0.78rem;color:rgba(250,247,242,0.7);line-height:1.6;margin-top:0.3rem">Payment Model & QBO Export · Data model, state machine, column mapping, reconciliation pack.</div>
+    </div>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:2rem;border-top:1px solid rgba(250,247,242,0.15);flex-wrap:wrap;gap:1rem">
+    <div>
+      <div style="font-family:var(--fd);font-weight:400;font-size:1rem;color:var(--ow)">Patina · Procurement Workspace</div>
+      <div style="font-family:var(--fd);font-style:italic;font-size:0.78rem;color:var(--ao)">Where Time Adds Value</div>
+    </div>
+    <div class="meta">Payment Model & QBO Export · v1 · April 2026</div>
+  </div>
+</div>
+</section>
+
+<script>
+const f=document.querySelectorAll('.fade');
+const o=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('vis')})},{threshold:0.08,rootMargin:'0px 0px -40px 0px'});
+f.forEach(s=>o.observe(s));
+</script>
+</body>
+</html>
