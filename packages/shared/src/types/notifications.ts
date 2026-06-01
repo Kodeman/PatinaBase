@@ -46,6 +46,7 @@ export type NotificationType =
   | 'project_activated'
   | 'decision_required'
   | 'decision_overdue'
+  | 'decision_resolved'
   | 'ffe_status_change'
   | 'change_order_requested'
   | 'change_order_signed'
