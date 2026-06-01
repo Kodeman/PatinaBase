@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import Link from 'next/link';
 import {
   useAllDecisions,
   useDecisionMetrics,
@@ -12,6 +11,7 @@ import { MetricBlock } from '@/components/portal/metric-block';
 import { FilterRow } from '@/components/portal/filter-row';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { DecisionCard } from '@/components/portal/decision-card';
+import { DecisionNewPicker } from '@/components/portal/decision-new-picker';
 import { PortalButton } from '@/components/portal/button';
 // F1.7 — Designer Decisions screen migrated to ambient + reactive help-system
 // layers per spec §12.4. SectionIntro renders the inline `fallback` until
@@ -112,6 +112,7 @@ function getClientName(decision: {
 
 export default function DecisionsDashboardPage() {
   const [filter, setFilter] = useState<FilterKey>('open');
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const statusFilter: DecisionStatus[] | undefined =
     filter === 'resolved' ? ['responded'] : undefined;
@@ -166,8 +167,8 @@ export default function DecisionsDashboardPage() {
             fallback="Open choices awaiting client response — overdue items block procurement and ETA promises."
           />
         </div>
-        <PortalButton variant="primary" asChild>
-          <Link href="/portal/clients">+ New Decision</Link>
+        <PortalButton variant="primary" onClick={() => setPickerOpen(true)}>
+          + New Decision
         </PortalButton>
       </div>
 
@@ -270,6 +271,8 @@ export default function DecisionsDashboardPage() {
           ))}
         </div>
       )}
+
+      {pickerOpen && <DecisionNewPicker onClose={() => setPickerOpen(false)} />}
     </div>
   );
 }
