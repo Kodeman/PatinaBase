@@ -22,6 +22,11 @@ import {
   type Facet,
   type FacetSelections,
 } from '@/components/portal/faceted-filter-popover';
+import {
+  BlockedItemsRollup,
+  distinctBlockingDecisionIds,
+  getBlockedItems,
+} from '@/components/portal/procurement/blocked-by-decision-notice';
 import { BulkActionBar, BulkActionButton } from '@/components/portal/bulk-action-bar';
 // F1.7 — FF&E migrated to ambient + reactive help-system layers per spec §12.4.
 // FF&E itself is Patina vocabulary (Furniture, Fixtures & Equipment), and each
@@ -186,6 +191,19 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
     return map;
   }, [filtered]);
 
+  // Decision-Framework blocked-items rollup (PT-D-2-T3-2). Counts items held
+  // by a pending blocks_procurement decision across the whole project. When a
+  // single decision is responsible we deep-link straight to it; otherwise the
+  // rollup links to the decisions list.
+  const blockedRollup = useMemo(() => {
+    const blocked = getBlockedItems(items);
+    const decisionIds = distinctBlockingDecisionIds(blocked);
+    return {
+      count: blocked.length,
+      decisionId: decisionIds.length === 1 ? decisionIds[0] : undefined,
+    };
+  }, [items]);
+
   const drawerItem = drawerItemId ? items.find((it) => it.id === drawerItemId) : null;
 
   const toggleSelect = (id: string) =>
@@ -341,8 +359,16 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
             fallback="Track each item from specification through install. Move items between stages to keep your client and vendors aligned."
           />
         </div>
-        <div className="type-meta-small text-[var(--text-muted)]">
-          {filtered.length} of {items.length} items
+        <div className="flex items-center gap-3">
+          {/* PT-D-2-T3-2 — surface how many items are held pending a decision. */}
+          <BlockedItemsRollup
+            count={blockedRollup.count}
+            projectId={projectId}
+            decisionId={blockedRollup.decisionId}
+          />
+          <div className="type-meta-small text-[var(--text-muted)]">
+            {filtered.length} of {items.length} items
+          </div>
         </div>
       </div>
 
