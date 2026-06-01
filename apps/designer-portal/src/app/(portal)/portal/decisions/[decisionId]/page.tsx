@@ -2,9 +2,11 @@
 
 import { use, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   useDecision,
   useUpdateDecisionStatus,
+  useDeleteDecision,
   useDecisionOverrides,
   useProjectFFEItems,
   useClient,
@@ -85,13 +87,16 @@ export default function DecisionDetailPage({
   params: Promise<{ decisionId: string }>;
 }) {
   const { decisionId } = use(params);
+  const router = useRouter();
   const { user } = useAuth();
   const { data: decision, isLoading } = useDecision(decisionId);
   const updateStatus = useUpdateDecisionStatus();
+  const deleteDecision = useDeleteDecision();
   const { data: overrides } = useDecisionOverrides(decisionId);
   const { data: ffeItemsRaw } = useProjectFFEItems(decision?.project_id ?? '');
   const { data: decisionClient } = useClient(decision?.designer_client_id ?? '');
   const [overrideOpen, setOverrideOpen] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   if (isLoading) return <LoadingStrata />;
   if (!decision) {
@@ -116,8 +121,29 @@ export default function DecisionDetailPage({
     ? ffeItems.filter((it) => it?.blocked_by_decision_id === decision.id)
     : [];
 
+  // Both responded→pending (reopen) and expired→pending (recovery) are legal
+  // moves under the 00171 guard; passing currentStatus lets the hook reject any
+  // illegal transition before the round trip.
   const handleReopen = () => {
-    updateStatus.mutate({ decisionId: decision.id, status: 'pending' });
+    updateStatus.mutate({
+      decisionId: decision.id,
+      status: 'pending',
+      currentStatus: decision.status,
+    });
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deleteDecision.mutateAsync({
+        decisionId: decision.id,
+        designerClientId: decision.designer_client_id,
+        projectId: decision.project_id,
+      });
+      router.push('/portal/decisions');
+    } catch (err) {
+      console.error('Failed to delete decision:', err);
+      setConfirmingDelete(false);
+    }
   };
 
   return (
@@ -464,6 +490,13 @@ export default function DecisionDetailPage({
           {/* Actions */}
           <SectionHeader>Actions</SectionHeader>
           <div className="flex flex-wrap gap-2">
+            {/* A resolved decision carries a signed record; editing happens via
+                reopen. Drafts, pending, and expired decisions are editable. */}
+            {decision.status !== 'responded' && (
+              <Link href={`/portal/decisions/${decision.id}/edit`}>
+                <PortalButton variant="secondary">Edit</PortalButton>
+              </Link>
+            )}
             {decision.project_id && (
               <Link href={`/portal/projects/${decision.project_id}`}>
                 <PortalButton variant="secondary">View in Project</PortalButton>
@@ -498,6 +531,42 @@ export default function DecisionDetailPage({
                 disabled={updateStatus.isPending}
               >
                 {updateStatus.isPending ? 'Reopening...' : 'Reopen Decision'}
+              </PortalButton>
+            )}
+          </div>
+
+          {/* Destructive action — kept visually separate with an inline confirm
+              so a stray click can't delete a decision and its audit trail. */}
+          <div className="mt-4">
+            {confirmingDelete ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="type-meta-small text-[var(--text-muted)]">
+                  Delete this decision and its history?
+                </span>
+                <PortalButton
+                  variant="ghost"
+                  onClick={handleDelete}
+                  disabled={deleteDecision.isPending}
+                >
+                  <span style={{ color: 'var(--color-terracotta)' }}>
+                    {deleteDecision.isPending ? 'Deleting...' : 'Yes, delete'}
+                  </span>
+                </PortalButton>
+                <PortalButton
+                  variant="ghost"
+                  onClick={() => setConfirmingDelete(false)}
+                >
+                  Keep
+                </PortalButton>
+              </div>
+            ) : (
+              <PortalButton
+                variant="ghost"
+                onClick={() => setConfirmingDelete(true)}
+              >
+                <span style={{ color: 'var(--color-terracotta)' }}>
+                  Delete Decision
+                </span>
               </PortalButton>
             )}
           </div>
