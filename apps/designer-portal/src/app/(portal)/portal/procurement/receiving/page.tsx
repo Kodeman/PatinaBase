@@ -34,6 +34,7 @@ import {
   type ReceivingInspection,
 } from '@patina/supabase';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { ReceivingKpiRow } from '@/components/portal/procurement/receiving-kpi-row';
 import {
   ReceivingTabs,
@@ -74,6 +75,7 @@ function describePO(po: PurchaseOrder): { primary: string; secondary: string } {
 function ReceivingDashboardContent() {
   // ─── Data ───────────────────────────────────────────────────────────────
 
+  const hydrated = useHydrated();
   const countsQuery = useTodayProcurementCounts();
   const ordersQuery = usePurchaseOrders();
   // 30-day pass-rate window for the KPI; "Cleared" tab also reads from this
@@ -86,7 +88,10 @@ function ReceivingDashboardContent() {
   const draftedClaimsQuery = useDamageClaims({ state: 'drafted' });
   const notifiedClaimsQuery = useDamageClaims({ state: 'vendor_notified' });
 
+  // `!hydrated` keeps the skeleton on SSR + first client paint so the warm
+  // singleton cache can't diverge from the empty server cache (hydration mismatch).
   const isLoading =
+    !hydrated ||
     countsQuery.isLoading ||
     ordersQuery.isLoading ||
     inspectionsQuery.isLoading ||

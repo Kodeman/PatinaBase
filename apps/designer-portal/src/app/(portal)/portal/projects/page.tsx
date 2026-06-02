@@ -9,6 +9,7 @@ import { FilterRow } from '@/components/portal/filter-row';
 import { MetricsRow } from '@/components/portal/metrics-row';
 import { ProgressBar } from '@/components/portal/progress-bar';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { EmptyState } from '@/components/portal/empty-state';
 import { SearchInput } from '@/components/portal/search-input';
 import { StatusBadge } from '@patina/catalog-ui';
@@ -148,6 +149,7 @@ function ProjectsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const hydrated = useHydrated();
 
   const { data: rawProjects, isLoading } = useProjects();
   const { data: metrics } = useProjectListMetrics();
@@ -353,8 +355,9 @@ function ProjectsContent() {
     setSelected(new Set());
   };
 
-  // Loading + empty states
-  if (isLoading) return <LoadingStrata />;
+  // Loading + empty states. Skeleton until hydrated so SSR (empty cache) and
+  // first client paint (warm singleton cache) agree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
 
   if (projects.length === 0) {
     return (

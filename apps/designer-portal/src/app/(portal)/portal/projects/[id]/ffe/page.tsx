@@ -8,6 +8,7 @@ import { useProject } from '@/hooks/use-projects';
 import { useUpdateFFEItemStatus, useVendors, type PaymentPattern } from '@patina/supabase';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { SearchInput } from '@/components/portal/search-input';
 import { useToast } from '@/components/portal/toast-provider';
 import { queryKeys } from '@/lib/react-query';
@@ -106,6 +107,7 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
   const router = useRouter();
   const searchParams = useSearchParams();
   const drawerItemId = searchParams.get('item');
+  const hydrated = useHydrated();
 
   const { data: project } = useProject(projectId);
   const { data: rawItems } = useProjectFFEItems(projectId);
@@ -328,7 +330,9 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
     queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
   };
 
-  if (!project) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || !project) return <LoadingStrata />;
 
   return (
     <div className="pt-8">

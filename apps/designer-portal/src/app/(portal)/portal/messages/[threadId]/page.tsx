@@ -26,6 +26,7 @@ import {
 } from '@patina/design-system';
 import { useAuth } from '@/hooks/use-auth';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 
 const counterpartName = (thread: ThreadSummary, myId: string): string => {
   const others = thread.participants.filter(
@@ -71,6 +72,7 @@ export default function ThreadDetailPage() {
   const threadId = params?.threadId;
   const { user } = useAuth();
   const myId = user?.id ?? '';
+  const hydrated = useHydrated();
   const [sendError, setSendError] = useState<string | null>(null);
 
   const { data: thread, isLoading: threadLoading } = useThread(threadId);
@@ -145,7 +147,9 @@ export default function ThreadDetailPage() {
     }
   };
 
-  if (threadLoading || !thread) {
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || threadLoading || !thread) {
     return <LoadingStrata />;
   }
 

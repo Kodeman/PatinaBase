@@ -6,6 +6,7 @@ import { useScopeChangeRequests } from '@patina/supabase';
 import { useProject } from '@/hooks/use-projects';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { EmptyState } from '@/components/portal/empty-state';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,6 +36,7 @@ export default function ChangeOrdersListPage({
   params: Promise<{ id: string }>;
 }) {
   const { id: projectId } = use(params);
+  const hydrated = useHydrated();
   const { data: project } = useProject(projectId);
   const { data: rawRequests, isLoading } = useScopeChangeRequests(projectId);
 
@@ -59,7 +61,9 @@ export default function ChangeOrdersListPage({
     };
   }, [requests]);
 
-  if (isLoading || !project) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading || !project) return <LoadingStrata />;
 
   return (
     <div className="pt-8">

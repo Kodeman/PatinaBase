@@ -13,6 +13,7 @@ import type { DecisionType, BlockingStatus, ClientDecisionOption } from '@patina
 import { DecisionOptionBuilder } from '@/components/portal/decision-option-builder';
 import type { DecisionOptionValue } from '@/components/portal/decision-option-builder';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { PortalButton } from '@/components/portal/button';
 
 const emptyOption = (): DecisionOptionValue => ({
@@ -91,6 +92,9 @@ export default function EditDecisionPage({
 }) {
   const { decisionId } = use(params);
   const router = useRouter();
+  // `pageHydrated` gates the loading skeleton (SSR/first-paint parity); the
+  // separate `hydrated` flag below guards one-time edit-form prefill.
+  const pageHydrated = useHydrated();
 
   const { data: decision, isLoading } = useDecision(decisionId);
   const updateDecision = useUpdateDecision();
@@ -130,7 +134,9 @@ export default function EditDecisionPage({
     setHydrated(true);
   }, [decision, hydrated]);
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!pageHydrated || isLoading) return <LoadingStrata />;
   if (!decision) {
     return (
       <p className="type-body py-16 text-center text-[var(--text-muted)]">

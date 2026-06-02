@@ -8,6 +8,7 @@ import { ProjectForm } from '@/components/portal/project-form';
 import { ChangeHistory } from '@/components/portal/change-history';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyProject = any;
@@ -23,10 +24,13 @@ export default function EditProjectPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const hydrated = useHydrated();
   const { data: project, isLoading } = useProject(id) as { data: AnyProject; isLoading: boolean };
   const updateProject = useUpdateProject();
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
   if (!project) {
     return (
       <p className="type-body py-16 text-center text-[var(--text-muted)]">

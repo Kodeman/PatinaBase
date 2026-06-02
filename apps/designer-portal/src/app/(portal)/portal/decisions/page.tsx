@@ -10,6 +10,7 @@ import type { DecisionStatus } from '@patina/supabase';
 import { MetricBlock } from '@/components/portal/metric-block';
 import { FilterRow } from '@/components/portal/filter-row';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { DecisionCard } from '@/components/portal/decision-card';
 import { DecisionNewPicker } from '@/components/portal/decision-new-picker';
 import { PortalButton } from '@/components/portal/button';
@@ -111,6 +112,7 @@ function getClientName(decision: {
 }
 
 export default function DecisionsDashboardPage() {
+  const hydrated = useHydrated();
   const [filter, setFilter] = useState<FilterKey>('open');
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -154,7 +156,9 @@ export default function DecisionsDashboardPage() {
     },
   ];
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
 
   return (
     <div className="pt-8">

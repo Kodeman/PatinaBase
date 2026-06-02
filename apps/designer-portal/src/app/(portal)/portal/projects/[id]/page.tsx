@@ -31,6 +31,7 @@ import {
 } from '@patina/supabase';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { useToast } from '@/components/portal/toast-provider';
 import { queryKeys } from '@/lib/react-query';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
@@ -80,6 +81,7 @@ export default function ProjectDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const hydrated = useHydrated();
   const [editMode, setEditMode] = useState(true);
   const [showUpdateComposer, setShowUpdateComposer] = useState(false);
 
@@ -155,7 +157,9 @@ export default function ProjectDetailPage({
     [rooms, ffeItems],
   );
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
   if (!project) {
     return (
       <p className="type-body py-16 text-center text-[var(--text-muted)]">

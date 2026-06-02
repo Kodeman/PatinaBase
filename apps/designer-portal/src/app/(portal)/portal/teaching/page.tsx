@@ -11,18 +11,22 @@ import {
   PortalButton,
 } from '@/components/portal';
 import { ProgressBar } from '@/components/portal/progress-bar';
+import { useHydrated } from '@/hooks/use-hydrated';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
 export default function TeachingPage() {
   const router = useRouter();
+  const hydrated = useHydrated();
   const [mode, setMode] = useState<'quick' | 'deep'>('quick');
   const { data: stats, isLoading: statsLoading } = useDesignerTeachingStats() as { data: Any; isLoading: boolean };
   const { data: rawQueue, isLoading: queueLoading } = useTeachingQueue() as { data: Any; isLoading: boolean };
   const queue = Array.isArray(rawQueue) ? rawQueue : [];
 
-  if (statsLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || statsLoading) return <LoadingStrata />;
 
   const totalTaught = stats?.total_teachings ?? stats?.products_taught ?? 0;
   // `accuracy_score` is the real 0–1 fraction from designer_teaching_stats.

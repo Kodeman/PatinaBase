@@ -9,6 +9,7 @@ import { FieldGroup } from '@/components/portal/field-group';
 import { DetailRow } from '@/components/portal/detail-row';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -16,10 +17,13 @@ type Any = any;
 export default function TemplateDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const hydrated = useHydrated();
   const { data: template, isLoading } = useTemplate(id) as { data: Any; isLoading: boolean };
   const deleteTemplate = useDeleteTemplate();
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
   if (!template) return <p className="type-body py-16 text-center text-[var(--text-muted)]">Template not found.</p>;
 
   return (

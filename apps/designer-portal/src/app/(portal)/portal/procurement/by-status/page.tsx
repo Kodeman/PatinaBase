@@ -33,6 +33,7 @@ import {
 } from '@patina/supabase';
 import { FFE_STAGE_KEYS, type FFEStageKey } from '@patina/types';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import {
   PaymentPill,
   type PaymentPillState,
@@ -454,6 +455,7 @@ function StageSection({
 // ─── Main content ───────────────────────────────────────────────────────────
 
 function ByStatusContent() {
+  const hydrated = useHydrated();
   const { data: orders, isLoading, isError, error } = usePurchaseOrders();
   // Production is the default-open stage per PRD §7.
   const [activeStage, setActiveStage] = useState<FFEStageKey>('production');
@@ -488,7 +490,9 @@ function ByStatusContent() {
   const totalLive = stages.reduce((acc, s) => acc + s.itemCount, 0);
   const cancelledCount = allOrders.filter((po) => po.status === 'cancelled').length;
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
 
   // Error surface — keep small/quiet per portal convention. Failures are
   // typically RLS/auth and resolve on sign-in.

@@ -14,6 +14,7 @@ import { PhaseDot } from '@/components/portal/phase-dot';
 import { ProgressBar } from '@/components/portal/progress-bar';
 import { TaskChecklist } from '@/components/portal/task-checklist';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { PHASE_CONFIG, ALL_PHASES, normalizePhaseSlug, type ProjectPhase } from '@/types/project-ui';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -26,6 +27,7 @@ export default function PhaseTaskViewPage({
 }) {
   const { id, phaseId } = use(params);
   const router = useRouter();
+  const hydrated = useHydrated();
   const { data: project, isLoading } = useProject(id) as { data: AnyProject; isLoading: boolean };
   const { data: allTasks = [] } = useProjectTasks(id);
   const updateTask = useUpdateTask();
@@ -45,7 +47,9 @@ export default function PhaseTaskViewPage({
     return arr.filter((t: any) => t.phase === phaseId);
   }, [allTasks, phaseId]);
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
   if (!project || !phaseConfig) {
     return (
       <p className="type-body py-16 text-center text-[var(--text-muted)]">

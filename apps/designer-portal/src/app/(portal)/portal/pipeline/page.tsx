@@ -12,6 +12,7 @@ import {
   useHelpContent,
 } from '@patina/help-system';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { formatProjectType } from '@/lib/lead-format';
 
 type PipelineStage = 'leads' | 'proposals' | 'active' | 'completed';
@@ -163,12 +164,15 @@ function PipelineEmptyState({
 function PipelineContent() {
   const searchParams = useSearchParams();
   const stageFilter = searchParams.get('stage') as PipelineStage | null;
+  const hydrated = useHydrated();
 
   const { data: leads, isLoading: leadsLoading } = useLeads();
   const { data: proposals, isLoading: proposalsLoading } = useProposals();
   const { data: projects, isLoading: projectsLoading } = useProjects();
 
-  const isLoading = leadsLoading || proposalsLoading || projectsLoading;
+  // `!hydrated` keeps the skeleton on SSR + first client paint so the warm
+  // singleton cache can't diverge from the empty server cache (hydration mismatch).
+  const isLoading = !hydrated || leadsLoading || proposalsLoading || projectsLoading;
 
   // Build unified pipeline items
   const items = useMemo((): PipelineItem[] => {

@@ -10,6 +10,7 @@ import type {
 } from '@patina/supabase';
 import { useProject } from '@/hooks/use-projects';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { deadlineVariant, bandSurface } from '@/lib/decision-deadline';
 
 const typeLabels: Record<DecisionType, string> = {
@@ -185,6 +186,7 @@ export default function ProjectDecisionsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const hydrated = useHydrated();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: project, isLoading: projectLoading } = useProject(id) as {
     data: any;
@@ -192,7 +194,9 @@ export default function ProjectDecisionsPage({
   };
   const { data: decisions = [], isLoading } = useDecisionsByProject(id);
 
-  if (projectLoading || isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || projectLoading || isLoading) return <LoadingStrata />;
 
   const open = decisions.filter((d) => OPEN_STATUSES.includes(d.status));
   const decided = decisions.filter((d) => d.status === 'responded');

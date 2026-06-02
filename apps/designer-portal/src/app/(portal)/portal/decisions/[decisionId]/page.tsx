@@ -16,6 +16,7 @@ import {
 } from '@patina/supabase';
 import type { DecisionType, BlockingStatus, DecisionOverride } from '@patina/supabase';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { PortalButton } from '@/components/portal/button';
 import { OverrideDecisionModal } from '@/components/portal/override-decision-modal';
 import { DecisionCommentThread } from '@/components/portal/decision-comment-thread';
@@ -91,6 +92,7 @@ export default function DecisionDetailPage({
 }) {
   const { decisionId } = use(params);
   const router = useRouter();
+  const hydrated = useHydrated();
   const { user } = useAuth();
   const { data: decision, isLoading } = useDecision(decisionId);
   // Live updates: when the client views, selects an option, or comments, the
@@ -109,7 +111,9 @@ export default function DecisionDetailPage({
   const [extending, setExtending] = useState(false);
   const [newDueDate, setNewDueDate] = useState('');
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
   if (!decision) {
     return (
       <p className="type-body py-16 text-center text-[var(--text-muted)]">

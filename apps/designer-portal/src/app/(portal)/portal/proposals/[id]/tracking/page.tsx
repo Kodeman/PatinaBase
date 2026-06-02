@@ -14,6 +14,7 @@ import { getProposalStatusDisplay } from '@/lib/proposal-status';
 import { MetricsRow } from '@/components/portal/metrics-row';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { EngagementTimeline } from '@/components/portal/engagement-timeline';
 import { SectionEngagement } from '@/components/portal/section-engagement';
 import { InsightPanel } from '@/components/portal/insight-panel';
@@ -65,6 +66,7 @@ export default function ProposalTrackingPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const hydrated = useHydrated();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal, isLoading: proposalLoading } = useProposal(id) as { data: any; isLoading: boolean };
   const { data: events } = useProposalEngagement(id);
@@ -114,7 +116,9 @@ export default function ProposalTrackingPage({
     ];
   }, [stats, proposal]);
 
-  if (proposalLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || proposalLoading) return <LoadingStrata />;
   if (!proposal) {
     return (
       <p className="type-body py-16 text-center text-[var(--text-muted)]">
