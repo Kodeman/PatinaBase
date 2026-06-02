@@ -15,6 +15,7 @@ import { RevisionFeedback } from '@/components/portal/revision-feedback';
 import { VersionTag } from '@/components/portal/version-tag';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { proposalEvents } from '@/lib/analytics';
 
 export default function ReviseProposalPage({
@@ -24,6 +25,7 @@ export default function ReviseProposalPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const hydrated = useHydrated();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal, isLoading } = useProposal(id) as { data: any; isLoading: boolean };
   const { data: versions } = useProposalVersions(id);
@@ -62,7 +64,9 @@ export default function ReviseProposalPage({
     }
   };
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
   if (!proposal) {
     return (
       <p className="type-body py-16 text-center text-[var(--text-muted)]">

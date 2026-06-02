@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useProposal, useProposalSections } from '@/hooks/use-proposals';
 import { useAuth } from '@/hooks/use-auth';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { ProposalLetterhead } from '@/components/portal/proposal-letterhead';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { ProposalProductItem } from '@/components/portal/proposal-product-item';
@@ -41,6 +42,7 @@ export default function ProposalPreviewPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const hydrated = useHydrated();
   const { session } = useAuth();
   const searchParams = useSearchParams();
   const shouldAutoPrint = searchParams.get('print') === '1';
@@ -164,7 +166,9 @@ export default function ProposalPreviewPage({
     };
   }, [sections, recordEvent]);
 
-  if (proposalLoading || sectionsLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || proposalLoading || sectionsLoading) return <LoadingStrata />;
   if (!proposal) {
     return (
       <p className="type-body py-16 text-center text-[var(--text-muted)]">

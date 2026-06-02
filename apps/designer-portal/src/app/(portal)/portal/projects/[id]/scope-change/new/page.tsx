@@ -6,6 +6,7 @@ import { useProjectV2, useCreateScopeChangeRequest, useSendScopeChangeRequest } 
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { PageContainer } from '@/components/portal/page-container';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { ScopeChangeForm, ScopeChangeFormData } from '@/components/portal/scope-change-form';
 
 export default function NewScopeChangePage({
@@ -15,12 +16,15 @@ export default function NewScopeChangePage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const hydrated = useHydrated();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: project, isLoading } = useProjectV2(id) as { data: any; isLoading: boolean };
   const createRequest = useCreateScopeChangeRequest();
   const sendRequest = useSendScopeChangeRequest();
 
-  if (isLoading) {
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) {
     return (
       <PageContainer>
         <div className="flex min-h-[60vh] items-center justify-center">

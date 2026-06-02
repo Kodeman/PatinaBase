@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useLeads, useLeadStats, useAllDecisions } from '@patina/supabase';
 import { useProjects } from '@/hooks/use-projects';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { useHydrated } from '@/hooks/use-hydrated';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyProject = any;
@@ -65,6 +66,7 @@ function formatPhase(phase: string): string {
 }
 
 export default function DashboardPage() {
+  const hydrated = useHydrated();
   const { user } = useAuth();
   const { data: leads, isLoading: leadsLoading } = useLeads({ status: 'new' });
   const { data: leadStats } = useLeadStats();
@@ -87,7 +89,9 @@ export default function DashboardPage() {
 
   const firstName = user?.name?.split(' ')[0] || 'Designer';
 
-  if (leadsLoading && projectsLoading) {
+  // Render the skeleton until hydrated so SSR (empty query cache) and the first
+  // client paint (possibly warm singleton cache) agree — prevents hydration mismatch.
+  if (!hydrated || (leadsLoading && projectsLoading)) {
     return <LoadingStrata />;
   }
 

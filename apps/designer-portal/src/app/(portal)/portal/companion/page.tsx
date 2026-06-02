@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useCompanionConversation, useCompanionHistory, useSendCompanionMessage, useCompanionQuickActions } from '@patina/supabase';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 // F1.4 — Aesthete Engine migrated to reactive help-system per spec §4.2 + §9.2.
 // Every Patina-vocab concept (Aesthete Engine, Aesthete Score, Aesthete
 // Vocabulary, the teaching loop) is marked with <StrataInfoIcon> so the icon
@@ -39,6 +40,7 @@ const FALLBACK_QUICK_ACTIONS = [
 ];
 
 export default function CompanionPage() {
+  const hydrated = useHydrated();
   const { data: conversation } = useCompanionConversation() as { data: Any };
   const conversationId = conversation?.id;
   const { data: rawHistory, isLoading } = useCompanionHistory(conversationId) as { data: Any; isLoading: boolean };
@@ -66,7 +68,9 @@ export default function CompanionPage() {
     setInput('');
   };
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
 
   const hasMessages = messages.length > 0;
 

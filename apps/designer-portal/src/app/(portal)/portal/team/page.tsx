@@ -6,6 +6,7 @@ import { useOrganizations, useSession, useAddClient } from '@patina/supabase';
 import { useProjects } from '@/hooks/use-projects';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { PortalButton } from '@/components/portal/button';
 // F1.7 — Team migrated to ambient + reactive help-system layers per spec
 // §12.4. Studio is Patina vocabulary (multi-user org); StrataInfoIcon
@@ -171,6 +172,7 @@ function InviteMemberModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function TeamPage() {
+  const hydrated = useHydrated();
   const { session } = useSession();
   const { data: orgs, isLoading: orgsLoading } = useOrganizations();
   const { data: projects, isLoading: projectsLoading } = useProjects();
@@ -179,7 +181,9 @@ export default function TeamPage() {
   const orgList = (Array.isArray(orgs) ? orgs : []) as AnyData[];
   const projectList = (Array.isArray(projects) ? projects : []) as AnyData[];
 
-  if (orgsLoading || projectsLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || orgsLoading || projectsLoading) return <LoadingStrata />;
 
   const studio = orgList[0];
 

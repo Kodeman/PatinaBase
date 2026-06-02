@@ -14,6 +14,7 @@ import { proposalEvents } from '@/lib/analytics';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { ProposalLetterhead } from '@/components/portal/proposal-letterhead';
 import { ProposalSectionEditor } from '@/components/portal/proposal-section-editor';
 import { ClientPicker } from '@/components/portal/client-picker';
@@ -25,6 +26,7 @@ export default function ProposalDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const hydrated = useHydrated();
   const { session } = useAuth();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,7 +97,9 @@ export default function ProposalDetailPage({
     [id, sections, upsertSection]
   );
 
-  if (proposalLoading || sectionsLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || proposalLoading || sectionsLoading) return <LoadingStrata />;
 
   if (!proposal) {
     return (

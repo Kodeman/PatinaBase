@@ -8,6 +8,7 @@ import {
 import { StrataMark } from '@/components/portal/strata-mark';
 import { MetricBlock } from '@/components/portal/metric-block';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 
 type Period = 'month' | 'quarter' | 'year' | 'all';
 
@@ -42,6 +43,7 @@ function formatDate(dateStr: string): string {
 }
 
 export default function EarningsPage() {
+  const hydrated = useHydrated();
   const [period, setPeriod] = useState<Period>('month');
   const { startDate, endDate } = getPeriodDates(period);
 
@@ -58,7 +60,9 @@ export default function EarningsPage() {
     { key: 'all', label: 'All Time' },
   ];
 
-  if (statsLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || statsLoading) return <LoadingStrata />;
 
   return (
     <div className="pt-8">

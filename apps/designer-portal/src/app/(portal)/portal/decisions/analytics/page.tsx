@@ -10,6 +10,7 @@ import {
 import type { DecisionType } from '@patina/supabase';
 import { MetricBlock } from '@/components/portal/metric-block';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { ProgressBar } from '@/components/portal/progress-bar';
 
 const typeLabels: Record<DecisionType, string> = {
@@ -29,6 +30,7 @@ function hoursToDisplay(hours: number): string {
 }
 
 export default function DecisionAnalyticsPage() {
+  const hydrated = useHydrated();
   const { data: metrics, isLoading: metricsLoading } = useDecisionMetrics();
   const { data: byType, isLoading: typeLoading } = useDecisionAnalyticsByType();
   const { data: byClient, isLoading: clientLoading } = useDecisionAnalyticsByClient();
@@ -36,7 +38,9 @@ export default function DecisionAnalyticsPage() {
 
   const isLoading = metricsLoading || typeLoading || clientLoading || bottleneckLoading;
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
 
   const maxResponseHours = Math.max(...(byType ?? []).map((t) => t.avg_response_hours), 1);
 

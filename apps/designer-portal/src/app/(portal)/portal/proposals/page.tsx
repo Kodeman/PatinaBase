@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { formatShortDate } from '@patina/utils';
 import { useProposals, useProposalStats } from '@/hooks/use-proposals';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { FilterRow } from '@/components/portal/filter-row';
 import { MetricsRow } from '@/components/portal/metrics-row';
 import { ProposalListItem } from '@/components/portal/proposal-list-item';
@@ -21,6 +22,7 @@ const STATUS_FILTERS = [
 
 export default function ProposalsPage() {
   const router = useRouter();
+  const hydrated = useHydrated();
   const [activeFilter, setActiveFilter] = useState('all');
   const { data: proposals, isLoading } = useProposals(
     activeFilter !== 'all' ? { status: activeFilter } : undefined
@@ -70,7 +72,9 @@ export default function ProposalsPage() {
     ];
   }, [stats]);
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
 
   return (
     <div className="pt-8">

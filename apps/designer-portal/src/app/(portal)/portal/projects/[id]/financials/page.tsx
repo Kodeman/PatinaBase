@@ -9,6 +9,7 @@ import { PaymentMilestoneCard } from '@/components/portal/payment-milestone-card
 import { DetailRow } from '@/components/portal/detail-row';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 // F1.7 — Financials is the most information-dense designer-portal surface.
 // Every Patina-coined concept (committed vs actual, variance bands, commission
 // rate, milestone triggers) earns a StrataInfoIcon. The variance-band
@@ -62,6 +63,7 @@ export default function ProjectFinancialsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const hydrated = useHydrated();
   const { user } = useAuth();
   const { data: project, isLoading } = useProject(id) as { data: AnyData; isLoading: boolean };
   const { data: financials } = useProjectFinancials(id);
@@ -133,7 +135,9 @@ export default function ProjectFinancialsPage({
     return typedItems.filter((it) => (it.ffe_category || 'Uncategorized') === drillCategory);
   }, [drillCategory, typedItems]);
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
   if (!project) {
     return <p className="type-body py-16 text-center text-[var(--text-muted)]">Project not found.</p>;
   }

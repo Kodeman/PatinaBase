@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useProduct } from '@/hooks/use-products';
 import { Breadcrumb, LoadingStrata } from '@/components/portal';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { useToast } from '@/components/portal/toast-provider';
 import { catalogApi } from '@/lib/api-client';
 import {
@@ -102,6 +103,7 @@ function ProductDetailContent() {
 export default function ProductDetailPage() {
   const params = useParams();
   const id = params.id as string;
+  const hydrated = useHydrated();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -136,7 +138,9 @@ export default function ProductDetailPage() {
     [queryClient]
   );
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
 
   if (!product?.id) {
     return (

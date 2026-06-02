@@ -11,6 +11,7 @@ import { DetailRow } from '@/components/portal/detail-row';
 import { StyleTag } from '@/components/portal/style-tag';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import {
   formatBudgetRange,
   formatProjectType,
@@ -24,6 +25,7 @@ export default function LeadBriefPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const hydrated = useHydrated();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: lead, isLoading } = useLead(id) as { data: any; isLoading: boolean };
   const markViewed = useMarkLeadViewed();
@@ -80,7 +82,9 @@ export default function LeadBriefPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
   if (!lead) {
     return (
       <p className="type-body py-16 text-center text-[var(--text-muted)]">

@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCrossLayerSearch, type LayerProductRow } from '@patina/supabase';
 import { LayerChip, ProductCard, EmptyState, type Layer } from '@patina/catalog-ui';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 
 const LAYER_ORDER: Layer[] = ['personal', 'studio', 'catalog'];
 
@@ -23,6 +24,7 @@ export default function LibrarySearchPage() {
   const router = useRouter();
   const params = useSearchParams();
   const query = params?.get('q') ?? '';
+  const hydrated = useHydrated();
   const { data, isLoading, error } = useCrossLayerSearch({ query });
 
   if (!query.trim()) {
@@ -34,7 +36,9 @@ export default function LibrarySearchPage() {
     );
   }
 
-  if (isLoading) {
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) {
     return <LoadingStrata />;
   }
 

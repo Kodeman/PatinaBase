@@ -3,6 +3,7 @@
 import { useProjects } from '@/hooks/use-projects';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyProject = any;
@@ -13,12 +14,15 @@ type AnyProject = any;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function PortfolioPage() {
+  const hydrated = useHydrated();
   const { data: rawProjects, isLoading } = useProjects({ status: 'completed' });
   const projects = ((Array.isArray(rawProjects) ? rawProjects : []) as AnyProject[]).filter(
     (p) => typeof p.id === 'string' && UUID_RE.test(p.id)
   );
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
 
   return (
     <div className="pt-8">

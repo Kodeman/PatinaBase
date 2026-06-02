@@ -22,6 +22,7 @@ import {
   ImageGallery,
   useToast,
 } from '@/components/portal';
+import { useHydrated } from '@/hooks/use-hydrated';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -61,6 +62,7 @@ const avoidanceOptions = [
 export default function TeachProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const hydrated = useHydrated();
   const { data: product, isLoading } = useProduct(id) as { data: Any; isLoading: boolean };
   const { data: rawStyles } = useProductStyles(id) as { data: Any };
   const { data: spectrum } = useProductSpectrum(id) as { data: Any };
@@ -119,7 +121,9 @@ export default function TeachProductPage({ params }: { params: Promise<{ id: str
     });
   }, [spectrum]);
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
   if (!product) {
     return <p className="type-body py-16 text-center text-[var(--text-muted)]">Product not found.</p>;
   }

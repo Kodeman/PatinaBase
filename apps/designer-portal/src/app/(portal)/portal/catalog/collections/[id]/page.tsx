@@ -16,6 +16,7 @@ import { FieldGroup } from '@/components/portal/field-group';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { SearchInput } from '@/components/portal/search-input';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -24,6 +25,7 @@ type AnyProduct = any;
 export default function CollectionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const hydrated = useHydrated();
 
   const { data: rawCollection, isLoading } = useCollection(id);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -53,7 +55,9 @@ export default function CollectionDetailPage({ params }: { params: Promise<{ id:
   const existingIds = new Set(products.map((p: AnyProduct) => p.id));
   const filteredSearchResults = searchProducts.filter((p: AnyProduct) => !existingIds.has(p.id));
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
   if (!collection) return <p className="type-body py-16 text-center text-[var(--text-muted)]">Collection not found.</p>;
 
   const isPublished = collection.status === 'published';

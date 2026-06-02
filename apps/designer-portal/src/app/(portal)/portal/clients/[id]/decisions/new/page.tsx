@@ -9,6 +9,7 @@ import { DecisionOptionBuilder } from '@/components/portal/decision-option-build
 import type { DecisionOptionValue } from '@/components/portal/decision-option-builder';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { PortalButton } from '@/components/portal/button';
+import { useHydrated } from '@/hooks/use-hydrated';
 
 const emptyOption = (): DecisionOptionValue => ({
   name: '',
@@ -69,6 +70,7 @@ export default function NewDecisionPage({
   const { id } = use(params);
   const router = useRouter();
 
+  const hydrated = useHydrated();
   const { data: client, isLoading } = useClient(id) as {
     data: DesignerClient | undefined;
     isLoading: boolean;
@@ -83,7 +85,9 @@ export default function NewDecisionPage({
   const [blockingStatus, setBlockingStatus] = useState<BlockingStatus>('non_blocking');
   const [options, setOptions] = useState<DecisionOptionValue[]>([emptyOption(), emptyOption()]);
 
-  if (isLoading) return <LoadingStrata />;
+  // Render the skeleton until hydrated so SSR (empty query cache) and the first
+  // client paint (possibly warm singleton cache) agree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
   if (!client) {
     return (
       <p className="type-body py-16 text-center text-[var(--text-muted)]">

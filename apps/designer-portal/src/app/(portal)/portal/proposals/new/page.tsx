@@ -10,10 +10,12 @@ import { TemplateCard } from '@/components/portal/template-card';
 import { ClientPicker } from '@/components/portal/client-picker';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { proposalEvents } from '@/lib/analytics';
 
 export default function NewProposalPage() {
   const router = useRouter();
+  const hydrated = useHydrated();
   const { data: templates, isLoading: templatesLoading } = useProposalTemplates();
   const { data: projects } = useProjects();
   useClients();
@@ -49,7 +51,9 @@ export default function NewProposalPage() {
     }
   };
 
-  if (templatesLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || templatesLoading) return <LoadingStrata />;
 
   return (
     <div className="pt-8">

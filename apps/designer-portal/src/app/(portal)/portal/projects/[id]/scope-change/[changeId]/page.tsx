@@ -6,6 +6,7 @@ import { useScopeChangeRequest, useApplyScopeChange, useSendScopeChangeRequest }
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { PageContainer } from '@/components/portal/page-container';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { PortalButton } from '@/components/portal/button';
 import { DetailRow } from '@/components/portal/detail-row';
 
@@ -29,12 +30,15 @@ export default function ScopeChangeDetailPage({
 }) {
   const { id, changeId } = use(params);
   const router = useRouter();
+  const hydrated = useHydrated();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: request, isLoading } = useScopeChangeRequest(changeId) as { data: any; isLoading: boolean };
   const applyChange = useApplyScopeChange();
   const sendRequest = useSendScopeChangeRequest();
 
-  if (isLoading) {
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) {
     return (
       <PageContainer>
         <div className="flex min-h-[60vh] items-center justify-center">

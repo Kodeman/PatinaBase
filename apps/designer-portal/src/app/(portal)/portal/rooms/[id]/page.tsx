@@ -7,6 +7,7 @@ import { FieldGroup } from '@/components/portal/field-group';
 import { DetailRow } from '@/components/portal/detail-row';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { RoomScanViewer } from '@/components/rooms/viewer';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -14,11 +15,14 @@ type Any = any;
 
 export default function RoomViewerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const hydrated = useHydrated();
   const { data: room, isLoading } = useRoom(id) as { data: Any; isLoading: boolean };
   const { data: scans } = useRoomScans() as { data: Any };
   const roomScans = Array.isArray(scans) ? scans.filter((s: Any) => s.room_id === id) : [];
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
   if (!room) return <p className="type-body py-16 text-center text-[var(--text-muted)]">Room not found.</p>;
 
   return (

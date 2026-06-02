@@ -9,6 +9,7 @@ import { ClosureChecklist } from '@/components/portal/closure-checklist';
 import { PortfolioSnapshotForm } from '@/components/portal/portfolio-snapshot-form';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { useHydrated } from '@/hooks/use-hydrated';
 import type { ClosureItem } from '@/types/project-ui';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,11 +36,14 @@ export default function ProjectClosurePage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const hydrated = useHydrated();
   const { data: project, isLoading } = useProject(id) as { data: AnyProject; isLoading: boolean };
   const completeProject = useCompleteProject();
   const [closureItems, setClosureItems] = useState<ClosureItem[]>(DEFAULT_CLOSURE_ITEMS);
 
-  if (isLoading) return <LoadingStrata />;
+  // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
+  // singleton cache) render the same tree — prevents hydration mismatch.
+  if (!hydrated || isLoading) return <LoadingStrata />;
   if (!project) {
     return <p className="type-body py-16 text-center text-[var(--text-muted)]">Project not found.</p>;
   }
