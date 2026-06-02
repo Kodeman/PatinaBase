@@ -50,6 +50,8 @@ interface ProductInsert {
   source_url: string;
   captured_by: string;
   captured_at: string;
+  layer: string;
+  patina_managed: boolean;
 }
 
 function toInsert(payload: Record<string, unknown>, capturedBy: string): ProductInsert | string {
@@ -86,6 +88,11 @@ function toInsert(payload: Record<string, unknown>, capturedBy: string): Product
     source_url: typeof payload.sourceUrl === 'string' ? payload.sourceUrl : '',
     captured_by: capturedBy,
     captured_at: new Date().toISOString(),
+    // products.layer is NOT NULL with a CHECK of personal|studio|catalog; admin
+    // bulk-imports are Patina-managed catalog products, and the catalog CHECK
+    // (products_catalog_requires_management) requires patina_managed = true.
+    layer: 'catalog',
+    patina_managed: true,
   };
 }
 
