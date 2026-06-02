@@ -58,6 +58,9 @@ export { getSanityClient } from './sanityClient';
 // ─── Data hooks ───────────────────────────────────────────────────────────────
 export { useHelpContent } from './hooks/useHelpContent';
 
+// ─── Placeholder-content guard (filters seed/stub CMS copy) ──────────────────
+export { isPlaceholderContent } from './isPlaceholderContent';
+
 // ─── Providers ────────────────────────────────────────────────────────────────
 export { SurfaceKeyProvider, useSurfaceKey, useSetSurfaceKey } from './providers';
 export type { SurfaceKeyProviderProps } from './providers';

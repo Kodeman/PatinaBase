@@ -59,6 +59,23 @@ const parentEmptyState: EmptyStateContent = {
   description: 'Create your first project to get started.',
 }
 
+// A seed/stub doc whose body is still placeholder copy (the live bug).
+const placeholderTooltip: TooltipContent = {
+  surfaceKey: 'designer-portal/pipeline/project-list',
+  persona: 'designer',
+  contentType: 'tooltip',
+  body: 'PLACEHOLDER pending Leah review — explain leads.',
+}
+
+// A seed/stub empty-state whose heading is placeholder copy.
+const placeholderEmptyState: EmptyStateContent = {
+  surfaceKey: 'designer-portal/today/empty/leads',
+  persona: 'all',
+  contentType: 'emptyState',
+  heading: 'PLACEHOLDER pending Leah review — empty-state copy for designer-portal/today/empty/leads.',
+  description: 'PLACEHOLDER — leads',
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('useHelpContent', () => {
@@ -185,6 +202,81 @@ describe('useHelpContent', () => {
     expect(consoleWarnSpy).toHaveBeenCalledWith(
       expect.stringContaining('[help-system] No content found'),
     )
+  })
+
+  // ── Placeholder guard: stub body is treated as a MISS ─────────────────────
+
+  it('treats a placeholder body as a miss and continues the fallback chain', async () => {
+    // Step 1 (exact persona) returns a PLACEHOLDER doc → must be skipped as a
+    // miss. Step 2 (persona='all') returns real copy → that should win.
+    mockFetch
+      .mockResolvedValueOnce(placeholderTooltip) // step 1 — placeholder, treated as miss
+      .mockResolvedValueOnce(allPersonaTooltip) // step 2 — real content wins
+
+    const { Wrapper } = makeWrapper()
+    const { result } = renderHook(
+      () => useHelpContent('designer-portal/pipeline/project-list', 'tooltip', 'designer'),
+      { wrapper: Wrapper },
+    )
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(result.current.data).toEqual(allPersonaTooltip)
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('returns null when every candidate doc is placeholder (→ inline fallback / absence)', async () => {
+    // All fallback steps return placeholder docs. The hook must resolve to
+    // null so the component uses its inline `fallback` or renders nothing.
+    mockFetch.mockResolvedValue(placeholderEmptyState)
+
+    const { Wrapper } = makeWrapper()
+    const { result } = renderHook(
+      () => useHelpContent('designer-portal/today/empty/leads', 'emptyState', 'all'),
+      { wrapper: Wrapper },
+    )
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(result.current.data).toBeNull()
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[help-system] No content found'),
+    )
+  })
+
+  it('flags placeholder content via heading even when body is absent (emptyState)', async () => {
+    // emptyState docs carry no `body` — the guard must inspect heading/description.
+    mockFetch.mockResolvedValue({
+      surfaceKey: 'designer-portal/today/empty/leads',
+      persona: 'all',
+      contentType: 'emptyState',
+      heading: 'PLACEHOLDER pending Leah review — explain leads.',
+    })
+
+    const { Wrapper } = makeWrapper()
+    const { result } = renderHook(
+      () => useHelpContent('designer-portal/today/empty/leads', 'emptyState', 'all'),
+      { wrapper: Wrapper },
+    )
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(result.current.data).toBeNull()
+  })
+
+  it('does NOT treat a normal body as placeholder', async () => {
+    // Sanity check that the guard is not over-eager — normal copy still wins.
+    mockFetch.mockResolvedValueOnce(tooltipFixture)
+
+    const { Wrapper } = makeWrapper()
+    const { result } = renderHook(
+      () => useHelpContent('designer-portal/pipeline/project-list', 'tooltip', 'designer'),
+      { wrapper: Wrapper },
+    )
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(result.current.data).toEqual(tooltipFixture)
   })
 
   // ── Sanity downtime → null gracefully ─────────────────────────────────────

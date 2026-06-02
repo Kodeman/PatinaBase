@@ -13,6 +13,7 @@
  */
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { getSanityClient } from '../sanityClient'
+import { isPlaceholderContent } from '../isPlaceholderContent'
 import type { ContentTypeMap, HelpContentType, Persona } from '../contentTypes'
 
 /**
@@ -146,7 +147,12 @@ async function tryFetch(
   }`
   try {
     const result: unknown = await client.fetch(query, { sk: surfaceKey, ct: contentType, p: persona })
-    return result ?? null
+    if (!result) return null
+    // Centralized placeholder guard: a seed doc whose copy is still placeholder
+    // text must be treated as a MISS so the fallback chain continues (and
+    // ultimately yields null → inline fallback / graceful absence per §13.4).
+    if (isPlaceholderDocument(result)) return null
+    return result
   } catch (err) {
     // Sanity unavailable — fail silently per spec §13.4
     if (typeof console !== 'undefined') {
@@ -154,4 +160,24 @@ async function tryFetch(
     }
     return null
   }
+}
+
+/**
+ * A fetched help document is placeholder when any of the user-visible copy
+ * fields the components render (`body`, `heading`, `description`) is recognized
+ * seed/placeholder text. We check all three because different content types
+ * surface different fields (e.g. tooltip→body, emptyState→heading+description).
+ */
+function isPlaceholderDocument(doc: unknown): boolean {
+  if (!doc || typeof doc !== 'object') return false
+  const { body, heading, description } = doc as {
+    body?: unknown
+    heading?: unknown
+    description?: unknown
+  }
+  return (
+    isPlaceholderContent(body) ||
+    isPlaceholderContent(heading) ||
+    isPlaceholderContent(description)
+  )
 }

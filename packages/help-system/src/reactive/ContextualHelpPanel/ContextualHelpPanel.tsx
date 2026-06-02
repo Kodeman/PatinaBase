@@ -40,6 +40,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { getSanityClient } from '../../sanityClient'
+import { isPlaceholderContent } from '../../isPlaceholderContent'
 import { useSurfaceKey } from '../../providers/SurfaceKeyProvider'
 
 // ─── Public types ─────────────────────────────────────────────────────────────
@@ -136,6 +137,9 @@ async function fetchPanelArticles(surfaceKey: string): Promise<PanelArticle[]> {
       .filter((row): row is { _id: string; surfaceKey: string; title?: string; excerpt?: string } => {
         return Boolean(row && typeof row === 'object' && '_id' in row && 'surfaceKey' in row)
       })
+      // Drop seed/placeholder articles (title or excerpt still stub copy) so
+      // they never surface in the panel — same guard as useHelpContent.
+      .filter((row) => !isPlaceholderContent(row.title) && !isPlaceholderContent(row.excerpt))
       .map((row) => ({
         _id: String(row._id),
         surfaceKey: String(row.surfaceKey),
