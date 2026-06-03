@@ -3,9 +3,32 @@
 import { use, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { useProjectFFEItems, useProjectRooms } from '@/hooks/use-projects';
-import { useProject } from '@/hooks/use-projects';
-import { useUpdateFFEItemStatus, useVendors, type PaymentPattern } from '@patina/supabase';
+import {
+  useProject,
+  useProjectFFEItems,
+  useProjectRooms,
+  useAddProjectFFEItem,
+  useRemoveProjectFFEItem,
+} from '@/hooks/use-projects';
+import {
+  useUpdateFFEItemStatus,
+  useVendors,
+  useFFECategories,
+  type PaymentPattern,
+} from '@patina/supabase';
+import { FFE_STAGE_KEYS, type FFEStageKey } from '@patina/types';
+import { STAGES, STAGE_CONFIG } from '@/components/portal/ffe/stages';
+import { StageSelect } from '@/components/portal/ffe/stage-select';
+import { FFEItemCard } from '@/components/portal/ffe/ffe-item-card';
+import {
+  AddFFEItemControls,
+  type AddFFEItemControlsHandle,
+} from '@/components/portal/ffe/add-ffe-item-controls';
+import { type ProductPickResult } from '@/components/portal/proposals/product-picker-modal';
+import {
+  type AllowanceFormState,
+  type TbdFormState,
+} from '@/components/portal/ffe/ffe-item-forms';
 import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
@@ -55,19 +78,11 @@ interface PendingOrder {
   ffeItems: OrderAssistantFFEItem[];
 }
 
-// FF&E procurement stages — each is a Patina-defined step in the lifecycle.
-// `surfaceKey` is the StrataInfoIcon target for the column header, so authors
-// can explain what each stage means without cluttering the column UI.
-const STAGES = [
-  { key: 'specified',  label: 'Specified',   color: 'var(--text-muted)',                       surfaceKey: SurfaceKeys.DesignerPortal.Ffe.Stage.Specified },
-  { key: 'quoted',     label: 'Quoted',      color: 'var(--color-dusty-blue, #8B9CAD)',        surfaceKey: SurfaceKeys.DesignerPortal.Ffe.Stage.Quoted },
-  { key: 'approved',   label: 'Approved',    color: 'var(--color-clay, #C4A57B)',              surfaceKey: SurfaceKeys.DesignerPortal.Ffe.Stage.Approved },
-  { key: 'ordered',    label: 'Ordered',     color: 'var(--color-dusty-blue, #8B9CAD)',        surfaceKey: SurfaceKeys.DesignerPortal.Ffe.Stage.Ordered },
-  { key: 'production', label: 'Production',  color: 'var(--color-golden-hour, #E8C547)',       surfaceKey: SurfaceKeys.DesignerPortal.Ffe.Stage.Production },
-  { key: 'shipped',    label: 'Shipped',     color: 'var(--color-golden-hour, #E8C547)',       surfaceKey: SurfaceKeys.DesignerPortal.Ffe.Stage.Shipped },
-  { key: 'delivered',  label: 'Delivered',   color: 'var(--color-sage, #A8B5A0)',              surfaceKey: SurfaceKeys.DesignerPortal.Ffe.Stage.Delivered },
-  { key: 'installed',  label: 'Installed',   color: 'var(--color-sage, #A8B5A0)',              surfaceKey: SurfaceKeys.DesignerPortal.Ffe.Stage.Installed },
-];
+// Stage label/color/surfaceKey config now lives in the shared FF&E module
+// (@/components/portal/ffe/stages) so the board, the card stage dropdown, and
+// the Procurement By Status view stay in lockstep.
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // CMS-probe-then-fallback wrapper for the page-level zero-state when a
 // project has no FF&E items at all. Mirrors the F1.6 Clients empty-state
@@ -113,16 +128,39 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
   const { data: rawItems } = useProjectFFEItems(projectId);
   const { data: rawRooms } = useProjectRooms(projectId);
   const { data: vendors } = useVendors();
+  const { data: rawCategories } = useFFECategories();
   const updateStatus = useUpdateFFEItemStatus();
+  const addItem = useAddProjectFFEItem();
+  const removeItem = useRemoveProjectFFEItem();
 
   const items = useMemo(() => (Array.isArray(rawItems) ? rawItems : []) as AnyItem[], [rawItems]);
   const rooms = useMemo(() => (Array.isArray(rawRooms) ? rawRooms : []) as AnyItem[], [rawRooms]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const vendorList = (Array.isArray(vendors) ? vendors : []) as any[];
 
+  // FF&E categories for the allowance/TBD add-forms (no proposalId → system +
+  // designer-scoped rows, the correct set for a project).
+  const categoryOptions = useMemo(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    () => ((rawCategories ?? []) as any[]).map((c) => ({ slug: c.slug, label: c.label })),
+    [rawCategories]
+  );
+  const categoryLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of categoryOptions) map.set(c.slug, c.label);
+    return map;
+  }, [categoryOptions]);
+  const roomOptions = useMemo(() => rooms.map((r) => ({ id: r.id, name: r.name })), [rooms]);
+
+  // Direct add/edit only works for a real (UUID) project — slug fixtures serve
+  // mock data and have no Supabase row to insert against.
+  const isRealProject = UUID_RE.test(projectId);
+  const addControlsRef = useRef<AddFFEItemControlsHandle>(null);
+
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<FacetSelections>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [collapsedRooms, setCollapsedRooms] = useState<Set<string>>(new Set());
 
   // Deep-link from the project-detail Procurement tile: ?focus=approved lands
   // the designer here with all approved items pre-selected, one click from
@@ -144,6 +182,11 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
       if (it.vendor_name) itemVendors.set(it.vendor_id || it.vendor_name, it.vendor_name);
     }
     return [
+      {
+        key: 'stage',
+        label: 'Stage',
+        options: FFE_STAGE_KEYS.map((k) => ({ value: k, label: STAGE_CONFIG[k].label })),
+      },
       {
         key: 'room',
         label: 'Room',
@@ -172,6 +215,8 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
         const hay = [it.name, it.vendor_name, it.po_number].join(' ').toLowerCase();
         if (!hay.includes(q)) return false;
       }
+      const stageSel = filters.stage ?? [];
+      if (stageSel.length > 0 && !stageSel.includes(it.status || 'specified')) return false;
       const roomSel = filters.room ?? [];
       if (roomSel.length > 0 && !roomSel.includes(it.project_room_id)) return false;
       const vendorSel = filters.vendor ?? [];
@@ -182,16 +227,109 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
     });
   }, [items, search, filters]);
 
-  const grouped = useMemo(() => {
-    const map: Record<string, AnyItem[]> = {};
-    for (const stage of STAGES) map[stage.key] = [];
-    for (const it of filtered) {
+  // Stage-count strip is computed from ALL items (not `filtered`) so it stays a
+  // stable pipeline-at-a-glance even while a stage filter is active.
+  const stageCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const stage of STAGES) counts[stage.key] = 0;
+    for (const it of items) {
       const key = it.status || 'specified';
-      if (!map[key]) map[key] = [];
-      map[key].push(it);
+      counts[key] = (counts[key] ?? 0) + 1;
     }
-    return map;
-  }, [filtered]);
+    return counts;
+  }, [items]);
+
+  // Filter first, then group by room (rooms in their sort order, Unassigned
+  // last). Mirrors the proposal FF&E schedule builder's grouping.
+  const groupedByRoom = useMemo(() => {
+    const matched = new Set(rooms.map((r) => r.id));
+    const byRoom = new Map<string, AnyItem[]>();
+    for (const it of filtered) {
+      const key = it.project_room_id && matched.has(it.project_room_id) ? it.project_room_id : '__unassigned';
+      const arr = byRoom.get(key) ?? [];
+      arr.push(it);
+      byRoom.set(key, arr);
+    }
+    const groups: Array<{ id: string; name: string; items: AnyItem[] }> = [];
+    for (const room of rooms) {
+      const arr = byRoom.get(room.id);
+      if (arr && arr.length > 0) groups.push({ id: room.id, name: room.name, items: arr });
+    }
+    const unassigned = byRoom.get('__unassigned');
+    if (unassigned && unassigned.length > 0) {
+      groups.push({ id: '__unassigned', name: 'Unassigned', items: unassigned });
+    }
+    return groups;
+  }, [filtered, rooms]);
+
+  const toggleRoom = (id: string) =>
+    setCollapsedRooms((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  // Summary-strip chip click → single-select toggle into the shared filters.stage
+  // (the same state the Filters popover writes), so strip and popover stay in sync.
+  const toggleStageFilter = (key: string) =>
+    setFilters((prev) => {
+      const cur = prev.stage ?? [];
+      const isOnly = cur.length === 1 && cur[0] === key;
+      return { ...prev, stage: isOnly ? [] : [key] };
+    });
+
+  // Stage change from a card dropdown — any stage → any stage. Errors surface
+  // via the global mutation toast; we swallow the rejection so StageSelect's
+  // pending state resets cleanly.
+  const handleStageChange = async (item: AnyItem, next: FFEStageKey) => {
+    try {
+      await updateStatus.mutateAsync({ itemId: item.id, projectId, status: next });
+    } catch {
+      /* global mutation error toast already fired */
+    }
+  };
+
+  const handleAddProduct = (r: ProductPickResult) =>
+    addItem.mutateAsync({
+      projectId,
+      productId: r.productId,
+      name: r.name,
+      quantity: 1,
+      unitPriceCents: r.priceCents ?? 0,
+      vendorName: r.vendorName ?? undefined,
+      itemType: 'fixed',
+      projectRoomId: r.scopeRoomId,
+    });
+
+  const handleAddAllowance = (form: AllowanceFormState) => {
+    const budgetMin = Math.round(parseFloat(form.minDollars || '0') * 100);
+    const budgetMax = Math.round(parseFloat(form.maxDollars || '0') * 100);
+    return addItem.mutateAsync({
+      projectId,
+      name: categoryLookup.get(form.ffeCategory) ?? form.ffeCategory,
+      quantity: 1,
+      unitPriceCents: 0,
+      itemType: 'allowance',
+      projectRoomId: form.scopeRoomId || null,
+      ffeCategory: form.ffeCategory,
+      budgetMinCents: budgetMin,
+      budgetMaxCents: budgetMax,
+      notes: form.notes || undefined,
+    });
+  };
+
+  const handleAddTbd = (form: TbdFormState) =>
+    addItem.mutateAsync({
+      projectId,
+      name: categoryLookup.get(form.ffeCategory) ?? form.ffeCategory,
+      quantity: 1,
+      unitPriceCents: 0,
+      itemType: 'tbd',
+      projectRoomId: form.scopeRoomId || null,
+      ffeCategory: form.ffeCategory,
+      notes: form.notes || undefined,
+    });
 
   // Decision-Framework blocked-items rollup (PT-D-2-T3-2). Counts items held
   // by a pending blocks_procurement decision across the whole project. When a
@@ -376,10 +514,73 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
+      {/* Add FF&E — direct add to the project (real/UUID projects only; slug
+          fixtures serve mock data with no Supabase row to insert against). The
+          allowance/TBD inline forms render in place below the buttons. Per-room
+          "+ Add" links drive this same instance via the imperative handle. */}
+      {isRealProject && (
+        <div className="mb-5">
+          <AddFFEItemControls
+            ref={addControlsRef}
+            rooms={roomOptions}
+            categories={categoryOptions}
+            pickerScope="library"
+            isSaving={addItem.isPending}
+            productLabel="+ Add FF&E"
+            onAddProduct={handleAddProduct}
+            onAddAllowance={handleAddAllowance}
+            onAddTbd={handleAddTbd}
+          />
+        </div>
+      )}
+
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <SearchInput value={search} onChange={setSearch} placeholder="Search items, vendors, PO numbers" />
         <FacetedFilterPopover facets={facets} value={filters} onChange={setFilters} />
       </div>
+
+      {/* Stage-count summary strip — pipeline-at-a-glance. Clicking a chip
+          single-select-toggles the shared filters.stage (same state as the
+          Filters popover's Stage facet). */}
+      {items.length > 0 && (
+        <div className="mb-5 flex flex-wrap items-stretch gap-1.5">
+          {STAGES.map((stage) => {
+            const active = (filters.stage ?? []).includes(stage.key);
+            return (
+              <button
+                key={stage.key}
+                type="button"
+                onClick={() => toggleStageFilter(stage.key)}
+                aria-pressed={active}
+                className="flex min-w-[6.5rem] items-center gap-2 rounded-md border px-3 py-1.5 text-left transition-colors"
+                style={{
+                  borderColor: active ? stage.color : 'var(--border-default)',
+                  background: active
+                    ? `color-mix(in srgb, ${stage.color} 10%, transparent)`
+                    : 'var(--bg-surface)',
+                }}
+              >
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: stage.color }} />
+                <span
+                  className="flex-1"
+                  style={{
+                    fontFamily: 'var(--font-meta)',
+                    fontSize: '0.6rem',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    color: active ? stage.color : 'var(--text-muted)',
+                  }}
+                >
+                  {stage.label}
+                </span>
+                <span className="font-heading text-[0.85rem] font-medium text-[var(--text-primary)]">
+                  {stageCounts[stage.key] ?? 0}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Board-level empty state. Per spec §12.4 — first-time designers and
           filter-no-match cases route to dedicated CMS surfaces so authors can
@@ -388,111 +589,96 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
         <FfeBoardEmpty isFiltered={items.length > 0} />
       )}
 
-      {/* Kanban */}
-      <div className="overflow-x-auto pb-4">
-        <div className="flex min-w-max gap-3">
-          {STAGES.map((stage) => {
-            const stageItems = grouped[stage.key] || [];
-            return (
-              <div
-                key={stage.key}
-                className="flex w-[260px] shrink-0 flex-col rounded-md border"
-                style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)' }}
-              >
-                <div
-                  className="flex items-center justify-between border-b px-3 py-2"
-                  style={{ borderColor: 'var(--border-default)' }}
+      {/* Card grid, grouped by room. Each card carries an inline stage dropdown
+          (any stage → any stage). Rooms collapse independently; Unassigned last. */}
+      <div className="flex flex-col gap-5 pb-4">
+        {groupedByRoom.map((group) => {
+          const collapsed = collapsedRooms.has(group.id);
+          return (
+            <div key={group.id}>
+              <div className="mb-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => toggleRoom(group.id)}
+                  aria-expanded={!collapsed}
+                  className="flex items-center gap-1.5 text-[var(--color-clay)] transition-colors hover:text-[var(--text-primary)]"
                 >
-                  <span className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full" style={{ background: stage.color }} />
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-meta)',
-                        fontSize: '0.62rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.06em',
-                      }}
-                    >
-                      {stage.label}
-                    </span>
-                    {/* Per-stage StrataInfoIcon — Patina-defined procurement
-                        step. Tooltip body authored in Sanity per stage key. */}
-                    <StrataInfoIcon
-                      surfaceKey={stage.surfaceKey}
-                      size={11}
-                      ariaLabel={`What does the ${stage.label} stage mean?`}
-                    />
+                  <svg
+                    width="11"
+                    height="11"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    aria-hidden
+                    style={{ transform: collapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 120ms' }}
+                  >
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-meta)',
+                      fontSize: '0.62rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    {group.name}
                   </span>
-                  <span className="type-meta-small text-[var(--text-muted)]">
-                    {stageItems.length}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-2 p-2 min-h-[100px]">
-                  {stageItems.map((it) => {
-                    const isSelected = selected.has(it.id);
-                    return (
-                      <div
-                        key={it.id}
-                        className="cursor-pointer rounded-md border bg-white p-2.5 text-left transition-colors hover:border-[var(--text-primary)]"
-                        style={{
-                          borderColor: isSelected
-                            ? 'var(--text-primary)'
-                            : 'var(--border-default)',
-                        }}
-                        onClick={() =>
-                          router.push(`/portal/projects/${projectId}/ffe?item=${it.id}`)
-                        }
-                      >
-                        <div className="mb-1.5 flex items-start justify-between gap-2">
-                          <span className="line-clamp-2 font-body text-[0.8rem] font-medium">
-                            {it.name}
-                          </span>
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={() => toggleSelect(it.id)}
-                            aria-label={`Select ${it.name}`}
-                          />
-                        </div>
-                        {it.blocked && (
-                          <div className="mb-1.5 type-meta-small uppercase tracking-wider" style={{ color: 'var(--color-terracotta, #D4A090)' }}>
-                            ⚠ Blocked
-                          </div>
-                        )}
-                        {it.room?.name && (
-                          <div className="type-meta-small text-[var(--text-muted)]">
-                            {it.room.name}
-                          </div>
-                        )}
-                        {it.vendor_name && (
-                          <div className="type-meta-small text-[var(--text-muted)]">
-                            {it.vendor_name}
-                          </div>
-                        )}
-                        <div className="mt-1.5 flex items-baseline justify-between">
-                          <span className="font-heading text-[0.85rem] font-semibold">
-                            {formatDollars(it.line_total_cents || 0)}
-                          </span>
-                          {it.eta && (
-                            <span className="type-meta-small text-[var(--text-muted)]">
-                              ETA {formatDate(it.eta)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {stageItems.length === 0 && (
-                    <div className="py-6 text-center type-meta-small text-[var(--text-muted)]">
-                      —
-                    </div>
-                  )}
-                </div>
+                </button>
+                <span className="type-meta-small text-[var(--text-muted)]">{group.items.length}</span>
+                {isRealProject && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      addControlsRef.current?.openProduct(group.id === '__unassigned' ? null : group.id)
+                    }
+                    className="cursor-pointer text-[var(--text-muted)] transition-colors hover:text-[var(--accent-primary)]"
+                    style={{
+                      fontFamily: 'var(--font-meta)',
+                      fontSize: '0.58rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    + Add
+                  </button>
+                )}
               </div>
-            );
-          })}
-        </div>
+
+              {!collapsed && (
+                <div
+                  className="grid gap-3"
+                  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}
+                >
+                  {group.items.map((it) => (
+                    <FFEItemCard
+                      key={it.id}
+                      name={it.name}
+                      imageUrl={it.product?.images?.[0] ?? null}
+                      roomName={it.room?.name}
+                      vendorName={it.vendor_name}
+                      quantity={it.quantity}
+                      unitTotalLabel={formatDollars(it.line_total_cents || 0)}
+                      etaLabel={it.eta ? formatDate(it.eta) : null}
+                      itemType={it.item_type}
+                      blocked={it.blocked}
+                      blockedReason={it.blocked_reason}
+                      blockedByDecisionId={it.blocked_by_decision_id}
+                      selected={selected.has(it.id)}
+                      onToggleSelect={() => toggleSelect(it.id)}
+                      onOpenDetail={() => router.push(`/portal/projects/${projectId}/ffe?item=${it.id}`)}
+                      stage={{
+                        currentStatus: it.status || 'specified',
+                        onChangeStatus: (next) => handleStageChange(it, next),
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Item drawer */}
@@ -509,6 +695,14 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
             router.push(`/portal/projects/${projectId}/ffe`);
             startGeneratePOs([drawerItem]);
           }}
+          onRemove={
+            isRealProject
+              ? async () => {
+                  await removeItem.mutateAsync({ itemId: drawerItem.id, projectId });
+                  router.push(`/portal/projects/${projectId}/ffe`);
+                }
+              : undefined
+          }
         />
       )}
 
@@ -577,6 +771,7 @@ function ItemDrawer({
   onClose,
   onUpdateStatus,
   onGeneratePO,
+  onRemove,
 }: {
   item: AnyItem;
   rooms: AnyItem[];
@@ -584,10 +779,9 @@ function ItemDrawer({
   onClose: () => void;
   onUpdateStatus: (status: string) => Promise<void>;
   onGeneratePO?: () => void;
+  onRemove?: () => void | Promise<void>;
 }) {
   const room = rooms.find((r) => r.id === item.project_room_id);
-  const currentIdx = STAGES.findIndex((s) => s.key === item.status);
-  const nextStage = currentIdx >= 0 && currentIdx < STAGES.length - 1 ? STAGES[currentIdx + 1] : null;
   // Decision-Framework integrity (PT-D-2-T3-1): an item held by a pending
   // blocks_procurement decision (blocked flag + a blocked_by_decision_id)
   // cannot be ordered until the client responds.
@@ -677,17 +871,21 @@ function ItemDrawer({
           </div>
         )}
 
-        <div className="mt-6 flex flex-wrap gap-2">
-          {nextStage && (
-            <button
-              type="button"
-              onClick={() => onUpdateStatus(nextStage.key)}
-              className="rounded-[3px] px-3 py-1.5 text-[0.8rem] text-[var(--bg-primary)]"
-              style={{ background: 'var(--text-primary)', fontFamily: 'var(--font-body)' }}
-            >
-              Mark as {nextStage.label}
-            </button>
-          )}
+        {/* Stage picker — any stage → any stage, consistent with the card grid. */}
+        <div className="mt-5">
+          <span className="type-meta-small mb-1 block uppercase tracking-wider text-[var(--text-muted)]">
+            Stage
+          </span>
+          <div className="max-w-[220px]">
+            <StageSelect
+              currentStatus={item.status || 'specified'}
+              onChangeStatus={(next) => onUpdateStatus(next)}
+              size="md"
+            />
+          </div>
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => item.vendor_id && !isOrderBlocked && onGeneratePO?.()}
@@ -704,6 +902,17 @@ function ItemDrawer({
           >
             {isOrderBlocked ? 'Blocked — decision pending' : 'Generate PO'}
           </button>
+          {onRemove && (
+            <button
+              type="button"
+              onClick={() => void onRemove()}
+              className="ml-auto rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem] transition-colors hover:border-[var(--color-terracotta,#D4A090)] hover:text-[var(--color-terracotta,#D4A090)]"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
+              title="Remove this item from the project"
+            >
+              Remove item
+            </button>
+          )}
         </div>
 
         {/* Suppress unused vendors prop warning until vendor reassignment ships */}

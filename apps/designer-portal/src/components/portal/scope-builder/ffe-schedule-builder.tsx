@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DndContext, useDroppable, type DragEndEvent } from '@dnd-kit/core';
 import { PortalButton } from '@/components/portal/button';
@@ -8,7 +8,6 @@ import { proposalEvents } from '@/lib/analytics';
 import {
   useProposalScopeRooms,
   useFFECategories,
-  useProduct,
   useConsumeCapture,
   createBrowserClient,
   type ProposalItemType,
@@ -18,7 +17,16 @@ import {
   useUpdateProposalItem,
   useRemoveProposalItem,
 } from '@/hooks/use-proposals';
-import { ProductPickerModal } from '@/components/portal/proposals/product-picker-modal';
+import { type ProductPickResult } from '@/components/portal/proposals/product-picker-modal';
+import { FFEItemCard } from '@/components/portal/ffe/ffe-item-card';
+import {
+  AddFFEItemControls,
+  type AddFFEItemControlsHandle,
+} from '@/components/portal/ffe/add-ffe-item-controls';
+import {
+  type AllowanceFormState,
+  type TbdFormState,
+} from '@/components/portal/ffe/ffe-item-forms';
 import {
   CaptureInbox,
   parseCaptureDraggableId,
@@ -59,268 +67,13 @@ function formatDollars(cents: number): string {
   })}`;
 }
 
-function typeTagStyle(type: ProposalItemType): { color: string; bg: string } {
-  switch (type) {
-    case 'fixed':
-      return { color: 'var(--color-sage)', bg: 'rgba(122, 155, 118, 0.08)' };
-    case 'allowance':
-      return { color: 'var(--color-golden-hour)', bg: 'rgba(232, 197, 71, 0.08)' };
-    case 'tbd':
-      return { color: 'var(--text-muted)', bg: 'rgba(139, 115, 85, 0.06)' };
-  }
-}
-
-function typeLabel(type: ProposalItemType): string {
-  switch (type) {
-    case 'fixed':
-      return 'Fixed';
-    case 'allowance':
-      return 'Allowance';
-    case 'tbd':
-      return 'TBD';
-  }
-}
+// Item-type chip styling/labels now live in the shared FFEItemCard.
 
 function categoryLabel(slug: string | null, lookup: Map<string, string>): string {
   if (!slug) return '';
   return lookup.get(slug) ?? slug;
 }
 
-// ─── Allowance form (range required, category required) ─────────────────────
-
-interface AllowanceFormState {
-  ffeCategory: string;
-  scopeRoomId: string;
-  minDollars: string;
-  maxDollars: string;
-  notes: string;
-}
-
-const EMPTY_ALLOWANCE_FORM: AllowanceFormState = {
-  ffeCategory: '',
-  scopeRoomId: '',
-  minDollars: '',
-  maxDollars: '',
-  notes: '',
-};
-
-function AllowanceForm({
-  rooms,
-  categories,
-  onSave,
-  onCancel,
-  isSaving,
-}: {
-  rooms: ScopeRoom[];
-  categories: Array<{ slug: string; label: string }>;
-  onSave: (form: AllowanceFormState) => void;
-  onCancel: () => void;
-  isSaving: boolean;
-}) {
-  const [form, setForm] = useState<AllowanceFormState>(EMPTY_ALLOWANCE_FORM);
-
-  const update = <K extends keyof AllowanceFormState>(key: K, v: AllowanceFormState[K]) =>
-    setForm((prev) => ({ ...prev, [key]: v }));
-
-  const minN = parseFloat(form.minDollars);
-  const maxN = parseFloat(form.maxDollars);
-  const rangeOk =
-    !Number.isNaN(minN) && !Number.isNaN(maxN) && minN >= 0 && maxN >= 0 && minN <= maxN;
-  const canSave = !!form.ffeCategory && rangeOk;
-
-  return (
-    <div className="space-y-3 rounded-md border border-[var(--accent-primary)] p-4">
-      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        <label className="block">
-          <span className="type-meta mb-1 block">Category *</span>
-          <select
-            value={form.ffeCategory}
-            onChange={(e) => update('ffeCategory', e.target.value)}
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
-          >
-            <option value="">Select…</option>
-            {categories.map((c) => (
-              <option key={c.slug} value={c.slug}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="block">
-          <span className="type-meta mb-1 block">Room</span>
-          <select
-            value={form.scopeRoomId}
-            onChange={(e) => update('scopeRoomId', e.target.value)}
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
-          >
-            <option value="">Unassigned</option>
-            {rooms.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        <label className="block">
-          <span className="type-meta mb-1 block">Min *</span>
-          <div className="relative">
-            <span
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-body text-[0.88rem]"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              $
-            </span>
-            <input
-              type="number"
-              min="0"
-              value={form.minDollars}
-              onChange={(e) => update('minDollars', e.target.value)}
-              placeholder="0"
-              className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent py-2 pl-7 pr-3 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
-            />
-          </div>
-        </label>
-        <label className="block">
-          <span className="type-meta mb-1 block">Max *</span>
-          <div className="relative">
-            <span
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-body text-[0.88rem]"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              $
-            </span>
-            <input
-              type="number"
-              min="0"
-              value={form.maxDollars}
-              onChange={(e) => update('maxDollars', e.target.value)}
-              placeholder="0"
-              className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent py-2 pl-7 pr-3 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
-            />
-          </div>
-        </label>
-      </div>
-
-      <label className="block">
-        <span className="type-meta mb-1 block">Notes (optional)</span>
-        <textarea
-          value={form.notes}
-          onChange={(e) => update('notes', e.target.value)}
-          rows={2}
-          placeholder="Specification notes, lead time, COM details…"
-          className="w-full resize-none rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.82rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
-        />
-      </label>
-
-      <div className="flex items-center gap-2">
-        <PortalButton variant="primary" onClick={() => onSave(form)} disabled={!canSave || isSaving}>
-          {isSaving ? 'Saving…' : 'Save Allowance'}
-        </PortalButton>
-        <PortalButton variant="ghost" onClick={onCancel} disabled={isSaving}>
-          Cancel
-        </PortalButton>
-      </div>
-    </div>
-  );
-}
-
-// ─── TBD form (category required) ────────────────────────────────────────────
-
-interface TbdFormState {
-  ffeCategory: string;
-  scopeRoomId: string;
-  notes: string;
-}
-
-const EMPTY_TBD_FORM: TbdFormState = {
-  ffeCategory: '',
-  scopeRoomId: '',
-  notes: '',
-};
-
-function TbdForm({
-  rooms,
-  categories,
-  onSave,
-  onCancel,
-  isSaving,
-}: {
-  rooms: ScopeRoom[];
-  categories: Array<{ slug: string; label: string }>;
-  onSave: (form: TbdFormState) => void;
-  onCancel: () => void;
-  isSaving: boolean;
-}) {
-  const [form, setForm] = useState<TbdFormState>(EMPTY_TBD_FORM);
-  const update = <K extends keyof TbdFormState>(key: K, v: TbdFormState[K]) =>
-    setForm((prev) => ({ ...prev, [key]: v }));
-
-  return (
-    <div className="space-y-3 rounded-md border border-[var(--accent-primary)] p-4">
-      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        <label className="block">
-          <span className="type-meta mb-1 block">Category *</span>
-          <select
-            value={form.ffeCategory}
-            onChange={(e) => update('ffeCategory', e.target.value)}
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
-          >
-            <option value="">Select…</option>
-            {categories.map((c) => (
-              <option key={c.slug} value={c.slug}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="block">
-          <span className="type-meta mb-1 block">Room</span>
-          <select
-            value={form.scopeRoomId}
-            onChange={(e) => update('scopeRoomId', e.target.value)}
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
-          >
-            <option value="">Unassigned</option>
-            {rooms.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <label className="block">
-        <span className="type-meta mb-1 block">Notes (optional)</span>
-        <textarea
-          value={form.notes}
-          onChange={(e) => update('notes', e.target.value)}
-          rows={2}
-          placeholder="What still needs to be specified, vendor quotes pending, etc."
-          className="w-full resize-none rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.82rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
-        />
-      </label>
-
-      <div className="flex items-center gap-2">
-        <PortalButton
-          variant="primary"
-          onClick={() => onSave(form)}
-          disabled={!form.ffeCategory || isSaving}
-        >
-          {isSaving ? 'Saving…' : 'Save TBD'}
-        </PortalButton>
-        <PortalButton variant="ghost" onClick={onCancel} disabled={isSaving}>
-          Cancel
-        </PortalButton>
-      </div>
-    </div>
-  );
-}
 
 // ─── Inline item edit form ───────────────────────────────────────────────────
 //
@@ -589,7 +342,6 @@ function ItemRow({
   onStopEdit: () => void;
 }) {
   const removeItem = useRemoveProposalItem();
-  const style = typeTagStyle(item.item_type);
   const lineCost = item.unit_price * item.quantity;
 
   const rangeText =
@@ -621,211 +373,51 @@ function ItemRow({
     );
   }
 
+  const displayName = item.name || categoryLabel(item.ffe_category, categoryLookup) || 'Untitled';
+  const unitTotalLabel =
+    item.item_type === 'allowance' && rangeText
+      ? rangeText
+      : lineCost > 0
+        ? formatDollars(lineCost)
+        : '—';
+
   return (
-    <div
-      className="group grid items-center gap-2 border-b py-2"
-      style={{
-        gridTemplateColumns: '1fr 60px 80px 120px 40px',
-        borderColor: 'rgba(229, 226, 221, 0.4)',
-      }}
-    >
-      <div>
-        <div
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: '0.82rem',
-            color: 'var(--text-primary)',
-          }}
-        >
-          {item.name || categoryLabel(item.ffe_category, categoryLookup) || 'Untitled'}
-        </div>
-        {subtitle && (
-          <div
-            style={{
-              fontFamily: 'var(--font-body)',
-              fontSize: '0.68rem',
-              fontStyle: 'italic',
-              color: 'var(--color-aged-oak)',
-            }}
+    <FFEItemCard
+      name={displayName}
+      vendorName={subtitle}
+      quantity={item.item_type === 'tbd' ? null : item.quantity}
+      unitTotalLabel={unitTotalLabel}
+      itemType={item.item_type}
+      actions={
+        <>
+          <button
+            onClick={onStartEdit}
+            className="cursor-pointer p-0.5 text-[var(--text-muted)] transition-colors hover:text-[var(--accent-primary)]"
+            title="Edit"
+            aria-label="Edit item"
           >
-            {subtitle}
-          </div>
-        )}
-      </div>
-
-      <div
-        className="text-right"
-        style={{
-          fontFamily: 'var(--font-meta)',
-          fontSize: '0.58rem',
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-          color: 'var(--text-muted)',
-        }}
-      >
-        {item.item_type === 'tbd' ? '—' : item.quantity}
-      </div>
-
-      <div className="text-right">
-        <span
-          className="inline-flex whitespace-nowrap rounded-sm px-1.5 py-0.5"
-          style={{
-            fontFamily: 'var(--font-meta)',
-            fontSize: '0.48rem',
-            textTransform: 'uppercase',
-            letterSpacing: '0.04em',
-            color: style.color,
-            background: style.bg,
-          }}
-        >
-          {typeLabel(item.item_type)}
-        </span>
-      </div>
-
-      <div
-        className="text-right"
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontWeight: 500,
-          fontSize: '0.82rem',
-          color: lineCost > 0 || rangeText ? 'var(--text-primary)' : 'var(--text-muted)',
-        }}
-      >
-        {item.item_type === 'allowance' && rangeText
-          ? rangeText
-          : lineCost > 0
-            ? formatDollars(lineCost)
-            : '—'}
-      </div>
-
-      <div className="flex justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <button
-          onClick={onStartEdit}
-          className="cursor-pointer p-0.5 text-[var(--text-muted)] transition-colors hover:text-[var(--accent-primary)]"
-          title="Edit"
-          aria-label="Edit item"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 20h9" />
-            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-          </svg>
-        </button>
-        <button
-          onClick={handleRemove}
-          disabled={removeItem.isPending}
-          className="cursor-pointer p-0.5 text-[var(--text-muted)] transition-colors hover:text-[var(--color-terracotta)]"
-          title="Remove"
-          aria-label="Remove item"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Picker → Add product wrapper ────────────────────────────────────────────
-
-/**
- * When the picker returns a product id, we fetch the product and create a
- * proposal_item with item_type='fixed'. This component is gated by the
- * pickerOpen state in the parent.
- */
-function ProductAdder({
-  proposalId,
-  productId,
-  scopeRoomId,
-  ffeCategorySlug,
-  onDone,
-}: {
-  proposalId: string;
-  productId: string | null;
-  scopeRoomId: string | null;
-  ffeCategorySlug: string | null;
-  onDone: () => void;
-}) {
-  const productQ = useProduct(productId ?? '');
-  const addItem = useAddProposalItem();
-
-  if (!productId) return null;
-  if (productQ.isLoading) {
-    return (
-      <div
-        className="rounded-md border border-dashed px-3 py-3 text-center type-body"
-        style={{
-          borderColor: 'var(--border-default)',
-          color: 'var(--text-muted)',
-          fontSize: '0.78rem',
-        }}
-      >
-        Loading product…
-      </div>
-    );
-  }
-  if (productQ.isError) {
-    return (
-      <div className="rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-        Failed to load product. Try picking again.
-        <PortalButton variant="ghost" onClick={onDone}>Dismiss</PortalButton>
-      </div>
-    );
-  }
-  if (!productQ.data) return null;
-
-  const product = productQ.data as {
-    id: string;
-    name: string;
-    price_retail: number | null;
-    vendor_id: string | null;
-    vendor?: { name?: string | null } | null;
-  };
-
-  // Add the item exactly once. A useEffect would over-react to rerenders;
-  // a plain mutate inside render would dispatch repeatedly. We use a guard
-  // ref pattern via mutation's idle->pending transition: only fire when
-  // idle.
-  if (addItem.isIdle) {
-    addItem.mutate(
-      {
-        proposalId,
-        productId: product.id,
-        name: product.name,
-        quantity: 1,
-        unitPrice: product.price_retail ?? 0,
-        vendorName: product.vendor?.name ?? undefined,
-        itemType: 'fixed',
-        scopeRoomId,
-        ffeCategory: ffeCategorySlug,
-      },
-      {
-        onSuccess: () => {
-          proposalEvents.itemAdded({
-            proposalId,
-            itemType: 'fixed',
-            hasProduct: true,
-            lineTotal: product.price_retail ?? 0,
-          });
-        },
-        onSettled: onDone,
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+            </svg>
+          </button>
+          <button
+            onClick={handleRemove}
+            disabled={removeItem.isPending}
+            className="cursor-pointer p-0.5 text-[var(--text-muted)] transition-colors hover:text-[var(--color-terracotta)]"
+            title="Remove"
+            aria-label="Remove item"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </>
       }
-    );
-  }
-
-  return (
-    <div
-      className="rounded-md border border-dashed px-3 py-3 text-center type-body"
-      style={{
-        borderColor: 'var(--border-default)',
-        color: 'var(--text-muted)',
-        fontSize: '0.78rem',
-      }}
-    >
-      {addItem.isPending ? 'Adding to schedule…' : 'Adding…'}
-    </div>
+    />
   );
 }
+
 
 // ─── Drop target ─────────────────────────────────────────────────────────────
 
@@ -1011,11 +603,6 @@ interface FFEScheduleBuilderProps {
   proposalId: string;
 }
 
-type PickerContext = {
-  scopeRoomId: string | null;
-  ffeCategorySlug: string | null;
-};
-
 interface CaptureDropContext {
   captureId: string;
   scopeRoomId: string;
@@ -1028,24 +615,13 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
 
   const addItem = useAddProposalItem();
   const consumeCapture = useConsumeCapture();
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerCtx, setPickerCtx] = useState<PickerContext>({
-    scopeRoomId: null,
-    ffeCategorySlug: null,
-  });
-  const [pickedProductId, setPickedProductId] = useState<string | null>(null);
-  const [allowanceMode, setAllowanceMode] = useState(false);
-  const [tbdMode, setTbdMode] = useState(false);
   const [captureDrop, setCaptureDrop] = useState<CaptureDropContext | null>(null);
   const [captureDropError, setCaptureDropError] = useState<string | null>(null);
   // Only one row may be in inline-edit mode at a time.
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
-
-  // Open the product picker pre-targeted at a room (null → Unassigned).
-  const openPickerForRoom = (scopeRoomId: string | null) => {
-    setPickerCtx({ scopeRoomId, ffeCategorySlug: null });
-    setPickerOpen(true);
-  };
+  // The shared Add controls own the picker + allowance/TBD forms; per-room
+  // "+ Add Item" links open its picker pre-targeted via the imperative handle.
+  const addControlsRef = useRef<AddFFEItemControlsHandle>(null);
 
   const { data: items = [], isLoading } = useProposalItems(proposalId);
 
@@ -1096,11 +672,35 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
     }, 0);
   }, [items]);
 
+  // Picked from the catalog → add a fixed proposal_item directly from the
+  // denormalized pick result (the result already carries name/price/vendor, so
+  // no follow-up product fetch is needed). priceCents is already cents.
+  const handleAddProduct = (r: ProductPickResult) =>
+    addItem
+      .mutateAsync({
+        proposalId,
+        productId: r.productId,
+        name: r.name,
+        quantity: 1,
+        unitPrice: r.priceCents ?? 0,
+        vendorName: r.vendorName ?? undefined,
+        itemType: 'fixed',
+        scopeRoomId: r.scopeRoomId,
+      })
+      .then(() => {
+        proposalEvents.itemAdded({
+          proposalId,
+          itemType: 'fixed',
+          hasProduct: true,
+          lineTotal: r.priceCents ?? 0,
+        });
+      });
+
   const handleAllowanceSave = (form: AllowanceFormState) => {
     const budgetMin = Math.round(parseFloat(form.minDollars || '0') * 100);
     const budgetMax = Math.round(parseFloat(form.maxDollars || '0') * 100);
-    addItem.mutate(
-      {
+    return addItem
+      .mutateAsync({
         proposalId,
         name: categoryLookup.get(form.ffeCategory) ?? form.ffeCategory,
         quantity: 1,
@@ -1111,24 +711,20 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
         ffeCategory: form.ffeCategory,
         budgetMinCents: budgetMin,
         budgetMaxCents: budgetMax,
-      },
-      {
-        onSuccess: () => {
-          proposalEvents.itemAdded({
-            proposalId,
-            itemType: 'allowance',
-            hasProduct: false,
-            lineTotal: Math.round((budgetMin + budgetMax) / 2),
-          });
-          setAllowanceMode(false);
-        },
-      }
-    );
+      })
+      .then(() => {
+        proposalEvents.itemAdded({
+          proposalId,
+          itemType: 'allowance',
+          hasProduct: false,
+          lineTotal: Math.round((budgetMin + budgetMax) / 2),
+        });
+      });
   };
 
-  const handleTbdSave = (form: TbdFormState) => {
-    addItem.mutate(
-      {
+  const handleTbdSave = (form: TbdFormState) =>
+    addItem
+      .mutateAsync({
         proposalId,
         name: categoryLookup.get(form.ffeCategory) ?? form.ffeCategory,
         quantity: 1,
@@ -1137,20 +733,10 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
         itemType: 'tbd',
         scopeRoomId: form.scopeRoomId || null,
         ffeCategory: form.ffeCategory,
-      },
-      {
-        onSuccess: () => {
-          proposalEvents.itemAdded({
-            proposalId,
-            itemType: 'tbd',
-            hasProduct: false,
-            lineTotal: 0,
-          });
-          setTbdMode(false);
-        },
-      }
-    );
-  };
+      })
+      .then(() => {
+        proposalEvents.itemAdded({ proposalId, itemType: 'tbd', hasProduct: false, lineTotal: 0 });
+      });
 
   // Map a drag-end (capture dragged from inbox onto a room droppable) into a
   // capture-drop context. The category is collected via CategoryPromptModal.
@@ -1214,30 +800,6 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
         {totalEstimate > 0 ? ` · Est. total: ${formatDollars(totalEstimate)}` : ''}
       </div>
 
-      <div
-        className="mb-1 grid items-center gap-2 border-b py-1"
-        style={{
-          gridTemplateColumns: '1fr 60px 80px 120px 40px',
-          borderColor: 'var(--border-default)',
-        }}
-      >
-        {['Item / Vendor', 'Qty', 'Type', 'Cost / Range', ''].map((h) => (
-          <span
-            key={h || 'actions'}
-            style={{
-              fontFamily: 'var(--font-meta)',
-              fontSize: '0.58rem',
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              color: 'var(--text-muted)',
-              textAlign: h === 'Item / Vendor' ? 'left' : 'right',
-            }}
-          >
-            {h}
-          </span>
-        ))}
-      </div>
-
       {isLoading && (
         <div
           className="py-8 text-center"
@@ -1273,7 +835,7 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => openPickerForRoom(groupRoomId)}
+                  onClick={() => addControlsRef.current?.openProduct(groupRoomId)}
                   className="cursor-pointer text-[var(--text-muted)] transition-colors hover:text-[var(--accent-primary)]"
                   style={{
                     fontFamily: 'var(--font-meta)',
@@ -1286,19 +848,28 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
                 </button>
               </div>
 
-              {group.items.map((item) => (
-                <ItemRow
-                  key={item.id}
-                  item={item}
-                  proposalId={proposalId}
-                  rooms={typedRooms}
-                  categories={categoryOptions}
-                  categoryLookup={categoryLookup}
-                  isEditing={editingItemId === item.id}
-                  onStartEdit={() => setEditingItemId(item.id)}
-                  onStopEdit={() => setEditingItemId(null)}
-                />
-              ))}
+              <div
+                className="grid gap-3"
+                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}
+              >
+                {group.items.map((item) => {
+                  const editing = editingItemId === item.id;
+                  return (
+                    <div key={item.id} style={{ gridColumn: editing ? '1 / -1' : undefined }}>
+                      <ItemRow
+                        item={item}
+                        proposalId={proposalId}
+                        rooms={typedRooms}
+                        categories={categoryOptions}
+                        categoryLookup={categoryLookup}
+                        isEditing={editing}
+                        onStartEdit={() => setEditingItemId(item.id)}
+                        onStopEdit={() => setEditingItemId(null)}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </RoomDropZone>
         );
@@ -1326,7 +897,7 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => openPickerForRoom(room.id)}
+                  onClick={() => addControlsRef.current?.openProduct(room.id)}
                   className="cursor-pointer text-[var(--text-muted)] transition-colors hover:text-[var(--accent-primary)]"
                   style={{
                     fontFamily: 'var(--font-meta)',
@@ -1366,10 +937,7 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
       )}
 
       {(items as FFEItem[]).length > 0 && (
-        <div
-          className="mt-1 grid items-baseline gap-2 border-t-2 border-[var(--border-default)] pt-3"
-          style={{ gridTemplateColumns: '1fr 60px 80px 120px 40px' }}
-        >
+        <div className="mt-4 flex items-baseline justify-between border-t-2 border-[var(--border-default)] pt-3">
           <span
             style={{
               fontFamily: 'var(--font-body)',
@@ -1380,10 +948,7 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
           >
             Estimated Total
           </span>
-          <span />
-          <span />
           <span
-            className="text-right"
             style={{
               fontFamily: 'var(--font-display)',
               fontWeight: 600,
@@ -1393,78 +958,25 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
           >
             {formatDollars(totalEstimate)}
           </span>
-          <span />
         </div>
       )}
 
-      {/* Inline allowance form */}
-      {allowanceMode && (
-        <div className="mt-3">
-          <AllowanceForm
-            rooms={typedRooms}
-            categories={categoryOptions}
-            onSave={handleAllowanceSave}
-            onCancel={() => setAllowanceMode(false)}
-            isSaving={addItem.isPending}
-          />
-        </div>
-      )}
-
-      {/* Inline TBD form */}
-      {tbdMode && (
-        <div className="mt-3">
-          <TbdForm
-            rooms={typedRooms}
-            categories={categoryOptions}
-            onSave={handleTbdSave}
-            onCancel={() => setTbdMode(false)}
-            isSaving={addItem.isPending}
-          />
-        </div>
-      )}
-
-      {/* In-flight product add */}
-      {pickedProductId && (
-        <div className="mt-3">
-          <ProductAdder
-            proposalId={proposalId}
-            productId={pickedProductId}
-            scopeRoomId={pickerCtx.scopeRoomId}
-            ffeCategorySlug={pickerCtx.ffeCategorySlug}
-            onDone={() => setPickedProductId(null)}
-          />
-        </div>
-      )}
-
-      {/* Action buttons */}
-      {!allowanceMode && !tbdMode && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <PortalButton variant="primary" onClick={() => openPickerForRoom(null)}>
-            + Add Item
-          </PortalButton>
-          <PortalButton variant="secondary" onClick={() => setAllowanceMode(true)}>
-            + Add Allowance
-          </PortalButton>
-          <PortalButton variant="ghost" onClick={() => setTbdMode(true)}>
-            + Add TBD
-          </PortalButton>
-        </div>
-      )}
-
-      {/* Product picker modal */}
-      <ProductPickerModal
-        open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        defaultCategorySlug={pickerCtx.ffeCategorySlug ?? undefined}
-        rooms={typedRooms}
-        defaultScopeRoomId={pickerCtx.scopeRoomId}
-        onPick={(r) => {
-          // The modal may override the room the picker was opened with; carry
-          // the user's choice into the in-flight add.
-          setPickerCtx((prev) => ({ ...prev, scopeRoomId: r.scopeRoomId }));
-          setPickedProductId(r.productId);
-        }}
-      />
+      {/* Add product / allowance / TBD — shared with the project FF&E board.
+          Owns the catalog picker + inline allowance/TBD forms; per-room
+          "+ Add Item" links drive it via the imperative handle. */}
+      <div className="mt-4">
+        <AddFFEItemControls
+          ref={addControlsRef}
+          rooms={typedRooms}
+          categories={categoryOptions}
+          pickerScope="catalog"
+          isSaving={addItem.isPending}
+          productLabel="+ Add Item"
+          onAddProduct={handleAddProduct}
+          onAddAllowance={handleAllowanceSave}
+          onAddTbd={handleTbdSave}
+        />
+      </div>
 
       {/* Capture inbox + drag-and-drop into rooms above */}
       <div className="mt-6 border-t pt-4" style={{ borderColor: 'var(--border-default)' }}>

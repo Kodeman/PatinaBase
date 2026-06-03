@@ -221,6 +221,12 @@ export function useUpdateFFEItemStatus() {
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
+      // The designer-portal FF&E board reads items via the portal namespace
+      // (queryKeys.projects.* → ['projects', id, 'ffe-items'/'financials'/
+      // 'key-metrics'/detail]). This prefix invalidates all of them so a stage
+      // change (card dropdown, drawer, bulk advance) refreshes the board — the
+      // package keys above don't prefix-match the portal ones.
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
     },
   });
 }

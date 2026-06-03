@@ -9,7 +9,7 @@
  * svc_projects service (real-time / activity-stream surfaces).
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '@patina/supabase';
 import { mockData } from '@/data/mock-designer-data';
 import { projectsApi } from '@/lib/api-client';
@@ -713,6 +713,215 @@ export function useAddProjectRoom() {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.rooms(variables.projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(variables.projectId) });
     },
+  });
+}
+
+// ── Project FF&E item mutations (public.project_ffe_items, 00066) ──
+//
+// The per-project FF&E board reads items via useProjectFFEItems
+// (queryKeys.projects.ffeItems → ['projects', id, 'ffe-items']) but the package
+// hook useUpdateFFEItemStatus invalidates ['project-ffe-items', id]. These two
+// namespaces do NOT prefix-match, so every project FF&E write must invalidate
+// BOTH or the board won't refresh until a hard reload. These mutations live here
+// (next to the read hooks + queryKeys + isUuid) so that invalidation is explicit.
+
+type ProjectFFEItemType = 'fixed' | 'allowance' | 'tbd';
+
+// projects.budget_cents is the stored FF&E spend cap = Σ project_ffe_items.line_total_cents
+// (activation seeds it this way). Direct add/remove/edit must recompute it or the
+// project-detail budget tile + variance math drift. Mirrors updateProposalTotal.
+async function recomputeProjectBudget(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  projectId: string
+): Promise<void> {
+  const { data, error } = await supabase
+    .from('project_ffe_items')
+    .select('line_total_cents')
+    .eq('project_id', projectId);
+  if (error) throw error;
+  const sum = (data ?? []).reduce(
+    (acc: number, r: { line_total_cents: number | null }) => acc + (r.line_total_cents || 0),
+    0
+  );
+  const { error: upErr } = await supabase
+    .from('projects')
+    .update({ budget_cents: sum })
+    .eq('id', projectId);
+  if (upErr) throw upErr;
+}
+
+function invalidateProjectFFE(queryClient: QueryClient, projectId: string) {
+  // Portal read keys — the FF&E board, financials, key-metrics, detail tile.
+  queryClient.invalidateQueries({ queryKey: queryKeys.projects.ffeItems(projectId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.projects.financials(projectId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.projects.keyMetrics(projectId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+  // Package read keys — project detail's useProjectV2 + package financials.
+  queryClient.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
+  queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
+  queryClient.invalidateQueries({ queryKey: ['project-financials', projectId] });
+}
+
+// Add an FF&E item directly to a project (fixed product, allowance, or TBD).
+// Mirrors useAddProposalItem: allowance line_total = budget midpoint, else
+// quantity × unit price. Inserts at status 'specified'. unitPriceCents is cents
+// (the picker's priceCents is already cents — do NOT ×100 it).
+export function useAddProjectFFEItem() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      productId,
+      name,
+      quantity = 1,
+      unitPriceCents = 0,
+      vendorName,
+      vendorId,
+      itemType = 'fixed',
+      projectRoomId,
+      ffeCategory,
+      budgetMinCents,
+      budgetMaxCents,
+      notes,
+      eta,
+    }: {
+      projectId: string;
+      productId?: string | null;
+      name: string;
+      quantity?: number;
+      unitPriceCents?: number;
+      vendorName?: string | null;
+      vendorId?: string | null;
+      itemType?: ProjectFFEItemType;
+      projectRoomId?: string | null;
+      ffeCategory?: string | null;
+      budgetMinCents?: number | null;
+      budgetMaxCents?: number | null;
+      notes?: string | null;
+      eta?: string | null;
+    }) => {
+      const supabase = getSupabase();
+
+      // Append: max existing sort_order + 1 (not count — count collides after a delete).
+      const { data: existing } = await supabase
+        .from('project_ffe_items')
+        .select('sort_order')
+        .eq('project_id', projectId)
+        .order('sort_order', { ascending: false })
+        .limit(1);
+      const nextSort = (existing?.[0]?.sort_order ?? -1) + 1;
+
+      const lineTotal =
+        itemType === 'allowance' &&
+        typeof budgetMinCents === 'number' &&
+        typeof budgetMaxCents === 'number'
+          ? Math.round((budgetMinCents + budgetMaxCents) / 2)
+          : quantity * unitPriceCents;
+
+      const { data, error } = await supabase
+        .from('project_ffe_items')
+        .insert({
+          project_id: projectId,
+          project_room_id: projectRoomId ?? null,
+          product_id: productId ?? null,
+          name,
+          ffe_category: ffeCategory ?? null,
+          item_type: itemType,
+          status: 'specified',
+          quantity,
+          unit_price_cents: unitPriceCents,
+          line_total_cents: lineTotal,
+          budget_min_cents: budgetMinCents ?? null,
+          budget_max_cents: budgetMaxCents ?? null,
+          vendor_name: vendorName ?? null,
+          vendor_id: vendorId ?? null,
+          eta: eta ?? null,
+          notes: notes ?? null,
+          sort_order: nextSort,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+
+      await recomputeProjectBudget(supabase, projectId);
+      return data;
+    },
+    onSuccess: (_, { projectId }) => invalidateProjectFFE(queryClient, projectId),
+  });
+}
+
+// Remove an FF&E item, then recompute the project budget (inverse of add).
+export function useRemoveProjectFFEItem() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ itemId, projectId }: { itemId: string; projectId: string }) => {
+      const supabase = getSupabase();
+      const { error } = await supabase.from('project_ffe_items').delete().eq('id', itemId);
+      if (error) throw error;
+      await recomputeProjectBudget(supabase, projectId);
+    },
+    onSuccess: (_, { projectId }) => invalidateProjectFFE(queryClient, projectId),
+  });
+}
+
+// Edit an FF&E item's spec fields (quantity, unit_price_cents, project_room_id,
+// vendor_name, vendor_id, ffe_category, notes, budget_min/max_cents, eta). Refetches
+// the row to recompute line_total_cents from merged values, then recomputes budget.
+// Status is owned separately by useUpdateFFEItemStatus.
+export function useUpdateProjectFFEItem() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      projectId,
+      updates,
+    }: {
+      itemId: string;
+      projectId: string;
+      updates: Record<string, unknown>;
+    }) => {
+      const supabase = getSupabase();
+
+      const { data: current, error: curErr } = await supabase
+        .from('project_ffe_items')
+        .select('item_type, quantity, unit_price_cents, budget_min_cents, budget_max_cents')
+        .eq('id', itemId)
+        .single();
+      if (curErr) throw curErr;
+
+      const merged = { ...current, ...updates } as {
+        item_type?: string;
+        quantity?: number;
+        unit_price_cents?: number;
+        budget_min_cents?: number | null;
+        budget_max_cents?: number | null;
+      };
+      const mergedType = merged.item_type ?? 'fixed';
+      const mergedQty = merged.quantity ?? 1;
+      const mergedUnit = merged.unit_price_cents ?? 0;
+      const lineTotal =
+        mergedType === 'allowance' &&
+        typeof merged.budget_min_cents === 'number' &&
+        typeof merged.budget_max_cents === 'number'
+          ? Math.round((merged.budget_min_cents + merged.budget_max_cents) / 2)
+          : mergedQty * mergedUnit;
+
+      const { data, error } = await supabase
+        .from('project_ffe_items')
+        .update({ ...updates, line_total_cents: lineTotal })
+        .eq('id', itemId)
+        .select()
+        .single();
+      if (error) throw error;
+
+      await recomputeProjectBudget(supabase, projectId);
+      return data;
+    },
+    onSuccess: (_, { projectId }) => invalidateProjectFFE(queryClient, projectId),
   });
 }
 
