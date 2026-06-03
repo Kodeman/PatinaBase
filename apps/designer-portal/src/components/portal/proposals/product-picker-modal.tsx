@@ -5,7 +5,12 @@ import {
   useProducts,
   useCreateDraftProduct,
   useProposalCaptures,
+  useLayerProducts,
+  useLayerCounts,
+  useCrossLayerSearch,
   type ProposalCapture,
+  type LayerProductLayer,
+  type LayerProductRow,
 } from '@patina/supabase';
 import { PortalButton } from '@/components/portal/button';
 
@@ -17,18 +22,35 @@ export interface ProductPickerRoom {
   name: string;
 }
 
+/**
+ * Everything a caller needs to denormalize a picked product onto its own row
+ * (a decision option, an FF&E line, …) without a follow-up fetch. The picking
+ * tab already holds these fields, so we surface them rather than throwing them
+ * away and re-querying by id.
+ */
+export interface ProductPickResult {
+  productId: string;
+  name: string;
+  imageUrl: string | null; // images?.[0] ?? null
+  priceCents: number | null; // products.price_retail (already cents)
+  vendorName: string | null; // brand ?? vendor.name ?? null
+  /** Library layer the product was picked from, when known (for a badge). */
+  layer?: LayerProductLayer;
+  /** Room selected in the modal (or the default it opened with), null = Unassigned. */
+  scopeRoomId: string | null;
+}
+
+/** What an individual tab emits; the modal shell folds in `scopeRoomId`. */
+type TabPick = Omit<ProductPickResult, 'scopeRoomId'>;
+
 export interface ProductPickerModalProps {
   open: boolean;
   onClose: () => void;
-  /**
-   * Called when the user picks a product (catalog or freshly-created draft).
-   * `scopeRoomId` reflects the room selected in the modal (or the
-   * `defaultScopeRoomId` it was opened with), or null for Unassigned.
-   */
-  onPick: (productId: string, scopeRoomId: string | null) => void;
+  /** Called when the user picks a product (catalog/library item or fresh draft). */
+  onPick: (result: ProductPickResult) => void;
   /**
    * Default category slug to attach to the picked item — surfaced as a
-   * subtle hint above the list. Wave 1 doesn't filter by category yet.
+   * subtle hint above the catalog list. (Catalog scope only; not used in library.)
    */
   defaultCategorySlug?: string;
   /**
@@ -40,9 +62,16 @@ export interface ProductPickerModalProps {
   defaultScopeRoomId?: string | null;
   /** Show the Quick-create draft tab. Defaults to true. */
   allowDraftCreate?: boolean;
+  /**
+   * Where the first tab looks for products:
+   *  - 'catalog' (default): published Patina catalog (`useProducts`). Used by proposals.
+   *  - 'library': the designer's full 3-layer library (personal/studio/catalog) with
+   *    per-layer browse + cross-layer search. Used by decisions ("library-first").
+   */
+  scope?: 'catalog' | 'library';
 }
 
-type Tab = 'catalog' | 'captures' | 'draft';
+type Tab = 'browse' | 'captures' | 'draft';
 
 interface CatalogProductRow {
   id: string;
@@ -53,14 +82,148 @@ interface CatalogProductRow {
   images: string[];
 }
 
-// ─── Catalog tab ──────────────────────────────────────────────────────────────
+const LAYER_LABEL: Record<LayerProductLayer, string> = {
+  personal: 'Personal',
+  studio: 'Studio',
+  catalog: 'Catalog',
+};
+
+// ─── Shared result grid ─────────────────────────────────────────────────────────
+
+interface GridRow {
+  id: string;
+  name: string;
+  brand: string | null;
+  price_retail: number | null;
+  images: string[] | null;
+  /** Catalog rows carry a joined vendor; library rows only have `brand`. */
+  vendorName?: string | null;
+  layer?: LayerProductLayer;
+}
+
+function LayerBadge({ layer }: { layer: LayerProductLayer }) {
+  return (
+    <span
+      className="absolute right-1 top-1 rounded-sm px-1.5 py-0.5"
+      style={{
+        fontFamily: 'var(--font-meta)',
+        fontSize: '0.5rem',
+        textTransform: 'uppercase',
+        letterSpacing: '0.05em',
+        color: 'var(--text-primary)',
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-default)',
+      }}
+    >
+      {LAYER_LABEL[layer]}
+    </span>
+  );
+}
+
+function ProductResultGrid({
+  rows,
+  onPick,
+}: {
+  rows: GridRow[];
+  onPick: (pick: TabPick) => void;
+}) {
+  return (
+    <div className="grid max-h-[380px] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3">
+      {rows.map((p) => (
+        <button
+          key={p.id}
+          type="button"
+          onClick={() =>
+            onPick({
+              productId: p.id,
+              name: p.name,
+              imageUrl: p.images?.[0] ?? null,
+              priceCents: p.price_retail ?? null,
+              vendorName: p.vendorName ?? p.brand ?? null,
+              layer: p.layer,
+            })
+          }
+          data-testid="product-picker-result"
+          data-product-id={p.id}
+          className="group flex cursor-pointer flex-col items-stretch gap-2 rounded-sm border border-[var(--border-default)] p-2 text-left transition-colors hover:border-[var(--accent-primary)]"
+        >
+          <div
+            className="relative w-full overflow-hidden rounded-sm bg-[var(--bg-surface)]"
+            style={{ aspectRatio: '1 / 1' }}
+          >
+            {p.images?.[0] ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={p.images[0]}
+                alt={p.name}
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <div
+                className="flex h-full w-full items-center justify-center"
+                style={{ color: 'var(--text-muted)', fontSize: '0.62rem' }}
+              >
+                No image
+              </div>
+            )}
+            {p.layer && <LayerBadge layer={p.layer} />}
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <div
+              className="line-clamp-2"
+              style={{
+                fontFamily: 'var(--font-body)',
+                fontSize: '0.78rem',
+                color: 'var(--text-primary)',
+              }}
+            >
+              {p.name}
+            </div>
+            {(p.brand || p.vendorName) && (
+              <div
+                style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '0.68rem',
+                  fontStyle: 'italic',
+                  color: 'var(--color-aged-oak)',
+                }}
+              >
+                {p.brand ?? p.vendorName}
+              </div>
+            )}
+            {typeof p.price_retail === 'number' && (
+              <div
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontWeight: 500,
+                  fontSize: '0.78rem',
+                  color: 'var(--text-primary)',
+                }}
+              >
+                ${(p.price_retail / 100).toLocaleString()}
+              </div>
+            )}
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const messageStyle = {
+  fontSize: '0.82rem',
+  color: 'var(--text-muted)',
+} as const;
+
+// ─── Catalog tab (proposals / scope='catalog') ──────────────────────────────────
 
 function CatalogTab({
   defaultCategorySlug,
   onPick,
 }: {
   defaultCategorySlug?: string;
-  onPick: (productId: string) => void;
+  onPick: (pick: TabPick) => void;
 }) {
   const [search, setSearch] = useState('');
   // useProducts defaults to status='published' — exactly what we want.
@@ -70,26 +233,30 @@ function CatalogTab({
   );
 
   const products: CatalogProductRow[] = (data?.data ?? []) as CatalogProductRow[];
+  const rows: GridRow[] = products.map((p) => ({
+    id: p.id,
+    name: p.name,
+    brand: p.brand,
+    price_retail: p.price_retail,
+    images: p.images,
+    vendorName: p.vendor?.name ?? null,
+    layer: 'catalog',
+  }));
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search the catalog by product name…"
-          className="type-body w-full rounded-sm border border-[var(--border-default)] bg-transparent px-3 py-2 text-[0.85rem] outline-none transition-colors focus:border-[var(--accent-primary)]"
-        />
-      </div>
+      <input
+        type="search"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search the catalog by product name…"
+        className="type-body w-full rounded-sm border border-[var(--border-default)] bg-transparent px-3 py-2 text-[0.85rem] outline-none transition-colors focus:border-[var(--accent-primary)]"
+      />
 
       {defaultCategorySlug && (
         <div
           className="rounded-sm border border-dashed px-3 py-2 text-[0.72rem]"
-          style={{
-            borderColor: 'var(--border-default)',
-            color: 'var(--text-muted)',
-          }}
+          style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
         >
           Picking for category{' '}
           <span style={{ color: 'var(--text-primary)' }}>{defaultCategorySlug}</span>
@@ -97,100 +264,153 @@ function CatalogTab({
       )}
 
       {isLoading && (
-        <div
-          className="py-8 text-center type-body"
-          style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}
-        >
+        <div className="py-8 text-center type-body" style={messageStyle}>
           Loading catalog…
         </div>
       )}
-
       {isError && (
         <div className="rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
           {(error as Error)?.message ?? 'Failed to load catalog.'}
         </div>
       )}
-
-      {!isLoading && !isError && products.length === 0 && (
-        <div
-          className="py-8 text-center type-body"
-          style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}
-        >
+      {!isLoading && !isError && rows.length === 0 && (
+        <div className="py-8 text-center type-body" style={messageStyle}>
           No products found. Try a different search or quick-create a draft.
         </div>
       )}
+      {!isLoading && rows.length > 0 && <ProductResultGrid rows={rows} onPick={onPick} />}
+    </div>
+  );
+}
 
-      {!isLoading && products.length > 0 && (
-        <div className="grid max-h-[380px] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3">
-          {products.map((p) => (
+// ─── Library tab (decisions / scope='library') ──────────────────────────────────
+
+function LibraryTab({ onPick }: { onPick: (pick: TabPick) => void }) {
+  const [search, setSearch] = useState('');
+  const [activeLayer, setActiveLayer] = useState<LayerProductLayer>('personal');
+  const trimmed = search.trim();
+  const isSearching = trimmed.length > 0;
+
+  const { data: counts } = useLayerCounts();
+  // Default browse (blank query) of the active layer — useCrossLayerSearch
+  // returns empty on a blank query, so the per-layer browse fills that gap.
+  const browse = useLayerProducts({ layer: activeLayer, enabled: !isSearching });
+  // Typing switches to one cross-layer query, grouped by layer below.
+  const searchRes = useCrossLayerSearch({ query: trimmed, enabled: isSearching });
+
+  const layers: LayerProductLayer[] = ['personal', 'studio', 'catalog'];
+  const toGridRows = (items: LayerProductRow[], layer: LayerProductLayer): GridRow[] =>
+    items.map((r) => ({
+      id: r.id,
+      name: r.name,
+      brand: r.brand,
+      price_retail: r.price_retail,
+      images: r.images,
+      layer,
+    }));
+
+  return (
+    <div className="flex flex-col gap-3">
+      <input
+        type="search"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search your library and the catalog…"
+        className="type-body w-full rounded-sm border border-[var(--border-default)] bg-transparent px-3 py-2 text-[0.85rem] outline-none transition-colors focus:border-[var(--accent-primary)]"
+      />
+
+      {/* Layer chips — select the active layer to browse; counts are caller-scoped. */}
+      <div className="flex flex-wrap gap-2">
+        {layers.map((l) => {
+          const active = !isSearching && activeLayer === l;
+          return (
             <button
-              key={p.id}
+              key={l}
               type="button"
-              onClick={() => onPick(p.id)}
-              data-testid="product-picker-result"
-              data-product-id={p.id}
-              className="group flex cursor-pointer flex-col items-stretch gap-2 rounded-sm border border-[var(--border-default)] p-2 text-left transition-colors hover:border-[var(--accent-primary)]"
+              onClick={() => {
+                setActiveLayer(l);
+                setSearch('');
+              }}
+              aria-pressed={active}
+              data-testid={`library-layer-${l}`}
+              className={`cursor-pointer rounded-sm border px-3 py-1 text-[0.72rem] transition-colors ${
+                active
+                  ? 'border-[var(--accent-primary)] bg-[rgba(196,165,123,0.08)] text-[var(--text-primary)]'
+                  : 'border-[var(--border-default)] text-[var(--text-muted)] hover:border-[var(--accent-primary)]'
+              }`}
             >
-              <div
-                className="relative w-full overflow-hidden rounded-sm bg-[var(--bg-surface)]"
-                style={{ aspectRatio: '1 / 1' }}
-              >
-                {p.images?.[0] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={p.images[0]}
-                    alt={p.name}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div
-                    className="flex h-full w-full items-center justify-center"
-                    style={{ color: 'var(--text-muted)', fontSize: '0.62rem' }}
-                  >
-                    No image
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <div
-                  className="line-clamp-2"
-                  style={{
-                    fontFamily: 'var(--font-body)',
-                    fontSize: '0.78rem',
-                    color: 'var(--text-primary)',
-                  }}
-                >
-                  {p.name}
-                </div>
-                {(p.brand || p.vendor?.name) && (
-                  <div
-                    style={{
-                      fontFamily: 'var(--font-body)',
-                      fontSize: '0.68rem',
-                      fontStyle: 'italic',
-                      color: 'var(--color-aged-oak)',
-                    }}
-                  >
-                    {p.brand ?? p.vendor?.name}
-                  </div>
-                )}
-                {typeof p.price_retail === 'number' && (
-                  <div
-                    style={{
-                      fontFamily: 'var(--font-display)',
-                      fontWeight: 500,
-                      fontSize: '0.78rem',
-                      color: 'var(--text-primary)',
-                    }}
-                  >
-                    ${(p.price_retail / 100).toLocaleString()}
-                  </div>
-                )}
-              </div>
+              {LAYER_LABEL[l]}
+              {counts ? ` · ${counts[l]}` : ''}
             </button>
-          ))}
-        </div>
+          );
+        })}
+      </div>
+
+      {/* Browse the active layer (blank query) */}
+      {!isSearching && (
+        <>
+          {browse.isLoading && (
+            <div className="py-8 text-center type-body" style={messageStyle}>
+              Loading {LAYER_LABEL[activeLayer].toLowerCase()} library…
+            </div>
+          )}
+          {browse.isError && (
+            <div className="rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              {(browse.error as Error)?.message ?? 'Failed to load library.'}
+            </div>
+          )}
+          {!browse.isLoading && !browse.isError && (browse.data?.length ?? 0) === 0 && (
+            <div className="py-8 text-center type-body" style={messageStyle}>
+              Nothing in your {LAYER_LABEL[activeLayer].toLowerCase()} library yet. Search
+              the catalog, capture with the extension, or quick-create a draft.
+            </div>
+          )}
+          {(browse.data?.length ?? 0) > 0 && (
+            <ProductResultGrid rows={toGridRows(browse.data ?? [], activeLayer)} onPick={onPick} />
+          )}
+        </>
+      )}
+
+      {/* Cross-layer search results, grouped by layer */}
+      {isSearching && (
+        <>
+          {searchRes.isLoading && (
+            <div className="py-8 text-center type-body" style={messageStyle}>
+              Searching…
+            </div>
+          )}
+          {searchRes.isError && (
+            <div className="rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              {(searchRes.error as Error)?.message ?? 'Search failed.'}
+            </div>
+          )}
+          {searchRes.data && searchRes.data.total === 0 && (
+            <div className="py-8 text-center type-body" style={messageStyle}>
+              No matches in your library or the catalog. Quick-create a draft instead.
+            </div>
+          )}
+          {searchRes.data &&
+            layers.map((l) => {
+              const items = searchRes.data!.byLayer[l];
+              if (!items || items.length === 0) return null;
+              return (
+                <div key={l} className="flex flex-col gap-2">
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-meta)',
+                      fontSize: '0.6rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      color: 'var(--text-muted)',
+                    }}
+                  >
+                    {LAYER_LABEL[l]} · {items.length}
+                  </div>
+                  <ProductResultGrid rows={toGridRows(items, l)} onPick={onPick} />
+                </div>
+              );
+            })}
+        </>
       )}
     </div>
   );
@@ -198,7 +418,7 @@ function CatalogTab({
 
 // ─── Quick-create draft tab ────────────────────────────────────────────────────
 
-function DraftTab({ onPick }: { onPick: (productId: string) => void }) {
+function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
   const [name, setName] = useState('');
   const [brand, setBrand] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
@@ -213,14 +433,23 @@ function DraftTab({ onPick }: { onPick: (productId: string) => void }) {
     setErrorMessage(null);
     try {
       const parsed = priceDollars ? Number(priceDollars) : undefined;
+      const priceRetailDollars =
+        parsed !== undefined && !Number.isNaN(parsed) ? parsed : undefined;
       const result = await create.mutateAsync({
         name,
         brand: brand || undefined,
         sourceUrl: sourceUrl || undefined,
-        priceRetailDollars:
-          parsed !== undefined && !Number.isNaN(parsed) ? parsed : undefined,
+        priceRetailDollars,
       });
-      onPick(result.id);
+      onPick({
+        productId: result.id,
+        name: name.trim(),
+        imageUrl: null,
+        priceCents:
+          priceRetailDollars !== undefined ? Math.round(priceRetailDollars * 100) : null,
+        vendorName: brand.trim() || null,
+        layer: 'personal',
+      });
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Failed to create draft');
     }
@@ -232,9 +461,9 @@ function DraftTab({ onPick }: { onPick: (productId: string) => void }) {
         className="type-body"
         style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.5 }}
       >
-        Create a stub product so you can spec it on the proposal now. You can fill in
-        catalog details later — it stays in <span style={{ color: 'var(--text-primary)' }}>draft</span>{' '}
-        until you publish it.
+        Create a stub product so you can spec it now. You can fill in catalog details
+        later — it stays in <span style={{ color: 'var(--text-primary)' }}>draft</span> in your
+        personal library until you publish it.
       </p>
 
       <label className="block">
@@ -342,7 +571,16 @@ function captureVendorName(c: ProposalCapture): string | null {
   return fromKey('manufacturer') ?? fromKey('brand');
 }
 
-function CapturesTab({ onPick }: { onPick: (productId: string) => void }) {
+function capturePriceCents(c: ProposalCapture): number | null {
+  const payload = (c.raw_payload ?? {}) as Record<string, unknown>;
+  const priceRaw = payload['price_retail_cents'] ?? payload['priceRetailCents'];
+  if (typeof priceRaw === 'number' && Number.isFinite(priceRaw)) return priceRaw;
+  const dollars = payload['priceRetailDollars'] ?? payload['price'];
+  if (typeof dollars === 'number' && Number.isFinite(dollars)) return Math.round(dollars * 100);
+  return null;
+}
+
+function CapturesTab({ onPick }: { onPick: (pick: TabPick) => void }) {
   const { data: captures = [], isLoading, isError, error } = useProposalCaptures({
     status: 'inbox',
   });
@@ -354,24 +592,21 @@ function CapturesTab({ onPick }: { onPick: (productId: string) => void }) {
     setPromoteError(null);
     setPromotingId(capture.id);
     try {
-      const payload = (capture.raw_payload ?? {}) as Record<string, unknown>;
-      const priceRaw = payload['price_retail_cents'] ?? payload['priceRetailCents'];
-      const priceDollars =
-        typeof priceRaw === 'number' && Number.isFinite(priceRaw)
-          ? priceRaw / 100
-          : (() => {
-              const dollars = payload['priceRetailDollars'] ?? payload['price'];
-              return typeof dollars === 'number' && Number.isFinite(dollars)
-                ? dollars
-                : undefined;
-            })();
+      const priceCents = capturePriceCents(capture);
       const result = await createDraft.mutateAsync({
         name: captureName(capture),
         brand: captureVendorName(capture) ?? undefined,
         sourceUrl: capture.source_url,
-        priceRetailDollars: priceDollars,
+        priceRetailDollars: priceCents != null ? priceCents / 100 : undefined,
       });
-      onPick(result.id);
+      onPick({
+        productId: result.id,
+        name: captureName(capture),
+        imageUrl: capture.thumbnail_url ?? null,
+        priceCents,
+        vendorName: captureVendorName(capture),
+        layer: 'personal',
+      });
     } catch (err) {
       setPromoteError(err instanceof Error ? err.message : 'Failed to promote draft');
     } finally {
@@ -382,10 +617,7 @@ function CapturesTab({ onPick }: { onPick: (productId: string) => void }) {
   return (
     <div className="flex flex-col gap-3">
       {isLoading && (
-        <div
-          className="py-8 text-center type-body"
-          style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}
-        >
+        <div className="py-8 text-center type-body" style={messageStyle}>
           Loading captures…
         </div>
       )}
@@ -397,12 +629,9 @@ function CapturesTab({ onPick }: { onPick: (productId: string) => void }) {
       )}
 
       {!isLoading && !isError && captures.length === 0 && (
-        <div
-          className="py-8 text-center type-body"
-          style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}
-        >
+        <div className="py-8 text-center type-body" style={messageStyle}>
           No captures yet. Use the Patina extension to capture products from the web,
-          then return here to add them to a proposal.
+          then return here to add them.
         </div>
       )}
 
@@ -420,7 +649,13 @@ function CapturesTab({ onPick }: { onPick: (productId: string) => void }) {
             const isPromoting = promotingId === capture.id;
             const handleClick = () => {
               if (capture.product_id) {
-                onPick(capture.product_id);
+                onPick({
+                  productId: capture.product_id,
+                  name,
+                  imageUrl: capture.thumbnail_url ?? null,
+                  priceCents: capturePriceCents(capture),
+                  vendorName: vendor,
+                });
               } else {
                 void handlePromoteAndPick(capture);
               }
@@ -499,7 +734,7 @@ function CapturesTab({ onPick }: { onPick: (productId: string) => void }) {
                   {isPromoting
                     ? 'Promoting…'
                     : capture.product_id
-                      ? 'Catalog'
+                      ? 'Library'
                       : 'Promote draft'}
                 </span>
               </button>
@@ -521,14 +756,15 @@ export function ProductPickerModal({
   rooms = [],
   defaultScopeRoomId = null,
   allowDraftCreate = true,
+  scope = 'catalog',
 }: ProductPickerModalProps) {
-  const [tab, setTab] = useState<Tab>('catalog');
+  const [tab, setTab] = useState<Tab>('browse');
   const [scopeRoomId, setScopeRoomId] = useState<string | null>(defaultScopeRoomId ?? null);
 
-  // Reset to the catalog tab and the default room whenever the modal opens.
+  // Reset to the browse tab and the default room whenever the modal opens.
   useEffect(() => {
     if (open) {
-      setTab('catalog');
+      setTab('browse');
       setScopeRoomId(defaultScopeRoomId ?? null);
     }
   }, [open, defaultScopeRoomId]);
@@ -545,10 +781,28 @@ export function ProductPickerModal({
 
   if (!open) return null;
 
-  const handlePick = (id: string) => {
-    onPick(id, scopeRoomId);
+  const handlePick = (pick: TabPick) => {
+    onPick({ ...pick, scopeRoomId });
     onClose();
   };
+
+  const browseLabel = scope === 'library' ? 'Library' : 'Catalog';
+
+  const tabButton = (key: Tab, label: string) => (
+    <button
+      role="tab"
+      type="button"
+      aria-selected={tab === key}
+      onClick={() => setTab(key)}
+      className={`cursor-pointer px-3 py-2 font-body text-[0.82rem] font-medium transition-colors ${
+        tab === key
+          ? 'border-b-2 border-[var(--accent-primary)] text-[var(--text-primary)]'
+          : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+      }`}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div
@@ -605,53 +859,18 @@ export function ProductPickerModal({
           className="mb-4 flex gap-1 border-b"
           style={{ borderColor: 'var(--border-default)' }}
         >
-          <button
-            role="tab"
-            type="button"
-            aria-selected={tab === 'catalog'}
-            onClick={() => setTab('catalog')}
-            className={`cursor-pointer px-3 py-2 font-body text-[0.82rem] font-medium transition-colors ${
-              tab === 'catalog'
-                ? 'border-b-2 border-[var(--accent-primary)] text-[var(--text-primary)]'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            Catalog
-          </button>
-          <button
-            role="tab"
-            type="button"
-            aria-selected={tab === 'captures'}
-            onClick={() => setTab('captures')}
-            className={`cursor-pointer px-3 py-2 font-body text-[0.82rem] font-medium transition-colors ${
-              tab === 'captures'
-                ? 'border-b-2 border-[var(--accent-primary)] text-[var(--text-primary)]'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            Captures
-          </button>
-          {allowDraftCreate && (
-            <button
-              role="tab"
-              type="button"
-              aria-selected={tab === 'draft'}
-              onClick={() => setTab('draft')}
-              className={`cursor-pointer px-3 py-2 font-body text-[0.82rem] font-medium transition-colors ${
-                tab === 'draft'
-                  ? 'border-b-2 border-[var(--accent-primary)] text-[var(--text-primary)]'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              Quick-create draft
-            </button>
-          )}
+          {tabButton('browse', browseLabel)}
+          {tabButton('captures', 'Captures')}
+          {allowDraftCreate && tabButton('draft', 'Quick-create draft')}
         </div>
 
         {/* Panels */}
-        {tab === 'catalog' && (
-          <CatalogTab defaultCategorySlug={defaultCategorySlug} onPick={handlePick} />
-        )}
+        {tab === 'browse' &&
+          (scope === 'library' ? (
+            <LibraryTab onPick={handlePick} />
+          ) : (
+            <CatalogTab defaultCategorySlug={defaultCategorySlug} onPick={handlePick} />
+          ))}
         {tab === 'captures' && <CapturesTab onPick={handlePick} />}
         {tab === 'draft' && allowDraftCreate && <DraftTab onPick={handlePick} />}
       </div>

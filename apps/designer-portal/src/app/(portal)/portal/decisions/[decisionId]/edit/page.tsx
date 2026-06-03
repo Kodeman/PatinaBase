@@ -9,23 +9,18 @@ import {
   useDeleteDecision,
   usePublishDraftDecision,
 } from '@patina/supabase';
-import type { DecisionType, BlockingStatus, ClientDecisionOption } from '@patina/supabase';
-import { DecisionOptionBuilder } from '@/components/portal/decision-option-builder';
-import type { DecisionOptionValue } from '@/components/portal/decision-option-builder';
+import type { DecisionType, BlockingStatus } from '@patina/supabase';
+import {
+  DecisionOptionBuilder,
+  emptyOption,
+  optionToValue,
+  optionValueToInput,
+  useMaterializeDraftOptions,
+  type DecisionOptionValue,
+} from '@/components/portal/decision-option-builder';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { PortalButton } from '@/components/portal/button';
-
-const emptyOption = (): DecisionOptionValue => ({
-  name: '',
-  imageUrl: '',
-  designerNote: '',
-  isRecommended: false,
-  price: '',
-  quantity: '1',
-  costDelta: '',
-  leadTimeDelta: '',
-});
 
 const decisionTypes: { key: DecisionType; label: string; icon: string }[] = [
   { key: 'material', label: 'Material', icon: '🎨' },
@@ -43,48 +38,6 @@ const blockingOptions: { key: BlockingStatus; label: string }[] = [
   { key: 'non_blocking', label: 'Non-blocking (advisory)' },
 ];
 
-function parsePriceToCents(price: string): number | undefined {
-  if (!price) return undefined;
-  const cleaned = price.replace(/[$,\s]/g, '');
-  const num = parseFloat(cleaned);
-  if (isNaN(num)) return undefined;
-  return Math.round(num * 100);
-}
-
-function parseDeltaToCents(value: string): number | undefined {
-  if (!value) return undefined;
-  const cleaned = value.replace(/[$,\s]/g, '').replace(/^\+/, '');
-  const num = parseFloat(cleaned);
-  if (isNaN(num)) return undefined;
-  return Math.round(num * 100);
-}
-
-function parseInteger(value: string): number | undefined {
-  if (!value) return undefined;
-  const cleaned = value.replace(/^\+/, '');
-  const num = parseInt(cleaned, 10);
-  if (isNaN(num)) return undefined;
-  return num;
-}
-
-// Hydrate the option-builder string fields from a persisted option row. Prices
-// are stored in cents and surfaced as plain dollar strings; deltas keep their
-// sign so a designer sees exactly what the client will see.
-function optionToValue(opt: ClientDecisionOption): DecisionOptionValue {
-  return {
-    name: opt.name ?? '',
-    imageUrl: opt.image_url ?? '',
-    designerNote: opt.designer_note ?? '',
-    isRecommended: opt.is_recommended ?? false,
-    price: opt.price != null ? String(opt.price / 100) : '',
-    quantity: opt.quantity != null ? String(opt.quantity) : '1',
-    costDelta:
-      opt.cost_delta_cents != null ? String(opt.cost_delta_cents / 100) : '',
-    leadTimeDelta:
-      opt.lead_time_days_delta != null ? String(opt.lead_time_days_delta) : '',
-  };
-}
-
 export default function EditDecisionPage({
   params,
 }: {
@@ -100,6 +53,7 @@ export default function EditDecisionPage({
   const updateDecision = useUpdateDecision();
   const deleteDecision = useDeleteDecision();
   const publishDraft = usePublishDraftDecision();
+  const materialize = useMaterializeDraftOptions();
 
   const [hydrated, setHydrated] = useState(false);
   const [title, setTitle] = useState('');
@@ -163,25 +117,20 @@ export default function EditDecisionPage({
 
   const isDraft = decision.status === 'draft';
 
-  const buildOptionPayload = () =>
-    options
-      .filter((o) => o.name.trim())
-      .map((o) => ({
-        name: o.name.trim(),
-        imageUrl: o.imageUrl || undefined,
-        designerNote: o.designerNote.trim() || undefined,
-        isRecommended: o.isRecommended,
-        price: parsePriceToCents(o.price),
-        quantity: parseInteger(o.quantity) ?? 1,
-        costDeltaCents: parseDeltaToCents(o.costDelta),
-        leadTimeDaysDelta: parseInteger(o.leadTimeDelta),
-      }));
+  // Only replace options when at least two named options exist (the create-flow
+  // contract: a decision needs ≥2 choices). Materializes "save as draft" manual
+  // options into library products first, then maps to the mutation input.
+  const buildOptionsPayload = async () => {
+    const named = options.filter((o) => o.name.trim());
+    if (named.length < 2) return undefined;
+    const materialized = await materialize(named);
+    return materialized.map(optionValueToInput);
+  };
 
   const handleSave = async () => {
     if (!title.trim()) return;
     setError(null);
     try {
-      const namedOptions = options.filter((o) => o.name.trim());
       await updateDecision.mutateAsync({
         decisionId,
         designerClientId: decision.designer_client_id,
@@ -192,9 +141,7 @@ export default function EditDecisionPage({
         linkedPhase: linkedPhase || null,
         decisionType,
         blockingStatus,
-        // Only replace options when at least two named options exist; this
-        // matches the create-flow contract (a decision needs ≥2 choices).
-        options: namedOptions.length >= 2 ? buildOptionPayload() : undefined,
+        options: await buildOptionsPayload(),
       });
       router.push(`/portal/decisions/${decisionId}`);
     } catch (err) {
@@ -211,7 +158,6 @@ export default function EditDecisionPage({
     if (!title.trim()) return;
     setError(null);
     try {
-      const namedOptions = options.filter((o) => o.name.trim());
       await updateDecision.mutateAsync({
         decisionId,
         designerClientId: decision.designer_client_id,
@@ -222,7 +168,7 @@ export default function EditDecisionPage({
         linkedPhase: linkedPhase || null,
         decisionType,
         blockingStatus,
-        options: namedOptions.length >= 2 ? buildOptionPayload() : undefined,
+        options: await buildOptionsPayload(),
       });
       // Drafts publish (draft → pending) and notify in one step.
       if (isDraft) {
@@ -249,8 +195,12 @@ export default function EditDecisionPage({
   };
 
   const updateOption = (index: number, value: DecisionOptionValue) => {
-    const next = [...options];
+    let next = [...options];
     next[index] = value;
+    // Only one option can be the recommendation — clear the others.
+    if (value.isRecommended) {
+      next = next.map((o, i) => (i === index ? o : { ...o, isRecommended: false }));
+    }
     setOptions(next);
   };
 

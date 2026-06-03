@@ -1458,11 +1458,11 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
         defaultCategorySlug={pickerCtx.ffeCategorySlug ?? undefined}
         rooms={typedRooms}
         defaultScopeRoomId={pickerCtx.scopeRoomId}
-        onPick={(productId, scopeRoomId) => {
+        onPick={(r) => {
           // The modal may override the room the picker was opened with; carry
           // the user's choice into the in-flight add.
-          setPickerCtx((prev) => ({ ...prev, scopeRoomId }));
-          setPickedProductId(productId);
+          setPickerCtx((prev) => ({ ...prev, scopeRoomId: r.scopeRoomId }));
+          setPickedProductId(r.productId);
         }}
       />
 

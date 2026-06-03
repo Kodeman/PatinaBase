@@ -314,6 +314,33 @@ describe('useCreateDecision', () => {
     expect(payload.status).toBe('draft');
     expect(payload.sent_at).toBeNull();
   });
+
+  it('writes product_id on options when productId is supplied (parity with useUpdateDecision)', async () => {
+    setTableResult('client_decisions', {
+      data: { id: 'dec-9', designer_client_id: 'dc-1', project_id: null },
+      error: null,
+    });
+    setTableResult('client_decision_options', { data: null, error: null });
+
+    const config = useCreateDecision() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    await config.mutationFn({
+      designerClientId: 'dc-1',
+      title: 'Pick a sofa',
+      options: [{ name: 'Velvet', productId: 'prod-7' }],
+    });
+
+    const optBuilder = builders['client_decision_options'];
+    const inserts = callsTo(optBuilder, 'insert');
+    expect(inserts).toHaveLength(1);
+    expect((inserts[0].args[0] as Record<string, unknown>[])[0]).toMatchObject({
+      decision_id: 'dec-9',
+      name: 'Velvet',
+      product_id: 'prod-7',
+      sort_order: 0,
+    });
+  });
 });
 
 describe('useSelectDecisionOption', () => {

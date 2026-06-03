@@ -5,22 +5,16 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useClient, useCreateDecision } from '@patina/supabase';
 import type { DesignerClient, DecisionType, BlockingStatus } from '@patina/supabase';
-import { DecisionOptionBuilder } from '@/components/portal/decision-option-builder';
-import type { DecisionOptionValue } from '@/components/portal/decision-option-builder';
+import {
+  DecisionOptionBuilder,
+  emptyOption,
+  optionValueToInput,
+  useMaterializeDraftOptions,
+  type DecisionOptionValue,
+} from '@/components/portal/decision-option-builder';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { PortalButton } from '@/components/portal/button';
 import { useHydrated } from '@/hooks/use-hydrated';
-
-const emptyOption = (): DecisionOptionValue => ({
-  name: '',
-  imageUrl: '',
-  designerNote: '',
-  isRecommended: false,
-  price: '',
-  quantity: '1',
-  costDelta: '',
-  leadTimeDelta: '',
-});
 
 const decisionTypes: { key: DecisionType; label: string; icon: string }[] = [
   { key: 'material', label: 'Material', icon: '🎨' },
@@ -38,30 +32,6 @@ const blockingOptions: { key: BlockingStatus; label: string }[] = [
   { key: 'non_blocking', label: 'Non-blocking (advisory)' },
 ];
 
-function parsePriceToCents(price: string): number | undefined {
-  if (!price) return undefined;
-  const cleaned = price.replace(/[$,\s]/g, '');
-  const num = parseFloat(cleaned);
-  if (isNaN(num)) return undefined;
-  return Math.round(num * 100);
-}
-
-function parseDeltaToCents(value: string): number | undefined {
-  if (!value) return undefined;
-  const cleaned = value.replace(/[$,\s]/g, '').replace(/^\+/, '');
-  const num = parseFloat(cleaned);
-  if (isNaN(num)) return undefined;
-  return Math.round(num * 100);
-}
-
-function parseInteger(value: string): number | undefined {
-  if (!value) return undefined;
-  const cleaned = value.replace(/^\+/, '');
-  const num = parseInt(cleaned, 10);
-  if (isNaN(num)) return undefined;
-  return num;
-}
-
 export default function NewDecisionPage({
   params,
 }: {
@@ -76,6 +46,7 @@ export default function NewDecisionPage({
     isLoading: boolean;
   };
   const createDecision = useCreateDecision();
+  const materialize = useMaterializeDraftOptions();
 
   const [title, setTitle] = useState('');
   const [context, setContext] = useState('');
@@ -102,8 +73,13 @@ export default function NewDecisionPage({
     client.client_email ||
     'Unknown Client';
 
-  const handleSubmit = (status: 'pending' | 'draft') => {
+  const handleSubmit = async (status: 'pending' | 'draft') => {
     if (!title.trim()) return;
+
+    // Seed the library from any "save as draft" manual options, then send the
+    // resulting product_ids through with the denormalized fields.
+    const named = options.filter((o) => o.name.trim());
+    const materialized = await materialize(named);
 
     createDecision.mutate(
       {
@@ -115,18 +91,7 @@ export default function NewDecisionPage({
         decisionType,
         blockingStatus,
         status,
-        options: options
-          .filter((o) => o.name.trim())
-          .map((o) => ({
-            name: o.name.trim(),
-            imageUrl: o.imageUrl || undefined,
-            designerNote: o.designerNote.trim() || undefined,
-            isRecommended: o.isRecommended,
-            price: parsePriceToCents(o.price),
-            quantity: parseInteger(o.quantity) ?? 1,
-            costDeltaCents: parseDeltaToCents(o.costDelta),
-            leadTimeDaysDelta: parseInteger(o.leadTimeDelta),
-          })),
+        options: materialized.map(optionValueToInput),
       },
       {
         onSuccess: () => {
@@ -144,8 +109,12 @@ export default function NewDecisionPage({
   };
 
   const updateOption = (index: number, value: DecisionOptionValue) => {
-    const next = [...options];
+    let next = [...options];
     next[index] = value;
+    // Only one option can be the recommendation — clear the others.
+    if (value.isRecommended) {
+      next = next.map((o, i) => (i === index ? o : { ...o, isRecommended: false }));
+    }
     setOptions(next);
   };
 

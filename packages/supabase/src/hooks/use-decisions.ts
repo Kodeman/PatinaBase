@@ -50,6 +50,8 @@ export interface ClientDecisionOption {
   decision_id: string;
   name: string;
   image_url: string | null;
+  /** Optional link to the catalog/library product this option represents (00172). */
+  product_id: string | null;
   designer_note: string | null;
   is_recommended: boolean;
   selected: boolean;
@@ -108,6 +110,8 @@ export interface CreateDecisionInput {
     quantity?: number;
     costDeltaCents?: number;
     leadTimeDaysDelta?: number;
+    /** Optional catalog/library product this option is built from (00172). */
+    productId?: string;
   }[];
 }
 
@@ -441,6 +445,7 @@ export function useCreateDecision() {
               quantity: opt.quantity ?? 1,
               cost_delta_cents: opt.costDeltaCents ?? null,
               lead_time_days_delta: opt.leadTimeDaysDelta ?? null,
+              product_id: opt.productId || null,
               sort_order: i,
             }))
           );

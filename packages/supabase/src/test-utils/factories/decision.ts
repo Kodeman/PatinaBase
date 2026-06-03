@@ -29,6 +29,7 @@ export function makeDecisionOption(
     decision_id: overrides.decision_id ?? nextId('b'),
     name: 'Option A',
     image_url: null,
+    product_id: null,
     designer_note: null,
     is_recommended: false,
     selected: false,
