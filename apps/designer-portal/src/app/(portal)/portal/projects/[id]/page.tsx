@@ -22,6 +22,7 @@ import {
 } from '@/hooks/use-projects';
 import {
   useDecisionsByProject,
+  useDesignerClientForClientUser,
   useProjectActivityFromLog,
   useCreateProjectPhase,
   useUpdateProjectPhaseStatus,
@@ -100,6 +101,10 @@ export default function ProjectDetailPage({
   const { data: timeTracking } = useProjectTimeTracking(id);
   const { data: keyMetrics } = useProjectKeyMetrics(id);
   const { data: projectDecisions = [] } = useDecisionsByProject(id);
+  // The project carries the client's AUTH uid (client_id), not a designer_clients
+  // row id. Resolve the real designer_clients.id so the decision composer inserts
+  // a valid designer_client_id (raw auth uid fails the client_decisions RLS check).
+  const { data: decisionClient } = useDesignerClientForClientUser(project?.client_id);
 
   // FFESummaryTile surfaces procurement KPIs + a CTA into /portal/procurement/*.
   // Pilot-gate it the same way the Today card and procurement zone are gated
@@ -535,7 +540,7 @@ export default function ProjectDetailPage({
           <>
             <DecisionsPanel
               projectId={id}
-              designerClientId={project.designer_client_id ?? project.client_id}
+              designerClientId={decisionClient?.id ?? project.designer_client_id ?? project.client_id}
             />
             <StrataMark variant="mini" />
           </>

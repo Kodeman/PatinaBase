@@ -152,6 +152,37 @@ export function useClient(clientId: string) {
 }
 
 /**
+ * Resolve the current designer's `designer_clients` row for a given client
+ * AUTH user id (profiles.id / auth.users.id). RLS scopes designer_clients to
+ * the signed-in designer, so this returns at most one row — the relationship
+ * between this designer and that client. Use when you hold a project's
+ * `client_id` (an auth user id) but need the `designer_clients.id` it maps to —
+ * e.g. opening the decision composer, which keys off designer_client_id and
+ * fails RLS if handed a raw auth uid.
+ */
+export function useDesignerClientForClientUser(
+  clientUserId: string | null | undefined,
+) {
+  return useQuery({
+    queryKey: ['designer-client-for-user', clientUserId],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      const { data, error } = await supabase
+        .from('designer_clients')
+        .select('id, designer_id, client_id')
+        .eq('client_id', clientUserId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data as { id: string; designer_id: string; client_id: string } | null;
+    },
+    enabled: !!clientUserId,
+  });
+}
+
+/**
  * Get client statistics
  */
 export function useClientStats() {

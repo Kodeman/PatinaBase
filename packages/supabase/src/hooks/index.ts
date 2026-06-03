@@ -191,6 +191,7 @@ export type { Lead, LeadFilters } from './use-leads';
 export {
   useClients,
   useClient,
+  useDesignerClientForClientUser,
   useClientStats,
   useUpdateClientStatus,
   useUpdateClientNotes,
