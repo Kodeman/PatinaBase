@@ -74,6 +74,7 @@ export const ZONES: ZoneConfig[] = [
     href: '/health',
     paths: [
       '/health',
+      '/system',
       '/audit',
       '/flags',
       '/settings',
@@ -121,6 +122,7 @@ export const ZONE_SUB_ITEMS: Record<ZoneKey, SubNavItem[]> = {
   ],
   system: [
     { label: 'Health', href: '/health' },
+    { label: 'Deployments', href: '/system/deployments' },
     { label: 'Audit', href: '/audit' },
     { label: 'Flags', href: '/flags' },
     { label: 'Settings', href: '/settings' },

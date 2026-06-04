@@ -365,6 +365,9 @@ services:
       SUPABASE_SERVICE_ROLE_KEY: '${SERVICE_ROLE_KEY}'
       ORDERS_SERVICE_URL: 'http://patina-orders-ghcr:3015'
       MEDIA_SERVICE_URL: 'http://patina-media-ghcr:3014'
+      PROJECTS_SERVICE_URL: 'http://patina-projects-ghcr:3016'
+      DESIGNER_PORTAL_URL: 'https://app.patina.cloud'
+      CLIENT_PORTAL_URL: 'https://client.patina.cloud'
       ANON_KEY: '${ANON_KEY}'
       COOLIFY_RESOURCE_UUID: oc8kggksw4s8sg08o4w0wsw4
       COOLIFY_CONTAINER_NAME: admin-portal-oc8kggksw4s8sg08o4w0wsw4

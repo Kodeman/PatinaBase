@@ -108,6 +108,18 @@ async function bootstrap() {
     });
   });
 
+  // Build version info — stamped into the image at build time
+  // (GIT_SHA / BUILD_TIME / APP_VERSION via infra/build-and-push.sh).
+  // Raw route (no global prefix, bypasses the auth guard).
+  app.getHttpAdapter().get('/version', (req, res) => {
+    res.json({
+      service: process.env.SERVICE_NAME ?? 'media',
+      version: process.env.APP_VERSION ?? '0.0.0',
+      gitSha: process.env.BUILD_SHA ?? 'unknown',
+      buildTime: process.env.BUILD_TIME ?? null,
+    });
+  });
+
   await app.listen(port);
 
   console.log(`

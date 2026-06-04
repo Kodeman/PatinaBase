@@ -55,4 +55,22 @@ export class HealthController {
       timestamp: new Date().toISOString(),
     };
   }
+
+  /**
+   * Build version info — stamped into the image at build time
+   * (GIT_SHA / BUILD_TIME / APP_VERSION via infra/build-and-push.sh).
+   * Served at /v1/version (global prefix applies).
+   */
+  @Public()
+  @Get('version')
+  @ApiOperation({ summary: 'Build version info' })
+  @ApiResponse({ status: 200, description: 'Build version info' })
+  version() {
+    return {
+      service: process.env.SERVICE_NAME ?? 'projects',
+      version: process.env.APP_VERSION ?? '0.0.0',
+      gitSha: process.env.BUILD_SHA ?? 'unknown',
+      buildTime: process.env.BUILD_TIME ?? null,
+    };
+  }
 }
