@@ -92,22 +92,65 @@ if [ "$COMPOSE_ONLY" = true ]; then
   exit 0
 fi
 
-# ─── 6. Apply migrations (idempotent) ───────────────────────────────────────
+# ─── 6. Apply migrations (ledger-driven gap) ────────────────────────────────
+# Applies every local migration NOT yet recorded in prod's Supabase migration
+# ledger (supabase_migrations.schema_migrations), in filename order, then records
+# each one so subsequent deploys are no-ops. Replaces the old hardcoded list.
 if [ "$SKIP_MIGRATE" = false ]; then
-  echo "[deploy] applying migrations 00128–00135 to prod DB"
-  for m in 00128_ffe_categories_taxonomy 00129_products_status_column \
-           00130_proposal_captures 00131_proposal_palettes \
-           00132_paint_colors_catalog 00133_proposal_phase_deliverables \
-           00134_proposal_phase_gates 00135_proposal_phase_templates; do
-    if [ -f "supabase/migrations/${m}.sql" ]; then
-      echo "  applying $m"
-      ssh "$SERVER" "sudo docker exec -i ${DB_CONTAINER} \
-          psql -U postgres -d postgres -v ON_ERROR_STOP=1" \
-        < "supabase/migrations/${m}.sql" > /dev/null 2>&1 || {
-          echo "  WARN: $m may have applied partially — re-runs are idempotent"
-      }
+  echo "[deploy] computing migration gap vs prod ledger..."
+  LEDGER="$(mktemp)"
+  ssh "$SERVER" "sudo docker exec -i ${DB_CONTAINER} \
+      psql -U postgres -d postgres -tA -c \
+      'SELECT version FROM supabase_migrations.schema_migrations'" 2>/dev/null \
+    | tr -d ' \r' | sort -u > "$LEDGER"
+
+  # Safety: a real prod DB always has a populated ledger. If the read failed or
+  # came back empty, do NOT treat every migration as unapplied — abort instead.
+  if [ ! -s "$LEDGER" ]; then
+    echo "[deploy] ERROR: could not read prod migration ledger (empty result)."
+    echo "         Refusing to apply the full migration history. Check DB access."
+    rm -f "$LEDGER"; exit 1
+  fi
+
+  migr_applied=0
+  for f in supabase/migrations/*.sql; do
+    [ -e "$f" ] || continue
+    base="$(basename "$f" .sql)"
+    ver="${base%%_*}"          # numeric prefix, e.g. 00176
+    name="${base#*_}"          # remainder, e.g. some_change
+    grep -qxF "$ver" "$LEDGER" && continue   # already applied
+
+    # Files with their own BEGIN;…COMMIT; manage their transaction; wrap the
+    # rest in a single transaction so a mid-file failure rolls back cleanly.
+    if grep -qiE '^[[:space:]]*BEGIN[[:space:]]*;' "$f"; then
+      TXN=""
+    else
+      TXN="--single-transaction"
     fi
+
+    echo "  applying ${base} (${TXN:-self-txn})"
+    if ! ssh "$SERVER" "sudo docker exec -i ${DB_CONTAINER} \
+          psql -U postgres -d postgres -v ON_ERROR_STOP=1 ${TXN}" < "$f"; then
+      echo "[deploy] ERROR: migration ${base} failed — stopping (earlier ones are applied)."
+      echo "         Fix it and re-run ./infra/deploy.sh; it resumes from the gap."
+      rm -f "$LEDGER"; exit 1
+    fi
+
+    # Record it so future deploys skip it (statements column is nullable).
+    ssh "$SERVER" "sudo docker exec -i ${DB_CONTAINER} \
+        psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+        -c \"INSERT INTO supabase_migrations.schema_migrations(version,name) \
+             VALUES ('${ver}','${name}') ON CONFLICT (version) DO NOTHING\"" \
+      >/dev/null 2>&1 || echo "  WARN: applied ${ver} but failed to record it in the ledger"
+    migr_applied=$((migr_applied + 1))
   done
+  rm -f "$LEDGER"
+
+  if [ "$migr_applied" -eq 0 ]; then
+    echo "  prod ledger already current — no migrations to apply"
+  else
+    echo "  applied + recorded ${migr_applied} migration(s)"
+  fi
 
   if [ -f supabase/seed/paint_colors_seed.sql ]; then
     echo "  applying paint_colors_seed.sql"
