@@ -20,10 +20,10 @@
 | **Library — 3-layer (Personal/Studio/Catalog)** | ℹ️ PILOT-GATED on prod for this account — not accessible (by design) |
 | **Library — legacy `/portal/catalog` (the live experience)** | ✅ PASS (list/search/filter/grid-list/detail/edit, all on live data) |
 | **Mock-fallback false-green audit** | ✅ PASS (data proven live; no silent mock observed) |
-| **Proposals — list page `/portal/proposals`** | 🔴 **P0 CRASH** — white-screens in production |
+| **Proposals + Projects — list pages** | 🔴 **P0 CRASH** — both `/portal/proposals` and `/portal/projects` white-screen in production |
 | **Proposals — create + Scope Builder + generate + preview + send-ready** | ✅ PASS (full build path works via `/new`; reached send-ready without sending) |
 
-**Headline:** The **Proposals list page crashes in production** (`TypeError: g.existsSync is not a function` — a Node `fs` API bundled into the client). This is isolated to the **list** route; `/portal/proposals/new` and the proposal editor/scope-builder all work. A designer landing on "Proposals" from the nav gets a blank error page, so the feature is effectively unreachable through normal navigation even though the underlying build flow is healthy.
+**Headline:** Two primary list pages — **`/portal/proposals` and `/portal/projects`** — crash in production (`TypeError: g.existsSync is not a function`). **Root cause pinned:** `packages/utils/src/logging/logger.ts` constructs a module-level winston logger whose **File transport calls `fs.existsSync`** (prod-only); it leaks into the browser because the `@patina/utils` barrel (`src/index.ts:10`) does `export * from './logging'` and the package is a non-tree-shakeable CJS dist. The two list pages are the only client pages importing `@patina/utils`. The proposal create/edit/scope flows (which don't import `@patina/utils`) are healthy. Fix = drop `export * from './logging'` from the utils barrel (matches the existing error-tracking/websocket exclusion); zero logger consumers, so nothing breaks.
 
 ---
 
@@ -91,16 +91,28 @@ Console clean throughout Flow 2.
 
 ## Flow 3 — Proposals (build, stop before send)
 
-### 🔴 P0 — `/portal/proposals` (list) crashes in production
-- Navigating to the Proposals list (the "Proposals" nav target) renders **"Application error: a client-side exception has occurred while loading app.patina.cloud."** — blank page. Reproducible across reloads.
-- **Console / root cause:**
+### 🔴 P0 — `/portal/proposals` AND `/portal/projects` (both list pages) crash in production
+- Both render **"Application error: a client-side exception has occurred while loading app.patina.cloud."** — blank page. Reproducible across reloads.
+- **Console (identical for both pages, through the same shared chunks):**
   ```
   TypeError: g.existsSync is not a function
-      at .../_next/static/chunks/8064-….js
-      at .../_next/static/chunks/app/(portal)/portal/proposals/page-1d6f6feff1cc15c3.js
+      at t.value (8064-*.js)          // winston File transport opens log dir
+      at new t  (8064-*.js)           // winston File transport constructor
+      at new f  (1568-*.js)           // StructuredLogger / winston.createLogger
+      at 66996  (1568-*.js)           // module-level `const logger = createLogger('patina')`
+      at 28550 (proposals/page-*.js)  // …or 5192 (projects/page-d7d5b244…js) for /projects
   ```
-  `existsSync` is Node's `fs.existsSync` — a **server-only API bundled into the client** for the proposals **list** page. It throws in the browser. Some module imported (transitively) into `proposals/page` pulls in `fs`. Isolate via the `8064` chunk; the offending import is reachable only from the list page bundle (the `/new` and `/[id]` bundles are unaffected).
-- **Blast radius:** the list page is the normal entry point to proposals, so the feature looks fully broken to a designer even though the create/edit/scope flows are healthy. **Fix priority: high.**
+- **ROOT CAUSE (pinned):** `packages/utils/src/logging/logger.ts` ends with a module-level singleton:
+  ```ts
+  import winston from 'winston';
+  export const logger = createLogger('patina');   // runs at import time
+  ```
+  `createLogger()` → `new StructuredLogger()` → `winston.createLogger({ transports: [ new transports.Console(), ...(NODE_ENV==='production' ? [ new transports.File({filename:'logs/error.log'}), new transports.File({filename:'logs/combined.log'}) ] : []) ] })`. **`winston.transports.File`'s constructor calls `fs.existsSync`**, which is `undefined` in the browser (Next shims `fs` to empty) → the TypeError. This is exactly the `new f → new t → t.value() → g.existsSync` chain.
+- **VECTOR into the client:** `packages/utils/src/index.ts` line 10 does `export * from './logging';`. Because `@patina/utils` is consumed as a **CommonJS `dist/index.js`** (`__exportStar(require("./logging"))` — not tree-shakeable), **any** client import of `@patina/utils` drags winston into the browser bundle. The proposals list imports `formatShortDate` (+ `formatCents` via `proposal-list-item`) and the projects list imports `@patina/utils` directly — they are **the only two client pages in the portal that import `@patina/utils`**, which is why exactly these two pages crash.
+- **Why prod-only / not caught in dev:** the File transports are added only when `NODE_ENV==='production'`; local `next dev` uses only the Console transport (no `fs`), so the crash doesn't reproduce locally.
+- **Same-file precedent:** `index.ts` lines 12–16 already exclude `./error-tracking` (@sentry/node) and `./websocket` (React) with "import directly from subpath" comments. `./logging` is the lone Node-only module left in the barrel.
+- **Recommended fix (safe one-liner):** remove/comment `export * from './logging';` in `packages/utils/src/index.ts` (mirroring error-tracking/websocket), rebuild `@patina/utils` (`tsc`), rebuild portal images, redeploy. **Zero call sites break** — a repo-wide grep finds no consumers of `logger`/`createLogger`/`StructuredLogger` from `@patina/utils`. (Server code that wants the logger can later import a dedicated subpath.)
+- **Blast radius:** the two primary list pages of the portal (Projects and Proposals) are unreachable via normal navigation in production, even though the underlying create/edit/scope flows are healthy. **Fix priority: P0.**
 
 ### The build path (via `/portal/proposals/new`) ✅ PASS
 Created proposal id **`7489a4df-a231-4b29-8a7e-089237f615d3`**.
@@ -136,7 +148,7 @@ Created proposal id **`7489a4df-a231-4b29-8a7e-089237f615d3`**.
 
 | # | Sev | Area | Issue | Repro / evidence |
 |---|-----|------|-------|------------------|
-| **PUNCH-1** | **P0** | Proposals | List page `/portal/proposals` crashes (white screen) in prod | `TypeError: g.existsSync is not a function` in `proposals/page-*.js` (chunk `8064`). Node `fs` API bundled client-side. Reproducible. `/new` + editor unaffected. **Fix:** find the import in the proposals-list page tree that pulls in `fs`/`existsSync` and move it server-side or swap for a browser-safe lib. |
+| **PUNCH-1** | **P0** | Proposals **+ Projects** lists | Both `/portal/proposals` and `/portal/projects` white-screen in prod | **Pinned:** `packages/utils/src/logging/logger.ts` module-level `export const logger = createLogger('patina')` → `winston.transports.File` ctor calls `fs.existsSync` (prod-only). Reaches client via `index.ts:10 export * from './logging'` (CJS barrel, not tree-shakeable) — the two list pages are the only client pages importing `@patina/utils`. **Fix:** drop `export * from './logging'` from the utils barrel (matches existing error-tracking/websocket exclusion), rebuild + redeploy. Zero consumers of the logger exist, so nothing breaks. |
 | **PUNCH-2** | P2 | Catalog / add product | Empty-name "Save as Draft" is a **silent no-op** — blocked client-side but no inline error/toast | `/portal/catalog/new` → click Save with Name empty → no POST, no message |
 | **PUNCH-3** | P2 | Proposals / Payments | Custom payment milestone doesn't persist/aggregate → generated proposal falls back to default 30/40/30; "Total"/"% allocated" stays 0% | Scope Builder → Payments → add 50% milestone; "Total" row shows 0%; Generate → schedule is 30/40/30 |
 | **PUNCH-4** | P3 | Proposals / Investment | Allowance & TBD line items render blank price in generated Investment section (allowance midpoint still counted in Total) | Generated proposal Investment: "Rugs" / "Art" show no amount |
