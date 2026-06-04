@@ -118,6 +118,15 @@ RUN addgroup --system --gid 1001 nestjs && \
 ARG SERVICE_NAME
 ENV SERVICE_NAME=${SERVICE_NAME}
 
+# Build version stamping (read at runtime by the /version endpoint).
+# Runner stage only — keeps the per-commit SHA out of the cacheable build layers.
+ARG GIT_SHA=unknown
+ARG BUILD_TIME=unknown
+ARG APP_VERSION=1.0.0
+ENV BUILD_SHA=${GIT_SHA}
+ENV BUILD_TIME=${BUILD_TIME}
+ENV APP_VERSION=${APP_VERSION}
+
 # Create writable logs directory for Winston file transports
 RUN mkdir -p /app/logs && chown nestjs:nestjs /app/logs
 

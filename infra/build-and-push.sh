@@ -141,12 +141,23 @@ NEXT_PUBLIC_QR_AUTH_URL="${NEXT_PUBLIC_QR_AUTH_URL:-https://app.patina.cloud}"
 # Git SHA for tagging
 GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
+# Build timestamp (UTC ISO 8601) — stamped into images for version tracking
+BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+# Read a target's version from its package.json (node is guaranteed present).
+# cwd is REPO_ROOT (set above), so relative paths resolve.
+get_app_version() {
+  local kind="$1" name="$2"   # kind = apps|services
+  node -p "require('./${kind}/${name}/package.json').version" 2>/dev/null || echo "0.0.0"
+}
+
 echo -e "${BOLD}╔══════════════════════════════════════════════════════╗${NC}"
 echo -e "${BOLD}║  Patina Docker Build → GHCR                         ║${NC}"
 echo -e "${BOLD}╚══════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "  Registry:  ${BLUE}${REGISTRY}${NC}"
 echo -e "  Git SHA:   ${BLUE}${GIT_SHA}${NC}"
+echo -e "  Build:     ${BLUE}${BUILD_TIME}${NC}"
 echo -e "  Push:      $(${PUSH} && echo -e "${GREEN}yes${NC}" || echo -e "${YELLOW}no${NC}")"
 echo -e "  Deploy:    $(${DEPLOY} && echo -e "${GREEN}yes${NC}" || echo -e "${YELLOW}no${NC}")"
 echo -e "  Target:    ${BLUE}${TARGET:-all}${NC}"
@@ -169,13 +180,18 @@ build_nextjs() {
   local app="$1"
   local app_url
   app_url="$(get_app_url "$app")"
+  local app_version
+  app_version="$(get_app_version apps "$app")"
 
   echo -e "${BLUE}━━━ Building ${BOLD}${app}${NC}${BLUE} (Next.js) ━━━${NC}"
-  echo -e "  Image: ${REGISTRY}/${app}:${GIT_SHA}"
+  echo -e "  Image: ${REGISTRY}/${app}:${GIT_SHA} (v${app_version})"
 
   docker buildx build \
     --platform "${PLATFORM}" \
     --build-arg APP_NAME="${app}" \
+    --build-arg GIT_SHA="${GIT_SHA}" \
+    --build-arg BUILD_TIME="${BUILD_TIME}" \
+    --build-arg APP_VERSION="${app_version}" \
     --build-arg NEXT_PUBLIC_SUPABASE_URL="${NEXT_PUBLIC_SUPABASE_URL}" \
     --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="${NEXT_PUBLIC_SUPABASE_ANON_KEY}" \
     --build-arg NEXT_PUBLIC_APP_URL="${app_url}" \
@@ -194,13 +210,18 @@ build_nextjs() {
 
 build_nestjs() {
   local svc="$1"
+  local svc_version
+  svc_version="$(get_app_version services "$svc")"
 
   echo -e "${BLUE}━━━ Building ${BOLD}${svc}${NC}${BLUE} (NestJS) ━━━${NC}"
-  echo -e "  Image: ${REGISTRY}/${svc}:${GIT_SHA}"
+  echo -e "  Image: ${REGISTRY}/${svc}:${GIT_SHA} (v${svc_version})"
 
   docker buildx build \
     --platform "${PLATFORM}" \
     --build-arg SERVICE_NAME="${svc}" \
+    --build-arg GIT_SHA="${GIT_SHA}" \
+    --build-arg BUILD_TIME="${BUILD_TIME}" \
+    --build-arg APP_VERSION="${svc_version}" \
     -t "${REGISTRY}/${svc}:latest" \
     -t "${REGISTRY}/${svc}:${GIT_SHA}" \
     -f infra/Dockerfile.nestjs \

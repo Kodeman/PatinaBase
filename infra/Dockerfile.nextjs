@@ -124,6 +124,15 @@ RUN addgroup --system --gid 1001 nodejs && \
 ARG APP_NAME
 ENV APP_NAME=${APP_NAME}
 
+# Build version stamping (read at runtime by app/api/version/route.ts).
+# Runner stage only — keeps the per-commit SHA out of the cacheable build layers.
+ARG GIT_SHA=unknown
+ARG BUILD_TIME=unknown
+ARG APP_VERSION=0.0.0
+ENV BUILD_SHA=${GIT_SHA}
+ENV BUILD_TIME=${BUILD_TIME}
+ENV APP_VERSION=${APP_VERSION}
+
 # Copy public assets
 COPY --from=builder /app/apps/${APP_NAME}/public ./public
 
