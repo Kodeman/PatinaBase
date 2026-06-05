@@ -99,7 +99,17 @@ export async function middleware(req: NextRequest) {
     if (callbackUrl) {
       return redirectWithCookies(new URL(callbackUrl, baseUrl));
     }
-    return redirectWithCookies(new URL('/', baseUrl));
+    return redirectWithCookies(new URL('/portal', baseUrl));
+  }
+
+  // Authenticated user on the public landing page: send them into the app.
+  // Mirror the auth-page role gate so a user without a designer/admin role
+  // doesn't bounce `/` -> `/portal` -> `/unauthorized` (one redirect, not two).
+  if (isAuthenticated && isPublicPage) {
+    if (!(await userHasDesignerPortalRole(user!.id))) {
+      return redirectWithCookies(new URL('/unauthorized', baseUrl));
+    }
+    return redirectWithCookies(new URL('/portal', baseUrl));
   }
 
   // Redirect unauthenticated users to login
