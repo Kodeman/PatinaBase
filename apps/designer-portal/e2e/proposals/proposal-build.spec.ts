@@ -101,9 +101,10 @@ test.describe.serial('proposal build → send → view → sign', () => {
   test('create from template', async ({ authenticatedPage: page }) => {
     await page.goto('/portal/proposals/new', { waitUntil: 'networkidle' });
 
-    // Wait for templates to load (they come from a query)
-    // TemplateCard renders as a div with onClick — select the first one by its name text
-    const firstTemplate = page.locator('[class*="cursor-pointer"][class*="rounded-md"]').first();
+    // Wait for templates to load (they come from a query). Select via the
+    // stable testid — class-based selectors broke when the control kit
+    // standardized cursor-pointer/rounded classes portal-wide.
+    const firstTemplate = page.getByTestId('proposal-template-card').first();
     await firstTemplate.waitFor({ state: 'visible', timeout: 20_000 });
     await firstTemplate.click();
 
@@ -591,8 +592,14 @@ test.describe.serial('proposal build → send → view → sign', () => {
     await exclusionInput.waitFor({ state: 'visible', timeout: 10_000 });
     await exclusionInput.fill('Structural modifications not included');
 
-    // Submit by clicking the "Add" button inside the form
-    await page.getByRole('button', { name: /^add$/i }).click();
+    // Submit by clicking the "Add" button inside the exclusions form — scope
+    // to the section containing the exclusion input (other scope-builder
+    // sections render their own "Add" buttons, so an unscoped name match is a
+    // strict-mode violation).
+    await page
+      .locator('section', { has: page.getByPlaceholder(/describe the exclusion/i) })
+      .getByRole('button', { name: /^add$/i })
+      .click();
     await waitForMutation(page);
 
     // DB assert
@@ -660,11 +667,25 @@ test.describe.serial('proposal build → send → view → sign', () => {
   test('send the proposal', async ({ authenticatedPage: page }) => {
     await page.goto(`/portal/proposals/${proposalId}/send`, { waitUntil: 'networkidle' });
 
-    // Fill recipient email (required to enable the Send button).
-    // Labels on the send page lack `htmlFor`, so use placeholder selectors.
-    const recipientInput = page.getByPlaceholder('client@email.com');
-    await recipientInput.waitFor({ state: 'visible', timeout: 10_000 });
-    await recipientInput.fill(CLIENT_EMAIL);
+    // Sending is gated on a LINKED client (pre-existing linking redesign:
+    // disabled={!proposal.client_id || !recipientEmail}). This proposal was
+    // created without a client, so link the seeded dev client via the
+    // ClientPicker the send page shows for unlinked proposals; the recipient
+    // email then auto-fills from the linked client.
+    await page.getByTestId('client-picker-trigger').click();
+    const pickerSearch = page.getByTestId('client-picker-search');
+    await pickerSearch.waitFor({ state: 'visible', timeout: 10_000 });
+    await pickerSearch.fill('client');
+    const clientOption = page.getByTestId(
+      'client-picker-option-a0000000-0000-0000-0000-000000000005',
+    );
+    await clientOption.waitFor({ state: 'visible', timeout: 10_000 });
+    await clientOption.click();
+
+    // Linked-client recipient row appears once the mutation lands.
+    await expect(page.getByText(CLIENT_EMAIL).first()).toBeVisible({
+      timeout: 15_000,
+    });
 
     // Fill personal message
     const messageArea = page.getByPlaceholder(/write a personal note/i);

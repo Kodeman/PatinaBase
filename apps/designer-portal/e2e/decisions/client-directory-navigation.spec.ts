@@ -77,10 +77,13 @@ test.describe('Client Directory — navigation', () => {
 
     // Breadcrumb in the SubNav chrome: the UUID segment should be resolved to
     // the client display name (not the title-cased UUID fragments).
-    // The SubNav renders a breadcrumb link with href="/portal/clients/{uuid}" on deep pages.
-    // On /portal/clients/{uuid} (top-level client page), it may or may not be a "deep" page.
-    // We navigate to /portal/clients/{uuid}/messages to trigger the deep page + breadcrumb.
-    await page.goto(`/portal/clients/${clientId}/messages`, {
+    // The SubNav renders a breadcrumb link with href="/portal/clients/{uuid}"
+    // on deep pages where the client segment is not the last crumb. Use
+    // /decisions/new — /messages is a legacy redirect page that navigates to
+    // /portal/messages/{threadId} as soon as the direct thread resolves
+    // (immediately on re-runs once the thread exists), making assertions
+    // there a self-corrupting race.
+    await page.goto(`/portal/clients/${clientId}/decisions/new`, {
       waitUntil: 'networkidle',
       timeout: 30_000,
     });

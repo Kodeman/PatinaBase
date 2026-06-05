@@ -1,3 +1,4 @@
+import { createClient } from '@supabase/supabase-js';
 import { test, expect } from '../fixtures/auth';
 
 /**
@@ -14,7 +15,32 @@ import { test, expect } from '../fixtures/auth';
 
 const RESPONDED_DECISION_ID = 'b0000000-0000-0000-0000-0000000d2c04';
 
+const SUPABASE_URL =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://localhost:54321';
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+
 test.describe('Decision detail — responded decision and reopen', () => {
+  // The test itself reopens the seeded decision to `pending` and (by design)
+  // does not respond again — which left every SUBSEQUENT run failing at the
+  // Resolution Record assertion. Reset the row to `responded` before each run
+  // so the spec is idempotent. (Reopen only flips `status`; the seeded
+  // selected-option flags survive, so this one UPDATE fully restores state.)
+  test.beforeEach(async () => {
+    if (!SERVICE_ROLE_KEY) {
+      throw new Error(
+        'SUPABASE_SERVICE_ROLE_KEY env var is required for detail-and-reopen e2e tests',
+      );
+    }
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { error } = await admin
+      .from('client_decisions')
+      .update({ status: 'responded' })
+      .eq('id', RESPONDED_DECISION_ID);
+    if (error) throw new Error(`Failed to reset seeded decision: ${error.message}`);
+  });
+
   test('shows Resolution Record with selected option, then reopens to pending', async ({ authenticatedPage: page }) => {
     const pageErrors: Error[] = [];
     page.on('pageerror', (err) => pageErrors.push(err));

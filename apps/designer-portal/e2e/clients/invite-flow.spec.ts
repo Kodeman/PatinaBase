@@ -63,10 +63,13 @@ async function deleteDesignerClientByEmail(email: string) {
 async function openAddClientDialog(page: import('@playwright/test').Page) {
   await page.goto('/portal/clients', { waitUntil: 'networkidle' });
 
-  // Look for a button that opens the add-client form
+  // Look for the page-header button that opens the add-client form. Scope to
+  // <main> — the SubNav chrome also renders a "+ Add Client" zone action, so
+  // an unscoped role/text union resolves to 2 elements (strict-mode failure).
   const addBtn = page
+    .getByRole('main')
     .getByRole('button', { name: /add client/i })
-    .or(page.getByText(/add client/i).first());
+    .first();
   await addBtn.click();
 
   // Wait for the form to appear
@@ -158,7 +161,9 @@ test.describe('Client invite flow', () => {
       // Success message
       await expect(page.getByRole('status')).toBeVisible({ timeout: 8_000 });
       const statusText = await page.getByRole('status').textContent();
-      expect(statusText).toMatch(/no invite/i);
+      // Dialog toast says "Client added without invite."; the API route's
+      // message variant says "Client added (no invite)". Accept either.
+      expect(statusText).toMatch(/without invite|no invite/i);
 
       // ── Assert: NO auth user created ──────────────────────────────────────
       const { data: authList } = await admin.auth.admin.listUsers();
@@ -194,6 +199,24 @@ test.describe('Client invite flow', () => {
     // Use an existing seeded designer account as the "client" being added
     const existingEmail = 'designer@patina.dev';
     const admin = getAdminClient();
+
+    // Idempotence: prior runs leave a designer_clients link for this profile,
+    // and re-adding an already-linked client makes the invite route error
+    // ("unexpected error" toast) instead of the already-exists path. Remove
+    // any existing link first so each run exercises the link-creation branch.
+    {
+      const { data: profile } = await (admin as any)
+        .from('profiles')
+        .select('id')
+        .eq('email', existingEmail)
+        .maybeSingle();
+      if (profile) {
+        await (admin as any)
+          .from('designer_clients')
+          .delete()
+          .eq('client_id', profile.id);
+      }
+    }
 
     await openAddClientDialog(page);
     await fillAndSubmit(page, { email: existingEmail, invite: true });

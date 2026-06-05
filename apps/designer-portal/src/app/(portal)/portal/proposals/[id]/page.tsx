@@ -35,7 +35,6 @@ export default function ProposalDetailPage({
   const updateProposal = useUpdateProposal();
 
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
-  const [clientPickerOpen, setClientPickerOpen] = useState(false);
 
   // Status-based routing: redirect non-draft proposals to appropriate views
   useEffect(() => {
@@ -125,39 +124,18 @@ export default function ProposalDetailPage({
             <span className="type-meta-small">&middot;</span>
             <span className="type-meta-small">v{proposal.version || 1}.0</span>
             <span className="type-meta-small">&middot;</span>
-            {proposal.client_id ? (
-              <span className="type-meta-small">
-                Client: {proposal.client?.full_name || proposal.client?.email || 'Linked'}
-              </span>
-            ) : (
-              <span className="type-meta-small italic text-[var(--text-muted)]">
-                Unlinked
-              </span>
-            )}
-            {/* ClientPicker runs in controlled mode: the "Change" button is the
-                sole opening affordance (single click), and the picker's own
-                Radix popover handles click-outside + Escape. Selecting a client
-                fires the mutation and closes; clicking "Change" again toggles
-                it shut. The relative wrapper anchors the popover content. */}
-            <span className="relative inline-flex">
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-expanded={clientPickerOpen}
-                onClick={() => setClientPickerOpen((o) => !o)}
-              >
-                Change
-              </Button>
+            {/* The picker chip IS the client display: it shows the linked
+                client (or "Link a client…") and opens the combobox on click.
+                Radix handles click-outside + Escape; selecting a client fires
+                the mutation and closes. */}
+            <span className="inline-flex w-[220px]">
               <ClientPicker
-                open={clientPickerOpen}
-                onOpenChange={setClientPickerOpen}
                 value={proposal.client_id ?? null}
                 onChange={(clientId) => {
                   updateProposal.mutate({
                     proposalId: id,
                     updates: { client_id: clientId },
                   });
-                  setClientPickerOpen(false);
                 }}
                 placeholder="Link a client…"
                 inlineChip

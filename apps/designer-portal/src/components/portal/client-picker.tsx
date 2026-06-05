@@ -125,38 +125,36 @@ export function ClientPicker({
   return (
     <div className={cn('w-full', className)}>
       <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
-        {/* Controlled mode: the parent owns the opening affordance (e.g. a
-            "Change" button), so we anchor to the picker's position rather than
-            render our own combobox trigger. Uncontrolled mode renders the
-            built-in trigger as before. */}
-        {isControlled ? (
-          <PopoverPrimitive.Anchor className="block w-full" />
-        ) : (
-          <PopoverPrimitive.Trigger asChild disabled={disabled}>
-            <button
-              type="button"
-              role="combobox"
-              data-testid="client-picker-trigger"
-              aria-expanded={open}
-              disabled={disabled}
-              className={cn(
-                'flex w-full items-center justify-between rounded border border-[var(--color-pearl)] bg-white text-[0.85rem] outline-none transition-colors',
-                'focus:border-[var(--accent-primary)]',
-                'disabled:cursor-not-allowed disabled:opacity-50',
-                inlineChip ? 'px-2.5 py-1' : 'px-3 py-2'
-              )}
-              style={{ fontFamily: 'var(--font-body)' }}
+        {/* The built-in combobox trigger renders in BOTH modes — in controlled
+            mode a parent affordance can also toggle `open`, but the trigger
+            chip stays visible and clickable (and keeps the
+            `client-picker-trigger` testid that e2e relies on). Radix routes
+            trigger clicks through onOpenChange, so controlled state works
+            either way. */}
+        <PopoverPrimitive.Trigger asChild disabled={disabled}>
+          <button
+            type="button"
+            role="combobox"
+            data-testid="client-picker-trigger"
+            aria-expanded={open}
+            disabled={disabled}
+            className={cn(
+              'flex w-full items-center justify-between rounded border border-[var(--color-pearl)] bg-white text-[0.85rem] outline-none transition-colors',
+              'focus:border-[var(--accent-primary)]',
+              'disabled:cursor-not-allowed disabled:opacity-50',
+              inlineChip ? 'px-2.5 py-1' : 'px-3 py-2'
+            )}
+            style={{ fontFamily: 'var(--font-body)' }}
+          >
+            <span
+              className={cn('truncate', !selected && 'text-[var(--text-muted)]')}
+              style={selected ? { color: 'var(--text-primary)' } : undefined}
             >
-              <span
-                className={cn('truncate', !selected && 'text-[var(--text-muted)]')}
-                style={selected ? { color: 'var(--text-primary)' } : undefined}
-              >
-                {triggerLabel}
-              </span>
-              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </button>
-          </PopoverPrimitive.Trigger>
-        )}
+              {triggerLabel}
+            </span>
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </button>
+        </PopoverPrimitive.Trigger>
 
         <PopoverPrimitive.Portal>
           <PopoverPrimitive.Content

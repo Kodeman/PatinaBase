@@ -29,6 +29,25 @@ async function openComposer(page: import('@playwright/test').Page): Promise<void
   await expect(page.getByRole('heading', { name: /^New decision$/i })).toBeVisible({ timeout: 10000 });
 }
 
+/**
+ * Options are library-first (00172 redesign): each pristine option shows a
+ * "choose from library" zone with an enter-manually escape hatch, and the
+ * name input (data-testid="option-N-name", no placeholder) only renders in
+ * manual mode. Enter manual mode for every option, then fill the names —
+ * canSubmit requires every option to have a non-empty name.
+ */
+async function fillOptionNames(page: import('@playwright/test').Page): Promise<void> {
+  const manualToggles = page.locator('[data-testid$="-enter-manually"]');
+  while ((await manualToggles.count()) > 0) {
+    await manualToggles.first().click();
+  }
+  const nameInputs = page.locator('[data-testid^="option-"][data-testid$="-name"]');
+  const count = await nameInputs.count();
+  for (let i = 0; i < count; i++) {
+    await nameInputs.nth(i).fill(`Option ${i + 1}`);
+  }
+}
+
 test.describe('Decision composer — validation edges', () => {
   test('"Send to client" is disabled when title is empty', async ({ authenticatedPage: page }) => {
     await openComposer(page);
@@ -39,11 +58,9 @@ test.describe('Decision composer — validation edges', () => {
     await expect(sendBtn).toBeDisabled();
 
     // Even after we fill option names but leave the title empty, the button must still be disabled.
-    const optionInputs = page.locator('input[placeholder^="Option name"]');
-    const optionCount = await optionInputs.count();
-    for (let i = 0; i < optionCount; i++) {
-      await optionInputs.nth(i).fill(`Option ${i + 1}`);
-    }
+    // Options are library-first: enter manual mode per option, then fill the
+    // name input via its stable testid (the inputs have no placeholder).
+    await fillOptionNames(page);
     await expect(sendBtn).toBeDisabled();
   });
 
@@ -53,11 +70,7 @@ test.describe('Decision composer — validation edges', () => {
     // Fill required fields: title + each option name
     await page.getByPlaceholder(/Choose primary upholstery fabric for sectional/i).fill('Past-due test decision');
 
-    const optionInputs = page.locator('input[placeholder^="Option name"]');
-    const optionCount = await optionInputs.count();
-    for (let i = 0; i < optionCount; i++) {
-      await optionInputs.nth(i).fill(`Option ${i + 1}`);
-    }
+    await fillOptionNames(page);
 
     // Set deadline to a date 1 month in the past
     const past = new Date();

@@ -19,6 +19,7 @@ export function TemplateCard({
 }: TemplateCardProps) {
   return (
     <div
+      data-testid="proposal-template-card"
       className={`cursor-pointer rounded-md border-[1.5px] p-5 transition-all ${
         selected
           ? 'border-[var(--accent-primary)] bg-[rgba(196,165,123,0.04)]'

@@ -116,10 +116,9 @@ test.describe.serial('proposal client-link → send → view → sign → activa
     test.setTimeout(90_000);
     await page.goto('/portal/proposals/new', { waitUntil: 'networkidle' });
 
-    // Select the first template (TemplateCard renders a clickable rounded div).
-    const firstTemplate = page
-      .locator('[class*="cursor-pointer"][class*="rounded-md"]')
-      .first();
+    // Select the first template via its stable testid (class-based selectors
+    // broke when the control kit standardized cursor-pointer/rounded classes).
+    const firstTemplate = page.getByTestId('proposal-template-card').first();
     await firstTemplate.waitFor({ state: 'visible', timeout: 20_000 });
     await firstTemplate.click();
 
