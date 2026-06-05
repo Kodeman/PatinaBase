@@ -7,6 +7,7 @@ import { UserStatusMenu, type UserPresenceStatus } from '@patina/design-system';
 import { ContextualHelpPanel } from '@patina/help-system';
 import { Button, IconButton } from '@/components/ui/controls';
 import { useAuth } from '@/hooks/use-auth';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { useUnreadCounts } from '@/hooks/use-unread-counts';
 import { useCommandPalette } from '@/contexts/command-palette-context';
 import { useMessagesPanel } from '@/contexts/messages-panel-context';
@@ -16,6 +17,10 @@ import { NotificationDropdown } from './notification-dropdown';
 
 export function UtilityBar() {
   const { user, signOut } = useAuth();
+  // Unread counts come from client-side queries; gate the badges on
+  // hydration so SSR (no counts) and first client paint render the same
+  // tree — prevents a hydration mismatch when the query cache is warm.
+  const hydrated = useHydrated();
   const { notifications, messages } = useUnreadCounts();
   const commandPalette = useCommandPalette();
   const messagesPanel = useMessagesPanel();
@@ -69,7 +74,7 @@ export function UtilityBar() {
 
       {/* Notifications */}
       <NotificationDropdown
-        count={notifications}
+        count={hydrated ? notifications : 0}
         open={notificationsOpen}
         onOpenChange={setNotificationsOpen}
       />
@@ -104,7 +109,7 @@ export function UtilityBar() {
         className="relative"
       >
         <MessageSquare className="h-4 w-4" />
-        {messages > 0 && (
+        {hydrated && messages > 0 && (
           <span className="absolute right-1 top-1 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-[var(--color-terracotta)] px-[3px] font-mono text-[0.4rem] text-white">
             {messages}
           </span>

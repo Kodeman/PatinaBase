@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
 import { useActiveZone, type BreadcrumbItem } from '@/hooks/use-active-zone';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { useNavCounts } from '@/hooks/use-nav-counts';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { ZONE_ACTIONS } from '@/config/navigation';
@@ -163,6 +164,9 @@ function BreadcrumbLabel({ crumb }: { crumb: BreadcrumbItem }) {
 
 export function SubNav() {
   const { zone, subNavItems, isDeepPage, breadcrumbs, activeSubNavHref } = useActiveZone();
+  // Tab counts come from client-side queries; gate them on hydration so SSR
+  // (no counts) and the first client paint render the same tree.
+  const hydrated = useHydrated();
   const counts = useNavCounts(zone);
   const prefersReducedMotion = useReducedMotion();
 
@@ -247,7 +251,7 @@ export function SubNav() {
                   {item.label}
 
                   {/* Count badge */}
-                  {count !== undefined && (
+                  {hydrated && count !== undefined && (
                     <span className="ml-1 font-mono text-[0.45rem] text-[var(--text-muted)]">
                       {count}
                     </span>
