@@ -27,42 +27,42 @@ export default async function UnsubscribePage({ searchParams }: PageProps) {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-[#F5F1ED] p-6 font-sans">
+    <main className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)] p-6 font-sans">
       <div className="w-full max-w-xl bg-white rounded-lg shadow-sm overflow-hidden">
         <header className="bg-[#3C3226] px-10 py-7 text-center">
-          <span className="font-serif text-xl font-semibold tracking-[0.15em] text-[#FAF7F2]">
+          <span className="font-serif text-xl font-semibold tracking-[0.15em] text-[var(--color-off-white)]">
             PATINA
           </span>
         </header>
         <div className="p-10">
           {outcome.ok ? (
             <>
-              <h1 className="font-serif text-2xl font-semibold text-[#2C2926] mb-4">
+              <h1 className="font-serif text-2xl font-semibold text-[var(--color-charcoal)] mb-4">
                 You&apos;ve been unsubscribed
               </h1>
-              <p className="text-[#4A453F] text-[15px] leading-6 mb-4">
+              <p className="text-[var(--color-bark)] text-[15px] leading-6 mb-4">
                 {outcome.type === 'all_marketing'
                   ? "We've turned off marketing emails to your address."
                   : `We've unsubscribed you from ${humanize(outcome.type)} emails.`}
               </p>
               <Link
                 href="/portal/settings/notifications"
-                className="inline-block bg-[#A3927C] text-white px-9 py-3.5 rounded-full font-semibold text-sm"
+                className="inline-block bg-[var(--color-taupe)] text-white px-9 py-3.5 rounded-full font-semibold text-sm"
               >
                 Manage preferences
               </Link>
             </>
           ) : (
             <>
-              <h1 className="font-serif text-2xl font-semibold text-[#2C2926] mb-4">
+              <h1 className="font-serif text-2xl font-semibold text-[var(--color-charcoal)] mb-4">
                 We couldn&apos;t complete that
               </h1>
-              <p className="text-[#4A453F] text-[15px] leading-6 mb-6">
+              <p className="text-[var(--color-bark)] text-[15px] leading-6 mb-6">
                 {errorCopy(outcome.status)}
               </p>
               <Link
                 href="/portal/settings/notifications"
-                className="inline-block bg-[#A3927C] text-white px-9 py-3.5 rounded-full font-semibold text-sm"
+                className="inline-block bg-[var(--color-taupe)] text-white px-9 py-3.5 rounded-full font-semibold text-sm"
               >
                 Sign in to manage
               </Link>

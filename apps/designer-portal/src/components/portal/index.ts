@@ -14,7 +14,7 @@ export {
 // PortalButton is the new control-kit button (drop-in superset of the legacy
 // catalog-ui PortalButton). Source it from the local kit, not @patina/catalog-ui,
 // so barrel consumers get the new clay button instead of the old charcoal one.
-export { PortalButton, Button, buttonVariants } from './button';
+export { PortalButton, Button, buttonVariants } from '@/components/ui/controls';
 
 export { PageContainer } from './page-container';
 export { MetricBlock } from './metric-block';
@@ -33,7 +33,6 @@ export { TeachPanel } from './teach-panel';
 export { CompatItem } from './compat-item';
 export { UploadZone } from './upload-zone';
 export { ImageGallery } from './image-gallery';
-export { Breadcrumb } from './breadcrumb';
 export { ToastProvider, useToast } from './toast-provider';
 export { PhaseDot } from './phase-dot';
 export { PhaseTimeline } from './phase-timeline';

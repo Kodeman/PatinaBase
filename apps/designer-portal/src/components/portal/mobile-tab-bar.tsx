@@ -90,7 +90,7 @@ export function MobileTabBar() {
                 <tab.icon className="h-5 w-5" strokeWidth={1.5} />
                 <span className="type-meta-small">{tab.label}</span>
                 {unreadMessages > 0 && (
-                  <span className="absolute -right-1 top-0 h-[7px] w-[7px] rounded-full bg-[#D4A090]" />
+                  <span className="absolute -right-1 top-0 h-[7px] w-[7px] rounded-full bg-[var(--color-terracotta)]" />
                 )}
               </button>
             );

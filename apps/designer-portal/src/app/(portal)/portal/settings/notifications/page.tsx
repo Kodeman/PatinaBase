@@ -199,7 +199,7 @@ export default function NotificationsSettingsPage() {
 
   if (loading) {
     return (
-      <div className="py-16 text-center text-[#7A736C]">Loading preferences…</div>
+      <div className="py-16 text-center text-[var(--text-faint)]">Loading preferences…</div>
     );
   }
 
@@ -214,10 +214,10 @@ export default function NotificationsSettingsPage() {
   return (
     <div className="max-w-2xl mx-auto py-12 px-6">
       <header className="mb-8">
-        <h1 className="font-serif text-3xl font-semibold text-[#2C2926] mb-2">
+        <h1 className="font-serif text-3xl font-semibold text-[var(--color-charcoal)] mb-2">
           Notifications
         </h1>
-        <p className="text-[#4A453F] text-[15px]">
+        <p className="text-[var(--color-bark)] text-[15px]">
           Choose what you want to hear from us — and how.
         </p>
       </header>
@@ -265,7 +265,7 @@ export default function NotificationsSettingsPage() {
 
       <Section title="Digest" description="Batch routine updates into a single email.">
         <label className="block">
-          <span className="block text-sm font-medium text-[#2C2926] mb-2">
+          <span className="block text-sm font-medium text-[var(--color-charcoal)] mb-2">
             Frequency
           </span>
           <select
@@ -276,7 +276,7 @@ export default function NotificationsSettingsPage() {
                 e.target.value as NotificationPreferences['digest_frequency'],
               )
             }
-            className="w-full max-w-xs px-3 py-2 border border-[#DDD4C8] rounded-md bg-white text-[#2C2926]"
+            className="w-full max-w-xs px-3 py-2 border border-[var(--border-warm)] rounded-md bg-white text-[var(--color-charcoal)]"
           >
             <option value="never">Never</option>
             <option value="daily">Daily</option>
@@ -333,9 +333,9 @@ function MessagesSection() {
       description="Per-thread notification overrides. New threads default to all messages."
     >
       {isLoading ? (
-        <p className="text-sm text-[#7A736C]">Loading overrides…</p>
+        <p className="text-sm text-[var(--text-faint)]">Loading overrides…</p>
       ) : overrides.length === 0 ? (
-        <p className="text-sm text-[#7A736C]">
+        <p className="text-sm text-[var(--text-faint)]">
           No threads currently muted or customized. Use the bell or menu icons
           inside any conversation to set an override.
         </p>
@@ -343,10 +343,10 @@ function MessagesSection() {
         <>
           {muted.length > 0 && (
             <div className="mb-5">
-              <h3 className="text-[13px] font-semibold uppercase tracking-wider text-[#7A736C] mb-2">
+              <h3 className="text-[13px] font-semibold uppercase tracking-wider text-[var(--text-faint)] mb-2">
                 Muted ({muted.length})
               </h3>
-              <ul className="divide-y divide-[#EEE6DB] rounded border border-[#EEE6DB]">
+              <ul className="divide-y divide-[var(--bg-warm)] rounded border border-[var(--bg-warm)]">
                 {muted.map((o) => (
                   <ThreadOverrideRow
                     key={o.thread_id}
@@ -364,10 +364,10 @@ function MessagesSection() {
           )}
           {customPref.length > 0 && (
             <div>
-              <h3 className="text-[13px] font-semibold uppercase tracking-wider text-[#7A736C] mb-2">
+              <h3 className="text-[13px] font-semibold uppercase tracking-wider text-[var(--text-faint)] mb-2">
                 Custom preference ({customPref.length})
               </h3>
-              <ul className="divide-y divide-[#EEE6DB] rounded border border-[#EEE6DB]">
+              <ul className="divide-y divide-[var(--bg-warm)] rounded border border-[var(--bg-warm)]">
                 {customPref.map((o) => (
                   <ThreadOverrideRow
                     key={o.thread_id}
@@ -411,11 +411,11 @@ function ThreadOverrideRow({
       <div className="min-w-0 flex-1">
         <Link
           href={`/portal/messages/${override.thread_id}`}
-          className="block truncate text-[14px] font-medium text-[#2C2926] hover:underline"
+          className="block truncate text-[14px] font-medium text-[var(--color-charcoal)] hover:underline"
         >
           {label}
         </Link>
-        <p className="text-xs text-[#7A736C]">{kindLabel}</p>
+        <p className="text-xs text-[var(--text-faint)]">{kindLabel}</p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {onUnmute && (
@@ -427,7 +427,7 @@ function ThreadOverrideRow({
           <select
             value={override.notification_pref}
             onChange={(e) => onChangePref(e.target.value as NotificationPref)}
-            className="rounded border border-[#DDD4C8] bg-white px-2 py-1 text-xs text-[#2C2926]"
+            className="rounded border border-[var(--border-warm)] bg-white px-2 py-1 text-xs text-[var(--color-charcoal)]"
           >
             <option value="all">All messages</option>
             <option value="mentions">Mentions only</option>
@@ -463,11 +463,11 @@ function SmsChannel({
   const enabled = channelEnabled && (profile?.sms_opt_in ?? false);
 
   return (
-    <div className="border-t border-[#EEE6DB] pt-3 mt-1">
+    <div className="border-t border-[var(--bg-warm)] pt-3 mt-1">
       <div className="flex items-start justify-between gap-4">
         <span className="flex-1">
-          <span className="block text-[15px] text-[#2C2926] font-medium">SMS</span>
-          <span className="block text-xs text-[#7A736C] mt-0.5">
+          <span className="block text-[15px] text-[var(--color-charcoal)] font-medium">SMS</span>
+          <span className="block text-xs text-[var(--text-faint)] mt-0.5">
             Time-sensitive alerts via text. SMS requires admin Twilio setup —
             standard message and data rates may apply.
           </span>
@@ -479,7 +479,7 @@ function SmsChannel({
           onChange={(e) => onToggle(e.target.checked)}
           aria-label="Enable SMS notifications"
           title={hasPhone ? undefined : 'Save a phone number to enable SMS'}
-          className={`mt-1 h-5 w-5 rounded border-[#DDD4C8] text-[#A3927C] focus:ring-[#A3927C] ${
+          className={`mt-1 h-5 w-5 rounded border-[var(--border-warm)] text-[var(--color-taupe)] focus:ring-[var(--color-taupe)] ${
             hasPhone ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'
           }`}
         />
@@ -487,7 +487,7 @@ function SmsChannel({
 
       <div className="mt-3 flex items-end gap-2">
         <label className="flex-1">
-          <span className="block text-sm font-medium text-[#2C2926] mb-1">
+          <span className="block text-sm font-medium text-[var(--color-charcoal)] mb-1">
             Mobile number
           </span>
           <input
@@ -497,7 +497,7 @@ function SmsChannel({
             placeholder="+1 (555) 123-4567"
             value={draftPhone}
             onChange={(e) => setDraftPhone(e.target.value)}
-            className="w-full px-3 py-2 border border-[#DDD4C8] rounded-md bg-white text-[#2C2926]"
+            className="w-full px-3 py-2 border border-[var(--border-warm)] rounded-md bg-white text-[var(--color-charcoal)]"
           />
         </label>
         <Button
@@ -510,7 +510,7 @@ function SmsChannel({
         </Button>
       </div>
       {!hasPhone && (
-        <p className="mt-2 text-xs text-[#7A736C]">
+        <p className="mt-2 text-xs text-[var(--text-faint)]">
           Save a verified mobile number to enable the SMS channel.
         </p>
       )}
@@ -528,12 +528,12 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-white rounded-lg shadow-sm p-6 mb-6 border border-[#EEE6DB]">
-      <h2 className="font-serif text-lg font-semibold text-[#2C2926] mb-1">
+    <section className="bg-white rounded-lg shadow-sm p-6 mb-6 border border-[var(--bg-warm)]">
+      <h2 className="font-serif text-lg font-semibold text-[var(--color-charcoal)] mb-1">
         {title}
       </h2>
       {description && (
-        <p className="text-sm text-[#7A736C] mb-4">{description}</p>
+        <p className="text-sm text-[var(--text-faint)] mb-4">{description}</p>
       )}
       <div className="space-y-3">{children}</div>
     </section>
@@ -558,17 +558,17 @@ function Toggle({
       className={`flex items-start justify-between gap-4 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
     >
       <span className="flex-1">
-        <span className="block text-[15px] text-[#2C2926] font-medium">
+        <span className="block text-[15px] text-[var(--color-charcoal)] font-medium">
           {label}
         </span>
-        {help && <span className="block text-xs text-[#7A736C] mt-0.5">{help}</span>}
+        {help && <span className="block text-xs text-[var(--text-faint)] mt-0.5">{help}</span>}
       </span>
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange?.(e.target.checked)}
         disabled={disabled}
-        className="mt-1 h-5 w-5 rounded border-[#DDD4C8] text-[#A3927C] focus:ring-[#A3927C]"
+        className="mt-1 h-5 w-5 rounded border-[var(--border-warm)] text-[var(--color-taupe)] focus:ring-[var(--color-taupe)]"
       />
     </label>
   );
@@ -585,14 +585,14 @@ function TimeField({
 }) {
   return (
     <label className="flex-1">
-      <span className="block text-sm font-medium text-[#2C2926] mb-1">
+      <span className="block text-sm font-medium text-[var(--color-charcoal)] mb-1">
         {label}
       </span>
       <input
         type="time"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 border border-[#DDD4C8] rounded-md bg-white text-[#2C2926]"
+        className="w-full px-3 py-2 border border-[var(--border-warm)] rounded-md bg-white text-[var(--color-charcoal)]"
       />
     </label>
   );
@@ -609,11 +609,11 @@ function SaveStatus({
 }) {
   const status = useMemo(() => {
     if (error) return { text: error, color: 'text-[#C45B4A]' };
-    if (saving) return { text: 'Saving…', color: 'text-[#7A736C]' };
+    if (saving) return { text: 'Saving…', color: 'text-[var(--text-faint)]' };
     if (savedAt)
       return {
         text: `Saved ${savedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`,
-        color: 'text-[#7A736C]',
+        color: 'text-[var(--text-faint)]',
       };
     return null;
   }, [error, saving, savedAt]);

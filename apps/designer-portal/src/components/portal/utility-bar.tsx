@@ -105,7 +105,7 @@ export function UtilityBar() {
       >
         <MessageSquare className="h-4 w-4" />
         {messages > 0 && (
-          <span className="absolute right-1 top-1 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-[#D4A090] px-[3px] font-mono text-[0.4rem] text-white">
+          <span className="absolute right-1 top-1 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-[var(--color-terracotta)] px-[3px] font-mono text-[0.4rem] text-white">
             {messages}
           </span>
         )}

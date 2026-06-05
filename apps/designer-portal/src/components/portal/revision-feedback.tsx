@@ -27,7 +27,7 @@ export function RevisionFeedback({ feedback, clientName, date }: RevisionFeedbac
           fontSize: '0.62rem',
           textTransform: 'uppercase',
           letterSpacing: '0.06em',
-          color: '#E8C547',
+          color: 'var(--color-golden-hour)',
         }}
       >
         Client Feedback &mdash; {formattedDate}

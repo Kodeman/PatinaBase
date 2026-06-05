@@ -46,6 +46,7 @@
   --bg-subtle: #F5F1ED;     /* panel tint between off-white and pearl */
   --bg-warm: #EEE6DB;       /* warm light fill */
   --color-bark: #4A453F;    /* dark warm gray between mocha and charcoal */
+  --border-warm: #DDD4C8;   /* warm hairline border, below --border-default */
 
   /* — Functional Colors — */
   --color-success: #7A9B76;

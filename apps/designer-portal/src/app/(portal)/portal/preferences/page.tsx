@@ -167,19 +167,19 @@ function PreferencesPageInner() {
 
   if (!isAuthenticated) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-[#F5F1ED] p-6">
+      <main className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)] p-6">
         <div className="max-w-md text-center">
-          <h1 className="font-serif text-2xl font-semibold text-[#2C2926] mb-3">
+          <h1 className="font-serif text-2xl font-semibold text-[var(--color-charcoal)] mb-3">
             Sign in to manage preferences
           </h1>
-          <p className="text-[#4A453F] text-[15px] mb-6">
+          <p className="text-[var(--color-bark)] text-[15px] mb-6">
             {tokenStatus.kind === 'applied'
               ? 'Your unsubscribe was applied. Sign in to manage other preferences.'
               : 'Sign in to view and update your notification preferences.'}
           </p>
           <a
             href="/auth/signin?callbackUrl=/portal/preferences"
-            className="inline-block bg-[#A3927C] text-white px-9 py-3.5 rounded-full font-semibold text-sm"
+            className="inline-block bg-[var(--color-taupe)] text-white px-9 py-3.5 rounded-full font-semibold text-sm"
           >
             Sign in
           </a>
@@ -190,7 +190,7 @@ function PreferencesPageInner() {
 
   if (prefsError || !prefs) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-[#F5F1ED] p-6">
+      <main className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)] p-6">
         <p className="text-[#C45B4A]">
           {prefsError instanceof Error
             ? prefsError.message
@@ -204,13 +204,13 @@ function PreferencesPageInner() {
   const effectiveTimezone = prefs.timezone || browserTz;
 
   return (
-    <main className="min-h-screen bg-[#F5F1ED] py-12 px-6">
+    <main className="min-h-screen bg-[var(--bg-subtle)] py-12 px-6">
       <div className="max-w-2xl mx-auto">
         <header className="mb-8">
-          <h1 className="font-serif text-3xl font-semibold text-[#2C2926] mb-2">
+          <h1 className="font-serif text-3xl font-semibold text-[var(--color-charcoal)] mb-2">
             Notification preferences
           </h1>
-          <p className="text-[#4A453F] text-[15px]">
+          <p className="text-[var(--color-bark)] text-[15px]">
             Choose what you want to hear from us — and how.
           </p>
         </header>
@@ -273,13 +273,13 @@ function PreferencesPageInner() {
                 />
               </div>
               <label className="block mt-3">
-                <span className="block text-sm font-medium text-[#2C2926] mb-1">
+                <span className="block text-sm font-medium text-[var(--color-charcoal)] mb-1">
                   Timezone
                 </span>
                 <select
                   value={effectiveTimezone}
                   onChange={(e) => update({ timezone: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#DDD4C8] rounded-md bg-white text-[#2C2926]"
+                  className="w-full px-3 py-2 border border-[var(--border-warm)] rounded-md bg-white text-[var(--color-charcoal)]"
                 >
                   {timezones.map((tz) => (
                     <option key={tz} value={tz}>
@@ -310,9 +310,9 @@ function PreferencesPageInner() {
                   value={opt.value}
                   checked={prefs.digest_frequency === opt.value}
                   onChange={() => update({ digest_frequency: opt.value })}
-                  className="h-4 w-4 border-[#DDD4C8] text-[#A3927C] focus:ring-[#A3927C]"
+                  className="h-4 w-4 border-[var(--border-warm)] text-[var(--color-taupe)] focus:ring-[var(--color-taupe)]"
                 />
-                <span className="text-[15px] text-[#2C2926]">{opt.label}</span>
+                <span className="text-[15px] text-[var(--color-charcoal)]">{opt.label}</span>
               </label>
             ))}
           </fieldset>
@@ -324,8 +324,8 @@ function PreferencesPageInner() {
 
 function LoadingShell() {
   return (
-    <main className="min-h-screen flex items-center justify-center bg-[#F5F1ED]">
-      <p className="text-[#7A736C]">Loading preferences…</p>
+    <main className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)]">
+      <p className="text-[var(--text-faint)]">Loading preferences…</p>
     </main>
   );
 }
@@ -345,7 +345,7 @@ function TokenStatusBanner({
       <div
         role="status"
         aria-live="polite"
-        className="mb-4 px-4 py-3 rounded-md border border-[#DDD4C8] bg-white text-sm text-[#4A453F]"
+        className="mb-4 px-4 py-3 rounded-md border border-[var(--border-warm)] bg-white text-sm text-[var(--color-bark)]"
       >
         Applying unsubscribe link…
       </div>
@@ -387,12 +387,12 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-white rounded-lg shadow-sm p-6 mb-6 border border-[#EEE6DB]">
-      <h2 className="font-serif text-lg font-semibold text-[#2C2926] mb-1">
+    <section className="bg-white rounded-lg shadow-sm p-6 mb-6 border border-[var(--bg-warm)]">
+      <h2 className="font-serif text-lg font-semibold text-[var(--color-charcoal)] mb-1">
         {title}
       </h2>
       {description && (
-        <p className="text-sm text-[#7A736C] mb-4">{description}</p>
+        <p className="text-sm text-[var(--text-faint)] mb-4">{description}</p>
       )}
       <div className="space-y-3">{children}</div>
     </section>
@@ -417,11 +417,11 @@ function Toggle({
       className={`flex items-start justify-between gap-4 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
     >
       <span className="flex-1">
-        <span className="block text-[15px] text-[#2C2926] font-medium">
+        <span className="block text-[15px] text-[var(--color-charcoal)] font-medium">
           {label}
         </span>
         {help && (
-          <span className="block text-xs text-[#7A736C] mt-0.5">{help}</span>
+          <span className="block text-xs text-[var(--text-faint)] mt-0.5">{help}</span>
         )}
       </span>
       <input
@@ -429,7 +429,7 @@ function Toggle({
         checked={checked}
         onChange={(e) => onChange?.(e.target.checked)}
         disabled={disabled}
-        className="mt-1 h-5 w-5 rounded border-[#DDD4C8] text-[#A3927C] focus:ring-[#A3927C]"
+        className="mt-1 h-5 w-5 rounded border-[var(--border-warm)] text-[var(--color-taupe)] focus:ring-[var(--color-taupe)]"
       />
     </label>
   );
@@ -446,14 +446,14 @@ function TimeField({
 }) {
   return (
     <label className="flex-1">
-      <span className="block text-sm font-medium text-[#2C2926] mb-1">
+      <span className="block text-sm font-medium text-[var(--color-charcoal)] mb-1">
         {label}
       </span>
       <input
         type="time"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 border border-[#DDD4C8] rounded-md bg-white text-[#2C2926]"
+        className="w-full px-3 py-2 border border-[var(--border-warm)] rounded-md bg-white text-[var(--color-charcoal)]"
       />
     </label>
   );
@@ -475,11 +475,11 @@ function SaveStatus({
         color: 'text-[#C45B4A]',
       };
     }
-    if (saving) return { text: 'Saving…', color: 'text-[#7A736C]' };
+    if (saving) return { text: 'Saving…', color: 'text-[var(--text-faint)]' };
     if (savedAt)
       return {
         text: `Saved ${savedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`,
-        color: 'text-[#7A736C]',
+        color: 'text-[var(--text-faint)]',
       };
     return null;
   }, [error, saving, savedAt]);
