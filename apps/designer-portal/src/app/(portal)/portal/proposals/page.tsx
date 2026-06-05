@@ -18,6 +18,7 @@ const STATUS_FILTERS = [
   { key: 'sent', label: 'Sent' },
   { key: 'viewed', label: 'Viewed' },
   { key: 'accepted', label: 'Signed' },
+  { key: 'revised', label: 'Revised' },
   { key: 'expired', label: 'Expired' },
 ];
 

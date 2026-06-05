@@ -2,7 +2,12 @@
 
 import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useProposal, useSendProposal, useUpdateProposal } from '@/hooks/use-proposals';
+import {
+  useProposal,
+  useSendProposal,
+  useUpdateProposal,
+  useProposalVersions,
+} from '@/hooks/use-proposals';
 import { PageActionBar } from '@/components/portal';
 import { Button, Input } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
@@ -29,9 +34,15 @@ export default function SendProposalPage({
   const hydrated = useHydrated();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal, isLoading } = useProposal(id) as { data: any; isLoading: boolean };
+  const { data: versions } = useProposalVersions(id);
   const sendProposal = useSendProposal();
   const updateProposal = useUpdateProposal();
   const { toast } = useToast();
+
+  // A sibling version already accepted? Sending this one won't affect it.
+  const hasAcceptedSibling = (versions ?? []).some(
+    (v) => v.id !== id && v.status === 'accepted'
+  );
 
   const [recipientEmail, setRecipientEmail] = useState('');
   const [ccEmail, setCcEmail] = useState('');
@@ -165,11 +176,45 @@ export default function SendProposalPage({
         </div>
       )}
 
+      {/* Accepted-sibling warning banner */}
+      {hasAcceptedSibling && (
+        <div
+          className="mb-6 max-w-[520px] rounded-md border p-4"
+          style={{
+            background: 'rgba(196,124,92,0.06)',
+            borderColor: 'rgba(196,124,92,0.2)',
+          }}
+        >
+          <p
+            className="mb-1"
+            style={{
+              fontFamily: 'var(--font-meta)',
+              fontSize: '0.62rem',
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              color: 'var(--color-terracotta)',
+            }}
+          >
+            Another version is already accepted
+          </p>
+          <p
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: '0.82rem',
+              color: 'var(--text-body)',
+            }}
+          >
+            Another version of this proposal has already been accepted. Sending
+            this version will not affect the accepted one.
+          </p>
+        </div>
+      )}
+
       {/* Form */}
       <div className="grid max-w-[520px] grid-cols-2 gap-x-8 gap-y-5">
         {/* Recipient — the linked client */}
         <div className="col-span-2 flex flex-col gap-1.5">
-          <label className="type-meta-small">Recipient</label>
+          <label className="type-meta-small" htmlFor="proposal-send-recipient">Recipient</label>
           {proposal.client_id ? (
             <div
               className="rounded border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.85rem]"
@@ -199,6 +244,7 @@ export default function SendProposalPage({
           </Button>
           {showAltAddress && (
             <Input
+              id="proposal-send-recipient"
               type="email"
               value={recipientEmail}
               onChange={(e) => setRecipientEmail(e.target.value)}
@@ -210,8 +256,9 @@ export default function SendProposalPage({
 
         {/* CC */}
         <div className="flex flex-col gap-1.5">
-          <label className="type-meta-small">CC (optional)</label>
+          <label className="type-meta-small" htmlFor="proposal-send-cc">CC (optional)</label>
           <input
+            id="proposal-send-cc"
             type="email"
             value={ccEmail}
             onChange={(e) => setCcEmail(e.target.value)}
@@ -223,8 +270,9 @@ export default function SendProposalPage({
 
         {/* Expiry */}
         <div className="flex flex-col gap-1.5">
-          <label className="type-meta-small">Expires After</label>
+          <label className="type-meta-small" htmlFor="proposal-send-expires">Expires After</label>
           <select
+            id="proposal-send-expires"
             value={expiryDays}
             onChange={(e) => setExpiryDays(e.target.value)}
             className="rounded border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.85rem] outline-none focus:border-[var(--accent-primary)]"
@@ -240,8 +288,9 @@ export default function SendProposalPage({
 
         {/* Personal message */}
         <div className="col-span-2 flex flex-col gap-1.5">
-          <label className="type-meta-small">Personal Message</label>
+          <label className="type-meta-small" htmlFor="proposal-send-message">Personal Message</label>
           <textarea
+            id="proposal-send-message"
             rows={6}
             value={personalMessage}
             onChange={(e) => setPersonalMessage(e.target.value)}

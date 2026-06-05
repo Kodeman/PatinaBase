@@ -1,9 +1,11 @@
 'use client';
 
-import { use, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { use, useEffect, useRef, useCallback, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useProposal, useProposalSections } from '@/hooks/use-proposals';
+import { useEnterRevision } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
+import { Button, PageActionBar } from '@/components/portal';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { ProposalLetterhead } from '@/components/portal/proposal-letterhead';
@@ -43,9 +45,12 @@ export default function ProposalPreviewPage({
 }) {
   const { id } = use(params);
   const hydrated = useHydrated();
+  const router = useRouter();
   const { session } = useAuth();
   const searchParams = useSearchParams();
   const shouldAutoPrint = searchParams.get('print') === '1';
+  const enterRevision = useEnterRevision();
+  const [revising, setRevising] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal, isLoading: proposalLoading } = useProposal(id) as { data: any; isLoading: boolean };
   const { data: sections, isLoading: sectionsLoading } = useProposalSections(id);
@@ -177,8 +182,44 @@ export default function ProposalPreviewPage({
     );
   }
 
+  const canRevise =
+    proposal.status === 'declined' || proposal.status === 'expired';
+
   return (
     <div className="pt-8">
+      {/* Designer revise bar — declined/expired proposals can be revised */}
+      {canRevise && (
+        <PageActionBar
+          status={{
+            tone: 'error',
+            label: proposal.status === 'declined' ? 'Declined' : 'Expired',
+          }}
+          meta={
+            <span className="type-label-secondary">
+              {proposal.title} &middot; v{proposal.version || 1}.0
+            </span>
+          }
+          actions={
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={revising}
+              onClick={async () => {
+                setRevising(true);
+                try {
+                  await enterRevision.mutateAsync({ proposalId: id });
+                  router.push(`/portal/proposals/${id}/revise`);
+                } catch {
+                  setRevising(false);
+                }
+              }}
+            >
+              {revising ? 'Starting revision…' : 'Revise'}
+            </Button>
+          }
+        />
+      )}
+
       {/* Document container */}
       <div
         className="proposal-print-area mx-auto rounded-lg bg-white shadow-sm"

@@ -7,7 +7,7 @@ import {
   useProposalEngagement,
   useProposalEngagementStats,
 } from '@/hooks/use-proposals';
-import { useSendProposal, useDuplicateProposal } from '@patina/supabase';
+import { useSendProposal, useDuplicateProposal, useEnterRevision } from '@patina/supabase';
 import { getProposalStatusDisplay } from '@/lib/proposal-status';
 import { MetricsRow } from '@/components/portal/metrics-row';
 import { Button, PageActionBar } from '@/components/portal';
@@ -92,9 +92,11 @@ export default function ProposalTrackingPage({
   const { data: stats } = useProposalEngagementStats(id);
   const sendProposal = useSendProposal();
   const duplicateProposal = useDuplicateProposal();
+  const enterRevision = useEnterRevision();
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const [revising, setRevising] = useState(false);
 
   const metrics = useMemo(() => {
     if (!stats || !proposal) return [];
@@ -176,9 +178,18 @@ export default function ProposalTrackingPage({
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => router.push(`/portal/proposals/${id}`)}
+              disabled={revising}
+              onClick={async () => {
+                setRevising(true);
+                try {
+                  await enterRevision.mutateAsync({ proposalId: id });
+                  router.push(`/portal/proposals/${id}/revise`);
+                } catch {
+                  setRevising(false);
+                }
+              }}
             >
-              Edit Proposal
+              {revising ? 'Starting revision…' : 'Revise'}
             </Button>
             <Button
               variant="secondary"

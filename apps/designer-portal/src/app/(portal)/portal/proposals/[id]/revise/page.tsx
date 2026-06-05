@@ -35,6 +35,17 @@ export default function ReviseProposalPage({
 
   const handleOpenEditor = async () => {
     try {
+      // Dangling-draft guard: if a revision draft (a higher-version row still in
+      // 'draft') already exists in the chain, reuse it instead of cloning again.
+      const currentVersionNum = proposal?.version ?? 1;
+      const existingDraft = (versions ?? []).find(
+        (v) => v.status === 'draft' && (v.version ?? 0) > currentVersionNum
+      );
+      if (existingDraft) {
+        router.push(`/portal/proposals/${existingDraft.id}`);
+        return;
+      }
+
       // Create a new revision from this proposal
       const newProposal = await createRevision.mutateAsync({
         sourceProposalId: id,
