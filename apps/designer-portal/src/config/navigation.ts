@@ -41,6 +41,7 @@ export const ZONES: ZoneConfig[] = [
       '/portal/leads',
       '/portal/proposals',
       '/portal/projects',
+      '/portal/rooms',
     ],
     icon: TrendingUp,
   },
@@ -103,6 +104,7 @@ export const ZONE_SUB_ITEMS: Record<ZoneKey, SubNavItem[]> = {
     { label: 'Proposals', href: '/portal/proposals', dotColor: 'var(--color-golden-hour, #E8C547)' },
     { label: 'Active', href: '/portal/projects', dotColor: 'var(--color-clay, #C4A57B)' },
     { label: 'Completed', href: '/portal/projects?status=completed', dotColor: 'var(--color-sage, #A8B5A0)' },
+    { label: 'Rooms', href: '/portal/rooms', dotColor: 'var(--color-terracotta, #D4A090)' },
   ],
   procurement: [
     { label: 'By Vendor', href: '/portal/procurement/by-vendor' },

@@ -1,33 +1,146 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
-import { useActiveZone } from '@/hooks/use-active-zone';
+import { useActiveZone, type BreadcrumbItem } from '@/hooks/use-active-zone';
 import { useNavCounts } from '@/hooks/use-nav-counts';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { ZONE_ACTIONS } from '@/config/navigation';
-import { useClient } from '@patina/supabase';
+import {
+  useClient,
+  useDecision,
+  useProduct,
+  useRoom,
+  useLead,
+} from '@patina/supabase';
 import { useProject } from '@/hooks/use-projects';
+import { useProposal } from '@/hooks/use-proposals';
+import { leadDisplayName } from '@/lib/lead-format';
+
+// ── Breadcrumb label resolution ────────────────────────────────────────────
+//
+// Each entity type gets its own resolver component so the entity's React Query
+// hook only runs when a crumb of that type is actually present in the trail.
+// All resolvers share one loading contract (renderResolved below): NEVER show
+// the raw UUID — render a skeleton while loading, a generic singular label on
+// error/missing data, and the real name once resolved.
+
+/** Skeleton + generic-label contract shared by every resolver. */
+function renderResolved(
+  name: string | null | undefined,
+  isLoading: boolean,
+  fallback: string,
+): ReactNode {
+  if (isLoading) {
+    return (
+      <span className="inline-block h-3 w-20 animate-pulse rounded bg-[var(--border-default)]" />
+    );
+  }
+  return <>{name || fallback}</>;
+}
 
 /**
  * Resolves the display name for a client breadcrumb segment (tagged by
  * useActiveZone when a UUID appears under /portal/clients/[id]).
  */
-function ClientBreadcrumbLabel({ clientId }: { clientId: string }) {
-  const { data } = useClient(clientId);
-  const displayName =
-    data?.client?.full_name || data?.client_name || data?.client_email || clientId;
-  return <>{displayName}</>;
+function ClientBreadcrumbLabel({ id }: { id: string }) {
+  const { data, isLoading } = useClient(id);
+  const name = data?.client?.full_name || data?.client_name || data?.client_email;
+  return renderResolved(name, isLoading, 'Client');
 }
 
 /**
  * Resolves the project name for a project breadcrumb segment so the trail reads
  * "Pipeline › Active › Aspen Loft Refresh" instead of the raw UUID (AP-C7).
  */
-function ProjectBreadcrumbLabel({ projectId }: { projectId: string }) {
-  const { data } = useProject(projectId) as { data?: { name?: string } };
-  return <>{data?.name || 'Project'}</>;
+function ProjectBreadcrumbLabel({ id }: { id: string }) {
+  // useProject's Supabase client is cast to `any` internally (getSupabase()),
+  // so its data is untyped — the cast below is genuinely needed to read `name`.
+  const { data, isLoading } = useProject(id) as {
+    data?: { name?: string };
+    isLoading: boolean;
+  };
+  return renderResolved(data?.name, isLoading, 'Project');
+}
+
+/** Resolves a proposal breadcrumb segment to its title. */
+function ProposalBreadcrumbLabel({ id }: { id: string }) {
+  // useProposal returns a typed `Proposal` (has `title`) — no cast needed.
+  const { data, isLoading } = useProposal(id);
+  return renderResolved(data?.title, isLoading, 'Proposal');
+}
+
+/** Resolves a decision breadcrumb segment to its title. */
+function DecisionBreadcrumbLabel({ id }: { id: string }) {
+  const { data, isLoading } = useDecision(id);
+  return renderResolved(data?.title, isLoading, 'Decision');
+}
+
+/**
+ * Resolves a product breadcrumb segment to its name. Covers both /portal/catalog/[id]
+ * and /portal/teaching/product/[id] (both are real products UUIDs).
+ */
+function ProductBreadcrumbLabel({ id }: { id: string }) {
+  // useProduct queries a typed SupabaseClient<Database> (products.name) — no cast needed.
+  const { data, isLoading } = useProduct(id);
+  return renderResolved(data?.name, isLoading, 'Product');
+}
+
+/** Resolves a room breadcrumb segment to its name. */
+function RoomBreadcrumbLabel({ id }: { id: string }) {
+  // useRoom returns a typed `Room` (has `name`) — no cast needed.
+  const { data, isLoading } = useRoom(id);
+  return renderResolved(data?.name, isLoading, 'Room');
+}
+
+/** Resolves a lead breadcrumb segment to its display name. */
+function LeadBreadcrumbLabel({ id }: { id: string }) {
+  const { data, isLoading } = useLead(id) as {
+    data?: Parameters<typeof leadDisplayName>[0];
+    isLoading: boolean;
+  };
+  return renderResolved(
+    data ? leadDisplayName(data) : undefined,
+    isLoading,
+    'Lead',
+  );
+}
+
+/**
+ * Dispatches a UUID-tagged breadcrumb crumb to the right entity resolver.
+ * Untagged crumbs (and any future resourceType without a resolver) fall back
+ * to the crumb's own label.
+ */
+function BreadcrumbLabel({ crumb }: { crumb: BreadcrumbItem }) {
+  if (crumb.resourceType && crumb.resourceId) {
+    const id = crumb.resourceId;
+    switch (crumb.resourceType) {
+      case 'project':
+        return <ProjectBreadcrumbLabel id={id} />;
+      case 'client':
+        return <ClientBreadcrumbLabel id={id} />;
+      case 'proposal':
+        return <ProposalBreadcrumbLabel id={id} />;
+      case 'decision':
+        return <DecisionBreadcrumbLabel id={id} />;
+      case 'product':
+        return <ProductBreadcrumbLabel id={id} />;
+      case 'room':
+        return <RoomBreadcrumbLabel id={id} />;
+      case 'lead':
+        return <LeadBreadcrumbLabel id={id} />;
+      default: {
+        // Exhaustiveness guard: adding an 8th resourceType without a resolver
+        // here is a COMPILE error. At runtime we still fall through to the
+        // crumb's own label rather than ever rendering a raw UUID.
+        const _exhaustive: never = crumb.resourceType;
+        void _exhaustive;
+      }
+    }
+  }
+  return <>{crumb.label}</>;
 }
 
 export function SubNav() {
@@ -55,20 +168,16 @@ export function SubNav() {
           // Breadcrumb mode for deep pages
           <div className="flex h-[38px] items-center gap-1.5">
             {breadcrumbs.map((crumb, i) => {
-              // Resolve UUID segments to a name (tagged by useActiveZone). Works
-              // for both linked crumbs (sub-routes) and the current-page crumb
-              // (project detail, which has no href).
-              const labelNode =
-                crumb.resourceType === 'project' && crumb.resourceId ? (
-                  <ProjectBreadcrumbLabel projectId={crumb.resourceId} />
-                ) : crumb.resourceType === 'client' && crumb.resourceId ? (
-                  <ClientBreadcrumbLabel clientId={crumb.resourceId} />
-                ) : (
-                  crumb.label
-                );
+              // Resolve UUID segments to a real entity name (tagged by
+              // useActiveZone). Works for both linked crumbs (sub-routes) and
+              // the current-page crumb (detail pages, which have no href).
+              const labelNode = <BreadcrumbLabel crumb={crumb} />;
 
               return (
-              <span key={i} className="flex items-center gap-1.5">
+              // resourceId forces a remount per entity (project A → B won't
+              // flash the stale resolver name); label+index keeps static crumbs
+              // stable and unique.
+              <span key={crumb.resourceId ?? `${crumb.label}-${i}`} className="flex items-center gap-1.5">
                 {i > 0 && (
                   <ChevronRight className="h-3 w-3 text-[var(--text-muted)] opacity-40" />
                 )}

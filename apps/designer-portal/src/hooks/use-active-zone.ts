@@ -8,9 +8,38 @@ export interface BreadcrumbItem {
   label: string;
   href?: string;
   /** Set when the segment is a UUID, so SubNav can resolve it to a name. */
-  resourceType?: 'project' | 'client';
+  resourceType?:
+    | 'project'
+    | 'client'
+    | 'proposal'
+    | 'decision'
+    | 'product'
+    | 'room'
+    | 'lead';
   resourceId?: string;
 }
+
+/**
+ * Maps the first path segment under /portal to the entity type its UUID
+ * children represent, so SubNav can swap raw UUIDs for real names.
+ *
+ * COUPLED: a new root must be added in THREE places to render correctly:
+ *   1. here (RESOURCE_BY_ROOT) — so the UUID child gets a resourceType,
+ *   2. the first-segment skip-list + `labels` map in buildBreadcrumbs() below
+ *      — so the root segment renders a friendly label instead of the raw slug,
+ *   3. a matching resolver case in BreadcrumbLabel (sub-nav.tsx) — so the
+ *      resourceType actually resolves to a name (the `never` guard there will
+ *      flag a missing case at compile time).
+ */
+const RESOURCE_BY_ROOT: Record<string, BreadcrumbItem['resourceType']> = {
+  projects: 'project',
+  clients: 'client',
+  proposals: 'proposal',
+  decisions: 'decision',
+  catalog: 'product',
+  leads: 'lead',
+  rooms: 'room',
+};
 
 const BREADCRUMB_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -73,6 +102,8 @@ export function useActiveZone(): ActiveZoneResult {
           searchParams.get('status') === 'completed'
             ? '/portal/projects?status=completed'
             : '/portal/projects';
+      } else if (pathname.startsWith('/portal/rooms')) {
+        activeSubNavHref = '/portal/rooms';
       } else if (pathname === '/portal/pipeline') {
         activeSubNavHref = '/portal/pipeline';
       }
@@ -134,6 +165,7 @@ function detectDeepPage(pathname: string, zoneKey: ZoneKey): boolean {
       /^\/portal\/proposals\/[^/]+/,    // /portal/proposals/[id]
       /^\/portal\/leads\/[^/]+/,        // /portal/leads/[id]
       /^\/portal\/pipeline\/[^/]+/,     // /portal/pipeline/[id]
+      /^\/portal\/rooms\/[^/]+/,        // /portal/rooms/[id]
     ],
     procurement: [],                    // Sprint 1: no deep sub-routes
     products: [
@@ -182,7 +214,9 @@ function buildBreadcrumbs(
     const segment = segments[i];
 
     // Skip the first segment if it matches the zone name (e.g., "projects" for pipeline)
-    if (i === 0 && ['projects', 'proposals', 'leads', 'catalog', 'clients', 'decisions', 'teaching'].includes(segment)) {
+    // COUPLED with RESOURCE_BY_ROOT (above) + BreadcrumbLabel resolvers in
+    // sub-nav.tsx — new roots must be added in all three. See RESOURCE_BY_ROOT.
+    if (i === 0 && ['projects', 'proposals', 'leads', 'catalog', 'clients', 'decisions', 'teaching', 'rooms'].includes(segment)) {
       // Map to a friendly label
       const labels: Record<string, string> = {
         projects: 'Active',
@@ -192,6 +226,7 @@ function buildBreadcrumbs(
         clients: 'Clients',
         decisions: 'Decisions',
         teaching: 'Teaching',
+        rooms: 'Rooms',
       };
       crumbs.push({ label: labels[segment] || segment, href: currentPath });
       continue;
@@ -202,12 +237,22 @@ function buildBreadcrumbs(
     // the current page).
     const isLast = i === segments.length - 1;
     const isUuid = BREADCRUMB_UUID_RE.test(segment);
-    const resourceType: BreadcrumbItem['resourceType'] =
-      isUuid && segments[0] === 'projects'
-        ? 'project'
-        : isUuid && segments[0] === 'clients'
-          ? 'client'
-          : undefined;
+    let resourceType: BreadcrumbItem['resourceType'] = isUuid
+      ? RESOURCE_BY_ROOT[segments[0]]
+      : undefined;
+
+    // Teaching product detail (/portal/teaching/product/<productId>) — the id
+    // segment is a real products UUID (the page fetches it via useProduct), so
+    // resolve it as a product. Slug-shaped ids won't match BREADCRUMB_UUID_RE,
+    // leaving resourceType undefined (formatted segment fallback).
+    if (
+      isUuid &&
+      segments[0] === 'teaching' &&
+      segments[1] === 'product' &&
+      i === 2
+    ) {
+      resourceType = 'product';
+    }
     crumbs.push({
       // Keep the raw id as the fallback label; SubNav swaps in the resolved name.
       label: isUuid ? segment : formatSegment(segment),
