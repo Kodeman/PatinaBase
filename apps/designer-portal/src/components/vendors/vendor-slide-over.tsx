@@ -16,6 +16,7 @@ import {
   Package,
   Loader2,
 } from 'lucide-react';
+import { Button, IconButton } from '@/components/ui/controls';
 import { useVendor, useToggleVendorSave } from '@patina/supabase';
 import { useVendorSlideOver, useVendorsStore } from '../../stores/vendors-store';
 import { VendorLogo } from './vendor-logo';
@@ -195,27 +196,22 @@ export function VendorSlideOver() {
                     />
                   </div>
                 </div>
-                <button
-                  type="button"
+                <IconButton
+                  label="Close panel"
                   onClick={close}
-                  className="flex-shrink-0 p-2 -mr-2 -mt-1 rounded-full hover:bg-patina-clay-beige/30 transition-colors focus:outline-none focus:ring-2 focus:ring-patina-mocha-brown"
-                  aria-label="Close panel"
+                  size="sm"
                 >
                   <X className="w-5 h-5 text-patina-charcoal" />
-                </button>
+                </IconButton>
               </div>
 
               {/* Quick Actions */}
               <div className="flex items-center gap-2 px-4 pb-4 sm:px-6">
-                <button
-                  type="button"
+                <Button
+                  variant={vendor.designerRelationship?.isSaved ? 'primary' : 'secondary'}
+                  size="sm"
                   onClick={handleSave}
                   disabled={toggleSaveMutation.isPending}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-patina-mocha-brown focus:ring-offset-2 ${
-                    vendor.designerRelationship?.isSaved
-                      ? 'bg-patina-mocha-brown text-white'
-                      : 'bg-patina-clay-beige/30 text-patina-charcoal hover:bg-patina-clay-beige/50'
-                  }`}
                 >
                   {vendor.designerRelationship?.isSaved ? (
                     <BookmarkCheck className="w-4 h-4" />
@@ -223,23 +219,23 @@ export function VendorSlideOver() {
                     <Bookmark className="w-4 h-4" />
                   )}
                   {vendor.designerRelationship?.isSaved ? 'Saved' : 'Save'}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={handleWriteReview}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-patina-clay-beige/30 text-patina-charcoal hover:bg-patina-clay-beige/50 transition-colors focus:outline-none focus:ring-2 focus:ring-patina-mocha-brown focus:ring-offset-2"
                 >
                   <PenLine className="w-4 h-4" />
                   Write Review
-                </button>
+                </Button>
                 {vendor.designerRelationship?.accountStatus === 'none' && (
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-patina-mocha-brown text-white hover:bg-patina-charcoal transition-colors focus:outline-none focus:ring-2 focus:ring-patina-mocha-brown focus:ring-offset-2"
+                  <Button
+                    variant="primary"
+                    size="sm"
                   >
                     <UserPlus className="w-4 h-4" />
                     Apply for Account
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -687,13 +683,17 @@ export function VendorSlideOver() {
 
             {/* Footer */}
             <div className="flex-shrink-0 border-t border-patina-clay-beige/30 p-4 bg-patina-off-white/30 sm:p-6">
-              <Link
-                href={`/vendors/${vendor.id}`}
-                className="flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-lg bg-patina-charcoal text-white font-medium hover:bg-patina-mocha-brown transition-colors focus:outline-none focus:ring-2 focus:ring-patina-mocha-brown focus:ring-offset-2"
+              <Button
+                variant="primary"
+                size="sm"
+                asChild
+                className="w-full justify-center"
               >
-                View Full Profile
-                <ExternalLink className="w-4 h-4" />
-              </Link>
+                <Link href={`/vendors/${vendor.id}`}>
+                  View Full Profile
+                  <ExternalLink className="w-4 h-4" />
+                </Link>
+              </Button>
             </div>
           </>
         ) : null}

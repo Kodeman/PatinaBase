@@ -11,7 +11,7 @@ import { ClientListItem } from '@/components/portal/client-list-item';
 import { AddClientDialog } from '@/components/portal/add-client-dialog';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { ListPageHeader } from '@/components/portal/list-page-header';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 // F1.6 — Designer Clients migrated to ambient + reactive help-system layers
 // per spec §12.4. SectionIntro renders the inline `fallback` until Sanity
 // content ships. EmptyState renders nothing on a clean CMS miss (spec §13.4
@@ -172,9 +172,9 @@ function ClientDirectoryContent() {
           />
         }
         actions={
-          <PortalButton variant="secondary" onClick={() => setAddDialogOpen(true)}>
+          <Button variant="secondary" onClick={() => setAddDialogOpen(true)}>
             + Add Client
-          </PortalButton>
+          </Button>
         }
       />
 

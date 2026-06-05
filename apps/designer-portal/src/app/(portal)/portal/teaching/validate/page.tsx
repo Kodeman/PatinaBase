@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useValidationQueue, useSubmitValidation } from '@patina/supabase';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 
@@ -26,9 +26,10 @@ export default function ValidatePage() {
 
   return (
     <div className="pt-8">
-      <div className="type-meta mb-6">
-        <Link href="/portal/teaching" className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]">Teaching</Link>
-        <span className="mx-2">&rarr;</span><span>Validation</span>
+      <div className="mb-4">
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/portal/teaching">← Teaching</Link>
+        </Button>
       </div>
 
       <h1 className="type-section-head mb-6">Validation ({remaining.length} remaining)</h1>
@@ -50,23 +51,23 @@ export default function ValidatePage() {
           )}
 
           <div className="mt-6 flex gap-4">
-            <PortalButton
+            <Button
               variant="primary"
               onClick={() => submitValidation.mutate({ productId: idOf(current), vote: 'confirm' })}
               disabled={submitValidation.isPending}
             >
               Agree
-            </PortalButton>
-            <PortalButton
+            </Button>
+            <Button
               variant="secondary"
               onClick={() => submitValidation.mutate({ productId: idOf(current), vote: 'flag' })}
               disabled={submitValidation.isPending}
             >
               Disagree
-            </PortalButton>
-            <PortalButton variant="ghost" onClick={() => setSkipped((prev) => new Set(prev).add(idOf(current)))}>
+            </Button>
+            <Button variant="ghost" onClick={() => setSkipped((prev) => new Set(prev).add(idOf(current)))}>
               Skip
-            </PortalButton>
+            </Button>
           </div>
         </div>
       ) : (

@@ -3,8 +3,9 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useClients } from '@patina/supabase';
+import { X } from 'lucide-react';
 import type { DesignerClient } from '@patina/supabase';
-import { PortalButton } from '@/components/portal/button';
+import { Button, IconButton, Input } from '@/components/ui/controls';
 
 interface DecisionNewPickerProps {
   onClose: () => void;
@@ -57,14 +58,9 @@ export function DecisionNewPicker({ onClose }: DecisionNewPickerProps) {
           <h3 className="type-section-head" style={{ fontSize: '1.2rem' }}>
             New decision
           </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-[1.1rem] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            aria-label="Close"
-          >
-            ×
-          </button>
+          <IconButton variant="ghost" size="sm" label="Close" onClick={onClose}>
+            <X className="h-4 w-4" aria-hidden="true" />
+          </IconButton>
         </div>
 
         <p
@@ -75,17 +71,12 @@ export function DecisionNewPicker({ onClose }: DecisionNewPickerProps) {
           (optionally) link a project on the next step.
         </p>
 
-        <input
+        <Input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search clients..."
-          className="mb-3 w-full rounded-sm border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 outline-none focus:border-[var(--accent-primary)]"
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: '0.85rem',
-            color: 'var(--text-primary)',
-          }}
+          className="mb-3"
           // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
         />
@@ -130,9 +121,9 @@ export function DecisionNewPicker({ onClose }: DecisionNewPickerProps) {
         )}
 
         <div className="mt-5 flex items-center justify-end gap-2">
-          <PortalButton variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose}>
             Cancel
-          </PortalButton>
+          </Button>
         </div>
       </div>
     </div>

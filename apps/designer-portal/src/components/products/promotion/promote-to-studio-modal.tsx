@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
+import { Button, IconButton, Textarea } from '@/components/ui/controls';
 import {
   useProduct,
   useVendor,
@@ -252,14 +253,13 @@ export function PromoteToStudioModal({
               vendor record — review and edit as needed.
             </p>
           </div>
-          <button
-            type="button"
+          <IconButton
             onClick={onClose}
-            aria-label="Close"
-            className="rounded-sm p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            label="Close"
+            className="h-auto w-auto p-1"
           >
             <X className="h-4 w-4" />
-          </button>
+          </IconButton>
         </header>
 
         <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-y-auto">
@@ -410,12 +410,11 @@ export function PromoteToStudioModal({
               required
               hint="What every designer in the studio should know about working with this vendor."
             >
-              <textarea
+              <Textarea
                 value={usageNotes}
                 onChange={(e) => setUsageNotes(e.target.value)}
                 required
                 rows={3}
-                className="w-full rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 text-sm"
                 placeholder="Custom dye lots are slow, but the rep is responsive."
               />
             </Field>
@@ -431,24 +430,19 @@ export function PromoteToStudioModal({
           </div>
 
           <footer className="flex items-center justify-end gap-2 border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-3">
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={onClose}
-              className="rounded-md px-4 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={!canSubmit}
-              className="rounded-md px-4 py-2 text-sm text-white"
-              style={{
-                background: canSubmit ? 'var(--accent-primary)' : 'var(--border-default)',
-                cursor: canSubmit ? 'pointer' : 'not-allowed',
-              }}
             >
               {promote.isPending ? 'Promoting…' : 'Promote to Studio'}
-            </button>
+            </Button>
           </footer>
         </form>
       </div>

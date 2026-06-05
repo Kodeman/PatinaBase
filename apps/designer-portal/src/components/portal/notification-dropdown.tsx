@@ -2,6 +2,7 @@
 
 import { Bell } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@patina/design-system';
+import { IconButton } from '@/components/ui/controls';
 
 interface NotificationDropdownProps {
   count: number;
@@ -13,17 +14,14 @@ export function NotificationDropdown({ count, open, onOpenChange }: Notification
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
-        <button
-          className="relative flex h-9 w-9 items-center justify-center rounded-md text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg,rgba(196,165,123,0.06))] hover:text-[var(--text-primary)]"
-          title="Notifications"
-        >
+        <IconButton variant="ghost" size="md" label="Notifications" className="relative">
           <Bell className="h-4 w-4" />
           {count > 0 && (
             <span className="absolute right-1 top-1 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-[#D4A090] px-[3px] font-mono text-[0.4rem] text-white">
               {count}
             </span>
           )}
-        </button>
+        </IconButton>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
         <div className="border-b border-[var(--border-default)] px-4 py-3">

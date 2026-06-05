@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStartVendorBrief, useVendorProfiles } from '@patina/supabase';
+import { Button, Select, Textarea } from '@/components/ui/controls';
 
 interface Props {
   projectId: string;
@@ -58,12 +59,11 @@ export function BriefVendorModal({ projectId, open, onClose }: Props) {
 
         <label className="block mb-3">
           <span className="type-meta-small uppercase tracking-wider">Vendor</span>
-          <select
+          <Select
             value={vendorId}
             onChange={(e) => setVendorId(e.target.value)}
             disabled={isLoading || startBrief.isPending}
-            className="mt-1 w-full rounded border bg-transparent px-3 py-2 text-sm focus:border-patina-clay focus:outline-none"
-            style={{ borderColor: 'var(--border-default)' }}
+            className="mt-1"
           >
             <option value="">
               {isLoading ? 'Loading vendors…' : 'Select a vendor'}
@@ -73,7 +73,7 @@ export function BriefVendorModal({ projectId, open, onClose }: Props) {
                 {v.full_name ?? v.id.slice(0, 8)}
               </option>
             ))}
-          </select>
+          </Select>
           {!isLoading && vendors.length === 0 && (
             <p className="type-meta-small mt-1 text-[var(--text-muted)]">
               No vendor profiles available. Vendors must be onboarded with a
@@ -86,14 +86,13 @@ export function BriefVendorModal({ projectId, open, onClose }: Props) {
           <span className="type-meta-small uppercase tracking-wider">
             Opening message
           </span>
-          <textarea
+          <Textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder="Outline the brief — scope, materials, timing, anything you want them to know up front."
             rows={5}
             disabled={startBrief.isPending}
-            className="mt-1 w-full resize-y rounded border bg-transparent px-3 py-2 text-sm focus:border-patina-clay focus:outline-none"
-            style={{ borderColor: 'var(--border-default)' }}
+            className="mt-1 resize-y"
           />
         </label>
 
@@ -102,26 +101,23 @@ export function BriefVendorModal({ projectId, open, onClose }: Props) {
         )}
 
         <div className="flex justify-end gap-2">
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={onClose}
             disabled={startBrief.isPending}
-            className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
-            style={{
-              borderColor: 'var(--border-default)',
-              fontFamily: 'var(--font-body)',
-            }}
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
+            variant="primary"
+            size="sm"
             disabled={!canSubmit}
-            className="rounded-[3px] bg-patina-clay px-4 py-1.5 text-[0.8rem] font-medium text-white disabled:opacity-50"
-            style={{ fontFamily: 'var(--font-body)' }}
           >
             {startBrief.isPending ? 'Opening…' : 'Open brief'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

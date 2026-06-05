@@ -10,7 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@patina/design-system';
-import { Button, Input, Badge, Card, CardContent, Skeleton, ScrollArea } from '@patina/design-system';
+import { Card, CardContent, Skeleton, ScrollArea } from '@patina/design-system';
+import { Button, Input } from '@/components/ui/controls';
 import type { Product } from '@patina/types';
 import { cn } from '@/lib/utils';
 
@@ -196,7 +197,7 @@ export function ProductSelectorModal({
         </ScrollArea>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleCancel}>
+          <Button variant="secondary" onClick={handleCancel}>
             Cancel
           </Button>
           <Button onClick={handleConfirm}>

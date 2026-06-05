@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useCompanionConversation, useCompanionHistory, useSendCompanionMessage, useCompanionQuickActions } from '@patina/supabase';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 // F1.4 — Aesthete Engine migrated to reactive help-system per spec §4.2 + §9.2.
@@ -166,12 +166,9 @@ export default function CompanionPage() {
                   surfaceKey={SurfaceKeys.DesignerPortal.Aesthete.QuickActions.Intro}
                   fallback="Tap to use this as a starting prompt — your replies shape what the Aesthete Engine recommends next."
                 >
-                  <button
-                    onClick={() => setInput(label)}
-                    className="type-btn-text cursor-pointer rounded-sm border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)]"
-                  >
+                  <Button variant="secondary" size="sm" onClick={() => setInput(label)}>
                     {label}
-                  </button>
+                  </Button>
                 </Tooltip>
               );
             })}
@@ -193,9 +190,9 @@ export default function CompanionPage() {
           placeholder="Ask the Aesthete Engine..."
           className="type-body flex-1 border-0 bg-transparent py-2 outline-none placeholder:text-[var(--text-subtle)]"
         />
-        <PortalButton variant="ghost" onClick={handleSend} disabled={!input.trim() || sendMessage.isPending}>
+        <Button variant="ghost" onClick={handleSend} disabled={!input.trim() || sendMessage.isPending}>
           {sendMessage.isPending ? '...' : 'Send'}
-        </PortalButton>
+        </Button>
       </div>
     </div>
   );

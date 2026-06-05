@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useTemplates } from '@patina/supabase';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -17,7 +17,7 @@ export default function TemplatesPage() {
     <div className="pt-8">
       <div className="mb-6 flex items-baseline justify-between">
         <h1 className="type-section-head">Templates</h1>
-        <PortalButton variant="primary" onClick={() => router.push('/portal/communications/templates/new')}>New Template</PortalButton>
+        <Button variant="primary" onClick={() => router.push('/portal/communications/templates/new')}>New Template</Button>
       </div>
       {isLoading ? <LoadingStrata /> : templates.length > 0 ? (
         <div>

@@ -21,6 +21,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { useUpdatePurchaseOrderETA } from '@patina/supabase';
 import { useToast } from '@/components/portal/toast-provider';
+import { Button, IconButton, Input, Textarea } from '@/components/ui/controls';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -147,15 +148,14 @@ export function EtaQuickEditDrawer(props: EtaQuickEditDrawerProps) {
                   {vendorName} · {projectName}
                 </div>
               </div>
-              <button
-                type="button"
+              <IconButton
+                label="Close"
                 onClick={() => !updateEta.isPending && onOpenChange(false)}
                 disabled={updateEta.isPending}
-                className="shrink-0 cursor-pointer rounded-md border-0 bg-transparent p-1 text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="Close"
+                size="sm"
               >
                 <X size={18} />
-              </button>
+              </IconButton>
             </div>
 
             {/* Body */}
@@ -194,13 +194,11 @@ export function EtaQuickEditDrawer(props: EtaQuickEditDrawerProps) {
                 >
                   New ETA
                 </label>
-                <input
+                <Input
                   id="eta-quickedit-newdate"
                   type="date"
                   value={newEta}
                   onChange={(e) => setNewEta(e.target.value)}
-                  className="w-full rounded-md border bg-[var(--bg-surface-alt,var(--bg-surface))] px-3 py-2 text-[0.85rem] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-clay,#C4A57B)]"
-                  style={{ borderColor: 'var(--border-default)' }}
                 />
               </div>
 
@@ -219,14 +217,12 @@ export function EtaQuickEditDrawer(props: EtaQuickEditDrawerProps) {
                 >
                   Notes (optional)
                 </label>
-                <textarea
+                <Textarea
                   id="eta-quickedit-notes"
                   rows={3}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="What did the vendor tell you?"
-                  className="w-full rounded-md border bg-[var(--bg-surface-alt,var(--bg-surface))] px-3 py-2 text-[0.85rem] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-clay,#C4A57B)]"
-                  style={{ borderColor: 'var(--border-default)' }}
                 />
                 <div
                   className="mt-1.5 text-[0.65rem]"
@@ -253,24 +249,23 @@ export function EtaQuickEditDrawer(props: EtaQuickEditDrawerProps) {
 
             {/* Footer */}
             <div className="flex items-center justify-end gap-3 border-t border-[var(--border-default)] px-5 py-4">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => onOpenChange(false)}
                 disabled={updateEta.isPending}
-                className="cursor-pointer rounded-md border bg-transparent px-3 py-1.5 text-[0.8rem] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-hover,rgba(0,0,0,0.04))] disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ borderColor: 'var(--border-default)' }}
               >
                 Cancel
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={handleSubmit}
                 disabled={!canSave}
-                className="cursor-pointer rounded-md border-0 px-4 py-1.5 text-[0.8rem] font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                style={{ background: 'var(--color-clay,#C4A57B)' }}
+                loading={updateEta.isPending}
               >
-                {updateEta.isPending ? 'Saving…' : 'Save new ETA'}
-              </button>
+                Save new ETA
+              </Button>
             </div>
           </motion.div>
         </>

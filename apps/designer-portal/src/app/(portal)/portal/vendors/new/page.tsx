@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFindOrCreateVendor } from '@patina/supabase';
 import { FieldGroup } from '@/components/portal/field-group';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 
 export default function NewVendorPage() {
   const router = useRouter();
@@ -36,10 +36,10 @@ export default function NewVendorPage() {
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="vendor@example.com" className="type-body w-full border-0 border-b border-[var(--border-default)] bg-transparent py-2 outline-none placeholder:text-[var(--text-subtle)] focus:border-[var(--accent-primary)]" />
         </FieldGroup>
         <div className="flex gap-4 pt-4">
-          <PortalButton variant="primary" onClick={handleSubmit} disabled={findOrCreate.isPending || !name.trim()}>
+          <Button variant="primary" onClick={handleSubmit} disabled={findOrCreate.isPending || !name.trim()}>
             {findOrCreate.isPending ? 'Adding...' : 'Add Vendor'}
-          </PortalButton>
-          <PortalButton variant="ghost" onClick={() => router.push('/portal/vendors')}>Cancel</PortalButton>
+          </Button>
+          <Button variant="ghost" onClick={() => router.push('/portal/vendors')}>Cancel</Button>
         </div>
       </div>
     </div>

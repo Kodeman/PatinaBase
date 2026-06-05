@@ -14,7 +14,7 @@ import {
 import { useProductSearch } from '@/hooks/use-products';
 import { FieldGroup } from '@/components/portal/field-group';
 import { StrataMark } from '@/components/portal/strata-mark';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { SearchInput } from '@/components/portal/search-input';
@@ -86,9 +86,10 @@ export default function CollectionDetailPage({ params }: { params: Promise<{ id:
 
   return (
     <div className="pt-8">
-      <div className="type-meta mb-6">
-        <Link href="/portal/catalog/collections" className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]">Collections</Link>
-        <span className="mx-2">&rarr;</span><span>{collection.name || 'Collection'}</span>
+      <div className="mb-4">
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/portal/catalog/collections">← Collections</Link>
+        </Button>
       </div>
 
       <h1 className="type-page-title mb-2">{collection.name || collection.title}</h1>
@@ -108,17 +109,17 @@ export default function CollectionDetailPage({ params }: { params: Promise<{ id:
       </div>
 
       <div className="flex flex-wrap gap-4 mb-6">
-        <PortalButton variant="secondary" onClick={() => router.push(`/portal/catalog/collections/${id}/edit`)}>
+        <Button variant="secondary" onClick={() => router.push(`/portal/catalog/collections/${id}/edit`)}>
           Edit Collection
-        </PortalButton>
+        </Button>
         {!isPublished && (
-          <PortalButton variant="secondary" onClick={() => publishCollection.mutate(id)} disabled={publishCollection.isPending}>
+          <Button variant="secondary" onClick={() => publishCollection.mutate(id)} disabled={publishCollection.isPending}>
             {publishCollection.isPending ? 'Publishing...' : 'Publish'}
-          </PortalButton>
+          </Button>
         )}
-        <PortalButton variant="secondary" onClick={handleDelete} disabled={deleteCollection.isPending}>
+        <Button variant="secondary" onClick={handleDelete} disabled={deleteCollection.isPending}>
           {confirmDelete ? 'Confirm Delete' : 'Delete Collection'}
-        </PortalButton>
+        </Button>
       </div>
 
       <StrataMark variant="mini" />
@@ -127,12 +128,9 @@ export default function CollectionDetailPage({ params }: { params: Promise<{ id:
       <div className="mt-6">
         <div className="mb-4 flex items-baseline justify-between">
           <h2 className="type-section-head">Products</h2>
-          <button
-            className="type-btn-text text-[var(--accent-primary)] hover:text-[var(--accent-hover)]"
-            onClick={() => setShowSearch(!showSearch)}
-          >
+          <Button variant="ghost" size="sm" onClick={() => setShowSearch(!showSearch)}>
             {showSearch ? 'Cancel' : 'Add Products'}
-          </button>
+          </Button>
         </div>
 
         {/* Product Search (add to collection) */}
@@ -156,13 +154,14 @@ export default function CollectionDetailPage({ params }: { params: Promise<{ id:
                         {[product.brand || product.vendor_name, product.category].filter(Boolean).join(' · ')}
                       </div>
                     </div>
-                    <button
-                      className="type-btn-text text-[var(--accent-primary)] hover:text-[var(--accent-hover)]"
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleAddProduct(product.id)}
                       disabled={addProduct.isPending}
                     >
                       Add
-                    </button>
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -185,12 +184,14 @@ export default function CollectionDetailPage({ params }: { params: Promise<{ id:
                   <span className="type-item-name">{product.name}</span>
                   <div className="flex items-center gap-4">
                     <div className="hidden items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100 md:flex">
-                      <button
-                        className={`type-btn-text ${removeId === product.id ? 'text-[var(--color-error)]' : 'text-[var(--text-muted)] hover:text-[var(--color-error)]'}`}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={removeId === product.id ? 'text-[var(--color-error)]' : 'hover:text-[var(--color-error)]'}
                         onClick={() => handleRemoveProduct(product.id)}
                       >
                         {removeId === product.id ? 'Confirm Remove' : 'Remove'}
-                      </button>
+                      </Button>
                     </div>
                     <span className="font-heading text-lg font-semibold text-[var(--text-primary)]">
                       {product.price

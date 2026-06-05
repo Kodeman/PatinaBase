@@ -6,6 +6,7 @@ import { Permission, Role } from '@/lib/rbac';
 const mockUseSession = jest.fn();
 jest.mock('@patina/supabase', () => ({
   useSession: (...args: unknown[]) => mockUseSession(...args),
+  useProfile: () => ({ data: null }),
   createBrowserClient: jest.fn(() => ({
     auth: {
       signOut: jest.fn().mockResolvedValue({}),

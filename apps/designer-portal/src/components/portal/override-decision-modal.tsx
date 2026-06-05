@@ -1,12 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { X } from 'lucide-react';
 import { useApplyDecisionOverride } from '@patina/supabase';
 import type {
   ClientDecision,
   ClientDecisionOption,
   ConsentMethod,
 } from '@patina/supabase';
+import { Button, IconButton, Textarea, Select } from '@/components/ui/controls';
 
 interface OverrideDecisionModalProps {
   decision: ClientDecision;
@@ -73,14 +75,9 @@ export function OverrideDecisionModal({
           <h3 className="type-section-head" style={{ fontSize: '1.2rem' }}>
             Override on client&apos;s behalf
           </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-[1.1rem] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            aria-label="Close"
-          >
-            ×
-          </button>
+          <IconButton variant="ghost" size="sm" label="Close" onClick={onClose}>
+            <X className="h-4 w-4" aria-hidden="true" />
+          </IconButton>
         </div>
 
         <p
@@ -179,18 +176,16 @@ export function OverrideDecisionModal({
           >
             Consent method
           </label>
-          <select
+          <Select
             value={consentMethod}
             onChange={(e) => setConsentMethod(e.target.value as ConsentMethod)}
-            className="w-full rounded-[3px] border bg-white px-2 py-1.5 font-body text-[0.82rem] outline-none"
-            style={{ borderColor: 'var(--border-default)' }}
           >
             {CONSENT_METHODS.map((m) => (
               <option key={m.value} value={m.value}>
                 {m.label}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         <div className="mb-4">
@@ -206,13 +201,11 @@ export function OverrideDecisionModal({
           >
             Consent evidence
           </label>
-          <textarea
+          <Textarea
             value={consentEvidence}
             onChange={(e) => setConsentEvidence(e.target.value)}
             rows={3}
             placeholder="Client confirmed via SMS at 2:14pm Apr 27"
-            className="w-full rounded-[3px] border bg-white px-2 py-1.5 font-body text-[0.82rem] outline-none"
-            style={{ borderColor: 'var(--border-default)' }}
           />
           <p className="mt-1 text-[0.7rem] text-[var(--text-muted)]">
             Required. Minimum 10 characters{' '}
@@ -232,25 +225,12 @@ export function OverrideDecisionModal({
         )}
 
         <div className="mt-5 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
-            style={{ borderColor: 'var(--border-default)' }}
-          >
+          <Button variant="secondary" size="sm" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!canSubmit}
-            className="rounded-[3px] px-3 py-1.5 text-[0.8rem] text-[var(--bg-primary)]"
-            style={{
-              background: canSubmit ? 'var(--text-primary)' : 'var(--text-muted)',
-            }}
-          >
+          </Button>
+          <Button variant="primary" size="sm" onClick={submit} disabled={!canSubmit}>
             {apply.isPending ? 'Applying…' : 'Apply override'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

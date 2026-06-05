@@ -15,6 +15,7 @@ import {
 import { useViewerStore } from '@/stores/viewer-store';
 import type { NavigationMode, ActiveTool } from '@patina/types';
 import { clsx } from 'clsx';
+import { IconButton } from '@/components/ui/controls';
 
 const navigationModes: { mode: NavigationMode; icon: typeof Orbit; label: string; shortcut: string }[] = [
   { mode: 'orbit', icon: Orbit, label: 'Orbit', shortcut: '1' },
@@ -81,23 +82,25 @@ export function ViewerToolbar() {
         <>
           <div className="w-px h-6 bg-white/10" />
           <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
-            <button
+            <IconButton
+              label="Previous Wall"
+              size="sm"
               onClick={handlePrevWall}
-              className="p-1.5 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-              title="Previous Wall"
+              className="text-white/60 hover:text-white hover:bg-white/10"
             >
               <ChevronLeft className="w-4 h-4" />
-            </button>
+            </IconButton>
             <span className="px-2 text-sm font-medium text-white min-w-[60px] text-center">
               {wallLabels[selectedWallIndex ?? 0]}
             </span>
-            <button
+            <IconButton
+              label="Next Wall"
+              size="sm"
               onClick={handleNextWall}
-              className="p-1.5 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-              title="Next Wall"
+              className="text-white/60 hover:text-white hover:bg-white/10"
             >
               <ChevronRight className="w-4 h-4" />
-            </button>
+            </IconButton>
           </div>
         </>
       )}
@@ -130,30 +133,32 @@ export function ViewerToolbar() {
 
       {/* View options */}
       <div className="flex items-center gap-1">
-        <button
+        <IconButton
+          label="Toggle Grid (G)"
+          size="sm"
           onClick={toggleGrid}
           className={clsx(
-            'p-2 rounded-md transition-colors',
+            'rounded-md transition-colors',
             showGrid
               ? 'bg-white/10 text-white'
               : 'text-white/40 hover:text-white/60'
           )}
-          title="Toggle Grid (G)"
         >
           <Grid3X3 className="w-4 h-4" />
-        </button>
-        <button
+        </IconButton>
+        <IconButton
+          label="Toggle Dimensions"
+          size="sm"
           onClick={toggleDimensions}
           className={clsx(
-            'p-2 rounded-md transition-colors',
+            'rounded-md transition-colors',
             showDimensions
               ? 'bg-white/10 text-white'
               : 'text-white/40 hover:text-white/60'
           )}
-          title="Toggle Dimensions"
         >
           <Maximize className="w-4 h-4" />
-        </button>
+        </IconButton>
       </div>
     </div>
   );

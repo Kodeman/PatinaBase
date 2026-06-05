@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { proposalEvents } from '@/lib/analytics';
 import {
   useProposalPhases,
@@ -278,17 +278,17 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
         <div className="mb-4 flex items-center justify-between">
           <span className="type-meta">Project Phases</span>
           <div className="flex gap-2">
-            <PortalButton variant="ghost" onClick={() => setTemplatePickerOpen(true)}>
+            <Button variant="ghost" onClick={() => setTemplatePickerOpen(true)}>
               Apply Template
-            </PortalButton>
+            </Button>
             {phases.length === 0 && (
-              <PortalButton variant="secondary" onClick={handleAddDefaults}>
+              <Button variant="secondary" onClick={handleAddDefaults}>
                 Add Defaults
-              </PortalButton>
+              </Button>
             )}
-            <PortalButton variant="secondary" onClick={handleAddPhase}>
+            <Button variant="secondary" onClick={handleAddPhase}>
               + Add Phase
-            </PortalButton>
+            </Button>
           </div>
         </div>
 
@@ -376,9 +376,10 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
 
                 {/* Revision stepper */}
                 <div className="flex items-center justify-center gap-1.5">
-                  <button
-                    type="button"
-                    className="flex h-5 w-5 items-center justify-center rounded-[3px] border border-[var(--border-default)] text-[0.65rem] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-5 w-5 !px-0 !py-0"
                     onClick={() =>
                       setField(
                         id,
@@ -388,25 +389,27 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
                     }
                   >
                     -
-                  </button>
+                  </Button>
                   <span className="w-4 text-center font-mono text-[0.82rem] text-[var(--text-primary)]">
                     {(local.revision_limit as number) ?? 0}
                   </span>
-                  <button
-                    type="button"
-                    className="flex h-5 w-5 items-center justify-center rounded-[3px] border border-[var(--border-default)] text-[0.65rem] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-5 w-5 !px-0 !py-0"
                     onClick={() =>
                       setField(id, 'revision_limit', ((local.revision_limit as number) ?? 0) + 1)
                     }
                   >
                     +
-                  </button>
+                  </Button>
                 </div>
 
                 {/* Remove */}
-                <button
-                  type="button"
-                  className="flex h-6 w-6 items-center justify-center rounded-[3px] text-[0.7rem] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 !px-0 !py-0"
                   onClick={() =>
                     removePhase.mutate(
                       { phaseId: id, proposalId },
@@ -417,11 +420,10 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
                       }
                     )
                   }
-                  title="Remove phase"
                   aria-label="Remove phase"
                 >
                   x
-                </button>
+                </Button>
               </div>
 
               {/* Disclosure: deliverables + gates */}

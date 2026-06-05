@@ -7,6 +7,7 @@ import {
   useAssignStyle,
   useProduct,
 } from '@patina/supabase';
+import { IconButton } from '@/components/ui/controls';
 
 interface StyleArchetype {
   id: string;
@@ -94,14 +95,15 @@ export function QuickTeachModal({ productId, isOpen, onClose, onComplete }: Quic
       {/* Modal */}
       <div className="relative bg-white rounded-xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden">
         {/* Close button */}
-        <button
+        <IconButton
+          label="Close"
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 p-2 text-patina-mocha-brown hover:text-patina-charcoal transition-colors"
+          className="absolute top-4 right-4 z-10"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
-        </button>
+        </IconButton>
 
         {isLoading ? (
           <div className="p-8 text-center">

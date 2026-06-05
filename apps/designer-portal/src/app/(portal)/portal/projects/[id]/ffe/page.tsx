@@ -65,6 +65,7 @@ import {
   SurfaceKeys,
   useHelpContent,
 } from '@patina/help-system';
+import { Button, IconButton } from '@/components/ui/controls';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyItem = any;
@@ -625,21 +626,15 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
                 </button>
                 <span className="type-meta-small text-[var(--text-muted)]">{group.items.length}</span>
                 {isRealProject && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() =>
                       addControlsRef.current?.openProduct(group.id === '__unassigned' ? null : group.id)
                     }
-                    className="cursor-pointer text-[var(--text-muted)] transition-colors hover:text-[var(--accent-primary)]"
-                    style={{
-                      fontFamily: 'var(--font-meta)',
-                      fontSize: '0.58rem',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.06em',
-                    }}
                   >
                     + Add
-                  </button>
+                  </Button>
                 )}
               </div>
 
@@ -745,19 +740,9 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
 // BulkActionButton component stays untouched.
 function ComingSoonButton({ children }: { children: ReactNode }) {
   return (
-    <button
-      type="button"
-      disabled
-      title="Coming soon"
-      className="cursor-not-allowed rounded-[3px] border px-3 py-1.5 text-[0.8rem] opacity-50"
-      style={{
-        borderColor: 'var(--border-default)',
-        color: 'var(--text-primary)',
-        fontFamily: 'var(--font-body)',
-      }}
-    >
+    <Button variant="secondary" size="sm" disabled title="Coming soon">
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -789,14 +774,9 @@ function ItemDrawer({
       style={{ borderColor: 'var(--border-default)' }}>
       <div className="flex items-center justify-between border-b p-4" style={{ borderColor: 'var(--border-default)' }}>
         <span className="type-meta-small uppercase tracking-wider">Item Detail</span>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-[1rem] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-          aria-label="Close"
-        >
+        <IconButton label="Close" onClick={onClose}>
           ×
-        </button>
+        </IconButton>
       </div>
 
       <div className="p-5">
@@ -883,8 +863,9 @@ function ItemDrawer({
         </div>
 
         <div className="mt-5 flex flex-wrap gap-2">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => item.vendor_id && !isOrderBlocked && onGeneratePO?.()}
             disabled={!item.vendor_id || isOrderBlocked}
             title={
@@ -894,21 +875,19 @@ function ItemDrawer({
                   ? 'Create a purchase order for this item'
                   : 'Assign a vendor first'
             }
-            className={`rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem] ${item.vendor_id && !isOrderBlocked ? '' : 'cursor-not-allowed opacity-50'}`}
-            style={{ borderColor: 'var(--border-default)' }}
           >
             {isOrderBlocked ? 'Blocked — decision pending' : 'Generate PO'}
-          </button>
+          </Button>
           {onRemove && (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => void onRemove()}
-              className="ml-auto rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem] transition-colors hover:border-[var(--color-terracotta,#D4A090)] hover:text-[var(--color-terracotta,#D4A090)]"
-              style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
+              className="ml-auto"
               title="Remove this item from the project"
             >
               Remove item
-            </button>
+            </Button>
           )}
         </div>
 

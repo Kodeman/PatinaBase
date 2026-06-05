@@ -3,6 +3,7 @@
 import { Plus, Trash2 } from 'lucide-react';
 import type { ProductGridProps, ProductGridProduct } from '@patina/types';
 import { FormField, TextInput } from './FormField';
+import { Button, IconButton } from '@/components/ui/controls';
 
 interface Props {
   props: ProductGridProps;
@@ -41,12 +42,14 @@ export function ProductGridPropsForm({ props, onChange }: Props) {
         <div key={idx} className="border border-patina-clay-beige/20 rounded-lg p-3 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-patina-charcoal">Product {idx + 1}</span>
-            <button
+            <IconButton
+              label="Remove product"
+              size="sm"
               onClick={() => removeProduct(idx)}
-              className="p-1 text-patina-clay-beige hover:text-red-500"
+              className="hover:text-red-500"
             >
               <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            </IconButton>
           </div>
           <FormField label="Name">
             <TextInput value={product.product_name} onChange={(v) => updateProduct(idx, { product_name: v })} />
@@ -64,13 +67,15 @@ export function ProductGridPropsForm({ props, onChange }: Props) {
           </div>
         </div>
       ))}
-      <button
+      <Button
+        variant="secondary"
+        size="sm"
         onClick={addProduct}
-        className="w-full flex items-center justify-center gap-1.5 py-2 border border-dashed border-patina-clay-beige/40 rounded-lg text-xs text-patina-clay-beige hover:border-patina-mocha-brown hover:text-patina-mocha-brown transition-colors"
+        className="w-full border-dashed"
       >
         <Plus className="w-3.5 h-3.5" />
         Add Product
-      </button>
+      </Button>
     </div>
   );
 }

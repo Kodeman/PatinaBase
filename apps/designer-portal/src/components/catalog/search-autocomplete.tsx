@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Search as SearchIcon, Clock, TrendingUp, X } from 'lucide-react';
-import { Input } from '@patina/design-system';
 import { Badge } from '@patina/design-system';
+import { Button, IconButton, Input } from '@/components/ui/controls';
 import { useAutocomplete } from '@/hooks/use-search';
 import { debounce } from '@/lib/utils';
 
@@ -162,13 +162,13 @@ export function SearchAutocomplete({
         />
         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
           {value && (
-            <button
+            <IconButton
               onClick={clearSearch}
-              className="p-1 hover:bg-muted rounded-md transition-colors"
-              aria-label="Clear search"
+              className="h-auto w-auto p-1"
+              label="Clear search"
             >
               <X className="h-4 w-4 text-muted-foreground" />
-            </button>
+            </IconButton>
           )}
           {isLoading && (
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted border-t-primary" />
@@ -188,12 +188,14 @@ export function SearchAutocomplete({
                     <Clock className="h-3 w-3" />
                     Recent Searches
                   </div>
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={clearSearchHistory}
-                    className="text-xs text-muted-foreground hover:text-foreground"
+                    className="px-2 py-1 text-xs"
                   >
                     Clear
-                  </button>
+                  </Button>
                 </div>
                 {searchHistory.map((query) => (
                   <button

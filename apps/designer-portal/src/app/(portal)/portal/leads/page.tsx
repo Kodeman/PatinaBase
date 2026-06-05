@@ -7,7 +7,7 @@ import { LeadListItem } from '@/components/portal/lead-list-item';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { AddLeadDialog } from '@/components/portal/add-lead-dialog';
 import { ListPageHeader } from '@/components/portal/list-page-header';
-import { PortalButton } from '@/components/portal/button';
+import { Button, FilterPill } from '@/components/ui/controls';
 import {
   formatBudgetRange,
   formatProjectType,
@@ -54,9 +54,9 @@ function LeadInboxContent() {
       <ListPageHeader
         title="Leads"
         actions={
-          <PortalButton variant="secondary" onClick={() => setAddDialogOpen(true)}>
+          <Button variant="secondary" onClick={() => setAddDialogOpen(true)}>
             + Add Lead
-          </PortalButton>
+          </Button>
         }
       />
 
@@ -65,18 +65,14 @@ function LeadInboxContent() {
       {/* Filter Row */}
       <div className="mb-6 flex gap-4">
         {filters.map((f) => (
-          <button
+          <FilterPill
             key={f.key}
+            active={filter === f.key}
+            count={f.count}
             onClick={() => setFilter(f.key)}
-            className={`type-meta cursor-pointer border-0 bg-transparent ${
-              filter === f.key
-                ? 'text-[var(--text-primary)] underline underline-offset-4'
-                : 'text-[var(--text-muted)] no-underline hover:text-[var(--text-primary)]'
-            }`}
           >
             {f.label}
-            {f.count !== undefined && ` (${f.count})`}
-          </button>
+          </FilterPill>
         ))}
       </div>
 

@@ -8,9 +8,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@patina/design-system';
-import { Button } from '@patina/design-system';
 import { Badge } from '@patina/design-system';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@patina/design-system';
+import { Button, IconButton } from '@/components/ui/controls';
 import {
   Heart,
   Share2,
@@ -161,23 +161,22 @@ export function ProductDetailModal({
                 </div>
                 <div className="flex gap-2">
                   {product.sourceUrl && (
-                    <Button variant="ghost" size="icon" asChild>
+                    <IconButton variant="ghost" label="View original product page" asChild>
                       <a
                         href={product.sourceUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        aria-label="View original product page"
                       >
                         <ExternalLink className="h-5 w-5" />
                       </a>
-                    </Button>
+                    </IconButton>
                   )}
-                  <Button variant="ghost" size="icon">
+                  <IconButton variant="ghost" label="Add to favorites">
                     <Heart className="h-5 w-5" />
-                  </Button>
-                  <Button variant="ghost" size="icon">
+                  </IconButton>
+                  <IconButton variant="ghost" label="Share">
                     <Share2 className="h-5 w-5" />
-                  </Button>
+                  </IconButton>
                 </div>
               </div>
 
@@ -246,27 +245,27 @@ export function ProductDetailModal({
             <div className="mb-6">
               <p className="text-sm font-medium mb-3">Quantity</p>
               <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  size="icon"
+                <IconButton
+                  variant="secondary"
+                  label="Decrease quantity"
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
                 >
                   <Minus className="h-4 w-4" />
-                </Button>
+                </IconButton>
                 <span className="w-16 text-center font-semibold text-lg">{quantity}</span>
-                <Button variant="outline" size="icon" onClick={() => setQuantity(quantity + 1)}>
+                <IconButton variant="secondary" label="Increase quantity" onClick={() => setQuantity(quantity + 1)}>
                   <Plus className="h-4 w-4" />
-                </Button>
+                </IconButton>
               </div>
             </div>
 
             {/* Actions */}
             <div className="grid gap-3 mb-6">
-              <Button size="lg" onClick={handleAddToProposal}>
+              <Button size="md" onClick={handleAddToProposal}>
                 <ShoppingBag className="h-5 w-5 mr-2" />
                 Add to Proposal
               </Button>
-              <Button variant="outline" size="lg">
+              <Button variant="secondary" size="md">
                 <Heart className="h-5 w-5 mr-2" />
                 Add to Favorites
               </Button>

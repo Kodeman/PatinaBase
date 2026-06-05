@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { PortalButton } from '@/components/portal/button';
+import { Button, Textarea } from '@/components/ui/controls';
 import {
   useProposalChangeOrderTerms,
   useUpsertChangeOrderTerms,
@@ -89,13 +89,13 @@ export function ChangeOrderTermsEditor({ proposalId }: ChangeOrderTermsEditorPro
       <div className="mb-6 flex items-center justify-between">
         <span className="type-meta">Change Order Terms</span>
         {!terms && initialized && (
-          <PortalButton
+          <Button
             variant="primary"
             onClick={() => save(local)}
             disabled={upsert.isPending}
           >
             Save Terms
-          </PortalButton>
+          </Button>
         )}
       </div>
 
@@ -106,11 +106,10 @@ export function ChangeOrderTermsEditor({ proposalId }: ChangeOrderTermsEditorPro
         >
           Process Description
         </label>
-        <textarea
+        <Textarea
           value={local.processDescription}
           onChange={(e) => update({ processDescription: e.target.value })}
           rows={5}
-          className="w-full resize-y rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2.5 font-body text-[0.88rem] leading-relaxed text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]/40 focus:border-[var(--accent-primary)]"
           placeholder="Describe the process for handling work outside the agreed scope..."
         />
         <span className="mt-1 block font-body text-[0.68rem] text-[var(--text-muted)]">

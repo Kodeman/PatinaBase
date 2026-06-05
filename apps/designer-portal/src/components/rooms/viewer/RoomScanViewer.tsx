@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { X, Maximize2, Minimize2, Check, Loader2 } from 'lucide-react';
 import { useViewerStore } from '@/stores/viewer-store';
+import { IconButton } from '@/components/ui/controls';
 import { ViewerCanvas } from './ViewerCanvas';
 import { ViewerToolbar } from './ViewerToolbar';
 import { MeasurementPanel } from './tools/MeasurementPanel';
@@ -168,13 +169,14 @@ export function RoomScanViewer({
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
         <div className="flex items-center gap-3">
           {onClose && (
-            <button
+            <IconButton
+              label="Close viewer"
+              size="sm"
               onClick={onClose}
-              className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
-              aria-label="Close viewer"
+              className="hover:bg-white/10 text-white"
             >
               <X className="w-5 h-5" />
-            </button>
+            </IconButton>
           )}
           <div>
             <h2 className="font-medium">{scan.name}</h2>
@@ -201,17 +203,18 @@ export function RoomScanViewer({
           )}
 
           {onToggleFullscreen && (
-            <button
+            <IconButton
+              label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+              size="sm"
               onClick={onToggleFullscreen}
-              className="p-2 rounded-md hover:bg-white/10 transition-colors"
-              aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+              className="hover:bg-white/10 text-white"
             >
               {isFullscreen ? (
                 <Minimize2 className="w-5 h-5" />
               ) : (
                 <Maximize2 className="w-5 h-5" />
               )}
-            </button>
+            </IconButton>
           )}
         </div>
       </div>

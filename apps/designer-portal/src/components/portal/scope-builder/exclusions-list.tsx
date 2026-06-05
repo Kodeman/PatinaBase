@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { proposalEvents } from '@/lib/analytics';
 import {
   useProposalExclusions,
@@ -100,12 +100,12 @@ export function ExclusionsList({ proposalId }: ExclusionsListProps) {
       <div className="mb-4 flex items-center justify-between">
         <span className="type-meta">Exclusions</span>
         <div className="flex gap-2">
-          <PortalButton variant="ghost" onClick={handleAddCommon}>
+          <Button variant="ghost" onClick={handleAddCommon}>
             Add Common
-          </PortalButton>
-          <PortalButton variant="secondary" onClick={() => setIsAdding(true)}>
+          </Button>
+          <Button variant="secondary" onClick={() => setIsAdding(true)}>
             + Add
-          </PortalButton>
+          </Button>
         </div>
       </div>
 
@@ -135,8 +135,10 @@ export function ExclusionsList({ proposalId }: ExclusionsListProps) {
           </span>
 
           {/* Remove */}
-          <button
-            className="shrink-0 rounded-[3px] px-1.5 py-0.5 text-[0.7rem] text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] group-hover:opacity-100"
+          <Button
+            variant="ghost"
+            size="sm"
+            className="shrink-0 !px-1.5 !py-0.5 opacity-0 transition-opacity group-hover:opacity-100"
             onClick={() =>
               removeExclusion.mutate(
                 { exclusionId: excl.id, proposalId },
@@ -147,10 +149,9 @@ export function ExclusionsList({ proposalId }: ExclusionsListProps) {
                 }
               )
             }
-            title="Remove"
           >
             x
-          </button>
+          </Button>
         </div>
       ))}
 
@@ -182,24 +183,24 @@ export function ExclusionsList({ proposalId }: ExclusionsListProps) {
           />
 
           <div className="flex gap-1.5">
-            <PortalButton
+            <Button
               variant="primary"
+              size="sm"
               onClick={handleAdd}
               disabled={!newText.trim() || addExclusion.isPending}
-              className="!px-3 !py-1"
             >
               Add
-            </PortalButton>
-            <PortalButton
+            </Button>
+            <Button
               variant="ghost"
+              size="sm"
               onClick={() => {
                 setIsAdding(false);
                 setNewText('');
               }}
-              className="!px-2 !py-1"
             >
               Cancel
-            </PortalButton>
+            </Button>
           </div>
         </div>
       )}

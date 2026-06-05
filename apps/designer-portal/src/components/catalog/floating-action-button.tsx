@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { SlidersHorizontal, X } from 'lucide-react';
-import { Button, Badge } from '@patina/design-system';
+import { Button, StatusBadge } from '@/components/ui/controls';
 
 export interface FloatingActionButtonProps {
   onClick: () => void;
@@ -63,7 +63,7 @@ export function FloatingActionButton({
       whileTap="tap"
     >
       <Button
-        size="lg"
+        size="md"
         className="h-14 px-6 rounded-full shadow-lg"
         onClick={onClick}
         aria-label={`${isOpen ? 'Close' : 'Open'} ${label.toLowerCase()}`}
@@ -87,9 +87,7 @@ export function FloatingActionButton({
             exit="exit"
             className="ml-2"
           >
-            <Badge variant="solid" className="bg-white text-primary">
-              {activeFilters}
-            </Badge>
+            <StatusBadge tone="accent">{activeFilters}</StatusBadge>
           </motion.div>
         )}
       </Button>

@@ -44,6 +44,7 @@ import {
 } from '@patina/design-system';
 import { useToast } from '@/components/portal/toast-provider';
 import { procurementEvents } from '@/lib/analytics/procurement-events';
+import { Button } from '@/components/ui/controls';
 
 // ─── Hooks ──────────────────────────────────────────────────────────────────
 //
@@ -480,23 +481,23 @@ export function QboExportModal({ open, onOpenChange }: QboExportModalProps) {
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => onOpenChange(false)}
             disabled={exportMutation.isPending}
-            className="rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-[var(--text-primary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             Cancel
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
             onClick={handleSubmit}
             disabled={submitDisabled}
-            className="rounded-[3px] px-4 py-2 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ backgroundColor: 'var(--color-clay)' }}
+            loading={exportMutation.isPending}
           >
-            {exportMutation.isPending ? 'Generating…' : 'Download CSV'}
-          </button>
+            Download CSV
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

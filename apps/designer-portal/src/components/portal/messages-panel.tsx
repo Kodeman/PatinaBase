@@ -16,6 +16,7 @@ import {
   type CommsMessage,
 } from '@patina/supabase';
 import { useMessagesPanel } from '@/contexts/messages-panel-context';
+import { IconButton, Input } from '@/components/ui/controls';
 import { MessageBubble } from './message-bubble';
 
 function getInitials(name: string): string {
@@ -113,12 +114,9 @@ function ThreadListView({
         <h2 className="font-heading text-sm font-medium text-[var(--text-primary)]">
           Messages
         </h2>
-        <button
-          onClick={onClose}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--hover-bg,rgba(196,165,123,0.06))] hover:text-[var(--text-primary)]"
-        >
+        <IconButton variant="ghost" size="sm" label="Close" onClick={onClose}>
           <X className="h-4 w-4" />
-        </button>
+        </IconButton>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -226,21 +224,15 @@ function ConversationView({
   return (
     <>
       <div className="flex h-[52px] items-center gap-2 border-b border-[var(--border-default)] px-4">
-        <button
-          onClick={onBack}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--hover-bg,rgba(196,165,123,0.06))] hover:text-[var(--text-primary)]"
-        >
+        <IconButton variant="ghost" size="sm" label="Back" onClick={onBack}>
           <ArrowLeft className="h-4 w-4" />
-        </button>
+        </IconButton>
         <h2 className="flex-1 truncate font-heading text-sm font-medium text-[var(--text-primary)]">
           {title}
         </h2>
-        <button
-          onClick={onClose}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--hover-bg,rgba(196,165,123,0.06))] hover:text-[var(--text-primary)]"
-        >
+        <IconButton variant="ghost" size="sm" label="Close" onClick={onClose}>
           <X className="h-4 w-4" />
-        </button>
+        </IconButton>
       </div>
 
       <div className="flex flex-1 flex-col-reverse gap-2 overflow-y-auto p-4">
@@ -270,21 +262,24 @@ function ConversationView({
 
       <div className="border-t border-[var(--border-default)] p-3">
         <div className="flex items-center gap-2">
-          <input
+          <Input
             type="text"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
             placeholder="Type a message..."
-            className="flex-1 rounded-md border border-[var(--border-default)] bg-transparent px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-primary)] focus:outline-none"
+            className="flex-1"
           />
-          <button
+          <IconButton
+            variant="ghost"
+            size="md"
+            label="Send message"
             onClick={handleSend}
             disabled={!draft.trim() || sendMessage.isPending}
-            className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--accent-primary)] text-white transition-opacity disabled:opacity-40"
+            className="bg-[var(--accent-primary)] text-white hover:bg-[var(--accent-primary)] hover:text-white"
           >
             <Send className="h-4 w-4" />
-          </button>
+          </IconButton>
         </div>
       </div>
     </>

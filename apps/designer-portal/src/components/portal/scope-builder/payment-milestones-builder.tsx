@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { proposalEvents } from '@/lib/analytics';
 import {
   useProposalPaymentMilestones,
@@ -151,9 +151,9 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
             </span>
           )}
         </div>
-        <PortalButton variant="secondary" onClick={handleAdd}>
+        <Button variant="secondary" onClick={handleAdd}>
           + Add Milestone
-        </PortalButton>
+        </Button>
       </div>
 
       {/* Percentage bar */}
@@ -272,8 +272,10 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
               />
 
               {/* Remove */}
-              <button
-                className="flex h-6 w-6 items-center justify-center rounded-[3px] text-[0.7rem] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 !px-0 !py-0"
                 onClick={() =>
                   removeMilestone.mutate(
                     { milestoneId: m.id, proposalId },
@@ -284,10 +286,10 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
                     }
                   )
                 }
-                title="Remove milestone"
+                aria-label="Remove milestone"
               >
                 x
-              </button>
+              </Button>
             </div>
           );
         }

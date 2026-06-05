@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useDecisionsByProject, useSendDecisionReminder } from '@patina/supabase';
+import { Button } from '@/components/ui/controls';
 import { DecisionComposerModal } from './decision-composer-modal';
 import { deadlineVariant } from '@/lib/decision-deadline';
 
@@ -34,14 +35,14 @@ export function DecisionsPanel({ projectId, designerClientId }: DecisionsPanelPr
         <h3 className="type-section-head" style={{ fontSize: '1.15rem' }}>
           Decisions
         </h3>
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={() => setComposerOpen(true)}
-          className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
-          style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)' }}
         >
           + New decision
-        </button>
+        </Button>
       </div>
 
       {isLoading ? (
@@ -90,15 +91,16 @@ export function DecisionsPanel({ projectId, designerClientId }: DecisionsPanelPr
                           {d.blocking_status === 'blocks_phase' && ' · blocks phase'}
                         </span>
                         <span className="ml-auto flex gap-2">
-                          <button
+                          <Button
                             type="button"
+                            variant="ghost"
+                            size="sm"
                             onClick={() =>
                               sendReminder.mutate({ decisionId: d.id })
                             }
-                            className="text-[0.7rem] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                           >
                             Send reminder
-                          </button>
+                          </Button>
                         </span>
                       </div>
                     </div>

@@ -12,7 +12,7 @@ import { getProposalStatusDisplay } from '@/lib/proposal-status';
 import { RevisionFeedback } from '@/components/portal/revision-feedback';
 import { VersionTag } from '@/components/portal/version-tag';
 import { PageActionBar } from '@/components/portal';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { proposalEvents } from '@/lib/analytics';
@@ -171,15 +171,15 @@ export default function ReviseProposalPage({
 
       {/* Actions */}
       <div className="flex gap-2">
-        <PortalButton
+        <Button
           variant="primary"
           onClick={handleOpenEditor}
           disabled={createRevision.isPending}
         >
           {createRevision.isPending ? 'Creating...' : 'Open Editor \u2192'}
-        </PortalButton>
+        </Button>
         {versions && versions.length > 0 && (
-          <PortalButton
+          <Button
             variant="secondary"
             onClick={() => {
               // View the most recent sent version
@@ -188,11 +188,11 @@ export default function ReviseProposalPage({
             }}
           >
             View v{currentVersion}.0
-          </PortalButton>
+          </Button>
         )}
-        <PortalButton variant="ghost" onClick={handleCancelRevision}>
+        <Button variant="ghost" onClick={handleCancelRevision}>
           Cancel Revision
-        </PortalButton>
+        </Button>
       </div>
     </div>
   );

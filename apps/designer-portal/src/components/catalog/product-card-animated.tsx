@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { Heart, Plus, Eye, Share2, TrendingUp, Tag, Clock } from 'lucide-react';
-import { Button, Card, CardContent, Badge } from '@patina/design-system';
+import { Card, CardContent, Badge } from '@patina/design-system';
+import { Button, IconButton } from '@/components/ui/controls';
 import { formatCurrency } from '@/lib/utils';
 import { useSwipeGesture } from '@/hooks/use-swipe-gesture';
 import type { Product } from '@patina/types';
@@ -180,20 +181,20 @@ export function ProductCardAnimated({
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.95 }}
                 >
-                  <Button
-                    size="icon"
+                  <IconButton
                     variant="secondary"
-                    className={`h-9 w-9 rounded-full shadow-md ${
+                    size="md"
+                    label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                    className={`rounded-full bg-[var(--bg-surface)] shadow-md ${
                       isFavorite ? 'bg-red-500 text-white hover:bg-red-600' : ''
                     }`}
                     onClick={(e) => {
                       e.stopPropagation();
                       onToggleFavorite?.(product);
                     }}
-                    aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                   >
                     <Heart className={`h-4 w-4 ${isFavorite ? 'fill-current' : ''}`} />
-                  </Button>
+                  </IconButton>
                 </motion.div>
 
                 {isComparing && (
@@ -238,18 +239,18 @@ export function ProductCardAnimated({
                     </Button>
                   </motion.div>
                   <motion.div custom={1} variants={actionButtonVariants}>
-                    <Button
-                      size="icon"
+                    <IconButton
                       variant="secondary"
+                      size="md"
                       className="backdrop-blur-sm bg-white/90 hover:bg-white"
                       onClick={(e) => {
                         e.stopPropagation();
                         onToggleCompare?.(product);
                       }}
-                      aria-label={isComparing ? 'Remove from comparison' : 'Add to comparison'}
+                      label={isComparing ? 'Remove from comparison' : 'Add to comparison'}
                     >
                       <Share2 className="h-3 w-3" />
-                    </Button>
+                    </IconButton>
                   </motion.div>
                 </motion.div>
               )}
@@ -363,7 +364,7 @@ export function ProductCardAnimated({
               </div>
             </div>
           </CardContent>
-        ) : (
+        ) /* list view */ : (
           // List View (Horizontal on mobile)
           <CardContent className="p-4">
             <div className="flex gap-4">
@@ -438,9 +439,9 @@ export function ProductCardAnimated({
                   </div>
                 )}
                 <div className="flex gap-2">
-                  <Button
-                    size="icon"
-                    variant="outline"
+                  <IconButton
+                    variant="secondary"
+                    size="md"
                     className={`min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 ${
                       isFavorite ? 'bg-red-500 text-white hover:bg-red-600' : ''
                     }`}
@@ -448,10 +449,10 @@ export function ProductCardAnimated({
                       e.stopPropagation();
                       onToggleFavorite?.(product);
                     }}
-                    aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                    label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                   >
                     <Heart className={`h-4 w-4 ${isFavorite ? 'fill-current' : ''}`} />
-                  </Button>
+                  </IconButton>
                   <Button
                     size="sm"
                     onClick={(e) => {

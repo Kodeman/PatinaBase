@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { Input, Label, Textarea, Select, Badge } from '@patina/design-system';
+import { Label, Select, Badge } from '@patina/design-system';
+import { Input, Textarea } from '@/components/ui/controls';
 import type { Product, ProductCategory, ProductStatus } from '@patina/types';
 
 interface DetailsTabProps {

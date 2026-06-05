@@ -4,7 +4,7 @@ import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProposal, useSendProposal, useUpdateProposal } from '@/hooks/use-proposals';
 import { PageActionBar } from '@/components/portal';
-import { PortalButton } from '@/components/portal/button';
+import { Button, Input } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { ClientPicker } from '@/components/portal/client-picker';
@@ -189,21 +189,21 @@ export default function SendProposalPage({
               Link a client above to set the recipient.
             </p>
           )}
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-0.5 self-start"
             onClick={() => setShowAltAddress((s) => !s)}
-            className="type-meta-small mt-0.5 self-start cursor-pointer border-0 bg-transparent text-[var(--accent-primary)] underline-offset-2 hover:underline"
           >
             {showAltAddress ? 'Hide alternate address' : 'Send to a different address'}
-          </button>
+          </Button>
           {showAltAddress && (
-            <input
+            <Input
               type="email"
               value={recipientEmail}
               onChange={(e) => setRecipientEmail(e.target.value)}
               placeholder="client@email.com"
-              className="mt-1 rounded border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.85rem] outline-none focus:border-[var(--accent-primary)]"
-              style={{ fontFamily: 'var(--font-body)' }}
+              className="mt-1"
             />
           )}
         </div>
@@ -305,20 +305,20 @@ export default function SendProposalPage({
 
       {/* Actions */}
       <div className="mt-8 flex gap-2 border-t border-[var(--border-subtle)] pt-6">
-        <PortalButton
+        <Button
           variant="primary"
           onClick={handleSend}
           disabled={!proposal.client_id || !recipientEmail || sendProposal.isPending}
           className="!bg-[var(--accent-primary)]"
         >
           {sendProposal.isPending ? 'Sending...' : 'Send Proposal \u2192'}
-        </PortalButton>
-        <PortalButton variant="secondary" onClick={() => router.push(`/portal/proposals/${id}`)}>
+        </Button>
+        <Button variant="secondary" onClick={() => router.push(`/portal/proposals/${id}`)}>
           Save &amp; Send Later
-        </PortalButton>
-        <PortalButton variant="ghost" onClick={() => router.push(`/portal/proposals/${id}`)}>
+        </Button>
+        <Button variant="ghost" onClick={() => router.push(`/portal/proposals/${id}`)}>
           Back to Editor
-        </PortalButton>
+        </Button>
       </div>
     </div>
   );

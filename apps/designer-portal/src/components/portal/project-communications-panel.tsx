@@ -19,6 +19,7 @@ import {
   type CommsMessage,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
+import { Button, Input } from '@/components/ui/controls';
 
 interface Props {
   projectId: string;
@@ -137,7 +138,7 @@ export function ProjectCommunicationsPanel({ projectId, className }: Props) {
 
       {threadId && (
         <div className="mt-4 flex gap-2">
-          <input
+          <Input
             type="text"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -148,17 +149,17 @@ export function ProjectCommunicationsPanel({ projectId, className }: Props) {
               }
             }}
             placeholder="Reply…"
-            className="flex-1 rounded border border-[var(--border-subtle)] bg-transparent px-3 py-2 text-sm focus:border-patina-clay focus:outline-none"
+            className="flex-1"
             disabled={sendMessage.isPending}
           />
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => void handleSend()}
             disabled={sendMessage.isPending || !draft.trim()}
-            className="rounded bg-patina-clay px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
             Send
-          </button>
+          </Button>
         </div>
       )}
     </section>

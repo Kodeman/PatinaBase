@@ -8,7 +8,7 @@ import { StrataMark } from '@/components/portal/strata-mark';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { PageActionBar } from '@/components/portal/page-action-bar';
 import { useHydrated } from '@/hooks/use-hydrated';
-import { Button } from '@/components/ui/controls';
+import { Button, IconButton, Input, Textarea } from '@/components/ui/controls';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -231,14 +231,9 @@ function QuoteRequestModal({
           <h3 className="type-section-head" style={{ fontSize: '1.2rem' }}>
             Request a quote from {vendorName}
           </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-[1.1rem] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            aria-label="Close"
-          >
+          <IconButton label="Close" onClick={onClose}>
             ×
-          </button>
+          </IconButton>
         </div>
 
         {sent ? (
@@ -247,46 +242,37 @@ function QuoteRequestModal({
               Your quote request has been sent to {vendorName}.
             </p>
             <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-[3px] px-3 py-1.5 text-[0.8rem] text-[var(--bg-primary)]"
-                style={{ background: 'var(--text-primary)' }}
-              >
+              <Button size="sm" onClick={onClose}>
                 Done
-              </button>
+              </Button>
             </div>
           </>
         ) : (
           <>
             <FieldLabel>Scope</FieldLabel>
-            <input
+            <Input
               type="text"
               value={scope}
               onChange={(e) => setScope(e.target.value)}
               placeholder="e.g. 12 dining chairs, custom upholstery"
-              className="mb-4 w-full rounded-[3px] border bg-white px-2 py-1.5 font-body text-[0.82rem] outline-none"
-              style={{ borderColor: 'var(--border-default)' }}
+              className="mb-4"
             />
 
             <FieldLabel>Timeline</FieldLabel>
-            <input
+            <Input
               type="text"
               value={timeline}
               onChange={(e) => setTimeline(e.target.value)}
               placeholder="e.g. Delivery by mid-August"
-              className="mb-4 w-full rounded-[3px] border bg-white px-2 py-1.5 font-body text-[0.82rem] outline-none"
-              style={{ borderColor: 'var(--border-default)' }}
+              className="mb-4"
             />
 
             <FieldLabel>Message</FieldLabel>
-            <textarea
+            <Textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               rows={5}
               placeholder="Describe what you need a quote for…"
-              className="w-full rounded-[3px] border bg-white px-2 py-1.5 font-body text-[0.82rem] outline-none"
-              style={{ borderColor: 'var(--border-default)' }}
             />
             <p className="mt-1 text-[0.7rem] text-[var(--text-muted)]">Minimum 10 characters</p>
 
@@ -300,23 +286,17 @@ function QuoteRequestModal({
             )}
 
             <div className="mt-5 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
-                style={{ borderColor: 'var(--border-default)' }}
-              >
+              <Button variant="ghost" size="sm" onClick={onClose}>
                 Cancel
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                size="sm"
                 onClick={submit}
                 disabled={!canSend}
-                className="rounded-[3px] px-3 py-1.5 text-[0.8rem] text-[var(--bg-primary)]"
-                style={{ background: canSend ? 'var(--text-primary)' : 'var(--text-muted)' }}
+                loading={sending}
               >
                 {sending ? 'Sending…' : 'Send Request'}
-              </button>
+              </Button>
             </div>
           </>
         )}

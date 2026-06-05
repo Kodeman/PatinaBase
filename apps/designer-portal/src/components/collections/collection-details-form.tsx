@@ -1,6 +1,7 @@
 'use client';
 
-import { Label, Input, Textarea, Badge } from '@patina/design-system';
+import { Label, Badge } from '@patina/design-system';
+import { Input, Textarea, Select } from '@/components/ui/controls';
 import type { Collection, CollectionType } from '@patina/types';
 import { Package, Zap, Sparkles } from 'lucide-react';
 
@@ -144,18 +145,17 @@ export function CollectionDetailsForm({ collection, onChange, errors }: Collecti
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="status">Status</Label>
-            <select
+            <Select
               id="status"
               value={collection.status || 'draft'}
               onChange={(e) => onChange({ status: e.target.value as any })}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               {statuses.map((status) => (
                 <option key={status.value} value={status.value}>
                   {status.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="space-y-2">

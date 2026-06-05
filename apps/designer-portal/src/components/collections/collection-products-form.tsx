@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { Search, X, Plus, GripVertical } from 'lucide-react';
-import { Input, Button, Card, CardContent, Badge } from '@patina/design-system';
+import { Card, CardContent, Badge } from '@patina/design-system';
+import { Button, IconButton, Input } from '@/components/ui/controls';
 import type { Collection, Product, CollectionItem } from '@patina/types';
 import { formatCurrency } from '@/lib/utils';
 
@@ -219,14 +220,13 @@ export function CollectionProductsForm({
                       <p className="text-xs text-muted-foreground">Position: {index + 1}</p>
                     </div>
 
-                    <Button
-                      size="icon"
+                    <IconButton
                       variant="ghost"
                       onClick={() => handleRemoveProduct(product.id)}
-                      title="Remove from collection"
+                      label="Remove from collection"
                     >
                       <X className="h-4 w-4" />
-                    </Button>
+                    </IconButton>
                   </div>
                 );
               })}

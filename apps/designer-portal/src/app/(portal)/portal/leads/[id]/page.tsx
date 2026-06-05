@@ -8,7 +8,7 @@ import { ScoreCircle } from '@/components/portal/score-circle';
 import { FieldGroup } from '@/components/portal/field-group';
 import { DetailRow } from '@/components/portal/detail-row';
 import { StyleTag } from '@/components/portal/style-tag';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { PageActionBar } from '@/components/portal/page-action-bar';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
@@ -214,27 +214,27 @@ export default function LeadBriefPage({
         )}
 
         <div className="flex flex-wrap gap-4">
-          <PortalButton
+          <Button
             variant="primary"
             onClick={handleAccept}
             disabled={acceptLead.isPending}
           >
             {acceptLead.isPending ? 'Accepting…' : 'Accept & Introduce Yourself'}
-          </PortalButton>
-          <PortalButton
+          </Button>
+          <Button
             variant="secondary"
             onClick={handleRequestContext}
             disabled={updateStatus.isPending}
           >
             {updateStatus.isPending ? 'Requesting...' : 'Request More Context'}
-          </PortalButton>
-          <PortalButton
+          </Button>
+          <Button
             variant="ghost"
             onClick={handleDecline}
             disabled={declineLead.isPending}
           >
             Pass on This Lead
-          </PortalButton>
+          </Button>
         </div>
       </div>
     </div>

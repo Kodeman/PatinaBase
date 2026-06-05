@@ -8,6 +8,7 @@ import {
 import { StrataMark } from '@/components/portal/strata-mark';
 import { MetricBlock } from '@/components/portal/metric-block';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { FilterPill } from '@/components/ui/controls';
 import { useHydrated } from '@/hooks/use-hydrated';
 
 type Period = 'month' | 'quarter' | 'year' | 'all';
@@ -71,17 +72,13 @@ export default function EarningsPage() {
         <h1 className="type-section-head">Earnings</h1>
         <div className="flex gap-4">
           {periods.map((p) => (
-            <button
+            <FilterPill
               key={p.key}
+              active={period === p.key}
               onClick={() => setPeriod(p.key)}
-              className={`type-meta cursor-pointer border-0 bg-transparent ${
-                period === p.key
-                  ? 'text-[var(--text-primary)] underline underline-offset-4'
-                  : 'text-[var(--text-muted)] no-underline hover:text-[var(--text-primary)]'
-              }`}
             >
               {p.label}
-            </button>
+            </FilterPill>
           ))}
         </div>
       </div>

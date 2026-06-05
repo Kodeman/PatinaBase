@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { Plus, X, AlertCircle } from 'lucide-react';
-import { Button, Card, CardContent, Badge, Alert, AlertDescription } from '@patina/design-system';
+import { Card, CardContent, Badge, Alert, AlertDescription } from '@patina/design-system';
+import { Button, IconButton, Input, Select, FilterPill } from '@/components/ui/controls';
 import type { Collection, CollectionRule, RuleCondition } from '@patina/types';
 
 interface CollectionRulesFormProps {
@@ -122,22 +123,18 @@ export function CollectionRulesForm({ collection, onChange }: CollectionRulesFor
       <div className="space-y-2">
         <label className="text-sm font-medium">Products must match</label>
         <div className="flex gap-2">
-          <Button
-            type="button"
-            variant={rule.operator === 'AND' ? 'default' : 'outline'}
-            size="sm"
+          <FilterPill
+            active={rule.operator === 'AND'}
             onClick={() => handleOperatorChange('AND')}
           >
             All conditions (AND)
-          </Button>
-          <Button
-            type="button"
-            variant={rule.operator === 'OR' ? 'default' : 'outline'}
-            size="sm"
+          </FilterPill>
+          <FilterPill
+            active={rule.operator === 'OR'}
             onClick={() => handleOperatorChange('OR')}
           >
             Any condition (OR)
-          </Button>
+          </FilterPill>
         </div>
       </div>
 
@@ -174,74 +171,71 @@ export function CollectionRulesForm({ collection, onChange }: CollectionRulesFor
                 <div key={index} className="flex items-start gap-2 p-3 rounded-lg border group">
                   <div className="flex-1 grid grid-cols-3 gap-2">
                     {/* Field */}
-                    <select
+                    <Select
                       value={condition.field}
                       onChange={(e) => handleUpdateCondition(index, { field: e.target.value })}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
                       {FIELD_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
                           {option.label}
                         </option>
                       ))}
-                    </select>
+                    </Select>
 
                     {/* Operator */}
-                    <select
+                    <Select
                       value={condition.operator}
                       onChange={(e) => handleUpdateCondition(index, { operator: e.target.value as any })}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
                       {operators.map((op) => (
                         <option key={op.value} value={op.value}>
                           {op.label}
                         </option>
                       ))}
-                    </select>
+                    </Select>
 
                     {/* Value */}
                     {fieldOption?.type === 'boolean' ? (
-                      <select
+                      <Select
                         value={condition.value === true ? 'true' : 'false'}
                         onChange={(e) => handleUpdateCondition(index, { value: e.target.value === 'true' })}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
                         <option value="true">Yes</option>
                         <option value="false">No</option>
-                      </select>
+                      </Select>
                     ) : fieldOption?.type === 'number' ? (
-                      <input
+                      <Input
                         type="number"
                         value={condition.value || ''}
                         onChange={(e) => handleUpdateCondition(index, { value: parseFloat(e.target.value) })}
                         placeholder="Enter value..."
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className="h-10"
                       />
                     ) : (
-                      <input
+                      <Input
                         type="text"
                         value={condition.value || ''}
                         onChange={(e) => handleUpdateCondition(index, { value: e.target.value })}
                         placeholder="Enter value..."
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className="h-10"
                       />
                     )}
                   </div>
 
-                  <Button
+                  <IconButton
                     type="button"
-                    size="icon"
                     variant="ghost"
+                    label="Remove condition"
                     onClick={() => handleRemoveCondition(index)}
                     className="opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <X className="h-4 w-4" />
-                  </Button>
+                  </IconButton>
                 </div>
               );
             })}
 
-            <Button type="button" variant="outline" onClick={handleAddCondition} className="w-full">
+            <Button type="button" variant="secondary" onClick={handleAddCondition} className="w-full">
               <Plus className="mr-2 h-4 w-4" />
               Add Condition
             </Button>

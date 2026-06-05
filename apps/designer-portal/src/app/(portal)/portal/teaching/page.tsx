@@ -8,7 +8,6 @@ import {
   MetricBlock,
   LoadingStrata,
   ProductListItem,
-  PortalButton,
 } from '@/components/portal';
 import { ProgressBar } from '@/components/portal/progress-bar';
 import { useHydrated } from '@/hooks/use-hydrated';

@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCollections, useDeleteCollection } from '@/hooks/use-collections';
 import { LoadingStrata } from '@/components/portal/loading-strata';
-import { PortalButton } from '@/components/portal/button';
+import { ListPageHeader } from '@/components/portal/list-page-header';
+import { Button } from '@/components/ui/controls';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyCollection = any;
@@ -34,31 +35,33 @@ export default function CollectionsPage() {
 
   return (
     <div className="pt-8">
-      <div className="mb-6 flex items-baseline justify-between">
-        <h1 className="type-section-head">Catalog</h1>
-        <PortalButton
-          variant="primary"
-          onClick={() => router.push('/portal/catalog/collections/new')}
-        >
-          New Collection
-        </PortalButton>
-      </div>
-
-      <div className="mb-6 flex gap-4">
-        {sectionLinks.map((link) => (
-          <Link
-            key={link.key}
-            href={link.href}
-            className={`type-meta no-underline ${
-              link.key === 'collections'
-                ? 'text-[var(--text-primary)] underline underline-offset-4'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-            }`}
+      <ListPageHeader
+        title="Catalog"
+        actions={
+          <Button
+            variant="primary"
+            onClick={() => router.push('/portal/catalog/collections/new')}
           >
-            {link.label}
-          </Link>
-        ))}
-      </div>
+            New Collection
+          </Button>
+        }
+      >
+        <div className="mt-6 flex gap-4">
+          {sectionLinks.map((link) => (
+            <Link
+              key={link.key}
+              href={link.href}
+              className={`type-meta no-underline ${
+                link.key === 'collections'
+                  ? 'text-[var(--text-primary)] underline underline-offset-4'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              {link.label}
+            </Link>
+          ))}
+        </div>
+      </ListPageHeader>
 
       {isLoading ? (
         <LoadingStrata />
@@ -74,15 +77,17 @@ export default function CollectionsPage() {
                 <span className="type-label">{collection.name || collection.title}</span>
                 <div className="flex items-center gap-4">
                   <div className="hidden items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100 md:flex">
-                    <button
-                      className={`type-btn-text ${deleteId === collection.id ? 'text-[var(--color-error)]' : 'text-[var(--text-muted)] hover:text-[var(--color-error)]'}`}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={deleteId === collection.id ? 'text-[var(--color-error)]' : 'hover:text-[var(--color-error)]'}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDelete(collection.id);
                       }}
                     >
                       {deleteId === collection.id ? 'Confirm Delete' : 'Delete'}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>

@@ -4,6 +4,7 @@ import { MessageSquare, Trash2, AlertCircle, HelpCircle, Lightbulb, StickyNote }
 import { useViewerStore } from '@/stores/viewer-store';
 import type { AnnotationCategory } from '@patina/types';
 import { clsx } from 'clsx';
+import { IconButton } from '@/components/ui/controls';
 
 const categoryConfig: Record<AnnotationCategory, { icon: typeof StickyNote; color: string; label: string }> = {
   note: { icon: StickyNote, color: 'text-blue-400', label: 'Note' },
@@ -67,15 +68,17 @@ export function AnnotationsList() {
                     )}
                   </div>
                 </div>
-                <button
+                <IconButton
+                  label="Delete annotation"
+                  size="sm"
                   onClick={(e) => {
                     e.stopPropagation();
                     deleteAnnotation(annotation.id);
                   }}
-                  className="p-1 text-white/30 hover:text-red-400 transition-colors"
+                  className="text-white/30 hover:text-red-400"
                 >
                   <Trash2 className="w-4 h-4" />
-                </button>
+                </IconButton>
               </div>
             </div>
           );

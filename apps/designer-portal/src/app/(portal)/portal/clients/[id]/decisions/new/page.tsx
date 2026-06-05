@@ -12,7 +12,7 @@ import {
   type DecisionOptionValue,
 } from '@/components/portal/decision-option-builder';
 import { LoadingStrata } from '@/components/portal/loading-strata';
-import { PortalButton } from '@/components/portal/button';
+import { Button, FilterPill } from '@/components/ui/controls';
 import { useHydrated } from '@/hooks/use-hydrated';
 
 const decisionTypes: { key: DecisionType; label: string; icon: string }[] = [
@@ -164,22 +164,13 @@ export default function NewDecisionPage({
           <FieldLabel>Decision Type</FieldLabel>
           <div className="flex flex-wrap gap-2">
             {decisionTypes.map((dt) => (
-              <button
+              <FilterPill
                 key={dt.key}
-                type="button"
+                active={decisionType === dt.key}
                 onClick={() => setDecisionType(dt.key)}
-                className={`cursor-pointer rounded-sm border px-3 py-1.5 transition-colors ${
-                  decisionType === dt.key
-                    ? 'border-[var(--accent-primary)] bg-[rgba(196,165,123,0.08)] text-[var(--text-primary)]'
-                    : 'border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-muted)] hover:border-[var(--accent-primary)]'
-                }`}
-                style={{
-                  fontFamily: 'var(--font-body)',
-                  fontSize: '0.78rem',
-                }}
               >
                 {dt.icon} {dt.label}
-              </button>
+              </FilterPill>
             ))}
           </div>
         </div>
@@ -214,9 +205,9 @@ export default function NewDecisionPage({
       </div>
 
       <div className="mb-6 max-w-[580px]">
-        <PortalButton variant="secondary" onClick={() => setOptions([...options, emptyOption()])}>
+        <Button variant="secondary" onClick={() => setOptions([...options, emptyOption()])}>
           + Add Another Option
-        </PortalButton>
+        </Button>
       </div>
 
       <StrataMark />
@@ -261,22 +252,13 @@ export default function NewDecisionPage({
           <FieldLabel>Blocking Status</FieldLabel>
           <div className="flex flex-wrap gap-2">
             {blockingOptions.map((bo) => (
-              <button
+              <FilterPill
                 key={bo.key}
-                type="button"
+                active={blockingStatus === bo.key}
                 onClick={() => setBlockingStatus(bo.key)}
-                className={`cursor-pointer rounded-sm border px-3 py-1.5 transition-colors ${
-                  blockingStatus === bo.key
-                    ? 'border-[var(--accent-primary)] bg-[rgba(196,165,123,0.08)] text-[var(--text-primary)]'
-                    : 'border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-muted)] hover:border-[var(--accent-primary)]'
-                }`}
-                style={{
-                  fontFamily: 'var(--font-body)',
-                  fontSize: '0.78rem',
-                }}
               >
                 {bo.label}
-              </button>
+              </FilterPill>
             ))}
           </div>
         </div>
@@ -328,19 +310,19 @@ export default function NewDecisionPage({
         className="mt-8 flex gap-2 pt-6"
         style={{ borderTop: '1px solid var(--border-subtle)' }}
       >
-        <PortalButton
+        <Button
           variant="primary"
           onClick={() => handleSubmit('pending')}
           disabled={!title.trim() || createDecision.isPending}
         >
           {createDecision.isPending ? 'Sending...' : 'Send Decision to Client'}
-        </PortalButton>
-        <PortalButton variant="secondary" onClick={() => handleSubmit('draft')}>
+        </Button>
+        <Button variant="secondary" onClick={() => handleSubmit('draft')}>
           Save as Draft
-        </PortalButton>
-        <PortalButton variant="ghost" onClick={() => router.back()}>
+        </Button>
+        <Button variant="ghost" onClick={() => router.back()}>
           Cancel
-        </PortalButton>
+        </Button>
       </div>
     </div>
   );

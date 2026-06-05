@@ -15,12 +15,12 @@ import {
   Alert,
   AlertDescription,
   Badge,
-  Button,
   Card,
   CardContent,
   Skeleton,
   toast,
 } from '@patina/design-system';
+import { Button, IconButton } from '@/components/ui/controls';
 import {
   useDuplicateCheck,
   useDismissDuplicate,
@@ -137,7 +137,7 @@ function DuplicateCard({
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 onClick={onMark}
                 disabled={isActioning}
                 className="text-xs"
@@ -147,7 +147,7 @@ function DuplicateCard({
               </Button>
               <Button
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 onClick={onMerge}
                 disabled={isActioning}
                 className="text-xs"
@@ -274,7 +274,7 @@ export function DuplicateDetectionPanel({
   if (!isExpanded) {
     return (
       <Button
-        variant="outline"
+        variant="secondary"
         onClick={() => setIsExpanded(true)}
         className="w-full justify-start"
       >
@@ -297,9 +297,10 @@ export function DuplicateDetectionPanel({
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Button
+          <IconButton
             size="sm"
             variant="ghost"
+            label="Refresh duplicate check"
             onClick={() => refetch()}
             disabled={isLoading}
           >
@@ -308,14 +309,15 @@ export function DuplicateDetectionPanel({
             ) : (
               <Search className="h-4 w-4" />
             )}
-          </Button>
-          <Button
+          </IconButton>
+          <IconButton
             size="sm"
             variant="ghost"
+            label="Close duplicate detection"
             onClick={() => setIsExpanded(false)}
           >
             <X className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </div>
       </div>
 

@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DndContext, useDroppable, type DragEndEvent } from '@dnd-kit/core';
-import { PortalButton } from '@/components/portal/button';
+import { Button, IconButton, Input, Select, Textarea } from '@/components/ui/controls';
 import { proposalEvents } from '@/lib/analytics';
 import {
   useProposalScopeRooms,
@@ -170,24 +170,22 @@ function ItemEditForm({
         <>
           <label className="block">
             <span className="type-meta mb-1 block">Name *</span>
-            <input
+            <Input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Item name"
-              className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
             />
           </label>
           <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
             <label className="block">
               <span className="type-meta mb-1 block">Qty</span>
-              <input
+              <Input
                 type="number"
                 min="1"
                 step="1"
                 value={qty}
                 onChange={(e) => setQty(e.target.value)}
-                className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
               />
             </label>
             <label className="block">
@@ -199,13 +197,13 @@ function ItemEditForm({
                 >
                   $
                 </span>
-                <input
+                <Input
                   type="number"
                   min="0"
                   value={priceDollars}
                   onChange={(e) => setPriceDollars(e.target.value)}
                   placeholder="0"
-                  className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent py-2 pl-7 pr-3 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
+                  className="pl-7"
                 />
               </div>
             </label>
@@ -219,10 +217,9 @@ function ItemEditForm({
           <span className="type-meta mb-1 block">
             Category{item.item_type === 'fixed' ? '' : ' *'}
           </span>
-          <select
+          <Select
             value={ffeCategory}
             onChange={(e) => setFfeCategory(e.target.value)}
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
           >
             <option value="">{item.item_type === 'fixed' ? 'None' : 'Select…'}</option>
             {categories.map((c) => (
@@ -230,15 +227,14 @@ function ItemEditForm({
                 {c.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
 
         <label className="block">
           <span className="type-meta mb-1 block">Room</span>
-          <select
+          <Select
             value={scopeRoomId}
             onChange={(e) => setScopeRoomId(e.target.value)}
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
           >
             <option value="">Unassigned</option>
             {rooms.map((r) => (
@@ -246,7 +242,7 @@ function ItemEditForm({
                 {r.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
 
@@ -262,13 +258,13 @@ function ItemEditForm({
               >
                 $
               </span>
-              <input
+              <Input
                 type="number"
                 min="0"
                 value={minDollars}
                 onChange={(e) => setMinDollars(e.target.value)}
                 placeholder="0"
-                className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent py-2 pl-7 pr-3 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
+                className="pl-7"
               />
             </div>
           </label>
@@ -281,13 +277,13 @@ function ItemEditForm({
               >
                 $
               </span>
-              <input
+              <Input
                 type="number"
                 min="0"
                 value={maxDollars}
                 onChange={(e) => setMaxDollars(e.target.value)}
                 placeholder="0"
-                className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent py-2 pl-7 pr-3 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
+                className="pl-7"
               />
             </div>
           </label>
@@ -296,25 +292,25 @@ function ItemEditForm({
 
       <label className="block">
         <span className="type-meta mb-1 block">Notes (optional)</span>
-        <textarea
+        <Textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
-          className="w-full resize-none rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.82rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
+          className="resize-none"
         />
       </label>
 
       <div className="flex items-center gap-2">
-        <PortalButton
+        <Button
           variant="primary"
           onClick={handleSave}
           disabled={!canSave || isSaving}
         >
           {isSaving ? 'Saving…' : 'Save'}
-        </PortalButton>
-        <PortalButton variant="ghost" onClick={onDone} disabled={isSaving}>
+        </Button>
+        <Button variant="ghost" onClick={onDone} disabled={isSaving}>
           Cancel
-        </PortalButton>
+        </Button>
       </div>
     </div>
   );
@@ -390,28 +386,28 @@ function ItemRow({
       itemType={item.item_type}
       actions={
         <>
-          <button
+          <IconButton
+            label="Edit item"
+            variant="ghost"
+            size="sm"
             onClick={onStartEdit}
-            className="cursor-pointer p-0.5 text-[var(--text-muted)] transition-colors hover:text-[var(--accent-primary)]"
-            title="Edit"
-            aria-label="Edit item"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M12 20h9" />
               <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
             </svg>
-          </button>
-          <button
+          </IconButton>
+          <IconButton
+            label="Remove item"
+            variant="ghost"
+            size="sm"
             onClick={handleRemove}
             disabled={removeItem.isPending}
-            className="cursor-pointer p-0.5 text-[var(--text-muted)] transition-colors hover:text-[var(--color-terracotta)]"
-            title="Remove"
-            aria-label="Remove item"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
-          </button>
+          </IconButton>
         </>
       }
     />
@@ -520,14 +516,14 @@ function CategoryPromptModal({
           <h3 id="capture-drop-title" className="type-section-head" style={{ fontSize: '1.05rem' }}>
             Add capture to {roomName}
           </h3>
-          <button
-            type="button"
+          <IconButton
+            label="Cancel"
+            variant="ghost"
+            size="sm"
             onClick={onCancel}
-            className="text-[1.1rem] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            aria-label="Cancel"
           >
             ×
-          </button>
+          </IconButton>
         </div>
         <p
           className="mb-3"
@@ -545,10 +541,9 @@ function CategoryPromptModal({
         <div className="grid gap-3" style={{ gridTemplateColumns: '2fr 1fr' }}>
           <label className="block">
             <span className="type-meta mb-1 block">Category *</span>
-            <select
+            <Select
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
             >
               <option value="">Select…</option>
               {categories.map((c) => (
@@ -556,17 +551,16 @@ function CategoryPromptModal({
                   {c.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="block">
             <span className="type-meta mb-1 block">Qty</span>
-            <input
+            <Input
               type="number"
               min="1"
               step="1"
               value={qty}
               onChange={(e) => setQty(e.target.value)}
-              className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
             />
           </label>
         </div>
@@ -581,16 +575,16 @@ function CategoryPromptModal({
         )}
 
         <div className="mt-4 flex items-center gap-2">
-          <PortalButton
+          <Button
             variant="primary"
             onClick={() => onConfirm(slug, parsedQty)}
             disabled={!slug || isSaving}
           >
             {isSaving ? 'Adding…' : 'Add to schedule'}
-          </PortalButton>
-          <PortalButton variant="ghost" onClick={onCancel} disabled={isSaving}>
+          </Button>
+          <Button variant="ghost" onClick={onCancel} disabled={isSaving}>
             Cancel
-          </PortalButton>
+          </Button>
         </div>
       </div>
     </div>
@@ -833,19 +827,13 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
                 >
                   {group.roomName}
                 </div>
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => addControlsRef.current?.openProduct(groupRoomId)}
-                  className="cursor-pointer text-[var(--text-muted)] transition-colors hover:text-[var(--accent-primary)]"
-                  style={{
-                    fontFamily: 'var(--font-meta)',
-                    fontSize: '0.58rem',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                  }}
                 >
                   + Add Item
-                </button>
+                </Button>
               </div>
 
               <div
@@ -895,19 +883,13 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
                 >
                   {room.name}
                 </div>
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => addControlsRef.current?.openProduct(room.id)}
-                  className="cursor-pointer text-[var(--text-muted)] transition-colors hover:text-[var(--accent-primary)]"
-                  style={{
-                    fontFamily: 'var(--font-meta)',
-                    fontSize: '0.58rem',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                  }}
                 >
                   + Add Item
-                </button>
+                </Button>
               </div>
               <div
                 style={{

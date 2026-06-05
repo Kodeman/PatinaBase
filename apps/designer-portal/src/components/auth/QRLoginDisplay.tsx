@@ -3,6 +3,7 @@
 import { QRCodeSVG } from 'qrcode.react';
 import { Smartphone, RefreshCw, CheckCircle2, QrCode } from 'lucide-react';
 import { useQRAuth } from '@/hooks/use-qr-auth';
+import { Button } from '@/components/ui/controls';
 
 interface QRLoginDisplayProps {
   redirectTo: string;
@@ -56,13 +57,15 @@ export function QRLoginDisplay({ redirectTo, baseUrl = '' }: QRLoginDisplayProps
             </p>
           </div>
         </div>
-        <button
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={regenerate}
-          className="mt-4 flex items-center gap-2 px-4 py-2 text-sm font-medium text-foreground border border-border rounded-lg hover:bg-muted/50 transition-colors"
+          className="mt-4"
         >
           <RefreshCw className="w-4 h-4" />
           Generate new code
-        </button>
+        </Button>
       </div>
     );
   }
@@ -79,13 +82,15 @@ export function QRLoginDisplay({ redirectTo, baseUrl = '' }: QRLoginDisplayProps
             </p>
           </div>
         </div>
-        <button
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={regenerate}
-          className="mt-4 flex items-center gap-2 px-4 py-2 text-sm font-medium text-foreground border border-border rounded-lg hover:bg-muted/50 transition-colors"
+          className="mt-4"
         >
           <RefreshCw className="w-4 h-4" />
           Try again
-        </button>
+        </Button>
       </div>
     );
   }

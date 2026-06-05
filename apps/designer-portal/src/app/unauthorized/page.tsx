@@ -2,6 +2,7 @@
 
 import { createBrowserClient } from '@patina/supabase';
 import { useState } from 'react';
+import { Button } from '@/components/ui/controls';
 
 export default function UnauthorizedPage() {
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -34,13 +35,14 @@ export default function UnauthorizedPage() {
           </a>
           . If you believe this is an error, contact your administrator.
         </p>
-        <button
+        <Button
           onClick={handleSignInWithDifferentAccount}
           disabled={isSigningOut}
-          className="mt-8 inline-block rounded-md bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+          loading={isSigningOut}
+          className="mt-8"
         >
           {isSigningOut ? 'Signing out...' : 'Sign in with a different account'}
-        </button>
+        </Button>
       </div>
     </div>
   );

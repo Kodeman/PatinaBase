@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { Box } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { RoomScan } from '@patina/supabase';
+import { Button, IconButton } from '@/components/ui/controls';
 
 // Dynamically import the viewer to avoid SSR issues with Three.js
 const RoomScanViewer = dynamic(
@@ -90,23 +91,24 @@ export function RoomScanDetail({
         </div>
         <div className="flex items-center gap-2">
           {hasModel && (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setShowViewer(true)}
-              className="flex items-center gap-2 px-3 py-2 bg-patina-clay-beige text-white rounded-lg text-sm font-inter hover:bg-patina-mocha-brown transition-colors"
             >
               <Box className="w-4 h-4" />
               View 3D
-            </button>
+            </Button>
           )}
           {onClose && (
-            <button
+            <IconButton
+              label="Close"
               onClick={onClose}
-              className="p-2 hover:bg-patina-off-white rounded-lg transition-colors"
             >
               <svg className="w-5 h-5 text-patina-mocha-brown/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
-            </button>
+            </IconButton>
           )}
         </div>
       </div>
@@ -146,18 +148,20 @@ export function RoomScanDetail({
       <div className="px-6 border-b border-patina-clay-beige/10">
         <div className="flex gap-6">
           {(['overview', 'features', 'style'] as const).map((tab) => (
-            <button
+            <Button
               key={tab}
+              variant="ghost"
+              size="sm"
               onClick={() => setActiveTab(tab)}
               className={cn(
-                'py-3 text-sm font-inter capitalize border-b-2 transition-colors',
+                'py-3 capitalize border-b-2 rounded-none px-0',
                 activeTab === tab
                   ? 'border-patina-clay-beige text-patina-charcoal'
                   : 'border-transparent text-patina-mocha-brown/60 hover:text-patina-mocha-brown'
               )}
             >
               {tab}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -179,12 +183,13 @@ export function RoomScanDetail({
       <div className="px-6 py-4 border-t border-patina-clay-beige/10 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {!scan.project_id && onAssociateWithProject && (
-            <button
+            <Button
+              variant="primary"
+              size="sm"
               onClick={() => onAssociateWithProject(scan.id)}
-              className="px-4 py-2 bg-patina-clay-beige text-white rounded-lg text-sm font-inter hover:bg-patina-mocha-brown transition-colors"
             >
               Add to Project
-            </button>
+            </Button>
           )}
           {scan.project && (
             <span className="text-sm text-patina-mocha-brown/60 font-inter">
@@ -193,13 +198,15 @@ export function RoomScanDetail({
           )}
         </div>
         {onDelete && (
-          <button
+          <Button
+            variant="danger"
+            size="sm"
             onClick={handleDelete}
             disabled={isDeleting}
-            className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm font-inter transition-colors disabled:opacity-50"
+            loading={isDeleting}
           >
-            {isDeleting ? 'Deleting...' : 'Delete Scan'}
-          </button>
+            Delete Scan
+          </Button>
         )}
       </div>
     </div>

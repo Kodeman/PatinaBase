@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence, useReducedMotion, type Variants } from 'framer-motion';
 import { ArrowUp } from 'lucide-react';
-import { Button } from '@patina/design-system';
+import { IconButton } from '@/components/ui/controls';
 
 export interface BackToTopProps {
   threshold?: number;
@@ -88,14 +88,14 @@ export function BackToTop({ threshold = 400, smooth = true }: BackToTopProps) {
           whileHover="hover"
           whileTap="tap"
         >
-          <Button
-            size="icon"
-            className="h-12 w-12 rounded-full shadow-lg"
+          <IconButton
+            variant="secondary"
+            label="Scroll to top"
+            className="h-12 w-12 rounded-full bg-[var(--bg-surface)] shadow-lg"
             onClick={scrollToTop}
-            aria-label="Scroll to top"
           >
             <ArrowUp className="h-5 w-5" />
-          </Button>
+          </IconButton>
         </motion.div>
       )}
     </AnimatePresence>

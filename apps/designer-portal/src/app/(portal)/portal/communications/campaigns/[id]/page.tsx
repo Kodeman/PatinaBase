@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useCampaign, useDeleteCampaign, useSendCampaign } from '@patina/supabase';
 import { FieldGroup } from '@/components/portal/field-group';
 import { DetailRow } from '@/components/portal/detail-row';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 
@@ -28,9 +28,10 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="pt-8">
-      <div className="type-meta mb-6">
-        <Link href="/portal/communications/campaigns" className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]">Campaigns</Link>
-        <span className="mx-2">&rarr;</span><span>{campaign.name || 'Campaign'}</span>
+      <div className="mb-4">
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/portal/communications/campaigns">← Campaigns</Link>
+        </Button>
       </div>
       <h1 className="type-page-title mb-4">{campaign.name || campaign.subject}</h1>
 
@@ -45,10 +46,10 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
 
       {campaign.status === 'draft' && (
         <div className="mt-6 flex gap-4">
-          <PortalButton variant="primary" onClick={() => sendCampaign.mutate(id)} disabled={sendCampaign.isPending}>
+          <Button variant="primary" onClick={() => sendCampaign.mutate(id)} disabled={sendCampaign.isPending}>
             {sendCampaign.isPending ? 'Sending...' : 'Send Campaign'}
-          </PortalButton>
-          <PortalButton variant="ghost" onClick={() => deleteCampaign.mutate(id, { onSuccess: () => router.push('/portal/communications/campaigns') })} disabled={deleteCampaign.isPending}>Delete</PortalButton>
+          </Button>
+          <Button variant="ghost" onClick={() => deleteCampaign.mutate(id, { onSuccess: () => router.push('/portal/communications/campaigns') })} disabled={deleteCampaign.isPending}>Delete</Button>
         </div>
       )}
     </div>

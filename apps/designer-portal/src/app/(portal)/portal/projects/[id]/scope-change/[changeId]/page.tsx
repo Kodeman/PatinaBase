@@ -7,7 +7,7 @@ import { PageActionBar, type BadgeTone } from '@/components/portal';
 import { PageContainer } from '@/components/portal/page-container';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { DetailRow } from '@/components/portal/detail-row';
 
 function formatDollars(cents: number): string {
@@ -136,7 +136,7 @@ export default function ScopeChangeDetailPage({
         {/* Actions */}
         <div className="flex gap-3 border-t border-[var(--border-default)] pt-5">
           {canSend && (
-            <PortalButton
+            <Button
               variant="primary"
               onClick={async () => {
                 await sendRequest.mutateAsync({ requestId: changeId, projectId: id });
@@ -144,10 +144,10 @@ export default function ScopeChangeDetailPage({
               className="!bg-[var(--accent-primary)]"
             >
               Send to Client
-            </PortalButton>
+            </Button>
           )}
           {canApply && (
-            <PortalButton
+            <Button
               variant="primary"
               onClick={async () => {
                 await applyChange.mutateAsync({ requestId: changeId, projectId: id });
@@ -156,11 +156,11 @@ export default function ScopeChangeDetailPage({
               className="!bg-[var(--color-sage)]"
             >
               Apply Changes to Project
-            </PortalButton>
+            </Button>
           )}
-          <PortalButton variant="ghost" onClick={() => router.push(`/portal/projects/${id}`)}>
+          <Button variant="ghost" onClick={() => router.push(`/portal/projects/${id}`)}>
             Back to Project
-          </PortalButton>
+          </Button>
         </div>
       </div>
     </PageContainer>

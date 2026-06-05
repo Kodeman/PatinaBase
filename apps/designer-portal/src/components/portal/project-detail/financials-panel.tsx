@@ -1,5 +1,5 @@
-import type { CSSProperties } from 'react';
 import type { FinancialLineItem, PaymentMilestone, DesignerEarnings } from '@/types/project-ui';
+import { Button } from '@/components/ui/controls';
 
 interface FinancialsPanelProps {
   items: FinancialLineItem[];
@@ -38,20 +38,6 @@ const milestoneStatusLabel: Record<PaymentMilestone['status'], string> = {
   paid: 'Paid',
   outstanding: 'Due · Outstanding',
   pending: 'At walkthrough',
-};
-
-const milestoneActionButtonStyle: CSSProperties = {
-  fontFamily: 'var(--font-meta)',
-  fontSize: '0.5rem',
-  textTransform: 'uppercase',
-  letterSpacing: '0.04em',
-  padding: '0.1rem 0.4rem',
-  borderRadius: '3px',
-  border: '1px solid var(--border-default)',
-  background: 'transparent',
-  color: 'var(--text-primary)',
-  cursor: 'pointer',
-  whiteSpace: 'nowrap',
 };
 
 export function FinancialsPanel({
@@ -229,31 +215,34 @@ export function FinancialsPanel({
                 {editable && onMilestoneStatusChange && (
                   <div className="flex gap-1">
                     {m.status !== 'paid' && (
-                      <button
+                      <Button
                         type="button"
-                        style={milestoneActionButtonStyle}
+                        variant="secondary"
+                        size="sm"
                         onClick={() => onMilestoneStatusChange(m.id, 'paid')}
                       >
                         Mark paid
-                      </button>
+                      </Button>
                     )}
                     {m.status === 'pending' && (
-                      <button
+                      <Button
                         type="button"
-                        style={milestoneActionButtonStyle}
+                        variant="secondary"
+                        size="sm"
                         onClick={() => onMilestoneStatusChange(m.id, 'outstanding')}
                       >
                         Mark due
-                      </button>
+                      </Button>
                     )}
                     {m.status === 'paid' && (
-                      <button
+                      <Button
                         type="button"
-                        style={milestoneActionButtonStyle}
+                        variant="secondary"
+                        size="sm"
                         onClick={() => onMilestoneStatusChange(m.id, 'outstanding')}
                       >
                         Mark unpaid
-                      </button>
+                      </Button>
                     )}
                   </div>
                 )}

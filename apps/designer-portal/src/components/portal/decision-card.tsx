@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { PortalButton } from './button';
+import { Button, StatusBadge } from '@/components/ui/controls';
 import type { DecisionType, BlockingStatus, DecisionStatus } from '@patina/supabase';
 import { deadlineVariant, bandSurface } from '@/lib/decision-deadline';
 
@@ -140,26 +140,12 @@ export function DecisionCard({
             </span>
           )}
 
-          {isResolved && (
-            <span
-              className="rounded-sm px-2 py-0.5"
-              style={{
-                fontFamily: 'var(--font-meta)',
-                fontSize: '0.55rem',
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                color: 'var(--color-sage)',
-                background: 'rgba(168, 181, 160, 0.1)',
-              }}
-            >
-              Resolved
-            </span>
-          )}
+          {isResolved && <StatusBadge tone="success">Resolved</StatusBadge>}
 
           {status === 'pending' && onSendReminder && isOverdue && (
-            <PortalButton variant="primary" onClick={onSendReminder}>
+            <Button variant="primary" onClick={onSendReminder}>
               Send Reminder
-            </PortalButton>
+            </Button>
           )}
         </div>
       </div>
@@ -232,9 +218,9 @@ export function DecisionCard({
 
       {status === 'pending' && onViewOptions && (
         <div className="mt-3 flex gap-2">
-          <PortalButton variant="ghost" onClick={onViewOptions}>
+          <Button variant="ghost" onClick={onViewOptions}>
             View Options
-          </PortalButton>
+          </Button>
         </div>
       )}
     </div>

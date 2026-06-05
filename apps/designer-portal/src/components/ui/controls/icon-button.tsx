@@ -45,7 +45,23 @@ const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
   ) => {
     if (asChild) {
       if (React.isValidElement(children)) {
-        const child = children as React.ReactElement<{ className?: string }>;
+        const child = children as React.ReactElement<{
+          className?: string;
+          onClick?: React.MouseEventHandler<HTMLElement>;
+        }>;
+        // cloneElement (unlike radix Slot) doesn't compose event handlers —
+        // merge onClick explicitly so neither side's handler is dropped.
+        const childOnClick = child.props.onClick;
+        const outerOnClick = props.onClick as
+          | React.MouseEventHandler<HTMLElement>
+          | undefined;
+        const mergedOnClick =
+          outerOnClick && childOnClick
+            ? (e: React.MouseEvent<HTMLElement>) => {
+                outerOnClick(e);
+                childOnClick(e);
+              }
+            : (outerOnClick ?? childOnClick);
         return React.cloneElement(child, {
           // className precedence (deliberate): caller className > child
           // className > variant classes (cn merges left→right, later wins).
@@ -57,6 +73,7 @@ const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
           'aria-label': label,
           title: label,
           ...props,
+          onClick: mergedOnClick,
           // Forward the ref onto the child so callers can reach the element.
           ref,
         } as React.Attributes & {

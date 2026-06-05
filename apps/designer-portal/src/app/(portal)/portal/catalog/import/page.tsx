@@ -2,10 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  UploadZone,
-  PortalButton,
-} from '@/components/portal';
+import { UploadZone } from '@/components/portal';
+import { Button } from '@/components/ui/controls';
 import { ListPageHeader } from '@/components/portal/list-page-header';
 import { SectionIntro, SurfaceKeys } from '@patina/help-system';
 
@@ -342,12 +340,9 @@ export default function BulkImportPage() {
               <span className="type-label">
                 File: {file?.name} · {dataRows.length} row{dataRows.length === 1 ? '' : 's'}
               </span>
-              <button
-                className="cursor-pointer border-0 bg-transparent font-mono text-[0.62rem] uppercase text-[var(--accent-primary)]"
-                onClick={resetToStart}
-              >
+              <Button variant="ghost" size="sm" onClick={resetToStart}>
                 Change File
-              </button>
+              </Button>
             </div>
 
             <p className="type-body-small mb-4 text-[var(--text-muted)]">
@@ -388,16 +383,16 @@ export default function BulkImportPage() {
           </div>
 
           <div className="flex gap-2">
-            <PortalButton
+            <Button
               variant="primary"
               onClick={() => setStep(3)}
               disabled={!hasNameMapping}
             >
               Continue to Preview
-            </PortalButton>
-            <PortalButton variant="ghost" onClick={() => setStep(1)}>
+            </Button>
+            <Button variant="ghost" onClick={() => setStep(1)}>
               Back
-            </PortalButton>
+            </Button>
           </div>
         </div>
       )}
@@ -488,7 +483,7 @@ export default function BulkImportPage() {
           </div>
 
           <div className="flex gap-2">
-            <PortalButton
+            <Button
               variant="primary"
               onClick={handleImport}
               disabled={importing || validCount === 0}
@@ -496,10 +491,10 @@ export default function BulkImportPage() {
               {importing
                 ? 'Importing…'
                 : `Import ${validCount} Product${validCount === 1 ? '' : 's'}`}
-            </PortalButton>
-            <PortalButton variant="ghost" onClick={() => setStep(2)} disabled={importing}>
+            </Button>
+            <Button variant="ghost" onClick={() => setStep(2)} disabled={importing}>
               Back
-            </PortalButton>
+            </Button>
           </div>
         </div>
       )}

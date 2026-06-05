@@ -3,8 +3,7 @@
 import * as React from 'react';
 import { Search, Filter, X, Save, ChevronDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Input } from '@patina/design-system';
-import { Button } from '@patina/design-system';
+import { Button, IconButton, Input } from '@/components/ui/controls';
 import { Badge } from '@patina/design-system';
 import { Slider } from '@patina/design-system';
 import { Switch } from '@patina/design-system';
@@ -243,7 +242,7 @@ export function ProductFilters({
         <Popover open={isFilterOpen} onOpenChange={setIsFilterOpen}>
           <PopoverTrigger asChild>
             <Button
-              variant="outline"
+              variant="secondary"
               className={cn(
                 'transition-all duration-200',
                 activeFilters.length > 0 && 'border-primary'
@@ -266,7 +265,7 @@ export function ProductFilters({
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       className="w-full justify-between transition-all duration-200"
                     >
                       {filters.categoryIds && filters.categoryIds.length > 0
@@ -314,7 +313,7 @@ export function ProductFilters({
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       className="w-full justify-between transition-all duration-200"
                     >
                       {filters.vendorIds && filters.vendorIds.length > 0
@@ -421,7 +420,7 @@ export function ProductFilters({
           <>
             <Popover open={isSavedSearchOpen} onOpenChange={setIsSavedSearchOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" className="transition-all duration-200">
+                <Button variant="secondary" className="transition-all duration-200">
                   <Save className="mr-2 h-4 w-4" />
                   Saved
                 </Button>
@@ -456,14 +455,15 @@ export function ProductFilters({
                             {search.name}
                           </button>
                           {onDeleteSearch && (
-                            <Button
+                            <IconButton
                               size="sm"
                               variant="ghost"
+                              label="Delete saved search"
                               onClick={() => onDeleteSearch(search.id)}
                               className="h-6 w-6 p-0"
                             >
                               <X className="h-3 w-3" />
-                            </Button>
+                            </IconButton>
                           )}
                         </div>
                       ))}
@@ -493,7 +493,7 @@ export function ProductFilters({
                 </div>
                 <DialogFooter>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     onClick={() => setIsSaveDialogOpen(false)}
                   >
                     Cancel
@@ -531,12 +531,13 @@ export function ProductFilters({
               <span className="text-xs">
                 {filter.label}: {filter.displayValue}
               </span>
-              <button
+              <IconButton
+                label={`Remove ${filter.label} filter`}
                 onClick={() => handleRemoveFilter(filter.key)}
-                className="ml-2 rounded-full p-0.5 hover:bg-secondary-foreground/20 transition-colors duration-200"
+                className="ml-2 h-auto w-auto rounded-full p-0.5"
               >
                 <X className="h-3 w-3" />
-              </button>
+              </IconButton>
             </Badge>
           ))}
         </div>

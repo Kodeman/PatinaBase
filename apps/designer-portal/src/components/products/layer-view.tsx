@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search } from 'lucide-react';
+import { Button, Input, FilterPill } from '@/components/ui/controls';
 import { useLayerProducts, type LayerProductRow } from '@patina/supabase';
 import {
   ProductCard,
@@ -85,12 +86,12 @@ export function LayerView({
             className="absolute left-3 h-4 w-4 text-[var(--text-muted)]"
             aria-hidden="true"
           />
-          <input
+          <Input
             type="search"
             placeholder={`Search ${layer === 'personal' ? 'your library' : layer === 'studio' ? 'studio library' : 'catalog'}`}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]"
+            className="h-10 pl-9"
             aria-label="Search library"
           />
         </div>
@@ -168,20 +169,13 @@ function StatusFilterBar({
       {options.map((opt) => {
         const isActive = opt.key === value;
         return (
-          <button
+          <FilterPill
             key={opt.key}
-            type="button"
+            active={isActive}
             onClick={() => onChange(opt.key)}
-            className="rounded-md px-3 py-1.5 text-[0.78rem] transition-colors"
-            style={{
-              background: isActive ? 'var(--accent-primary)' : 'transparent',
-              color: isActive ? 'var(--bg-surface)' : 'var(--text-muted)',
-              border: '1px solid var(--border-default)',
-              borderColor: isActive ? 'var(--accent-primary)' : 'var(--border-default)',
-            }}
           >
             {opt.label}
-          </button>
+          </FilterPill>
         );
       })}
     </div>
@@ -223,21 +217,21 @@ function Grid({
           onClick={onOpen}
           footerSlot={
             onPromote && (
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
                   onPromote(p.id);
                 }}
-                className="w-full rounded-md border px-3 py-1.5 text-[0.78rem] transition-colors"
+                className="w-full"
                 style={{
                   borderColor: 'rgba(168, 181, 160, 0.4)',
                   color: 'var(--color-sage, #A8B5A0)',
-                  background: 'transparent',
                 }}
               >
                 Promote to Studio
-              </button>
+              </Button>
             )
           }
         />

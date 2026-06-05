@@ -4,6 +4,7 @@ import { ChevronLeft, Save, Monitor, Smartphone } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTemplateBuilderStore } from '@/stores/template-builder-store';
 import { cn } from '@/lib/utils';
+import { Button, IconButton } from '@/components/ui/controls';
 
 interface BuilderHeaderProps {
   templateName: string;
@@ -23,13 +24,14 @@ export function BuilderHeader({ templateName, isSaving, onSave }: BuilderHeaderP
     <div className="bg-white border-b border-patina-clay-beige/20 px-6 py-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => router.push('/communications/templates')}
-            className="flex items-center gap-1 text-sm text-patina-clay-beige hover:text-patina-charcoal transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
             Templates
-          </button>
+          </Button>
           <div className="h-5 w-px bg-patina-clay-beige/30" />
           <h1 className="text-base font-display font-semibold text-patina-charcoal truncate max-w-[200px]">
             {templateName || 'Untitled'}
@@ -42,54 +44,60 @@ export function BuilderHeader({ templateName, isSaving, onSave }: BuilderHeaderP
         <div className="flex items-center gap-3">
           {/* Mode tabs */}
           <div className="flex bg-patina-off-white rounded-lg p-0.5">
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setEditorMode('builder')}
               className={cn(
-                'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
-                editorMode === 'builder'
-                  ? 'bg-white shadow-sm text-patina-charcoal'
-                  : 'text-patina-clay-beige hover:text-patina-charcoal'
+                'rounded-md',
+                editorMode === 'builder' && 'bg-white shadow-sm text-patina-charcoal'
               )}
             >
               Builder
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setEditorMode('html')}
               className={cn(
-                'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
-                editorMode === 'html'
-                  ? 'bg-white shadow-sm text-patina-charcoal'
-                  : 'text-patina-clay-beige hover:text-patina-charcoal'
+                'rounded-md',
+                editorMode === 'html' && 'bg-white shadow-sm text-patina-charcoal'
               )}
             >
               HTML
-            </button>
+            </Button>
           </div>
 
           {/* Device toggle */}
           <div className="flex gap-0.5 bg-patina-off-white rounded-lg p-0.5">
-            <button
+            <IconButton
+              label="Desktop preview"
+              size="sm"
               onClick={() => setPreviewDevice('desktop')}
-              className={cn('p-1.5 rounded-md transition-all', previewDevice === 'desktop' ? 'bg-white shadow-sm' : '')}
+              className={cn('rounded-md', previewDevice === 'desktop' ? 'bg-white shadow-sm' : '')}
             >
               <Monitor className="w-3.5 h-3.5 text-patina-clay-beige" />
-            </button>
-            <button
+            </IconButton>
+            <IconButton
+              label="Mobile preview"
+              size="sm"
               onClick={() => setPreviewDevice('mobile')}
-              className={cn('p-1.5 rounded-md transition-all', previewDevice === 'mobile' ? 'bg-white shadow-sm' : '')}
+              className={cn('rounded-md', previewDevice === 'mobile' ? 'bg-white shadow-sm' : '')}
             >
               <Smartphone className="w-3.5 h-3.5 text-patina-clay-beige" />
-            </button>
+            </IconButton>
           </div>
 
-          <button
+          <Button
+            variant="primary"
+            size="sm"
             onClick={onSave}
             disabled={!isDirty || isSaving}
-            className="flex items-center gap-1.5 px-4 py-2 bg-patina-mocha-brown text-white rounded-lg text-sm font-medium hover:bg-patina-charcoal transition-colors disabled:opacity-50"
+            loading={isSaving}
           >
             <Save className="w-3.5 h-3.5" />
-            {isSaving ? 'Saving...' : 'Save'}
-          </button>
+            Save
+          </Button>
         </div>
       </div>
     </div>

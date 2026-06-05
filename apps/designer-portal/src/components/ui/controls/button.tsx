@@ -93,9 +93,27 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         // forwarded onto the child, mirroring radix Slot behavior; the
         // forwarded `ref` is attached to the child so callers can still reach
         // the rendered element (e.g. an anchor).
-        const child = children as React.ReactElement<{ className?: string }>;
+        const child = children as React.ReactElement<{
+          className?: string;
+          onClick?: React.MouseEventHandler<HTMLElement>;
+        }>;
+        // cloneElement (unlike radix Slot) doesn't compose event handlers —
+        // merge onClick explicitly so a handler on the child is never
+        // silently replaced by one on the Button (or vice versa).
+        const childOnClick = child.props.onClick;
+        const outerOnClick = props.onClick as
+          | React.MouseEventHandler<HTMLElement>
+          | undefined;
+        const mergedOnClick =
+          outerOnClick && childOnClick
+            ? (e: React.MouseEvent<HTMLElement>) => {
+                outerOnClick(e);
+                childOnClick(e);
+              }
+            : (outerOnClick ?? childOnClick);
         return React.cloneElement(child, {
           ...props,
+          onClick: mergedOnClick,
           // className precedence (deliberate): caller className > child
           // className > variant classes (cn merges left→right, later wins).
           className: cn(

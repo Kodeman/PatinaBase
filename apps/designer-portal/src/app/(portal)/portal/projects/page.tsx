@@ -21,7 +21,7 @@ import {
 } from '@/components/portal/faceted-filter-popover';
 import { BulkActionBar, BulkActionButton } from '@/components/portal/bulk-action-bar';
 import { ListPageHeader } from '@/components/portal/list-page-header';
-import { Button } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { getProjectStatusVariant } from '@/lib/project-status';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -624,18 +624,8 @@ function GridView({
 // stays untouched.
 function ComingSoonButton({ children }: { children: ReactNode }) {
   return (
-    <button
-      type="button"
-      disabled
-      title="Coming soon"
-      className="cursor-not-allowed rounded-[3px] border px-3 py-1.5 text-[0.8rem] opacity-50"
-      style={{
-        borderColor: 'var(--border-default)',
-        color: 'var(--text-primary)',
-        fontFamily: 'var(--font-body)',
-      }}
-    >
+    <Button variant="secondary" size="sm" disabled title="Coming soon">
       {children}
-    </button>
+    </Button>
   );
 }

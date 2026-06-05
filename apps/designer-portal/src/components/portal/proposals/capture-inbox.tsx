@@ -7,6 +7,7 @@ import {
   useDismissCapture,
   type ProposalCapture,
 } from '@patina/supabase';
+import { IconButton } from '@/components/ui/controls';
 
 // ─── DnD wire-format ─────────────────────────────────────────────────────────
 //
@@ -201,19 +202,19 @@ function CaptureRow({ capture, onDismiss, isDismissing }: CaptureRowProps) {
         </div>
       </div>
 
-      <button
-        type="button"
+      <IconButton
+        label="Dismiss capture"
+        variant="ghost"
+        size="sm"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={() => onDismiss(capture.id)}
         disabled={isDismissing}
-        aria-label="Dismiss capture"
-        title="Dismiss"
-        className="flex-shrink-0 cursor-pointer rounded-sm p-1 text-[var(--text-muted)] opacity-0 transition-opacity hover:text-[var(--color-terracotta)] focus:opacity-100 group-hover:opacity-100"
+        className="flex-shrink-0 opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M18 6L6 18M6 6l12 12" />
         </svg>
-      </button>
+      </IconButton>
     </div>
   );
 }

@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@patina/design-system';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import {
   usePhaseTemplates,
   useApplyPhaseTemplate,
@@ -169,30 +169,30 @@ export function PhaseTemplatePicker({
 
                   <div className="flex shrink-0 flex-col items-end gap-2">
                     {!isArmed && (
-                      <PortalButton
+                      <Button
                         variant="secondary"
                         onClick={() => setArmedSlug(template.slug)}
                         disabled={applyMutation.isPending}
                       >
                         Apply
-                      </PortalButton>
+                      </Button>
                     )}
                     {isArmed && (
                       <>
-                        <PortalButton
+                        <Button
                           variant="primary"
                           onClick={() => handleApply(template)}
                           disabled={applyMutation.isPending}
                         >
                           {applyMutation.isPending ? 'Applying...' : 'Confirm'}
-                        </PortalButton>
-                        <PortalButton
+                        </Button>
+                        <Button
                           variant="ghost"
                           onClick={() => setArmedSlug(null)}
                           disabled={applyMutation.isPending}
                         >
                           Cancel
-                        </PortalButton>
+                        </Button>
                       </>
                     )}
                   </div>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useUpdateProject } from '@/hooks/use-projects';
+import { Button } from '@/components/ui/controls';
 
 export type ClientVisibilityTier = 'full' | 'milestone' | 'curated';
 
@@ -28,28 +29,24 @@ export function ClientViewToggle({ projectId, current }: ClientViewToggleProps) 
 
   return (
     <div className="relative inline-flex items-center gap-2">
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        size="sm"
         onClick={() => setPreviewing((v) => !v)}
-        className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
-        style={{
-          borderColor: previewing ? 'var(--text-primary)' : 'var(--border-default)',
-          background: previewing ? 'var(--bg-hover)' : 'transparent',
-          fontFamily: 'var(--font-body)',
-        }}
         aria-pressed={previewing}
       >
         {previewing ? '◉' : '○'} Client view
-      </button>
+      </Button>
 
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        size="sm"
         onClick={() => setOpen((v) => !v)}
-        className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
-        style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)' }}
       >
         Tier · {TIER_INFO[current].label} ▾
-      </button>
+      </Button>
 
       {open && (
         <div

@@ -3,8 +3,6 @@
 import { useState } from 'react';
 import { X, ChevronDown, ChevronUp } from 'lucide-react';
 import {
-  Button,
-  Input,
   Label,
   Drawer,
   DrawerContent,
@@ -13,6 +11,7 @@ import {
   DrawerTitle,
   Badge,
 } from '@patina/design-system';
+import { Button, IconButton, Input, FilterPill } from '@/components/ui/controls';
 import { useCategories, useVendors } from '@/hooks/use-products';
 
 export interface CatalogFilters {
@@ -125,7 +124,7 @@ export function CatalogFilterPanel({
           {/* Clear Filters */}
           {activeFilterCount > 0 && (
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={onClearFilters}
               className="w-full"
@@ -275,14 +274,13 @@ export function CatalogFilterPanel({
             {expandedSections.tags && (
               <div className="flex flex-wrap gap-2">
                 {commonTags.map((tag) => (
-                  <Badge
+                  <FilterPill
                     key={tag}
-                    variant={filters.tags?.includes(tag) ? 'solid' : 'outline'}
-                    className="cursor-pointer"
+                    active={filters.tags?.includes(tag)}
                     onClick={() => handleTagToggle(tag)}
                   >
                     {tag}
-                  </Badge>
+                  </FilterPill>
                 ))}
               </div>
             )}
@@ -297,31 +295,34 @@ export function CatalogFilterPanel({
                   <Badge variant="subtle" className="gap-1">
                     Category:{' '}
                     {categories.find((c: any) => c.id === filters.categoryId)?.name}
-                    <button
+                    <IconButton
+                      label="Remove category filter"
                       onClick={() =>
                         onFiltersChange({ ...filters, categoryId: undefined })
                       }
-                      className="ml-1"
+                      className="ml-1 h-auto w-auto"
                     >
                       <X className="h-3 w-3" />
-                    </button>
+                    </IconButton>
                   </Badge>
                 )}
                 {filters.brand && (
                   <Badge variant="subtle" className="gap-1">
                     Brand: {filters.brand}
-                    <button
+                    <IconButton
+                      label="Remove brand filter"
                       onClick={() => onFiltersChange({ ...filters, brand: undefined })}
-                      className="ml-1"
+                      className="ml-1 h-auto w-auto"
                     >
                       <X className="h-3 w-3" />
-                    </button>
+                    </IconButton>
                   </Badge>
                 )}
                 {(filters.priceMin || filters.priceMax) && (
                   <Badge variant="subtle" className="gap-1">
                     Price: ${filters.priceMin || 0} - ${filters.priceMax || '∞'}
-                    <button
+                    <IconButton
+                      label="Remove price filter"
                       onClick={() =>
                         onFiltersChange({
                           ...filters,
@@ -329,18 +330,22 @@ export function CatalogFilterPanel({
                           priceMax: undefined,
                         })
                       }
-                      className="ml-1"
+                      className="ml-1 h-auto w-auto"
                     >
                       <X className="h-3 w-3" />
-                    </button>
+                    </IconButton>
                   </Badge>
                 )}
                 {filters.tags?.map((tag) => (
                   <Badge key={tag} variant="subtle" className="gap-1">
                     {tag}
-                    <button onClick={() => handleTagToggle(tag)} className="ml-1">
+                    <IconButton
+                      label={`Remove ${tag} filter`}
+                      onClick={() => handleTagToggle(tag)}
+                      className="ml-1 h-auto w-auto"
+                    >
                       <X className="h-3 w-3" />
-                    </button>
+                    </IconButton>
                   </Badge>
                 ))}
               </div>

@@ -15,8 +15,8 @@ import { cn } from '@/lib/utils';
 import { Dialog, DialogContent } from '@patina/design-system';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@patina/design-system';
 import { ScrollArea } from '@patina/design-system';
-import { Button } from '@patina/design-system';
 import { Badge } from '@patina/design-system';
+import { Button } from '@/components/ui/controls';
 import type { Product } from '@patina/types';
 import { DetailsTab, MediaTab, PricingTab, InventoryTab, SEOTab } from './tabs';
 
@@ -300,7 +300,7 @@ export function ProductEditorModal({
           )}
         >
           <Button
-            variant="outline"
+            variant="secondary"
             onClick={handlePrevious}
             disabled={currentTabIndex === 0}
             className="transition-all duration-200"
@@ -317,7 +317,7 @@ export function ProductEditorModal({
 
           <div className="flex items-center gap-2">
             <Button
-              variant="outline"
+              variant="secondary"
               onClick={handleNext}
               disabled={currentTabIndex === totalTabs - 1}
               className="transition-all duration-200"

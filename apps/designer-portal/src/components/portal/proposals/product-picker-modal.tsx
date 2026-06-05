@@ -12,7 +12,7 @@ import {
   type LayerProductLayer,
   type LayerProductRow,
 } from '@patina/supabase';
-import { PortalButton } from '@/components/portal/button';
+import { Button, FilterPill, IconButton, Input, Select } from '@/components/ui/controls';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -245,12 +245,11 @@ function CatalogTab({
 
   return (
     <div className="flex flex-col gap-3">
-      <input
+      <Input
         type="search"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search the catalog by product name…"
-        className="type-body w-full rounded-sm border border-[var(--border-default)] bg-transparent px-3 py-2 text-[0.85rem] outline-none transition-colors focus:border-[var(--accent-primary)]"
       />
 
       {defaultCategorySlug && (
@@ -311,12 +310,11 @@ function LibraryTab({ onPick }: { onPick: (pick: TabPick) => void }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <input
+      <Input
         type="search"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search your library and the catalog…"
-        className="type-body w-full rounded-sm border border-[var(--border-default)] bg-transparent px-3 py-2 text-[0.85rem] outline-none transition-colors focus:border-[var(--accent-primary)]"
       />
 
       {/* Layer chips — select the active layer to browse; counts are caller-scoped. */}
@@ -324,24 +322,18 @@ function LibraryTab({ onPick }: { onPick: (pick: TabPick) => void }) {
         {layers.map((l) => {
           const active = !isSearching && activeLayer === l;
           return (
-            <button
+            <FilterPill
               key={l}
-              type="button"
+              active={active}
               onClick={() => {
                 setActiveLayer(l);
                 setSearch('');
               }}
-              aria-pressed={active}
               data-testid={`library-layer-${l}`}
-              className={`cursor-pointer rounded-sm border px-3 py-1 text-[0.72rem] transition-colors ${
-                active
-                  ? 'border-[var(--accent-primary)] bg-[rgba(196,165,123,0.08)] text-[var(--text-primary)]'
-                  : 'border-[var(--border-default)] text-[var(--text-muted)] hover:border-[var(--accent-primary)]'
-              }`}
             >
               {LAYER_LABEL[l]}
               {counts ? ` · ${counts[l]}` : ''}
-            </button>
+            </FilterPill>
           );
         })}
       </div>
@@ -468,25 +460,23 @@ function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
 
       <label className="block">
         <span className="type-meta mb-1 block">Product Name *</span>
-        <input
+        <Input
           type="text"
           required
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Holly Hunt Cardamom Lounge Chair"
-          className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
         />
       </label>
 
       <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <label className="block">
           <span className="type-meta mb-1 block">Brand</span>
-          <input
+          <Input
             type="text"
             value={brand}
             onChange={(e) => setBrand(e.target.value)}
             placeholder="e.g. Holly Hunt"
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
           />
         </label>
         <label className="block">
@@ -498,14 +488,14 @@ function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
             >
               $
             </span>
-            <input
+            <Input
               type="number"
               min="0"
               step="1"
               value={priceDollars}
               onChange={(e) => setPriceDollars(e.target.value)}
               placeholder="0"
-              className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent py-2 pl-7 pr-3 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
+              className="pl-7"
             />
           </div>
         </label>
@@ -513,12 +503,11 @@ function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
 
       <label className="block">
         <span className="type-meta mb-1 block">Source URL</span>
-        <input
+        <Input
           type="url"
           value={sourceUrl}
           onChange={(e) => setSourceUrl(e.target.value)}
           placeholder="https://…"
-          className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
         />
       </label>
 
@@ -532,13 +521,13 @@ function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
       )}
 
       <div className="flex gap-2">
-        <PortalButton
+        <Button
           variant="primary"
           type="submit"
           disabled={!name.trim() || create.isPending}
         >
           {create.isPending ? 'Creating…' : 'Create draft + use'}
-        </PortalButton>
+        </Button>
       </div>
     </form>
   );
@@ -822,25 +811,24 @@ export function ProductPickerModal({
           <h3 id="product-picker-title" className="type-section-head" style={{ fontSize: '1.2rem' }}>
             Add a product
           </h3>
-          <button
-            type="button"
+          <IconButton
+            label="Close"
+            variant="ghost"
+            size="sm"
             onClick={onClose}
-            className="text-[1.1rem] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            aria-label="Close"
           >
             ×
-          </button>
+          </IconButton>
         </div>
 
         {/* Room targeting */}
         {rooms.length > 0 && (
           <label className="mb-4 block">
             <span className="type-meta mb-1 block">Add to room</span>
-            <select
+            <Select
               value={scopeRoomId ?? ''}
               onChange={(e) => setScopeRoomId(e.target.value || null)}
               data-testid="product-picker-room"
-              className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
             >
               <option value="">Unassigned</option>
               {rooms.map((r) => (
@@ -848,7 +836,7 @@ export function ProductPickerModal({
                   {r.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         )}
 

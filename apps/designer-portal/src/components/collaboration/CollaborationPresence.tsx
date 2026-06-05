@@ -2,6 +2,7 @@
 
 import { Avatar, AvatarGroup, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@patina/design-system';
 import { Wifi, WifiOff, Users } from 'lucide-react';
+import { IconButton } from '@/components/ui/controls';
 import type { PresenceInfo, ConnectionQuality } from '@/lib/projects-websocket';
 
 interface CollaborationPresenceProps {
@@ -63,9 +64,9 @@ export function CollaborationPresence({
         {/* Connection status */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <button type="button" className={`flex items-center gap-1.5 ${connectionColor}`}>
+            <IconButton label={connectionLabel} className={`flex items-center gap-1.5 ${connectionColor}`}>
               <WifiIcon className="h-4 w-4" />
-            </button>
+            </IconButton>
           </TooltipTrigger>
           <TooltipContent>
             <p>{connectionLabel}</p>

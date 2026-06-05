@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { PortalButton } from './button';
+import { Button, Input, StatusBadge } from '@/components/ui/controls';
 
 interface ReviewRequestCardProps {
   clientName: string;
@@ -47,17 +47,9 @@ export function ReviewRequestCard({
         <span className="type-label" style={{ fontSize: '0.88rem' }}>
           {projectName} &mdash; {clientName}
         </span>
-        <span
-          style={{
-            fontFamily: 'var(--font-meta)',
-            fontSize: '0.52rem',
-            textTransform: 'uppercase',
-            letterSpacing: '0.04em',
-            color: 'var(--color-golden-hour)',
-          }}
-        >
+        <StatusBadge tone="warning">
           Ready to send {'·'} Completed {completedDate}
-        </span>
+        </StatusBadge>
       </div>
       <p
         className="mb-3"
@@ -73,18 +65,17 @@ export function ReviewRequestCard({
 
       {scheduling ? (
         <div className="flex items-center gap-2">
-          <input
+          <Input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
             min={new Date().toISOString().slice(0, 10)}
-            className="rounded-[3px] border bg-white px-2 py-1.5 font-body text-[0.82rem] outline-none"
-            style={{ borderColor: 'var(--border-default)' }}
+            className="w-auto"
           />
-          <PortalButton variant="primary" onClick={confirmSchedule}>
+          <Button variant="primary" onClick={confirmSchedule}>
             Confirm
-          </PortalButton>
-          <PortalButton
+          </Button>
+          <Button
             variant="ghost"
             onClick={() => {
               setScheduling(false);
@@ -92,22 +83,22 @@ export function ReviewRequestCard({
             }}
           >
             Cancel
-          </PortalButton>
+          </Button>
         </div>
       ) : (
         <div className="flex gap-2">
-          <PortalButton variant="primary" onClick={onSend} disabled={busy}>
+          <Button variant="primary" onClick={onSend} disabled={busy}>
             {busy ? 'Sending…' : 'Send Review Request'}
-          </PortalButton>
+          </Button>
           {onCustomize && (
-            <PortalButton variant="secondary" onClick={onCustomize}>
+            <Button variant="secondary" onClick={onCustomize}>
               Customize Message
-            </PortalButton>
+            </Button>
           )}
           {onSchedule && (
-            <PortalButton variant="ghost" onClick={() => setScheduling(true)}>
+            <Button variant="ghost" onClick={() => setScheduling(true)}>
               Schedule for Later
-            </PortalButton>
+            </Button>
           )}
         </div>
       )}

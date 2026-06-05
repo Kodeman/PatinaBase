@@ -4,7 +4,7 @@ import { use, useMemo, useState } from 'react';
 import { useProject, useProjectFinancials, useProjectMilestones, useProjectFFEItems } from '@/hooks/use-projects';
 import { useAuth } from '@/hooks/use-auth';
 import { PageActionBar } from '@/components/portal';
-import { Button } from '@/components/ui/controls';
+import { Button, IconButton } from '@/components/ui/controls';
 import { MetricBlock } from '@/components/portal/metric-block';
 import { PaymentMilestoneCard } from '@/components/portal/payment-milestone-card';
 import { DetailRow } from '@/components/portal/detail-row';
@@ -454,14 +454,9 @@ function DrillDownModal({
           <h3 className="type-section-head" style={{ fontSize: '1.15rem' }}>
             {category} — Line items
           </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-[1rem] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            aria-label="Close"
-          >
+          <IconButton label="Close" onClick={onClose}>
             ×
-          </button>
+          </IconButton>
         </div>
         {items.length === 0 ? (
           <LineItemsEmpty />

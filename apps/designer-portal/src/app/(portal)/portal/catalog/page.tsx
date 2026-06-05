@@ -8,13 +8,13 @@ import {
   SearchInput,
   FilterRow,
   LoadingStrata,
-  PortalButton,
   ProductCard,
   ProductListItem,
   EmptyState as LocalEmptyState,
   CatalogRefineBar,
   ListPageHeader,
 } from '@/components/portal';
+import { Button, FilterPill } from '@/components/ui/controls';
 import {
   EmptyState as HelpEmptyState,
   InfoIcon,
@@ -219,49 +219,49 @@ export default function CatalogPage() {
               className="max-w-[220px]"
             />
             <div className="flex gap-1.5">
-              <button
-                className={`cursor-pointer border-0 bg-transparent font-mono text-[0.68rem] uppercase tracking-[0.06em] ${
-                  viewMode === 'grid' ? 'text-[var(--text-primary)] opacity-100' : 'text-[var(--text-muted)] opacity-40'
-                }`}
+              <FilterPill
+                active={viewMode === 'grid'}
                 onClick={() => setViewMode('grid')}
               >
                 ▦ Grid
-              </button>
-              <button
-                className={`cursor-pointer border-0 bg-transparent font-mono text-[0.68rem] uppercase tracking-[0.06em] ${
-                  viewMode === 'list' ? 'text-[var(--text-primary)] opacity-100' : 'text-[var(--text-muted)] opacity-40'
-                }`}
+              </FilterPill>
+              <FilterPill
+                active={viewMode === 'list'}
                 onClick={() => setViewMode('list')}
               >
                 ☰ List
-              </button>
+              </FilterPill>
             </div>
             {canCreate && (
               <div className="relative" ref={addMenuRef}>
-                <PortalButton
+                <Button
                   variant="primary"
-                  className="px-2.5 py-1 text-[0.75rem]"
+                  size="sm"
                   onClick={() => setAddMenuOpen((v) => !v)}
                 >
                   +
-                </PortalButton>
+                </Button>
                 {addMenuOpen && (
                   <div
                     className="absolute right-0 top-full z-20 mt-1 flex flex-col rounded border border-[var(--border-default)] bg-[var(--bg-primary)] py-1 shadow-sm"
                     style={{ minWidth: '140px' }}
                   >
-                    <button
-                      className="cursor-pointer border-0 bg-transparent px-3 py-1.5 text-left text-[0.8rem] text-[var(--text-body)] hover:bg-[var(--bg-hover)]"
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="justify-start"
                       onClick={() => { router.push('/portal/catalog/new'); setAddMenuOpen(false); }}
                     >
                       Add Product
-                    </button>
-                    <button
-                      className="cursor-pointer border-0 bg-transparent px-3 py-1.5 text-left text-[0.8rem] text-[var(--text-body)] hover:bg-[var(--bg-hover)]"
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="justify-start"
                       onClick={() => { router.push('/portal/catalog/import'); setAddMenuOpen(false); }}
                     >
                       Import
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>

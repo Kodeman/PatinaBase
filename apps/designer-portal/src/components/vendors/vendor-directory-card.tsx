@@ -6,6 +6,7 @@ import { VendorLogo } from './vendor-logo';
 import { VendorRatingBadge } from './vendor-rating-badge';
 import { TradeTierIndicator } from './trade-tier-indicator';
 import { LeadTimeDisplay } from './lead-time-display';
+import { IconButton } from '@/components/ui/controls';
 
 interface VendorDirectoryCardProps {
   vendor: VendorSummary;
@@ -107,11 +108,10 @@ export function VendorDirectoryCard({
         </div>
 
         {/* Save Button */}
-        <button
-          type="button"
+        <IconButton
+          label={isSaved ? 'Remove from saved vendors' : 'Save vendor'}
           onClick={handleSaveClick}
-          className="flex-shrink-0 p-2 rounded-full hover:bg-patina-clay-beige/20 transition-colors focus:outline-none focus:ring-2 focus:ring-patina-mocha-brown"
-          aria-label={isSaved ? 'Remove from saved vendors' : 'Save vendor'}
+          size="sm"
         >
           <Bookmark
             className={`w-5 h-5 ${
@@ -120,7 +120,7 @@ export function VendorDirectoryCard({
                 : 'text-patina-mocha-brown'
             }`}
           />
-        </button>
+        </IconButton>
       </div>
     );
   }
@@ -142,11 +142,11 @@ export function VendorDirectoryCard({
       {/* Header with Logo and Save */}
       <div className="flex items-start justify-between p-4 pb-3">
         <VendorLogo logoUrl={logoUrl} vendorName={tradeName} size="lg" />
-        <button
-          type="button"
+        <IconButton
+          label={isSaved ? 'Remove from saved vendors' : 'Save vendor'}
           onClick={handleSaveClick}
-          className="flex-shrink-0 p-2 -mr-1 -mt-1 rounded-full hover:bg-patina-clay-beige/20 transition-colors focus:outline-none focus:ring-2 focus:ring-patina-mocha-brown"
-          aria-label={isSaved ? 'Remove from saved vendors' : 'Save vendor'}
+          size="sm"
+          className="-mr-1 -mt-1"
         >
           <Bookmark
             className={`w-5 h-5 ${
@@ -155,7 +155,7 @@ export function VendorDirectoryCard({
                 : 'text-patina-mocha-brown'
             }`}
           />
-        </button>
+        </IconButton>
       </div>
 
       {/* Content */}

@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { Card, CardContent } from '@patina/design-system';
-import { Button } from '@patina/design-system';
-import { Input } from '@patina/design-system';
 import { Badge } from '@patina/design-system';
+import { Button, IconButton, Input, Select, FilterPill } from '@/components/ui/controls';
 import { Plus, X, Zap } from 'lucide-react';
 import type { RuleCondition } from '@patina/types';
 
@@ -115,24 +114,18 @@ export function RuleBuilder({
             <div className="flex items-center gap-2 text-sm">
               <span className="text-muted-foreground">Match products that meet:</span>
               <div className="flex gap-1 rounded-lg border p-1">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={logicOperator === 'AND' ? 'default' : 'ghost'}
+                <FilterPill
+                  active={logicOperator === 'AND'}
                   onClick={() => handleOperatorChange('AND')}
-                  className="h-7 px-3"
                 >
                   All
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={logicOperator === 'OR' ? 'default' : 'ghost'}
+                </FilterPill>
+                <FilterPill
+                  active={logicOperator === 'OR'}
                   onClick={() => handleOperatorChange('OR')}
-                  className="h-7 px-3"
                 >
                   Any
-                </Button>
+                </FilterPill>
               </div>
             </div>
           )}
@@ -143,36 +136,34 @@ export function RuleBuilder({
             <div key={index} className="flex items-start gap-2">
               <div className="flex-1 grid grid-cols-3 gap-2">
                 {/* Field */}
-                <select
+                <Select
                   value={condition.field}
                   onChange={(e) =>
                     handleConditionChange(index, 'field', e.target.value)
                   }
                   disabled={readOnly}
-                  className="px-3 py-2 border rounded-lg bg-background"
                 >
                   {FIELD_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
                   ))}
-                </select>
+                </Select>
 
                 {/* Operator */}
-                <select
+                <Select
                   value={condition.operator}
                   onChange={(e) =>
                     handleConditionChange(index, 'operator', e.target.value)
                   }
                   disabled={readOnly}
-                  className="px-3 py-2 border rounded-lg bg-background"
                 >
                   {getOperatorOptions(condition.field).map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
                   ))}
-                </select>
+                </Select>
 
                 {/* Value */}
                 <Input
@@ -186,15 +177,15 @@ export function RuleBuilder({
               </div>
 
               {!readOnly && conditions.length > 1 && (
-                <Button
+                <IconButton
                   type="button"
-                  size="icon"
                   variant="ghost"
+                  label="Remove condition"
                   onClick={() => handleRemoveCondition(index)}
                   className="h-10 w-10 shrink-0"
                 >
                   <X className="h-4 w-4" />
-                </Button>
+                </IconButton>
               )}
             </div>
           ))}
@@ -203,7 +194,7 @@ export function RuleBuilder({
         {!readOnly && (
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             size="sm"
             onClick={handleAddCondition}
             className="w-full"

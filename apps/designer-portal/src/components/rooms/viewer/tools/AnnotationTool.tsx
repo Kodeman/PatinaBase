@@ -5,6 +5,7 @@ import { Html } from '@react-three/drei';
 import { useViewerStore } from '@/stores/viewer-store';
 import type { ThreeEvent } from '@react-three/fiber';
 import type { Annotation, AnnotationCategory, Vector3 } from '@patina/types';
+import { Button } from '@/components/ui/controls';
 
 const ANNOTATION_COLORS: Record<AnnotationCategory, { bg: string; text: string; border: string }> = {
   note: { bg: 'bg-blue-500', text: 'text-blue-500', border: 'border-blue-500' },
@@ -135,19 +136,23 @@ export function AnnotationTool() {
 
               {/* Actions */}
               <div className="flex gap-2">
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={handleCancel}
-                  className="flex-1 py-2 text-sm text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                  className="flex-1"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={handleSubmit}
                   disabled={!formData.text.trim()}
-                  className="flex-1 py-2 text-sm text-white bg-blue-500 rounded-md hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1"
                 >
                   Add
-                </button>
+                </Button>
               </div>
             </div>
           </Html>
@@ -213,15 +218,17 @@ function AnnotationPin({
           >
             <div className="flex items-start justify-between gap-2 mb-1">
               <span className="text-lg">{icon}</span>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
                   deleteAnnotation(annotation.id);
                 }}
-                className="text-gray-400 hover:text-red-500 text-xs"
+                className="text-gray-400 hover:text-red-500 text-xs px-1"
               >
                 Delete
-              </button>
+              </Button>
             </div>
             <p className="text-gray-900 text-sm mb-2">
               {annotation.text}

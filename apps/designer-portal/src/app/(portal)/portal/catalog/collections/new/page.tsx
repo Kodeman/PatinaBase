@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCreateCollection } from '@/hooks/use-collections';
 import { FieldGroup } from '@/components/portal/field-group';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 
 export default function NewCollectionPage() {
   const router = useRouter();
@@ -25,9 +25,10 @@ export default function NewCollectionPage() {
 
   return (
     <div className="pt-8">
-      <div className="type-meta mb-6">
-        <Link href="/portal/catalog/collections" className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]">Collections</Link>
-        <span className="mx-2">&rarr;</span><span>New Collection</span>
+      <div className="mb-4">
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/portal/catalog/collections">← Collections</Link>
+        </Button>
       </div>
       <h1 className="type-page-title mb-8">Create Collection</h1>
       <div className="max-w-2xl space-y-8">
@@ -60,12 +61,12 @@ export default function NewCollectionPage() {
           </select>
         </FieldGroup>
         <div className="flex gap-4 pt-4">
-          <PortalButton variant="primary" onClick={handleCreate} disabled={createCollection.isPending || !name.trim()}>
+          <Button variant="primary" onClick={handleCreate} disabled={createCollection.isPending || !name.trim()}>
             {createCollection.isPending ? 'Creating...' : 'Create Collection'}
-          </PortalButton>
-          <PortalButton variant="ghost" onClick={() => router.push('/portal/catalog/collections')}>
+          </Button>
+          <Button variant="ghost" onClick={() => router.push('/portal/catalog/collections')}>
             Cancel
-          </PortalButton>
+          </Button>
         </div>
       </div>
     </div>

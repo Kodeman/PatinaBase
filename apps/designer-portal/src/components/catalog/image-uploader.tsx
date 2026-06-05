@@ -2,7 +2,7 @@
 
 import { useState, useRef, DragEvent, ChangeEvent } from 'react';
 import { Upload, X, Image as ImageIcon } from 'lucide-react';
-import { Button } from '@patina/design-system';
+import { Button } from '@/components/ui/controls';
 import { cn } from '@/lib/utils';
 
 interface ImageUploaderProps {
@@ -135,7 +135,7 @@ export function ImageUploader({
               <Button
                 type="button"
                 size="sm"
-                variant="destructive"
+                variant="danger"
                 onClick={handleRemove}
               >
                 <X className="mr-2 h-4 w-4" />

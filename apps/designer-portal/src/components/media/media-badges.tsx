@@ -3,6 +3,7 @@
 import { Box, Video, Rotate3D, View, Eye } from 'lucide-react';
 import { Badge } from '@patina/design-system';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/controls';
 
 interface MediaBadgesProps {
   has3D?: boolean;
@@ -205,21 +206,18 @@ export function ARViewButton({
   disabled?: boolean;
 }) {
   return (
-    <button
+    <Button
+      variant="primary"
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all',
-        'bg-gradient-to-r from-purple-600 to-blue-600 text-white',
-        'hover:from-purple-700 hover:to-blue-700',
-        'disabled:opacity-50 disabled:cursor-not-allowed',
-        'shadow-lg hover:shadow-xl',
+        'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 shadow-lg hover:shadow-xl',
         className
       )}
     >
       <View className="h-5 w-5" />
-      <span>View in Your Space</span>
-    </button>
+      View in Your Space
+    </Button>
   );
 }
 
@@ -236,21 +234,18 @@ export function ThreeDViewButton({
   disabled?: boolean;
 }) {
   return (
-    <button
+    <Button
+      variant="primary"
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all',
-        'bg-gradient-to-r from-blue-600 to-cyan-600 text-white',
-        'hover:from-blue-700 hover:to-cyan-700',
-        'disabled:opacity-50 disabled:cursor-not-allowed',
-        'shadow-lg hover:shadow-xl',
+        'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 shadow-lg hover:shadow-xl',
         className
       )}
     >
       <Box className="h-5 w-5" />
-      <span>View 3D Model</span>
-    </button>
+      View 3D Model
+    </Button>
   );
 }
 
@@ -267,20 +262,17 @@ export function View360Button({
   disabled?: boolean;
 }) {
   return (
-    <button
+    <Button
+      variant="primary"
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all',
-        'bg-gradient-to-r from-orange-600 to-red-600 text-white',
-        'hover:from-orange-700 hover:to-red-700',
-        'disabled:opacity-50 disabled:cursor-not-allowed',
-        'shadow-lg hover:shadow-xl',
+        'bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 shadow-lg hover:shadow-xl',
         className
       )}
     >
       <Rotate3D className="h-5 w-5" />
-      <span>360° View</span>
-    </button>
+      360° View
+    </Button>
   );
 }

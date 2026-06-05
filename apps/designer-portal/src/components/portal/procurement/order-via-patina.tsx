@@ -41,6 +41,7 @@ import {
   BlockedByDecisionInline,
   getBlockedItems,
 } from '@/components/portal/procurement/blocked-by-decision-notice';
+import { Button } from '@/components/ui/controls';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
@@ -193,32 +194,30 @@ export function OrderViaPatina({
           )}
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-0">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting}
-            className="rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-[var(--text-primary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             Cancel
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
             onClick={handleConfirm}
             disabled={isSubmitting || itemCount === 0 || hasBlockedItems}
+            loading={isSubmitting}
             title={
               hasBlockedItems
                 ? 'Ordering is blocked pending a client decision'
                 : undefined
             }
-            className="rounded-[3px] px-4 py-2 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ backgroundColor: 'var(--color-clay)' }}
           >
             {hasBlockedItems
               ? 'Blocked — decision pending'
-              : isSubmitting
-                ? 'Placing order…'
-                : 'Confirm order'}
-          </button>
+              : 'Confirm order'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

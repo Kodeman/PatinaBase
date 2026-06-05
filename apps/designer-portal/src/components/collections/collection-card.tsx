@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from '@patina/design-system';
 import { Badge } from '@patina/design-system';
-import { Button } from '@patina/design-system';
+import { Button, IconButton } from '@/components/ui/controls';
 import { Eye, Star, Package, Calendar, Edit, Trash } from 'lucide-react';
 import type { Collection } from '@patina/types';
 import Link from 'next/link';
@@ -142,7 +142,7 @@ export function CollectionCard({
 
               <div className="flex items-center gap-1">
                 {canEdit && onEdit && (
-                  <Button
+                  <IconButton
                     size="sm"
                     variant="ghost"
                     onClick={(e) => {
@@ -150,13 +150,13 @@ export function CollectionCard({
                       e.stopPropagation();
                       onEdit(collection);
                     }}
-                    title="Edit collection"
+                    label="Edit collection"
                   >
                     <Edit className="h-3.5 w-3.5" />
-                  </Button>
+                  </IconButton>
                 )}
                 {canDelete && onDelete && (
-                  <Button
+                  <IconButton
                     size="sm"
                     variant="ghost"
                     onClick={(e) => {
@@ -164,10 +164,10 @@ export function CollectionCard({
                       e.stopPropagation();
                       onDelete(collection);
                     }}
-                    title="Delete collection"
+                    label="Delete collection"
                   >
                     <Trash className="h-3.5 w-3.5" />
-                  </Button>
+                  </IconButton>
                 )}
                 <Button
                   size="sm"

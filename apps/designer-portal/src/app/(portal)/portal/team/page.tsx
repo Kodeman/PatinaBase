@@ -6,7 +6,7 @@ import { useOrganizations, useSession, useAddClient } from '@patina/supabase';
 import { useProjects } from '@/hooks/use-projects';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
-import { Button, PortalButton } from '@/components/ui/controls';
+import { Button } from '@/components/ui/controls';
 // F1.7 — Team migrated to ambient + reactive help-system layers per spec
 // §12.4. Studio is Patina vocabulary (multi-user org); StrataInfoIcon
 // explains the concept inline. Aliased the local EmptyState helper to
@@ -153,16 +153,16 @@ function InviteMemberModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="flex gap-3 pt-2">
-            <PortalButton
+            <Button
               variant="primary"
               type="submit"
               disabled={addClient.isPending || !email.trim()}
             >
               {addClient.isPending ? 'Sending...' : 'Send invite'}
-            </PortalButton>
-            <PortalButton variant="ghost" type="button" onClick={onClose}>
+            </Button>
+            <Button variant="ghost" type="button" onClick={onClose}>
               {successMessage ? 'Done' : 'Cancel'}
-            </PortalButton>
+            </Button>
           </div>
         </form>
       </div>

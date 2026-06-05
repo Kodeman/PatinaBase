@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { PortalButton } from '@/components/portal/button';
+import { Button, Input, Select, Textarea } from '@/components/ui/controls';
 
 // Shared allowance / TBD add-forms used by BOTH the proposal FF&E schedule
 // builder and the project FF&E board. They are surface-agnostic: the caller
@@ -62,10 +62,9 @@ export function AllowanceForm({
       <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <label className="block">
           <span className="type-meta mb-1 block">Category *</span>
-          <select
+          <Select
             value={form.ffeCategory}
             onChange={(e) => update('ffeCategory', e.target.value)}
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
           >
             <option value="">Select…</option>
             {categories.map((c) => (
@@ -73,15 +72,14 @@ export function AllowanceForm({
                 {c.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
 
         <label className="block">
           <span className="type-meta mb-1 block">Room</span>
-          <select
+          <Select
             value={form.scopeRoomId}
             onChange={(e) => update('scopeRoomId', e.target.value)}
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
           >
             <option value="">Unassigned</option>
             {rooms.map((r) => (
@@ -89,7 +87,7 @@ export function AllowanceForm({
                 {r.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
 
@@ -103,13 +101,13 @@ export function AllowanceForm({
             >
               $
             </span>
-            <input
+            <Input
               type="number"
               min="0"
               value={form.minDollars}
               onChange={(e) => update('minDollars', e.target.value)}
               placeholder="0"
-              className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent py-2 pl-7 pr-3 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
+              className="pl-7"
             />
           </div>
         </label>
@@ -122,13 +120,13 @@ export function AllowanceForm({
             >
               $
             </span>
-            <input
+            <Input
               type="number"
               min="0"
               value={form.maxDollars}
               onChange={(e) => update('maxDollars', e.target.value)}
               placeholder="0"
-              className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent py-2 pl-7 pr-3 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
+              className="pl-7"
             />
           </div>
         </label>
@@ -136,22 +134,21 @@ export function AllowanceForm({
 
       <label className="block">
         <span className="type-meta mb-1 block">Notes (optional)</span>
-        <textarea
+        <Textarea
           value={form.notes}
           onChange={(e) => update('notes', e.target.value)}
           rows={2}
           placeholder="Specification notes, lead time, COM details…"
-          className="w-full resize-none rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.82rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
         />
       </label>
 
       <div className="flex items-center gap-2">
-        <PortalButton variant="primary" onClick={() => onSave(form)} disabled={!canSave || isSaving}>
+        <Button variant="primary" onClick={() => onSave(form)} disabled={!canSave || isSaving}>
           {isSaving ? 'Saving…' : 'Save Allowance'}
-        </PortalButton>
-        <PortalButton variant="ghost" onClick={onCancel} disabled={isSaving}>
+        </Button>
+        <Button variant="ghost" onClick={onCancel} disabled={isSaving}>
           Cancel
-        </PortalButton>
+        </Button>
       </div>
     </div>
   );
@@ -193,10 +190,9 @@ export function TbdForm({
       <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <label className="block">
           <span className="type-meta mb-1 block">Category *</span>
-          <select
+          <Select
             value={form.ffeCategory}
             onChange={(e) => update('ffeCategory', e.target.value)}
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
           >
             <option value="">Select…</option>
             {categories.map((c) => (
@@ -204,15 +200,14 @@ export function TbdForm({
                 {c.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
 
         <label className="block">
           <span className="type-meta mb-1 block">Room</span>
-          <select
+          <Select
             value={form.scopeRoomId}
             onChange={(e) => update('scopeRoomId', e.target.value)}
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
           >
             <option value="">Unassigned</option>
             {rooms.map((r) => (
@@ -220,32 +215,31 @@ export function TbdForm({
                 {r.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
 
       <label className="block">
         <span className="type-meta mb-1 block">Notes (optional)</span>
-        <textarea
+        <Textarea
           value={form.notes}
           onChange={(e) => update('notes', e.target.value)}
           rows={2}
           placeholder="What still needs to be specified, vendor quotes pending, etc."
-          className="w-full resize-none rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.82rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
         />
       </label>
 
       <div className="flex items-center gap-2">
-        <PortalButton
+        <Button
           variant="primary"
           onClick={() => onSave(form)}
           disabled={!form.ffeCategory || isSaving}
         >
           {isSaving ? 'Saving…' : 'Save TBD'}
-        </PortalButton>
-        <PortalButton variant="ghost" onClick={onCancel} disabled={isSaving}>
+        </Button>
+        <Button variant="ghost" onClick={onCancel} disabled={isSaving}>
           Cancel
-        </PortalButton>
+        </Button>
       </div>
     </div>
   );

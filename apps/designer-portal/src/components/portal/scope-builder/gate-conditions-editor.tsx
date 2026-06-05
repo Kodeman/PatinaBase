@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import {
   usePhaseGates,
   useAddGate,
@@ -296,23 +296,22 @@ export function GateConditionsEditor({
 
               <div className="flex gap-1.5">
                 {!isSatisfied && gate.gate_kind !== 'designer_override' && (
-                  <PortalButton
+                  <Button
                     variant="ghost"
+                    size="sm"
                     onClick={() => satisfyGate.mutate({ gateId: gate.id, phaseId })}
-                    className="!px-2 !py-0.5 !text-[0.7rem]"
                   >
                     Mark satisfied
-                  </PortalButton>
+                  </Button>
                 )}
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => removeGate.mutate({ gateId: gate.id, phaseId })}
-                  className="rounded-[3px] px-1.5 py-0.5 text-[0.7rem] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
-                  title="Remove gate"
                   aria-label="Remove gate"
                 >
                   x
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -339,47 +338,48 @@ export function GateConditionsEditor({
       {/* Add gate */}
       <div className="mt-2 flex flex-wrap items-center gap-2">
         {!pickerOpen ? (
-          <PortalButton
+          <Button
             variant="ghost"
+            size="sm"
             onClick={() => setPickerOpen(true)}
-            className="!px-2 !py-1"
           >
             + Add gate
-          </PortalButton>
+          </Button>
         ) : (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-[var(--accent-primary)] p-2">
             <span className="font-mono text-[0.6rem] uppercase tracking-wider text-[var(--text-muted)]">
               Choose gate kind:
             </span>
             {GATE_KIND_OPTIONS.map((opt) => (
-              <PortalButton
+              <Button
                 key={opt.value}
                 variant="secondary"
+                size="sm"
                 onClick={() => handlePickKind(opt.value)}
                 disabled={addGate.isPending}
-                className="!px-2 !py-1 !text-[0.7rem]"
               >
                 {opt.label}
-              </PortalButton>
+              </Button>
             ))}
-            <PortalButton
+            <Button
               variant="ghost"
+              size="sm"
               onClick={() => setPickerOpen(false)}
-              className="!px-2 !py-1 !text-[0.7rem]"
             >
               Cancel
-            </PortalButton>
+            </Button>
           </div>
         )}
 
         {!overrideOpen ? (
-          <PortalButton
+          <Button
             variant="ghost"
+            size="sm"
             onClick={() => setOverrideOpen(true)}
-            className="!px-2 !py-1 !text-[var(--patina-terracotta,var(--text-muted))]"
+            className="!text-[var(--patina-terracotta,var(--text-muted))]"
           >
             Designer override
-          </PortalButton>
+          </Button>
         ) : (
           <div className="flex w-full items-center gap-2 rounded-md border border-dashed border-[var(--patina-terracotta,var(--accent-primary))] p-2">
             <input
@@ -400,24 +400,24 @@ export function GateConditionsEditor({
               }}
               className="flex-1 border-b border-transparent bg-transparent font-body text-[0.85rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
             />
-            <PortalButton
+            <Button
               variant="primary"
+              size="sm"
               onClick={handleOverrideSubmit}
               disabled={!overrideReason.trim() || designerOverride.isPending}
-              className="!px-2 !py-1 !text-[0.7rem]"
             >
               Override
-            </PortalButton>
-            <PortalButton
+            </Button>
+            <Button
               variant="ghost"
+              size="sm"
               onClick={() => {
                 setOverrideOpen(false);
                 setOverrideReason('');
               }}
-              className="!px-2 !py-1 !text-[0.7rem]"
             >
               Cancel
-            </PortalButton>
+            </Button>
           </div>
         )}
       </div>

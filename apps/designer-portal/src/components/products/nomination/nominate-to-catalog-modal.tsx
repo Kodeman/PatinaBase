@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
+import { Button, IconButton, Input, Textarea } from '@/components/ui/controls';
 import {
   useNominateVendor,
   useLatestVendorNomination,
@@ -203,14 +204,13 @@ export function NominateToCatalogModal({
                 : 'Tell Patina why this maker belongs in the catalog. Patina handles outreach and onboarding from there.'}
             </p>
           </div>
-          <button
-            type="button"
+          <IconButton
             onClick={onClose}
-            aria-label="Close"
-            className="rounded-sm p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            label="Close"
+            className="h-auto w-auto p-1"
           >
             <X className="h-4 w-4" />
-          </button>
+          </IconButton>
         </header>
 
         {showPostSubmitTimeline && activeStatusForBanner ? (
@@ -287,22 +287,22 @@ export function NominateToCatalogModal({
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Manufacturer contact name" required>
-                  <input
+                  <Input
                     value={contactName}
                     onChange={(e) => setContactName(e.target.value)}
                     required
                     placeholder="Maria Ortiz"
-                    className="h-10 w-full rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 text-sm"
+                    className="h-10"
                   />
                 </Field>
                 <Field label="Contact email" required>
-                  <input
+                  <Input
                     type="email"
                     value={contactEmail}
                     onChange={(e) => setContactEmail(e.target.value)}
                     required
                     placeholder="maria@maker.example"
-                    className="h-10 w-full rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 text-sm"
+                    className="h-10"
                   />
                 </Field>
               </div>
@@ -312,7 +312,7 @@ export function NominateToCatalogModal({
                 required
                 hint="Speak in your own voice. Patina passes this note along when reaching out."
               >
-                <textarea
+                <Textarea
                   value={recommendationNote}
                   onChange={(e) => setRecommendationNote(e.target.value)}
                   required
@@ -322,7 +322,6 @@ export function NominateToCatalogModal({
                       ? 'What has changed since the previous decline?'
                       : 'Three projects in 18 months, all sailing through; rep is responsive; finishes hold up under daily use.'
                   }
-                  className="w-full rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 text-sm"
                 />
               </Field>
 
@@ -376,28 +375,23 @@ export function NominateToCatalogModal({
             </div>
 
             <footer className="flex items-center justify-end gap-2 border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-3">
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={onClose}
-                className="rounded-md px-4 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
                 disabled={!canSubmit}
-                className="rounded-md px-4 py-2 text-sm text-white"
-                style={{
-                  background: canSubmit ? 'var(--color-clay, #C4A57B)' : 'var(--border-default)',
-                  cursor: canSubmit ? 'pointer' : 'not-allowed',
-                }}
               >
                 {nominate.isPending
                   ? 'Submitting…'
                   : isRenomination
                     ? 'Resubmit nomination'
                     : 'Submit nomination'}
-              </button>
+              </Button>
             </footer>
           </form>
         )}

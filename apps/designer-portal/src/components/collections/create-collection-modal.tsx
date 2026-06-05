@@ -2,13 +2,11 @@
 
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@patina/design-system';
-import { Button } from '@patina/design-system';
-import { Input } from '@patina/design-system';
-import { Textarea } from '@patina/design-system';
 import { Badge } from '@patina/design-system';
 import { Alert, AlertDescription } from '@patina/design-system';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@patina/design-system';
 import { Label } from '@patina/design-system';
+import { Button, Input, Textarea } from '@/components/ui/controls';
 import { Package, Zap, Sparkles, AlertCircle } from 'lucide-react';
 import { useCreateCollection } from '@/hooks/use-collections';
 import type { CollectionType } from '@patina/types';
@@ -234,7 +232,7 @@ export function CreateCollectionModal({
           <div className="flex items-center justify-end gap-3 pt-4 border-t">
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               onClick={() => onOpenChange(false)}
               disabled={createMutation.isPending}
             >

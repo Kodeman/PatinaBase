@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useClaimNextProduct, useProductSpectrum, useSaveSpectrum } from '@patina/supabase';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { SpectrumSlider } from '@/components/portal/spectrum-slider';
 import { useToast } from '@/components/portal/toast-provider';
@@ -84,9 +84,10 @@ export default function DeepAnalysisPage() {
 
   return (
     <div className="pt-8">
-      <div className="type-meta mb-6">
-        <Link href="/portal/teaching" className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]">Teaching</Link>
-        <span className="mx-2">&rarr;</span><span>Deep Analysis</span>
+      <div className="mb-4">
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/portal/teaching">← Teaching</Link>
+        </Button>
       </div>
 
       <h1 className="type-section-head mb-6">Deep Analysis</h1>
@@ -108,9 +109,9 @@ export default function DeepAnalysisPage() {
           </div>
 
           <div className="mt-6">
-            <PortalButton variant="primary" onClick={handleSave} disabled={saveSpectrum.isPending || !productId}>
+            <Button variant="primary" onClick={handleSave} disabled={saveSpectrum.isPending || !productId}>
               {saveSpectrum.isPending ? 'Saving...' : 'Save Analysis'}
-            </PortalButton>
+            </Button>
           </div>
         </div>
       ) : (

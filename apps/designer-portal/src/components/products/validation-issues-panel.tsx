@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 import { AlertTriangle, AlertCircle, Info, CheckCircle, RefreshCw, X } from 'lucide-react';
-import { Button, Badge, Card, CardContent, Alert, AlertDescription, Textarea } from '@patina/design-system';
+import { Badge, Card, CardContent, Alert, AlertDescription } from '@patina/design-system';
+import { Button, Textarea } from '@/components/ui/controls';
 import { cn } from '@/lib/utils';
 import type { ValidationIssue } from '@patina/types';
 import { catalogApi } from '@/lib/api-client';
@@ -194,7 +195,7 @@ export function ValidationIssuesPanel({ productId, className }: ValidationIssues
           </p>
         </div>
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={handleRevalidate}
           disabled={isRevalidating}
@@ -269,17 +270,19 @@ export function ValidationIssuesPanel({ productId, className }: ValidationIssues
                           </div>
                           <p className="text-sm font-medium">{issue.message}</p>
                           {issue.details && Object.keys(issue.details).length > 0 && (
-                            <button
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               onClick={() => toggleExpanded(issue.id)}
-                              className="text-xs text-muted-foreground hover:text-foreground mt-1"
+                              className="mt-1 px-1 py-0 text-xs"
                             >
                               {isExpanded ? 'Hide details' : 'Show details'}
-                            </button>
+                            </Button>
                           )}
                         </div>
                         <Button
                           size="sm"
-                          variant="outline"
+                          variant="secondary"
                           onClick={() => {
                             setResolvingIssueId(issue.id);
                             toggleExpanded(issue.id);
@@ -321,7 +324,7 @@ export function ValidationIssuesPanel({ productId, className }: ValidationIssues
                             </Button>
                             <Button
                               size="sm"
-                              variant="outline"
+                              variant="secondary"
                               onClick={() => {
                                 setResolvingIssueId(null);
                                 toggleExpanded(issue.id);

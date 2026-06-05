@@ -6,6 +6,7 @@ import { useVendors, useToggleVendorSave } from '@patina/supabase';
 import { SearchInput } from '@/components/portal/search-input';
 import { FilterRow } from '@/components/portal/filter-row';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { Button } from '@/components/ui/controls';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyVendor = any;
@@ -60,15 +61,17 @@ export default function VendorsPage() {
               <div className="flex items-baseline justify-between">
                 <span className="type-item-name">{vendor.trade_name || vendor.name}</span>
                 <div className="flex items-center gap-3">
-                  <button
-                    className="type-btn-text text-[var(--text-muted)] transition-opacity hover:text-[var(--accent-primary)] md:opacity-0 md:group-hover:opacity-100"
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="transition-opacity md:opacity-0 md:group-hover:opacity-100"
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleSave.mutate(vendor.id);
                     }}
                   >
                     {vendor.is_saved ? 'Unsave' : 'Save'}
-                  </button>
+                  </Button>
                   <span className="type-meta">{vendor.market_position || vendor.tier || ''}</span>
                 </div>
               </div>

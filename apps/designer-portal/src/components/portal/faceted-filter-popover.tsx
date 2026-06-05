@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Button, FilterPill } from '@/components/ui/controls';
 
 export interface Facet {
   key: string;
@@ -45,16 +46,11 @@ export function FacetedFilterPopover({ facets, value, onChange }: FacetedFilterP
 
   return (
     <div className="relative" ref={containerRef}>
-      <button
-        type="button"
+      <Button
+        variant="secondary"
+        size="sm"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1.5 rounded-[3px] border px-3 py-1.5 text-[0.8rem] transition-colors"
-        style={{
-          borderColor: 'var(--border-default)',
-          background: totalActive > 0 ? 'var(--bg-hover)' : 'transparent',
-          color: 'var(--text-primary)',
-          fontFamily: 'var(--font-body)',
-        }}
+        className={totalActive > 0 ? 'bg-[var(--bg-hover)]' : undefined}
         aria-haspopup="dialog"
         aria-expanded={open}
       >
@@ -67,7 +63,7 @@ export function FacetedFilterPopover({ facets, value, onChange }: FacetedFilterP
             {totalActive}
           </span>
         )}
-      </button>
+      </Button>
 
       {open && (
         <div
@@ -77,14 +73,14 @@ export function FacetedFilterPopover({ facets, value, onChange }: FacetedFilterP
         >
           <div className="mb-3 flex items-center justify-between">
             <span className="type-label">Filters</span>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={reset}
-              className="text-[0.7rem] text-[var(--text-muted)] underline-offset-2 hover:underline"
               disabled={totalActive === 0}
             >
               Reset
-            </button>
+            </Button>
           </div>
 
           {facets.map((facet) => (
@@ -105,19 +101,13 @@ export function FacetedFilterPopover({ facets, value, onChange }: FacetedFilterP
                 {facet.options.map((opt) => {
                   const active = (value[facet.key] ?? []).includes(opt.value);
                   return (
-                    <button
+                    <FilterPill
                       key={opt.value}
-                      type="button"
+                      active={active}
                       onClick={() => toggle(facet.key, opt.value)}
-                      className="rounded-full border px-2 py-0.5 text-[0.72rem] transition-colors"
-                      style={{
-                        borderColor: active ? 'var(--text-primary)' : 'var(--border-default)',
-                        background: active ? 'var(--text-primary)' : 'transparent',
-                        color: active ? 'var(--bg-primary)' : 'var(--text-primary)',
-                      }}
                     >
                       {opt.label}
-                    </button>
+                    </FilterPill>
                   );
                 })}
               </div>

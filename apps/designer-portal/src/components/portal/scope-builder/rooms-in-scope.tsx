@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { PortalButton } from '@/components/portal/button';
+import { Button, Input, Select, Textarea } from '@/components/ui/controls';
 import { proposalEvents } from '@/lib/analytics';
 import {
   useProposalScopeRooms,
@@ -92,27 +92,25 @@ function RoomForm({
       <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <label className="block">
           <span className="type-meta mb-1 block">Room Name</span>
-          <input
+          <Input
             type="text"
             value={form.name}
             onChange={(e) => update('name', e.target.value)}
             placeholder="e.g. Primary Living Room"
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
           />
         </label>
         <label className="block">
           <span className="type-meta mb-1 block">Room Type</span>
-          <select
+          <Select
             value={form.roomType}
             onChange={(e) => update('roomType', e.target.value as RoomType)}
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
           >
             {ROOM_TYPES.map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
 
@@ -120,12 +118,11 @@ function RoomForm({
       <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <label className="block">
           <span className="type-meta mb-1 block">Dimensions</span>
-          <input
+          <Input
             type="text"
             value={form.dimensions}
             onChange={(e) => update('dimensions', e.target.value)}
             placeholder={`e.g. 18' x 22'`}
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
           />
         </label>
         <label className="block">
@@ -137,14 +134,14 @@ function RoomForm({
             >
               $
             </span>
-            <input
+            <Input
               type="number"
               min="0"
               step="100"
               value={form.budgetDollars}
               onChange={(e) => update('budgetDollars', e.target.value)}
               placeholder="0"
-              className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent py-2 pl-7 pr-3 font-body text-[0.88rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
+              className="pl-7"
             />
           </div>
         </label>
@@ -167,27 +164,26 @@ function RoomForm({
       {/* Notes */}
       <label className="block">
         <span className="type-meta mb-1 block">Notes (optional)</span>
-        <textarea
+        <Textarea
           value={form.notes}
           onChange={(e) => update('notes', e.target.value)}
           rows={2}
           placeholder="Design direction, client preferences, constraints..."
-          className="w-full resize-none rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-[0.82rem] text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]"
         />
       </label>
 
       {/* Actions */}
       <div className="flex items-center gap-2">
-        <PortalButton
+        <Button
           variant="primary"
           onClick={() => onSave(form)}
           disabled={!form.name.trim() || isSaving}
         >
           {isSaving ? 'Saving...' : 'Save Room'}
-        </PortalButton>
-        <PortalButton variant="ghost" onClick={onCancel} disabled={isSaving}>
+        </Button>
+        <Button variant="ghost" onClick={onCancel} disabled={isSaving}>
           Cancel
-        </PortalButton>
+        </Button>
       </div>
     </div>
   );
@@ -365,19 +361,21 @@ function RoomCard({
 
       {/* Actions */}
       <div className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => onEdit(room.id)}
-          className="cursor-pointer rounded-[3px] px-2 py-1 font-body text-[0.72rem] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
         >
           Edit
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={handleRemove}
           disabled={removeRoom.isPending}
-          className="cursor-pointer rounded-[3px] px-2 py-1 font-body text-[0.72rem] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--color-terracotta)]"
         >
           {removeRoom.isPending ? 'Removing...' : 'Remove'}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -568,9 +566,9 @@ export function RoomsInScope({ proposalId }: RoomsInScopeProps) {
         </div>
       ) : (
         <div className="mt-3">
-          <PortalButton variant="secondary" onClick={() => setIsAdding(true)}>
+          <Button variant="secondary" onClick={() => setIsAdding(true)}>
             + Add Room
-          </PortalButton>
+          </Button>
         </div>
       )}
 

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SharedScanBadge } from './shared-scan-badge';
+import { Button } from '@/components/ui/controls';
 
 interface LeadRoomScansProps {
   /** The lead/homeowner ID */
@@ -186,31 +187,32 @@ export function LeadRoomScans({ homeownerId, leadName, onViewScan }: LeadRoomSca
 
                 {/* Actions */}
                 {hasAccess && canView ? (
-                  <button
+                  <Button
+                    variant="primary"
+                    size="sm"
                     onClick={() => onViewScan?.(scan.id)}
-                    className="flex items-center justify-center gap-2 w-full px-3 py-2 bg-patina-mocha-brown text-white text-sm font-medium rounded-lg hover:bg-patina-charcoal transition-colors"
+                    className="w-full justify-center"
                   >
                     <Maximize2 className="w-4 h-4" />
                     View 3D Scan
-                  </button>
+                  </Button>
                 ) : isPending ? (
                   <div className="flex items-center justify-center gap-2 w-full px-3 py-2 bg-amber-50 text-amber-700 text-sm font-medium rounded-lg">
                     <Clock className="w-4 h-4" />
                     Request Pending
                   </div>
                 ) : (
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => handleRequestAccess(scan.id)}
                     disabled={requestAccess.isPending}
-                    className="flex items-center justify-center gap-2 w-full px-3 py-2 bg-patina-off-white text-patina-mocha-brown text-sm font-medium rounded-lg hover:bg-patina-soft-cream transition-colors disabled:opacity-50"
+                    loading={requestAccess.isPending}
+                    className="w-full justify-center"
                   >
-                    {requestAccess.isPending ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
+                    <Eye className="w-4 h-4" />
                     Request Access
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>

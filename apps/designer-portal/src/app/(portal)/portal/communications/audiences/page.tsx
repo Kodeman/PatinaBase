@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useAudienceSegments } from '@patina/supabase';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -17,7 +17,7 @@ export default function AudiencesPage() {
     <div className="pt-8">
       <div className="mb-6 flex items-baseline justify-between">
         <h1 className="type-section-head">Audiences</h1>
-        <PortalButton variant="primary" onClick={() => router.push('/portal/communications/audiences/new')}>New Audience</PortalButton>
+        <Button variant="primary" onClick={() => router.push('/portal/communications/audiences/new')}>New Audience</Button>
       </div>
       {isLoading ? <LoadingStrata /> : audiences.length > 0 ? (
         <div>

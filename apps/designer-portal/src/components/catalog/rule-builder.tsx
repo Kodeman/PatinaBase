@@ -1,8 +1,9 @@
 'use client';
 
 import { Plus, X, GripVertical } from 'lucide-react';
-import { Button, Input, Label, Card, CardContent, Badge } from '@patina/design-system';
+import { Label, Card, CardContent, Badge } from '@patina/design-system';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@patina/design-system';
+import { Button, IconButton, Input, FilterPill } from '@/components/ui/controls';
 import type { RuleCondition } from '@patina/types';
 
 interface RuleBuilderProps {
@@ -77,22 +78,18 @@ export function RuleBuilder({ operator, conditions, onChange, className }: RuleB
         <div className="flex items-center gap-2">
           <Label>Match</Label>
           <div className="flex gap-1 rounded-lg border p-1">
-            <Button
-              type="button"
-              variant={operator === 'AND' ? 'secondary' : 'ghost'}
-              size="sm"
+            <FilterPill
+              active={operator === 'AND'}
               onClick={() => onChange('AND', conditions)}
             >
               All (AND)
-            </Button>
-            <Button
-              type="button"
-              variant={operator === 'OR' ? 'secondary' : 'ghost'}
-              size="sm"
+            </FilterPill>
+            <FilterPill
+              active={operator === 'OR'}
               onClick={() => onChange('OR', conditions)}
             >
               Any (OR)
-            </Button>
+            </FilterPill>
           </div>
           <span className="text-sm text-muted-foreground">
             of the following conditions
@@ -107,7 +104,7 @@ export function RuleBuilder({ operator, conditions, onChange, className }: RuleB
                 <p className="text-sm text-muted-foreground mb-4">
                   No conditions added yet. Click "Add Condition" to get started.
                 </p>
-                <Button type="button" variant="outline" size="sm" onClick={addCondition}>
+                <Button type="button" variant="secondary" size="sm" onClick={addCondition}>
                   <Plus className="mr-2 h-4 w-4" />
                   Add Condition
                 </Button>
@@ -225,15 +222,15 @@ export function RuleBuilder({ operator, conditions, onChange, className }: RuleB
                     </div>
 
                     {/* Remove Button */}
-                    <Button
+                    <IconButton
                       type="button"
                       variant="ghost"
-                      size="icon"
+                      label="Remove condition"
                       className="h-10 w-10 flex-shrink-0"
                       onClick={() => removeCondition(index)}
                     >
                       <X className="h-4 w-4" />
-                    </Button>
+                    </IconButton>
                   </div>
                 </CardContent>
               </Card>
@@ -243,7 +240,7 @@ export function RuleBuilder({ operator, conditions, onChange, className }: RuleB
 
         {/* Add Condition Button */}
         {conditions.length > 0 && (
-          <Button type="button" variant="outline" onClick={addCondition} className="w-full">
+          <Button type="button" variant="secondary" onClick={addCondition} className="w-full">
             <Plus className="mr-2 h-4 w-4" />
             Add Condition
           </Button>

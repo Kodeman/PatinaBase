@@ -26,6 +26,7 @@ import {
   SurfaceKeys,
   useHelpContent,
 } from '@patina/help-system';
+import { Button } from '@/components/ui/controls';
 
 type Tab = 'notifications' | 'messages';
 
@@ -182,14 +183,14 @@ export default function InboxPage() {
           />
         </div>
         {tab === 'notifications' && unreadIds.length > 0 && (
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => markRead('all')}
-            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-default)] px-3 py-1.5 text-[0.7rem] uppercase tracking-wider text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
             data-testid="inbox-mark-all-read"
           >
             <CheckCheck className="h-3.5 w-3.5" /> Mark all read
-          </button>
+          </Button>
         )}
       </div>
 

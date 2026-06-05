@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import type { SpectrumValues } from '@patina/types';
 import { StyleArchetypeGrid } from './StyleArchetypeGrid';
 import { StyleSpectrumSlider } from './StyleSpectrumSlider';
+import { Button } from '@/components/ui/controls';
 
 interface StyleAttributionPanelProps {
   primaryStyleId: string | null;
@@ -57,9 +58,10 @@ export function StyleAttributionPanel({
     <div className="space-y-6">
       {/* Style Selection Section */}
       <section>
-        <button
+        <Button
+          variant="ghost"
           onClick={() => setExpandedSection(expandedSection === 'styles' ? null : 'styles')}
-          className="w-full flex items-center justify-between py-2 text-left"
+          className="w-full flex items-center justify-between py-2 text-left px-0"
         >
           <div>
             <h3 className="font-medium text-patina-charcoal">Style Classification</h3>
@@ -77,7 +79,7 @@ export function StyleAttributionPanel({
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
-        </button>
+        </Button>
 
         {expandedSection === 'styles' && (
           <div className="pt-4">
@@ -112,9 +114,10 @@ export function StyleAttributionPanel({
       {/* Spectrum Section */}
       {showSpectrum && (
         <section className="border-t border-patina-clay-beige/30 pt-4">
-          <button
+          <Button
+            variant="ghost"
             onClick={() => setExpandedSection(expandedSection === 'spectrum' ? null : 'spectrum')}
-            className="w-full flex items-center justify-between py-2 text-left"
+            className="w-full flex items-center justify-between py-2 text-left px-0"
           >
             <div>
               <h3 className="font-medium text-patina-charcoal">Style Spectrum</h3>
@@ -132,7 +135,7 @@ export function StyleAttributionPanel({
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
-          </button>
+          </Button>
 
           {expandedSection === 'spectrum' && (
             <div className="pt-4">

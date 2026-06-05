@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import {
   useDecisionMetrics,
   useDecisionAnalyticsByType,
@@ -46,18 +45,7 @@ export default function DecisionAnalyticsPage() {
 
   return (
     <div className="pt-8">
-      {/* Breadcrumb */}
-      <div className="type-meta mb-6">
-        <Link
-          href="/portal/decisions"
-          className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]"
-        >
-          Decisions
-        </Link>
-        <span className="mx-2">&rarr;</span>
-        <span>Insights</span>
-      </div>
-
+      {/* Breadcrumb is rendered globally by SubNav ("Clients › Decisions › Analytics"). */}
       <h1 className="type-page-title mb-6">Decision Insights</h1>
 
       {/* Metrics Row */}

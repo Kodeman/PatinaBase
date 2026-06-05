@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { StyleTag } from './style-tag';
 import { StrataMark } from './strata-mark';
 import { ALL_PHASES, PHASE_CONFIG } from '@/types/project-ui';
+import { Button, Input, Textarea, Select } from '@/components/ui/controls';
 
 interface ProjectFormData {
   name: string;
@@ -185,28 +186,17 @@ export function ProjectForm({
 
       {/* Actions */}
       <div className="flex gap-2 border-t border-[var(--border-default)] pt-6 mt-8">
-        <button
-          type="submit"
-          className="type-btn-text rounded-[3px] bg-[var(--text-primary)] px-5 py-2.5 text-[var(--bg-primary)]"
-        >
+        <Button type="submit" variant="primary">
           {isEdit ? 'Save Changes' : 'Create Project'}
-        </button>
+        </Button>
         {!isEdit && onSaveDraft && (
-          <button
-            type="button"
-            className="type-btn-text rounded-[3px] border border-[var(--border-default)] bg-transparent px-5 py-2.5 text-[var(--text-primary)]"
-            onClick={onSaveDraft}
-          >
+          <Button type="button" variant="secondary" onClick={onSaveDraft}>
             Save as Draft
-          </button>
+          </Button>
         )}
-        <button
-          type="button"
-          className="type-btn-text bg-transparent px-5 py-2.5 text-[var(--text-muted)]"
-          onClick={onCancel}
-        >
+        <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -230,14 +220,16 @@ function FormField({
   options?: string[];
 }) {
   const labelClass = 'mb-1.5 block type-meta-small';
-  const inputClass = `w-full rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 font-body text-[0.85rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)] ${disabled ? 'bg-[var(--bg-primary)] text-[var(--text-muted)]' : ''}`;
+  const disabledClass = disabled
+    ? 'bg-[var(--bg-primary)] text-[var(--text-muted)]'
+    : '';
 
   if (type === 'textarea') {
     return (
       <div>
         <label className={labelClass}>{label}</label>
-        <textarea
-          className={`${inputClass} min-h-[80px] resize-y`}
+        <Textarea
+          className={`min-h-[80px] resize-y ${disabledClass}`}
           value={value}
           onChange={(e) => onChange?.(e.target.value)}
           disabled={disabled}
@@ -251,8 +243,8 @@ function FormField({
     return (
       <div>
         <label className={labelClass}>{label}</label>
-        <select
-          className={inputClass}
+        <Select
+          className={disabledClass}
           value={value}
           onChange={(e) => onChange?.(e.target.value)}
           disabled={disabled}
@@ -260,7 +252,7 @@ function FormField({
           {options.map((opt) => (
             <option key={opt} value={opt}>{opt}</option>
           ))}
-        </select>
+        </Select>
       </div>
     );
   }
@@ -268,8 +260,8 @@ function FormField({
   return (
     <div>
       <label className={labelClass}>{label}</label>
-      <input
-        className={inputClass}
+      <Input
+        className={disabledClass}
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
         disabled={disabled}

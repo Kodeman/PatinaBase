@@ -17,7 +17,6 @@ import {
 import {
   Alert,
   AlertDescription,
-  Button,
   Card,
   CardContent,
   CardDescription,
@@ -25,6 +24,7 @@ import {
   CardTitle,
   toast,
 } from '@patina/design-system';
+import { Button } from '@/components/ui/controls';
 import { cn } from '@/lib/utils';
 import { catalogApi } from '@/lib/api-client';
 import { canCreateProducts } from '@/lib/permissions';
@@ -408,11 +408,11 @@ export function ProductCreationWizard({ onSuccess, onCancel }: ProductCreationWi
       {/* Navigation */}
       <div className="flex items-center justify-between border-t border-border pt-6">
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleCancel} disabled={isSaving}>
+          <Button variant="secondary" onClick={handleCancel} disabled={isSaving}>
             Cancel
           </Button>
           {!isFirstStep && (
-            <Button variant="outline" onClick={handleBack} disabled={isSaving}>
+            <Button variant="secondary" onClick={handleBack} disabled={isSaving}>
               <ChevronLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
@@ -423,7 +423,7 @@ export function ProductCreationWizard({ onSuccess, onCancel }: ProductCreationWi
           {!isLastStep && (
             <>
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={() => handleSave(true)}
                 disabled={isSaving || !stepValidation.essentials}
               >
@@ -441,7 +441,7 @@ export function ProductCreationWizard({ onSuccess, onCancel }: ProductCreationWi
           {isLastStep && (
             <>
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={() => handleSave(true)}
                 disabled={isSaving || !stepValidation.essentials}
               >

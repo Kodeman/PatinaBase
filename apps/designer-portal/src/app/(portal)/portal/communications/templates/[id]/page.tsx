@@ -7,7 +7,7 @@ import { useTemplate, useDeleteTemplate } from '@patina/supabase';
 import { useRouter } from 'next/navigation';
 import { FieldGroup } from '@/components/portal/field-group';
 import { DetailRow } from '@/components/portal/detail-row';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 
@@ -28,9 +28,10 @@ export default function TemplateDetailPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="pt-8">
-      <div className="type-meta mb-6">
-        <Link href="/portal/communications/templates" className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]">Templates</Link>
-        <span className="mx-2">&rarr;</span><span>{template.name}</span>
+      <div className="mb-4">
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/portal/communications/templates">← Templates</Link>
+        </Button>
       </div>
       <h1 className="type-page-title mb-4">{template.name}</h1>
       <FieldGroup label="Template Details">
@@ -43,9 +44,9 @@ export default function TemplateDetailPage({ params }: { params: Promise<{ id: s
         </FieldGroup>
       )}
       <div className="mt-6">
-        <PortalButton variant="ghost" disabled={deleteTemplate.isPending} onClick={() => deleteTemplate.mutate(id, { onSuccess: () => router.push('/portal/communications/templates') })}>
+        <Button variant="ghost" disabled={deleteTemplate.isPending} onClick={() => deleteTemplate.mutate(id, { onSuccess: () => router.push('/portal/communications/templates') })}>
           {deleteTemplate.isPending ? 'Deleting...' : 'Delete Template'}
-        </PortalButton>
+        </Button>
       </div>
     </div>
   );

@@ -20,7 +20,7 @@ import {
 } from '@/components/portal/decision-option-builder';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
-import { PortalButton } from '@/components/portal/button';
+import { Button, FilterPill } from '@/components/ui/controls';
 
 const decisionTypes: { key: DecisionType; label: string; icon: string }[] = [
   { key: 'material', label: 'Material', icon: '🎨' },
@@ -109,7 +109,7 @@ export default function EditDecisionPage({
           it from the detail page to make changes.
         </p>
         <Link href={`/portal/decisions/${decisionId}`}>
-          <PortalButton variant="secondary">Back to decision</PortalButton>
+          <Button variant="secondary">Back to decision</Button>
         </Link>
       </div>
     );
@@ -247,22 +247,13 @@ export default function EditDecisionPage({
           <FieldLabel>Decision Type</FieldLabel>
           <div className="flex flex-wrap gap-2">
             {decisionTypes.map((dt) => (
-              <button
+              <FilterPill
                 key={dt.key}
-                type="button"
+                active={decisionType === dt.key}
                 onClick={() => setDecisionType(dt.key)}
-                className={`cursor-pointer rounded-sm border px-3 py-1.5 transition-colors ${
-                  decisionType === dt.key
-                    ? 'border-[var(--accent-primary)] bg-[rgba(196,165,123,0.08)] text-[var(--text-primary)]'
-                    : 'border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-muted)] hover:border-[var(--accent-primary)]'
-                }`}
-                style={{
-                  fontFamily: 'var(--font-body)',
-                  fontSize: '0.78rem',
-                }}
               >
                 {dt.icon} {dt.label}
-              </button>
+              </FilterPill>
             ))}
           </div>
         </div>
@@ -297,9 +288,9 @@ export default function EditDecisionPage({
       </div>
 
       <div className="mb-6 max-w-[580px]">
-        <PortalButton variant="secondary" onClick={() => setOptions([...options, emptyOption()])}>
+        <Button variant="secondary" onClick={() => setOptions([...options, emptyOption()])}>
           + Add Another Option
-        </PortalButton>
+        </Button>
       </div>
 
       <StrataMark />
@@ -344,22 +335,13 @@ export default function EditDecisionPage({
           <FieldLabel>Blocking Status</FieldLabel>
           <div className="flex flex-wrap gap-2">
             {blockingOptions.map((bo) => (
-              <button
+              <FilterPill
                 key={bo.key}
-                type="button"
+                active={blockingStatus === bo.key}
                 onClick={() => setBlockingStatus(bo.key)}
-                className={`cursor-pointer rounded-sm border px-3 py-1.5 transition-colors ${
-                  blockingStatus === bo.key
-                    ? 'border-[var(--accent-primary)] bg-[rgba(196,165,123,0.08)] text-[var(--text-primary)]'
-                    : 'border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-muted)] hover:border-[var(--accent-primary)]'
-                }`}
-                style={{
-                  fontFamily: 'var(--font-body)',
-                  fontSize: '0.78rem',
-                }}
               >
                 {bo.label}
-              </button>
+              </FilterPill>
             ))}
           </div>
         </div>
@@ -378,7 +360,7 @@ export default function EditDecisionPage({
         className="mt-8 flex flex-wrap items-center gap-2 pt-6"
         style={{ borderTop: '1px solid var(--border-subtle)' }}
       >
-        <PortalButton
+        <Button
           variant="primary"
           onClick={handleSaveAndResend}
           disabled={!canSave}
@@ -388,13 +370,13 @@ export default function EditDecisionPage({
             : isDraft
               ? 'Save & Send to Client'
               : 'Save & Resend'}
-        </PortalButton>
-        <PortalButton variant="secondary" onClick={handleSave} disabled={!canSave}>
+        </Button>
+        <Button variant="secondary" onClick={handleSave} disabled={!canSave}>
           Save Changes
-        </PortalButton>
-        <PortalButton variant="ghost" onClick={() => router.back()}>
+        </Button>
+        <Button variant="ghost" onClick={() => router.back()}>
           Cancel
-        </PortalButton>
+        </Button>
 
         <div className="ml-auto">
           {confirmingDelete ? (
@@ -402,7 +384,7 @@ export default function EditDecisionPage({
               <span className="type-meta-small text-[var(--text-muted)]">
                 Delete permanently?
               </span>
-              <PortalButton
+              <Button
                 variant="ghost"
                 onClick={handleDelete}
                 disabled={deleteDecision.isPending}
@@ -410,17 +392,17 @@ export default function EditDecisionPage({
                 <span style={{ color: 'var(--color-terracotta, #D4A090)' }}>
                   {deleteDecision.isPending ? 'Deleting...' : 'Yes, delete'}
                 </span>
-              </PortalButton>
-              <PortalButton variant="ghost" onClick={() => setConfirmingDelete(false)}>
+              </Button>
+              <Button variant="ghost" onClick={() => setConfirmingDelete(false)}>
                 Keep
-              </PortalButton>
+              </Button>
             </div>
           ) : (
-            <PortalButton variant="ghost" onClick={() => setConfirmingDelete(true)}>
+            <Button variant="ghost" onClick={() => setConfirmingDelete(true)}>
               <span style={{ color: 'var(--color-terracotta, #D4A090)' }}>
                 Delete Decision
               </span>
-            </PortalButton>
+            </Button>
           )}
         </div>
       </div>

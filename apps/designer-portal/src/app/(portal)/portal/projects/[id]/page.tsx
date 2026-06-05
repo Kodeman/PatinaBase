@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useMemo, useState, type CSSProperties } from 'react';
+import { use, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   useProject,
@@ -51,6 +51,7 @@ import {
   TimeTrackingPanel,
   RecentActivityPanel,
 } from '@/components/portal/project-detail';
+import { Button } from '@/components/ui/controls';
 import { DecisionsPanel } from '@/components/portal/project-detail/decisions-panel';
 import { SendUpdateModal } from '@/components/portal/project-detail/send-update-modal';
 import { TeamPanel } from '@/components/portal/project-detail/team-panel';
@@ -63,17 +64,6 @@ type AnyProject = any;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const statusActionStyle: CSSProperties = {
-  fontFamily: 'var(--font-body)',
-  fontSize: '0.78rem',
-  fontWeight: 500,
-  padding: '0.5rem 0.85rem',
-  borderRadius: '3px',
-  border: '1px solid var(--border-default)',
-  background: 'transparent',
-  color: 'var(--text-primary)',
-  cursor: 'pointer',
-};
 
 export default function ProjectDetailPage({
   params,
@@ -613,26 +603,26 @@ export default function ProjectDetailPage({
                 {String(project.status ?? 'active').replace('_', ' ')}
               </span>
               {project.status === 'active' && (
-                <button type="button" style={statusActionStyle} onClick={() => handleChangeStatus('on_hold', 'put on hold')}>
+                <Button variant="secondary" size="sm" onClick={() => handleChangeStatus('on_hold', 'put on hold')}>
                   Put on hold
-                </button>
+                </Button>
               )}
               {project.status === 'draft' && (
-                <button type="button" style={statusActionStyle} onClick={() => handleChangeStatus('active', 'activated')}>
+                <Button variant="secondary" size="sm" onClick={() => handleChangeStatus('active', 'activated')}>
                   Activate
-                </button>
+                </Button>
               )}
               {(project.status === 'on_hold' ||
                 project.status === 'archived' ||
                 project.status === 'completed') && (
-                <button type="button" style={statusActionStyle} onClick={() => handleChangeStatus('active', 'reactivated')}>
+                <Button variant="secondary" size="sm" onClick={() => handleChangeStatus('active', 'reactivated')}>
                   Reactivate
-                </button>
+                </Button>
               )}
               {project.status !== 'archived' && project.status !== 'completed' && (
-                <button type="button" style={statusActionStyle} onClick={() => handleChangeStatus('archived', 'archived')}>
+                <Button variant="secondary" size="sm" onClick={() => handleChangeStatus('archived', 'archived')}>
                   Archive
-                </button>
+                </Button>
               )}
             </div>
           )}

@@ -2,7 +2,8 @@
 
 import { useMemo } from 'react';
 import { SlidersHorizontal, Grid3x3, List, X } from 'lucide-react';
-import { Badge, Button } from '@patina/design-system';
+import { Badge } from '@patina/design-system';
+import { Button, IconButton } from '@/components/ui/controls';
 
 import { FilterPresets } from '@/components/catalog/filter-presets';
 import { SearchAutocomplete } from '@/components/catalog/search-autocomplete';
@@ -55,7 +56,7 @@ export function CatalogSearchBar({
         />
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={onOpenFilters}>
+          <Button variant="secondary" onClick={onOpenFilters}>
             <SlidersHorizontal className="mr-2 h-4 w-4" />
             Filters
             {activeFilterCount > 0 && (
@@ -65,20 +66,20 @@ export function CatalogSearchBar({
             )}
           </Button>
           <div className="flex items-center gap-1 rounded-lg border p-1">
-            <Button
+            <IconButton
               variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
-              size="icon"
+              label="Grid view"
               onClick={() => onChangeView('grid')}
             >
               <Grid3x3 className="h-4 w-4" />
-            </Button>
-            <Button
+            </IconButton>
+            <IconButton
               variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-              size="icon"
+              label="List view"
               onClick={() => onChangeView('list')}
             >
               <List className="h-4 w-4" />
-            </Button>
+            </IconButton>
           </div>
         </div>
       </div>
@@ -92,33 +93,33 @@ export function CatalogSearchBar({
             {filters.categoryId && (
               <Badge variant="subtle" className="gap-1">
                 Category
-                <button onClick={() => onClearFilterKey('categoryId')} className="ml-1">
+                <IconButton label="Clear category filter" onClick={() => onClearFilterKey('categoryId')} className="ml-1 h-auto w-auto">
                   <X className="h-3 w-3" />
-                </button>
+                </IconButton>
               </Badge>
             )}
             {filters.brand && (
               <Badge variant="subtle" className="gap-1">
                 {filters.brand}
-                <button onClick={() => onClearFilterKey('brand')} className="ml-1">
+                <IconButton label="Clear brand filter" onClick={() => onClearFilterKey('brand')} className="ml-1 h-auto w-auto">
                   <X className="h-3 w-3" />
-                </button>
+                </IconButton>
               </Badge>
             )}
             {(filters.priceMin !== undefined || filters.priceMax !== undefined) && (
               <Badge variant="subtle" className="gap-1">
                 ${filters.priceMin ?? 0} - ${filters.priceMax ?? '∞'}
-                <button onClick={onClearPriceFilter} className="ml-1">
+                <IconButton label="Clear price filter" onClick={onClearPriceFilter} className="ml-1 h-auto w-auto">
                   <X className="h-3 w-3" />
-                </button>
+                </IconButton>
               </Badge>
             )}
             {filters.tags?.map((tag) => (
               <Badge key={tag} variant="subtle" className="gap-1">
                 {tag}
-                <button onClick={() => onRemoveTag(tag)} className="ml-1">
+                <IconButton label={`Remove ${tag} filter`} onClick={() => onRemoveTag(tag)} className="ml-1 h-auto w-auto">
                   <X className="h-3 w-3" />
-                </button>
+                </IconButton>
               </Badge>
             ))}
             <Button variant="ghost" size="sm" onClick={onClearFilters} className="text-muted-foreground">

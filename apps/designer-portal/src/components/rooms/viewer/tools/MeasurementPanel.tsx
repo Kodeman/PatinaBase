@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Ruler, Trash2, Save, X } from 'lucide-react';
 import { useViewerStore } from '@/stores/viewer-store';
+import { IconButton } from '@/components/ui/controls';
 
 export function MeasurementPanel() {
   const {
@@ -105,21 +106,25 @@ export function MeasurementPanel() {
                       }
                     }}
                   />
-                  <button
+                  <IconButton
+                    label="Save measurement"
+                    size="sm"
                     onClick={handleSave}
-                    className="p-1.5 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30"
+                    className="bg-green-500/20 text-green-400 hover:bg-green-500/30"
                   >
                     <Save className="w-4 h-4" />
-                  </button>
-                  <button
+                  </IconButton>
+                  <IconButton
+                    label="Cancel"
+                    size="sm"
                     onClick={() => {
                       setShowLabelInput(false);
                       setLabelInput('');
                     }}
-                    className="p-1.5 text-white/40 rounded hover:text-white/60"
+                    className="text-white/40 hover:text-white/60"
                   >
                     <X className="w-4 h-4" />
-                  </button>
+                  </IconButton>
                 </div>
               ) : (
                 <div className="flex gap-2">
@@ -169,12 +174,14 @@ export function MeasurementPanel() {
                     : m.distanceFormatted.metric}
                 </div>
               </div>
-              <button
+              <IconButton
+                label="Delete measurement"
+                size="sm"
                 onClick={() => deleteMeasurement(m.id)}
-                className="p-1.5 text-white/30 hover:text-red-400 transition-colors"
+                className="text-white/30 hover:text-red-400"
               >
                 <Trash2 className="w-4 h-4" />
-              </button>
+              </IconButton>
             </div>
           ))}
         </div>

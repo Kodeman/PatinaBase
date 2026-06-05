@@ -4,7 +4,7 @@ import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { AlertCircle, ArrowLeft, ShieldAlert, Lock } from 'lucide-react';
-import { Button } from '@patina/design-system';
+import { Button } from '@/components/ui/controls';
 
 const ERROR_CONFIGS: Record<string, { title: string; description: string; icon: React.ReactNode }> = {
   Configuration: {
@@ -61,19 +61,17 @@ function AuthErrorContent() {
           </div>
 
           <div className="mt-8 space-y-3">
-            <Link href="/auth/signin" className="block">
-              <Button className="w-full" size="lg">
+            <Button className="w-full" asChild>
+              <Link href="/auth/signin">
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to Sign In
-              </Button>
-            </Link>
+              </Link>
+            </Button>
 
             {error === 'InsufficientPermissions' && (
-              <Link href="/projects" className="block">
-                <Button variant="outline" className="w-full" size="lg">
-                  Go to Projects
-                </Button>
-              </Link>
+              <Button variant="secondary" className="w-full" asChild>
+                <Link href="/projects">Go to Projects</Link>
+              </Button>
             )}
           </div>
         </div>

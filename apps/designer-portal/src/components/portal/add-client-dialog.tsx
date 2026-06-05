@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAddClient } from '@patina/supabase';
-import { PortalButton } from './button';
+import { Button, Input, Textarea, Select } from '@/components/ui/controls';
 // F1.6 — Add Client form fields migrated to the help-system FieldLabel +
 // FieldHelper components. Labels keep visual + a11y semantics (htmlFor →
 // input id) while gaining the canonical small-caps style. Helpers fetch
@@ -118,13 +118,12 @@ export function AddClientDialog({ open, onClose }: AddClientFormProps) {
           <FieldLabel htmlFor="add-client-name" optional>
             Full Name
           </FieldLabel>
-          <input
+          <Input
             id="add-client-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="James & Lin Chen"
-            className="type-body rounded-sm border-0 border-b border-[var(--border-default)] bg-transparent px-0 py-2 text-[0.85rem] outline-none focus:border-[var(--accent-primary)]"
           />
           <FieldHelper
             surfaceKey={SurfaceKeys.DesignerPortal.Clients.Contact.Name}
@@ -137,14 +136,13 @@ export function AddClientDialog({ open, onClose }: AddClientFormProps) {
           <FieldLabel htmlFor="add-client-email" required>
             Email
           </FieldLabel>
-          <input
+          <Input
             id="add-client-email"
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="james@example.com"
-            className="type-body rounded-sm border-0 border-b border-[var(--border-default)] bg-transparent px-0 py-2 text-[0.85rem] outline-none focus:border-[var(--accent-primary)]"
           />
           <FieldHelper
             surfaceKey={SurfaceKeys.DesignerPortal.Clients.Contact.Email}
@@ -155,15 +153,14 @@ export function AddClientDialog({ open, onClose }: AddClientFormProps) {
 
         <div className="flex flex-col gap-1">
           <FieldLabel htmlFor="add-client-source">Source</FieldLabel>
-          <select
+          <Select
             id="add-client-source"
             value={source}
             onChange={(e) => setSource(e.target.value as 'direct' | 'referral')}
-            className="type-body rounded-sm border-0 border-b border-[var(--border-default)] bg-transparent px-0 py-2 text-[0.85rem] outline-none focus:border-[var(--accent-primary)]"
           >
             <option value="direct">Direct</option>
             <option value="referral">Referral</option>
-          </select>
+          </Select>
           <FieldHelper
             surfaceKey={SurfaceKeys.DesignerPortal.Clients.Contact.Source}
             fallback="How this client found you — used in your referral analytics."
@@ -175,13 +172,13 @@ export function AddClientDialog({ open, onClose }: AddClientFormProps) {
           <FieldLabel htmlFor="add-client-notes" optional>
             Notes
           </FieldLabel>
-          <textarea
+          <Textarea
             id="add-client-notes"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
             placeholder="Initial notes about this client..."
-            className="type-body resize-vertical border-0 border-b border-[var(--border-default)] bg-transparent px-0 py-2 text-[0.85rem] outline-none focus:border-[var(--accent-primary)]"
+            className="resize-vertical"
           />
           <FieldHelper
             surfaceKey={SurfaceKeys.DesignerPortal.Clients.Contact.Notes}
@@ -214,12 +211,12 @@ export function AddClientDialog({ open, onClose }: AddClientFormProps) {
         </div>
 
         <div className="flex gap-3 pt-4">
-          <PortalButton variant="primary" type="submit" disabled={addClient.isPending || !email.trim()}>
+          <Button variant="primary" type="submit" disabled={addClient.isPending || !email.trim()}>
             {addClient.isPending ? 'Adding...' : 'Add Client'}
-          </PortalButton>
-          <PortalButton variant="ghost" type="button" onClick={onClose}>
+          </Button>
+          <Button variant="ghost" type="button" onClick={onClose}>
             Cancel
-          </PortalButton>
+          </Button>
         </div>
       </form>
     </div>

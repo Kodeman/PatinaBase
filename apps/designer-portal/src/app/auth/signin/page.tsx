@@ -8,6 +8,7 @@ import { getAccountsForPortal } from '@patina/types';
 import Link from 'next/link';
 import { QRLoginDisplay } from '@/components/auth/QRLoginDisplay';
 import { StrataMark } from '@/components/portal/strata-mark';
+import { Button } from '@/components/ui/controls';
 import { authEvents } from '@/lib/analytics/events';
 
 const ERROR_MESSAGES: Record<string, { title: string; description: string }> = {
@@ -263,10 +264,10 @@ function SignInContent() {
         {/* OAuth Buttons */}
         <div className={`grid gap-4 ${isOAuthProviderEnabled('google') ? 'grid-cols-2' : 'grid-cols-1'}`}>
           {isOAuthProviderEnabled('google') && (
-            <button
+            <Button
+              variant="secondary"
               onClick={() => handleOAuthSignIn('google')}
               disabled={isLoading || !!oauthLoading}
-              className="type-btn-text flex items-center justify-center gap-2 py-3 px-4 border border-patina-pearl rounded-[3px] text-patina-charcoal hover:border-patina-clay transition-colors disabled:opacity-50"
             >
               {oauthLoading === 'google' ? (
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -279,13 +280,13 @@ function SignInContent() {
                 </svg>
               )}
               Google
-            </button>
+            </Button>
           )}
 
-          <button
+          <Button
+            variant="secondary"
             onClick={() => handleOAuthSignIn('apple')}
             disabled={isLoading || !!oauthLoading}
-            className="type-btn-text flex items-center justify-center gap-2 py-3 px-4 border border-patina-pearl rounded-[3px] text-patina-charcoal hover:border-patina-clay transition-colors disabled:opacity-50"
           >
             {oauthLoading === 'apple' ? (
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -295,15 +296,16 @@ function SignInContent() {
               </svg>
             )}
             Apple
-          </button>
+          </Button>
         </div>
 
         {/* Expandable Email/Password */}
         <div className="mt-6">
-          <button
+          <Button
+            variant="ghost"
             type="button"
             onClick={() => setShowEmailForm(!showEmailForm)}
-            className="type-meta w-full flex items-center justify-center gap-2 py-3 hover:text-patina-clay transition-colors"
+            className="type-meta w-full justify-center py-3"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="4" width="20" height="16" rx="2" />
@@ -313,7 +315,7 @@ function SignInContent() {
             <svg className={`h-3 w-3 transition-transform ${showEmailForm ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="m6 9 6 6 6-6" />
             </svg>
-          </button>
+          </Button>
 
           {showEmailForm && (
             <div className="mt-4">
@@ -339,14 +341,16 @@ function SignInContent() {
                 />
               )}
 
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 type="button"
                 onClick={() => {
                   setAuthMode((m) => (m === 'magic' ? 'password' : 'magic'));
                   setFormError(null);
                 }}
                 disabled={sendMagicLink.isPending}
-                className="type-body-small mt-4 w-full text-center text-patina-clay hover:text-patina-aged-oak transition-colors disabled:opacity-50"
+                className="mt-4 w-full justify-center"
                 aria-label={
                   authMode === 'magic'
                     ? 'Switch to password sign in'
@@ -355,7 +359,7 @@ function SignInContent() {
                 data-testid="auth-mode-toggle"
               >
                 {authMode === 'magic' ? 'Use password instead' : 'Email me a code'}
-              </button>
+              </Button>
             </div>
           )}
         </div>

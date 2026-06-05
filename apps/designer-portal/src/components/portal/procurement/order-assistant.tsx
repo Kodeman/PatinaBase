@@ -36,6 +36,7 @@ import {
   BlockedByDecisionInline,
   getBlockedItems,
 } from '@/components/portal/procurement/blocked-by-decision-notice';
+import { Button, IconButton } from '@/components/ui/controls';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
 
@@ -505,15 +506,14 @@ export function OrderAssistant(props: OrderAssistantProps) {
                     {project.name}
                   </div>
                 </div>
-                <button
-                  type="button"
+                <IconButton
+                  label="Close"
                   onClick={handleSkip}
                   disabled={createPO.isPending}
-                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--hover-bg,rgba(196,165,123,0.06))] hover:text-[var(--text-primary)] disabled:opacity-40"
-                  aria-label="Close"
+                  size="sm"
                 >
                   <X className="h-4 w-4" />
-                </button>
+                </IconButton>
               </div>
               {scopeDisclaimer && (
                 <p className="mt-1 text-[0.7rem] italic text-[var(--text-muted)]">
@@ -565,10 +565,10 @@ export function OrderAssistant(props: OrderAssistantProps) {
                   <div className="type-meta-small text-[var(--text-primary)]">
                     Step 2 · Copy item details
                   </div>
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={handleCopyDetails}
-                    className="inline-flex items-center gap-1.5 rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-2.5 py-1 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-[var(--text-primary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]"
                   >
                     <Copy className="h-3 w-3" />
                     {copyState === 'copied'
@@ -576,7 +576,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
                       : copyState === 'error'
                         ? 'Copy failed'
                         : 'Copy details'}
-                  </button>
+                  </Button>
                 </div>
                 <div
                   className="border-l-2 pl-3 text-[0.7rem] leading-[1.7] text-[var(--text-primary)]"
@@ -735,14 +735,13 @@ export function OrderAssistant(props: OrderAssistantProps) {
                             Milestone {idx + 1}
                           </span>
                           {milestones.length > 2 && (
-                            <button
-                              type="button"
+                            <IconButton
+                              label={`Remove milestone ${idx + 1}`}
                               onClick={() => removeMilestone(m.key)}
-                              className="flex h-6 w-6 items-center justify-center rounded-sm text-[var(--text-muted)] hover:text-[var(--color-terracotta,#D4A090)]"
-                              aria-label={`Remove milestone ${idx + 1}`}
+                              size="sm"
                             >
                               <Trash2 className="h-3 w-3" />
-                            </button>
+                            </IconButton>
                           )}
                         </div>
                         <div className="grid grid-cols-3 gap-2">
@@ -775,14 +774,15 @@ export function OrderAssistant(props: OrderAssistantProps) {
                       </div>
                     ))}
                     {milestones.length < 4 && (
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={addMilestone}
-                        className="inline-flex items-center justify-center gap-1.5 self-start rounded-[3px] border border-dashed border-[var(--border-default)] px-2.5 py-1 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-[var(--text-muted)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]"
+                        className="self-start"
                       >
                         <Plus className="h-3 w-3" />
                         Add milestone
-                      </button>
+                      </Button>
                     )}
                   </div>
                 )}
@@ -817,64 +817,48 @@ export function OrderAssistant(props: OrderAssistantProps) {
 
             {/* Footer */}
             <div className="flex items-center justify-between gap-2 border-t border-[var(--border-default)] px-5 py-3">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={handleSkip}
                 disabled={createPO.isPending}
-                className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 font-mono text-[0.65rem] uppercase tracking-[0.06em] text-[var(--text-muted)] transition-colors hover:border-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40"
               >
                 {dominantLayer === 'catalog' ? 'Cancel' : 'Skip — order externally'}
-              </button>
+              </Button>
               {dominantLayer === 'catalog' ? (
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={handleCatalogSubmit}
                   disabled={createPO.isPending || hasBlockedItems}
+                  loading={createPO.isPending}
                   title={
                     hasBlockedItems
                       ? 'Ordering is blocked pending a client decision'
                       : undefined
                   }
-                  className="inline-flex items-center gap-2 rounded-[3px] px-4 py-1.5 font-mono text-[0.7rem] uppercase tracking-[0.06em] text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
-                  style={{ background: 'var(--color-clay,#C4A57B)' }}
                 >
-                  {createPO.isPending && (
-                    <span
-                      className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white"
-                      aria-hidden="true"
-                    />
-                  )}
                   {hasBlockedItems
                     ? 'Blocked — decision pending'
-                    : createPO.isPending
-                      ? 'Placing Patina order…'
-                      : `One-click order via Patina · ${formatDollars(totalCents)}`}
-                </button>
+                    : `One-click order via Patina · ${formatDollars(totalCents)}`}
+                </Button>
               ) : (
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={handleSubmit}
                   disabled={createPO.isPending || hasBlockedItems}
+                  loading={createPO.isPending}
                   title={
                     hasBlockedItems
                       ? 'Ordering is blocked pending a client decision'
                       : undefined
                   }
-                  className="inline-flex items-center gap-2 rounded-[3px] px-4 py-1.5 font-mono text-[0.7rem] uppercase tracking-[0.06em] text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
-                  style={{ background: 'var(--accent-primary,#C4A57B)' }}
                 >
-                  {createPO.isPending && (
-                    <span
-                      className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white"
-                      aria-hidden="true"
-                    />
-                  )}
                   {hasBlockedItems
                     ? 'Blocked — decision pending'
-                    : createPO.isPending
-                      ? 'Submitting…'
-                      : `Confirm ${ffeItems.length} ordered`}
-                </button>
+                    : `Confirm ${ffeItems.length} ordered`}
+                </Button>
               )}
             </div>
           </motion.div>

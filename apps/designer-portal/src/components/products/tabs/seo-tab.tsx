@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 import { Search, Globe, Hash, ExternalLink, CheckCircle, AlertCircle } from 'lucide-react';
-import { Input, Label, Textarea, Badge } from '@patina/design-system';
+import { Label, Badge } from '@patina/design-system';
+import { Button, Input, Textarea } from '@/components/ui/controls';
 import { cn } from '@/lib/utils';
 import type { Product } from '@patina/types';
 
@@ -138,13 +139,15 @@ export function SEOTab({ product, onChange }: SEOTabProps) {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label htmlFor="product-slug">URL Slug*</Label>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={handleGenerateSlug}
-              className="text-xs text-primary hover:underline"
+              className="px-1 py-0 text-xs"
             >
               Generate from name
-            </button>
+            </Button>
           </div>
           <div className="relative">
             <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

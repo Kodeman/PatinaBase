@@ -2,7 +2,8 @@
 
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { SearchX, Package, Filter, Sparkles } from 'lucide-react';
-import { Button, Card, CardContent } from '@patina/design-system';
+import { Card, CardContent } from '@patina/design-system';
+import { Button } from '@/components/ui/controls';
 
 export interface EmptyStateProps {
   type?: 'no-results' | 'no-products' | 'filtered' | 'error';
@@ -195,7 +196,7 @@ export function EmptyState({
           >
             {searchQuery && onClearSearch && (
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={onClearSearch}
               >
                 Clear Search
@@ -203,7 +204,7 @@ export function EmptyState({
             )}
             {hasFilters && onClearFilters && (
               <Button
-                variant={searchQuery ? 'outline' : 'default'}
+                variant={searchQuery ? 'secondary' : 'primary'}
                 onClick={onClearFilters}
               >
                 Clear All Filters
@@ -211,7 +212,7 @@ export function EmptyState({
             )}
             {!searchQuery && !hasFilters && (
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={() => window.location.reload()}
               >
                 Refresh Page

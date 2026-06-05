@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Search, Bell, MessageSquare, HelpCircle } from 'lucide-react';
 import { UserStatusMenu, type UserPresenceStatus } from '@patina/design-system';
 import { ContextualHelpPanel } from '@patina/help-system';
+import { Button, IconButton } from '@/components/ui/controls';
 import { useAuth } from '@/hooks/use-auth';
 import { useUnreadCounts } from '@/hooks/use-unread-counts';
 import { useCommandPalette } from '@/contexts/command-palette-context';
@@ -52,17 +53,19 @@ export function UtilityBar() {
 
   return (
     <div className="flex items-center gap-1">
-      {/* Search (⌘K) */}
-      <button
+      {/* Search (⌘K) — text+kbd cluster, so kit Button ghost sm */}
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={commandPalette.open}
-        className="flex h-9 items-center gap-1.5 rounded-md px-2.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg,rgba(196,165,123,0.06))] hover:text-[var(--text-primary)]"
+        className="h-9 gap-1.5 rounded-md px-2.5"
         title="Search (⌘K)"
       >
         <Search className="h-4 w-4" />
         <kbd className="hidden font-mono text-[0.6rem] text-[var(--text-muted)] opacity-60 lg:inline">
           ⌘K
         </kbd>
-      </button>
+      </Button>
 
       {/* Notifications */}
       <NotificationDropdown
@@ -72,17 +75,16 @@ export function UtilityBar() {
       />
 
       {/* Help (Sprint 2 · C6 — opens ContextualHelpPanel for the current surface) */}
-      <button
-        type="button"
+      <IconButton
+        variant="ghost"
+        size="md"
+        label="Help"
         onClick={() => setIsHelpOpen(true)}
-        aria-label="Help"
         aria-haspopup="dialog"
         aria-expanded={isHelpOpen}
-        className="relative flex h-9 w-9 items-center justify-center rounded-md text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg,rgba(196,165,123,0.06))] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring,#C4A57B)]"
-        title="Help"
       >
         <HelpCircle className="h-4 w-4" aria-hidden="true" />
-      </button>
+      </IconButton>
 
       {/* Contextual help panel (renders in its own portal; mounted here so it
           inherits portal-tree theming + auth context). The panel itself fires
@@ -93,11 +95,13 @@ export function UtilityBar() {
         surfaceKey={surfaceKey}
       />
 
-      {/* Messages */}
-      <button
+      {/* Messages — IconButton is relative, so the badge stays overlaid */}
+      <IconButton
+        variant="ghost"
+        size="md"
+        label="Messages"
         onClick={messagesPanel.toggle}
-        className="relative flex h-9 w-9 items-center justify-center rounded-md text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg,rgba(196,165,123,0.06))] hover:text-[var(--text-primary)]"
-        title="Messages"
+        className="relative"
       >
         <MessageSquare className="h-4 w-4" />
         {messages > 0 && (
@@ -105,7 +109,7 @@ export function UtilityBar() {
             {messages}
           </span>
         )}
-      </button>
+      </IconButton>
 
       {/* Profile — wrapped so the First Project Walkthrough tour (Sprint 3 W1)
           can anchor its step 5 coachmark on the avatar trigger. The

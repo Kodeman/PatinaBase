@@ -1,4 +1,5 @@
 import type { MockDocument } from '@/types/project-ui';
+import { Button } from '@/components/ui/controls';
 
 interface DocumentListProps {
   documents: MockDocument[];
@@ -48,12 +49,14 @@ export function DocumentList({ documents, onView, onAdd }: DocumentListProps) {
 
             {/* Action */}
             {onView && (
-              <button
-                className="type-btn-text bg-transparent px-2 py-1 text-[0.72rem] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              <Button
+                variant="ghost"
+                size="sm"
+                className="px-2 py-1 text-[0.72rem]"
                 onClick={() => onView(doc)}
               >
                 View
-              </button>
+              </Button>
             )}
           </div>
         );
@@ -61,12 +64,14 @@ export function DocumentList({ documents, onView, onAdd }: DocumentListProps) {
 
       {onAdd && (
         <div className="mt-3">
-          <button
-            className="type-btn-text rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[0.72rem] text-[var(--text-primary)]"
+          <Button
+            variant="secondary"
+            size="sm"
+            className="text-[0.72rem]"
             onClick={onAdd}
           >
             + Add Document
-          </button>
+          </Button>
         </div>
       )}
     </div>

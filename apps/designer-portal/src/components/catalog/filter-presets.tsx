@@ -3,8 +3,6 @@
 import { useState, useEffect } from 'react';
 import { Save, FolderOpen, Trash2, Check } from 'lucide-react';
 import {
-  Button,
-  Input,
   Label,
   Dialog,
   DialogContent,
@@ -14,6 +12,7 @@ import {
   DialogFooter,
   Badge,
 } from '@patina/design-system';
+import { Button, IconButton, Input } from '@/components/ui/controls';
 import type { CatalogFilters } from './catalog-filters';
 
 interface FilterPreset {
@@ -98,7 +97,7 @@ export function FilterPresets({ currentFilters, onLoadPreset }: FilterPresetsPro
       {/* Save/Load Buttons */}
       <div className="flex items-center gap-2">
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={() => setIsSaveDialogOpen(true)}
           disabled={!hasActiveFilters}
@@ -107,7 +106,7 @@ export function FilterPresets({ currentFilters, onLoadPreset }: FilterPresetsPro
           Save Filters
         </Button>
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={() => setIsLoadDialogOpen(true)}
           disabled={presets.length === 0}
@@ -166,7 +165,7 @@ export function FilterPresets({ currentFilters, onLoadPreset }: FilterPresetsPro
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsSaveDialogOpen(false)}>
+            <Button variant="secondary" onClick={() => setIsSaveDialogOpen(false)}>
               Cancel
             </Button>
             <Button onClick={handleSavePreset} disabled={!presetName.trim()}>
@@ -223,21 +222,21 @@ export function FilterPresets({ currentFilters, onLoadPreset }: FilterPresetsPro
                   </div>
                   <div className="flex items-center gap-2 ml-4">
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       onClick={() => handleLoadPreset(preset)}
                     >
                       <Check className="mr-1 h-3 w-3" />
                       Load
                     </Button>
-                    <Button
+                    <IconButton
                       variant="ghost"
-                      size="icon"
+                      label="Delete preset"
                       onClick={() => handleDeletePreset(preset.id)}
                       className="opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    </IconButton>
                   </div>
                 </div>
               ))
@@ -245,7 +244,7 @@ export function FilterPresets({ currentFilters, onLoadPreset }: FilterPresetsPro
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsLoadDialogOpen(false)}>
+            <Button variant="secondary" onClick={() => setIsLoadDialogOpen(false)}>
               Cancel
             </Button>
           </DialogFooter>

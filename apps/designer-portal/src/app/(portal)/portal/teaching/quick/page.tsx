@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useClaimNextProduct, useAssignStyle, useAllStyles } from '@patina/supabase';
-import { PortalButton } from '@/components/portal/button';
+import { Button, FilterPill } from '@/components/ui/controls';
 import { StyleTag } from '@/components/portal/style-tag';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 
@@ -51,9 +51,10 @@ export default function QuickTagsPage() {
 
   return (
     <div className="pt-8">
-      <div className="type-meta mb-6">
-        <Link href="/portal/teaching" className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]">Teaching</Link>
-        <span className="mx-2">&rarr;</span><span>Quick Tags</span>
+      <div className="mb-4">
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/portal/teaching">← Teaching</Link>
+        </Button>
       </div>
 
       <h1 className="type-section-head mb-6">Quick Tags</h1>
@@ -71,28 +72,24 @@ export default function QuickTagsPage() {
             <span className="type-meta mb-3 block">Select Style Tags</span>
             <div className="flex flex-wrap gap-2">
               {styles.map((style: Any) => (
-                <button
+                <FilterPill
                   key={style.id}
+                  active={selectedStyles.includes(style.id)}
                   onClick={() => toggleStyle(style.id)}
-                  className={`type-btn-text cursor-pointer rounded-sm border px-3.5 py-1.5 transition-colors ${
-                    selectedStyles.includes(style.id)
-                      ? 'border-[var(--accent-primary)] bg-[var(--bg-hover)] text-[var(--text-primary)]'
-                      : 'border-patina-pearl bg-patina-off-white text-patina-mocha hover:border-[var(--accent-primary)]'
-                  }`}
                 >
                   {style.name}
-                </button>
+                </FilterPill>
               ))}
             </div>
           </div>
 
           <div className="flex gap-4">
-            <PortalButton variant="primary" onClick={handleSubmit} disabled={selectedStyles.length === 0 || assignStyle.isPending}>
+            <Button variant="primary" onClick={handleSubmit} disabled={selectedStyles.length === 0 || assignStyle.isPending}>
               {assignStyle.isPending ? 'Submitting...' : 'Submit Tags'}
-            </PortalButton>
-            <PortalButton variant="ghost" onClick={() => setSelectedStyles([])}>
+            </Button>
+            <Button variant="ghost" onClick={() => setSelectedStyles([])}>
               Clear
-            </PortalButton>
+            </Button>
           </div>
         </div>
       ) : (

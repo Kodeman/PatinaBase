@@ -1,5 +1,7 @@
 'use client';
 
+import { FilterPill } from '@/components/ui/controls';
+
 const defaultTemplates = [
   'Schedule visit',
   'Send weekly update',
@@ -20,21 +22,13 @@ export function QuickReplyBar({
   return (
     <div className="flex flex-wrap gap-1.5 py-3">
       {templates.map((tpl) => (
-        <button
+        <FilterPill
           key={tpl}
           onClick={() => onSelect(tpl)}
-          className="cursor-pointer whitespace-nowrap rounded-full border bg-transparent px-3 py-1.5"
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: '0.7rem',
-            color: 'var(--accent-primary)',
-            borderColor: 'rgba(196, 165, 123, 0.2)',
-            background: 'rgba(196, 165, 123, 0.06)',
-            transition: `background var(--duration-fast) var(--ease-default)`,
-          }}
+          className="whitespace-nowrap border-[rgba(196,165,123,0.2)] bg-[rgba(196,165,123,0.06)] text-[var(--accent-primary)]"
         >
           {tpl}
-        </button>
+        </FilterPill>
       ))}
     </div>
   );

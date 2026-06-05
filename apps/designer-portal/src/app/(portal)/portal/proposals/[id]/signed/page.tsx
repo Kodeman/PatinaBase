@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useProposal } from '@/hooks/use-proposals';
 import { useActivateProposal, createBrowserClient } from '@patina/supabase';
 import { DetailRow } from '@/components/portal/detail-row';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 
@@ -123,13 +123,13 @@ export default function SignedProposalPage({
                 This proposal has been activated as a live project. All rooms,
                 FF&E items, phases, and payment milestones have been created.
               </p>
-              <PortalButton
+              <Button
                 variant="primary"
                 onClick={() => router.push(`/portal/projects/${proposal.project_id}`)}
                 className="!bg-[var(--color-sage)]"
               >
                 Go to Project &rarr;
-              </PortalButton>
+              </Button>
             </div>
           ) : (
             <div
@@ -172,7 +172,7 @@ export default function SignedProposalPage({
                   className="rounded-[3px] border border-[var(--border-default)] bg-white px-3 py-2 font-body text-sm text-[var(--text-primary)] outline-none"
                 />
               </div>
-              <PortalButton
+              <Button
                 variant="primary"
                 disabled={activating}
                 onClick={async () => {
@@ -195,7 +195,7 @@ export default function SignedProposalPage({
                 className="!bg-[var(--color-sage)]"
               >
                 {activating ? 'Activating...' : 'Activate Project →'}
-              </PortalButton>
+              </Button>
               {activationError && (
                 <p
                   className="mt-3 rounded-[3px] border px-3 py-2"

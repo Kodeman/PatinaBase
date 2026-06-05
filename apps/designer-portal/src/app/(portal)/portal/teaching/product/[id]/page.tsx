@@ -15,12 +15,12 @@ import {
   DetailRow,
   StyleTag,
   LoadingStrata,
-  PortalButton,
   TeachPanel,
   SpectrumSlider,
   ImageGallery,
   useToast,
 } from '@/components/portal';
+import { Button } from '@/components/ui/controls';
 import { useHydrated } from '@/hooks/use-hydrated';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -350,28 +350,28 @@ export default function TeachProductPage({ params }: { params: Promise<{ id: str
 
           {/* Actions */}
           <div className="flex flex-wrap gap-2.5">
-            <PortalButton
+            <Button
               variant="primary"
               className="bg-[var(--accent-primary)] text-white hover:bg-[var(--accent-hover)]"
               onClick={() => handleSave(true)}
               disabled={submitTeaching.isPending}
             >
               {submitTeaching.isPending ? 'Saving…' : 'Save & Next Product →'}
-            </PortalButton>
-            <PortalButton
+            </Button>
+            <Button
               variant="secondary"
               onClick={() => handleSave(false)}
               disabled={submitTeaching.isPending}
             >
               {submitTeaching.isPending ? 'Saving…' : 'Save & Close'}
-            </PortalButton>
-            <PortalButton
+            </Button>
+            <Button
               variant="ghost"
               onClick={() => router.push('/portal/teaching')}
               disabled={submitTeaching.isPending}
             >
               Skip Product
-            </PortalButton>
+            </Button>
           </div>
         </div>
       </div>

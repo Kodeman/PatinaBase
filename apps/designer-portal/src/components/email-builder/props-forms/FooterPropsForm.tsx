@@ -3,6 +3,7 @@
 import { Plus, Trash2 } from 'lucide-react';
 import type { FooterBlockProps } from '@patina/types';
 import { FormField, TextArea } from './FormField';
+import { Button, IconButton } from '@/components/ui/controls';
 
 interface Props {
   props: FooterBlockProps;
@@ -37,20 +38,23 @@ export function FooterPropsForm({ props, onChange }: Props) {
               placeholder="URL"
               className="flex-1 px-2 py-1.5 text-sm border border-patina-clay-beige/30 rounded-md bg-white"
             />
-            <button
+            <IconButton
+              label="Remove link"
+              size="sm"
               onClick={() => onChange({ nav_links: links.filter((_, i) => i !== idx) })}
-              className="p-1 text-patina-clay-beige hover:text-red-500"
+              className="hover:text-red-500"
             >
               <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            </IconButton>
           </div>
         ))}
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => onChange({ nav_links: [...links, { label: '', url: '#' }] })}
-          className="flex items-center gap-1 text-xs text-patina-clay-beige hover:text-patina-mocha-brown"
         >
           <Plus className="w-3 h-3" /> Add link
-        </button>
+        </Button>
       </div>
 
       <FormField label="Compliance Text">

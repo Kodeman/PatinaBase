@@ -33,6 +33,7 @@ import {
 } from '@patina/supabase';
 import { FFE_STAGE_KEYS, type FFEStageKey } from '@patina/types';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { IconButton } from '@/components/ui/controls';
 import { useHydrated } from '@/hooks/use-hydrated';
 import {
   PaymentPill,
@@ -338,15 +339,13 @@ function POStatusRow({
         ) : (
           <span className="text-[0.6rem] text-[var(--text-muted)]">—</span>
         )}
-        <button
-          type="button"
+        <IconButton
+          size="sm"
           onClick={() => onEditEta(po)}
-          className="cursor-pointer rounded border-0 bg-transparent p-0.5 text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
-          aria-label={`Update ETA for ${po.vendor_po_number ? `PO ${po.vendor_po_number}` : (po.vendor?.name ?? 'purchase order')}`}
-          title="Update ETA"
+          label={`Update ETA for ${po.vendor_po_number ? `PO ${po.vendor_po_number}` : (po.vendor?.name ?? 'purchase order')}`}
         >
           <Pencil size={12} />
-        </button>
+        </IconButton>
       </div>
     </div>
   );

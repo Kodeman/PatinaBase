@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCreateTemplate } from '@patina/supabase';
 import { FieldGroup } from '@/components/portal/field-group';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 
 export default function NewTemplatePage() {
   const router = useRouter();
@@ -24,18 +24,19 @@ export default function NewTemplatePage() {
 
   return (
     <div className="pt-8">
-      <div className="type-meta mb-6">
-        <Link href="/portal/communications/templates" className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]">Templates</Link>
-        <span className="mx-2">&rarr;</span><span>New</span>
+      <div className="mb-4">
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/portal/communications/templates">← Templates</Link>
+        </Button>
       </div>
       <h1 className="type-page-title mb-8">Create Template</h1>
       <div className="max-w-2xl space-y-8">
         <FieldGroup label="Template Name"><input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Template name" className="type-body w-full border-0 border-b border-[var(--border-default)] bg-transparent py-2 outline-none placeholder:text-[var(--text-subtle)] focus:border-[var(--accent-primary)]" /></FieldGroup>
         <FieldGroup label="Subject"><input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Default subject line" className="type-body w-full border-0 border-b border-[var(--border-default)] bg-transparent py-2 outline-none placeholder:text-[var(--text-subtle)] focus:border-[var(--accent-primary)]" /></FieldGroup>
         <FieldGroup label="Body"><textarea value={body} onChange={(e) => setBody(e.target.value)} rows={8} placeholder="Template content (HTML)" className="type-body w-full resize-none border-0 border-b border-[var(--border-default)] bg-transparent py-2 outline-none placeholder:text-[var(--text-subtle)] focus:border-[var(--accent-primary)]" /></FieldGroup>
-        <PortalButton variant="primary" onClick={handleSubmit} disabled={createTemplate.isPending || !name.trim()}>
+        <Button variant="primary" onClick={handleSubmit} disabled={createTemplate.isPending || !name.trim()}>
           {createTemplate.isPending ? 'Saving...' : 'Save Template'}
-        </PortalButton>
+        </Button>
       </div>
     </div>
   );

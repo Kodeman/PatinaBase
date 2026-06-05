@@ -7,7 +7,7 @@ import { useSession } from '@patina/supabase';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { FieldGroup } from '@/components/portal/field-group';
 import { DetailRow } from '@/components/portal/detail-row';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 
 // SET-10 — shape returned by GET /api/me/sessions (rows from public.user_sessions).
@@ -142,14 +142,14 @@ function ActiveSessions() {
             </div>
           ))}
 
-          <PortalButton
+          <Button
             variant="secondary"
             type="button"
             onClick={handleSignOutOthers}
             disabled={signingOut}
           >
             {signingOut ? 'Signing out…' : 'Sign out other sessions'}
-          </PortalButton>
+          </Button>
         </div>
       )}
     </FieldGroup>
@@ -219,11 +219,11 @@ export default function ProfilePage() {
       </div>
 
       <div className="mt-8">
-        <PortalButton variant="secondary" asChild>
+        <Button variant="secondary" asChild>
           <Link href="/portal/settings" className="no-underline text-inherit">
             Edit Settings
           </Link>
-        </PortalButton>
+        </Button>
       </div>
     </div>
   );

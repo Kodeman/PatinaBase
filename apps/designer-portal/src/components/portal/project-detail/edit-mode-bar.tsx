@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/controls';
+
 interface EditModeBarProps {
   onToggleClientView?: () => void;
   onSendUpdate?: () => void;
@@ -55,20 +57,22 @@ export function EditModeBar({ onToggleClientView, onSendUpdate }: EditModeBarPro
           >
             Saved
           </span>
-          <button
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
             onClick={onToggleClientView}
-            className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[var(--text-primary)]"
-            style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', fontWeight: 500 }}
           >
             Client View
-          </button>
-          <button
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
             onClick={onSendUpdate}
-            className="rounded-[3px] px-3 py-1.5 text-white"
-            style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', fontWeight: 500, background: 'var(--color-clay)' }}
           >
             Send Update
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -1,9 +1,9 @@
 'use client';
 
 import { Card, CardContent } from '@patina/design-system';
-import { Button } from '@patina/design-system';
 import { Badge } from '@patina/design-system';
 import { Skeleton } from '@patina/design-system';
+import { IconButton } from '@/components/ui/controls';
 import { Heart, Plus, Eye, Sparkles } from 'lucide-react';
 import { useSimilarProducts } from '@/hooks/use-search';
 import { formatCurrency } from '@/lib/utils';
@@ -90,17 +90,18 @@ export function SimilarProducts({
                     className="h-full w-full object-cover transition-transform group-hover:scale-105"
                   />
                   <div className="absolute right-2 top-2">
-                    <Button
-                      size="icon"
+                    <IconButton
+                      label="Add to favorites"
                       variant="secondary"
-                      className="h-8 w-8 rounded-full shadow-md"
+                      size="sm"
+                      className="rounded-full bg-[var(--bg-surface)] shadow-md"
                       onClick={(e) => {
                         e.stopPropagation();
                         // Add to favorites logic
                       }}
                     >
                       <Heart className="h-4 w-4" />
-                    </Button>
+                    </IconButton>
                   </div>
                   {product.similarityScore && (
                     <div className="absolute left-2 top-2">
@@ -135,25 +136,28 @@ export function SimilarProducts({
                   <div className="flex items-center justify-between pt-2 border-t">
                     <span className="font-bold text-sm">{formatCurrency(product.price)}</span>
                     <div className="flex gap-1">
-                      <Button
+                      <IconButton
+                        label="View product"
+                        variant="secondary"
                         size="sm"
-                        variant="outline"
                         onClick={(e) => {
                           e.stopPropagation();
                           onViewProduct?.(product);
                         }}
                       >
                         <Eye className="h-3 w-3" />
-                      </Button>
-                      <Button
+                      </IconButton>
+                      <IconButton
+                        label="Add to proposal"
                         size="sm"
+                        className="bg-[var(--accent-primary)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)]"
                         onClick={(e) => {
                           e.stopPropagation();
                           onAddToProposal?.(product);
                         }}
                       >
                         <Plus className="h-3 w-3" />
-                      </Button>
+                      </IconButton>
                     </div>
                   </div>
                 </div>

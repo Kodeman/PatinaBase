@@ -28,6 +28,7 @@ import {
 } from '@patina/supabase';
 import { useToast } from '@/components/portal/toast-provider';
 import { procurementEvents } from '@/lib/analytics/procurement-events';
+import { Button, IconButton, Textarea } from '@/components/ui/controls';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -165,15 +166,14 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                   {vendorName} · {projectName}
                 </div>
               </div>
-              <button
-                type="button"
+              <IconButton
+                label="Close"
                 onClick={() => !createInspection.isPending && onOpenChange(false)}
                 disabled={createInspection.isPending}
-                className="shrink-0 cursor-pointer rounded-md border-0 bg-transparent p-1 text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="Close"
+                size="sm"
               >
                 <X size={18} />
-              </button>
+              </IconButton>
             </div>
 
             {/* Body */}
@@ -243,7 +243,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                 >
                   Notes (optional)
                 </label>
-                <textarea
+                <Textarea
                   id="inspection-notes"
                   rows={5}
                   value={notes}
@@ -255,8 +255,6 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                         ? 'e.g. Chip on canopy of pendant cluster. Estimated 2cm chip.'
                         : 'e.g. 2 of 3 chairs delivered; one back-ordered.'
                   }
-                  className="w-full rounded-md border bg-[var(--bg-surface-alt,var(--bg-surface))] px-3 py-2 text-[0.85rem] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-clay,#C4A57B)]"
-                  style={{ borderColor: 'var(--border-default)' }}
                 />
               </div>
 
@@ -291,31 +289,23 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
 
             {/* Footer */}
             <div className="flex items-center justify-end gap-3 border-t border-[var(--border-default)] px-5 py-4">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => onOpenChange(false)}
                 disabled={createInspection.isPending}
-                className="cursor-pointer rounded-md border bg-transparent px-3 py-1.5 text-[0.8rem] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-hover,rgba(0,0,0,0.04))] disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ borderColor: 'var(--border-default)' }}
               >
                 Cancel
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={handleSubmit}
                 disabled={createInspection.isPending}
-                className="cursor-pointer rounded-md border-0 px-4 py-1.5 text-[0.8rem] font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                style={{
-                  background:
-                    outcome === 'clean'
-                      ? 'var(--color-sage)'
-                      : outcome === 'damaged'
-                        ? 'var(--color-terracotta)'
-                        : 'var(--color-golden-hour)',
-                }}
+                loading={createInspection.isPending}
               >
-                {createInspection.isPending ? 'Logging…' : 'Log inspection'}
-              </button>
+                Log inspection
+              </Button>
             </div>
           </motion.div>
         </>

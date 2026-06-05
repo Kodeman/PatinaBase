@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCreateCampaign, useAudienceSegments } from '@patina/supabase';
 import { FieldGroup } from '@/components/portal/field-group';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -39,9 +39,10 @@ export default function NewCampaignPage() {
 
   return (
     <div className="pt-8">
-      <div className="type-meta mb-6">
-        <Link href="/portal/communications/campaigns" className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]">Campaigns</Link>
-        <span className="mx-2">&rarr;</span><span>New</span>
+      <div className="mb-4">
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/portal/communications/campaigns">← Campaigns</Link>
+        </Button>
       </div>
       <h1 className="type-page-title mb-8">Create Campaign</h1>
       <div className="max-w-2xl space-y-8">
@@ -63,8 +64,8 @@ export default function NewCampaignPage() {
           <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={6} placeholder="Email body" className="type-body w-full resize-none border-0 border-b border-[var(--border-default)] bg-transparent py-2 outline-none placeholder:text-[var(--text-subtle)] focus:border-[var(--accent-primary)]" />
         </FieldGroup>
         <div className="flex gap-4 pt-4">
-          <PortalButton variant="primary" onClick={() => handleSave(false)} disabled={createCampaign.isPending}>Save Draft</PortalButton>
-          <PortalButton variant="secondary" onClick={() => handleSave(true)} disabled={createCampaign.isPending}>Send Now</PortalButton>
+          <Button variant="primary" onClick={() => handleSave(false)} disabled={createCampaign.isPending}>Save Draft</Button>
+          <Button variant="secondary" onClick={() => handleSave(true)} disabled={createCampaign.isPending}>Send Now</Button>
         </div>
       </div>
     </div>

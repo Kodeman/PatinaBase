@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useCreateDecision, useProjectFFEItems } from '@patina/supabase';
+import { Button, IconButton } from '@/components/ui/controls';
 import { FieldRow, Select, TextArea, TextInput } from '../activation-wizard/field-primitives';
 import {
   DecisionOptionBuilder,
@@ -137,14 +138,14 @@ export function DecisionComposerModal({
           <h3 className="type-section-head" style={{ fontSize: '1.2rem' }}>
             New decision
           </h3>
-          <button
-            type="button"
+          <IconButton
+            label="Close"
+            variant="ghost"
+            size="sm"
             onClick={onClose}
-            className="text-[1.1rem] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            aria-label="Close"
           >
-            ×
-          </button>
+            <span aria-hidden="true" style={{ fontSize: '1.1rem', lineHeight: 1 }}>×</span>
+          </IconButton>
         </div>
 
         <FieldRow label="Title" hint="A short question for the client">
@@ -220,14 +221,14 @@ export function DecisionComposerModal({
             Options · {options.length} of 4 max
           </span>
           {options.length < 4 && (
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={addOption}
-              className="rounded-[3px] border bg-transparent px-2 py-0.5 text-[0.7rem]"
-              style={{ borderColor: 'var(--border-default)' }}
             >
               + Add option
-            </button>
+            </Button>
           )}
         </div>
 
@@ -253,32 +254,33 @@ export function DecisionComposerModal({
         )}
 
         <div className="mt-5 flex items-center justify-end gap-2">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={onClose}
-            className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
-            style={{ borderColor: 'var(--border-default)' }}
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={() => submit('draft')}
             disabled={!canSubmit || submitting}
-            className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
-            style={{ borderColor: 'var(--border-default)' }}
           >
             Save draft
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             onClick={() => submit('pending')}
             disabled={!canSubmit || submitting}
-            className="rounded-[3px] px-3 py-1.5 text-[0.8rem] text-[var(--bg-primary)]"
-            style={{ background: canSubmit ? 'var(--text-primary)' : 'var(--text-muted)' }}
+            loading={submitting}
           >
             {submitting ? 'Sending…' : 'Send to client'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

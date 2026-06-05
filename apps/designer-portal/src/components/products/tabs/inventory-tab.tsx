@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 import { Plus, Trash2, Package, AlertTriangle, CheckCircle } from 'lucide-react';
-import { Input, Label, Select, Button, Badge } from '@patina/design-system';
+import { Label, Select, Badge } from '@patina/design-system';
+import { Button, IconButton, Input } from '@/components/ui/controls';
 import { cn } from '@/lib/utils';
 import type { Product, Variant, AvailabilityStatus } from '@patina/types';
 
@@ -151,7 +152,7 @@ export function InventoryTab({ product, onChange }: InventoryTabProps) {
             Create variants for different sizes, colors, or configurations
           </p>
         </div>
-        <Button onClick={handleAddVariant} variant="outline">
+        <Button onClick={handleAddVariant} variant="secondary">
           <Plus className="w-4 h-4 mr-2" />
           Add Variant
         </Button>
@@ -170,7 +171,7 @@ export function InventoryTab({ product, onChange }: InventoryTabProps) {
                 Add variants to manage different SKUs, stock levels, and pricing
               </p>
             </div>
-            <Button onClick={handleAddVariant} variant="outline">
+            <Button onClick={handleAddVariant} variant="secondary">
               <Plus className="w-4 h-4 mr-2" />
               Create First Variant
             </Button>
@@ -206,13 +207,14 @@ export function InventoryTab({ product, onChange }: InventoryTabProps) {
                     </Badge>
                   )}
                 </div>
-                <Button
+                <IconButton
                   size="sm"
-                  variant="destructive"
+                  label="Remove variant"
+                  className="bg-[var(--color-terracotta)] text-[var(--bg-primary)] hover:opacity-90"
                   onClick={() => handleRemoveVariant(index)}
                 >
                   <Trash2 className="w-4 h-4" />
-                </Button>
+                </IconButton>
               </div>
 
               {/* Variant Basic Info */}

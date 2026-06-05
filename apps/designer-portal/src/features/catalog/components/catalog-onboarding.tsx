@@ -3,7 +3,8 @@
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Package, Upload, Sparkles, ArrowRight, Plus, FileUp, Wand2 } from 'lucide-react';
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@patina/design-system';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@patina/design-system';
+import { Button } from '@/components/ui/controls';
 
 interface CatalogOnboardingProps {
   canCreate?: boolean;
@@ -43,11 +44,11 @@ export function CatalogOnboarding({ canCreate = true, onCreateProduct }: Catalog
           </p>
           {canCreate && (
             <div className="mt-8 flex flex-wrap gap-3">
-              <Button size="lg" onClick={handleCreateClick}>
+              <Button size="md" onClick={handleCreateClick}>
                 <Plus className="mr-2 h-5 w-5" />
                 Create Your First Product
               </Button>
-              <Button variant="outline" size="lg" asChild>
+              <Button variant="secondary" size="md" asChild>
                 <Link href="/demo/catalog-sandbox">
                   <Sparkles className="mr-2 h-5 w-5" />
                   Explore Demo Catalog

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Button, Input, Select } from '@/components/ui/controls';
 import { useScopeBuilderSummary, useProposal, useUpdateProposal } from '@patina/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { RoomsInScope } from './rooms-in-scope';
@@ -130,14 +131,13 @@ export function ScopeBuilderShell({
           >
             Site Address
           </label>
-          <input
+          <Input
             id="project-address"
             type="text"
             value={addressDraft}
             onChange={(e) => setAddressDraft(e.target.value)}
             onBlur={commitAddress}
             placeholder="123 Main St, City, ST 00000"
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-primary)] focus:outline-none"
           />
           <p className="mt-2 type-body-small text-[var(--text-muted)]">
             Both fields carry forward to the project on activation.
@@ -150,16 +150,15 @@ export function ScopeBuilderShell({
           >
             Client Visibility
           </label>
-          <select
+          <Select
             id="project-visibility"
             value={visibilityTier}
             onChange={(e) => updateVisibilityTier(e.target.value as 'full' | 'milestone' | 'curated')}
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-sm text-[var(--text-primary)] focus:border-[var(--accent-primary)] focus:outline-none"
           >
             <option value="milestone">Milestones only (default)</option>
             <option value="full">Full project view</option>
             <option value="curated">Curated highlights</option>
-          </select>
+          </Select>
           <p className="mt-2 type-body-small text-[var(--text-muted)]">
             What the client sees in their portal.
           </p>
@@ -180,17 +179,19 @@ export function ScopeBuilderShell({
       {/* Tab strip */}
       <div className="mb-6 flex flex-wrap gap-1 border-b border-[var(--border-default)]">
         {TABS.map((t) => (
-          <button
+          <Button
             key={t.value}
+            variant="ghost"
+            size="sm"
             onClick={() => setTab(t.value)}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
+            className={
               tab === t.value
-                ? 'border-b-2 border-[var(--accent-primary)] text-[var(--accent-primary)]'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-default)]'
-            }`}
+                ? '!text-[var(--accent-primary)] border-b-2 border-[var(--accent-primary)] rounded-none'
+                : ''
+            }
           >
             {t.label}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -281,12 +282,9 @@ export function ScopeBuilderShell({
 
       {/* Generate Proposal CTA */}
       <div className="mt-10 flex gap-3 border-t border-[var(--border-default)] pt-6">
-        <button
-          onClick={onGenerateProposal}
-          className="rounded-[3px] bg-[var(--accent-primary)] px-6 py-3 font-body text-sm font-medium text-white transition-colors hover:opacity-90"
-        >
+        <Button variant="primary" onClick={onGenerateProposal}>
           Generate Proposal from Scope →
-        </button>
+        </Button>
       </div>
     </div>
   );

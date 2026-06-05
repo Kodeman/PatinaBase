@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { PortalButton } from './button';
+import { Button, Input, Textarea } from '@/components/ui/controls';
 
 interface ScopeChangeFormProps {
   projectName: string;
@@ -71,8 +71,6 @@ export function ScopeChangeForm({
     setNewRoomBudget(0);
   };
 
-  const inputClass =
-    'w-full rounded-[3px] border border-[var(--border-default)] bg-white px-3 py-2 font-body text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]';
   const labelClass =
     'mb-1 block font-mono text-[0.58rem] uppercase tracking-wider text-[var(--text-muted)]';
 
@@ -82,8 +80,8 @@ export function ScopeChangeForm({
         {/* Title */}
         <div>
           <label className={labelClass}>What&apos;s Changing</label>
-          <input
-            className={`${inputClass} !font-display !text-base !font-medium`}
+          <Input
+            className="!font-display !text-base !font-medium"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Add entryway to project scope"
@@ -93,8 +91,8 @@ export function ScopeChangeForm({
         {/* Description */}
         <div>
           <label className={labelClass}>Description</label>
-          <textarea
-            className={`${inputClass} min-h-[80px] resize-y`}
+          <Textarea
+            className="min-h-[80px] resize-y"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Describe what's being added or changed and why..."
@@ -107,9 +105,9 @@ export function ScopeChangeForm({
             <label className={labelClass}>Additional FF&E Budget</label>
             <div className="relative">
               <span className="absolute left-3 top-2 text-sm text-[var(--text-muted)]">$</span>
-              <input
+              <Input
                 type="number"
-                className={`${inputClass} pl-7`}
+                className="pl-7"
                 value={additionalFfe || ''}
                 onChange={(e) => setAdditionalFfe(Number(e.target.value))}
                 placeholder="0"
@@ -120,9 +118,9 @@ export function ScopeChangeForm({
             <label className={labelClass}>Additional Design Fee</label>
             <div className="relative">
               <span className="absolute left-3 top-2 text-sm text-[var(--text-muted)]">$</span>
-              <input
+              <Input
                 type="number"
-                className={`${inputClass} pl-7`}
+                className="pl-7"
                 value={additionalFee || ''}
                 onChange={(e) => setAdditionalFee(Number(e.target.value))}
                 placeholder="0"
@@ -136,9 +134,8 @@ export function ScopeChangeForm({
             <label className={labelClass}>Timeline Impact</label>
             <div className="flex items-center gap-2">
               <span className="text-sm text-[var(--text-muted)]">+</span>
-              <input
+              <Input
                 type="number"
-                className={inputClass}
                 value={timelineWeeks || ''}
                 onChange={(e) => setTimelineWeeks(Number(e.target.value))}
                 placeholder="0"
@@ -148,8 +145,8 @@ export function ScopeChangeForm({
           </div>
           <div>
             <label className={labelClass}>New Total Project Value</label>
-            <input
-              className={`${inputClass} !font-medium`}
+            <Input
+              className="!font-medium"
               value={formatDollars(newTotalCents)}
               readOnly
             />
@@ -169,17 +166,19 @@ export function ScopeChangeForm({
             <span className="font-mono text-xs text-[var(--text-muted)]">
               {formatDollars(room.budgetCents)}
             </span>
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setNewRooms(newRooms.filter((_, idx) => idx !== i))}
-              className="text-xs text-[var(--text-muted)] hover:text-red-600"
+              className="px-0 py-0 text-xs"
             >
               Remove
-            </button>
+            </Button>
           </div>
         ))}
         <div className="flex gap-2">
-          <input
-            className={`${inputClass} flex-1`}
+          <Input
+            className="flex-1"
             value={newRoomName}
             onChange={(e) => setNewRoomName(e.target.value)}
             placeholder="Room name"
@@ -187,17 +186,17 @@ export function ScopeChangeForm({
           />
           <div className="relative w-32">
             <span className="absolute left-3 top-2 text-sm text-[var(--text-muted)]">$</span>
-            <input
+            <Input
               type="number"
-              className={`${inputClass} pl-7`}
+              className="pl-7"
               value={newRoomBudget || ''}
               onChange={(e) => setNewRoomBudget(Number(e.target.value))}
               placeholder="Budget"
             />
           </div>
-          <PortalButton variant="secondary" onClick={addRoom}>
+          <Button variant="secondary" onClick={addRoom}>
             Add
-          </PortalButton>
+          </Button>
         </div>
       </div>
 
@@ -223,23 +222,23 @@ export function ScopeChangeForm({
 
       {/* Actions */}
       <div className="flex gap-3 border-t border-[var(--border-default)] pt-5">
-        <button
+        <Button
+          variant="primary"
           onClick={() => onSend(formData)}
           disabled={!title.trim() || !description.trim() || saving}
-          className="rounded-[3px] bg-[var(--accent-primary)] px-5 py-2.5 font-body text-sm font-medium text-white transition-colors hover:opacity-90 disabled:opacity-50"
         >
           {saving ? 'Sending...' : 'Send to Client for Approval'}
-        </button>
-        <PortalButton
+        </Button>
+        <Button
           variant="secondary"
           onClick={() => onSave(formData)}
           disabled={!title.trim() || saving}
         >
           Save Draft
-        </PortalButton>
-        <PortalButton variant="ghost" onClick={onCancel}>
+        </Button>
+        <Button variant="ghost" onClick={onCancel}>
           Cancel
-        </PortalButton>
+        </Button>
       </div>
     </div>
   );

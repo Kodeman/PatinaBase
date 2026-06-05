@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { createBrowserClient, useAddProjectTeamMember } from '@patina/supabase';
-import { PortalButton } from '../button';
+import { Button, Input } from '@/components/ui/controls';
 
 interface AddBookkeeperModalProps {
   projectId: string;
@@ -121,24 +121,24 @@ export function AddBookkeeperModal({ projectId, open, onClose }: AddBookkeeperMo
       <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
         <div className="flex flex-col gap-1">
           <label className="type-meta">Email *</label>
-          <input
+          <Input
             ref={emailRef}
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="bookkeeper@example.com"
-            className="type-body rounded-sm border-0 border-b border-[var(--border-default)] bg-transparent px-0 py-2 text-[0.85rem] outline-none focus:border-[var(--accent-primary)]"
+            variant="underline"
           />
         </div>
 
         <div className="flex gap-3 pt-4">
-          <PortalButton variant="primary" type="submit" disabled={isPending || !email.trim()}>
+          <Button variant="primary" type="submit" disabled={isPending || !email.trim()}>
             {isLooking ? 'Looking up…' : addTeamMember.isPending ? 'Adding…' : 'Add Bookkeeper'}
-          </PortalButton>
-          <PortalButton variant="ghost" type="button" onClick={onClose}>
+          </Button>
+          <Button variant="ghost" type="button" onClick={onClose}>
             Cancel
-          </PortalButton>
+          </Button>
         </div>
       </form>
     </div>

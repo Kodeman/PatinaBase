@@ -11,6 +11,7 @@ import {
   type ThreadOverride,
   type NotificationPref,
 } from '@patina/supabase';
+import { Button } from '@/components/ui/controls';
 
 const CATEGORIES: Array<{
   title: string;
@@ -418,13 +419,9 @@ function ThreadOverrideRow({
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {onUnmute && (
-          <button
-            type="button"
-            onClick={onUnmute}
-            className="rounded border border-[#DDD4C8] bg-white px-2 py-1 text-xs text-[#2C2926] hover:bg-[#F5F1E8]"
-          >
+          <Button variant="secondary" size="sm" onClick={onUnmute}>
             Unmute
-          </button>
+          </Button>
         )}
         {onChangePref && (
           <select
@@ -503,14 +500,14 @@ function SmsChannel({
             className="w-full px-3 py-2 border border-[#DDD4C8] rounded-md bg-white text-[#2C2926]"
           />
         </label>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          className="shrink-0"
           disabled={!dirty || draftPhone.trim().length === 0}
           onClick={() => onSavePhone(draftPhone.trim())}
-          className="shrink-0 rounded-md border border-[#DDD4C8] bg-white px-3 py-2 text-sm text-[#2C2926] hover:bg-[#F5F1E8] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Save
-        </button>
+        </Button>
       </div>
       {!hasPhone && (
         <p className="mt-2 text-xs text-[#7A736C]">

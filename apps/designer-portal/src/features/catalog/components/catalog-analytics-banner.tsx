@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { Layers, ArrowRight } from 'lucide-react';
-import { Badge, Button, Card, CardContent } from '@patina/design-system';
+import { Badge, Card, CardContent } from '@patina/design-system';
+import { Button } from '@/components/ui/controls';
 import type { Collection } from '@patina/types';
 
 interface CatalogAnalyticsBannerProps {

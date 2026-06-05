@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useRef, useCallback } from 'react';
+import { Button } from '@/components/ui/controls';
 
 interface LeadListItemProps {
   id: string;
@@ -136,26 +137,30 @@ export function LeadListItem({
             }}
           >
             {onAccept && (
-              <button
-                className="type-btn-text text-[var(--color-sage)] hover:text-[var(--text-primary)]"
+              <Button
+                variant="ghost"
+                size="sm"
+                className="px-0 py-0 text-[var(--color-sage)] hover:text-[var(--text-primary)]"
                 onClick={(e) => {
                   e.stopPropagation();
                   onAccept(id);
                 }}
               >
                 Accept
-              </button>
+              </Button>
             )}
             {onPass && (
-              <button
-                className="type-btn-text text-[var(--text-muted)] hover:text-[var(--color-terracotta)]"
+              <Button
+                variant="ghost"
+                size="sm"
+                className="px-0 py-0 hover:text-[var(--color-terracotta)]"
                 onClick={(e) => {
                   e.stopPropagation();
                   onPass(id);
                 }}
               >
                 Pass
-              </button>
+              </Button>
             )}
           </div>
 

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@patina/supabase';
 import { cn } from '@/lib/utils';
 import type { MarketPosition, ProductionModel, OwnershipType } from '@patina/types';
+import { Button } from '@/components/ui/controls';
 
 interface VendorFormData {
   name: string;
@@ -271,6 +272,7 @@ export function VendorForm({
                     type="button"
                     onClick={removeLogo}
                     className="absolute top-1 right-1 p-1 bg-white rounded-full shadow hover:bg-red-50 transition-colors"
+                    aria-label="Remove logo"
                   >
                     <svg className="w-3 h-3 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -530,26 +532,25 @@ export function VendorForm({
       {/* Form Actions */}
       <div className="flex items-center justify-end gap-3 pt-4 border-t border-patina-clay-beige/20">
         {onCancel && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={onCancel}
-            className="px-6 py-3 text-patina-charcoal hover:bg-patina-off-white rounded-lg transition-colors"
             disabled={isSubmitting}
           >
             Cancel
-          </button>
+          </Button>
         )}
-        <button
+        <Button
           type="submit"
+          variant="primary"
+          size="sm"
           disabled={isSubmitting || isUploadingLogo}
-          className={cn(
-            'px-6 py-3 rounded-lg font-medium transition-colors',
-            'bg-patina-charcoal text-white hover:bg-patina-mocha-brown',
-            (isSubmitting || isUploadingLogo) && 'opacity-50 cursor-not-allowed'
-          )}
+          loading={isSubmitting}
         >
-          {isSubmitting ? 'Saving...' : mode === 'create' ? 'Add Vendor' : 'Update Vendor'}
-        </button>
+          {mode === 'create' ? 'Add Vendor' : 'Update Vendor'}
+        </Button>
       </div>
     </form>
   );

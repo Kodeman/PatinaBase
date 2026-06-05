@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useProjectTeamMembers, type ProjectRole } from '@patina/supabase';
+import { Button } from '@/components/ui/controls';
 import { InviteDesignerModal } from './invite-designer-modal';
 import { AddBookkeeperModal } from './add-bookkeeper-modal';
 import { ReassignLeadModal } from './reassign-lead-modal';
@@ -54,45 +55,46 @@ export function TeamPanel({ projectId, leadDesignerName, currentDesignerId }: {
       <div>
         <div className="mb-2 type-meta-small uppercase tracking-wider">Quick actions</div>
         <div className="flex flex-wrap gap-2">
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={() => setInviteOpen(true)}
-            className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
-            style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)' }}
           >
             + Invite designer
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={() => setBookkeeperOpen(true)}
-            className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
-            style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)' }}
           >
             + Add bookkeeper
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={() => setReassignOpen(true)}
-            className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
-            style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)' }}
           >
             Reassign lead
-          </button>
-          <Link
-            href={`/portal/projects/${projectId}/scope-change`}
-            className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem] no-underline"
-            style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)', color: 'inherit' }}
-          >
-            + Initiate scope change
-          </Link>
-          <button
+          </Button>
+          <Button variant="secondary" size="sm" asChild>
+            <Link
+              href={`/portal/projects/${projectId}/scope-change`}
+              className="no-underline"
+            >
+              + Initiate scope change
+            </Link>
+          </Button>
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={() => setBriefVendorOpen(true)}
-            className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
-            style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)' }}
           >
             + Brief vendor
-          </button>
+          </Button>
         </div>
       </div>
       <InviteDesignerModal

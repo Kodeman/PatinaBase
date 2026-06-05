@@ -1,7 +1,7 @@
 'use client';
 
 import { forwardRef, useImperativeHandle, useState } from 'react';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import {
   ProductPickerModal,
   type ProductPickResult,
@@ -96,15 +96,15 @@ export const AddFFEItemControls = forwardRef<AddFFEItemControlsHandle, AddFFEIte
       <div>
         {!hideButtons && !allowanceMode && !tbdMode && (
           <div className="flex flex-wrap gap-2">
-            <PortalButton variant="primary" onClick={() => openProduct()}>
+            <Button variant="primary" onClick={() => openProduct()}>
               {productLabel}
-            </PortalButton>
-            <PortalButton variant="secondary" onClick={openAllowance}>
+            </Button>
+            <Button variant="secondary" onClick={openAllowance}>
               + Add Allowance
-            </PortalButton>
-            <PortalButton variant="ghost" onClick={openTbd}>
+            </Button>
+            <Button variant="ghost" onClick={openTbd}>
               + Add TBD
-            </PortalButton>
+            </Button>
           </div>
         )}
 

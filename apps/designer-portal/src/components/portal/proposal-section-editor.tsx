@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { X } from 'lucide-react';
 import { createBrowserClient } from '@patina/supabase';
+import { IconButton } from '@/components/ui/controls';
 import type { ProposalSection } from '@/hooks/use-proposals';
 import { UploadZone } from './upload-zone';
 import { ProposalProductItem } from './proposal-product-item';
@@ -220,14 +222,15 @@ function ConceptSection({
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={url} alt="" className="h-full w-full object-cover" />
-              <button
-                type="button"
+              <IconButton
+                variant="ghost"
+                size="sm"
+                label="Remove image"
                 onClick={() => handleRemoveMood(i)}
-                className="absolute right-1 top-1 hidden rounded-full bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
-                aria-label="Remove image"
+                className="absolute right-1 top-1 hidden h-6 w-6 rounded-full bg-black/60 text-white hover:bg-black/70 hover:text-white group-hover:inline-flex"
               >
-                ×
-              </button>
+                <X className="h-3 w-3" aria-hidden="true" />
+              </IconButton>
             </div>
           ))}
         </div>

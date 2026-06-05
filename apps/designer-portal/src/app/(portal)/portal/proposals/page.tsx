@@ -10,7 +10,7 @@ import { FilterRow } from '@/components/portal/filter-row';
 import { MetricsRow } from '@/components/portal/metrics-row';
 import { ProposalListItem } from '@/components/portal/proposal-list-item';
 import { ListPageHeader } from '@/components/portal/list-page-header';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'All' },
@@ -83,12 +83,12 @@ export default function ProposalsPage() {
       <ListPageHeader
         title="Proposals"
         actions={
-          <PortalButton
+          <Button
             variant="primary"
             onClick={() => router.push('/portal/proposals/new')}
           >
             + New Proposal
-          </PortalButton>
+          </Button>
         }
       />
 

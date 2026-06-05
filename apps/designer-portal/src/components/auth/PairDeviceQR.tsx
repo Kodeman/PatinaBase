@@ -3,6 +3,7 @@
 import { QRCodeSVG } from 'qrcode.react';
 import { Smartphone, RefreshCw, CheckCircle2, QrCode } from 'lucide-react';
 import { useDevicePair } from '@/hooks/use-device-pair';
+import { Button } from '@/components/ui/controls';
 
 interface PairDeviceQRProps {
   baseUrl?: string;
@@ -45,13 +46,15 @@ export function PairDeviceQR({ baseUrl = '' }: PairDeviceQRProps) {
         <p className="mt-1 text-xs text-muted-foreground">
           Open the Patina app on your phone — you&apos;re ready to go.
         </p>
-        <button
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={regenerate}
-          className="mt-4 flex items-center gap-2 px-4 py-2 text-sm font-medium text-foreground border border-border rounded-lg hover:bg-muted/50 transition-colors"
+          className="mt-4"
         >
           <RefreshCw className="w-4 h-4" />
           Pair another device
-        </button>
+        </Button>
       </div>
     );
   }
@@ -65,13 +68,15 @@ export function PairDeviceQR({ baseUrl = '' }: PairDeviceQRProps) {
             <p className="text-sm text-muted-foreground">Code expired</p>
           </div>
         </div>
-        <button
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={regenerate}
-          className="mt-4 flex items-center gap-2 px-4 py-2 text-sm font-medium text-foreground border border-border rounded-lg hover:bg-muted/50 transition-colors"
+          className="mt-4"
         >
           <RefreshCw className="w-4 h-4" />
           Generate new code
-        </button>
+        </Button>
       </div>
     );
   }
@@ -87,13 +92,15 @@ export function PairDeviceQR({ baseUrl = '' }: PairDeviceQRProps) {
             </p>
           </div>
         </div>
-        <button
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={regenerate}
-          className="mt-4 flex items-center gap-2 px-4 py-2 text-sm font-medium text-foreground border border-border rounded-lg hover:bg-muted/50 transition-colors"
+          className="mt-4"
         >
           <RefreshCw className="w-4 h-4" />
           Try again
-        </button>
+        </Button>
       </div>
     );
   }

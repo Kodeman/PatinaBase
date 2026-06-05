@@ -2,7 +2,8 @@
 
 import { motion, AnimatePresence, useReducedMotion, type Variants } from 'framer-motion';
 import { X, TrendingUp, Plus, ChevronRight } from 'lucide-react';
-import { Button, Badge, Card, CardContent } from '@patina/design-system';
+import { Badge, Card, CardContent } from '@patina/design-system';
+import { Button, IconButton } from '@/components/ui/controls';
 import { formatCurrency } from '@/lib/utils';
 
 export interface ProductComparisonProps {
@@ -102,14 +103,13 @@ export function ProductComparison({
               >
                 Clear All
               </Button>
-              <Button
+              <IconButton
                 variant="ghost"
-                size="icon"
                 onClick={onClear}
-                aria-label="Close comparison"
+                label="Close comparison"
               >
                 <X className="h-4 w-4" />
-              </Button>
+              </IconButton>
             </div>
           </div>
 
@@ -128,13 +128,13 @@ export function ProductComparison({
                   <Card className="relative overflow-hidden group">
                     <CardContent className="p-4">
                       {/* Remove Button */}
-                      <button
+                      <IconButton
                         onClick={() => onRemove(product.id)}
-                        className="absolute top-2 right-2 z-10 bg-white dark:bg-gray-800 rounded-full p-1.5 shadow-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                        aria-label={`Remove ${product.name} from comparison`}
+                        className="absolute top-2 right-2 z-10 h-auto w-auto rounded-full bg-white p-1.5 shadow-md hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
+                        label={`Remove ${product.name} from comparison`}
                       >
                         <X className="h-3 w-3" />
-                      </button>
+                      </IconButton>
 
                       {/* Product Image */}
                       <div className="relative aspect-square bg-muted rounded-lg overflow-hidden mb-3">
@@ -204,7 +204,7 @@ export function ProductComparison({
                         <div className="flex gap-2 pt-2">
                           <Button
                             size="sm"
-                            variant="outline"
+                            variant="secondary"
                             className="flex-1"
                             onClick={() => onViewProduct(product)}
                           >

@@ -6,7 +6,8 @@ import {
   useMfaFactors,
   useChallengeMfa,
 } from '@patina/supabase';
-import { Button, Input, Alert } from '@patina/design-system';
+import { Input, Alert } from '@patina/design-system';
+import { Button } from '@/components/ui/controls';
 import { ShieldCheck, Smartphone } from 'lucide-react';
 
 function MfaVerifyContent() {
@@ -76,7 +77,7 @@ function MfaVerifyContent() {
             No two-factor authentication methods found. Please contact support.
           </Alert>
           <Button
-            variant="outline"
+            variant="secondary"
             className="mt-4 w-full"
             onClick={() => router.push('/auth/signin')}
           >
@@ -172,13 +173,13 @@ function MfaVerifyContent() {
         )}
 
         <div className="text-center">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => router.push('/auth/signin')}
-            className="text-sm text-gray-500 hover:text-gray-700"
           >
             Cancel and sign in with a different account
-          </button>
+          </Button>
         </div>
       </div>
     </div>

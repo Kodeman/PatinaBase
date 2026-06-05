@@ -6,7 +6,7 @@ import { useAudienceSegment, useDeleteAudienceSegment } from '@patina/supabase';
 import { useRouter } from 'next/navigation';
 import { FieldGroup } from '@/components/portal/field-group';
 import { DetailRow } from '@/components/portal/detail-row';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 
@@ -27,9 +27,10 @@ export default function AudienceDetailPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="pt-8">
-      <div className="type-meta mb-6">
-        <Link href="/portal/communications/audiences" className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]">Audiences</Link>
-        <span className="mx-2">&rarr;</span><span>{audience.name}</span>
+      <div className="mb-4">
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/portal/communications/audiences">← Audiences</Link>
+        </Button>
       </div>
       <h1 className="type-page-title mb-4">{audience.name}</h1>
       {audience.description && <p className="type-body mb-6">{audience.description}</p>}
@@ -38,9 +39,9 @@ export default function AudienceDetailPage({ params }: { params: Promise<{ id: s
         <DetailRow label="Created" value={audience.created_at ? new Date(audience.created_at).toLocaleDateString() : '—'} />
       </FieldGroup>
       <div className="mt-6">
-        <PortalButton variant="ghost" disabled={deleteAudience.isPending} onClick={() => deleteAudience.mutate(id, { onSuccess: () => router.push('/portal/communications/audiences') })}>
+        <Button variant="ghost" disabled={deleteAudience.isPending} onClick={() => deleteAudience.mutate(id, { onSuccess: () => router.push('/portal/communications/audiences') })}>
           {deleteAudience.isPending ? 'Deleting...' : 'Delete Audience'}
-        </PortalButton>
+        </Button>
       </div>
     </div>
   );

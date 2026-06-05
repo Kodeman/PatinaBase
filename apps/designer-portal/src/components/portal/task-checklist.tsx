@@ -1,6 +1,7 @@
 'use client';
 
 import type { MockTask } from '@/types/project-ui';
+import { Button } from '@/components/ui/controls';
 
 interface TaskChecklistProps {
   tasks: MockTask[];
@@ -96,20 +97,24 @@ export function TaskChecklist({
       {/* Action buttons */}
       <div className="mt-3 flex gap-2">
         {onAddTask && (
-          <button
-            className="type-btn-text rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[0.72rem] text-[var(--text-primary)]"
+          <Button
+            variant="secondary"
+            size="sm"
+            className="text-[0.72rem]"
             onClick={onAddTask}
           >
             + Add Task
-          </button>
+          </Button>
         )}
         {canAdvancePhase && onAdvancePhase && (
-          <button
-            className="type-btn-text rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[0.72rem] text-[var(--text-primary)]"
+          <Button
+            variant="secondary"
+            size="sm"
+            className="text-[0.72rem]"
             onClick={onAdvancePhase}
           >
             Advance Phase →
-          </button>
+          </Button>
         )}
       </div>
     </div>

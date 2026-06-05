@@ -5,6 +5,7 @@ import { ArrowUpDown } from 'lucide-react';
 import { usePurchaseOrders, useIsStudioOwner, type PurchaseOrder } from '@patina/supabase';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { SearchInput } from '@/components/portal/search-input';
+import { Button } from '@/components/ui/controls';
 import { QboExportModal } from '@/components/portal/procurement/qbo-export-modal';
 import {
   VendorSectionCard,
@@ -215,13 +216,9 @@ function ByVendorContent() {
             (the current ZONE_ACTIONS contract is link-only).
           */}
           {!studioOwnerLoading && isStudioOwner && (
-            <button
-              type="button"
-              onClick={() => setQboExportOpen(true)}
-              className="rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-[var(--text-primary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]"
-            >
+            <Button variant="secondary" size="sm" onClick={() => setQboExportOpen(true)}>
               Export to QBO ↓
-            </button>
+            </Button>
           )}
           <span className="type-meta-small text-[var(--text-muted)]">
             {allOrders.length} order{allOrders.length !== 1 ? 's' : ''}

@@ -9,6 +9,7 @@ import {
   type PaintColorBrand,
   type PaintColorOption,
 } from '@patina/design-system';
+import { Button, IconButton, Select } from '@/components/ui/controls';
 import {
   createBrowserClient,
   usePalette,
@@ -158,20 +159,22 @@ function PaletteList({ palettes, activeId, onSelect, onNew, onSetPrimary, onDele
               Primary
             </span>
           ) : (
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => onSetPrimary(p)}
-              className="text-xs text-[var(--text-muted)] hover:text-[var(--text-default)]"
             >
               Make primary
-            </button>
+            </Button>
           )}
-          <button
+          <IconButton
+            label="Delete palette"
+            variant="ghost"
+            size="sm"
             onClick={() => onDelete(p.id)}
-            className="text-xs text-[var(--text-muted)] hover:text-red-500"
-            aria-label="Delete palette"
           >
             ×
-          </button>
+          </IconButton>
         </div>
       ))}
       <button
@@ -198,17 +201,15 @@ function TabStrip({ active, onChange }: TabStripProps) {
   return (
     <div className="flex gap-1 rounded-md border border-[var(--border-default)] p-0.5">
       {tabs.map((t) => (
-        <button
+        <Button
           key={t.value}
+          variant={active === t.value ? 'primary' : 'ghost'}
+          size="sm"
           onClick={() => onChange(t.value)}
-          className={`rounded px-3 py-1 text-xs ${
-            active === t.value
-              ? 'bg-[var(--accent-primary)] text-white'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-default)]'
-          }`}
+          className="!rounded"
         >
           {t.label}
-        </button>
+        </Button>
       ))}
     </div>
   );
@@ -365,24 +366,20 @@ function ManualTab({ paletteId }: { paletteId: string }) {
       </div>
       <div>
         <label className="block text-xs text-[var(--text-muted)]">Role</label>
-        <select
+        <Select
           value={role}
           onChange={(e) => setRole(e.target.value as PaletteSwatchRole | '')}
-          className="rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] px-2 py-1 text-sm"
         >
           {ROLE_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
-      <button
-        onClick={handleAdd}
-        className="rounded-md bg-[var(--accent-primary)] px-4 py-2 text-sm text-white hover:opacity-90"
-      >
+      <Button variant="primary" size="sm" onClick={handleAdd}>
         Add swatch
-      </button>
+      </Button>
     </div>
   );
 }
@@ -426,7 +423,9 @@ function ReorderHint({
 }) {
   if (swatches.length < 2) return null;
   return (
-    <button
+    <Button
+      variant="ghost"
+      size="sm"
       onClick={() => {
         // Sort swatches by hex luminance as a friendly default reorder.
         const ordered = [...swatches]
@@ -442,9 +441,8 @@ function ReorderHint({
           .map((s) => s.id);
         reorder.mutate({ paletteId, orderedIds: ordered });
       }}
-      className="text-xs text-[var(--text-muted)] hover:text-[var(--text-default)]"
     >
       Sort by luminance
-    </button>
+    </Button>
   );
 }

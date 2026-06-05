@@ -1,6 +1,8 @@
 'use client';
 
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { X } from 'lucide-react';
+import { IconButton } from '@/components/ui/controls';
 
 type ToastVariant = 'success' | 'warning' | 'error' | 'info';
 
@@ -61,12 +63,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <span className="font-body text-[0.85rem] text-[var(--text-primary)]">
               {t.message}
             </span>
-            <button
-              className="ml-auto shrink-0 cursor-pointer border-0 bg-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            <IconButton
+              variant="ghost"
+              size="sm"
+              label="Dismiss"
+              className="ml-auto shrink-0"
               onClick={() => removeToast(t.id)}
             >
-              ✕
-            </button>
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+            </IconButton>
           </div>
         ))}
       </div>

@@ -7,6 +7,7 @@ import {
   useDeleteDecisionComment,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
+import { Button, Textarea } from '@/components/ui/controls';
 
 interface DecisionCommentThreadProps {
   decisionId: string;
@@ -93,15 +94,16 @@ export function DecisionCommentThread({ decisionId }: DecisionCommentThreadProps
                     </span>
                   </div>
                   {isAuthor && (
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleDelete(c.id)}
                       disabled={remove.isPending}
-                      className="text-[0.7rem] text-[var(--text-muted)] hover:text-[var(--color-terracotta,#D4A090)]"
+                      className="px-0 py-0 text-[0.7rem] hover:text-[var(--color-terracotta,#D4A090)]"
                       aria-label="Delete comment"
                     >
                       Delete
-                    </button>
+                    </Button>
                   )}
                 </div>
                 <p
@@ -129,13 +131,11 @@ export function DecisionCommentThread({ decisionId }: DecisionCommentThreadProps
       )}
 
       <div className="flex flex-col gap-2">
-        <textarea
+        <Textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={2}
           placeholder="Add a comment…"
-          className="w-full rounded-[3px] border bg-white px-2 py-1.5 font-body text-[0.82rem] outline-none"
-          style={{ borderColor: 'var(--border-default)' }}
         />
         {error && (
           <p
@@ -146,17 +146,14 @@ export function DecisionCommentThread({ decisionId }: DecisionCommentThreadProps
           </p>
         )}
         <div className="flex justify-end">
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="sm"
             onClick={handlePost}
             disabled={!canPost}
-            className="rounded-[3px] px-3 py-1.5 text-[0.8rem] text-[var(--bg-primary)]"
-            style={{
-              background: canPost ? 'var(--text-primary)' : 'var(--text-muted)',
-            }}
           >
             {create.isPending ? 'Posting…' : 'Post'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

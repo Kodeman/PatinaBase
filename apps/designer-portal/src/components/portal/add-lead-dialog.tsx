@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useCreateLead } from '@patina/supabase';
-import { PortalButton } from './button';
+import { Button, Input, Textarea, Select } from '@/components/ui/controls';
 import { FieldLabel } from '@patina/help-system';
 
 interface AddLeadFormProps {
@@ -35,9 +35,6 @@ const TIMELINE_OPTIONS = [
   { value: '6_12_months', label: '6 – 12 months' },
   { value: 'flexible', label: 'Flexible' },
 ];
-
-const inputClass =
-  'type-body rounded-sm border-0 border-b border-[var(--border-default)] bg-transparent px-0 py-2 text-[0.85rem] outline-none focus:border-[var(--accent-primary)]';
 
 export function AddLeadDialog({ open, onClose }: AddLeadFormProps) {
   const [projectType, setProjectType] = useState('full_room');
@@ -142,18 +139,17 @@ export function AddLeadDialog({ open, onClose }: AddLeadFormProps) {
           <FieldLabel htmlFor="add-lead-type" required>
             Project Type
           </FieldLabel>
-          <select
+          <Select
             id="add-lead-type"
             value={projectType}
             onChange={(e) => setProjectType(e.target.value)}
-            className={inputClass}
           >
             {PROJECT_TYPE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -161,36 +157,34 @@ export function AddLeadDialog({ open, onClose }: AddLeadFormProps) {
             <FieldLabel htmlFor="add-lead-budget" optional>
               Budget
             </FieldLabel>
-            <select
+            <Select
               id="add-lead-budget"
               value={budgetRange}
               onChange={(e) => setBudgetRange(e.target.value)}
-              className={inputClass}
             >
               {BUDGET_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="flex flex-col gap-1">
             <FieldLabel htmlFor="add-lead-timeline" optional>
               Timeline
             </FieldLabel>
-            <select
+            <Select
               id="add-lead-timeline"
               value={timeline}
               onChange={(e) => setTimeline(e.target.value)}
-              className={inputClass}
             >
               {TIMELINE_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
 
@@ -198,13 +192,13 @@ export function AddLeadDialog({ open, onClose }: AddLeadFormProps) {
           <FieldLabel htmlFor="add-lead-description" optional>
             Project Notes
           </FieldLabel>
-          <textarea
+          <Textarea
             id="add-lead-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
             placeholder="What is the prospect looking for?"
-            className="type-body resize-none rounded-sm border border-[var(--border-default)] bg-transparent px-3 py-2 text-[0.85rem] outline-none focus:border-[var(--accent-primary)]"
+            className="resize-none"
           />
         </div>
 
@@ -213,13 +207,12 @@ export function AddLeadDialog({ open, onClose }: AddLeadFormProps) {
             <FieldLabel htmlFor="add-lead-city" optional>
               City
             </FieldLabel>
-            <input
+            <Input
               id="add-lead-city"
               type="text"
               value={city}
               onChange={(e) => setCity(e.target.value)}
               placeholder="Austin"
-              className={inputClass}
             />
           </div>
 
@@ -227,13 +220,12 @@ export function AddLeadDialog({ open, onClose }: AddLeadFormProps) {
             <FieldLabel htmlFor="add-lead-state" optional>
               State
             </FieldLabel>
-            <input
+            <Input
               id="add-lead-state"
               type="text"
               value={stateRegion}
               onChange={(e) => setStateRegion(e.target.value)}
               placeholder="TX"
-              className={inputClass}
             />
           </div>
         </div>
@@ -242,13 +234,12 @@ export function AddLeadDialog({ open, onClose }: AddLeadFormProps) {
           <FieldLabel htmlFor="add-lead-contact-name" optional>
             Contact Name
           </FieldLabel>
-          <input
+          <Input
             id="add-lead-contact-name"
             type="text"
             value={contactName}
             onChange={(e) => setContactName(e.target.value)}
             placeholder="James & Lin Chen"
-            className={inputClass}
           />
         </div>
 
@@ -256,27 +247,26 @@ export function AddLeadDialog({ open, onClose }: AddLeadFormProps) {
           <FieldLabel htmlFor="add-lead-contact-email" optional>
             Contact Email
           </FieldLabel>
-          <input
+          <Input
             id="add-lead-contact-email"
             type="email"
             value={contactEmail}
             onChange={(e) => setContactEmail(e.target.value)}
             placeholder="james@example.com"
-            className={inputClass}
           />
         </div>
 
         <div className="flex gap-2 pt-2">
-          <PortalButton
+          <Button
             type="submit"
             variant="primary"
             disabled={createLead.isPending || !projectType}
           >
             {createLead.isPending ? 'Adding…' : 'Add Lead'}
-          </PortalButton>
-          <PortalButton type="button" variant="ghost" onClick={onClose}>
+          </Button>
+          <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
-          </PortalButton>
+          </Button>
         </div>
       </form>
     </div>

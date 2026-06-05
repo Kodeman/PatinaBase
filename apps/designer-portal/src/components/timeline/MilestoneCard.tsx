@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { ChevronDown } from 'lucide-react';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import styles from './MilestoneCard.module.css';
+import { Button } from '@/components/ui/controls';
 
 interface Milestone {
   id: string;
@@ -89,7 +90,9 @@ export function MilestoneCard({ milestone }: MilestoneCardProps) {
 
       {milestone.details && (
         <>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={toggleExpanded}
             aria-expanded={isExpanded}
             aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
@@ -101,7 +104,7 @@ export function MilestoneCard({ milestone }: MilestoneCardProps) {
               }`}
             />
             {isExpanded ? 'Show less' : 'Show more'}
-          </button>
+          </Button>
 
           <div
             ref={detailsRef}

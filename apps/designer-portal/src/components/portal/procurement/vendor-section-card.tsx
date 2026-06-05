@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { POPayment, PurchaseOrder } from '@patina/supabase';
 import { PaymentPill } from './payment-pill';
+import { Button } from '@/components/ui/controls';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
 
@@ -228,8 +229,9 @@ export function VendorSectionCard({
             // handler is supplied. This avoids opening an OrderViaPatina
             // dialog that would show "Order 0 items totalling $0" with a
             // disabled Confirm button (dead UI).
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
               onClick={onOrderViaPatina}
               disabled={!onOrderViaPatina}
               title={
@@ -242,31 +244,28 @@ export function VendorSectionCard({
                   ? 'Order via Patina (Catalog ordering ships in a follow-up — see workspace for status.)'
                   : undefined
               }
-              className="rounded-full px-4 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ backgroundColor: 'var(--color-clay)' }}
             >
               Order via Patina
-            </button>
+            </Button>
           ) : (
             <div className="flex items-center gap-2">
               {onOrderAllClick && (
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={onOrderAllClick}
-                  className="rounded-[3px] px-3 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-white transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: 'var(--color-clay)' }}
                 >
                   {orderAllLabel ?? 'Order all'}
-                </button>
+                </Button>
               )}
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={onCtaClick}
-                className="rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-[var(--text-primary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]"
                 disabled={!onCtaClick}
               >
                 {ctaLabel}
-              </button>
+              </Button>
             </div>
           )}
         </div>

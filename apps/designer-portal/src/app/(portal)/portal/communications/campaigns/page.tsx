@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useCampaigns } from '@patina/supabase';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -17,7 +17,7 @@ export default function CampaignsPage() {
     <div className="pt-8">
       <div className="mb-6 flex items-baseline justify-between">
         <h1 className="type-section-head">Campaigns</h1>
-        <PortalButton variant="primary" onClick={() => router.push('/portal/communications/campaigns/new')}>New Campaign</PortalButton>
+        <Button variant="primary" onClick={() => router.push('/portal/communications/campaigns/new')}>New Campaign</Button>
       </div>
 
       {isLoading ? <LoadingStrata /> : campaigns.length > 0 ? (

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, Star } from 'lucide-react';
 import { createBrowserClient } from '@patina/supabase';
+import { Button, IconButton } from '@/components/ui/controls';
 
 interface ReviewModalProps {
   vendorId: string;
@@ -81,9 +82,9 @@ export function ReviewModal({ vendorId, vendorName, isOpen, onClose, onSuccess }
       <div className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-6 border-b border-patina-clay-beige/30">
           <h2 className="text-lg font-semibold text-patina-charcoal">Review {vendorName}</h2>
-          <button type="button" onClick={onClose} className="p-1 rounded-lg hover:bg-patina-off-white transition-colors">
+          <IconButton label="Close" onClick={onClose} size="sm">
             <X className="w-5 h-5 text-patina-mocha-brown" />
-          </button>
+          </IconButton>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
@@ -131,16 +132,18 @@ export function ReviewModal({ vendorId, vendorName, isOpen, onClose, onSuccess }
           </div>
 
           <div className="flex justify-end gap-3">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-patina-clay-beige/50 text-sm text-patina-mocha-brown hover:bg-patina-off-white transition-colors">
+            <Button variant="ghost" size="sm" onClick={onClose}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
+              variant="primary"
+              size="sm"
               disabled={!isValid || isSubmitting}
-              className="px-4 py-2 rounded-lg bg-patina-mocha-brown text-white text-sm font-medium hover:bg-patina-charcoal transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              loading={isSubmitting}
             >
-              {isSubmitting ? 'Submitting...' : 'Submit Review'}
-            </button>
+              Submit Review
+            </Button>
           </div>
         </form>
       </div>

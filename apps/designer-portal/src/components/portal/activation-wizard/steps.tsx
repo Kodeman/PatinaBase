@@ -17,6 +17,7 @@ import {
   type WizardPhase,
   type WizardMilestone,
 } from '@/stores/project-activation-store';
+import { Button } from '@/components/ui/controls';
 import {
   CurrencyInput,
   FieldRow,
@@ -201,14 +202,9 @@ export function Step02Scope() {
               {rooms.length} {rooms.length === 1 ? 'room' : 'rooms'} · ${(totalBudget / 100).toLocaleString()} allocated
               <StrataInfoIcon surfaceKey={SK.Step2Scope.FfeCategories} />
             </span>
-            <button
-              type="button"
-              onClick={addRoom}
-              className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
-              style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)' }}
-            >
+            <Button variant="secondary" size="sm" onClick={addRoom}>
               + Add room
-            </button>
+            </Button>
           </div>
           <div className="flex flex-col gap-3">
             {rooms.map((room) => (
@@ -261,14 +257,15 @@ export function Step02Scope() {
                       />
                     </FieldRow>
                   </div>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => removeRoom(room.id)}
-                    className="ml-2 text-[0.72rem] text-[var(--text-muted)] hover:text-[var(--color-terracotta,#D4A090)]"
                     aria-label={`Remove ${room.name || 'room'}`}
+                    className="ml-2"
                   >
                     ✕
-                  </button>
+                  </Button>
                 </div>
                 <FieldRow
                   label="Budget allocation"
@@ -486,14 +483,9 @@ export function Step04Financials() {
           Payment milestones · {milestoneTotalPct}% allocated
           <StrataInfoIcon surfaceKey={SK.Step4Financials.Milestones} />
         </span>
-        <button
-          type="button"
-          onClick={addMilestone}
-          className="rounded-[3px] border bg-transparent px-2.5 py-1 text-[0.72rem]"
-          style={{ borderColor: 'var(--border-default)' }}
-        >
+        <Button variant="secondary" size="sm" onClick={addMilestone}>
           + Add milestone
-        </button>
+        </Button>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -530,14 +522,14 @@ export function Step04Financials() {
               placeholder="Trigger (e.g. Phase 2 sign-off)"
               ariaLabel={`Milestone ${idx + 1} trigger condition`}
             />
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => removeMs(ms.id)}
-              className="text-[0.72rem] text-[var(--text-muted)] hover:text-[var(--color-terracotta,#D4A090)]"
               aria-label="Remove milestone"
             >
               ✕
-            </button>
+            </Button>
           </div>
         ))}
         {milestones.length === 0 && (

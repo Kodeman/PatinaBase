@@ -21,7 +21,7 @@ import { ActivityFeed } from '@/components/portal/activity-feed';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { ProjectCard } from '@/components/portal/project-card';
 import { ScanCard } from '@/components/portal/scan-card';
 // F1.6 — Client profile screen layered with help-system. Tooltip wraps each
@@ -210,30 +210,30 @@ export default function ClientProfilePage({
         actions={
           <>
             {canMessage ? (
-              <PortalButton variant="primary" size="sm" asChild>
+              <Button variant="primary" size="sm" asChild>
                 <Link href={`/portal/clients/${id}/messages`}>Message</Link>
-              </PortalButton>
+              </Button>
             ) : (
-              <PortalButton
+              <Button
                 variant="primary"
                 size="sm"
                 disabled
                 title="This client has no registered profile yet — invite them to enable messaging."
               >
                 Message
-              </PortalButton>
+              </Button>
             )}
-            <PortalButton variant="secondary" size="sm" asChild>
+            <Button variant="secondary" size="sm" asChild>
               <Link href={`/portal/clients/${id}/decisions/new`}>+ New Decision</Link>
-            </PortalButton>
+            </Button>
             {projects?.[0]?.id ? (
-              <PortalButton variant="secondary" size="sm" asChild>
+              <Button variant="secondary" size="sm" asChild>
                 <Link href={`/portal/projects/${projects[0].id}`}>View Project</Link>
-              </PortalButton>
+              </Button>
             ) : (
-              <PortalButton variant="secondary" size="sm" disabled>
+              <Button variant="secondary" size="sm" disabled>
                 View Project
-              </PortalButton>
+              </Button>
             )}
           </>
         }

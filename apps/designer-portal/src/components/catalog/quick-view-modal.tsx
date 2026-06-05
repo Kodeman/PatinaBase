@@ -8,7 +8,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@patina/design-system';
-import { Button, Badge } from '@patina/design-system';
+import { Badge } from '@patina/design-system';
+import { Button, IconButton } from '@/components/ui/controls';
 import {
   Heart,
   Plus,
@@ -129,20 +130,20 @@ export function QuickViewModal({
               {/* Image Navigation */}
               {images.length > 1 && (
                 <>
-                  <button
+                  <IconButton
                     onClick={prevImage}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/90 dark:bg-gray-800/90 p-2 rounded-full hover:bg-white dark:hover:bg-gray-700 transition-colors shadow-lg"
-                    aria-label="Previous image"
+                    className="absolute left-2 top-1/2 h-auto w-auto -translate-y-1/2 rounded-full bg-white/90 p-2 shadow-lg hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-700"
+                    label="Previous image"
                   >
                     <ChevronLeft className="h-5 w-5" />
-                  </button>
-                  <button
+                  </IconButton>
+                  <IconButton
                     onClick={nextImage}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/90 dark:bg-gray-800/90 p-2 rounded-full hover:bg-white dark:hover:bg-gray-700 transition-colors shadow-lg"
-                    aria-label="Next image"
+                    className="absolute right-2 top-1/2 h-auto w-auto -translate-y-1/2 rounded-full bg-white/90 p-2 shadow-lg hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-700"
+                    label="Next image"
                   >
                     <ChevronRight className="h-5 w-5" />
-                  </button>
+                  </IconButton>
 
                   {/* Image Indicators */}
                   <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
@@ -242,7 +243,7 @@ export function QuickViewModal({
               <div className="flex gap-3">
                 <Button
                   className="flex-1"
-                  size="lg"
+                  size="md"
                   onClick={() => {
                     onAddToProject?.(product);
                     onOpenChange(false);
@@ -251,22 +252,21 @@ export function QuickViewModal({
                   <Plus className="h-5 w-5 mr-2" />
                   Add to Project
                 </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
+                <IconButton
+                  variant="secondary"
                   className={`h-12 w-12 ${
                     isFavorite ? 'bg-red-500 text-white hover:bg-red-600' : ''
                   }`}
                   onClick={() => onToggleFavorite?.(product)}
-                  aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                  label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                 >
                   <Heart className={`h-5 w-5 ${isFavorite ? 'fill-current' : ''}`} />
-                </Button>
+                </IconButton>
               </div>
 
               <Button
-                variant="outline"
-                size="lg"
+                variant="secondary"
+                size="md"
                 className="w-full"
                 onClick={() => {
                   onViewFull?.(product);

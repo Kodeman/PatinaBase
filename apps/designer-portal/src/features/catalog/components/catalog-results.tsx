@@ -2,7 +2,8 @@
 
 import { Fragment, useMemo } from 'react';
 import { Heart, Plus, Eye, Edit2, Trash2, Search as SearchIcon, ExternalLink } from 'lucide-react';
-import { Badge, Button, Card, CardContent, Skeleton } from '@patina/design-system';
+import { Badge, Card, CardContent, Skeleton } from '@patina/design-system';
+import { Button, IconButton } from '@/components/ui/controls';
 
 import { ImageZoom, MediaBadges } from '@/components/media';
 import type { CatalogFilters } from '@/components/catalog/catalog-filters';
@@ -136,16 +137,17 @@ export function CatalogResults({
                       size="sm"
                     />
                     <div className="absolute right-2 top-2 space-x-2">
-                      <Button
-                        size="icon"
+                      <IconButton
+                        size="sm"
                         variant="secondary"
-                        className="h-8 w-8 rounded-full shadow-md"
+                        label="Add to favorites"
+                        className="rounded-full bg-[var(--bg-surface)] shadow-md"
                         onClick={(event) => {
                           event.stopPropagation();
                         }}
                       >
                         <Heart className="h-4 w-4" />
-                      </Button>
+                      </IconButton>
                     </div>
                   </div>
 
@@ -171,7 +173,7 @@ export function CatalogResults({
                         {canEdit && onEditProduct && (
                           <Button
                             size="sm"
-                            variant="outline"
+                            variant="secondary"
                             onClick={(event) => {
                               event.stopPropagation();
                               onEditProduct(product);
@@ -184,7 +186,7 @@ export function CatalogResults({
                         {canDelete && onDeleteProduct && (
                           <Button
                             size="sm"
-                            variant="outline"
+                            variant="secondary"
                             onClick={(event) => {
                               event.stopPropagation();
                               onDeleteProduct(product);
@@ -196,10 +198,10 @@ export function CatalogResults({
                           </Button>
                         )}
                         {product.sourceUrl && (
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-8 w-8"
+                          <IconButton
+                            size="sm"
+                            variant="secondary"
+                            label="View original product page"
                             asChild
                           >
                             <a
@@ -207,15 +209,14 @@ export function CatalogResults({
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(event) => event.stopPropagation()}
-                              aria-label="View original product page"
                             >
                               <ExternalLink className="h-3 w-3" />
                             </a>
-                          </Button>
+                          </IconButton>
                         )}
                         <Button
                           size="sm"
-                          variant="outline"
+                          variant="secondary"
                           onClick={(event) => {
                             event.stopPropagation();
                             onViewProduct(product);
@@ -262,7 +263,7 @@ export function CatalogResults({
                         {canEdit && onEditProduct && (
                           <Button
                             size="sm"
-                            variant="outline"
+                            variant="secondary"
                             onClick={(event) => {
                               event.stopPropagation();
                               onEditProduct(product);
@@ -275,7 +276,7 @@ export function CatalogResults({
                         {canDelete && onDeleteProduct && (
                           <Button
                             size="sm"
-                            variant="outline"
+                            variant="secondary"
                             onClick={(event) => {
                               event.stopPropagation();
                               onDeleteProduct(product);
@@ -287,9 +288,9 @@ export function CatalogResults({
                           </Button>
                         )}
                         {product.sourceUrl && (
-                          <Button
-                            size="icon"
-                            variant="outline"
+                          <IconButton
+                            variant="secondary"
+                            label="View original product page"
                             asChild
                           >
                             <a
@@ -297,15 +298,14 @@ export function CatalogResults({
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(event) => event.stopPropagation()}
-                              aria-label="View original product page"
                             >
                               <ExternalLink className="h-4 w-4" />
                             </a>
-                          </Button>
+                          </IconButton>
                         )}
-                        <Button size="icon" variant="outline">
+                        <IconButton variant="secondary" label="Add to favorites">
                           <Heart className="h-4 w-4" />
-                        </Button>
+                        </IconButton>
                         <Button size="sm">
                           <Plus className="mr-1 h-3 w-3" />
                           Add
@@ -329,7 +329,7 @@ export function CatalogResults({
               {searchQuery || hasFilters ? 'Try adjusting your search or filters' : 'No products available in the catalog'}
             </p>
             {hasFilters && (
-              <Button variant="outline" onClick={onClearFilters} className="mt-4">
+              <Button variant="secondary" onClick={onClearFilters} className="mt-4">
                 Clear Filters
               </Button>
             )}
@@ -339,14 +339,14 @@ export function CatalogResults({
 
       {!isLoading && !isError && hasResults && totalPages > 1 && (
         <div className="flex items-center justify-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page === 1}>
+          <Button variant="secondary" size="sm" onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page === 1}>
             Previous
           </Button>
           <div className="flex items-center gap-1">
             {paginationNumbers.map((pageNumber) => (
               <Button
                 key={pageNumber}
-                variant={page === pageNumber ? 'default' : 'outline'}
+                variant={page === pageNumber ? 'primary' : 'secondary'}
                 size="sm"
                 onClick={() => onPageChange(pageNumber)}
                 className="w-10"
@@ -356,7 +356,7 @@ export function CatalogResults({
             ))}
           </div>
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             onClick={() => onPageChange(Math.min(totalPages, page + 1))}
             disabled={page === totalPages}

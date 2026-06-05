@@ -5,6 +5,7 @@ import { X, AlertCircle, Loader2 } from 'lucide-react';
 import { useSubmitVendorReview } from '@patina/supabase';
 import type { VendorReviewInput, LeadTimeAccuracy } from '@patina/shared/validation';
 import { StarRatingInput } from './star-rating-input';
+import { Button, IconButton } from '@/components/ui/controls';
 
 interface ReviewModalProps {
   vendorId: string;
@@ -268,14 +269,13 @@ export function ReviewModal({
           >
             Review {vendorName}
           </h2>
-          <button
-            type="button"
+          <IconButton
+            label="Close modal"
             onClick={onClose}
-            className="p-2 rounded-full text-patina-mocha-brown hover:bg-patina-clay-beige/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-patina-mocha-brown"
-            aria-label="Close modal"
+            size="sm"
           >
             <X className="w-5 h-5" />
-          </button>
+          </IconButton>
         </div>
 
         {/* Scrollable Form Content */}
@@ -485,29 +485,24 @@ export function ReviewModal({
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-patina-clay-beige bg-patina-clay-beige/20">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={onClose}
             disabled={submitReview.isPending}
-            className="px-5 py-2.5 rounded-lg text-sm font-medium text-patina-charcoal hover:bg-patina-clay-beige/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-patina-mocha-brown min-h-[44px]"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
+            variant="primary"
+            size="sm"
             form="review-form"
             disabled={submitReview.isPending}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-patina-charcoal text-white hover:bg-patina-mocha-brown transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-patina-mocha-brown focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+            loading={submitReview.isPending}
           >
-            {submitReview.isPending ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Submitting...
-              </>
-            ) : (
-              'Submit Review'
-            )}
-          </button>
+            Submit Review
+          </Button>
         </div>
       </div>
     </div>

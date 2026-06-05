@@ -1,6 +1,7 @@
 'use client';
 
 import { type ReactNode } from 'react';
+import { Button } from '@/components/ui/controls';
 import {
   STEP_LABELS,
   TOTAL_WIZARD_STEPS,
@@ -105,42 +106,29 @@ export function WizardShell({
         </div>
         <div className="flex gap-2">
           {step > 1 && (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
               onClick={prevStep}
-              className="rounded-[3px] border bg-transparent px-4 py-2 text-[0.8rem] text-[var(--text-primary)]"
-              style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)' }}
             >
               ← Back
-            </button>
+            </Button>
           )}
           {!isLast ? (
-            <button
-              type="button"
+            <Button
+              variant="primary"
               onClick={nextStep}
               disabled={!canAdvance}
-              className="rounded-[3px] px-4 py-2 text-[0.8rem] text-[var(--bg-primary)]"
-              style={{
-                background: canAdvance ? 'var(--text-primary)' : 'var(--text-muted)',
-                fontFamily: 'var(--font-body)',
-                cursor: canAdvance ? 'pointer' : 'not-allowed',
-              }}
             >
               Continue →
-            </button>
+            </Button>
           ) : (
-            <button
-              type="button"
+            <Button
+              variant="primary"
               onClick={onActivate}
               disabled={isActivating}
-              className="rounded-[3px] px-4 py-2 text-[0.8rem] text-white"
-              style={{
-                background: 'var(--color-sage, #A8B5A0)',
-                fontFamily: 'var(--font-body)',
-              }}
             >
               {isActivating ? 'Activating…' : 'Activate Project →'}
-            </button>
+            </Button>
           )}
         </div>
       </div>

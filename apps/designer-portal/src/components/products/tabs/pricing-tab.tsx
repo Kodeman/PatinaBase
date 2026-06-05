@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 import { DollarSign, Calendar, AlertCircle } from 'lucide-react';
-import { Input, Label, Select, Switch, Badge } from '@patina/design-system';
+import { Label, Select, Switch, Badge } from '@patina/design-system';
+import { Input } from '@/components/ui/controls';
 import { cn } from '@/lib/utils';
 import type { Product, Variant } from '@patina/types';
 

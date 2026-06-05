@@ -11,6 +11,7 @@ import {
   ProductPickerModal,
   type ProductPickResult,
 } from '@/components/portal/proposals/product-picker-modal';
+import { Button, Input, Textarea } from '@/components/ui/controls';
 
 interface DecisionOptionValue {
   name: string;
@@ -193,24 +194,10 @@ const metaStyle = {
   color: 'var(--text-muted)',
 };
 
-const inputClass =
-  'rounded-sm border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 outline-none focus:border-[var(--accent-primary)]';
-const inputStyle = {
-  fontFamily: 'var(--font-body)',
-  fontSize: '0.85rem',
-  color: 'var(--text-primary)',
-};
-
 const LAYER_LABEL: Record<LayerProductLayer, string> = {
   personal: 'Personal',
   studio: 'Studio',
   catalog: 'Catalog',
-};
-
-const linkButtonStyle = {
-  fontFamily: 'var(--font-body)',
-  fontSize: '0.72rem',
-  color: 'var(--accent-primary)',
 };
 
 // ─── Component ─────────────────────────────────────────────────────────────────
@@ -284,18 +271,14 @@ export function DecisionOptionBuilder({
       <div className="mb-3 flex items-center justify-between">
         <span style={metaStyle}>Option {index + 1}</span>
         {onRemove && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={onRemove}
-            className="cursor-pointer border-0 bg-transparent"
-            style={{
-              fontFamily: 'var(--font-body)',
-              fontSize: '0.72rem',
-              color: 'var(--color-terracotta)',
-            }}
+            className="px-0 py-0 text-[0.72rem] text-[var(--color-terracotta)] hover:text-[var(--color-terracotta)]"
           >
             Remove
-          </button>
+          </Button>
         )}
       </div>
 
@@ -323,15 +306,15 @@ export function DecisionOptionBuilder({
             </span>
             <span style={metaStyle}>Personal · Studio · Catalog</span>
           </button>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => onChange({ ...value, manualMode: true })}
             data-testid={`option-${index}-enter-manually`}
-            className="cursor-pointer self-center border-0 bg-transparent"
-            style={linkButtonStyle}
+            className="self-center px-0 py-0 text-[0.72rem] text-[var(--accent-primary)] hover:text-[var(--accent-primary)]"
           >
             or enter manually →
-          </button>
+          </Button>
         </div>
       )}
 
@@ -376,24 +359,24 @@ export function DecisionOptionBuilder({
                   )}
                 </div>
                 <div className="mt-1 flex gap-3">
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setPickerOpen(true)}
                     data-testid={`option-${index}-change-product`}
-                    className="cursor-pointer border-0 bg-transparent p-0"
-                    style={linkButtonStyle}
+                    className="px-0 py-0 text-[0.72rem] text-[var(--accent-primary)] hover:text-[var(--accent-primary)]"
                   >
                     Change
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={clearLink}
                     data-testid={`option-${index}-clear-link`}
-                    className="cursor-pointer border-0 bg-transparent p-0"
-                    style={{ ...linkButtonStyle, color: 'var(--text-muted)' }}
+                    className="px-0 py-0 text-[0.72rem]"
                   >
                     Clear link
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -448,27 +431,25 @@ export function DecisionOptionBuilder({
                 onChange={handleFileSelect}
                 className="hidden"
               />
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setPickerOpen(true)}
                 data-testid={`option-${index}-choose-product`}
-                className="mb-3 cursor-pointer border-0 bg-transparent p-0"
-                style={linkButtonStyle}
+                className="mb-3 px-0 py-0 text-[0.72rem] text-[var(--accent-primary)] hover:text-[var(--accent-primary)]"
               >
                 ‹ choose from library instead
-              </button>
+              </Button>
             </>
           )}
 
           {/* ── Shared editable fields (states B & C) ── */}
           <div className="mb-2 flex flex-col gap-1">
             <label style={labelStyle}>Option Name</label>
-            <input
+            <Input
               type="text"
               value={value.name}
               onChange={(e) => onChange({ ...value, name: e.target.value })}
-              className={inputClass}
-              style={inputStyle}
               data-testid={`option-${index}-name`}
             />
           </div>
@@ -476,27 +457,23 @@ export function DecisionOptionBuilder({
           <div className="mb-2 grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1">
               <label style={labelStyle}>Price (each)</label>
-              <input
+              <Input
                 type="text"
                 value={value.price}
                 onChange={(e) => onChange({ ...value, price: e.target.value })}
                 placeholder="$0.00"
-                className={inputClass}
-                style={inputStyle}
                 data-testid={`option-${index}-price`}
               />
             </div>
             <div className="flex flex-col gap-1">
               <label style={labelStyle}>Quantity</label>
-              <input
+              <Input
                 type="number"
                 inputMode="numeric"
                 min={1}
                 value={value.quantity}
                 onChange={(e) => onChange({ ...value, quantity: e.target.value })}
                 placeholder="1"
-                className={inputClass}
-                style={inputStyle}
                 data-testid={`option-${index}-quantity`}
               />
             </div>
@@ -505,25 +482,21 @@ export function DecisionOptionBuilder({
           <div className="mb-2 grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1">
               <label style={labelStyle}>Cost Delta vs Recommended</label>
-              <input
+              <Input
                 type="text"
                 value={value.costDelta}
                 onChange={(e) => onChange({ ...value, costDelta: e.target.value })}
                 placeholder="+$200 / -$50"
-                className={inputClass}
-                style={inputStyle}
                 data-testid={`option-${index}-cost-delta`}
               />
             </div>
             <div className="flex flex-col gap-1">
               <label style={labelStyle}>Lead-Time Delta (days)</label>
-              <input
+              <Input
                 type="text"
                 value={value.leadTimeDelta}
                 onChange={(e) => onChange({ ...value, leadTimeDelta: e.target.value })}
                 placeholder="+7 / -3"
-                className={inputClass}
-                style={inputStyle}
                 data-testid={`option-${index}-lead-time-delta`}
               />
             </div>
@@ -531,12 +504,11 @@ export function DecisionOptionBuilder({
 
           <div className="mb-2 flex flex-col gap-1">
             <label style={labelStyle}>Designer Note</label>
-            <textarea
+            <Textarea
               value={value.designerNote}
               onChange={(e) => onChange({ ...value, designerNote: e.target.value })}
               rows={2}
-              className="resize-vertical rounded-sm border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 outline-none focus:border-[var(--accent-primary)]"
-              style={{ ...inputStyle, fontSize: '0.8rem' }}
+              className="resize-vertical text-[0.8rem]"
             />
           </div>
 

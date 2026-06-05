@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCollection, useUpdateCollection } from '@/hooks/use-collections';
 import { FieldGroup } from '@/components/portal/field-group';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 
@@ -43,11 +43,10 @@ export default function EditCollectionPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="pt-8">
-      <div className="type-meta mb-6">
-        <Link href="/portal/catalog/collections" className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]">Collections</Link>
-        <span className="mx-2">&rarr;</span>
-        <Link href={`/portal/catalog/collections/${id}`} className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]">{collection.name || 'Collection'}</Link>
-        <span className="mx-2">&rarr;</span><span>Edit</span>
+      <div className="mb-4">
+        <Button variant="ghost" size="sm" asChild>
+          <Link href={`/portal/catalog/collections/${id}`}>← {collection.name || 'Collection'}</Link>
+        </Button>
       </div>
       <h1 className="type-page-title mb-8">Edit Collection</h1>
       <div className="max-w-2xl space-y-8">
@@ -68,12 +67,12 @@ export default function EditCollectionPage({ params }: { params: Promise<{ id: s
           />
         </FieldGroup>
         <div className="flex gap-4 pt-4">
-          <PortalButton variant="primary" onClick={handleSave} disabled={updateCollection.isPending || !name.trim()}>
+          <Button variant="primary" onClick={handleSave} disabled={updateCollection.isPending || !name.trim()}>
             {updateCollection.isPending ? 'Saving...' : 'Save Changes'}
-          </PortalButton>
-          <PortalButton variant="ghost" onClick={() => router.push(`/portal/catalog/collections/${id}`)}>
+          </Button>
+          <Button variant="ghost" onClick={() => router.push(`/portal/catalog/collections/${id}`)}>
             Cancel
-          </PortalButton>
+          </Button>
         </div>
       </div>
     </div>

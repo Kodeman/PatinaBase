@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, type CSSProperties } from 'react';
+import { useState } from 'react';
 import { MessageThread, MessageComposer, StatusDot, type ThreadMessage } from '@patina/design-system';
+import { Button, IconButton } from '@/components/ui/controls';
 import { useThread, useSendMessage, useThreads } from '@/hooks/use-comms';
 import {
   PHASE_CONFIG,
@@ -27,26 +28,6 @@ interface PhaseTimelineV2Props {
   onAddPhase?: (name: string) => void;
 }
 
-const phaseActionButtonStyle: CSSProperties = {
-  fontFamily: 'var(--font-meta)',
-  fontSize: '0.55rem',
-  textTransform: 'uppercase',
-  letterSpacing: '0.04em',
-  padding: '0.18rem 0.55rem',
-  borderRadius: '3px',
-  border: '1px solid var(--border-default)',
-  background: 'transparent',
-  color: 'var(--text-primary)',
-  cursor: 'pointer',
-  whiteSpace: 'nowrap',
-};
-
-const phaseActionGhostStyle: CSSProperties = {
-  ...phaseActionButtonStyle,
-  border: '1px solid transparent',
-  color: 'var(--text-muted)',
-};
-
 function PhaseActionRow({
   phaseId,
   status,
@@ -66,14 +47,14 @@ function PhaseActionRow({
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2" style={{ paddingLeft: '1.5rem' }}>
       {status === 'pending' && onStatusChange && (
-        <button type="button" style={phaseActionButtonStyle} onClick={() => onStatusChange(phaseId, 'in_progress')}>
+        <Button type="button" variant="secondary" size="sm" onClick={() => onStatusChange(phaseId, 'in_progress')}>
           Start phase
-        </button>
+        </Button>
       )}
       {status === 'in_progress' && onStatusChange && (
-        <button type="button" style={phaseActionButtonStyle} onClick={() => onStatusChange(phaseId, 'completed')}>
+        <Button type="button" variant="secondary" size="sm" onClick={() => onStatusChange(phaseId, 'completed')}>
           Mark complete
-        </button>
+        </Button>
       )}
       {status !== 'pending' && onProgressChange && (
         editingProgress ? (
@@ -89,31 +70,33 @@ function PhaseActionRow({
               className="w-14 rounded-[3px] border px-1.5 py-0.5"
               style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)', fontSize: '0.72rem' }}
             />
-            <button
+            <Button
               type="button"
-              style={phaseActionButtonStyle}
+              variant="secondary"
+              size="sm"
               onClick={() => {
                 onProgressChange(phaseId, progressValue);
                 setEditingProgress(false);
               }}
             >
               Save
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              style={phaseActionGhostStyle}
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 setProgressValue(progress);
                 setEditingProgress(false);
               }}
             >
               Cancel
-            </button>
+            </Button>
           </span>
         ) : (
-          <button type="button" style={phaseActionGhostStyle} onClick={() => setEditingProgress(true)}>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setEditingProgress(true)}>
             Progress: {progress}%
-          </button>
+          </Button>
         )
       )}
     </div>
@@ -459,15 +442,15 @@ function TaskRow({
                 : ''}
         </span>
         {editable && onDelete && (
-          <button
-            type="button"
+          <IconButton
+            label={`Delete task ${task.title}`}
+            variant="ghost"
+            size="sm"
             onClick={() => onDelete(task.id)}
-            aria-label={`Delete task ${task.title}`}
             className="opacity-0 transition-opacity group-hover:opacity-100"
-            style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: 1 }}
           >
-            ×
-          </button>
+            <span aria-hidden="true" style={{ fontSize: '0.85rem', lineHeight: 1 }}>×</span>
+          </IconButton>
         )}
       </div>
     </div>
@@ -489,14 +472,16 @@ function AddTaskInline({ phase, onAdd }: { phase: string; onAdd: (phase: string,
 
   if (!open) {
     return (
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="sm"
         onClick={() => setOpen(true)}
-        className="mt-1 type-meta text-[var(--accent-primary)] hover:text-[var(--text-primary)] transition-colors"
-        style={{ paddingLeft: '1.5rem', fontSize: '0.55rem' }}
+        className="mt-1"
+        style={{ paddingLeft: '1.5rem' }}
       >
         + Add task
-      </button>
+      </Button>
     );
   }
 
@@ -517,19 +502,20 @@ function AddTaskInline({ phase, onAdd }: { phase: string; onAdd: (phase: string,
         className="flex-1 rounded-[3px] border px-1.5 py-0.5"
         style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}
       />
-      <button type="button" onClick={submit} style={phaseActionButtonStyle}>
+      <Button type="button" variant="secondary" size="sm" onClick={submit}>
         Add
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
+        variant="ghost"
+        size="sm"
         onClick={() => {
           setTitle('');
           setOpen(false);
         }}
-        style={phaseActionGhostStyle}
       >
         Cancel
-      </button>
+      </Button>
     </div>
   );
 }
@@ -551,17 +537,17 @@ function AddPhaseInline({
 
   if (!open) {
     return (
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        size="sm"
         onClick={() => {
           setValue(available[0]);
           setOpen(true);
         }}
-        className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[var(--text-primary)]"
-        style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 500 }}
       >
         + Add Phase
-      </button>
+      </Button>
     );
   }
 
@@ -579,19 +565,20 @@ function AddPhaseInline({
           </option>
         ))}
       </select>
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        size="sm"
         onClick={() => {
           if (value) onAdd(value);
           setOpen(false);
         }}
-        style={phaseActionButtonStyle}
       >
         Add
-      </button>
-      <button type="button" onClick={() => setOpen(false)} style={phaseActionGhostStyle}>
+      </Button>
+      <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
         Cancel
-      </button>
+      </Button>
     </div>
   );
 }
@@ -773,28 +760,32 @@ export function PhaseTimelineV2({
                 {expandedMessages.has(phase) ? (
                   <>
                     <PhaseMessageThread projectId={projectId} phase={phase} />
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => setExpandedMessages((prev) => {
                         const next = new Set(prev);
                         next.delete(phase);
                         return next;
                       })}
-                      className="mt-1 type-meta text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-                      style={{ paddingLeft: '1.5rem', fontSize: '0.52rem' }}
+                      className="mt-1"
+                      style={{ paddingLeft: '1.5rem' }}
                     >
                       Hide messages
-                    </button>
+                    </Button>
                   </>
                 ) : (
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setExpandedMessages((prev) => new Set(prev).add(phase))}
-                    className="mt-2 type-meta text-[var(--accent-primary)] hover:text-[var(--text-primary)] transition-colors"
-                    style={{ paddingLeft: '1.5rem', fontSize: '0.52rem' }}
+                    className="mt-2"
+                    style={{ paddingLeft: '1.5rem' }}
                   >
                     Show messages
-                  </button>
+                  </Button>
                 )}
               </>
             )}

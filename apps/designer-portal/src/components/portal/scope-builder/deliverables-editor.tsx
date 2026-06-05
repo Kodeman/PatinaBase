@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { PortalButton } from '@/components/portal/button';
+import { Button, IconButton } from '@/components/ui/controls';
 import {
   usePhaseDeliverables,
   useAddDeliverable,
@@ -150,15 +150,15 @@ function DeliverableRow({
       </label>
 
       {/* Delete */}
-      <button
-        type="button"
+      <IconButton
+        label="Delete deliverable"
+        variant="ghost"
+        size="sm"
         onClick={onDelete}
-        className="shrink-0 rounded-[3px] px-1.5 py-0.5 text-[0.7rem] text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] group-hover:opacity-100"
-        title="Delete deliverable"
-        aria-label="Delete deliverable"
+        className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
       >
         x
-      </button>
+      </IconButton>
     </div>
   );
 }
@@ -252,14 +252,14 @@ export function DeliverablesEditor({ phaseId }: DeliverablesEditorProps) {
       )}
 
       <div className="mt-2">
-        <PortalButton
+        <Button
           variant="ghost"
+          size="sm"
           onClick={handleAdd}
           disabled={addDeliverable.isPending}
-          className="!px-2 !py-1"
         >
           + Add deliverable
-        </PortalButton>
+        </Button>
       </div>
     </div>
   );

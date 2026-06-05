@@ -7,7 +7,7 @@ import { useProfile, useUpdateProfile, useUpdatePassword, useOrganizations, useM
 import { StrataMark } from '@/components/portal/strata-mark';
 import { FieldGroup } from '@/components/portal/field-group';
 import { DetailRow } from '@/components/portal/detail-row';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 // F1.7 — Settings migrated to ambient help-system layer per spec §12.4.
 // Every form-section header gets a SectionIntro to explain *why* this
@@ -142,9 +142,9 @@ export default function SettingsPage() {
       <section>
         <div className="mb-2 flex items-baseline justify-between">
           <h2 className="type-meta">Profile</h2>
-          <button className="type-btn-text cursor-pointer border-0 bg-transparent text-[var(--accent-primary)]" onClick={() => setEditingSection(editingSection === 'profile' ? null : 'profile')}>
+          <Button variant="ghost" size="sm" onClick={() => setEditingSection(editingSection === 'profile' ? null : 'profile')}>
             {editingSection === 'profile' ? 'Cancel' : 'Edit'}
-          </button>
+          </Button>
         </div>
         <SectionIntro
           surfaceKey={SurfaceKeys.DesignerPortal.Settings.Profile.Section}
@@ -181,9 +181,9 @@ export default function SettingsPage() {
                 fallback="A short intro shown to homeowners reviewing your work. Keep it under 200 characters."
               />
             </div>
-            <PortalButton variant="primary" onClick={handleSaveProfile} disabled={updateProfile.isPending}>
+            <Button variant="primary" onClick={handleSaveProfile} disabled={updateProfile.isPending}>
               {updateProfile.isPending ? 'Saving...' : 'Save Profile'}
-            </PortalButton>
+            </Button>
           </div>
         ) : (
           <div>
@@ -200,9 +200,9 @@ export default function SettingsPage() {
       <section>
         <div className="mb-2 flex items-baseline justify-between">
           <h2 className="type-meta">Account</h2>
-          <button className="type-btn-text cursor-pointer border-0 bg-transparent text-[var(--accent-primary)]" onClick={() => setEditingSection(editingSection === 'account' ? null : 'account')}>
+          <Button variant="ghost" size="sm" onClick={() => setEditingSection(editingSection === 'account' ? null : 'account')}>
             {editingSection === 'account' ? 'Cancel' : 'Change Password'}
-          </button>
+          </Button>
         </div>
         <SectionIntro
           surfaceKey={SurfaceKeys.DesignerPortal.Settings.Account.Section}
@@ -226,9 +226,9 @@ export default function SettingsPage() {
                 fallback="At least 12 characters. We recommend a passphrase you've never used before."
               />
             </div>
-            <PortalButton variant="primary" onClick={handleUpdatePassword} disabled={updatePassword.isPending || !newPassword.trim()}>
+            <Button variant="primary" onClick={handleUpdatePassword} disabled={updatePassword.isPending || !newPassword.trim()}>
               {updatePassword.isPending ? 'Updating...' : 'Update Password'}
-            </PortalButton>
+            </Button>
           </div>
         ) : (
           <div>

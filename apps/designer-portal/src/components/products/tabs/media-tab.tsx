@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 import { Upload, X, Star, Image as ImageIcon, Box, Eye } from 'lucide-react';
-import { Button, Badge, Switch, Label } from '@patina/design-system';
+import { Badge, Switch, Label } from '@patina/design-system';
+import { Button, IconButton } from '@/components/ui/controls';
 import { cn } from '@/lib/utils';
 import type { Product, ProductImage } from '@patina/types';
 
@@ -151,7 +152,7 @@ export function MediaTab({ product, onChange }: MediaTabProps) {
           </div>
 
           <Button
-            variant="outline"
+            variant="secondary"
             onClick={() => fileInputRef.current?.click()}
           >
             <Upload className="w-4 h-4 mr-2" />
@@ -203,12 +204,15 @@ export function MediaTab({ product, onChange }: MediaTabProps) {
 
                 {/* Overlay Controls */}
                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                  <Button
+                  <IconButton
                     size="sm"
-                    variant={image.isPrimary ? 'default' : 'secondary'}
+                    variant="secondary"
                     onClick={() => handleSetPrimary(image.id)}
-                    className="h-8 w-8 p-0"
-                    title="Set as primary"
+                    className={cn(
+                      image.isPrimary &&
+                        'bg-[var(--accent-primary)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)]'
+                    )}
+                    label="Set as primary"
                   >
                     <Star
                       className={cn(
@@ -216,17 +220,16 @@ export function MediaTab({ product, onChange }: MediaTabProps) {
                         image.isPrimary && 'fill-current'
                       )}
                     />
-                  </Button>
+                  </IconButton>
 
-                  <Button
+                  <IconButton
                     size="sm"
-                    variant="destructive"
                     onClick={() => handleRemoveImage(image.id)}
-                    className="h-8 w-8 p-0"
-                    title="Remove image"
+                    className="bg-[var(--color-terracotta)] text-[var(--bg-primary)] hover:opacity-90"
+                    label="Remove image"
                   >
                     <X className="w-4 h-4" />
-                  </Button>
+                  </IconButton>
                 </div>
 
                 {/* Primary Badge */}
@@ -274,7 +277,7 @@ export function MediaTab({ product, onChange }: MediaTabProps) {
                   <Box className="w-4 h-4" />
                   <span>Upload 3D model file</span>
                 </div>
-                <Button variant="outline" size="sm" className="w-full">
+                <Button variant="secondary" size="sm" className="w-full">
                   <Upload className="w-4 h-4 mr-2" />
                   Upload GLB/GLTF
                 </Button>

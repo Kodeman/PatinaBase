@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Button } from '@patina/design-system';
+import { Button, IconButton } from '@/components/ui/controls';
 import { Badge } from '@patina/design-system';
 import { ChevronLeft, ChevronRight, ArrowRight, Star } from 'lucide-react';
 import type { Collection } from '@patina/types';
@@ -85,13 +85,13 @@ export function CollectionHero({ collections }: CollectionHeroProps) {
           {/* CTA */}
           <div className="flex items-center gap-3">
             <Link href={`/catalog/collections/${currentCollection.id}`}>
-              <Button size="lg">
+              <Button size="md">
                 Explore Collection
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
             <Link href="/catalog/collections">
-              <Button size="lg" variant="outline">
+              <Button size="md" variant="secondary">
                 Browse All Collections
               </Button>
             </Link>
@@ -137,20 +137,20 @@ export function CollectionHero({ collections }: CollectionHeroProps) {
           {/* Navigation Arrows */}
           {collections.length > 1 && (
             <>
-              <button
+              <IconButton
                 onClick={goToPrevious}
-                className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-foreground rounded-full p-2 shadow-lg transition-all hover:scale-110"
-                aria-label="Previous collection"
+                className="absolute left-4 top-1/2 h-auto w-auto -translate-y-1/2 rounded-full bg-white/90 p-2 text-foreground shadow-lg transition-all hover:scale-110 hover:bg-white"
+                label="Previous collection"
               >
                 <ChevronLeft className="h-5 w-5" />
-              </button>
-              <button
+              </IconButton>
+              <IconButton
                 onClick={goToNext}
-                className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-foreground rounded-full p-2 shadow-lg transition-all hover:scale-110"
-                aria-label="Next collection"
+                className="absolute right-4 top-1/2 h-auto w-auto -translate-y-1/2 rounded-full bg-white/90 p-2 text-foreground shadow-lg transition-all hover:scale-110 hover:bg-white"
+                label="Next collection"
               >
                 <ChevronRight className="h-5 w-5" />
-              </button>
+              </IconButton>
             </>
           )}
         </div>

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useSendMagicLink, useVerifyOtp } from '@patina/supabase';
 import Link from 'next/link';
 import { StrataMark } from '@/components/portal/strata-mark';
+import { Button } from '@/components/ui/controls';
 import { authEvents } from '@/lib/analytics/events';
 
 function VerifyOtpContent() {
@@ -131,29 +132,23 @@ function VerifyOtpContent() {
             </div>
           )}
 
-          <button
+          <Button
             type="submit"
-            disabled={token.length !== 6 || verifyOtp.isPending}
-            className="type-btn-text mt-6 w-full flex items-center justify-center gap-2 py-3 px-4 bg-patina-charcoal text-patina-off-white rounded-[3px] hover:bg-patina-aged-oak transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="mt-6 w-full"
+            disabled={token.length !== 6}
+            loading={verifyOtp.isPending}
           >
-            {verifyOtp.isPending ? (
-              <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                Verifying...
-              </>
-            ) : (
-              'Verify'
-            )}
-          </button>
+            {verifyOtp.isPending ? 'Verifying...' : 'Verify'}
+          </Button>
         </form>
 
         {/* Resend */}
         <div className="mt-8 text-center">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleResend}
             disabled={resendCooldown > 0 || resendMagicLink.isPending}
-            className="type-body-small text-patina-clay hover:text-patina-aged-oak transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-patina-clay"
             aria-label={
               resendCooldown > 0
                 ? `Resend code available in ${resendCooldown} seconds`
@@ -165,7 +160,7 @@ function VerifyOtpContent() {
               : resendCooldown > 0
                 ? `Didn't get the code? Resend in ${resendCooldown}s`
                 : 'Resend code'}
-          </button>
+          </Button>
         </div>
 
         {/* Footer Links */}

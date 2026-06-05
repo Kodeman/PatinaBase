@@ -27,6 +27,7 @@ import {
   type DamageClaimState,
 } from '@patina/supabase';
 import { useToast } from '@/components/portal/toast-provider';
+import { Button, IconButton, Textarea } from '@/components/ui/controls';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -202,15 +203,14 @@ export function DamageClaimDrawer(props: DamageClaimDrawerProps) {
                 >
                   {STATE_LABEL[state]}
                 </span>
-                <button
-                  type="button"
+                <IconButton
+                  label="Close"
                   onClick={() => !updateClaim.isPending && onOpenChange(false)}
                   disabled={updateClaim.isPending}
-                  className="shrink-0 cursor-pointer rounded-md border-0 bg-transparent p-1 text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-                  aria-label="Close"
+                  size="sm"
                 >
                   <X size={18} />
-                </button>
+                </IconButton>
               </div>
             </div>
 
@@ -270,14 +270,12 @@ export function DamageClaimDrawer(props: DamageClaimDrawerProps) {
                 >
                   Description
                 </label>
-                <textarea
+                <Textarea
                   id="claim-description"
                   rows={7}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Describe the damage or shortage in detail before notifying the vendor."
-                  className="w-full rounded-md border bg-[var(--bg-surface-alt,var(--bg-surface))] px-3 py-2 text-[0.85rem] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-clay,#C4A57B)]"
-                  style={{ borderColor: 'var(--border-default)' }}
                   disabled={state === 'resolved'}
                 />
                 {state === 'resolved' && (
@@ -303,7 +301,7 @@ export function DamageClaimDrawer(props: DamageClaimDrawerProps) {
                   >
                     Resolution notes
                   </label>
-                  <textarea
+                  <Textarea
                     id="claim-resolution-notes"
                     rows={4}
                     value={resolutionNotes}
@@ -313,8 +311,6 @@ export function DamageClaimDrawer(props: DamageClaimDrawerProps) {
                         ? 'How was this resolved? (e.g. Replacement shipped, credit issued.)'
                         : 'Optional — capture vendor responses as they come in.'
                     }
-                    className="w-full rounded-md border bg-[var(--bg-surface-alt,var(--bg-surface))] px-3 py-2 text-[0.85rem] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-clay,#C4A57B)]"
-                    style={{ borderColor: 'var(--border-default)' }}
                     disabled={state === 'resolved'}
                   />
                 </div>
@@ -337,50 +333,49 @@ export function DamageClaimDrawer(props: DamageClaimDrawerProps) {
 
             {/* Footer */}
             <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--border-default)] px-5 py-4">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => onOpenChange(false)}
                 disabled={updateClaim.isPending}
-                className="cursor-pointer rounded-md border bg-transparent px-3 py-1.5 text-[0.8rem] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-hover,rgba(0,0,0,0.04))] disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ borderColor: 'var(--border-default)' }}
               >
                 Close
-              </button>
+              </Button>
 
               {state !== 'resolved' && (
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => handleSave(undefined)}
                   disabled={updateClaim.isPending}
-                  className="cursor-pointer rounded-md border bg-transparent px-3 py-1.5 text-[0.8rem] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-hover,rgba(0,0,0,0.04))] disabled:cursor-not-allowed disabled:opacity-50"
-                  style={{ borderColor: 'var(--border-default)' }}
+                  loading={updateClaim.isPending}
                 >
-                  {updateClaim.isPending ? 'Saving…' : 'Save'}
-                </button>
+                  Save
+                </Button>
               )}
 
               {canNotifyVendor && (
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={() => handleSave('vendor_notified')}
                   disabled={updateClaim.isPending}
-                  className="cursor-pointer rounded-md border-0 px-4 py-1.5 text-[0.8rem] font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                  style={{ background: 'var(--color-golden-hour)' }}
+                  loading={updateClaim.isPending}
                 >
-                  {updateClaim.isPending ? 'Notifying…' : 'Notify vendor'}
-                </button>
+                  Notify vendor
+                </Button>
               )}
 
               {canMarkResolved && (
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={() => handleSave('resolved')}
                   disabled={updateClaim.isPending}
-                  className="cursor-pointer rounded-md border-0 px-4 py-1.5 text-[0.8rem] font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                  style={{ background: 'var(--color-sage)' }}
+                  loading={updateClaim.isPending}
                 >
-                  {updateClaim.isPending ? 'Saving…' : 'Mark resolved'}
-                </button>
+                  Mark resolved
+                </Button>
               )}
             </div>
           </motion.div>

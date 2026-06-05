@@ -17,7 +17,7 @@ import {
   useUnenrollMfa,
   type MfaFactor,
 } from '@patina/supabase';
-import { Button, PortalButton } from '@/components/ui/controls';
+import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { StrataMark } from '@/components/portal/strata-mark';
 
@@ -156,14 +156,14 @@ export default function SecurityPage() {
                       : ''}
                   </div>
                 </div>
-                <PortalButton
+                <Button
                   variant="ghost"
                   type="button"
                   onClick={() => handleUnenroll(factor)}
                   disabled={unenrollMfa.isPending}
                 >
                   Remove
-                </PortalButton>
+                </Button>
               </div>
             ))}
           </div>
@@ -179,7 +179,7 @@ export default function SecurityPage() {
       {/* ── Enrollment flow ──────────────────────────────────────────────── */}
       <section className="mt-6">
         {!enroll ? (
-          <PortalButton
+          <Button
             variant="primary"
             type="button"
             onClick={handleStartEnroll}
@@ -190,7 +190,7 @@ export default function SecurityPage() {
               : hasMfa
                 ? 'Add another authenticator'
                 : 'Enable two-factor authentication'}
-          </PortalButton>
+          </Button>
         ) : (
           <div className="max-w-md">
             <h2 className="type-meta mb-3">Scan the QR code</h2>
@@ -243,22 +243,22 @@ export default function SecurityPage() {
             />
 
             <div className="flex gap-3">
-              <PortalButton
+              <Button
                 variant="primary"
                 type="button"
                 onClick={handleVerify}
                 disabled={code.length !== 6 || verifyEnrollment.isPending}
               >
                 {verifyEnrollment.isPending ? 'Verifying...' : 'Verify & enable'}
-              </PortalButton>
-              <PortalButton
+              </Button>
+              <Button
                 variant="ghost"
                 type="button"
                 onClick={handleCancelEnroll}
                 disabled={verifyEnrollment.isPending}
               >
                 Cancel
-              </PortalButton>
+              </Button>
             </div>
           </div>
         )}

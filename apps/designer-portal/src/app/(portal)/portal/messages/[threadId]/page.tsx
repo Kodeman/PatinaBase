@@ -27,6 +27,7 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
+import { IconButton } from '@/components/ui/controls';
 
 const counterpartName = (thread: ThreadSummary, myId: string): string => {
   const others = thread.participants.filter(
@@ -161,14 +162,12 @@ export default function ThreadDetailPage() {
     <div className="min-h-screen">
       <div className="mx-auto flex max-w-4xl flex-col h-[calc(100vh-80px)] py-4">
         <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] pb-4">
-          <button
-            type="button"
+          <IconButton
+            label="Back to inbox"
             onClick={() => router.push('/portal/messages')}
-            className="rounded p-1 hover:bg-[rgba(196,165,123,0.08)]"
-            aria-label="Back to inbox"
           >
             <ArrowLeft className="h-5 w-5" />
-          </button>
+          </IconButton>
           <div className="flex-1">
             <h1 className="type-item-name">{title}</h1>
             <p className="type-meta-small">
@@ -181,32 +180,26 @@ export default function ThreadDetailPage() {
               {archived && ' · archived'}
             </p>
           </div>
-          <button
-            type="button"
+          <IconButton
+            label={muted ? 'Unmute thread' : 'Mute thread'}
             onClick={() =>
               muteThread.mutate({ threadId: thread.id, muted: !muted })
             }
-            className="rounded p-2 hover:bg-[rgba(196,165,123,0.08)]"
-            aria-label={muted ? 'Unmute' : 'Mute'}
-            title={muted ? 'Unmute thread' : 'Mute thread'}
           >
             <BellOff
               className={`h-4 w-4 ${muted ? 'text-patina-clay' : 'text-[var(--text-muted)]'}`}
             />
-          </button>
-          <button
-            type="button"
+          </IconButton>
+          <IconButton
+            label={archived ? 'Unarchive thread' : 'Archive thread'}
             onClick={() =>
               archiveThread.mutate({ threadId: thread.id, archived: !archived })
             }
-            className="rounded p-2 hover:bg-[rgba(196,165,123,0.08)]"
-            aria-label={archived ? 'Unarchive' : 'Archive'}
-            title={archived ? 'Unarchive thread' : 'Archive thread'}
           >
             <Archive
               className={`h-4 w-4 ${archived ? 'text-patina-clay' : 'text-[var(--text-muted)]'}`}
             />
-          </button>
+          </IconButton>
         </div>
 
         <div className="flex-1 overflow-hidden">

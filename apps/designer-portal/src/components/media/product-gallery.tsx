@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { ImgWithFallback } from './image-with-fallback';
 import { ImageZoom } from './image-zoom';
-import { Button } from '@patina/design-system';
+import { Button, IconButton } from '@/components/ui/controls';
 import { Dialog, DialogContent } from '@patina/design-system';
 import { cn } from '@/lib/utils';
 import { getOptimizedImageUrl } from '@/lib/media-utils';
@@ -79,35 +79,35 @@ export function ProductGallery({
           {/* Navigation Arrows */}
           {validImages.length > 1 && (
             <>
-              <Button
+              <IconButton
+                label="Previous image"
                 variant="secondary"
-                size="icon"
                 className="absolute left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity rounded-full shadow-lg"
                 onClick={handlePrevious}
               >
                 <ChevronLeft className="h-5 w-5" />
-              </Button>
-              <Button
+              </IconButton>
+              <IconButton
+                label="Next image"
                 variant="secondary"
-                size="icon"
                 className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity rounded-full shadow-lg"
                 onClick={handleNext}
               >
                 <ChevronRight className="h-5 w-5" />
-              </Button>
+              </IconButton>
             </>
           )}
 
           {/* Fullscreen Button */}
           {enableLightbox && (
-            <Button
+            <IconButton
+              label="View fullscreen"
               variant="secondary"
-              size="icon"
               className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity rounded-full shadow-lg"
               onClick={handleOpenLightbox}
             >
               <Maximize2 className="h-4 w-4" />
-            </Button>
+            </IconButton>
           )}
 
           {/* Image Counter */}
@@ -239,35 +239,35 @@ function ProductGalleryLightbox({
       <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95">
         <div className="relative w-full h-[95vh] flex items-center justify-center">
           {/* Close Button */}
-          <Button
+          <IconButton
+            label="Close lightbox"
             variant="ghost"
-            size="icon"
             className="absolute right-4 top-4 z-50 text-white hover:bg-white/20 rounded-full"
             onClick={onClose}
           >
             <X className="h-6 w-6" />
-          </Button>
+          </IconButton>
 
           {/* Zoom Controls */}
           <div className="absolute right-4 top-20 z-50 flex flex-col gap-2">
-            <Button
+            <IconButton
+              label="Zoom in"
               variant="secondary"
-              size="icon"
               className="rounded-full"
               onClick={handleZoomIn}
               disabled={zoomLevel >= 3}
             >
               <ZoomIn className="h-4 w-4" />
-            </Button>
-            <Button
+            </IconButton>
+            <IconButton
+              label="Zoom out"
               variant="secondary"
-              size="icon"
               className="rounded-full"
               onClick={handleZoomOut}
               disabled={zoomLevel <= 1}
             >
               <ZoomOut className="h-4 w-4" />
-            </Button>
+            </IconButton>
           </div>
 
           {/* Main Image */}
@@ -283,22 +283,22 @@ function ProductGalleryLightbox({
           {/* Navigation */}
           {images.length > 1 && (
             <>
-              <Button
+              <IconButton
+                label="Previous image"
                 variant="secondary"
-                size="icon"
                 className="absolute left-4 top-1/2 -translate-y-1/2 z-50 rounded-full shadow-lg"
                 onClick={handlePrevious}
               >
                 <ChevronLeft className="h-6 w-6" />
-              </Button>
-              <Button
+              </IconButton>
+              <IconButton
+                label="Next image"
                 variant="secondary"
-                size="icon"
                 className="absolute right-4 top-1/2 -translate-y-1/2 z-50 rounded-full shadow-lg"
                 onClick={handleNext}
               >
                 <ChevronRight className="h-6 w-6" />
-              </Button>
+              </IconButton>
 
               {/* Counter */}
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-sm text-white px-4 py-2 rounded-full">

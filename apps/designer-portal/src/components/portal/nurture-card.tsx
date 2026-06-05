@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { PortalButton } from './button';
+import { X } from 'lucide-react';
+import { Button, IconButton, Textarea, StatusBadge } from '@/components/ui/controls';
 
 interface NurtureCardProps {
   clientName: string;
@@ -45,17 +46,9 @@ export function NurtureCard({
             {projectContext} {'\u00B7'} Last contact: {lastContact}
           </div>
         </div>
-        <span
-          style={{
-            fontFamily: 'var(--font-meta)',
-            fontSize: '0.52rem',
-            textTransform: 'uppercase',
-            letterSpacing: '0.04em',
-            color: isPriority ? 'var(--accent-primary)' : 'var(--text-muted)',
-          }}
-        >
+        <StatusBadge tone={isPriority ? 'accent' : 'neutral'}>
           Suggested: {suggestedTiming}
-        </span>
+        </StatusBadge>
       </div>
 
       <p
@@ -70,18 +63,18 @@ export function NurtureCard({
       </p>
 
       <div className="flex gap-2">
-        <PortalButton variant={isPriority ? 'primary' : 'secondary'} onClick={onSendNote}>
+        <Button variant={isPriority ? 'primary' : 'secondary'} onClick={onSendNote}>
           Send Personalized Note
-        </PortalButton>
+        </Button>
         {onSchedule && (
-          <PortalButton variant="secondary" onClick={onSchedule}>
+          <Button variant="secondary" onClick={onSchedule}>
             Schedule for Later
-          </PortalButton>
+          </Button>
         )}
         {onDismiss && (
-          <PortalButton variant="ghost" onClick={onDismiss}>
+          <Button variant="ghost" onClick={onDismiss}>
             Dismiss
-          </PortalButton>
+          </Button>
         )}
       </div>
     </div>
@@ -141,14 +134,9 @@ export function NurtureComposeModal({
           <h3 className="type-section-head" style={{ fontSize: '1.2rem' }}>
             Send a note to {clientName}
           </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-[1.1rem] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            aria-label="Close"
-          >
-            ×
-          </button>
+          <IconButton variant="ghost" size="sm" label="Close" onClick={onClose}>
+            <X className="h-4 w-4" aria-hidden="true" />
+          </IconButton>
         </div>
 
         <p
@@ -159,13 +147,11 @@ export function NurtureComposeModal({
           touchpoint sent.
         </p>
 
-        <textarea
+        <Textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
           rows={6}
           placeholder="Write a warm, personal note…"
-          className="w-full rounded-[3px] border bg-white px-2 py-1.5 font-body text-[0.82rem] outline-none"
-          style={{ borderColor: 'var(--border-default)' }}
         />
         <p className="mt-1 text-[0.7rem] text-[var(--text-muted)]">
           Minimum 10 characters
@@ -184,23 +170,12 @@ export function NurtureComposeModal({
         )}
 
         <div className="mt-5 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem]"
-            style={{ borderColor: 'var(--border-default)' }}
-          >
+          <Button variant="secondary" size="sm" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!canSend}
-            className="rounded-[3px] px-3 py-1.5 text-[0.8rem] text-[var(--bg-primary)]"
-            style={{ background: canSend ? 'var(--text-primary)' : 'var(--text-muted)' }}
-          >
+          </Button>
+          <Button variant="primary" size="sm" onClick={submit} disabled={!canSend}>
             {sending ? 'Sending…' : 'Send Note'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

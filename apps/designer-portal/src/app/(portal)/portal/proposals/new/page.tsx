@@ -8,7 +8,7 @@ import { useClients } from '@/hooks/use-clients';
 import { ListPageHeader } from '@/components/portal/list-page-header';
 import { TemplateCard } from '@/components/portal/template-card';
 import { ClientPicker } from '@/components/portal/client-picker';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { proposalEvents } from '@/lib/analytics';
@@ -161,16 +161,16 @@ export default function NewProposalPage() {
 
       {/* Actions */}
       <div className="mt-8 flex gap-2 border-t border-[var(--border-subtle)] pt-6">
-        <PortalButton
+        <Button
           variant="primary"
           onClick={handleCreate}
           disabled={!selectedTemplateId || createProposal.isPending}
         >
           {createProposal.isPending ? 'Creating...' : 'Create Proposal \u2192'}
-        </PortalButton>
-        <PortalButton variant="ghost" onClick={() => router.back()}>
+        </Button>
+        <Button variant="ghost" onClick={() => router.back()}>
           Cancel
-        </PortalButton>
+        </Button>
       </div>
     </div>
   );

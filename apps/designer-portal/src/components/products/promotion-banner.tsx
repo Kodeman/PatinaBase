@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
+import { Button, IconButton } from '@/components/ui/controls';
 import { LayerIcon, PromotionToast } from '@patina/catalog-ui';
 import { usePromotionCandidates } from '@patina/supabase';
 import { BulkPromoteToStudioModal } from './promotion/bulk-promote-to-studio-modal';
@@ -76,27 +77,26 @@ export function PromotionBanner() {
           </ul>
         )}
         <div className="flex flex-wrap items-center gap-3 pt-1">
-          <button
-            type="button"
+          <Button
+            size="sm"
             onClick={() => setBulkOpen(true)}
-            className="rounded-md px-3 py-1.5 text-[0.78rem] text-white"
+            className="text-white"
             style={{ background: 'var(--color-sage, #A8B5A0)' }}
           >
             Review and promote
-          </button>
+          </Button>
           <p className="text-[0.78rem] text-[var(--text-muted)]">
             Or click any item below and choose <em>Promote to Studio</em>.
           </p>
         </div>
       </div>
-      <button
-        type="button"
+      <IconButton
         onClick={dismiss}
-        aria-label="Dismiss until next session"
-        className="rounded-sm p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+        label="Dismiss until next session"
+        className="h-auto w-auto p-1"
       >
         <X className="h-4 w-4" />
-      </button>
+      </IconButton>
 
       <BulkPromoteToStudioModal
         open={bulkOpen}

@@ -8,6 +8,7 @@ import {
   type ProposalRole,
 } from '@patina/supabase';
 import { createBrowserClient } from '@patina/supabase';
+import { Button, Input, Select } from '@/components/ui/controls';
 
 const ASSIGNABLE_ROLES: Array<{ value: ProposalRole; label: string }> = [
   { value: 'support_designer', label: 'Support designer' },
@@ -97,13 +98,13 @@ export function ProposalTeamPicker({ proposalId }: ProposalTeamPickerProps) {
                   {m.user?.email && m.user?.full_name ? ` · ${m.user.email}` : ''}
                 </div>
               </div>
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => removeMember.mutate({ memberId: m.id, proposalId })}
-                className="font-mono text-[0.58rem] uppercase tracking-wider text-[var(--text-muted)] hover:text-[var(--text-primary)]"
               >
                 Remove
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
@@ -117,13 +118,12 @@ export function ProposalTeamPicker({ proposalId }: ProposalTeamPickerProps) {
           >
             Email
           </label>
-          <input
+          <Input
             id="proposal-team-email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="teammate@example.com"
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-primary)] focus:outline-none"
           />
         </div>
         <div className="sm:w-44">
@@ -133,27 +133,25 @@ export function ProposalTeamPicker({ proposalId }: ProposalTeamPickerProps) {
           >
             Role
           </label>
-          <select
+          <Select
             id="proposal-team-role"
             value={role}
             onChange={(e) => setRole(e.target.value as ProposalRole)}
-            className="w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-2 font-body text-sm text-[var(--text-primary)] focus:border-[var(--accent-primary)] focus:outline-none"
           >
             {ASSIGNABLE_ROLES.map((r) => (
               <option key={r.value} value={r.value}>
                 {r.label}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
           onClick={handleAdd}
           disabled={busy}
-          className="rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2 font-body text-sm text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-hover)] disabled:opacity-50"
         >
           {busy ? 'Adding…' : 'Add'}
-        </button>
+        </Button>
       </div>
       {error ? (
         <p className="mt-2 type-body-small text-[var(--color-terracotta,#c45a3f)]">{error}</p>

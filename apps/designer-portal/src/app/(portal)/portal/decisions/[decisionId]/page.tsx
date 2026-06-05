@@ -17,7 +17,7 @@ import {
 import type { DecisionType, BlockingStatus, DecisionOverride } from '@patina/supabase';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 import { PageActionBar } from '@/components/portal/page-action-bar';
 import { decisionStatusToTone } from '@/components/ui/controls';
 import { OverrideDecisionModal } from '@/components/portal/override-decision-modal';
@@ -191,16 +191,16 @@ export default function DecisionDetailPage({
         actions={
           <>
             {decision.status !== 'responded' && (
-              <PortalButton variant="secondary" size="sm" asChild>
+              <Button variant="secondary" size="sm" asChild>
                 <Link href={`/portal/decisions/${decision.id}/edit`}>Edit</Link>
-              </PortalButton>
+              </Button>
             )}
             {decision.project_id && (
-              <PortalButton variant="secondary" size="sm" asChild>
+              <Button variant="secondary" size="sm" asChild>
                 <Link href={`/portal/projects/${decision.project_id}`}>
                   View in Project
                 </Link>
-              </PortalButton>
+              </Button>
             )}
           </>
         }
@@ -221,7 +221,7 @@ export default function DecisionDetailPage({
           >
             This decision is a draft. Your client can&apos;t see it until you send it.
           </p>
-          <PortalButton
+          <Button
             variant="primary"
             onClick={handlePublish}
             disabled={!canPublish || publishDraft.isPending}
@@ -232,7 +232,7 @@ export default function DecisionDetailPage({
             }
           >
             {publishDraft.isPending ? 'Sending...' : 'Send to Client'}
-          </PortalButton>
+          </Button>
         </div>
       )}
 
@@ -257,17 +257,17 @@ export default function DecisionDetailPage({
               without a response. Reopen it to give your client another chance to respond.
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              <PortalButton
+              <Button
                 variant="secondary"
                 onClick={handleReopen}
                 disabled={updateStatus.isPending}
               >
                 {updateStatus.isPending ? 'Reopening...' : 'Reopen'}
-              </PortalButton>
+              </Button>
               {!extending && (
-                <PortalButton variant="ghost" onClick={() => setExtending(true)}>
+                <Button variant="ghost" onClick={() => setExtending(true)}>
                   Extend deadline
-                </PortalButton>
+                </Button>
               )}
             </div>
           </div>
@@ -287,7 +287,7 @@ export default function DecisionDetailPage({
                   color: 'var(--text-primary)',
                 }}
               />
-              <PortalButton
+              <Button
                 variant="primary"
                 onClick={handleExtendAndReopen}
                 disabled={!newDueDate || updateDecision.isPending || updateStatus.isPending}
@@ -295,8 +295,8 @@ export default function DecisionDetailPage({
                 {updateDecision.isPending || updateStatus.isPending
                   ? 'Reopening...'
                   : 'Extend & reopen'}
-              </PortalButton>
-              <PortalButton
+              </Button>
+              <Button
                 variant="ghost"
                 onClick={() => {
                   setExtending(false);
@@ -304,7 +304,7 @@ export default function DecisionDetailPage({
                 }}
               >
                 Cancel
-              </PortalButton>
+              </Button>
             </div>
           )}
         </div>
@@ -621,7 +621,7 @@ export default function DecisionDetailPage({
             {/* Draft → publish CTA. Sends the decision to the client and fires
                 the decision_required notification (PT-D-2-T1-2). */}
             {decision.status === 'draft' && (
-              <PortalButton
+              <Button
                 variant="primary"
                 onClick={handlePublish}
                 disabled={!canPublish || publishDraft.isPending}
@@ -632,39 +632,39 @@ export default function DecisionDetailPage({
                 }
               >
                 {publishDraft.isPending ? 'Sending...' : 'Send to Client'}
-              </PortalButton>
+              </Button>
             )}
             {/* Edit and View-in-Project live in the page action bar above. */}
             {decision.designer_client_id &&
               (canMessageClient ? (
                 <Link href={`/portal/clients/${decision.designer_client_id}/messages`}>
-                  <PortalButton variant="secondary">View Conversation</PortalButton>
+                  <Button variant="secondary">View Conversation</Button>
                 </Link>
               ) : (
-                <PortalButton
+                <Button
                   variant="secondary"
                   disabled
                   title="This client has no registered profile yet — messaging isn't available."
                 >
                   View Conversation
-                </PortalButton>
+                </Button>
               ))}
             {decision.status === 'pending' && (decision.options?.length ?? 0) > 0 && (
-              <PortalButton
+              <Button
                 variant="secondary"
                 onClick={() => setOverrideOpen(true)}
               >
                 Override on client&apos;s behalf
-              </PortalButton>
+              </Button>
             )}
             {(decision.status === 'responded' || decision.status === 'expired') && (
-              <PortalButton
+              <Button
                 variant="ghost"
                 onClick={handleReopen}
                 disabled={updateStatus.isPending}
               >
                 {updateStatus.isPending ? 'Reopening...' : 'Reopen Decision'}
-              </PortalButton>
+              </Button>
             )}
           </div>
 
@@ -676,7 +676,7 @@ export default function DecisionDetailPage({
                 <span className="type-meta-small text-[var(--text-muted)]">
                   Delete this decision and its history?
                 </span>
-                <PortalButton
+                <Button
                   variant="ghost"
                   onClick={handleDelete}
                   disabled={deleteDecision.isPending}
@@ -684,23 +684,23 @@ export default function DecisionDetailPage({
                   <span style={{ color: 'var(--color-terracotta)' }}>
                     {deleteDecision.isPending ? 'Deleting...' : 'Yes, delete'}
                   </span>
-                </PortalButton>
-                <PortalButton
+                </Button>
+                <Button
                   variant="ghost"
                   onClick={() => setConfirmingDelete(false)}
                 >
                   Keep
-                </PortalButton>
+                </Button>
               </div>
             ) : (
-              <PortalButton
+              <Button
                 variant="ghost"
                 onClick={() => setConfirmingDelete(true)}
               >
                 <span style={{ color: 'var(--color-terracotta)' }}>
                   Delete Decision
                 </span>
-              </PortalButton>
+              </Button>
             )}
           </div>
         </div>

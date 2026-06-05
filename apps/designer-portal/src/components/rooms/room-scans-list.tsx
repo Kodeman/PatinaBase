@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import type { RoomScan } from '@patina/supabase';
+import { Button } from '@/components/ui/controls';
 
 interface RoomScansListProps {
   scans: RoomScan[];
@@ -85,28 +86,28 @@ export function RoomScansList({
       {/* View Mode Toggle */}
       <div className="flex justify-end mb-4">
         <div className="inline-flex rounded-lg bg-patina-off-white p-1">
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setViewMode('grid')}
             className={cn(
-              'px-3 py-1.5 rounded-md text-sm font-inter transition-colors',
-              viewMode === 'grid'
-                ? 'bg-white text-patina-mocha-brown shadow-sm'
-                : 'text-patina-mocha-brown/60 hover:text-patina-mocha-brown'
+              'rounded-md',
+              viewMode === 'grid' && 'bg-white text-patina-mocha-brown shadow-sm'
             )}
           >
             Grid
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setViewMode('list')}
             className={cn(
-              'px-3 py-1.5 rounded-md text-sm font-inter transition-colors',
-              viewMode === 'list'
-                ? 'bg-white text-patina-mocha-brown shadow-sm'
-                : 'text-patina-mocha-brown/60 hover:text-patina-mocha-brown'
+              'rounded-md',
+              viewMode === 'list' && 'bg-white text-patina-mocha-brown shadow-sm'
             )}
           >
             List
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -289,15 +290,17 @@ function RoomScanCard({
 
         {/* Project Association */}
         {!scan.project_id && onAssociateWithProject && (
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={(e) => {
               e.stopPropagation();
               onAssociateWithProject(scan.id);
             }}
-            className="mt-3 w-full py-2 text-sm text-patina-clay-beige hover:text-patina-mocha-brown font-inter transition-colors"
+            className="mt-3 w-full"
           >
             + Add to Project
-          </button>
+          </Button>
         )}
 
         {scan.project && (
@@ -417,15 +420,17 @@ function RoomScanRow({
 
       {/* Actions */}
       {!scan.project_id && onAssociateWithProject && (
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={(e) => {
             e.stopPropagation();
             onAssociateWithProject(scan.id);
           }}
-          className="text-sm text-patina-clay-beige hover:text-patina-mocha-brown font-inter transition-colors flex-shrink-0"
+          className="flex-shrink-0"
         >
           + Project
-        </button>
+        </Button>
       )}
     </div>
   );

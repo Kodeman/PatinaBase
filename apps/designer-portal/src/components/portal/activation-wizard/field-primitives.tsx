@@ -2,6 +2,11 @@
 
 import { type ReactNode } from 'react';
 import { FieldHelper } from '@patina/help-system';
+import {
+  Input as KitInput,
+  Select as KitSelect,
+  Textarea as KitTextarea,
+} from '@/components/ui/controls';
 
 /**
  * FieldRow — Activation Wizard field wrapper.
@@ -97,14 +102,13 @@ export function TextInput({
   ariaLabel?: string;
 }) {
   return (
-    <input
+    <KitInput
       id={id}
       aria-label={ariaLabel}
       type={type}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full rounded-[3px] border border-[var(--border-default)] bg-white px-3 py-2 font-body text-[0.85rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
     />
   );
 }
@@ -123,14 +127,13 @@ export function NumberInput({
   ariaLabel?: string;
 }) {
   return (
-    <input
+    <KitInput
       id={id}
       aria-label={ariaLabel}
       type="number"
       value={value || ''}
       onChange={(e) => onChange(Number(e.target.value) || 0)}
       placeholder={placeholder}
-      className="w-full rounded-[3px] border border-[var(--border-default)] bg-white px-3 py-2 font-body text-[0.85rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
     />
   );
 }
@@ -156,14 +159,14 @@ export function CurrencyInput({
       >
         $
       </span>
-      <input
+      <KitInput
         id={id}
         aria-label={ariaLabel}
         type="number"
         value={cents > 0 ? cents / 100 : ''}
         onChange={(e) => onChange(Math.round((Number(e.target.value) || 0) * 100))}
         placeholder={placeholder}
-        className="w-full rounded-[3px] border border-[var(--border-default)] bg-white px-3 py-2 pl-6 font-body text-[0.85rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
+        className="pl-6"
       />
     </div>
   );
@@ -185,12 +188,11 @@ export function Select({
   ariaLabel?: string;
 }) {
   return (
-    <select
+    <KitSelect
       id={id}
       aria-label={ariaLabel}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-[3px] border border-[var(--border-default)] bg-white px-3 py-2 font-body text-[0.85rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
     >
       {placeholder && <option value="">{placeholder}</option>}
       {options.map((o) => (
@@ -198,7 +200,7 @@ export function Select({
           {o.label}
         </option>
       ))}
-    </select>
+    </KitSelect>
   );
 }
 
@@ -218,14 +220,13 @@ export function TextArea({
   ariaLabel?: string;
 }) {
   return (
-    <textarea
+    <KitTextarea
       id={id}
       aria-label={ariaLabel}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       rows={rows}
       placeholder={placeholder}
-      className="w-full rounded-[3px] border border-[var(--border-default)] bg-white px-3 py-2 font-body text-[0.85rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
     />
   );
 }

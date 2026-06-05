@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from 'react';
 import { ChevronRight, FolderTree } from 'lucide-react';
-import { Label, Button, ScrollArea } from '@patina/design-system';
+import { Label, ScrollArea } from '@patina/design-system';
+import { IconButton } from '@/components/ui/controls';
 import { cn } from '@/lib/utils';
 import type { Category } from '@patina/types';
 
@@ -94,13 +95,13 @@ export function CategoryTreeSelector({
           onClick={() => !disabled && onChange(category.id)}
         >
           {hasChildren ? (
-            <button
-              type="button"
+            <IconButton
+              label={isExpanded ? 'Collapse category' : 'Expand category'}
               onClick={(e) => {
                 e.stopPropagation();
                 toggleExpand(category.id);
               }}
-              className="flex-shrink-0 hover:bg-muted rounded p-0.5"
+              className="h-auto w-auto flex-shrink-0 rounded p-0.5"
             >
               <ChevronRight
                 className={cn(
@@ -108,7 +109,7 @@ export function CategoryTreeSelector({
                   isExpanded && 'rotate-90'
                 )}
               />
-            </button>
+            </IconButton>
           ) : (
             <div className="w-5" />
           )}

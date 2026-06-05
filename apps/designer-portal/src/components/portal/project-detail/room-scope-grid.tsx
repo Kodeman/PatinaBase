@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, type CSSProperties } from 'react';
+import { useState } from 'react';
 import type { MockRoom } from '@/types/project-ui';
 import { ProgressBar } from '@/components/portal/progress-bar';
+import { Button } from '@/components/ui/controls';
 
 export interface NewRoomInput {
   name: string;
@@ -17,12 +18,6 @@ interface RoomScopeGridProps {
   editable?: boolean;
   onAddRoom?: (room: NewRoomInput) => void;
 }
-
-const roomFieldStyle: CSSProperties = {
-  borderColor: 'var(--border-default)',
-  fontFamily: 'var(--font-body)',
-  fontSize: '0.78rem',
-};
 
 function AddRoomInline({ onAdd }: { onAdd: (room: NewRoomInput) => void }) {
   const [open, setOpen] = useState(false);
@@ -49,14 +44,14 @@ function AddRoomInline({ onAdd }: { onAdd: (room: NewRoomInput) => void }) {
 
   if (!open) {
     return (
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        size="sm"
         onClick={() => setOpen(true)}
-        className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[var(--text-primary)]"
-        style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 500 }}
       >
         + Add Room to Scope
-      </button>
+      </Button>
     );
   }
 
@@ -69,7 +64,7 @@ function AddRoomInline({ onAdd }: { onAdd: (room: NewRoomInput) => void }) {
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && submit()}
         className="rounded-[3px] border px-2 py-1"
-        style={roomFieldStyle}
+        style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}
       />
       <input
         value={dimensions}
@@ -77,7 +72,7 @@ function AddRoomInline({ onAdd }: { onAdd: (room: NewRoomInput) => void }) {
         onChange={(e) => setDimensions(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && submit()}
         className="rounded-[3px] border px-2 py-1"
-        style={roomFieldStyle}
+        style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}
       />
       <input
         value={budget}
@@ -86,24 +81,14 @@ function AddRoomInline({ onAdd }: { onAdd: (room: NewRoomInput) => void }) {
         onChange={(e) => setBudget(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && submit()}
         className="w-32 rounded-[3px] border px-2 py-1"
-        style={roomFieldStyle}
+        style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}
       />
-      <button
-        type="button"
-        onClick={submit}
-        className="rounded-[3px] px-3 py-1.5 text-white"
-        style={{ background: 'var(--text-primary)', fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 500 }}
-      >
+      <Button type="button" variant="primary" size="sm" onClick={submit}>
         Add
-      </button>
-      <button
-        type="button"
-        onClick={reset}
-        className="rounded-[3px] px-3 py-1.5 text-[var(--text-muted)]"
-        style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem' }}
-      >
+      </Button>
+      <Button type="button" variant="ghost" size="sm" onClick={reset}>
         Cancel
-      </button>
+      </Button>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import type { SpectrumDimension, SpectrumValues } from '@patina/types';
+import { Button } from '@/components/ui/controls';
 
 interface DimensionConfig {
   id: SpectrumDimension;
@@ -202,7 +203,9 @@ export function StyleSpectrumSlider({
 
       {/* Reset button */}
       {Object.values(values).some((v) => v !== null && v !== undefined) && !disabled && (
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() =>
             onChange({
               warmth: null,
@@ -213,10 +216,9 @@ export function StyleSpectrumSlider({
               craftsmanship: null,
             })
           }
-          className="text-xs text-patina-mocha-brown hover:text-patina-charcoal transition-colors"
         >
           Reset all sliders
-        </button>
+        </Button>
       )}
     </div>
   );

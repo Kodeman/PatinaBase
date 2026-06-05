@@ -7,6 +7,7 @@ import { useTemplateBuilderStore } from '@/stores/template-builder-store';
 import { BlockPreview } from './BlockPreview';
 import { BLOCK_TYPE_LABELS } from './constants';
 import { cn } from '@/lib/utils';
+import { IconButton } from '@/components/ui/controls';
 
 interface SortableBlockProps {
   block: TypedContentBlock;
@@ -60,20 +61,21 @@ export function SortableBlock({ block }: SortableBlockProps) {
       </div>
 
       <div className="absolute -right-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-1">
-        <button
+        <IconButton
+          label="Duplicate block"
+          size="sm"
           onClick={(e) => { e.stopPropagation(); duplicateBlock(block.id); }}
-          className="p-1 text-patina-clay-beige hover:text-patina-charcoal"
-          title="Duplicate"
         >
           <Copy className="w-3.5 h-3.5" />
-        </button>
-        <button
+        </IconButton>
+        <IconButton
+          label="Delete block"
+          size="sm"
           onClick={(e) => { e.stopPropagation(); removeBlock(block.id); }}
-          className="p-1 text-patina-clay-beige hover:text-red-500"
-          title="Delete"
+          className="hover:text-red-500"
         >
           <Trash2 className="w-3.5 h-3.5" />
-        </button>
+        </IconButton>
       </div>
 
       {/* Block type label */}

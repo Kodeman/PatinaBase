@@ -2,6 +2,7 @@
 
 import { useRef } from 'react';
 import type { MockDocument, DocumentCategory } from '@/types/project-ui';
+import { Button } from '@/components/ui/controls';
 
 interface DocumentGridProps {
   documents: MockDocument[];
@@ -120,15 +121,15 @@ export function DocumentGrid({ documents, editable = false, uploading = false, o
               e.target.value = '';
             }}
           />
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
-            className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[var(--text-primary)] disabled:opacity-50"
-            style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 500 }}
           >
             {uploading ? 'Uploading…' : '+ Upload Document'}
-          </button>
+          </Button>
         </div>
       )}
     </div>

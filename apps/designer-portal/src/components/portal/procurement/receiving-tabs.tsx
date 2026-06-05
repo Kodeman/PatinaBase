@@ -29,6 +29,7 @@ import {
   PaymentPill,
   type PaymentPillState,
 } from '@/components/portal/procurement/payment-pill';
+import { Button } from '@/components/ui/controls';
 
 // ─── Tab key ────────────────────────────────────────────────────────────────
 
@@ -292,14 +293,13 @@ function PendingInspectionRow({
         {formatDollars(po.total_cents)}
       </div>
       <div className="flex justify-end">
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
           onClick={() => onInspect(po)}
-          className="cursor-pointer rounded-md border-0 px-3 py-1 text-[0.7rem] font-medium text-white transition-colors hover:opacity-90"
-          style={{ background: 'var(--color-clay,#C4A57B)' }}
         >
           Inspect now
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -370,14 +370,13 @@ function DamageClaimRow({
         <StatePill state={claim.state} />
       </div>
       <div className="flex justify-end">
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => onView(claim)}
-          className="cursor-pointer rounded-md border bg-transparent px-3 py-1 text-[0.7rem] font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-hover,rgba(0,0,0,0.04))]"
-          style={{ borderColor: 'var(--border-default)' }}
         >
           View claim
-        </button>
+        </Button>
       </div>
     </div>
   );

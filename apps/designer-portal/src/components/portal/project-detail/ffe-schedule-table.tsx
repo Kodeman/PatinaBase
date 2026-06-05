@@ -1,4 +1,5 @@
 import type { MockFFEItem, FFEStatus } from '@/types/project-ui';
+import { Button } from '@/components/ui/controls';
 
 interface FFEScheduleTableProps {
   items: MockFFEItem[];
@@ -169,24 +170,15 @@ export function FFEScheduleTable({ items }: FFEScheduleTableProps) {
       ))}
 
       <div className="mt-3 flex gap-2">
-        <button
-          className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[var(--text-primary)]"
-          style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 500 }}
-        >
+        <Button type="button" variant="secondary" size="sm">
           + Add Item
-        </button>
-        <button
-          className="rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[var(--text-primary)]"
-          style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 500 }}
-        >
-          Export FF&E Schedule
-        </button>
-        <button
-          className="px-3 py-1.5 text-[var(--text-muted)]"
-          style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 500 }}
-        >
+        </Button>
+        <Button type="button" variant="secondary" size="sm">
+          Export FF&amp;E Schedule
+        </Button>
+        <Button type="button" variant="ghost" size="sm">
           View Full Schedule
-        </button>
+        </Button>
       </div>
     </div>
   );

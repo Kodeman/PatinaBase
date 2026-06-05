@@ -1,6 +1,7 @@
 'use client';
 
 import { type ReactNode } from 'react';
+import { Button } from '@/components/ui/controls';
 
 interface BulkActionBarProps {
   count: number;
@@ -25,13 +26,9 @@ export function BulkActionBar({ count, onClear, children }: BulkActionBarProps) 
         <span className="h-4 w-px" style={{ background: 'var(--border-default)' }} />
         {children}
         <span className="h-4 w-px" style={{ background: 'var(--border-default)' }} />
-        <button
-          type="button"
-          onClick={onClear}
-          className="text-[0.72rem] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-        >
+        <Button variant="ghost" size="sm" onClick={onClear}>
           Clear
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -45,17 +42,12 @@ interface BulkActionButtonProps {
 
 export function BulkActionButton({ onClick, children, variant = 'default' }: BulkActionButtonProps) {
   return (
-    <button
-      type="button"
+    <Button
+      variant={variant === 'danger' ? 'danger' : 'secondary'}
+      size="sm"
       onClick={onClick}
-      className="rounded-[3px] border px-3 py-1.5 text-[0.8rem] transition-colors"
-      style={{
-        borderColor: 'var(--border-default)',
-        color: variant === 'danger' ? 'var(--color-terracotta, #D4A090)' : 'var(--text-primary)',
-        fontFamily: 'var(--font-body)',
-      }}
     >
       {children}
-    </button>
+    </Button>
   );
 }

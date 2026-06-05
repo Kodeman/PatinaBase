@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { createBrowserClient, useAddProjectTeamMember } from '@patina/supabase';
-import { PortalButton } from '../button';
+import { Button, Input, Select, Textarea } from '@/components/ui/controls';
 
 type DesignerRole = 'support_designer' | 'lead_designer';
 
@@ -129,47 +129,47 @@ export function InviteDesignerModal({ projectId, open, onClose }: InviteDesigner
       <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
         <div className="flex flex-col gap-1">
           <label className="type-meta">Email *</label>
-          <input
+          <Input
             ref={emailRef}
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="designer@example.com"
-            className="type-body rounded-sm border-0 border-b border-[var(--border-default)] bg-transparent px-0 py-2 text-[0.85rem] outline-none focus:border-[var(--accent-primary)]"
+            variant="underline"
           />
         </div>
 
         <div className="flex flex-col gap-1">
           <label className="type-meta">Role</label>
-          <select
+          <Select
             value={role}
             onChange={(e) => setRole(e.target.value as DesignerRole)}
-            className="type-body rounded-sm border-0 border-b border-[var(--border-default)] bg-transparent px-0 py-2 text-[0.85rem] outline-none focus:border-[var(--accent-primary)]"
           >
             <option value="support_designer">Support Designer</option>
             <option value="lead_designer">Lead Designer</option>
-          </select>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-1">
           <label className="type-meta">Notes (optional)</label>
-          <textarea
+          <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
             placeholder="Any notes about this collaboration..."
-            className="type-body resize-vertical border-0 border-b border-[var(--border-default)] bg-transparent px-0 py-2 text-[0.85rem] outline-none focus:border-[var(--accent-primary)]"
+            variant="underline"
+            className="resize-vertical"
           />
         </div>
 
         <div className="flex gap-3 pt-4">
-          <PortalButton variant="primary" type="submit" disabled={isPending || !email.trim()}>
+          <Button variant="primary" type="submit" disabled={isPending || !email.trim()}>
             {isLooking ? 'Looking up…' : addTeamMember.isPending ? 'Adding…' : 'Add to Team'}
-          </PortalButton>
-          <PortalButton variant="ghost" type="button" onClick={onClose}>
+          </Button>
+          <Button variant="ghost" type="button" onClick={onClose}>
             Cancel
-          </PortalButton>
+          </Button>
         </div>
       </form>
     </div>

@@ -9,6 +9,7 @@ import {
   useSaveSpectrum,
 } from '@patina/supabase';
 import type { SpectrumValues } from '@patina/types';
+import { Button } from '@/components/ui/controls';
 
 interface StyleArchetype {
   id: string;
@@ -95,12 +96,13 @@ export function EmbeddedTeaching({ productId, onComplete }: EmbeddedTeachingProp
         <h4 className="text-sm font-medium text-patina-charcoal">
           {hasExistingStyles ? 'Update Style' : 'Quick Teach'}
         </h4>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setIsExpanded(!isExpanded)}
-          className="text-xs text-patina-mocha-brown hover:text-patina-charcoal transition-colors"
         >
           {isExpanded ? 'Show less' : 'Show all styles'}
-        </button>
+        </Button>
       </div>
 
       {/* Prompt text */}
