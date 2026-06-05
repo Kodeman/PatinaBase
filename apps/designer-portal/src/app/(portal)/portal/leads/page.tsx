@@ -6,6 +6,7 @@ import { useLeads, useLeadStats, useAcceptLead, useDeclineLead } from '@patina/s
 import { LeadListItem } from '@/components/portal/lead-list-item';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { AddLeadDialog } from '@/components/portal/add-lead-dialog';
+import { ListPageHeader } from '@/components/portal/list-page-header';
 import { PortalButton } from '@/components/portal/button';
 import {
   formatBudgetRange,
@@ -50,12 +51,14 @@ function LeadInboxContent() {
 
   return (
     <div className="pt-8">
-      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-4">
-        <h1 className="type-section-head">Leads</h1>
-        <PortalButton variant="secondary" onClick={() => setAddDialogOpen(true)}>
-          + Add Lead
-        </PortalButton>
-      </div>
+      <ListPageHeader
+        title="Leads"
+        actions={
+          <PortalButton variant="secondary" onClick={() => setAddDialogOpen(true)}>
+            + Add Lead
+          </PortalButton>
+        }
+      />
 
       <AddLeadDialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} />
 

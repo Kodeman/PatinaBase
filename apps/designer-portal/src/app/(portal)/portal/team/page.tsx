@@ -4,10 +4,9 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useOrganizations, useSession, useAddClient } from '@patina/supabase';
 import { useProjects } from '@/hooks/use-projects';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
-import { PortalButton } from '@/components/portal/button';
+import { Button, PortalButton } from '@/components/ui/controls';
 // F1.7 — Team migrated to ambient + reactive help-system layers per spec
 // §12.4. Studio is Patina vocabulary (multi-user org); StrataInfoIcon
 // explains the concept inline. Aliased the local EmptyState helper to
@@ -189,8 +188,8 @@ export default function TeamPage() {
 
   return (
     <div className="pt-8">
-      <Breadcrumb items={[{ label: 'Team' }]} />
-
+      {/* Team is a zone-less top-level page (no global breadcrumb), so it keeps
+          its own h1. */}
       <div className="mb-6 flex flex-wrap items-baseline justify-between gap-4">
         <div>
           <h1 className="type-section-head" style={{ fontSize: '1.5rem' }}>
@@ -201,13 +200,9 @@ export default function TeamPage() {
             fallback="Members of your studio and their assignments across active projects."
           />
         </div>
-        <button
-          type="button"
-          onClick={() => setInviteOpen(true)}
-          className="rounded-[3px] bg-[var(--text-primary)] px-3 py-1.5 text-[0.8rem] text-[var(--bg-primary)]"
-        >
+        <Button variant="primary" size="sm" onClick={() => setInviteOpen(true)}>
           + Invite member
-        </button>
+        </Button>
       </div>
 
       {inviteOpen && <InviteMemberModal onClose={() => setInviteOpen(false)} />}

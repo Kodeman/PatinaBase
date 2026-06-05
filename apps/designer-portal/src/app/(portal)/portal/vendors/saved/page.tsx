@@ -1,9 +1,9 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useVendors } from '@patina/supabase';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { ListPageHeader } from '@/components/portal/list-page-header';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyVendor = any;
@@ -16,11 +16,8 @@ export default function SavedVendorsPage() {
 
   return (
     <div className="pt-8">
-      <div className="type-meta mb-6">
-        <Link href="/portal/vendors" className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]">Vendors</Link>
-        <span className="mx-2">&rarr;</span><span>Saved</span>
-      </div>
-      <h1 className="type-section-head mb-6">Saved Vendors</h1>
+      {/* Breadcrumb ("Products › Vendors › Saved") is rendered globally by SubNav. */}
+      <ListPageHeader title="Saved Vendors" />
 
       {isLoading ? (
         <LoadingStrata />

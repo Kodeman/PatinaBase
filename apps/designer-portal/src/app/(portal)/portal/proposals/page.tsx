@@ -9,6 +9,7 @@ import { useHydrated } from '@/hooks/use-hydrated';
 import { FilterRow } from '@/components/portal/filter-row';
 import { MetricsRow } from '@/components/portal/metrics-row';
 import { ProposalListItem } from '@/components/portal/proposal-list-item';
+import { ListPageHeader } from '@/components/portal/list-page-header';
 import { PortalButton } from '@/components/portal/button';
 
 const STATUS_FILTERS = [
@@ -79,17 +80,17 @@ export default function ProposalsPage() {
   return (
     <div className="pt-8">
       {/* Page header */}
-      <div className="mb-8 flex flex-wrap items-baseline justify-between gap-4">
-        <h1 className="type-section-head" style={{ fontSize: '1.5rem' }}>
-          Proposals
-        </h1>
-        <PortalButton
-          variant="primary"
-          onClick={() => router.push('/portal/proposals/new')}
-        >
-          + New Proposal
-        </PortalButton>
-      </div>
+      <ListPageHeader
+        title="Proposals"
+        actions={
+          <PortalButton
+            variant="primary"
+            onClick={() => router.push('/portal/proposals/new')}
+          >
+            + New Proposal
+          </PortalButton>
+        }
+      />
 
       {/* Status filter tabs */}
       <FilterRow

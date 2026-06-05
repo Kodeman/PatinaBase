@@ -35,7 +35,6 @@ import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { useToast } from '@/components/portal/toast-provider';
 import { queryKeys } from '@/lib/react-query';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { PHASE_CONFIG, ALL_PHASES, normalizePhaseSlug, type ProjectPhase, type PaymentMilestone } from '@/types/project-ui';
@@ -426,15 +425,9 @@ export default function ProjectDetailPage({
       />
 
       <div className="pt-8">
-        {/* Breadcrumb */}
-        <Breadcrumb
-          items={[
-            { label: 'Projects', href: '/portal/projects' },
-            { label: project.name },
-          ]}
-        />
-
-        {/* Zone 1: Project Identity */}
+        {/* Zone 1: Project Identity — the global breadcrumb (SubNav) now
+            carries the project name, so the header renders only the
+            PageActionBar (status/meta + quick actions). */}
         <ProjectIdentityHeader
           project={project}
           phase={phase}

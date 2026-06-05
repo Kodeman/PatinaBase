@@ -214,35 +214,9 @@ export default function EditDecisionPage({
 
   return (
     <div className="pt-8">
-      <div className="type-meta mb-6">
-        <Link
-          href="/portal/decisions"
-          className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]"
-        >
-          Decisions
-        </Link>
-        <span className="mx-2">&rarr;</span>
-        <Link
-          href={`/portal/decisions/${decisionId}`}
-          className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]"
-        >
-          {decision.title}
-        </Link>
-        <span className="mx-2">&rarr;</span>
-        <span>Edit</span>
-      </div>
-
-      <h1
-        className="mb-1"
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: '1.5rem',
-          fontWeight: 400,
-          color: 'var(--text-primary)',
-        }}
-      >
-        Edit Decision
-      </h1>
+      {/* The global SubNav breadcrumb carries the Decisions → {title} → Edit
+          trail, so this page renders no breadcrumb and no h1. The lead-in below
+          is contextual guidance, not a title. */}
       <p className="type-label-secondary mb-8">
         {isDraft
           ? 'Revise this draft before sending it to your client.'

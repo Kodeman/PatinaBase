@@ -9,8 +9,9 @@ import {
   useCreateTask,
   useUpdateProject,
 } from '@/hooks/use-projects';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { PhaseDot } from '@/components/portal/phase-dot';
+import { PageActionBar } from '@/components/portal';
+import { Button } from '@/components/ui/controls';
 import { ProgressBar } from '@/components/portal/progress-bar';
 import { TaskChecklist } from '@/components/portal/task-checklist';
 import { LoadingStrata } from '@/components/portal/loading-strata';
@@ -97,49 +98,37 @@ export default function PhaseTaskViewPage({
 
   return (
     <div className="pt-8">
-      <Breadcrumb
-        items={[
-          { label: 'Projects', href: '/portal/projects' },
-          { label: project.name, href: `/portal/projects/${id}` },
-          { label: phaseConfig.label },
-        ]}
-      />
-
-      {/* Phase header */}
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="mb-1 flex items-center gap-2">
-            <PhaseDot phase={phase} />
-            <span className="type-meta" style={{ color: phaseConfig.color }}>
-              Phase {phaseIndex + 1} of {ALL_PHASES.length}
+      {/* The global breadcrumb (SubNav) carries the project name + phase-label
+          step; the bar surfaces the phase indicator + task progress as meta.
+          PhaseDot + phaseConfig.color stay in `meta` so the rich per-phase
+          color is preserved (semantic tones can't match it). */}
+      <PageActionBar
+        meta={
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <div className="flex items-center gap-2">
+              <PhaseDot phase={phase} />
+              <span className="type-meta" style={{ color: phaseConfig.color }}>
+                Phase {phaseIndex + 1} of {ALL_PHASES.length}
+              </span>
+            </div>
+            <span className="type-label-secondary">
+              {project.name} · {completedCount} of {totalCount} tasks complete
             </span>
           </div>
-          <h1 className="type-section-head mb-1" style={{ fontSize: '1.5rem' }}>
-            {phaseConfig.label}
-          </h1>
-          <div className="type-label-secondary">
-            {project.name} · {completedCount} of {totalCount} tasks complete
-          </div>
-        </div>
-        <div className="flex gap-2">
-          {isActivePhase && (
+        }
+        actions={
+          isActivePhase ? (
             <>
-              <button
-                className="type-btn-text rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[0.72rem] text-[var(--text-primary)]"
-                onClick={handleAddTask}
-              >
+              <Button variant="secondary" size="sm" onClick={handleAddTask}>
                 + Add Task
-              </button>
-              <button
-                className="type-btn-text rounded-[3px] border border-[var(--border-default)] bg-transparent px-3 py-1.5 text-[0.72rem] text-[var(--text-primary)]"
-                onClick={handleAdvancePhase}
-              >
+              </Button>
+              <Button variant="secondary" size="sm" onClick={handleAdvancePhase}>
                 Advance Phase →
-              </button>
+              </Button>
             </>
-          )}
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
 
       {/* Progress bar */}
       <div className="mb-8" style={{ height: '4px' }}>

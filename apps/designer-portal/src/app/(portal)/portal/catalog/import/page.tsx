@@ -3,10 +3,10 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Breadcrumb,
   UploadZone,
   PortalButton,
 } from '@/components/portal';
+import { ListPageHeader } from '@/components/portal/list-page-header';
 import { SectionIntro, SurfaceKeys } from '@patina/help-system';
 
 type ImportStep = 1 | 2 | 3;
@@ -260,16 +260,8 @@ export default function BulkImportPage() {
 
   return (
     <div className="pt-8">
-      <Breadcrumb
-        items={[
-          { label: 'Products', href: '/portal/catalog' },
-          { label: 'Import Products' },
-        ]}
-      />
-
-      <h1 className="type-page-title mb-2" style={{ fontSize: '1.5rem' }}>
-        Import Products
-      </h1>
+      {/* Breadcrumb ("Products › Catalog › Import") is rendered globally by SubNav. */}
+      <ListPageHeader title="Import Products" />
 
       {/* Layer 1 · Ambient page intro — sits beneath the page title and gives
           the designer a sense of what the bulk-import flow does before they

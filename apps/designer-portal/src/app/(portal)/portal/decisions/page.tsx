@@ -13,6 +13,7 @@ import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { DecisionCard } from '@/components/portal/decision-card';
 import { DecisionNewPicker } from '@/components/portal/decision-new-picker';
+import { ListPageHeader } from '@/components/portal/list-page-header';
 import { PortalButton } from '@/components/portal/button';
 // F1.7 — Designer Decisions screen migrated to ambient + reactive help-system
 // layers per spec §12.4. SectionIntro renders the inline `fallback` until
@@ -163,18 +164,20 @@ export default function DecisionsDashboardPage() {
   return (
     <div className="pt-8">
       {/* Header */}
-      <div className="mb-6 flex flex-wrap items-baseline justify-between gap-4">
-        <div>
-          <h1 className="type-page-title mb-1">Decisions</h1>
+      <ListPageHeader
+        title="Decisions"
+        subtitle={
           <SectionIntro
             surfaceKey={SurfaceKeys.DesignerPortal.Decisions.ListIntro}
             fallback="Open choices awaiting client response — overdue items block procurement and ETA promises."
           />
-        </div>
-        <PortalButton variant="primary" onClick={() => setPickerOpen(true)}>
-          + New Decision
-        </PortalButton>
-      </div>
+        }
+        actions={
+          <PortalButton variant="primary" onClick={() => setPickerOpen(true)}>
+            + New Decision
+          </PortalButton>
+        }
+      />
 
       {/* Filter Tabs */}
       <FilterRow

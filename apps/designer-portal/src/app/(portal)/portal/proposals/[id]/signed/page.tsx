@@ -4,7 +4,6 @@ import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProposal } from '@/hooks/use-proposals';
 import { useActivateProposal, createBrowserClient } from '@patina/supabase';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { DetailRow } from '@/components/portal/detail-row';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
@@ -61,13 +60,6 @@ export default function SignedProposalPage({
 
   return (
     <div className="pt-8">
-      <Breadcrumb
-        items={[
-          { label: 'Proposals', href: '/portal/proposals' },
-          { label: proposal.title },
-        ]}
-      />
-
       {/* Success state */}
       <div className="py-8 text-center">
         <div

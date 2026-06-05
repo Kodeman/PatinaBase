@@ -8,17 +8,36 @@ import {
   useProposalEngagementStats,
 } from '@/hooks/use-proposals';
 import { useSendProposal, useDuplicateProposal } from '@patina/supabase';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
-import { StatusBadge } from '@patina/catalog-ui';
 import { getProposalStatusDisplay } from '@/lib/proposal-status';
 import { MetricsRow } from '@/components/portal/metrics-row';
-import { PortalButton } from '@/components/portal/button';
+import { Button, PageActionBar } from '@/components/portal';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { EngagementTimeline } from '@/components/portal/engagement-timeline';
 import { SectionEngagement } from '@/components/portal/section-engagement';
 import { InsightPanel } from '@/components/portal/insight-panel';
 import { StrataMark } from '@/components/portal/strata-mark';
+
+/** Map a proposal status to a PageActionBar badge tone. */
+function proposalStatusToTone(
+  status: string
+): 'neutral' | 'success' | 'warning' | 'error' | 'info' | 'accent' {
+  switch (status) {
+    case 'accepted':
+      return 'success';
+    case 'viewed':
+      return 'warning';
+    case 'sent':
+      return 'info';
+    case 'declined':
+    case 'expired':
+      return 'error';
+    case 'revised':
+      return 'accent';
+    default:
+      return 'neutral';
+  }
+}
 
 function formatDaysRemaining(validUntil: string | null): string {
   if (!validUntil) return '';
@@ -132,86 +151,71 @@ export default function ProposalTrackingPage({
 
   return (
     <div className="pt-8">
-      <Breadcrumb
-        items={[
-          { label: 'Proposals', href: '/portal/proposals' },
-          { label: proposal.title },
-        ]}
-      />
-
-      {/* Header */}
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="mb-2 flex items-center gap-2">
-            {(() => {
-              const { variant, label } = getProposalStatusDisplay(proposal.status);
-              return <StatusBadge variant={variant} label={label} />;
-            })()}
-            {proposal.valid_until && (
-              <span className="type-meta-small">
-                &middot; Expires{' '}
-                {new Date(proposal.valid_until).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                })}
-              </span>
-            )}
-          </div>
-          <h1 className="type-section-head mb-0.5" style={{ fontSize: '1.5rem' }}>
-            {proposal.title}
-          </h1>
-          <p className="type-label-secondary">
+      <PageActionBar
+        status={{
+          tone: proposalStatusToTone(proposal.status),
+          label: getProposalStatusDisplay(proposal.status).label,
+        }}
+        meta={
+          <span className="type-label-secondary">
             {[
               proposal.client?.full_name,
               proposal.sent_at &&
                 `Sent ${new Date(proposal.sent_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
               `v${proposal.version || 1}.0`,
               `$${total}`,
+              proposal.valid_until &&
+                `Expires ${new Date(proposal.valid_until).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
             ]
               .filter(Boolean)
               .join(' \u00B7 ')}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <PortalButton
-            variant="secondary"
-            onClick={() => router.push(`/portal/proposals/${id}`)}
-          >
-            Edit Proposal
-          </PortalButton>
-          <PortalButton
-            variant="secondary"
-            disabled={resending || resent}
-            onClick={async () => {
-              setResending(true);
-              try {
-                await sendProposal.mutateAsync({ proposalId: id });
-                setResent(true);
-                setTimeout(() => setResent(false), 3000);
-              } finally {
-                setResending(false);
-              }
-            }}
-          >
-            {resending ? 'Resending…' : resent ? 'Resent ✓' : 'Resend'}
-          </PortalButton>
-          <PortalButton
-            variant="secondary"
-            disabled={duplicating}
-            onClick={async () => {
-              setDuplicating(true);
-              try {
-                const created = await duplicateProposal.mutateAsync(id);
-                router.push(`/portal/proposals/${(created as { id: string }).id}`);
-              } catch {
-                setDuplicating(false);
-              }
-            }}
-          >
-            {duplicating ? 'Duplicating…' : 'Duplicate'}
-          </PortalButton>
-        </div>
-      </div>
+          </span>
+        }
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => router.push(`/portal/proposals/${id}`)}
+            >
+              Edit Proposal
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={resending || resent}
+              onClick={async () => {
+                setResending(true);
+                try {
+                  await sendProposal.mutateAsync({ proposalId: id });
+                  setResent(true);
+                  setTimeout(() => setResent(false), 3000);
+                } finally {
+                  setResending(false);
+                }
+              }}
+            >
+              {resending ? 'Resending…' : resent ? 'Resent ✓' : 'Resend'}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={duplicating}
+              onClick={async () => {
+                setDuplicating(true);
+                try {
+                  const created = await duplicateProposal.mutateAsync(id);
+                  router.push(`/portal/proposals/${(created as { id: string }).id}`);
+                } catch {
+                  setDuplicating(false);
+                }
+              }}
+            >
+              {duplicating ? 'Duplicating…' : 'Duplicate'}
+            </Button>
+          </>
+        }
+      />
 
       {/* Metrics */}
       {metrics.length > 0 && <MetricsRow metrics={metrics} />}

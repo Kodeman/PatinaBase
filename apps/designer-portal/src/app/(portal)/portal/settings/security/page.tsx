@@ -17,8 +17,7 @@ import {
   useUnenrollMfa,
   type MfaFactor,
 } from '@patina/supabase';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
-import { PortalButton } from '@/components/portal/button';
+import { Button, PortalButton } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { StrataMark } from '@/components/portal/strata-mark';
 
@@ -101,9 +100,13 @@ export default function SecurityPage() {
 
   return (
     <div className="pt-8">
-      <Breadcrumb
-        items={[{ label: 'Settings', href: '/portal/settings' }, { label: 'Security' }]}
-      />
+      {/* Settings is zone-less (no global breadcrumb), so a minimal back-link
+          stands in for the old breadcrumb and the page keeps its own h1. */}
+      <div className="mb-4">
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/portal/settings">← Settings</Link>
+        </Button>
+      </div>
 
       <h1 className="type-section-head mb-2" style={{ fontSize: '1.5rem' }}>
         Two-factor authentication

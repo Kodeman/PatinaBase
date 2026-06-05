@@ -93,8 +93,13 @@ test.describe('Active Project screens', () => {
     await page.waitForLoadState('networkidle');
 
     expect(pageErrors.filter((m) => CRASH_RE.test(m)), `page errors: ${pageErrors.join(' | ')}`).toHaveLength(0);
-    await expect(page.getByRole('heading', { name: /QA Active Project/i })).toBeVisible();
-    // 'concept' must normalize to the canonical 'concept_development' label.
+    // The entity h1 was removed in the page-header migration; the global
+    // sub-nav breadcrumb now carries the project title. Assert that to confirm
+    // the page loaded (AP-C7 covers the raw-UUID fallback case in depth).
+    const breadcrumb = page.locator('nav', { hasText: 'Active' }).first();
+    await expect(breadcrumb).toContainText('QA Active Project', { timeout: 10_000 });
+    // 'concept' must normalize to the canonical 'concept_development' label —
+    // a stable piece of page content that proves the detail body rendered.
     await expect(page.getByText('Schematic Design', { exact: false }).first()).toBeVisible();
   });
 

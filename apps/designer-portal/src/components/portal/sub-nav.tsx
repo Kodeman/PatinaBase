@@ -14,6 +14,7 @@ import {
   useProduct,
   useRoom,
   useLead,
+  useVendor,
 } from '@patina/supabase';
 import { useProject } from '@/hooks/use-projects';
 import { useProposal } from '@/hooks/use-proposals';
@@ -95,6 +96,21 @@ function RoomBreadcrumbLabel({ id }: { id: string }) {
   return renderResolved(data?.name, isLoading, 'Room');
 }
 
+/**
+ * Resolves a vendor breadcrumb segment to its trade/display name. Reuses the
+ * same `useVendor(id)` hook (query key ['vendor', id]) the vendor detail page
+ * uses, so a warm cache resolves the name without a second fetch.
+ */
+function VendorBreadcrumbLabel({ id }: { id: string }) {
+  // useVendor casts its Supabase client to `any` internally (getSupabase()),
+  // so its data is untyped — read trade_name then name.
+  const { data, isLoading } = useVendor(id) as {
+    data?: { trade_name?: string; name?: string };
+    isLoading: boolean;
+  };
+  return renderResolved(data?.trade_name || data?.name, isLoading, 'Vendor');
+}
+
 /** Resolves a lead breadcrumb segment to its display name. */
 function LeadBreadcrumbLabel({ id }: { id: string }) {
   const { data, isLoading } = useLead(id) as {
@@ -131,6 +147,8 @@ function BreadcrumbLabel({ crumb }: { crumb: BreadcrumbItem }) {
         return <RoomBreadcrumbLabel id={id} />;
       case 'lead':
         return <LeadBreadcrumbLabel id={id} />;
+      case 'vendor':
+        return <VendorBreadcrumbLabel id={id} />;
       default: {
         // Exhaustiveness guard: adding an 8th resourceType without a resolver
         // here is a COMPILE error. At runtime we still fall through to the

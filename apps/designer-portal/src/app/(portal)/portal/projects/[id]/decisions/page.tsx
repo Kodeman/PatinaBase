@@ -1,6 +1,7 @@
 'use client';
 
 import { use } from 'react';
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { useDecisionsByProject } from '@patina/supabase';
 import type {
@@ -8,8 +9,8 @@ import type {
   DecisionType,
   DecisionStatus,
 } from '@patina/supabase';
-import { useProject } from '@/hooks/use-projects';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { PageActionBar } from '@/components/portal';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { deadlineVariant, bandSurface } from '@/lib/decision-deadline';
 
@@ -112,7 +113,7 @@ function Field({
   children,
 }: {
   label: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="min-w-0">
@@ -187,16 +188,11 @@ export default function ProjectDecisionsPage({
 }) {
   const { id } = use(params);
   const hydrated = useHydrated();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: project, isLoading: projectLoading } = useProject(id) as {
-    data: any;
-    isLoading: boolean;
-  };
   const { data: decisions = [], isLoading } = useDecisionsByProject(id);
 
   // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
   // singleton cache) render the same tree — prevents hydration mismatch.
-  if (!hydrated || projectLoading || isLoading) return <LoadingStrata />;
+  if (!hydrated || isLoading) return <LoadingStrata />;
 
   const open = decisions.filter((d) => OPEN_STATUSES.includes(d.status));
   const decided = decisions.filter((d) => d.status === 'responded');
@@ -204,39 +200,19 @@ export default function ProjectDecisionsPage({
 
   return (
     <div className="pt-8">
-      <div className="type-meta mb-6">
-        <Link
-          href="/portal/projects"
-          className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]"
-        >
-          Projects
-        </Link>
-        <span className="mx-2">&rarr;</span>
-        <Link
-          href={`/portal/projects/${id}`}
-          className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]"
-        >
-          {project?.name ?? 'Project'}
-        </Link>
-        <span className="mx-2">&rarr;</span>
-        <span>Decisions</span>
-      </div>
-
-      <h1
-        className="mb-1"
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: '1.5rem',
-          fontWeight: 400,
-          color: 'var(--text-primary)',
-        }}
-      >
-        Decision history
-      </h1>
-      <p className="type-label-secondary mb-8">
-        {decisions.length} total {'·'} {open.length} open {'·'}{' '}
-        {decided.length} decided {'·'} {expired.length} expired
-      </p>
+      {/* The global breadcrumb (SubNav) carries the project name + "Decisions"
+          step; the bar surfaces the decision-history context + counts. */}
+      <PageActionBar
+        meta={
+          <div className="min-w-0">
+            <span className="type-label-secondary">Decision history</span>
+            <p className="type-label-secondary">
+              {decisions.length} total {'·'} {open.length} open {'·'}{' '}
+              {decided.length} decided {'·'} {expired.length} expired
+            </p>
+          </div>
+        }
+      />
 
       <Section title="Open" decisions={open} />
       <Section title="Decided" decisions={decided} />

@@ -4,7 +4,8 @@ import { use, useMemo } from 'react';
 import Link from 'next/link';
 import { useScopeChangeRequests } from '@patina/supabase';
 import { useProject } from '@/hooks/use-projects';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
+import { PageActionBar } from '@/components/portal';
+import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { EmptyState } from '@/components/portal/empty-state';
@@ -67,25 +68,21 @@ export default function ChangeOrdersListPage({
 
   return (
     <div className="pt-8">
-      <Breadcrumb
-        items={[
-          { label: 'Projects', href: '/portal/projects' },
-          { label: project.name, href: `/portal/projects/${projectId}` },
-          { label: 'Change Orders' },
-        ]}
+      {/* The global breadcrumb (SubNav) carries the project name + "Change
+          Orders" step; the bar surfaces step context + the primary CTA. */}
+      <PageActionBar
+        meta={<span className="type-label-secondary">Change Orders</span>}
+        actions={
+          <Button variant="primary" size="sm" asChild>
+            <Link
+              href={`/portal/projects/${projectId}/scope-change/new`}
+              className="no-underline"
+            >
+              + New change order
+            </Link>
+          </Button>
+        }
       />
-
-      <div className="mb-6 flex flex-wrap items-baseline justify-between gap-4">
-        <h1 className="type-section-head" style={{ fontSize: '1.5rem' }}>
-          Change Orders
-        </h1>
-        <Link
-          href={`/portal/projects/${projectId}/scope-change/new`}
-          className="rounded-[3px] bg-[var(--text-primary)] px-3 py-1.5 text-[0.8rem] text-[var(--bg-primary)] no-underline"
-        >
-          + New change order
-        </Link>
-      </div>
 
       {/* Summary */}
       <div className="mb-6 flex flex-wrap gap-6 border-b pb-6" style={{ borderColor: 'var(--border-default)' }}>

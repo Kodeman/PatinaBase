@@ -20,6 +20,8 @@ import {
   type FacetSelections,
 } from '@/components/portal/faceted-filter-popover';
 import { BulkActionBar, BulkActionButton } from '@/components/portal/bulk-action-bar';
+import { ListPageHeader } from '@/components/portal/list-page-header';
+import { Button } from '@/components/portal/button';
 import { getProjectStatusVariant } from '@/lib/project-status';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -362,15 +364,14 @@ function ProjectsContent() {
   if (projects.length === 0) {
     return (
       <div className="pt-8">
-        <div className="mb-8 flex flex-wrap items-baseline justify-between gap-4">
-          <h1 className="type-section-head">Projects</h1>
-          <Link
-            href="/portal/projects/new"
-            className="type-btn-text rounded-[3px] bg-[var(--text-primary)] px-3 py-1.5 text-[0.8rem] text-[var(--bg-primary)] no-underline"
-          >
-            + New Project
-          </Link>
-        </div>
+        <ListPageHeader
+          title="Projects"
+          actions={
+            <Button asChild variant="primary">
+              <Link href="/portal/projects/new">+ New Project</Link>
+            </Button>
+          }
+        />
         <EmptyState
           title="No projects yet"
           description="Projects will appear here as you accept leads and begin working with clients."
@@ -382,17 +383,14 @@ function ProjectsContent() {
   return (
     <div className="pt-8">
       {/* Header */}
-      <div className="mb-6 flex flex-wrap items-baseline justify-between gap-4">
-        <h1 className="type-section-head" style={{ fontSize: '1.5rem' }}>
-          Projects
-        </h1>
-        <Link
-          href="/portal/projects/new"
-          className="type-btn-text rounded-[3px] bg-[var(--text-primary)] px-3 py-1.5 text-[0.8rem] text-[var(--bg-primary)] no-underline"
-        >
-          + New Project
-        </Link>
-      </div>
+      <ListPageHeader
+        title="Projects"
+        actions={
+          <Button asChild variant="primary">
+            <Link href="/portal/projects/new">+ New Project</Link>
+          </Button>
+        }
+      />
 
       {/* Tab filters */}
       <FilterRow options={filterOptions} active={activeFilter} onChange={handleFilterChange} />

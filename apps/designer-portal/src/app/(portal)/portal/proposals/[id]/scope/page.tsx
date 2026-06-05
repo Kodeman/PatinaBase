@@ -10,8 +10,8 @@ import {
   useProposalPaymentMilestones,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { PageContainer } from '@/components/portal/page-container';
+import { PageActionBar } from '@/components/portal';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { ScopeBuilderShell } from '@/components/portal/scope-builder/scope-builder-shell';
 
@@ -195,26 +195,8 @@ export default function ScopeBuilderPage({
 
   return (
     <PageContainer>
-      <Breadcrumb
-        items={[
-          { label: 'Proposals', href: '/portal/proposals' },
-          { label: proposal.title || 'Untitled', href: `/portal/proposals/${id}` },
-          { label: 'Scope Builder' },
-        ]}
-      />
-
-      {/* Edit mode bar */}
-      <div className="mb-6 flex items-center justify-between rounded-md bg-[rgba(196,165,123,0.06)] px-5 py-3">
-        <div className="flex items-center gap-3">
-          <div className="h-2 w-2 animate-pulse rounded-full bg-[var(--accent-primary)]" />
-          <span className="font-mono text-[0.55rem] uppercase tracking-widest text-[var(--accent-primary)]">
-            Scope Builder
-          </span>
-        </div>
-        <span className="font-mono text-[0.55rem] uppercase tracking-widest text-green-600">
-          ● Auto-saved
-        </span>
-      </div>
+      {/* Action bar */}
+      <PageActionBar status={{ tone: 'success', dot: true, label: 'Auto-saved' }} />
 
       <h2 className="mb-1 font-display text-2xl">Define Project Scope</h2>
       <p className="type-body-small mb-8 text-[var(--text-muted)]">

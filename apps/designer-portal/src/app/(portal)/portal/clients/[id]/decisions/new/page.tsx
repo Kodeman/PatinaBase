@@ -2,7 +2,6 @@
 
 import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useClient, useCreateDecision } from '@patina/supabase';
 import type { DesignerClient, DecisionType, BlockingStatus } from '@patina/supabase';
 import {
@@ -125,24 +124,6 @@ export default function NewDecisionPage({
 
   return (
     <div className="pt-8">
-      <div className="type-meta mb-6">
-        <Link
-          href="/portal/clients"
-          className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]"
-        >
-          Clients
-        </Link>
-        <span className="mx-2">&rarr;</span>
-        <Link
-          href={`/portal/clients/${id}`}
-          className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]"
-        >
-          {name}
-        </Link>
-        <span className="mx-2">&rarr;</span>
-        <span>New Decision Request</span>
-      </div>
-
       <h1
         className="mb-1"
         style={{

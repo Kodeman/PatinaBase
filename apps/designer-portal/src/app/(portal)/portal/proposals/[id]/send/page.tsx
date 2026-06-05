@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProposal, useSendProposal, useUpdateProposal } from '@/hooks/use-proposals';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
+import { PageActionBar } from '@/components/portal';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
@@ -105,20 +105,18 @@ export default function SendProposalPage({
 
   return (
     <div className="pt-8">
-      <Breadcrumb
-        items={[
-          { label: 'Proposals', href: '/portal/proposals' },
-          { label: proposal.title, href: `/portal/proposals/${id}` },
-          { label: 'Send' },
-        ]}
+      <PageActionBar
+        status={{ tone: 'info', label: 'Send' }}
+        meta={
+          <span className="type-label-secondary">
+            {proposal.title} &middot; v{proposal.version || 1}.0 &middot; ${total}
+          </span>
+        }
       />
 
-      <h1 className="type-section-head mb-1" style={{ fontSize: '1.5rem' }}>
+      <h1 className="type-section-head mb-8" style={{ fontSize: '1.5rem' }}>
         Send Proposal
       </h1>
-      <p className="type-label-secondary mb-8">
-        {proposal.title} &middot; v{proposal.version || 1}.0 &middot; ${total}
-      </p>
 
       {/* No-client warning banner */}
       {!proposal.client_id && (

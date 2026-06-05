@@ -15,7 +15,8 @@ export interface BreadcrumbItem {
     | 'decision'
     | 'product'
     | 'room'
-    | 'lead';
+    | 'lead'
+    | 'vendor';
   resourceId?: string;
 }
 
@@ -39,6 +40,7 @@ const RESOURCE_BY_ROOT: Record<string, BreadcrumbItem['resourceType']> = {
   catalog: 'product',
   leads: 'lead',
   rooms: 'room',
+  vendors: 'vendor',
 };
 
 const BREADCRUMB_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -169,8 +171,9 @@ function detectDeepPage(pathname: string, zoneKey: ZoneKey): boolean {
     ],
     procurement: [],                    // Sprint 1: no deep sub-routes
     products: [
-      /^\/portal\/catalog\/[^/]+/,      // /portal/catalog/[id] (but not /catalog/import, /catalog/new, /catalog/collections, /catalog/categories)
+      /^\/portal\/catalog\/[^/]+/,      // /portal/catalog/[id], /catalog/import, /catalog/new (collections/categories stay non-deep via nonDeepPaths)
       /^\/portal\/teaching\/product/,   // /portal/teaching/product/[id]
+      /^\/portal\/vendors\/[^/]+/,      // /portal/vendors/[id], /vendors/new ("Vendors › New"), /vendors/saved ("Vendors › Saved")
     ],
     clients: [
       /^\/portal\/clients\/[^/]+/,      // /portal/clients/[id]
@@ -179,10 +182,10 @@ function detectDeepPage(pathname: string, zoneKey: ZoneKey): boolean {
     messages: [],
   };
 
-  // Exclude known non-deep sub-routes
+  // Exclude known non-deep sub-routes. catalog/new + catalog/import are now
+  // breadcrumb pages ("Catalog › New" / "Catalog › Import"); collections +
+  // categories stay non-deep (they show the zone tabs, not a breadcrumb).
   const nonDeepPaths = [
-    '/portal/catalog/new',
-    '/portal/catalog/import',
     '/portal/catalog/collections',
     '/portal/catalog/categories',
   ];
@@ -216,7 +219,7 @@ function buildBreadcrumbs(
     // Skip the first segment if it matches the zone name (e.g., "projects" for pipeline)
     // COUPLED with RESOURCE_BY_ROOT (above) + BreadcrumbLabel resolvers in
     // sub-nav.tsx — new roots must be added in all three. See RESOURCE_BY_ROOT.
-    if (i === 0 && ['projects', 'proposals', 'leads', 'catalog', 'clients', 'decisions', 'teaching', 'rooms'].includes(segment)) {
+    if (i === 0 && ['projects', 'proposals', 'leads', 'catalog', 'clients', 'decisions', 'teaching', 'rooms', 'vendors'].includes(segment)) {
       // Map to a friendly label
       const labels: Record<string, string> = {
         projects: 'Active',
@@ -227,6 +230,7 @@ function buildBreadcrumbs(
         decisions: 'Decisions',
         teaching: 'Teaching',
         rooms: 'Rooms',
+        vendors: 'Vendors',
       };
       crumbs.push({ label: labels[segment] || segment, href: currentPath });
       continue;

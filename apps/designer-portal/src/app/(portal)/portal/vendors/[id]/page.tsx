@@ -1,14 +1,14 @@
 'use client';
 
 import { use, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useVendor, useVendorProducts, useVendorReviews } from '@patina/supabase';
 import { FieldGroup } from '@/components/portal/field-group';
 import { DetailRow } from '@/components/portal/detail-row';
 import { StrataMark } from '@/components/portal/strata-mark';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { PageActionBar } from '@/components/portal/page-action-bar';
 import { useHydrated } from '@/hooks/use-hydrated';
-import { PortalButton } from '@/components/portal/button';
+import { Button } from '@/components/ui/controls';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -70,44 +70,43 @@ export default function VendorDetailPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="pt-8">
-      <div className="type-meta mb-6">
-        <Link href="/portal/vendors" className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]">Vendors</Link>
-        <span className="mx-2">&rarr;</span><span>{vendorName}</span>
-      </div>
-
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="type-page-title mb-2">{vendorName}</h1>
-          <p className="type-label-secondary">
+      {/* The global SubNav breadcrumb carries the vendor name, so there is no
+          h1 here — the category · market · location summary moves into the
+          PageActionBar meta cluster. */}
+      <PageActionBar
+        meta={
+          <span className="type-label-secondary">
             {[vendor.primary_category, vendor.market_position, vendor.location_city].filter(Boolean).join(' · ')}
-          </p>
-        </div>
-
-        {/* VEN-01 / VEN-02 actions */}
-        <div className="flex flex-shrink-0 gap-2">
-          <PortalButton variant="primary" onClick={() => setQuoteOpen(true)}>
-            Request Quote
-          </PortalButton>
-          {contactEmail ? (
-            <PortalButton variant="secondary" asChild>
-              <a href={`mailto:${contactEmail}?subject=${encodeURIComponent(`Inquiry — ${vendorName}`)}`}>
+          </span>
+        }
+        actions={
+          <>
+            {/* VEN-01 / VEN-02 actions */}
+            <Button variant="primary" size="sm" onClick={() => setQuoteOpen(true)}>
+              Request Quote
+            </Button>
+            {contactEmail ? (
+              <Button variant="secondary" size="sm" asChild>
+                <a href={`mailto:${contactEmail}?subject=${encodeURIComponent(`Inquiry — ${vendorName}`)}`}>
+                  Contact
+                </a>
+              </Button>
+            ) : (
+              <Button variant="secondary" size="sm" onClick={() => setQuoteOpen(true)}>
                 Contact
-              </a>
-            </PortalButton>
-          ) : (
-            <PortalButton variant="secondary" onClick={() => setQuoteOpen(true)}>
-              Contact
-            </PortalButton>
-          )}
-          <PortalButton
-            variant={saved ? 'secondary' : 'ghost'}
-            onClick={toggleSave}
-            disabled={savingToggle || saved === null}
-          >
-            {saved ? 'Saved' : 'Save'}
-          </PortalButton>
-        </div>
-      </div>
+              </Button>
+            )}
+            <Button
+              variant={saved ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={toggleSave}
+              disabled={savingToggle || saved === null}
+            >
+              {saved ? 'Saved' : 'Save'}
+            </Button>
+          </>
+        }
+      />
 
       <StrataMark variant="full" />
 

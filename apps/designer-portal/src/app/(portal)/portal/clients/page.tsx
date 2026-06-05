@@ -10,6 +10,7 @@ import { MetricsRow } from '@/components/portal/metrics-row';
 import { ClientListItem } from '@/components/portal/client-list-item';
 import { AddClientDialog } from '@/components/portal/add-client-dialog';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { ListPageHeader } from '@/components/portal/list-page-header';
 import { PortalButton } from '@/components/portal/button';
 // F1.6 — Designer Clients migrated to ambient + reactive help-system layers
 // per spec §12.4. SectionIntro renders the inline `fallback` until Sanity
@@ -160,20 +161,21 @@ function ClientDirectoryContent() {
 
   return (
     <div className="pt-8">
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-4">
-        <h1 className="type-section-head">
-          Clients
-        </h1>
-        <PortalButton variant="secondary" onClick={() => setAddDialogOpen(true)}>
-          + Add Client
-        </PortalButton>
-      </div>
-
-      {/* Section intro — CMS-authored, with inline fallback until Sanity ships */}
-      <SectionIntro
-        surfaceKey={SurfaceKeys.DesignerPortal.Clients.ListIntro}
-        fallback="Your active and past clients."
-        className="mb-6 max-w-prose"
+      <ListPageHeader
+        title="Clients"
+        subtitle={
+          /* CMS-authored section intro, with inline fallback until Sanity ships */
+          <SectionIntro
+            surfaceKey={SurfaceKeys.DesignerPortal.Clients.ListIntro}
+            fallback="Your active and past clients."
+            className="max-w-prose"
+          />
+        }
+        actions={
+          <PortalButton variant="secondary" onClick={() => setAddDialogOpen(true)}>
+            + Add Client
+          </PortalButton>
+        }
       />
 
       {/* Search */}

@@ -3,7 +3,7 @@
 import { use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProjectV2, useCreateScopeChangeRequest, useSendScopeChangeRequest } from '@patina/supabase';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
+import { PageActionBar } from '@/components/portal';
 import { PageContainer } from '@/components/portal/page-container';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
@@ -81,21 +81,21 @@ export default function NewScopeChangePage({
 
   return (
     <PageContainer>
-      <Breadcrumb
-        items={[
-          { label: 'Projects', href: '/portal/projects' },
-          { label: project.name || 'Project', href: `/portal/projects/${id}` },
-          { label: 'Scope Change' },
-        ]}
+      {/* The global breadcrumb (SubNav) carries the project name + "Scope
+          Change" step; the bar surfaces the authorization context as meta. */}
+      <PageActionBar
+        meta={
+          <div className="min-w-0">
+            <span className="type-label-secondary">Scope Change Authorization</span>
+            <p className="type-body-small text-[var(--text-muted)]">
+              {project.name} &middot; Original scope signed{' '}
+              {project.proposal?.signed_at
+                ? new Date(project.proposal.signed_at).toLocaleDateString()
+                : 'N/A'}
+            </p>
+          </div>
+        }
       />
-
-      <h2 className="mb-1 font-display text-2xl">Scope Change Authorization</h2>
-      <p className="type-body-small mb-8 text-[var(--text-muted)]">
-        {project.name} &middot; Original scope signed{' '}
-        {project.proposal?.signed_at
-          ? new Date(project.proposal.signed_at).toLocaleDateString()
-          : 'N/A'}
-      </p>
 
       <ScopeChangeForm
         projectName={project.name}

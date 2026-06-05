@@ -11,7 +11,7 @@ import {
   useProjectPhases,
 } from '@patina/supabase';
 import type { DesignerClient, ClientLifecycleStage } from '@patina/supabase';
-import { StageBadge } from '@/components/portal/stage-badge';
+import { PageActionBar } from '@/components/portal/page-action-bar';
 import { FieldGroup } from '@/components/portal/field-group';
 import { DetailRow } from '@/components/portal/detail-row';
 import { StyleTag } from '@/components/portal/style-tag';
@@ -182,25 +182,68 @@ export default function ClientProfilePage({
   // Style preferences from JSONB
   const prefs = (client.style_preferences || {}) as Record<string, string>;
 
+  const stageToneMap: Record<ClientLifecycleStage, 'info' | 'warning' | 'success' | 'neutral' | 'accent'> = {
+    lead: 'info',
+    proposal: 'warning',
+    active: 'success',
+    completed: 'neutral',
+    nurture: 'accent',
+  };
+
+  const sinceDate = new Date(client.created_at).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
   return (
     <div className="pt-8">
-      {/* Breadcrumb */}
-      <div className="type-meta mb-6">
-        <Link
-          href="/portal/clients"
-          className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]"
-        >
-          Clients
-        </Link>
-        <span className="mx-2">&rarr;</span>
-        <span>{name}</span>
-      </div>
+      {/* Page action bar — status chip, meta, and primary actions */}
+      <PageActionBar
+        status={{ tone: stageToneMap[stage] ?? 'neutral', label: stage.charAt(0).toUpperCase() + stage.slice(1), dot: true }}
+        meta={
+          <span className="type-label-secondary">
+            Since {sinceDate}
+            {email ? ` · ${email}` : ''}
+          </span>
+        }
+        actions={
+          <>
+            {canMessage ? (
+              <PortalButton variant="primary" size="sm" asChild>
+                <Link href={`/portal/clients/${id}/messages`}>Message</Link>
+              </PortalButton>
+            ) : (
+              <PortalButton
+                variant="primary"
+                size="sm"
+                disabled
+                title="This client has no registered profile yet — invite them to enable messaging."
+              >
+                Message
+              </PortalButton>
+            )}
+            <PortalButton variant="secondary" size="sm" asChild>
+              <Link href={`/portal/clients/${id}/decisions/new`}>+ New Decision</Link>
+            </PortalButton>
+            {projects?.[0]?.id ? (
+              <PortalButton variant="secondary" size="sm" asChild>
+                <Link href={`/portal/projects/${projects[0].id}`}>View Project</Link>
+              </PortalButton>
+            ) : (
+              <PortalButton variant="secondary" size="sm" disabled>
+                View Project
+              </PortalButton>
+            )}
+          </>
+        }
+      />
 
-      {/* Profile Hero */}
+      {/* Profile Hero — avatar + name + location */}
       <div
         className="mb-8 grid items-start gap-6 pb-6"
         style={{
-          gridTemplateColumns: '64px 1fr auto',
+          gridTemplateColumns: '64px 1fr',
           borderBottom: '1px solid var(--border-subtle)',
         }}
       >
@@ -222,25 +265,6 @@ export default function ClientProfilePage({
 
         {/* Info */}
         <div>
-          <div className="mb-1 flex items-center gap-2">
-            <StageBadge stage={stage} />
-            <span
-              style={{
-                fontFamily: 'var(--font-meta)',
-                fontSize: '0.52rem',
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-                color: 'var(--text-muted)',
-              }}
-            >
-              · Since{' '}
-              {new Date(client.created_at).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-              })}
-            </span>
-          </div>
           <h1
             style={{
               fontFamily: 'var(--font-display)',
@@ -258,35 +282,6 @@ export default function ClientProfilePage({
               .filter(Boolean)
               .join(' · ')}
           </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex flex-col gap-2">
-          {canMessage ? (
-            <PortalButton variant="primary" asChild>
-              <Link href={`/portal/clients/${id}/messages`}>Message</Link>
-            </PortalButton>
-          ) : (
-            <PortalButton
-              variant="primary"
-              disabled
-              title="This client has no registered profile yet — invite them to enable messaging."
-            >
-              Message
-            </PortalButton>
-          )}
-          <PortalButton variant="secondary" asChild>
-            <Link href={`/portal/clients/${id}/decisions/new`}>+ New Decision</Link>
-          </PortalButton>
-          {projects?.[0]?.id ? (
-            <PortalButton variant="secondary" asChild>
-              <Link href={`/portal/projects/${projects[0].id}`}>View Project</Link>
-            </PortalButton>
-          ) : (
-            <PortalButton variant="secondary" disabled>
-              View Project
-            </PortalButton>
-          )}
         </div>
       </div>
 

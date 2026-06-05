@@ -12,7 +12,6 @@ import {
   useSubmitTeaching,
 } from '@patina/supabase';
 import {
-  Breadcrumb,
   DetailRow,
   StyleTag,
   LoadingStrata,
@@ -198,14 +197,7 @@ export default function TeachProductPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="pt-8">
-      <Breadcrumb
-        items={[
-          { label: 'Products', href: '/portal/catalog' },
-          { label: product.name, href: `/portal/catalog/${id}` },
-          { label: 'Teach' },
-        ]}
-      />
-
+      {/* Breadcrumb ("Products › Teaching › Product › {name}") is rendered globally by SubNav. */}
       {/* Teaching Header */}
       <div className="mb-8 flex flex-wrap items-baseline justify-between gap-4">
         <div>

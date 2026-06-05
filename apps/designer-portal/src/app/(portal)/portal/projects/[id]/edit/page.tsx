@@ -3,7 +3,7 @@
 import { use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProject, useUpdateProject } from '@/hooks/use-projects';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
+import { PageActionBar } from '@/components/portal';
 import { ProjectForm } from '@/components/portal/project-form';
 import { ChangeHistory } from '@/components/portal/change-history';
 import { StrataMark } from '@/components/portal/strata-mark';
@@ -79,19 +79,11 @@ export default function EditProjectPage({
 
   return (
     <div className="pt-8">
-      <Breadcrumb
-        items={[
-          { label: 'Projects', href: '/portal/projects' },
-          { label: project.name, href: `/portal/projects/${id}` },
-          { label: 'Edit' },
-        ]}
+      {/* The global breadcrumb (SubNav) carries the project name + "Edit" step;
+          the bar surfaces the step context as meta. */}
+      <PageActionBar
+        meta={<span className="type-label-secondary">Edit Project</span>}
       />
-
-      <div className="mb-8 flex flex-wrap items-baseline justify-between gap-4">
-        <h1 className="type-section-head" style={{ fontSize: '1.5rem' }}>
-          Edit Project
-        </h1>
-      </div>
 
       <ProjectForm
         isEdit

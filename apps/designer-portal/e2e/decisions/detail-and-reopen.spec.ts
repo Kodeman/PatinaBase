@@ -25,8 +25,11 @@ test.describe('Decision detail — responded decision and reopen', () => {
     });
     await page.waitForLoadState('networkidle', { timeout: 30000 });
 
-    // Title + breadcrumb confirm we're on the right decision page
-    await expect(page.getByRole('heading', { name: /Concept direction approval/i })).toBeVisible({ timeout: 15000 });
+    // The entity h1 was removed in the page-header migration; the global
+    // sub-nav breadcrumb ("Decisions › Concept direction approval") now carries
+    // the decision title. Assert it there to confirm the right page loaded.
+    const breadcrumb = page.locator('nav', { hasText: 'Decisions' }).first();
+    await expect(breadcrumb).toContainText('Concept direction approval', { timeout: 15000 });
 
     // Resolution Record section header (only renders when status === 'responded')
     await expect(page.getByRole('heading', { name: /Resolution Record/i })).toBeVisible();

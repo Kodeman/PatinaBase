@@ -61,6 +61,7 @@ export const ZONES: ZoneConfig[] = [
       '/portal/library', // three-layer catalog (S1.3) — co-exists with /portal/catalog through pilot
       '/portal/teaching',
       '/portal/companion',
+      '/portal/vendors', // vendor directory + detail join the products zone for the global breadcrumb
     ],
     icon: Package,
   },

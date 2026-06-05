@@ -13,6 +13,7 @@ import {
   ProductListItem,
   EmptyState as LocalEmptyState,
   CatalogRefineBar,
+  ListPageHeader,
 } from '@/components/portal';
 import {
   EmptyState as HelpEmptyState,
@@ -202,72 +203,72 @@ export default function CatalogPage() {
   return (
     <div className="pt-6">
       {/* Band 1: Title + Search + View Toggle + Add */}
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="type-section-head flex items-center gap-1.5">
-          Products
-          <InfoIcon
-            surfaceKey={SurfaceKeys.DesignerPortal.Products.Root}
-            fallback="Every product you've captured — vendor pieces, custom maker work, and sourced selections. Curate, teach, and pull from here when building proposals."
-            ariaLabel="About the Products workspace"
-          />
-        </h1>
-        <div className="flex items-center gap-3">
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder="Search by name, maker, style…"
-            className="max-w-[220px]"
-          />
-          <div className="flex gap-1.5">
-            <button
-              className={`cursor-pointer border-0 bg-transparent font-mono text-[0.68rem] uppercase tracking-[0.06em] ${
-                viewMode === 'grid' ? 'text-[var(--text-primary)] opacity-100' : 'text-[var(--text-muted)] opacity-40'
-              }`}
-              onClick={() => setViewMode('grid')}
-            >
-              ▦ Grid
-            </button>
-            <button
-              className={`cursor-pointer border-0 bg-transparent font-mono text-[0.68rem] uppercase tracking-[0.06em] ${
-                viewMode === 'list' ? 'text-[var(--text-primary)] opacity-100' : 'text-[var(--text-muted)] opacity-40'
-              }`}
-              onClick={() => setViewMode('list')}
-            >
-              ☰ List
-            </button>
-          </div>
-          {canCreate && (
-            <div className="relative" ref={addMenuRef}>
-              <PortalButton
-                variant="primary"
-                className="px-2.5 py-1 text-[0.75rem]"
-                onClick={() => setAddMenuOpen((v) => !v)}
+      <ListPageHeader
+        title="Products"
+        actions={
+          <>
+            <InfoIcon
+              surfaceKey={SurfaceKeys.DesignerPortal.Products.Root}
+              fallback="Every product you've captured — vendor pieces, custom maker work, and sourced selections. Curate, teach, and pull from here when building proposals."
+              ariaLabel="About the Products workspace"
+            />
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Search by name, maker, style…"
+              className="max-w-[220px]"
+            />
+            <div className="flex gap-1.5">
+              <button
+                className={`cursor-pointer border-0 bg-transparent font-mono text-[0.68rem] uppercase tracking-[0.06em] ${
+                  viewMode === 'grid' ? 'text-[var(--text-primary)] opacity-100' : 'text-[var(--text-muted)] opacity-40'
+                }`}
+                onClick={() => setViewMode('grid')}
               >
-                +
-              </PortalButton>
-              {addMenuOpen && (
-                <div
-                  className="absolute right-0 top-full z-20 mt-1 flex flex-col rounded border border-[var(--border-default)] bg-[var(--bg-primary)] py-1 shadow-sm"
-                  style={{ minWidth: '140px' }}
-                >
-                  <button
-                    className="cursor-pointer border-0 bg-transparent px-3 py-1.5 text-left text-[0.8rem] text-[var(--text-body)] hover:bg-[var(--bg-hover)]"
-                    onClick={() => { router.push('/portal/catalog/new'); setAddMenuOpen(false); }}
-                  >
-                    Add Product
-                  </button>
-                  <button
-                    className="cursor-pointer border-0 bg-transparent px-3 py-1.5 text-left text-[0.8rem] text-[var(--text-body)] hover:bg-[var(--bg-hover)]"
-                    onClick={() => { router.push('/portal/catalog/import'); setAddMenuOpen(false); }}
-                  >
-                    Import
-                  </button>
-                </div>
-              )}
+                ▦ Grid
+              </button>
+              <button
+                className={`cursor-pointer border-0 bg-transparent font-mono text-[0.68rem] uppercase tracking-[0.06em] ${
+                  viewMode === 'list' ? 'text-[var(--text-primary)] opacity-100' : 'text-[var(--text-muted)] opacity-40'
+                }`}
+                onClick={() => setViewMode('list')}
+              >
+                ☰ List
+              </button>
             </div>
-          )}
-        </div>
-      </div>
+            {canCreate && (
+              <div className="relative" ref={addMenuRef}>
+                <PortalButton
+                  variant="primary"
+                  className="px-2.5 py-1 text-[0.75rem]"
+                  onClick={() => setAddMenuOpen((v) => !v)}
+                >
+                  +
+                </PortalButton>
+                {addMenuOpen && (
+                  <div
+                    className="absolute right-0 top-full z-20 mt-1 flex flex-col rounded border border-[var(--border-default)] bg-[var(--bg-primary)] py-1 shadow-sm"
+                    style={{ minWidth: '140px' }}
+                  >
+                    <button
+                      className="cursor-pointer border-0 bg-transparent px-3 py-1.5 text-left text-[0.8rem] text-[var(--text-body)] hover:bg-[var(--bg-hover)]"
+                      onClick={() => { router.push('/portal/catalog/new'); setAddMenuOpen(false); }}
+                    >
+                      Add Product
+                    </button>
+                    <button
+                      className="cursor-pointer border-0 bg-transparent px-3 py-1.5 text-left text-[0.8rem] text-[var(--text-body)] hover:bg-[var(--bg-hover)]"
+                      onClick={() => { router.push('/portal/catalog/import'); setAddMenuOpen(false); }}
+                    >
+                      Import
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        }
+      />
 
       {/* Layer 1 · Ambient section intro — 1–2 sentences below the page header.
           Renders Sanity copy when present, else the inline fallback. */}

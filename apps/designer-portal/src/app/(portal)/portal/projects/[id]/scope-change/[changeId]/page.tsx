@@ -3,7 +3,7 @@
 import { use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useScopeChangeRequest, useApplyScopeChange, useSendScopeChangeRequest } from '@patina/supabase';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
+import { PageActionBar, type BadgeTone } from '@/components/portal';
 import { PageContainer } from '@/components/portal/page-container';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
@@ -14,13 +14,16 @@ function formatDollars(cents: number): string {
   return `$${(cents / 100).toLocaleString()}`;
 }
 
-const statusColors: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-600',
-  sent: 'bg-blue-50 text-blue-700',
-  viewed: 'bg-blue-50 text-blue-700',
-  approved: 'bg-green-50 text-green-700',
-  declined: 'bg-red-50 text-red-700',
-  cancelled: 'bg-gray-100 text-gray-400',
+// Map a scope-change request status to a kit StatusBadge tone, preserving the
+// prior color intent (approved → success/green, declined → error/red,
+// sent/viewed → info/blue, draft/cancelled → neutral).
+const STATUS_TONE: Record<string, BadgeTone> = {
+  draft: 'neutral',
+  sent: 'info',
+  viewed: 'info',
+  approved: 'success',
+  declined: 'error',
+  cancelled: 'neutral',
 };
 
 export default function ScopeChangeDetailPage({
@@ -63,28 +66,18 @@ export default function ScopeChangeDetailPage({
 
   return (
     <PageContainer>
-      <Breadcrumb
-        items={[
-          { label: 'Projects', href: '/portal/projects' },
-          { label: 'Project', href: `/portal/projects/${id}` },
-          { label: 'Scope Change' },
-        ]}
+      {/* The global breadcrumb (SubNav) carries the project name + "Scope
+          Change" step; the bar surfaces the request title + status. */}
+      <PageActionBar
+        status={{
+          tone: STATUS_TONE[request.status] ?? 'neutral',
+          label: request.status,
+          dot: true,
+        }}
+        meta={<span className="type-label-secondary">{request.title}</span>}
       />
 
       <div className="mx-auto max-w-[600px]">
-        <div className="mb-6 flex items-start justify-between">
-          <div>
-            <h2 className="mb-1 font-display text-2xl">{request.title}</h2>
-            <span
-              className={`inline-block rounded-sm px-2 py-0.5 font-mono text-[0.6rem] uppercase tracking-wider ${
-                statusColors[request.status] || statusColors.draft
-              }`}
-            >
-              {request.status}
-            </span>
-          </div>
-        </div>
-
         <p className="mb-6 font-body text-sm leading-relaxed text-[var(--text-body)]">
           {request.description}
         </p>

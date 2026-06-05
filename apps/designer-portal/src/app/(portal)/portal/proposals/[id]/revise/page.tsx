@@ -8,11 +8,10 @@ import {
   useCreateProposalRevision,
   useUpdateProposal,
 } from '@/hooks/use-proposals';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
-import { StatusBadge } from '@patina/catalog-ui';
 import { getProposalStatusDisplay } from '@/lib/proposal-status';
 import { RevisionFeedback } from '@/components/portal/revision-feedback';
 import { VersionTag } from '@/components/portal/version-tag';
+import { PageActionBar } from '@/components/portal';
 import { PortalButton } from '@/components/portal/button';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
@@ -81,28 +80,21 @@ export default function ReviseProposalPage({
 
   return (
     <div className="pt-8">
-      <Breadcrumb
-        items={[
-          { label: 'Proposals', href: '/portal/proposals' },
-          { label: proposal.title, href: `/portal/proposals/${id}` },
-          { label: 'Revise' },
-        ]}
+      <PageActionBar
+        status={{
+          tone: 'accent',
+          label: getProposalStatusDisplay('revised').label,
+        }}
+        meta={
+          <span className="type-label-secondary">
+            {proposal.title} &middot; {proposal.client?.full_name || 'Client'} &middot; ${total} &middot; v{currentVersion}.0 &rarr; v{nextVersion}.0
+          </span>
+        }
       />
 
-      {/* Status badge */}
-      <div className="mb-2 flex items-center gap-2">
-        {(() => {
-          const { variant, label } = getProposalStatusDisplay('revised');
-          return <StatusBadge variant={variant} label={label} />;
-        })()}
-      </div>
-
-      <h1 className="type-section-head mb-1" style={{ fontSize: '1.5rem' }}>
+      <h1 className="type-section-head mb-6" style={{ fontSize: '1.5rem' }}>
         Revise Proposal
       </h1>
-      <p className="type-label-secondary mb-6">
-        {proposal.title} &middot; {proposal.client?.full_name || 'Client'} &middot; ${total} &middot; v{currentVersion}.0 &rarr; v{nextVersion}.0
-      </p>
 
       {/* Client feedback */}
       {proposal.client_feedback && (

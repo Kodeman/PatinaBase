@@ -4,7 +4,8 @@ import { useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useProduct } from '@/hooks/use-products';
-import { Breadcrumb, LoadingStrata } from '@/components/portal';
+import { LoadingStrata, PageActionBar } from '@/components/portal';
+import { Button } from '@/components/ui/controls';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { useToast } from '@/components/portal/toast-provider';
 import { catalogApi } from '@/lib/api-client';
@@ -58,11 +59,20 @@ function ProductDetailContent() {
       <EditModeBar />
 
       <div className="px-[clamp(1.5rem,5vw,2.5rem)] pt-6">
-        <Breadcrumb
-          items={[
-            { label: 'Products', href: '/portal/catalog' },
-            { label: draft.name || 'Product' },
-          ]}
+        {/* Page action bar — the global SubNav breadcrumb carries
+            Products → {product name}, so this page renders no breadcrumb. The
+            present-mode "Edit Mode" toggle moves into the bar's actions; the
+            product name stays inside the document content below (ProductIdentity),
+            like a letterhead. In edit mode the bar has no actions and renders
+            nothing (EditModeBar above owns that state). */}
+        <PageActionBar
+          actions={
+            mode === 'present' ? (
+              <Button variant="ghost" size="sm" onClick={toggleMode}>
+                ✎ Edit Mode
+              </Button>
+            ) : undefined
+          }
         />
 
         {/* Layer 1 · Ambient page-level intro. Only rendered when the CMS has
@@ -73,17 +83,6 @@ function ProductDetailContent() {
           surfaceKey={SurfaceKeys.DesignerPortal.Products.Detail.Intro}
           className="mb-2 max-w-prose"
         />
-
-        {mode === 'present' && (
-          <div className="mb-4 flex justify-end">
-            <button
-              onClick={toggleMode}
-              className="cursor-pointer rounded-sm border border-[var(--border-subtle)] bg-transparent px-3 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-[var(--text-muted)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--text-primary)]"
-            >
-              ✎ Edit Mode
-            </button>
-          </div>
-        )}
 
         <HeroGallery />
         <ProductIdentity />

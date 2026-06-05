@@ -3,8 +3,9 @@
 import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProject, useCompleteProject } from '@/hooks/use-projects';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { PhaseDot } from '@/components/portal/phase-dot';
+import { PageActionBar } from '@/components/portal';
+import { Button } from '@/components/ui/controls';
 import { ClosureChecklist } from '@/components/portal/closure-checklist';
 import { PortfolioSnapshotForm } from '@/components/portal/portfolio-snapshot-form';
 import { StrataMark } from '@/components/portal/strata-mark';
@@ -71,27 +72,25 @@ export default function ProjectClosurePage({
 
   return (
     <div className="pt-8">
-      <Breadcrumb
-        items={[
-          { label: 'Projects', href: '/portal/projects' },
-          { label: project.name, href: `/portal/projects/${id}` },
-          { label: 'Complete Project' },
-        ]}
+      {/* The global breadcrumb (SubNav) carries the project name + "Complete
+          Project" step; the bar surfaces the phase indicator + scope meta.
+          PhaseDot + the rich --phase-walkthrough color stay in `meta` so the
+          phase color fidelity is preserved (semantic tones can't match it). */}
+      <PageActionBar
+        meta={
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <div className="flex items-center gap-2">
+              <PhaseDot phase="final_walkthrough" />
+              <span className="type-meta" style={{ color: 'var(--phase-walkthrough)' }}>
+                Final Walkthrough
+              </span>
+            </div>
+            <span className="type-label-secondary">
+              {project.name} · {project.client_name} · {formatBudget(project.budget)}
+            </span>
+          </div>
+        }
       />
-
-      {/* Phase header */}
-      <div className="mb-2 flex items-center gap-2">
-        <PhaseDot phase="final_walkthrough" />
-        <span className="type-meta" style={{ color: 'var(--phase-walkthrough)' }}>
-          Final Walkthrough
-        </span>
-      </div>
-      <h1 className="type-section-head mb-1" style={{ fontSize: '1.5rem' }}>
-        Complete Project
-      </h1>
-      <div className="type-label-secondary mb-8">
-        {project.name} · {project.client_name} · {formatBudget(project.budget)}
-      </div>
 
       {/* Closure Checklist */}
       <h3
@@ -138,20 +137,19 @@ export default function ProjectClosurePage({
 
       {/* Actions */}
       <div className="mt-8 flex gap-2 border-t border-[var(--border-default)] pt-6">
-        <button
-          className="type-btn-text rounded-[3px] px-5 py-2.5 text-white disabled:opacity-50"
-          style={{ background: 'var(--color-sage)' }}
+        <Button
+          variant="primary"
           disabled={!allComplete}
           onClick={handleComplete}
         >
           Complete & Archive Project
-        </button>
-        <button
-          className="type-btn-text rounded-[3px] border border-[var(--border-default)] bg-transparent px-5 py-2.5 text-[var(--text-primary)]"
+        </Button>
+        <Button
+          variant="secondary"
           onClick={() => router.push(`/portal/projects/${id}`)}
         >
           Save Progress
-        </button>
+        </Button>
       </div>
     </div>
   );

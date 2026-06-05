@@ -1,7 +1,6 @@
 'use client';
 
 import { use, useState } from 'react';
-import Link from 'next/link';
 import { useLead, useAcceptLead, useDeclineLead, useMarkLeadViewed, useUpdateLeadStatus } from '@patina/supabase';
 import { useEffect } from 'react';
 import { StrataMark } from '@/components/portal/strata-mark';
@@ -10,13 +9,13 @@ import { FieldGroup } from '@/components/portal/field-group';
 import { DetailRow } from '@/components/portal/detail-row';
 import { StyleTag } from '@/components/portal/style-tag';
 import { PortalButton } from '@/components/portal/button';
+import { PageActionBar } from '@/components/portal/page-action-bar';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 import {
   formatBudgetRange,
   formatProjectType,
   formatTimeline,
-  leadDisplayName,
 } from '@/lib/lead-format';
 
 export default function LeadBriefPage({
@@ -93,45 +92,33 @@ export default function LeadBriefPage({
     );
   }
 
-  const clientName = leadDisplayName(lead);
   const location = [lead.location_city, lead.location_state]
     .filter(Boolean)
     .join(', ');
 
   return (
     <div className="pt-8">
-      {/* Breadcrumb */}
-      <div className="type-meta mb-6">
-        <Link
-          href="/portal/leads"
-          className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]"
-        >
-          Leads
-        </Link>
-        <span className="mx-2">&rarr;</span>
-        <span>{clientName}</span>
-      </div>
-
-      {/* Hero Block */}
-      <div className="flex flex-col gap-6 border-b border-[var(--border-default)] pb-8 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h1 className="type-page-title mb-2">{clientName}</h1>
-          <p className="type-label-secondary">
-            {[formatProjectType(lead.project_type), location]
+      {/* Page action bar \u2014 the global SubNav breadcrumb carries the lead name,
+          so there is no h1. The project-type \u00B7 location \u00B7 budget \u00B7 timeline
+          summary moves into the meta cluster. The match score is substantial
+          context and stays in the hero body below. */}
+      <PageActionBar
+        meta={
+          <span className="type-label-secondary">
+            {[
+              formatProjectType(lead.project_type),
+              location,
+              lead.budget_range ? `Budget: ${formatBudgetRange(lead.budget_range)}` : null,
+              lead.timeline ? `Timeline: ${formatTimeline(lead.timeline)}` : null,
+            ]
               .filter(Boolean)
               .join(' \u00B7 ')}
-          </p>
-          {(lead.budget_range || lead.timeline) && (
-            <p className="type-label-secondary mt-1">
-              {[
-                lead.budget_range ? `Budget: ${formatBudgetRange(lead.budget_range)}` : null,
-                lead.timeline ? `Timeline: ${formatTimeline(lead.timeline)}` : null,
-              ]
-                .filter(Boolean)
-                .join(' \u00B7 ')}
-            </p>
-          )}
-        </div>
+          </span>
+        }
+      />
+
+      {/* Hero Block \u2014 match score */}
+      <div className="flex flex-col gap-6 border-b border-[var(--border-default)] pb-8 md:flex-row md:items-start md:justify-end">
         <div className="shrink-0">
           <ScoreCircle score={lead.match_score || 0} />
         </div>

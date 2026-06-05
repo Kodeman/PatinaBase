@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useFindOrCreateVendor } from '@patina/supabase';
 import { FieldGroup } from '@/components/portal/field-group';
 import { PortalButton } from '@/components/portal/button';
@@ -24,10 +23,7 @@ export default function NewVendorPage() {
 
   return (
     <div className="pt-8">
-      <div className="type-meta mb-6">
-        <Link href="/portal/vendors" className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]">Vendors</Link>
-        <span className="mx-2">&rarr;</span><span>Add Vendor</span>
-      </div>
+      {/* Breadcrumb ("Products › Vendors › New") is rendered globally by SubNav. */}
       <h1 className="type-page-title mb-8">Add Custom Vendor</h1>
       <div className="max-w-2xl space-y-8">
         <FieldGroup label="Trade Name">

@@ -9,10 +9,9 @@ import {
   useUpdateProposal,
 } from '@/hooks/use-proposals';
 import { useAuth } from '@/hooks/use-auth';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { proposalEvents } from '@/lib/analytics';
 import { StrataMark } from '@/components/portal/strata-mark';
-import { PortalButton } from '@/components/portal/button';
+import { Button, PageActionBar } from '@/components/portal';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { ProposalLetterhead } from '@/components/portal/proposal-letterhead';
@@ -118,49 +117,40 @@ export default function ProposalDetailPage({
 
   return (
     <div className="pt-8">
-      <Breadcrumb
-        items={[
-          { label: 'Proposals', href: '/portal/proposals' },
-          { label: proposal.title },
-        ]}
-      />
-
-      {/* ── Editor Toolbar ── */}
-      <div className="mb-6 flex items-center justify-between rounded-lg border border-[var(--border-subtle)] bg-white px-6 py-3">
-        <div className="flex items-center gap-2">
-          <span
-            style={{
-              fontFamily: 'var(--font-meta)',
-              fontSize: '0.55rem',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-              color: 'var(--color-sage)',
-            }}
-          >
-            {'\u25CF'} {savedText}
-          </span>
-          <span className="type-meta-small">&middot;</span>
-          <span className="type-meta-small">v{proposal.version || 1}.0</span>
-          <span className="type-meta-small">&middot;</span>
-          {proposal.client_id ? (
-            <span className="type-meta-small">
-              Client: {proposal.client?.full_name || proposal.client?.email || 'Linked'}
-            </span>
-          ) : (
-            <span className="type-meta-small italic text-[var(--text-muted)]">
-              Unlinked
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => setClientPickerOpen((o) => !o)}
-            className="type-meta-small cursor-pointer border-0 bg-transparent text-[var(--accent-primary)] underline-offset-2 hover:underline"
-          >
-            Change
-          </button>
-          {clientPickerOpen && (
-            <div className="w-[260px]">
+      {/* ── Editor Action Bar ── */}
+      <PageActionBar
+        status={{ tone: 'success', dot: true, label: savedText }}
+        meta={
+          <>
+            <span className="type-meta-small">&middot;</span>
+            <span className="type-meta-small">v{proposal.version || 1}.0</span>
+            <span className="type-meta-small">&middot;</span>
+            {proposal.client_id ? (
+              <span className="type-meta-small">
+                Client: {proposal.client?.full_name || proposal.client?.email || 'Linked'}
+              </span>
+            ) : (
+              <span className="type-meta-small italic text-[var(--text-muted)]">
+                Unlinked
+              </span>
+            )}
+            {/* ClientPicker runs in controlled mode: the "Change" button is the
+                sole opening affordance (single click), and the picker's own
+                Radix popover handles click-outside + Escape. Selecting a client
+                fires the mutation and closes; clicking "Change" again toggles
+                it shut. The relative wrapper anchors the popover content. */}
+            <span className="relative inline-flex">
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-expanded={clientPickerOpen}
+                onClick={() => setClientPickerOpen((o) => !o)}
+              >
+                Change
+              </Button>
               <ClientPicker
+                open={clientPickerOpen}
+                onOpenChange={setClientPickerOpen}
                 value={proposal.client_id ?? null}
                 onChange={(clientId) => {
                   updateProposal.mutate({
@@ -172,34 +162,38 @@ export default function ProposalDetailPage({
                 placeholder="Link a client…"
                 inlineChip
               />
-            </div>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <PortalButton
-            variant="ghost"
-            onClick={() => router.push(`/portal/proposals/${id}/scope`)}
-          >
-            Scope Builder
-          </PortalButton>
-          <PortalButton
-            variant="secondary"
-            onClick={() => {
-              // Preview opens a read-only view
-              window.open(`/portal/proposals/${id}/preview`, '_blank');
-            }}
-          >
-            Preview as Client
-          </PortalButton>
-          <PortalButton
-            variant="primary"
-            onClick={() => router.push(`/portal/proposals/${id}/send`)}
-            className="!bg-[var(--accent-primary)]"
-          >
-            Send to Client
-          </PortalButton>
-        </div>
-      </div>
+            </span>
+          </>
+        }
+        actions={
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push(`/portal/proposals/${id}/scope`)}
+            >
+              Scope Builder
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                // Preview opens a read-only view
+                window.open(`/portal/proposals/${id}/preview`, '_blank');
+              }}
+            >
+              Preview as Client
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => router.push(`/portal/proposals/${id}/send`)}
+            >
+              Send to Client
+            </Button>
+          </>
+        }
+      />
 
       {/* ── Proposal Document ── */}
       <div

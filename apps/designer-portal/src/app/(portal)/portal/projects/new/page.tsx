@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useCreateProject, useUpdateProject } from '@/hooks/use-projects';
 import { useActivationWizard } from '@/stores/project-activation-store';
@@ -137,13 +136,7 @@ export default function NewProjectPage() {
 
   return (
     <div className="pt-8">
-      <Breadcrumb
-        items={[
-          { label: 'Projects', href: '/portal/projects' },
-          { label: 'New Project' },
-        ]}
-      />
-
+      {/* Breadcrumb ("Pipeline › Active › New Project") is rendered globally by SubNav. */}
       {error && (
         <div
           className="mb-4 rounded-md border-2 p-3"

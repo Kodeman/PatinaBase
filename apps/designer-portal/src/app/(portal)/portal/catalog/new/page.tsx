@@ -7,11 +7,11 @@ import { useCategories } from '@/hooks/use-products';
 import { useImageUpload } from '@/hooks/use-image-upload';
 import { catalogApi } from '@/lib/api-client';
 import {
-  Breadcrumb,
   StrataMark,
-  PortalButton,
   UploadZone,
 } from '@/components/portal';
+import { ListPageHeader } from '@/components/portal/list-page-header';
+import { Button } from '@/components/ui/controls';
 import {
   FieldHelper,
   FieldLabel,
@@ -104,37 +104,30 @@ export default function NewProductPage() {
 
   return (
     <div className="pt-8">
-      <Breadcrumb
-        items={[
-          { label: 'Products', href: '/portal/catalog' },
-          { label: 'Add New Product' },
-        ]}
+      {/* Breadcrumb ("Products › Catalog › New") is rendered globally by SubNav. */}
+      <ListPageHeader
+        title="Add New Product"
+        actions={
+          <>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => handleSave(false)}
+              disabled={createProduct.isPending || !form.name.trim()}
+            >
+              Save as Draft
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => handleSave(true)}
+              disabled={createProduct.isPending || !form.name.trim()}
+            >
+              Publish
+            </Button>
+          </>
+        }
       />
-
-      {/* Page Header */}
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-4">
-        <h1 className="type-page-title" style={{ fontSize: '1.5rem' }}>
-          Add New Product
-        </h1>
-        <div className="flex gap-2">
-          <PortalButton
-            variant="primary"
-            className="text-[0.8rem]"
-            onClick={() => handleSave(false)}
-            disabled={createProduct.isPending || !form.name.trim()}
-          >
-            Save as Draft
-          </PortalButton>
-          <PortalButton
-            variant="secondary"
-            className="text-[0.8rem]"
-            onClick={() => handleSave(true)}
-            disabled={createProduct.isPending || !form.name.trim()}
-          >
-            Publish
-          </PortalButton>
-        </div>
-      </div>
 
       {/* Layer 1 · Ambient intro under the "Add New Product" header. Helps the
           designer understand what's worth filling in now vs deferring to a

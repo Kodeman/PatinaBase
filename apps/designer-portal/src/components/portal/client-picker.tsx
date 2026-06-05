@@ -17,6 +17,15 @@ export interface ClientPickerProps {
   className?: string;
   /** Render the trigger compactly (for inline chip contexts). */
   inlineChip?: boolean;
+  /**
+   * Controlled open state. When provided, the popover is driven by the parent
+   * (pair with `onOpenChange`) and the built-in combobox trigger is suppressed
+   * — the parent owns the affordance that opens it. Leave undefined for the
+   * default self-contained (uncontrolled) behavior.
+   */
+  open?: boolean;
+  /** Notified when the popover wants to open/close (controlled mode). */
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function ClientPicker({
@@ -26,8 +35,20 @@ export function ClientPicker({
   disabled = false,
   className,
   inlineChip = false,
+  open: openProp,
+  onOpenChange,
 }: ClientPickerProps) {
-  const [open, setOpen] = React.useState(false);
+  const [openState, setOpenState] = React.useState(false);
+  // Controlled when an `open` prop is supplied; otherwise own the state.
+  const isControlled = openProp !== undefined;
+  const open = isControlled ? openProp : openState;
+  const setOpen = React.useCallback(
+    (next: boolean) => {
+      if (!isControlled) setOpenState(next);
+      onOpenChange?.(next);
+    },
+    [isControlled, onOpenChange],
+  );
   const [search, setSearch] = React.useState('');
   const [adding, setAdding] = React.useState(false);
   const [addError, setAddError] = React.useState<string | null>(null);
@@ -104,30 +125,38 @@ export function ClientPicker({
   return (
     <div className={cn('w-full', className)}>
       <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
-        <PopoverPrimitive.Trigger asChild disabled={disabled}>
-          <button
-            type="button"
-            role="combobox"
-            data-testid="client-picker-trigger"
-            aria-expanded={open}
-            disabled={disabled}
-            className={cn(
-              'flex w-full items-center justify-between rounded border border-[var(--color-pearl)] bg-white text-[0.85rem] outline-none transition-colors',
-              'focus:border-[var(--accent-primary)]',
-              'disabled:cursor-not-allowed disabled:opacity-50',
-              inlineChip ? 'px-2.5 py-1' : 'px-3 py-2'
-            )}
-            style={{ fontFamily: 'var(--font-body)' }}
-          >
-            <span
-              className={cn('truncate', !selected && 'text-[var(--text-muted)]')}
-              style={selected ? { color: 'var(--text-primary)' } : undefined}
+        {/* Controlled mode: the parent owns the opening affordance (e.g. a
+            "Change" button), so we anchor to the picker's position rather than
+            render our own combobox trigger. Uncontrolled mode renders the
+            built-in trigger as before. */}
+        {isControlled ? (
+          <PopoverPrimitive.Anchor className="block w-full" />
+        ) : (
+          <PopoverPrimitive.Trigger asChild disabled={disabled}>
+            <button
+              type="button"
+              role="combobox"
+              data-testid="client-picker-trigger"
+              aria-expanded={open}
+              disabled={disabled}
+              className={cn(
+                'flex w-full items-center justify-between rounded border border-[var(--color-pearl)] bg-white text-[0.85rem] outline-none transition-colors',
+                'focus:border-[var(--accent-primary)]',
+                'disabled:cursor-not-allowed disabled:opacity-50',
+                inlineChip ? 'px-2.5 py-1' : 'px-3 py-2'
+              )}
+              style={{ fontFamily: 'var(--font-body)' }}
             >
-              {triggerLabel}
-            </span>
-            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </button>
-        </PopoverPrimitive.Trigger>
+              <span
+                className={cn('truncate', !selected && 'text-[var(--text-muted)]')}
+                style={selected ? { color: 'var(--text-primary)' } : undefined}
+              >
+                {triggerLabel}
+              </span>
+              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </button>
+          </PopoverPrimitive.Trigger>
+        )}
 
         <PopoverPrimitive.Portal>
           <PopoverPrimitive.Content

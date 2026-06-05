@@ -29,7 +29,7 @@ import {
   type AllowanceFormState,
   type TbdFormState,
 } from '@/components/portal/ffe/ffe-item-forms';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
+import { PageActionBar } from '@/components/portal';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { SearchInput } from '@/components/portal/search-input';
@@ -474,45 +474,42 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="pt-8">
-      <Breadcrumb
-        items={[
-          { label: 'Projects', href: '/portal/projects' },
-          { label: project.name, href: `/portal/projects/${projectId}` },
-          { label: 'FF&E' },
-        ]}
-      />
-
-      <div className="mb-6 flex flex-wrap items-baseline justify-between gap-4">
-        <div>
-          <div className="flex items-baseline gap-1.5">
-            <h1 className="type-section-head" style={{ fontSize: '1.5rem' }}>
-              FF&amp;E Pipeline
-            </h1>
-            {/* FF&E itself is Patina vocabulary; StrataInfoIcon explains the
-                acronym + the procurement-board model. */}
-            <StrataInfoIcon
-              surfaceKey={SurfaceKeys.DesignerPortal.Ffe.Concept.Ffe}
-              ariaLabel="What does FF&E mean?"
-              fallback="FF&E stands for Furniture, Fixtures & Equipment — every specified product that moves through procurement on the way to install."
+      {/* The global breadcrumb (SubNav) carries the project name + "FF&E" step;
+          the bar surfaces the FF&E concept icon + help intro as meta, with the
+          blocked-items rollup + item count on the right. */}
+      <PageActionBar
+        meta={
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-1.5">
+              <span className="type-label-secondary">FF&amp;E Pipeline</span>
+              {/* FF&E itself is Patina vocabulary; StrataInfoIcon explains the
+                  acronym + the procurement-board model. */}
+              <StrataInfoIcon
+                surfaceKey={SurfaceKeys.DesignerPortal.Ffe.Concept.Ffe}
+                ariaLabel="What does FF&E mean?"
+                fallback="FF&E stands for Furniture, Fixtures & Equipment — every specified product that moves through procurement on the way to install."
+              />
+            </div>
+            <SectionIntro
+              surfaceKey={SurfaceKeys.DesignerPortal.Ffe.ListIntro}
+              fallback="Track each item from specification through install. Move items between stages to keep your client and vendors aligned."
             />
           </div>
-          <SectionIntro
-            surfaceKey={SurfaceKeys.DesignerPortal.Ffe.ListIntro}
-            fallback="Track each item from specification through install. Move items between stages to keep your client and vendors aligned."
-          />
-        </div>
-        <div className="flex items-center gap-3">
-          {/* PT-D-2-T3-2 — surface how many items are held pending a decision. */}
-          <BlockedItemsRollup
-            count={blockedRollup.count}
-            projectId={projectId}
-            decisionId={blockedRollup.decisionId}
-          />
-          <div className="type-meta-small text-[var(--text-muted)]">
-            {filtered.length} of {items.length} items
-          </div>
-        </div>
-      </div>
+        }
+        actions={
+          <>
+            {/* PT-D-2-T3-2 — surface how many items are held pending a decision. */}
+            <BlockedItemsRollup
+              count={blockedRollup.count}
+              projectId={projectId}
+              decisionId={blockedRollup.decisionId}
+            />
+            <div className="type-meta-small text-[var(--text-muted)]">
+              {filtered.length} of {items.length} items
+            </div>
+          </>
+        }
+      />
 
       {/* Add FF&E — direct add to the project (real/UUID projects only; slug
           fixtures serve mock data with no Supabase row to insert against). The

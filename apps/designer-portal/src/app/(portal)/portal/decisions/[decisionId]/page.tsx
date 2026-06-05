@@ -18,6 +18,8 @@ import type { DecisionType, BlockingStatus, DecisionOverride } from '@patina/sup
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { PortalButton } from '@/components/portal/button';
+import { PageActionBar } from '@/components/portal/page-action-bar';
+import { decisionStatusToTone } from '@/components/ui/controls';
 import { OverrideDecisionModal } from '@/components/portal/override-decision-modal';
 import { DecisionCommentThread } from '@/components/portal/decision-comment-thread';
 import { useAuth } from '@/hooks/use-auth';
@@ -37,31 +39,6 @@ const blockingLabels: Record<BlockingStatus, string> = {
   blocks_phase: 'Blocks phase advancement',
   non_blocking: 'Non-blocking (advisory)',
 };
-
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, { color: string; bg: string }> = {
-    draft: { color: 'var(--text-muted)', bg: 'rgba(139, 115, 85, 0.08)' },
-    pending: { color: 'var(--color-gold)', bg: 'rgba(232, 197, 71, 0.1)' },
-    responded: { color: 'var(--color-sage)', bg: 'rgba(122, 155, 118, 0.1)' },
-    expired: { color: 'var(--color-terracotta)', bg: 'rgba(199, 123, 110, 0.1)' },
-  };
-  const s = styles[status] ?? styles.pending;
-  return (
-    <span
-      className="rounded-sm px-2 py-0.5"
-      style={{
-        fontFamily: 'var(--font-meta)',
-        fontSize: '0.55rem',
-        textTransform: 'uppercase',
-        letterSpacing: '0.06em',
-        color: s.color,
-        background: s.bg,
-      }}
-    >
-      {status === 'responded' ? 'Resolved' : status}
-    </span>
-  );
-}
 
 function formatDate(date: string | null): string {
   if (!date) return '\u2014';
@@ -195,39 +172,39 @@ export default function DecisionDetailPage({
 
   return (
     <div className="pt-8">
-      {/* Breadcrumb */}
-      <div className="type-meta mb-6">
-        <Link
-          href="/portal/decisions"
-          className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]"
-        >
-          Decisions
-        </Link>
-        <span className="mx-2">&rarr;</span>
-        <span>{decision.title}</span>
-      </div>
-
-      {/* Header */}
-      <div className="mb-2 flex items-center gap-3">
-        <StatusBadge status={decision.status} />
-        {decision.sent_at && (
-          <span className="type-meta-small">{'\u00B7'} Sent {formatDate(decision.sent_at)}</span>
-        )}
-      </div>
-      <h1
-        className="mb-1"
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: '1.5rem',
-          fontWeight: 400,
-          color: 'var(--text-primary)',
+      {/* Page action bar \u2014 status chip + meta cluster on the left (sent date,
+          type, linked phase), quick actions on the right. The global SubNav
+          breadcrumb carries the decision title, so there is no h1 here. */}
+      <PageActionBar
+        status={{
+          tone: decisionStatusToTone(decision.status),
+          label: decision.status === 'responded' ? 'Resolved' : decision.status,
+          dot: true,
         }}
-      >
-        {decision.title}
-      </h1>
-      <p className="type-label-secondary mb-8">
-        {typeLabels[decision.decision_type] ?? 'Decision'} {'\u00B7'} {decision.linked_phase ?? 'No phase linked'}
-      </p>
+        meta={
+          <span className="type-label-secondary">
+            {decision.sent_at ? `Sent ${formatDate(decision.sent_at)} \u00B7 ` : ''}
+            {typeLabels[decision.decision_type] ?? 'Decision'}{' \u00B7 '}
+            {decision.linked_phase ?? 'No phase linked'}
+          </span>
+        }
+        actions={
+          <>
+            {decision.status !== 'responded' && (
+              <PortalButton variant="secondary" size="sm" asChild>
+                <Link href={`/portal/decisions/${decision.id}/edit`}>Edit</Link>
+              </PortalButton>
+            )}
+            {decision.project_id && (
+              <PortalButton variant="secondary" size="sm" asChild>
+                <Link href={`/portal/projects/${decision.project_id}`}>
+                  View in Project
+                </Link>
+              </PortalButton>
+            )}
+          </>
+        }
+      />
 
       {/* Draft banner \u2014 the client can't see a draft until it's sent. */}
       {decision.status === 'draft' && (
@@ -657,18 +634,7 @@ export default function DecisionDetailPage({
                 {publishDraft.isPending ? 'Sending...' : 'Send to Client'}
               </PortalButton>
             )}
-            {/* A resolved decision carries a signed record; editing happens via
-                reopen. Drafts, pending, and expired decisions are editable. */}
-            {decision.status !== 'responded' && (
-              <Link href={`/portal/decisions/${decision.id}/edit`}>
-                <PortalButton variant="secondary">Edit</PortalButton>
-              </Link>
-            )}
-            {decision.project_id && (
-              <Link href={`/portal/projects/${decision.project_id}`}>
-                <PortalButton variant="secondary">View in Project</PortalButton>
-              </Link>
-            )}
+            {/* Edit and View-in-Project live in the page action bar above. */}
             {decision.designer_client_id &&
               (canMessageClient ? (
                 <Link href={`/portal/clients/${decision.designer_client_id}/messages`}>

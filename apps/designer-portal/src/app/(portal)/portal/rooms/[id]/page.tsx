@@ -1,7 +1,6 @@
 'use client';
 
 import { use } from 'react';
-import Link from 'next/link';
 import { useRoom, useRoomScans } from '@patina/supabase';
 import { FieldGroup } from '@/components/portal/field-group';
 import { DetailRow } from '@/components/portal/detail-row';
@@ -27,12 +26,9 @@ export default function RoomViewerPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="pt-8">
-      <div className="type-meta mb-6">
-        <Link href="/portal/rooms" className="text-[var(--accent-primary)] no-underline hover:text-[var(--accent-hover)]">Rooms</Link>
-        <span className="mx-2">&rarr;</span><span>{room.name || 'Room'}</span>
-      </div>
-
-      <h1 className="type-page-title mb-4">{room.name || 'Room Viewer'}</h1>
+      {/* The global SubNav breadcrumb carries Rooms → {room.name}, so this page
+          renders no breadcrumb and no h1. There are no header actions, so the
+          content (3D viewer + details) starts directly. */}
 
       {/* 3D Viewer Area */}
       {roomScans.length > 0 ? (

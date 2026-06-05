@@ -3,7 +3,8 @@
 import { use, useMemo, useState } from 'react';
 import { useProject, useProjectFinancials, useProjectMilestones, useProjectFFEItems } from '@/hooks/use-projects';
 import { useAuth } from '@/hooks/use-auth';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
+import { PageActionBar } from '@/components/portal';
+import { Button } from '@/components/ui/controls';
 import { MetricBlock } from '@/components/portal/metric-block';
 import { PaymentMilestoneCard } from '@/components/portal/payment-milestone-card';
 import { DetailRow } from '@/components/portal/detail-row';
@@ -159,37 +160,33 @@ export default function ProjectFinancialsPage({
 
   return (
     <div className="pt-8">
-      <Breadcrumb
-        items={[
-          { label: 'Projects', href: '/portal/projects' },
-          { label: project.name, href: `/portal/projects/${id}` },
-          { label: 'Financials' },
-        ]}
+      {/* The global breadcrumb (SubNav) carries the project name + "Financials"
+          step; the bar surfaces step context + the help intro as meta, with the
+          page-level actions (Generate Invoice / Export) on the right. */}
+      <PageActionBar
+        meta={
+          <div className="min-w-0">
+            <span className="type-label-secondary">Financials</span>
+            <SectionIntro
+              surfaceKey={SurfaceKeys.DesignerPortal.Financials.Intro}
+              fallback="Track budget against committed and actual spend. Variance updates in real time as POs are issued and invoices are paid."
+            />
+          </div>
+        }
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled
+              title="Coming soon"
+            >
+              Generate Invoice
+            </Button>
+            <ExportMenu />
+          </>
+        }
       />
-
-      <div className="mb-8 flex flex-wrap items-baseline justify-between gap-4">
-        <div>
-          <h1 className="type-section-head" style={{ fontSize: '1.5rem' }}>
-            Financials
-          </h1>
-          <SectionIntro
-            surfaceKey={SurfaceKeys.DesignerPortal.Financials.Intro}
-            fallback="Track budget against committed and actual spend. Variance updates in real time as POs are issued and invoices are paid."
-          />
-        </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled
-            title="Coming soon"
-            className="cursor-not-allowed rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem] opacity-50"
-            style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)' }}
-          >
-            Generate Invoice
-          </button>
-          <ExportMenu />
-        </div>
-      </div>
 
       {/* High-level metrics row — every label is a Patina-defined measurement
           (especially Committed vs Actual, which mean different things in
@@ -504,14 +501,8 @@ function ExportMenu() {
   // Export pipeline (XLSX / PDF / CSV) is not built yet — render the control
   // disabled with a tooltip rather than firing an alert (B-07).
   return (
-    <button
-      type="button"
-      disabled
-      title="Coming soon"
-      className="cursor-not-allowed rounded-[3px] border bg-transparent px-3 py-1.5 text-[0.8rem] opacity-50"
-      style={{ borderColor: 'var(--border-default)', fontFamily: 'var(--font-body)' }}
-    >
+    <Button variant="secondary" size="sm" disabled title="Coming soon">
       Export
-    </button>
+    </Button>
   );
 }

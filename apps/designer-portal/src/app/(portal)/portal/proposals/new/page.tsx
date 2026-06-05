@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useProposalTemplates, useCreateProposal } from '@/hooks/use-proposals';
 import { useProjects } from '@/hooks/use-projects';
 import { useClients } from '@/hooks/use-clients';
-import { Breadcrumb } from '@/components/portal/breadcrumb';
+import { ListPageHeader } from '@/components/portal/list-page-header';
 import { TemplateCard } from '@/components/portal/template-card';
 import { ClientPicker } from '@/components/portal/client-picker';
 import { PortalButton } from '@/components/portal/button';
@@ -57,19 +57,11 @@ export default function NewProposalPage() {
 
   return (
     <div className="pt-8">
-      <Breadcrumb
-        items={[
-          { label: 'Proposals', href: '/portal/proposals' },
-          { label: 'New Proposal' },
-        ]}
+      {/* Breadcrumb ("Pipeline › Proposals › New Proposal") is rendered globally by SubNav. */}
+      <ListPageHeader
+        title="New Proposal"
+        subtitle="Select a template, then customize for your client."
       />
-
-      <h1 className="type-section-head mb-1" style={{ fontSize: '1.5rem' }}>
-        New Proposal
-      </h1>
-      <p className="type-label-secondary mb-8">
-        Select a template, then customize for your client.
-      </p>
 
       {/* Project link + Client link + Version */}
       <div className="mb-8 grid max-w-[760px] grid-cols-3 gap-6">

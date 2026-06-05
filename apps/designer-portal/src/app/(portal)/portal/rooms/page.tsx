@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useRooms } from '@patina/supabase';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { ListPageHeader } from '@/components/portal/list-page-header';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRoom = any;
@@ -14,7 +15,7 @@ export default function RoomsPage() {
 
   return (
     <div className="pt-8">
-      <h1 className="type-section-head mb-6">Room Scans</h1>
+      <ListPageHeader title="Room Scans" />
 
       {isLoading ? (
         <LoadingStrata />
