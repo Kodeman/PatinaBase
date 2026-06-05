@@ -7,8 +7,12 @@ export * from './crypto';
 export * from './error';
 export * from './retry';
 export * from './slug';
-export * from './logging';
 export * from './performance';
+// Note: logging exports winston which requires Node.js — its File transport
+// calls fs.existsSync at construction, which throws in the browser bundle
+// (crashed /portal/proposals and /portal/projects in prod). Import directly
+// from '@patina/utils/dist/logging' for server-side code.
+// export * from './logging';
 // Note: error-tracking exports @sentry/node which requires Node.js
 // Import directly from '@patina/utils/dist/error-tracking' for server-side code
 // export * from './error-tracking';
