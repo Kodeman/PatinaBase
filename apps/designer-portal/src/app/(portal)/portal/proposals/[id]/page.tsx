@@ -8,6 +8,16 @@ import {
   useUpsertProposalSection,
   useUpdateProposal,
 } from '@/hooks/use-proposals';
+import {
+  useProposalPaymentMilestones,
+  useProposalScopeRooms,
+  useProposalExclusions,
+} from '@patina/supabase';
+import type {
+  ProposalPaymentMilestone,
+  ProposalScopeRoom,
+  ProposalExclusion,
+} from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { proposalEvents } from '@/lib/analytics';
 import { StrataMark } from '@/components/portal/strata-mark';
@@ -31,6 +41,9 @@ export default function ProposalDetailPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal, isLoading: proposalLoading } = useProposal(id) as { data: any; isLoading: boolean };
   const { data: sections, isLoading: sectionsLoading } = useProposalSections(id);
+  const { data: paymentMilestones } = useProposalPaymentMilestones(id) as { data: ProposalPaymentMilestone[] | undefined };
+  const { data: scopeRooms } = useProposalScopeRooms(id) as { data: ProposalScopeRoom[] | undefined };
+  const { data: exclusions } = useProposalExclusions(id) as { data: ProposalExclusion[] | undefined };
   const upsertSection = useUpsertProposalSection();
   const updateProposal = useUpdateProposal();
 
@@ -199,6 +212,9 @@ export default function ProposalDetailPage({
                 proposalId={id}
                 proposalItems={proposal.items}
                 totalAmount={proposal.total_amount || 0}
+                paymentMilestones={paymentMilestones}
+                scopeRooms={scopeRooms}
+                exclusions={exclusions}
                 clientName={proposal.client?.full_name}
                 designerName={designerName}
               />

@@ -7,7 +7,6 @@ import {
   useProposalScopeRooms,
   useProposalPhases,
   useProposalExclusions,
-  useProposalPaymentMilestones,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { PageContainer } from '@/components/portal/page-container';
@@ -29,7 +28,6 @@ export default function ScopeBuilderPage({
   const { data: rooms } = useProposalScopeRooms(id);
   const { data: phases } = useProposalPhases(id);
   const { data: exclusions } = useProposalExclusions(id);
-  const { data: milestones } = useProposalPaymentMilestones(id);
   const { data: sections } = useProposalSections(id);
   const upsertSection = useUpsertProposalSection();
 
@@ -116,13 +114,6 @@ export default function ScopeBuilderPage({
           designFeeCents: totalFees,
           ffeBudgetCents: totalFFE,
           totalCents: totalFees + totalFFE,
-          payment_schedule: milestones?.map(
-            (m: { label: string; percentage: number; amount_cents: number }) => ({
-              label: m.label,
-              percent: m.percentage,
-              description: `$${(m.amount_cents / 100).toLocaleString()}`,
-            })
-          ),
         },
       });
     }
@@ -171,7 +162,7 @@ export default function ScopeBuilderPage({
 
     // Navigate to the proposal editor
     router.push(`/portal/proposals/${id}`);
-  }, [proposal, rooms, phases, exclusions, milestones, sections, id, router, upsertSection]);
+  }, [proposal, rooms, phases, exclusions, sections, id, router, upsertSection]);
 
   if (isLoading) {
     return (

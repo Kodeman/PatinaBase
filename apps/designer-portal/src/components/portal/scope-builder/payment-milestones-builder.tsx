@@ -39,23 +39,37 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
   const [edits, setEdits] = useState<Record<string, Record<string, unknown>>>({});
 
   useEffect(() => {
-    if (milestones.length > 0) {
+    setEdits((prev) => {
+      const serverIds = new Set(milestones.map((m: { id: string }) => m.id));
+      let changed = false;
       const next: Record<string, Record<string, unknown>> = {};
+
+      // Keep existing edits untouched (preserve in-flight typed values), but
+      // drop entries whose milestone was removed on the server.
+      for (const id of Object.keys(prev)) {
+        if (serverIds.has(id)) {
+          next[id] = prev[id];
+        } else {
+          changed = true;
+        }
+      }
+
+      // Seed only milestone ids we don't already have (e.g. newly added rows).
       for (const m of milestones) {
-        if (!edits[m.id]) {
+        if (!next[m.id]) {
           next[m.id] = {
             label: m.label,
             percentage: m.percentage,
             amount_cents: m.amount_cents,
             trigger_condition: m.trigger_condition,
           };
-        } else {
-          next[m.id] = edits[m.id];
+          changed = true;
         }
       }
-      setEdits(next);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+      // Nothing added or removed — bail to avoid clobbering in-flight edits.
+      return changed ? next : prev;
+    });
   }, [milestones]);
 
   // Debounced save
@@ -73,6 +87,7 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
               onSuccess: () => {
                 proposalEvents.scopeUpdated({ proposalId, field: 'milestone', action: 'update' });
               },
+              onError: (err) => console.error('Failed to update payment milestone', err),
             }
           );
           timers.current.delete(milestoneId);
@@ -112,16 +127,25 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
         onSuccess: () => {
           proposalEvents.scopeUpdated({ proposalId, field: 'milestone', action: 'add' });
         },
+        onError: (err) => console.error('Failed to add payment milestone', err),
       }
     );
   }
 
+  // Compute totals from the SAME merged expression the rows render from, so the
+  // header reflects optimistic edits immediately (before the debounced refetch).
   const totalPercentage = milestones.reduce(
-    (sum: number, m: { percentage: number }) => sum + (m.percentage || 0),
+    (sum: number, m: { id: string; percentage: number }) => {
+      const pct = (edits[m.id]?.percentage as number) ?? m.percentage ?? 0;
+      return sum + (pct || 0);
+    },
     0
   );
   const totalAllocated = milestones.reduce(
-    (sum: number, m: { amount_cents: number }) => sum + (m.amount_cents || 0),
+    (sum: number, m: { id: string; percentage: number }) => {
+      const pct = (edits[m.id]?.percentage as number) ?? m.percentage ?? 0;
+      return sum + Math.round((totalCents * pct) / 100);
+    },
     0
   );
   const isBalanced = totalPercentage === 100;
@@ -283,6 +307,7 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
                       onSuccess: () => {
                         proposalEvents.scopeUpdated({ proposalId, field: 'milestone', action: 'remove' });
                       },
+                      onError: (err) => console.error('Failed to remove payment milestone', err),
                     }
                   )
                 }

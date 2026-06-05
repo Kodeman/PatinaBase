@@ -5,10 +5,19 @@ import { X } from 'lucide-react';
 import { createBrowserClient } from '@patina/supabase';
 import { IconButton } from '@/components/ui/controls';
 import type { ProposalSection } from '@/hooks/use-proposals';
+import {
+  LineItemsBlock,
+  PaymentScheduleBlock,
+  ScopeRoomsBlock,
+  ExclusionsBlock,
+} from '@patina/design-system';
+import type {
+  ProposalPaymentMilestone,
+  ProposalScopeRoom,
+  ProposalExclusion,
+} from '@patina/supabase';
 import { UploadZone } from './upload-zone';
 import { ProposalProductItem } from './proposal-product-item';
-import { InvestmentTable } from './investment-table';
-import { PaymentSchedule } from './payment-schedule';
 import { TimelinePhases } from './timeline-phases';
 import { SignatureBlock } from './signature-block';
 
@@ -19,14 +28,21 @@ interface ProposalSectionEditorProps {
   proposalItems?: Array<{
     id: string;
     name: string;
+    item_type?: string;
     vendor_name?: string | null;
     image_url?: string | null;
     product?: { name?: string; images?: string[] | null; brand?: string | null } | null;
     unit_price: number;
     quantity: number;
+    line_total_cents?: number;
+    budget_min_cents?: number | null;
+    budget_max_cents?: number | null;
     category?: string | null;
   }>;
   totalAmount?: number;
+  paymentMilestones?: ProposalPaymentMilestone[];
+  scopeRooms?: ProposalScopeRoom[];
+  exclusions?: ProposalExclusion[];
   clientName?: string | null;
   designerName?: string | null;
 }
@@ -53,6 +69,9 @@ export function ProposalSectionEditor({
   proposalId,
   proposalItems = [],
   totalAmount = 0,
+  paymentMilestones = [],
+  scopeRooms = [],
+  exclusions = [],
   clientName,
   designerName,
 }: ProposalSectionEditorProps) {
@@ -138,7 +157,13 @@ export function ProposalSectionEditor({
       )}
 
       {section.type === 'investment' && (
-        <InvestmentSection items={proposalItems} totalAmount={totalAmount} />
+        <InvestmentSection
+          items={proposalItems}
+          totalAmount={totalAmount}
+          paymentMilestones={paymentMilestones}
+          scopeRooms={scopeRooms}
+          exclusions={exclusions}
+        />
       )}
 
       {section.type === 'timeline' && (
@@ -431,38 +456,93 @@ function SelectionsSection({
 }
 
 // ── Investment Section ──
+// Renders the canonical client-facing investment blocks (the same
+// LineItemsBlock / PaymentScheduleBlock used by the /preview page and the
+// client portal) so allowance/TBD line totals and the real stored payment
+// milestones render here too — never a hardcoded 30/40/30 split.
 function InvestmentSection({
   items,
   totalAmount,
+  paymentMilestones,
+  scopeRooms,
+  exclusions,
 }: {
   items: Array<{
     id: string;
     name: string;
-    product?: { name?: string } | null;
-    unit_price: number;
+    item_type?: string;
     quantity: number;
-    category?: string | null;
+    unit_price: number;
+    line_total_cents?: number;
+    budget_min_cents?: number | null;
+    budget_max_cents?: number | null;
+    vendor_name?: string | null;
+    product?: { name?: string; brand?: string | null } | null;
   }>;
   totalAmount: number;
+  paymentMilestones: ProposalPaymentMilestone[];
+  scopeRooms: ProposalScopeRoom[];
+  exclusions: ProposalExclusion[];
 }) {
-  // Build investment rows from items, grouped
-  const rows = items.map((item) => ({
-    label: item.name || item.product?.name || 'Item',
-    amount: item.unit_price * item.quantity,
-  }));
-
-  const defaultMilestones = [
-    { label: 'Deposit', percent: 30, description: 'due on signing' },
-    { label: 'Procurement', percent: 40, description: 'due before ordering' },
-    { label: 'Completion', percent: 30, description: 'due on final walkthrough' },
-  ];
-
   return (
-    <div>
-      <InvestmentTable rows={rows} totalAmount={totalAmount} />
-      <div className="mt-6">
-        <PaymentSchedule milestones={defaultMilestones} totalAmount={totalAmount} />
-      </div>
+    <div className="mt-2">
+      <LineItemsBlock
+        items={items.map((item) => ({
+          id: item.id,
+          name: item.name,
+          item_type: item.item_type,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          line_total_cents: item.line_total_cents ?? 0,
+          budget_min_cents: item.budget_min_cents,
+          budget_max_cents: item.budget_max_cents,
+          vendor_name: item.vendor_name,
+          product: item.product,
+        }))}
+        totalCents={totalAmount}
+      />
+      {scopeRooms.length > 0 && (
+        <div className="mt-6">
+          <p
+            className="mb-1 type-meta-small text-[var(--text-muted)]"
+            style={{ textTransform: 'uppercase', letterSpacing: '0.12em' }}
+          >
+            Per-room budgets
+          </p>
+          <ScopeRoomsBlock
+            rooms={scopeRooms.map((r) => ({
+              name: r.name,
+              room_type: r.room_type,
+              budget_cents: r.budget_cents,
+            }))}
+          />
+        </div>
+      )}
+      <PaymentScheduleBlock
+        milestones={paymentMilestones.map((m) => ({
+          label: m.label,
+          percentage: m.percentage,
+          amount_cents: m.amount_cents,
+          trigger_condition: m.trigger_condition,
+        }))}
+        totalCents={totalAmount}
+      />
+      {exclusions.length > 0 && (
+        <div className="mt-6">
+          <p
+            className="mb-1 type-meta-small text-[var(--text-muted)]"
+            style={{ textTransform: 'uppercase', letterSpacing: '0.12em' }}
+          >
+            Not included
+          </p>
+          <ExclusionsBlock
+            exclusions={exclusions.map((e) => ({
+              description: e.description,
+              category: e.category,
+            }))}
+          />
+        </div>
+      )}
     </div>
   );
 }
