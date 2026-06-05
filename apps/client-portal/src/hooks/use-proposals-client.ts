@@ -18,5 +18,8 @@ export function partitionProposals(proposals: Proposal[] | undefined) {
   const pending = list.filter((p) => p.status === 'sent' || p.status === 'viewed');
   const accepted = list.filter((p) => p.status === 'accepted');
   const archived = list.filter((p) => p.status === 'declined' || p.status === 'expired');
+  // Note: 'revised' (a superseded version the designer pulled back to revise)
+  // intentionally falls into NO bucket — it stays hidden from the client until
+  // the new version is sent. 'draft' is likewise omitted.
   return { pending, accepted, archived };
 }

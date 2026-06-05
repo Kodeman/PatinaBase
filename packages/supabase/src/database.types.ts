@@ -5718,6 +5718,7 @@ export type Database = {
           quantity: number
           received_quantity: number | null
           sort_order: number
+          source_decision_id: string | null
           source_proposal_item_id: string | null
           status: string
           unit_price_cents: number | null
@@ -5748,6 +5749,7 @@ export type Database = {
           quantity?: number
           received_quantity?: number | null
           sort_order?: number
+          source_decision_id?: string | null
           source_proposal_item_id?: string | null
           status?: string
           unit_price_cents?: number | null
@@ -5778,6 +5780,7 @@ export type Database = {
           quantity?: number
           received_quantity?: number | null
           sort_order?: number
+          source_decision_id?: string | null
           source_proposal_item_id?: string | null
           status?: string
           unit_price_cents?: number | null
@@ -5847,6 +5850,13 @@ export type Database = {
             columns: ["project_room_id"]
             isOneToOne: false
             referencedRelation: "project_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_items_source_decision_id_fkey"
+            columns: ["source_decision_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
             referencedColumns: ["id"]
           },
           {
@@ -11136,6 +11146,14 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: number
       }
+      clone_proposal: {
+        Args: {
+          p_mode?: string
+          p_revision_summary?: string
+          p_source_id: string
+        }
+        Returns: string
+      }
       comms_resolve_role: { Args: { p_user_id: string }; Returns: string }
       consume_capture: {
         Args: {
@@ -11516,6 +11534,59 @@ export type Database = {
           semantic_score: number
           text_score: number
         }[]
+      }
+      send_proposal: {
+        Args: {
+          p_cc_email?: string
+          p_personal_message?: string
+          p_proposal_id: string
+          p_valid_until?: string
+        }
+        Returns: {
+          accepted_at: string | null
+          cc_email: string | null
+          client_feedback: string | null
+          client_id: string | null
+          client_visibility_tier: string | null
+          cover_image: string | null
+          created_at: string
+          decline_reason: string | null
+          declined_at: string | null
+          deposit_percent: number | null
+          description: string | null
+          designer_id: string
+          discount_amount: number | null
+          discount_percent: number | null
+          id: string
+          parent_proposal_id: string | null
+          payment_notes: string | null
+          payment_terms: string | null
+          personal_message: string | null
+          project_address: string | null
+          project_id: string | null
+          revision_summary: string | null
+          sent_at: string | null
+          signed_at: string | null
+          signed_by_name: string | null
+          signed_ip: string | null
+          status: string
+          subtotal: number | null
+          tax_amount: number | null
+          tax_rate: number | null
+          template_id: string | null
+          title: string
+          total_amount: number | null
+          updated_at: string
+          valid_until: string | null
+          version: number | null
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_nomination_status: {
         Args: {

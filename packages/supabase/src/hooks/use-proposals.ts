@@ -53,13 +53,18 @@ export interface Proposal {
   project_address: string | null;
   client_visibility_tier: 'full' | 'milestone' | 'curated' | null;
   total_amount: number;
-  status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired';
+  status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired' | 'revised';
   valid_until: string | null;
   sent_at: string | null;
   viewed_at: string | null;
   responded_at: string | null;
   created_at: string;
   updated_at: string;
+  // Revision chain
+  version: number | null;
+  parent_proposal_id: string | null;
+  revision_summary: string | null;
+  client_feedback: string | null;
   // Joined data
   project?: {
     id: string;
@@ -188,6 +193,7 @@ export function useProposalStats() {
         viewed: proposals.filter((p: Proposal) => p.status === 'viewed').length,
         accepted: proposals.filter((p: Proposal) => p.status === 'accepted').length,
         declined: proposals.filter((p: Proposal) => p.status === 'declined').length,
+        revised: proposals.filter((p: Proposal) => p.status === 'revised').length,
         totalValue: proposals.reduce((sum: number, p: Proposal) => sum + (p.total_amount || 0), 0),
         acceptedValue: proposals
           .filter((p: Proposal) => p.status === 'accepted')
@@ -573,20 +579,15 @@ export function useSendProposal() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const updates: Record<string, unknown> = {
-        status: 'sent',
-        sent_at: new Date().toISOString(),
-      };
-      if (personalMessage !== undefined) updates.personal_message = personalMessage;
-      if (ccEmail !== undefined) updates.cc_email = ccEmail;
-      if (validUntil !== undefined) updates.valid_until = validUntil;
-
-      const { data, error } = await supabase
-        .from('proposals')
-        .update(updates)
-        .eq('id', proposalId)
-        .select()
-        .single();
+      // send_proposal (00176) flips the target to 'sent' AND atomically
+      // supersedes sibling versions in the chain (sent/viewed → 'revised')
+      // so a stale version can no longer be signed by the client.
+      const { data, error } = await supabase.rpc('send_proposal', {
+        p_proposal_id: proposalId,
+        p_personal_message: personalMessage ?? null,
+        p_cc_email: ccEmail ?? null,
+        p_valid_until: validUntil ?? null,
+      });
 
       if (error) throw error;
 
@@ -608,10 +609,13 @@ export function useSendProposal() {
 
       return { ...data, _emailDispatched: emailDispatched };
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
-      queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+      // Prefix-match: sending may also have superseded sibling versions, so
+      // every cached single-proposal view must refetch (not just the target).
+      queryClient.invalidateQueries({ queryKey: ['proposal'] });
       queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['proposal-versions'] });
     },
   });
 }
@@ -967,7 +971,44 @@ export function useProposalVersions(proposalId: string) {
 }
 
 /**
- * Create a new revision of a proposal (version increment)
+ * Mark a sent/viewed (or declined/expired) proposal as 'revised' — the entry
+ * point of the revise flow. Pulls the proposal out of the client's pending
+ * list and makes it unsignable (sign route + RLS require sent/viewed); the
+ * /revise page's "Cancel Revision" restores it to 'sent'.
+ */
+export function useEnterRevision() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ proposalId }: { proposalId: string }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      const { data, error } = await supabase
+        .from('proposals')
+        .update({ status: 'revised' })
+        .eq('id', proposalId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as Proposal;
+    },
+    onSuccess: (_, { proposalId }) => {
+      queryClient.invalidateQueries({ queryKey: ['proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+      queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
+    },
+  });
+}
+
+/**
+ * Create a new revision of a proposal (version increment).
+ *
+ * Backed by the atomic `clone_proposal` RPC (00176), which deep-copies the
+ * proposal AND every child table (sections, items, scope rooms, phases,
+ * deliverables, gates, milestones, exclusions, change-order terms, team,
+ * palettes + swatches) with FK remapping — in one transaction.
  */
 export function useCreateProposalRevision() {
   const queryClient = useQueryClient();
@@ -983,80 +1024,28 @@ export function useCreateProposalRevision() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      // Fetch source proposal
-      const { data: source, error: sourceError } = await supabase
-        .from('proposals')
-        .select('*')
-        .eq('id', sourceProposalId)
-        .single();
-
-      if (sourceError) throw sourceError;
-
-      // Create new version
-      const rootId = source.parent_proposal_id || source.id;
-      const { data: newProposal, error } = await supabase
-        .from('proposals')
-        .insert({
-          ...source,
-          id: undefined, // Let DB generate
-          parent_proposal_id: rootId,
-          version: (source.version || 1) + 1,
-          status: 'draft',
-          revision_summary: revisionSummary || null,
-          client_feedback: source.client_feedback,
-          sent_at: null,
-          viewed_at: null,
-          accepted_at: null,
-          declined_at: null,
-          signed_at: null,
-          created_at: undefined,
-          updated_at: undefined,
-        })
-        .select()
-        .single();
+      const { data: newId, error } = await supabase.rpc('clone_proposal', {
+        p_source_id: sourceProposalId,
+        p_mode: 'revision',
+        p_revision_summary: revisionSummary || null,
+      });
 
       if (error) throw error;
 
-      // Clone sections from source
-      const { data: sections } = await supabase
-        .from('proposal_sections')
+      // Callers expect the full new row (id, version, …).
+      const { data: newProposal, error: fetchError } = await supabase
+        .from('proposals')
         .select('*')
-        .eq('proposal_id', sourceProposalId)
-        .order('sort_order');
+        .eq('id', newId)
+        .single();
 
-      if (sections && sections.length > 0) {
-        const clonedSections = sections.map((s: ProposalSection) => ({
-          ...s,
-          id: undefined,
-          proposal_id: newProposal.id,
-          created_at: undefined,
-          updated_at: undefined,
-        }));
-        await supabase.from('proposal_sections').insert(clonedSections);
-      }
-
-      // Clone items from source
-      const { data: items } = await supabase
-        .from('proposal_items')
-        .select('*')
-        .eq('proposal_id', sourceProposalId);
-
-      if (items && items.length > 0) {
-        const clonedItems = items.map((item: ProposalItem) => ({
-          ...item,
-          id: undefined,
-          proposal_id: newProposal.id,
-          created_at: undefined,
-          updated_at: undefined,
-        }));
-        await supabase.from('proposal_items').insert(clonedItems);
-      }
-
-      return newProposal;
+      if (fetchError) throw fetchError;
+      return newProposal as Proposal;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
       queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['proposal-versions'] });
     },
   });
 }
@@ -1074,70 +1063,22 @@ export function useDuplicateProposal() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data: source, error: sourceError } = await supabase
-        .from('proposals')
-        .select('*')
-        .eq('id', sourceProposalId)
-        .single();
-      if (sourceError) throw sourceError;
+      // Atomic deep copy of the proposal + all child tables (00176).
+      const { data: newId, error } = await supabase.rpc('clone_proposal', {
+        p_source_id: sourceProposalId,
+        p_mode: 'duplicate',
+      });
 
-      const { data: newProposal, error } = await supabase
-        .from('proposals')
-        .insert({
-          ...source,
-          id: undefined,
-          parent_proposal_id: null,
-          version: 1,
-          status: 'draft',
-          title: `${source.title} (Copy)`,
-          revision_summary: null,
-          client_feedback: null,
-          sent_at: null,
-          viewed_at: null,
-          accepted_at: null,
-          declined_at: null,
-          signed_at: null,
-          signed_by_name: null,
-          signed_ip: null,
-          created_at: undefined,
-          updated_at: undefined,
-        })
-        .select()
-        .single();
       if (error) throw error;
 
-      const { data: sections } = await supabase
-        .from('proposal_sections')
+      const { data: newProposal, error: fetchError } = await supabase
+        .from('proposals')
         .select('*')
-        .eq('proposal_id', sourceProposalId)
-        .order('sort_order');
-      if (sections && sections.length > 0) {
-        const cloned = sections.map((s: ProposalSection) => ({
-          ...s,
-          id: undefined,
-          proposal_id: newProposal.id,
-          created_at: undefined,
-          updated_at: undefined,
-        }));
-        await supabase.from('proposal_sections').insert(cloned);
-      }
+        .eq('id', newId)
+        .single();
 
-      const { data: items } = await supabase
-        .from('proposal_items')
-        .select('*')
-        .eq('proposal_id', sourceProposalId);
-      if (items && items.length > 0) {
-        const cloned = items.map((item: ProposalItem) => ({
-          ...item,
-          id: undefined,
-          proposal_id: newProposal.id,
-          created_at: undefined,
-          updated_at: undefined,
-        }));
-        await supabase.from('proposal_items').insert(cloned);
-      }
-
-      return newProposal;
+      if (fetchError) throw fetchError;
+      return newProposal as Proposal;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });

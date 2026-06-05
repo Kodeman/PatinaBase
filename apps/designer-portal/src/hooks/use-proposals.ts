@@ -27,6 +27,7 @@ export {
   useProposalEngagementStats,
   // Versions & Revisions
   useProposalVersions,
+  useEnterRevision,
   useCreateProposalRevision,
   useDuplicateProposal,
   // Signing

@@ -25,6 +25,9 @@ const statusLabels: Record<Proposal['status'], string> = {
   accepted: 'Signed',
   declined: 'Declined',
   expired: 'Expired',
+  // Superseded by a newer version — partitionProposals hides these, but the
+  // label keeps the map total over Proposal['status'].
+  revised: 'Superseded',
 };
 
 export default function ClientProposalsPage() {

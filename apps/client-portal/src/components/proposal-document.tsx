@@ -23,7 +23,7 @@ import { StrataMark } from '@/components/strata-mark';
 import { proposalClientEvents } from '@/lib/analytics/events';
 
 interface ProposalDocumentProps {
-  proposal: Proposal & { items?: ProposalItem[]; version?: number };
+  proposal: Proposal & { items?: ProposalItem[] };
   sections: ProposalSection[];
   trackEngagement?: boolean;
   paymentMilestones?: ProposalPaymentMilestone[];
