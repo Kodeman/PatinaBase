@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase, PORTAL_URL, getAuthCookieName } from '../lib/supabase';
+import { readPortalSessionTokens, isSessionCookieName } from '../lib/portal-cookie';
 
 interface PortalSessionResult {
   isChecking: boolean;
@@ -11,6 +12,10 @@ interface PortalSessionResult {
  * Detects an existing portal session by reading the Supabase auth cookie
  * set on the portal domain. Also listens for real-time cookie changes
  * so the extension reacts when the user logs in/out of the portal.
+ *
+ * The cookie is written by `@supabase/ssr` (base64-encoded and possibly
+ * chunked across `<name>.0`, `.1`, …), so reading/decoding is handled by
+ * `readPortalSessionTokens` rather than a naive `JSON.parse`.
  */
 export function usePortalSession(): PortalSessionResult {
   const [isChecking, setIsChecking] = useState(true);
@@ -20,29 +25,23 @@ export function usePortalSession(): PortalSessionResult {
 
   const cookieName = getAuthCookieName();
 
-  const restoreSession = useCallback(async (cookieValue: string) => {
-    try {
-      const decoded = decodeURIComponent(cookieValue);
-      const parsed = JSON.parse(decoded);
+  // Read + decode the portal cookie(s) and adopt the session. Returns whether
+  // a valid session was restored.
+  const restoreFromPortal = useCallback(async () => {
+    const tokens = await readPortalSessionTokens();
+    if (!tokens) return false;
 
-      if (!parsed.access_token || !parsed.refresh_token) {
-        return false;
-      }
+    const { error: sessionError } = await supabase.auth.setSession({
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+    });
 
-      const { error: sessionError } = await supabase.auth.setSession({
-        access_token: parsed.access_token,
-        refresh_token: parsed.refresh_token,
-      });
-
-      if (sessionError) {
-        console.error('Portal session restore failed:', sessionError.message);
-        return false;
-      }
-
-      return true;
-    } catch {
+    if (sessionError) {
+      console.error('Portal session restore failed:', sessionError.message);
       return false;
     }
+
+    return true;
   }, []);
 
   // Initial cookie check on mount
@@ -51,18 +50,9 @@ export function usePortalSession(): PortalSessionResult {
 
     const checkCookie = async () => {
       try {
-        const cookie = await chrome.cookies.get({
-          url: PORTAL_URL,
-          name: cookieName,
-        });
-
-        if (!mountedRef.current) return;
-
-        if (cookie?.value) {
-          const restored = await restoreSession(cookie.value);
-          if (mountedRef.current) {
-            setFound(restored);
-          }
+        const restored = await restoreFromPortal();
+        if (mountedRef.current) {
+          setFound(restored);
         }
       } catch (err) {
         if (mountedRef.current) {
@@ -80,7 +70,7 @@ export function usePortalSession(): PortalSessionResult {
     return () => {
       mountedRef.current = false;
     };
-  }, [cookieName, restoreSession]);
+  }, [restoreFromPortal]);
 
   // Listen for real-time cookie changes (portal login/logout)
   useEffect(() => {
@@ -95,19 +85,24 @@ export function usePortalSession(): PortalSessionResult {
     const handleCookieChange = async (changeInfo: chrome.cookies.CookieChangeInfo) => {
       const { cookie, removed } = changeInfo;
 
-      // Only care about our auth cookie on the portal domain
-      if (cookie.name !== cookieName) return;
+      // Care about the base auth cookie AND its chunks (`<name>.0`, `.1`, …),
+      // on the portal domain. A chunked session never touches the base name,
+      // so filtering on `cookie.name === cookieName` alone would miss logins.
+      if (!isSessionCookieName(cookie.name, cookieName)) return;
       if (!cookie.domain.endsWith(portalDomain) && !portalDomain.endsWith(cookie.domain.replace(/^\./, ''))) return;
 
       if (removed) {
-        // Portal logged out — sign out extension too
+        // Portal logged out — sign out extension too. (Chunk rotation also
+        // fires `removed` per chunk; signing out on a stale chunk is corrected
+        // by the subsequent set events re-restoring the session below.)
         await supabase.auth.signOut();
         if (mountedRef.current) {
           setFound(false);
         }
-      } else if (cookie.value) {
-        // Portal logged in — restore session
-        const restored = await restoreSession(cookie.value);
+      } else {
+        // Portal cookie changed — re-read the full (re)combined cookie rather
+        // than trusting this single chunk's value.
+        const restored = await restoreFromPortal();
         if (mountedRef.current) {
           setFound(restored);
         }
@@ -118,7 +113,7 @@ export function usePortalSession(): PortalSessionResult {
     return () => {
       chrome.cookies.onChanged.removeListener(handleCookieChange);
     };
-  }, [cookieName, restoreSession]);
+  }, [cookieName, restoreFromPortal]);
 
   return { isChecking, found, error };
 }

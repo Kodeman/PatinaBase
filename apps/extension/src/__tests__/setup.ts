@@ -25,13 +25,17 @@ const chromeMock = {
     executeScript: vi.fn(),
   },
   storage: {
+    // Resolve to an empty record so the Supabase client's GoTrue init (which
+    // reads the session on import) doesn't reject on `result[key]` of undefined.
     local: {
-      get: vi.fn(),
-      set: vi.fn(),
+      get: vi.fn().mockResolvedValue({}),
+      set: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
     },
     sync: {
-      get: vi.fn(),
-      set: vi.fn(),
+      get: vi.fn().mockResolvedValue({}),
+      set: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
     },
   },
   sidePanel: {
