@@ -224,13 +224,10 @@ test.describe.serial('proposal build → send → view → sign', () => {
   // ────────────────────────────────────────────────────────────────────────
   // Step 3: Add 3 FF&E line items (fixed via product picker, allowance, TBD)
   //
-  // The "fixed" path opens a ProductPickerModal, picks a product, and the
-  // ProductAdder component auto-fires addItem once the modal closes. This
-  // requires a product to exist in the catalog seed.
-  //
-  // If the product picker modal cannot be reliably driven (it does a catalog
-  // search), we fall back to fixme for the "fixed" item and still test the
-  // other two paths.
+  // The "fixed" path opens a ProductPickerModal, searches the seeded published
+  // catalog, and clicks a result; onPick fires useAddProposalItem. The picker
+  // carries stable testids (product-picker-modal / product-picker-result), so
+  // we drive it directly and wait on the result tile rather than a timeout.
   // ────────────────────────────────────────────────────────────────────────
   test('add 3 line items (fixed, allowance, tbd)', async ({ authenticatedPage: page }) => {
     await page.goto(`/portal/proposals/${proposalId}/scope?tab=ffe`, {
@@ -290,55 +287,45 @@ test.describe.serial('proposal build → send → view → sign', () => {
     await page.getByRole('button', { name: /save tbd/i }).click();
     await waitForMutation(page);
 
-    // ── Fixed item via product picker ───────────────────────────────────
-    // Open the product picker modal
-    await page.getByRole('button', { name: /^\+\s*add item$/i }).click();
+    // ── Fixed item via ProductPickerModal ───────────────────────────────
+    // The picker exposes stable testids: data-testid="product-picker-modal"
+    // on the dialog, a type=search input, and one data-testid="product-picker-
+    // result" per catalog hit. We search the seeded published catalog for
+    // "chair" (matches "Velvet Club Chair") and click the first result; the
+    // picker fires onPick → useAddProposalItem creates a fixed row.
+    // Two "+ Add Item" triggers can coexist (main cluster + the Unassigned
+    // group header once the allowance/TBD rows render) — either opens the
+    // same shared picker, so target the first.
+    await page.getByRole('button', { name: /^\+\s*add item$/i }).first().click();
 
-    // ProductPickerModal opens — look for it
-    const pickerModal = page.getByRole('dialog').first();
-    const productPickerOpened = await pickerModal.isVisible().catch(() => false);
+    const pickerModal = page.getByTestId('product-picker-modal');
+    await pickerModal.waitFor({ state: 'visible', timeout: 10_000 });
 
-    if (productPickerOpened) {
-      // Search for the first available product and pick it
-      const searchInput = pickerModal.locator('input[type="search"], input[type="text"]').first();
-      const searchVisible = await searchInput.isVisible().catch(() => false);
-      if (searchVisible) {
-        await searchInput.fill('chair');
-      }
-      // Wait for results to load
-      await page.waitForTimeout(800);
+    const searchInput = pickerModal.locator('input[type="search"]').first();
+    await searchInput.waitFor({ state: 'visible', timeout: 10_000 });
+    await searchInput.fill('chair');
 
-      // Click the first product result — the picker emits onPick(productId)
-      const firstResult = pickerModal.locator('[data-product-id], button, [role="option"]').first();
-      const resultVisible = await firstResult.isVisible().catch(() => false);
-      if (resultVisible) {
-        await firstResult.click();
-        await waitForMutation(page);
-      } else {
-        // Close modal if no results found
-        await page.keyboard.press('Escape');
-      }
-    }
+    // Wait for the catalog query to resolve and render at least one result
+    // tile (no fixed timeout — the result testid is the readiness signal).
+    const firstResult = pickerModal.getByTestId('product-picker-result').first();
+    await firstResult.waitFor({ state: 'visible', timeout: 15_000 });
+    await firstResult.click();
+
+    // Picker closes itself on pick, but useAddProposalItem runs a GET (max
+    // position) BEFORE its POST — `networkidle` can resolve inside that gap
+    // and read the DB too early (seen as an aborted POST in traces). Poll the
+    // DB for the third row instead of trusting network quiescence.
+    await pickerModal.waitFor({ state: 'hidden', timeout: 10_000 });
+    await expect
+      .poll(async () => (await getProposalItems(proposalId)).length, {
+        message: 'fixed item row should land after the picker closes',
+        timeout: 15_000,
+      })
+      .toBe(3);
 
     // ── DB assertions ──────────────────────────────────────────────────
     const items = await getProposalItems(proposalId);
     const itemTypeSet = new Set(items.map((i) => i.item_type as string));
-
-    // Always assert the two paths that are rock-solid.
-    expect(itemTypeSet.has('allowance'), 'allowance item missing').toBe(true);
-    expect(itemTypeSet.has('tbd'), 'tbd item missing').toBe(true);
-
-    // The fixed-item path runs through the ProductPickerModal which lacks stable
-    // selectors (no role="dialog" wrapper, no data-testid on results). If it didn't
-    // land an item, fixme rather than fail — this surfaces the gap without halting
-    // the rest of the suite.
-    test.fixme(
-      !itemTypeSet.has('fixed'),
-      `fixed item not added through product picker (got types: ${Array.from(itemTypeSet).join(', ')})`
-    );
-
-    // If we got here, all three paths succeeded.
-    expect(items.length, 'Expected exactly 3 proposal items (fixed + allowance + tbd)').toBe(3);
     expect(itemTypeSet).toEqual(new Set(['fixed', 'allowance', 'tbd']));
   });
 
@@ -353,7 +340,10 @@ test.describe.serial('proposal build → send → view → sign', () => {
 
     await expect(page.getByText('Rooms in Scope').first()).toBeVisible({ timeout: 15_000 });
 
-    // Add first room
+    // Add first room. On a successful save the inline form closes and a RoomCard
+    // renders the room name as text. We WAIT for that card before clicking
+    // "+ Add Room" again — the original flakiness was a test artifact: the
+    // second add raced the first form's close/reset, not a product bug.
     await page.getByRole('button', { name: /\+\s*add room/i }).click();
 
     const nameInput = page.getByLabel(/room name/i).first();
@@ -362,6 +352,9 @@ test.describe.serial('proposal build → send → view → sign', () => {
 
     await page.getByRole('button', { name: /save room/i }).click();
     await waitForMutation(page);
+
+    // First room card must be on screen (and the form torn down) before re-adding.
+    await expect(page.getByText('Living Room').first()).toBeVisible({ timeout: 15_000 });
 
     // Add second room
     await page.getByRole('button', { name: /\+\s*add room/i }).click();
@@ -373,10 +366,11 @@ test.describe.serial('proposal build → send → view → sign', () => {
     await page.getByRole('button', { name: /save room/i }).click();
     await waitForMutation(page);
 
+    // Second room card must render before reading the DB count.
+    await expect(page.getByText('Primary Bedroom').first()).toBeVisible({ timeout: 15_000 });
+
     // DB assert
     const roomCount = await countByProposal('proposal_scope_rooms', proposalId);
-    test.fixme(roomCount === 0, 'no rooms persisted — Add Room flow may have a UI/RLS gap');
-    test.fixme(roomCount < 2, `expected 2 rooms, got ${roomCount} — second add likely racing on form-state reset`);
     expect(roomCount, 'Expected exactly 2 scope rooms').toBe(2);
   });
 
@@ -562,18 +556,23 @@ test.describe.serial('proposal build → send → view → sign', () => {
     const addPhaseBtn = page.getByRole('button', { name: /\+\s*add phase/i });
     await addPhaseBtn.waitFor({ state: 'visible', timeout: 10_000 });
 
+    // Each added phase renders a row carrying a "Remove phase" button. Wait for
+    // the rendered row count to reach the expected value after each add BEFORE
+    // re-clicking / reading the DB — the earlier "no-op" was a test artifact:
+    // the second click fired before the first row's optimistic insert rendered.
+    const phaseRemoveButtons = page.getByRole('button', { name: /remove phase/i });
+
     // Add first phase
     await addPhaseBtn.click();
-    await waitForMutation(page);
+    await expect(phaseRemoveButtons).toHaveCount(1, { timeout: 15_000 });
 
     // Add second phase
     await page.getByRole('button', { name: /\+\s*add phase/i }).click();
+    await expect(phaseRemoveButtons).toHaveCount(2, { timeout: 15_000 });
     await waitForMutation(page);
 
     // DB assert
     const phaseCount = await countByProposal('proposal_phases', proposalId);
-    test.fixme(phaseCount === 0, 'no phases persisted — Add Phase click did not land a row');
-    test.fixme(phaseCount < 2, `expected 2 phases, got ${phaseCount}`);
     expect(phaseCount, 'Expected exactly 2 proposal phases').toBe(2);
   });
 
@@ -602,9 +601,15 @@ test.describe.serial('proposal build → send → view → sign', () => {
       .click();
     await waitForMutation(page);
 
+    // On success the inline form resets and the exclusion renders as a row.
+    // Wait for that text before reading the DB count (the previous fixme was a
+    // test artifact: the assert ran before the optimistic insert rendered).
+    await expect(
+      page.getByText('Structural modifications not included').first(),
+    ).toBeVisible({ timeout: 15_000 });
+
     // DB assert
     const exclusionCount = await countByProposal('proposal_exclusions', proposalId);
-    test.fixme(exclusionCount === 0, 'no exclusion persisted — Add Exclusion flow may have a UI gap');
     expect(exclusionCount, 'Expected 1 exclusion').toBe(1);
   });
 
@@ -618,47 +623,113 @@ test.describe.serial('proposal build → send → view → sign', () => {
     const addMilestoneBtn = page.getByRole('button', { name: /\+\s*add milestone/i });
     await addMilestoneBtn.waitFor({ state: 'visible', timeout: 10_000 });
 
-    // Add 4 milestones
-    for (let i = 0; i < 4; i++) {
+    // Each added milestone renders a row with a "Remove milestone" button. Wait
+    // for the rendered row count to reach the expected value after each add
+    // BEFORE re-clicking — the earlier "no-op" diagnosis was a test artifact
+    // (clicks fired faster than rows rendered).
+    const milestoneRemoveButtons = page.getByRole('button', { name: /remove milestone/i });
+    for (let i = 1; i <= 4; i++) {
       await page.getByRole('button', { name: /\+\s*add milestone/i }).click();
-      await waitForMutation(page);
+      await expect(milestoneRemoveButtons).toHaveCount(i, { timeout: 15_000 });
     }
+    await waitForMutation(page);
 
     // DB: 4 milestones exist
     const milestoneCount = await countByProposal('proposal_payment_milestones', proposalId);
-    test.fixme(milestoneCount === 0, 'no milestones persisted — Add Milestone flow may have a UI gap');
-    test.fixme(milestoneCount < 4, `expected 4 milestones, got ${milestoneCount}`);
     expect(milestoneCount, 'Expected exactly 4 milestones').toBe(4);
 
     // Now set each milestone's percentage to 25 so they sum to 100.
-    // The milestone rows render number inputs (without an aria-label for %)
-    // but they are the first number inputs in each grid row. We reload to
-    // ensure the latest data is present, then fill each % input.
+    // Each milestone row's % field is the only input[type="number"][max="100"]
+    // on this tab (the phase-duration inputs have no max). Reload to ensure the
+    // latest rows are present, then fill + blur each %.
     await page.reload({ waitUntil: 'networkidle' });
     await expect(page.getByText('Payment Milestones').first()).toBeVisible({ timeout: 15_000 });
 
-    // Each milestone row has a structure: label input | % number input | amount | trigger | remove
-    // Scoped to input[type="number"][max="100"]. PaymentMilestonesBuilder renders no data-testid
-    // or role="form" wrapper on milestone rows, so we cannot scope more tightly without a
-    // production code change. On this payment tab there are no other number inputs with max=100.
     const pctInputs = page.locator('input[type="number"][max="100"]');
-    const pctCount = await pctInputs.count();
+    await expect(pctInputs).toHaveCount(4, { timeout: 15_000 });
 
-    // We fill each available percentage input with 25
-    for (let i = 0; i < Math.min(pctCount, 4); i++) {
+    for (let i = 0; i < 4; i++) {
       await pctInputs.nth(i).fill('25');
-      // Trigger change event by blurring
+      // Blur to commit the change and start the 600ms debounce.
       await pctInputs.nth(i).blur();
     }
 
-    // Wait for debounced saves (600ms debounce in PaymentMilestonesBuilder)
+    // The header/Total reflect the merged optimistic edits immediately. Wait for
+    // the on-screen allocation to read 100% — that's the UI signal that all four
+    // edits registered. This also covers the debounce gate before we read the DB.
+    await expect(page.getByText('100% allocated').first()).toBeVisible({ timeout: 15_000 });
+
+    // Belt-and-suspenders: let the 600ms debounced saves flush to the network.
     await page.waitForTimeout(900);
     await waitForMutation(page);
 
     // DB: sum of percentage should equal 100 (column confirmed as 'percentage')
     const sum = await getMilestonePercentageSum(proposalId);
-    test.fixme(milestoneCount === 0, 'skipping percentage sum check — no milestones persisted');
     expect(sum, 'Milestone percentages should sum to 100').toBe(100);
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Step 4c: Editor investment-block regression guards (PUNCH-3 / PUNCH-4)
+  //
+  // The designer editor (/portal/proposals/{id}) renders the canonical
+  // LineItemsBlock + PaymentScheduleBlock inside the "investment" section.
+  // By now the proposal has 4 milestones @ 25% and an allowance + TBD item,
+  // so this is the natural place to lock in two prior regressions:
+  //
+  //   PUNCH-3 — the payment schedule must reflect the REAL seeded milestones
+  //     (each renders "(25%)") and must NOT fall back to the deleted
+  //     hardcoded 30/40/30 default trio.
+  //   PUNCH-4 — allowance line items must render their range ("Allowance: …")
+  //     AND a non-blank amount (the budget midpoint), never $0/blank.
+  // ────────────────────────────────────────────────────────────────────────
+  test('editor renders seeded milestones + allowance amounts (PUNCH-3/4)', async ({
+    authenticatedPage: page,
+  }) => {
+    await page.goto(`/portal/proposals/${proposalId}`, { waitUntil: 'networkidle' });
+    await page.waitForURL(`/portal/proposals/${proposalId}`, { timeout: 10_000 });
+
+    // Scope every assertion to the investment <section> — the one containing
+    // the PaymentScheduleBlock's "Payment schedule" label. Other sections
+    // render their own copy, so an unscoped match could be a false positive.
+    const investmentSection = page
+      .locator('section', { has: page.getByText(/payment schedule/i) })
+      .first();
+    await investmentSection.scrollIntoViewIfNeeded();
+    await expect(investmentSection).toBeVisible({ timeout: 20_000 });
+
+    // ── PUNCH-3: real milestone percentages, no default trio ──────────────
+    // All 4 seeded milestones are 25%, so "(25%)" must appear and the deleted
+    // 30/40/30 defaults must be wholly absent.
+    await expect(
+      investmentSection.getByText('(25%)').first(),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(
+      investmentSection.getByText('(30%)'),
+      'editor must NOT render the deleted hardcoded 30% default milestone',
+    ).toHaveCount(0);
+    await expect(
+      investmentSection.getByText('(40%)'),
+      'editor must NOT render the deleted hardcoded 40% default milestone',
+    ).toHaveCount(0);
+
+    // ── PUNCH-4: allowance range + non-blank amount ───────────────────────
+    // LineItemsBlock renders "Allowance: $min–$max" under the name and the
+    // line amount (the midpoint) in the amount column. The allowance was added
+    // at $1,000–$2,000 → midpoint $1,500, so the row must show that amount.
+    const allowanceRangeText = investmentSection.getByText(/allowance:/i).first();
+    await allowanceRangeText.scrollIntoViewIfNeeded();
+    await expect(allowanceRangeText).toBeVisible({ timeout: 15_000 });
+
+    // The allowance <tr> carries the range text; assert its amount cell is a
+    // real, non-empty currency value (the midpoint), not blank/absent.
+    const allowanceRow = investmentSection.locator('tr', {
+      has: page.getByText(/allowance:/i),
+    });
+    await expect(allowanceRow).toHaveCount(1, { timeout: 15_000 });
+    await expect(
+      allowanceRow.getByText('$1,500'),
+      'allowance row must render its midpoint amount ($1,500), never a blank price',
+    ).toBeVisible({ timeout: 15_000 });
   });
 
   // ────────────────────────────────────────────────────────────────────────

@@ -71,6 +71,17 @@ export async function getMilestonePercentageSum(proposalId: string): Promise<num
 }
 
 export async function deleteProposalCascade(proposalId: string): Promise<void> {
+  // Detach captures BEFORE deleting the proposal: the ON DELETE cascade
+  // removes proposal_scope_rooms first, and the captures FK's SET NULL then
+  // trips trg_proposal_captures_guard_update (00130), which re-validates the
+  // now-deleted scope_room_id and aborts the whole delete. The guard skips
+  // NULL fields, so nulling both in one update passes.
+  const { error: detachError } = await adminDb
+    .from('proposal_captures')
+    .update({ proposal_id: null, scope_room_id: null })
+    .eq('proposal_id', proposalId);
+  if (detachError) throw detachError;
+
   const { error } = await adminDb.from('proposals').delete().eq('id', proposalId);
   if (error) throw error;
 }
@@ -402,6 +413,172 @@ export async function resetProposalToSent(proposalId: string): Promise<void> {
     })
     .eq('id', proposalId);
   if (error) throw error;
+}
+
+// ─── Revision-chain helpers (proposal-revise-supersede spec) ─────────────────
+
+/**
+ * All versions in a proposal's revision chain (root + children), given ANY
+ * member's id. Mirrors the root computation in clone_proposal/send_proposal
+ * (00176): root = parent_proposal_id ?? id.
+ */
+export async function getProposalVersions(anyChainMemberId: string) {
+  const member = await getProposal(anyChainMemberId);
+  const rootId = member.parent_proposal_id ?? member.id;
+  const { data, error } = await adminDb
+    .from('proposals')
+    .select('id, version, status, parent_proposal_id, sent_at, project_id')
+    .or(`id.eq.${rootId},parent_proposal_id.eq.${rootId}`)
+    .order('version', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** Direct RPC invocation of clone_proposal (00176) for DB-level assertions. */
+export async function cloneProposalViaRpc(
+  sourceId: string,
+  mode: 'revision' | 'duplicate' = 'revision',
+  revisionSummary?: string,
+): Promise<string> {
+  const { data, error } = await adminDb.rpc('clone_proposal', {
+    p_source_id: sourceId,
+    p_mode: mode,
+    p_revision_summary: revisionSummary ?? null,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+// ─── Child-table seeders + counters for clone-completeness assertions ────────
+
+export async function insertExclusion(payload: {
+  proposalId: string;
+  description: string;
+  category?: string | null;
+  sortOrder?: number;
+}) {
+  const { data, error } = await adminDb
+    .from('proposal_exclusions')
+    .insert({
+      proposal_id: payload.proposalId,
+      description: payload.description,
+      category: payload.category ?? null,
+      sort_order: payload.sortOrder ?? 0,
+    })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function insertTeamMember(payload: {
+  proposalId: string;
+  userId: string;
+  role: string;
+}) {
+  const { data, error } = await adminDb
+    .from('proposal_team_members')
+    .insert({ proposal_id: payload.proposalId, user_id: payload.userId, role: payload.role })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function insertPalette(payload: {
+  proposalId: string;
+  name: string;
+  scopeRoomId?: string | null;
+  isPrimary?: boolean;
+}) {
+  const { data, error } = await adminDb
+    .from('proposal_palettes')
+    .insert({
+      proposal_id: payload.proposalId,
+      name: payload.name,
+      scope_room_id: payload.scopeRoomId ?? null,
+      is_primary: payload.isPrimary ?? false,
+    })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function insertSwatch(payload: { paletteId: string; hex: string; name?: string }) {
+  const { data, error } = await adminDb
+    .from('palette_swatches')
+    .insert({ palette_id: payload.paletteId, hex: payload.hex, name: payload.name ?? null })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function insertPhaseDeliverable(payload: { phaseId: string; label: string }) {
+  const { data, error } = await adminDb
+    .from('proposal_phase_deliverables')
+    .insert({ phase_id: payload.phaseId, label: payload.label })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function insertPhaseGate(payload: { phaseId: string; gateKind: string }) {
+  const { data, error } = await adminDb
+    .from('proposal_phase_gates')
+    .insert({ phase_id: payload.phaseId, gate_kind: payload.gateKind })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function insertChangeOrderTerms(payload: {
+  proposalId: string;
+  processDescription: string;
+  hourlyRateCents?: number;
+}) {
+  const { data, error } = await adminDb
+    .from('proposal_change_order_terms')
+    .insert({
+      proposal_id: payload.proposalId,
+      process_description: payload.processDescription,
+      hourly_rate_cents: payload.hourlyRateCents ?? 0,
+    })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/** Deliverable count via the phase join (deliverables have no proposal_id). */
+export async function countDeliverablesByProposal(proposalId: string): Promise<number> {
+  const { count, error } = await adminDb
+    .from('proposal_phase_deliverables')
+    .select('id, proposal_phases!inner(proposal_id)', { count: 'exact', head: true })
+    .eq('proposal_phases.proposal_id', proposalId);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function countGatesByProposal(proposalId: string): Promise<number> {
+  const { count, error } = await adminDb
+    .from('proposal_phase_gates')
+    .select('id, proposal_phases!inner(proposal_id)', { count: 'exact', head: true })
+    .eq('proposal_phases.proposal_id', proposalId);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function countSwatchesByProposal(proposalId: string): Promise<number> {
+  const { count, error } = await adminDb
+    .from('palette_swatches')
+    .select('id, proposal_palettes!inner(proposal_id)', { count: 'exact', head: true })
+    .eq('proposal_palettes.proposal_id', proposalId);
+  if (error) throw error;
+  return count ?? 0;
 }
 
 export interface ConsumeCaptureRpcArgs {
