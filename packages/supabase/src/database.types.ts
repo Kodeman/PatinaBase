@@ -2579,11 +2579,14 @@ export type Database = {
           earned_at: string
           gross_amount: number
           id: string
+          invoice_id: string | null
+          invoice_payment_id: string | null
           net_amount: number
           order_id: string | null
           paid_at: string | null
           payout_id: string | null
           platform_fee: number | null
+          project_id: string | null
           proposal_id: string | null
           proposal_item_id: string | null
           source_type: string
@@ -2597,11 +2600,14 @@ export type Database = {
           earned_at?: string
           gross_amount: number
           id?: string
+          invoice_id?: string | null
+          invoice_payment_id?: string | null
           net_amount: number
           order_id?: string | null
           paid_at?: string | null
           payout_id?: string | null
           platform_fee?: number | null
+          project_id?: string | null
           proposal_id?: string | null
           proposal_item_id?: string | null
           source_type: string
@@ -2615,11 +2621,14 @@ export type Database = {
           earned_at?: string
           gross_amount?: number
           id?: string
+          invoice_id?: string | null
+          invoice_payment_id?: string | null
           net_amount?: number
           order_id?: string | null
           paid_at?: string | null
           payout_id?: string | null
           platform_fee?: number | null
+          project_id?: string | null
           proposal_id?: string | null
           proposal_item_id?: string | null
           source_type?: string
@@ -2638,6 +2647,27 @@ export type Database = {
             columns: ["designer_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "designer_earnings_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "designer_earnings_invoice_payment_id_fkey"
+            columns: ["invoice_payment_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "designer_earnings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
           {
@@ -3373,6 +3403,292 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_counters: {
+        Row: {
+          designer_id: string
+          next_number: number
+        }
+        Insert: {
+          designer_id: string
+          next_number?: number
+        }
+        Update: {
+          designer_id?: string
+          next_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_counters_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_counters_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: true
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_line_items: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          description: string
+          id: string
+          invoice_id: string
+          kind: string
+          metadata: Json
+          milestone_id: string | null
+          quantity: number
+          sort_order: number
+          unit_amount_cents: number
+        }
+        Insert: {
+          amount_cents?: number
+          created_at?: string
+          description: string
+          id?: string
+          invoice_id: string
+          kind?: string
+          metadata?: Json
+          milestone_id?: string | null
+          quantity?: number
+          sort_order?: number
+          unit_amount_cents?: number
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          description?: string
+          id?: string
+          invoice_id?: string
+          kind?: string
+          metadata?: Json
+          milestone_id?: string | null
+          quantity?: number
+          sort_order?: number
+          unit_amount_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_line_items_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_line_items_milestone_id_fkey"
+            columns: ["milestone_id"]
+            isOneToOne: false
+            referencedRelation: "project_payment_milestones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_payments: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          id: string
+          invoice_id: string
+          method: string
+          note: string | null
+          received_at: string | null
+          recorded_by: string | null
+          reference: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+          stripe_event_id: string | null
+          stripe_payment_intent_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          id?: string
+          invoice_id: string
+          method: string
+          note?: string | null
+          received_at?: string | null
+          recorded_by?: string | null
+          reference?: string | null
+          status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_event_id?: string | null
+          stripe_payment_intent_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          method?: string
+          note?: string | null
+          received_at?: string | null
+          recorded_by?: string | null
+          reference?: string | null
+          status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_event_id?: string | null
+          stripe_payment_intent_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_payments_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_payments_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_payments_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          amount_paid_cents: number
+          ar_flagged_at: string | null
+          client_id: string | null
+          created_at: string
+          currency: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          internal_notes: string | null
+          invoice_number: string | null
+          issue_date: string | null
+          last_reminder_at: string | null
+          memo: string | null
+          paid_at: string | null
+          payment_terms_days: number
+          project_id: string
+          reminder_count: number
+          sent_at: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+          subtotal_cents: number
+          tax_cents: number
+          tax_rate: number
+          total_cents: number
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+        }
+        Insert: {
+          amount_paid_cents?: number
+          ar_flagged_at?: string | null
+          client_id?: string | null
+          created_at?: string
+          currency?: string
+          designer_id: string
+          due_date?: string | null
+          id?: string
+          internal_notes?: string | null
+          invoice_number?: string | null
+          issue_date?: string | null
+          last_reminder_at?: string | null
+          memo?: string | null
+          paid_at?: string | null
+          payment_terms_days?: number
+          project_id: string
+          reminder_count?: number
+          sent_at?: string | null
+          status?: string
+          stripe_checkout_session_id?: string | null
+          subtotal_cents?: number
+          tax_cents?: number
+          tax_rate?: number
+          total_cents?: number
+          updated_at?: string
+          void_reason?: string | null
+          voided_at?: string | null
+        }
+        Update: {
+          amount_paid_cents?: number
+          ar_flagged_at?: string | null
+          client_id?: string | null
+          created_at?: string
+          currency?: string
+          designer_id?: string
+          due_date?: string | null
+          id?: string
+          internal_notes?: string | null
+          invoice_number?: string | null
+          issue_date?: string | null
+          last_reminder_at?: string | null
+          memo?: string | null
+          paid_at?: string | null
+          payment_terms_days?: number
+          project_id?: string
+          reminder_count?: number
+          sent_at?: string | null
+          status?: string
+          stripe_checkout_session_id?: string | null
+          subtotal_cents?: number
+          tax_cents?: number
+          tax_rate?: number
+          total_cents?: number
+          updated_at?: string
+          void_reason?: string | null
+          voided_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -5459,6 +5775,7 @@ export type Database = {
           business_name: string | null
           city: string | null
           created_at: string
+          default_hourly_rate_cents: number | null
           display_name: string | null
           email: string | null
           email_bounce_count: number | null
@@ -5481,6 +5798,7 @@ export type Database = {
           role: string
           sms_opt_in: boolean
           state: string | null
+          stripe_customer_id: string | null
           total_engagement_score: number | null
           updated_at: string
           verified_at: string | null
@@ -5494,6 +5812,7 @@ export type Database = {
           business_name?: string | null
           city?: string | null
           created_at?: string
+          default_hourly_rate_cents?: number | null
           display_name?: string | null
           email?: string | null
           email_bounce_count?: number | null
@@ -5516,6 +5835,7 @@ export type Database = {
           role?: string
           sms_opt_in?: boolean
           state?: string | null
+          stripe_customer_id?: string | null
           total_engagement_score?: number | null
           updated_at?: string
           verified_at?: string | null
@@ -5529,6 +5849,7 @@ export type Database = {
           business_name?: string | null
           city?: string | null
           created_at?: string
+          default_hourly_rate_cents?: number | null
           display_name?: string | null
           email?: string | null
           email_bounce_count?: number | null
@@ -5551,6 +5872,7 @@ export type Database = {
           role?: string
           sms_opt_in?: boolean
           state?: string | null
+          stripe_customer_id?: string | null
           total_engagement_score?: number | null
           updated_at?: string
           verified_at?: string | null
@@ -5558,6 +5880,66 @@ export type Database = {
           zip?: string | null
         }
         Relationships: []
+      }
+      project_boards: {
+        Row: {
+          background_color: string
+          canvas_height: number
+          canvas_width: number
+          cover_image_url: string | null
+          created_at: string
+          id: string
+          items: Json
+          name: string
+          project_id: string
+          project_room_id: string | null
+          sort_order: number
+          source_board_id: string | null
+        }
+        Insert: {
+          background_color?: string
+          canvas_height?: number
+          canvas_width?: number
+          cover_image_url?: string | null
+          created_at?: string
+          id?: string
+          items?: Json
+          name: string
+          project_id: string
+          project_room_id?: string | null
+          sort_order?: number
+          source_board_id?: string | null
+        }
+        Update: {
+          background_color?: string
+          canvas_height?: number
+          canvas_width?: number
+          cover_image_url?: string | null
+          created_at?: string
+          id?: string
+          items?: Json
+          name?: string
+          project_id?: string
+          project_room_id?: string | null
+          sort_order?: number
+          source_board_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_boards_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_boards_project_room_id_fkey"
+            columns: ["project_room_id"]
+            isOneToOne: false
+            referencedRelation: "project_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       project_change_order_templates: {
         Row: {
@@ -6061,6 +6443,7 @@ export type Database = {
           created_at: string
           deliverables: Json | null
           duration_weeks: number | null
+          estimated_hours: number | null
           fee_cents: number | null
           gate_condition: string | null
           id: string
@@ -6082,6 +6465,7 @@ export type Database = {
           created_at?: string
           deliverables?: Json | null
           duration_weeks?: number | null
+          estimated_hours?: number | null
           fee_cents?: number | null
           gate_condition?: string | null
           id?: string
@@ -6103,6 +6487,7 @@ export type Database = {
           created_at?: string
           deliverables?: Json | null
           duration_weeks?: number | null
+          estimated_hours?: number | null
           fee_cents?: number | null
           gate_condition?: string | null
           id?: string
@@ -6459,6 +6844,90 @@ export type Database = {
           },
         ]
       }
+      project_time_entries: {
+        Row: {
+          billable: boolean
+          created_at: string
+          duration_minutes: number | null
+          hourly_rate_cents: number | null
+          id: string
+          invoice_id: string | null
+          notes: string | null
+          phase_key: string | null
+          project_id: string
+          started_at: string
+          task_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          billable?: boolean
+          created_at?: string
+          duration_minutes?: number | null
+          hourly_rate_cents?: number | null
+          id?: string
+          invoice_id?: string | null
+          notes?: string | null
+          phase_key?: string | null
+          project_id: string
+          started_at?: string
+          task_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          billable?: boolean
+          created_at?: string
+          duration_minutes?: number | null
+          hourly_rate_cents?: number | null
+          id?: string
+          invoice_id?: string | null
+          notes?: string | null
+          phase_key?: string | null
+          project_id?: string
+          started_at?: string
+          task_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_time_entries_invoice"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "project_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           actual_cents: number | null
@@ -6748,6 +7217,183 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
+          },
+        ]
+      }
+      proposal_board_items: {
+        Row: {
+          board_id: string
+          capture_id: string | null
+          content: string | null
+          created_at: string
+          data: Json
+          height: number | null
+          id: string
+          image_url: string | null
+          locked: boolean
+          palette_id: string | null
+          product_id: string | null
+          rotation: number
+          type: string
+          updated_at: string
+          width: number
+          x: number
+          y: number
+          z_index: number
+        }
+        Insert: {
+          board_id: string
+          capture_id?: string | null
+          content?: string | null
+          created_at?: string
+          data?: Json
+          height?: number | null
+          id?: string
+          image_url?: string | null
+          locked?: boolean
+          palette_id?: string | null
+          product_id?: string | null
+          rotation?: number
+          type: string
+          updated_at?: string
+          width?: number
+          x?: number
+          y?: number
+          z_index?: number
+        }
+        Update: {
+          board_id?: string
+          capture_id?: string | null
+          content?: string | null
+          created_at?: string
+          data?: Json
+          height?: number | null
+          id?: string
+          image_url?: string | null
+          locked?: boolean
+          palette_id?: string | null
+          product_id?: string | null
+          rotation?: number
+          type?: string
+          updated_at?: string
+          width?: number
+          x?: number
+          y?: number
+          z_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_board_items_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_board_items_capture_id_fkey"
+            columns: ["capture_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_captures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_board_items_palette_id_fkey"
+            columns: ["palette_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_palettes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_board_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_board_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "proposal_board_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "proposal_board_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "proposal_board_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+        ]
+      }
+      proposal_boards: {
+        Row: {
+          background_color: string
+          canvas_height: number
+          canvas_width: number
+          cover_image_url: string | null
+          created_at: string
+          id: string
+          name: string
+          proposal_id: string
+          scope_room_id: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          background_color?: string
+          canvas_height?: number
+          canvas_width?: number
+          cover_image_url?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          proposal_id: string
+          scope_room_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          background_color?: string
+          canvas_height?: number
+          canvas_width?: number
+          cover_image_url?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          proposal_id?: string
+          scope_room_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_boards_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_boards_scope_room_id_fkey"
+            columns: ["scope_room_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_scope_rooms"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -9184,6 +9830,27 @@ export type Database = {
           },
         ]
       }
+      stripe_webhook_events: {
+        Row: {
+          id: string
+          payload: Json | null
+          processed_at: string
+          type: string
+        }
+        Insert: {
+          id: string
+          payload?: Json | null
+          processed_at?: string
+          type: string
+        }
+        Update: {
+          id?: string
+          payload?: Json | null
+          processed_at?: string
+          type?: string
+        }
+        Relationships: []
+      }
       styles: {
         Row: {
           color_hex: string | null
@@ -10626,6 +11293,50 @@ export type Database = {
         }
         Relationships: []
       }
+      project_unbilled_time: {
+        Row: {
+          amount_cents: number | null
+          duration_minutes: number | null
+          id: string | null
+          notes: string | null
+          phase_key: string | null
+          project_id: string | null
+          resolved_rate_cents: number | null
+          started_at: string | null
+          task_id: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_time_entries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "project_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       room_scans_v2: {
         Row: {
           average_image_quality: number | null
@@ -11137,6 +11848,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      apply_invoice_payment_effects: {
+        Args: { p_invoice_id: string }
+        Returns: undefined
+      }
       apply_phase_template: {
         Args: { p_proposal_id: string; p_template_slug: string }
         Returns: string[]
@@ -11399,6 +12114,44 @@ export type Database = {
         Args: { _project_id: string; _user_id?: string }
         Returns: boolean
       }
+      issue_invoice: {
+        Args: { p_due_date?: string; p_invoice_id: string }
+        Returns: {
+          amount_paid_cents: number
+          ar_flagged_at: string | null
+          client_id: string | null
+          created_at: string
+          currency: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          internal_notes: string | null
+          invoice_number: string | null
+          issue_date: string | null
+          last_reminder_at: string | null
+          memo: string | null
+          paid_at: string | null
+          payment_terms_days: number
+          project_id: string
+          reminder_count: number
+          sent_at: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+          subtotal_cents: number
+          tax_cents: number
+          tax_rate: number
+          total_cents: number
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       link_studio_to_catalog_for_vendor: {
         Args: { p_vendor_id: string }
         Returns: number
@@ -11459,6 +12212,38 @@ export type Database = {
           p_vendor_contact: Json
         }
         Returns: string
+      }
+      record_invoice_payment: {
+        Args: {
+          p_amount_cents: number
+          p_invoice_id: string
+          p_method: string
+          p_note?: string
+          p_received_at?: string
+          p_reference?: string
+        }
+        Returns: {
+          amount_cents: number
+          created_at: string
+          id: string
+          invoice_id: string
+          method: string
+          note: string | null
+          received_at: string | null
+          recorded_by: string | null
+          reference: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+          stripe_event_id: string | null
+          stripe_payment_intent_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoice_payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       revoke_role_from_user: {
         Args: { p_role_name: string; p_user_id: string }
@@ -11629,6 +12414,44 @@ export type Database = {
           p_user_id: string
         }
         Returns: boolean
+      }
+      void_invoice: {
+        Args: { p_invoice_id: string; p_reason: string }
+        Returns: {
+          amount_paid_cents: number
+          ar_flagged_at: string | null
+          client_id: string | null
+          created_at: string
+          currency: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          internal_notes: string | null
+          invoice_number: string | null
+          issue_date: string | null
+          last_reminder_at: string | null
+          memo: string | null
+          paid_at: string | null
+          payment_terms_days: number
+          project_id: string
+          reminder_count: number
+          sent_at: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+          subtotal_cents: number
+          tax_cents: number
+          tax_rate: number
+          total_cents: number
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {

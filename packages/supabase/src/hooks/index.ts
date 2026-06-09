@@ -974,3 +974,59 @@ export type {
   ProcurementNotificationKind,
   ProcurementNotification,
 } from './use-procurement';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Mood boards (Wave 1 — see migration 00179)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  useBoards,
+  useBoard,
+  useUpsertBoard,
+  useDeleteBoard,
+  useAddBoardItem,
+  useUpdateBoardItem,
+  useDeleteBoardItem,
+  useSaveBoardLayout,
+  useProjectBoards,
+} from './use-boards';
+export type {
+  BoardItemType,
+  ProposalBoard,
+  ProposalBoardSummary,
+  ProposalBoardItem,
+  BoardWithItems,
+  ProjectBoard,
+  UpsertBoardInput,
+  AddBoardItemInput,
+  UpdateBoardItemInput,
+  BoardLayoutPosition,
+} from './use-boards';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Invoicing money core (Wave 1 — see migration 00178)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  useInvoices,
+  useInvoice,
+  useProjectInvoices,
+  useCreateDraftInvoice,
+  useUpdateDraftInvoice,
+  useUpsertLineItems,
+  useDeleteLineItem,
+  useIssueInvoice,
+  useRecordPayment,
+  useVoidInvoice,
+} from './use-invoices';
+export type {
+  Invoice,
+  InvoiceStatus,
+  InvoiceLineKind,
+  InvoiceLineItem,
+  InvoicePayment,
+  InvoicePaymentMethod,
+  InvoicePaymentStatus,
+  InvoiceFilters,
+  DraftLineInput,
+  CreateDraftInvoiceInput,
+  UpdateDraftInvoiceInput,
+} from './use-invoices';

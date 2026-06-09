@@ -5,7 +5,7 @@ import {
   DndContext,
   DragEndEvent,
   DragStartEvent,
-  DragOverlay,
+  useDraggable,
   useSensor,
   useSensors,
   PointerSensor,
@@ -19,9 +19,23 @@ import { Button } from '../Button'
 
 export interface BoardItem {
   id: UniqueIdentifier
-  type: 'product' | 'section' | 'note'
+  /**
+   * Item kind. Common values: 'product' | 'capture' | 'image' | 'palette'
+   * | 'note' | 'room_scan' | 'section' — but consumers may use any string.
+   */
+  type: string
   position: { x: number; y: number }
   size?: { width: number; height: number }
+  /**
+   * Stacking order on the canvas. Higher renders on top.
+   * @default 0
+   */
+  zIndex?: number
+  /**
+   * Rotation in degrees, applied around the item center.
+   * @default 0
+   */
+  rotation?: number
   data: any
   locked?: boolean
 }
@@ -57,7 +71,9 @@ export interface BoardCanvasProps extends React.HTMLAttributes<HTMLDivElement> {
    */
   showGrid?: boolean
   /**
-   * Zoom level (0.1 to 3)
+   * Zoom level (0.1 to 3). Controlled: local zoom state re-syncs whenever
+   * this prop changes (the built-in controls adjust it locally between
+   * prop updates).
    * @default 1
    */
   zoom?: number
@@ -66,6 +82,11 @@ export interface BoardCanvasProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default true
    */
   enableZoom?: boolean
+  /**
+   * Disable all dragging/deleting (view-only canvas)
+   * @default false
+   */
+  readOnly?: boolean
   /**
    * Callback when items are moved
    */
@@ -117,6 +138,7 @@ export const BoardCanvas = React.forwardRef<HTMLDivElement, BoardCanvasProps>(
       showGrid = true,
       zoom = 1,
       enableZoom = true,
+      readOnly = false,
       onItemsChange,
       onItemClick,
       onItemDelete,
@@ -130,8 +152,12 @@ export const BoardCanvas = React.forwardRef<HTMLDivElement, BoardCanvasProps>(
     ref
   ) => {
     const [localZoom, setLocalZoom] = React.useState(zoom)
-    const [activeId, setActiveId] = React.useState<UniqueIdentifier | null>(null)
     const [isDragging, setIsDragging] = React.useState(false)
+
+    // Controlled zoom: re-sync local state whenever the prop changes.
+    React.useEffect(() => {
+      setLocalZoom(Math.min(Math.max(zoom, 0.1), 3))
+    }, [zoom])
 
     const sensors = useSensors(
       useSensor(PointerSensor, {
@@ -143,33 +169,42 @@ export const BoardCanvas = React.forwardRef<HTMLDivElement, BoardCanvasProps>(
     )
 
     const handleDragStart = (event: DragStartEvent) => {
-      setActiveId(event.active.id)
       setIsDragging(true)
+
+      // Bring the active item to the front (max z + 1) so it stacks above
+      // everything else both during and after the drag.
+      const itemIndex = items.findIndex((item) => item.id === event.active.id)
+      if (itemIndex === -1) return
+
+      const item = items[itemIndex]
+      if (item.locked) return
+
+      const maxOtherZ = items.reduce(
+        (max, other) => (other.id === item.id ? max : Math.max(max, other.zIndex ?? 0)),
+        0
+      )
+
+      if (items.length > 1 && (item.zIndex ?? 0) <= maxOtherZ) {
+        const updatedItems = [...items]
+        updatedItems[itemIndex] = { ...item, zIndex: maxOtherZ + 1 }
+        onItemsChange?.(updatedItems)
+      }
     }
 
     const handleDragEnd = (event: DragEndEvent) => {
       const { active, delta } = event
+      setIsDragging(false)
 
-      if (!delta) {
-        setActiveId(null)
-        setIsDragging(false)
-        return
-      }
+      if (!delta) return
 
       const itemIndex = items.findIndex((item) => item.id === active.id)
-      if (itemIndex === -1) {
-        setActiveId(null)
-        setIsDragging(false)
-        return
-      }
+      if (itemIndex === -1) return
 
       const item = items[itemIndex]
-      if (item.locked) {
-        setActiveId(null)
-        setIsDragging(false)
-        return
-      }
+      if (item.locked) return
 
+      // dnd-kit reports the pointer delta in screen pixels; the canvas is
+      // scaled, so convert back to logical canvas coordinates.
       const scaledDelta = {
         x: delta.x / localZoom,
         y: delta.y / localZoom,
@@ -191,7 +226,9 @@ export const BoardCanvas = React.forwardRef<HTMLDivElement, BoardCanvasProps>(
       }
 
       onItemsChange?.(updatedItems)
-      setActiveId(null)
+    }
+
+    const handleDragCancel = () => {
       setIsDragging(false)
     }
 
@@ -210,8 +247,6 @@ export const BoardCanvas = React.forwardRef<HTMLDivElement, BoardCanvasProps>(
     const handleDeleteItem = (itemId: UniqueIdentifier) => {
       onItemDelete?.(itemId)
     }
-
-    const activeItem = items.find((item) => item.id === activeId)
 
     const gridBackground = showGrid && layout === 'grid'
       ? {
@@ -277,6 +312,7 @@ export const BoardCanvas = React.forwardRef<HTMLDivElement, BoardCanvasProps>(
             collisionDetection={closestCenter}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
           >
             <div
               className="absolute inset-0"
@@ -311,25 +347,14 @@ export const BoardCanvas = React.forwardRef<HTMLDivElement, BoardCanvasProps>(
                 <BoardCanvasItem
                   key={item.id}
                   item={item}
+                  zoom={localZoom}
+                  readOnly={readOnly}
                   onClick={() => onItemClick?.(item)}
-                  onDelete={() => handleDeleteItem(item.id)}
+                  onDelete={readOnly ? undefined : () => handleDeleteItem(item.id)}
                   renderItem={renderItem}
                 />
               ))}
             </div>
-
-            {/* Drag Overlay */}
-            <DragOverlay>
-              {activeItem ? (
-                <div className="opacity-50">
-                  {renderItem?.(activeItem) || (
-                    <div className="bg-white rounded-lg shadow-lg p-4">
-                      {activeItem.type}
-                    </div>
-                  )}
-                </div>
-              ) : null}
-            </DragOverlay>
           </DndContext>
         </div>
       </div>
@@ -344,6 +369,8 @@ BoardCanvas.displayName = 'BoardCanvas'
  */
 interface BoardCanvasItemProps {
   item: BoardItem
+  zoom: number
+  readOnly?: boolean
   onClick?: () => void
   onDelete?: () => void
   renderItem?: (item: BoardItem) => React.ReactNode
@@ -351,17 +378,37 @@ interface BoardCanvasItemProps {
 
 const BoardCanvasItem: React.FC<BoardCanvasItemProps> = ({
   item,
+  zoom,
+  readOnly = false,
   onClick,
   onDelete,
   renderItem,
 }) => {
   const [isHovered, setIsHovered] = React.useState(false)
 
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: item.id,
+    disabled: item.locked || readOnly,
+  })
+
+  // dnd-kit's live transform is in screen pixels; the canvas is scaled, so
+  // divide by the zoom factor to keep the item under the pointer. Rotation
+  // composes after the translation so the item pivots in its moved frame.
+  const dragTranslate = transform
+    ? `translate3d(${transform.x / zoom}px, ${transform.y / zoom}px, 0)`
+    : ''
+  const rotate = item.rotation ? `rotate(${item.rotation}deg)` : ''
+  const composedTransform = [dragTranslate, rotate].filter(Boolean).join(' ') || undefined
+
   return (
     <div
+      ref={setNodeRef}
       className={cn(
-        'absolute cursor-move transition-shadow',
-        isHovered && 'ring-2 ring-primary',
+        'absolute',
+        !readOnly && !item.locked && 'cursor-move',
+        !isDragging && 'transition-shadow',
+        isHovered && !readOnly && 'ring-2 ring-primary',
+        isDragging && 'shadow-lg opacity-90',
         item.locked && 'cursor-not-allowed opacity-60'
       )}
       style={{
@@ -369,10 +416,14 @@ const BoardCanvasItem: React.FC<BoardCanvasItemProps> = ({
         top: item.position.y,
         width: item.size?.width,
         height: item.size?.height,
+        zIndex: item.zIndex ?? 0,
+        transform: composedTransform,
       }}
       onClick={onClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      {...listeners}
+      {...attributes}
     >
       {renderItem?.(item) || (
         <div className="bg-white rounded-lg shadow-md p-4">
@@ -381,8 +432,9 @@ const BoardCanvasItem: React.FC<BoardCanvasItemProps> = ({
       )}
 
       {/* Delete Button */}
-      {isHovered && !item.locked && onDelete && (
+      {isHovered && !item.locked && !readOnly && onDelete && (
         <button
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation()
             onDelete()
