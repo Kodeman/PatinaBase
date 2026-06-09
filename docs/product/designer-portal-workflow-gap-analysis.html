@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina · Designer Portal — Workflow Gap Analysis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --plaster:#F2EDE3;
+    --plaster-deep:#E9E2D4;
+    --ink:#1D1A16;
+    --ink-soft:#46403A;
+    --ink-faint:#7A7166;
+    --clay:#B5532F;
+    --clay-deep:#8F3D20;
+    --verdigris:#4F7263;
+    --verdigris-deep:#335044;
+    --ochre:#C08A2D;
+    --rust:#A33B2B;
+    --night:#171E1B;
+    --night-soft:#222B27;
+    --night-line:#36433D;
+    --paper-line:#D8CFBE;
+    --serif:'Fraunces',Georgia,serif;
+    --sans:'Instrument Sans',Helvetica,sans-serif;
+    --mono:'IBM Plex Mono',monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth;scroll-snap-type:y proximity}
+  body{
+    font-family:var(--sans);
+    background:var(--plaster);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  /* grain */
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:99;opacity:.35;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.05'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  section.slide{
+    min-height:100vh;
+    scroll-snap-align:start;
+    position:relative;
+    padding:96px 8vw 80px 11vw;
+    display:flex;flex-direction:column;justify-content:center;
+    border-bottom:1px solid var(--paper-line);
+  }
+  section.slide.dark{background:var(--night);color:var(--plaster);border-bottom-color:var(--night-line)}
+  section.slide.deep{background:var(--plaster-deep)}
+
+  /* ---------- left rail ---------- */
+  nav#rail{
+    position:fixed;left:0;top:0;bottom:0;width:64px;z-index:50;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+    border-right:1px solid var(--paper-line);
+    background:color-mix(in srgb,var(--plaster) 86%,transparent);
+    backdrop-filter:blur(6px);
+  }
+  nav#rail a{
+    width:7px;height:7px;border-radius:50%;
+    background:transparent;border:1.5px solid var(--ink-faint);
+    display:block;position:relative;transition:all .25s ease;
+  }
+  nav#rail a:hover{transform:scale(1.5)}
+  nav#rail a.active{background:var(--clay);border-color:var(--clay);transform:scale(1.45)}
+  nav#rail a span{
+    position:absolute;left:22px;top:50%;transform:translateY(-50%);
+    white-space:nowrap;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;
+    color:var(--ink-soft);background:var(--plaster);border:1px solid var(--paper-line);
+    padding:3px 9px;opacity:0;pointer-events:none;transition:opacity .18s ease;
+  }
+  nav#rail a:hover span{opacity:1}
+  #progress{
+    position:fixed;top:0;left:0;height:3px;background:var(--clay);width:0%;z-index:60;
+    transition:width .12s linear;
+  }
+  /* slide chrome */
+  .kicker{
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--clay);margin-bottom:26px;display:flex;align-items:center;gap:14px;
+  }
+  .dark .kicker{color:#D8916F}
+  .kicker::before{content:"";width:34px;height:1px;background:currentColor;display:inline-block}
+  h1,h2{font-family:var(--serif);font-weight:500;line-height:1.04;letter-spacing:-.015em}
+  h2{font-size:clamp(34px,4.6vw,62px);max-width:18ch;margin-bottom:30px}
+  h2 em{font-style:italic;color:var(--clay)}
+  .dark h2 em{color:#D8916F}
+  .lede{font-size:clamp(16px,1.35vw,19.5px);line-height:1.6;color:var(--ink-soft);max-width:62ch}
+  .dark .lede{color:#C8C2B4}
+  .lede strong{color:var(--ink);font-weight:600}
+  .dark .lede strong{color:var(--plaster)}
+  .cite{
+    font-family:var(--mono);font-size:11px;color:var(--ink-faint);line-height:1.7;
+    border-left:2px solid var(--paper-line);padding-left:12px;margin-top:14px;
+  }
+  .dark .cite{color:#8B9590;border-left-color:var(--night-line)}
+  .pagenum{
+    position:absolute;bottom:34px;right:8vw;font-family:var(--mono);
+    font-size:11px;letter-spacing:.15em;color:var(--ink-faint);
+  }
+  .dark .pagenum{color:#6E7B75}
+
+  /* reveal animation */
+  .rv{opacity:0;transform:translateY(22px);transition:opacity .55s cubic-bezier(.2,.6,.2,1),transform .55s cubic-bezier(.2,.6,.2,1)}
+  .in-view .rv{opacity:1;transform:none}
+  .in-view .rv:nth-child(2){transition-delay:.06s}
+  .in-view .rv:nth-child(3){transition-delay:.12s}
+  .in-view .rv:nth-child(4){transition-delay:.18s}
+  .in-view .rv:nth-child(5){transition-delay:.24s}
+  .in-view .rv:nth-child(6){transition-delay:.3s}
+
+  /* ============ COVER ============ */
+  #cover{justify-content:flex-end;padding-bottom:11vh;overflow:hidden}
+  #cover .giant{
+    font-family:var(--serif);font-weight:300;letter-spacing:-.03em;
+    font-size:clamp(58px,9.5vw,148px);line-height:.96;
+  }
+  #cover .giant .it{font-style:italic;font-weight:400;color:#D8916F}
+  #cover .coverfoot{
+    display:flex;gap:48px;margin-top:54px;flex-wrap:wrap;
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;color:#8B9590;text-transform:uppercase
+  }
+  #cover .coverfoot b{display:block;color:var(--plaster);font-weight:500;margin-top:6px;letter-spacing:.04em}
+  .arch{
+    position:absolute;right:-6vw;top:-26vh;width:46vw;height:120vh;border-radius:50% 50% 0 0 / 38% 38% 0 0;
+    background:linear-gradient(168deg,#243029 0%,#1B231F 55%,transparent 100%);
+    border:1px solid var(--night-line);border-bottom:none;opacity:.9;
+  }
+  .arch.two{right:8vw;top:-10vh;width:24vw;background:linear-gradient(165deg,rgba(181,83,47,.16),transparent 70%)}
+  .scrollhint{position:absolute;bottom:36px;left:11vw;font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;color:#6E7B75;text-transform:uppercase}
+  .scrollhint::after{content:"↓";display:inline-block;margin-left:10px;animation:bob 1.8s ease-in-out infinite}
+  @keyframes bob{50%{transform:translateY(5px)}}
+
+  /* ============ EXEC SUMMARY ============ */
+  .triptych{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--paper-line);border:1px solid var(--paper-line);margin-top:8px}
+  .triptych>div{background:var(--plaster);padding:30px 26px 26px}
+  .triptych h3{font-family:var(--serif);font-size:21px;font-weight:600;margin-bottom:14px;display:flex;align-items:baseline;gap:10px}
+  .triptych .tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;padding:3px 8px;border-radius:99px}
+  .tag.good{background:rgba(79,114,99,.14);color:var(--verdigris-deep)}
+  .tag.bad{background:rgba(163,59,43,.12);color:var(--rust)}
+  .tag.act{background:rgba(192,138,45,.14);color:#8A6118}
+  .triptych ul{list-style:none;font-size:14.5px;line-height:1.55;color:var(--ink-soft)}
+  .triptych li{padding:9px 0;border-top:1px dashed var(--paper-line)}
+  .triptych li:first-child{border-top:none}
+  .triptych li b{color:var(--ink);font-weight:600}
+
+  /* ============ DAY STRIP ============ */
+  .legend{display:flex;gap:26px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);margin:6px 0 22px}
+  .legend i{width:11px;height:11px;display:inline-block;margin-right:8px;border-radius:2px;vertical-align:-1px}
+  .day{display:flex;flex-direction:column;gap:10px}
+  .hour{
+    display:grid;grid-template-columns:74px 230px 1fr 120px;gap:0;align-items:stretch;
+    border:1px solid var(--paper-line);background:#FBF8F1;
+  }
+  .hour .t{font-family:var(--mono);font-size:12px;color:var(--ink-faint);padding:16px 0 0 16px}
+  .hour .what{padding:14px 18px 14px 4px}
+  .hour .what b{font-family:var(--serif);font-size:17.5px;font-weight:600;display:block}
+  .hour .what span{font-size:12.5px;color:var(--ink-faint)}
+  .hour .verdict{padding:14px 18px;font-size:13.5px;line-height:1.5;color:var(--ink-soft);border-left:1px dashed var(--paper-line)}
+  .hour .pill{
+    align-self:stretch;display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:500;
+  }
+  .cov-full .pill{background:rgba(79,114,99,.16);color:var(--verdigris-deep)}
+  .cov-part .pill{background:rgba(192,138,45,.16);color:#8A6118}
+  .cov-none .pill{background:rgba(163,59,43,.13);color:var(--rust)}
+  .cov-full{border-left:4px solid var(--verdigris)}
+  .cov-part{border-left:4px solid var(--ochre)}
+  .cov-none{border-left:4px solid var(--rust)}
+
+  /* ============ STRENGTHS ============ */
+  .splitcols{display:grid;grid-template-columns:1.05fr 1fr;gap:64px;align-items:start}
+  .strengthlist{display:flex;flex-direction:column}
+  .strength{padding:22px 0;border-top:1px solid var(--night-line)}
+  .strength:last-child{border-bottom:1px solid var(--night-line)}
+  .strength h3{font-family:var(--serif);font-size:22px;font-weight:500;margin-bottom:8px;display:flex;align-items:baseline;gap:14px}
+  .strength h3 .n{font-family:var(--mono);font-size:11px;color:#D8916F;letter-spacing:.1em}
+  .strength p{font-size:14px;line-height:1.6;color:#B9B3A4;max-width:56ch}
+  .strength p b{color:var(--plaster);font-weight:600}
+
+  /* ============ SCORECARD ============ */
+  .score{display:flex;flex-direction:column;gap:0;margin-top:6px}
+  .scorerow{
+    display:grid;grid-template-columns:215px 1fr 64px 215px;gap:22px;align-items:center;
+    padding:11px 0;border-bottom:1px dashed var(--paper-line);
+  }
+  .scorerow .dom{font-family:var(--serif);font-size:16.5px;font-weight:600}
+  .scorerow .dom span{display:block;font-family:var(--mono);font-size:10px;font-weight:400;letter-spacing:.08em;color:var(--ink-faint);margin-top:2px;text-transform:uppercase}
+  .bar{height:9px;background:#E2DACA;border-radius:99px;overflow:hidden;position:relative}
+  .bar i{
+    position:absolute;inset:0 auto 0 0;width:0;border-radius:99px;
+    transition:width 1.1s cubic-bezier(.25,.8,.25,1);
+  }
+  .in-view .bar i{width:var(--w)}
+  .b-good i{background:linear-gradient(90deg,var(--verdigris-deep),var(--verdigris))}
+  .b-mid i{background:linear-gradient(90deg,#9A6E1E,var(--ochre))}
+  .b-low i{background:linear-gradient(90deg,#7E2C1F,var(--rust))}
+  .scorerow .pct{font-family:var(--mono);font-size:14px;font-weight:500;text-align:right}
+  .scorerow .note{font-size:12px;line-height:1.45;color:var(--ink-faint)}
+
+  /* ============ GAP slides ============ */
+  .gaphead{display:flex;align-items:baseline;gap:26px;flex-wrap:wrap}
+  .bigpct{
+    font-family:var(--serif);font-style:italic;font-weight:400;
+    font-size:clamp(64px,8vw,120px);line-height:1;color:var(--rust);
+  }
+  .dark .bigpct{color:#D8916F}
+  .gapgrid{display:grid;grid-template-columns:1fr 1fr;gap:48px;margin-top:34px;align-items:start}
+  .gapgrid h4{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:14px}
+  .dark .gapgrid h4{color:#8B9590}
+  .gapgrid ul{list-style:none}
+  .gapgrid li{
+    font-size:14.5px;line-height:1.55;color:var(--ink-soft);
+    padding:10px 0 10px 22px;border-top:1px dashed var(--paper-line);position:relative;
+  }
+  .dark .gapgrid li{color:#C8C2B4;border-top-color:var(--night-line)}
+  .gapgrid li::before{content:"·";position:absolute;left:4px;color:var(--clay);font-weight:700}
+  .gapgrid li b{color:var(--ink);font-weight:600}
+  .dark .gapgrid li b{color:var(--plaster)}
+  .have li::before{content:"✓";font-size:11px;color:var(--verdigris);top:13px}
+  .miss li::before{content:"✕";font-size:10px;color:var(--rust);top:14px}
+  .dark .miss li::before{color:#E08A77}
+
+  /* ============ CHOKEPOINTS ============ */
+  .chokes{display:flex;flex-direction:column;margin-top:4px}
+  .choke{
+    display:grid;grid-template-columns:44px 1fr;gap:20px;padding:17px 0;
+    border-bottom:1px solid var(--night-line);align-items:start;
+  }
+  .choke .cn{font-family:var(--mono);font-size:12px;color:#D8916F;padding-top:4px}
+  .flow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:15px}
+  .flow .node{
+    font-family:var(--serif);font-weight:500;font-size:16.5px;color:var(--plaster);
+    border:1px solid var(--night-line);padding:7px 15px;background:var(--night-soft);border-radius:3px;
+  }
+  .flow .ar{color:#6E7B75;font-family:var(--mono)}
+  .flow .dead{
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.04em;color:#E08A77;
+    border:1px dashed rgba(224,138,119,.5);padding:7px 13px;border-radius:3px;position:relative;
+  }
+  .choke .why{grid-column:2;font-size:13px;line-height:1.55;color:#9CA59F;max-width:78ch;margin-top:7px}
+  .choke .why code{font-family:var(--mono);font-size:11px;color:#C8C2B4}
+
+  /* ============ MATRIX ============ */
+  .matrixwrap{overflow-x:auto;margin-top:4px;border:1px solid var(--paper-line)}
+  table.matrix{width:100%;border-collapse:collapse;font-size:13px;background:#FBF8F1}
+  .matrix th,.matrix td{padding:11px 13px;border-bottom:1px solid var(--paper-line);text-align:center;vertical-align:middle}
+  .matrix th{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);font-weight:500;background:var(--plaster-deep)}
+  .matrix td:first-child,.matrix th:first-child{text-align:left;font-family:var(--sans);font-weight:600;font-size:13px;color:var(--ink);letter-spacing:0;text-transform:none}
+  .matrix td.patina-col,.matrix th.patina-col{background:rgba(79,114,99,.07);border-left:1px solid var(--paper-line);border-right:1px solid var(--paper-line)}
+  .dot-y,.dot-p,.dot-n{font-size:15px;line-height:1}
+  .dot-y{color:var(--verdigris)}
+  .dot-p{color:var(--ochre)}
+  .dot-n{color:#C9BBA8}
+  .matrix .sub{display:block;font-family:var(--mono);font-size:9.5px;color:var(--ink-faint);margin-top:3px;letter-spacing:.02em}
+  .matrixkey{display:flex;gap:24px;margin-top:14px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint)}
+
+  /* ============ WINS ============ */
+  .wins{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--paper-line);border:1px solid var(--paper-line)}
+  .win{background:#FBF8F1;padding:26px 24px}
+  .win h3{font-family:var(--serif);font-size:19px;font-weight:600;margin-bottom:10px}
+  .win p{font-size:13.5px;line-height:1.6;color:var(--ink-soft)}
+  .win .vs{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--clay);display:block;margin-top:12px;line-height:1.6}
+
+  /* ============ ROADMAP ============ */
+  .phases{display:grid;grid-template-columns:repeat(3,1fr);gap:26px;margin-top:10px;align-items:stretch}
+  .phase{border:1px solid var(--night-line);background:var(--night-soft);padding:28px 26px;display:flex;flex-direction:column;position:relative;overflow:hidden}
+  .phase.p0{border-top:4px solid var(--clay)}
+  .phase.p1{border-top:4px solid var(--ochre)}
+  .phase.p2{border-top:4px solid var(--verdigris)}
+  .phase .ph{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#8B9590;margin-bottom:10px}
+  .phase h3{font-family:var(--serif);font-size:24px;font-weight:500;margin-bottom:6px;color:var(--plaster)}
+  .phase .why{font-size:12.5px;line-height:1.55;color:#9CA59F;margin-bottom:18px}
+  .phase ul{list-style:none;margin-top:auto}
+  .phase li{font-size:13.5px;line-height:1.5;color:#C8C2B4;padding:8px 0 8px 18px;border-top:1px dashed var(--night-line);position:relative}
+  .phase li::before{content:"→";position:absolute;left:0;font-family:var(--mono);font-size:11px;color:#D8916F}
+  .phase li b{color:var(--plaster);font-weight:600}
+
+  /* ============ CLOSE ============ */
+  #close .giant2{font-family:var(--serif);font-weight:300;font-size:clamp(34px,4.8vw,66px);line-height:1.12;letter-spacing:-.02em;max-width:24ch}
+  #close .giant2 em{font-style:italic;color:var(--clay)}
+  .closing-list{display:flex;flex-direction:column;margin-top:44px;border-top:1px solid var(--paper-line)}
+  .closing-list div{display:grid;grid-template-columns:56px 1fr;gap:18px;padding:15px 0;border-bottom:1px solid var(--paper-line);font-size:15.5px;line-height:1.55;color:var(--ink-soft)}
+  .closing-list b{color:var(--ink)}
+  .closing-list .cn{font-family:var(--mono);font-size:11px;color:var(--clay);padding-top:4px}
+
+  @media (max-width:1020px){
+    nav#rail{display:none}
+    section.slide{padding:72px 6vw 64px}
+    .splitcols,.gapgrid,.triptych,.wins,.phases{grid-template-columns:1fr;gap:20px}
+    .scorerow{grid-template-columns:150px 1fr 50px;}
+    .scorerow .note{display:none}
+    .hour{grid-template-columns:60px 1fr 90px}
+    .hour .verdict{display:none}
+  }
+  @media print{
+    nav#rail,#progress,.scrollhint{display:none}
+    section.slide{min-height:auto;page-break-after:always;border-bottom:none;padding:48px}
+    body::after{display:none}
+    .rv{opacity:1;transform:none}
+    .bar i{width:var(--w)}
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav id="rail" aria-label="Sections"></nav>
+
+<main>
+
+<!-- ============ 01 · COVER ============ -->
+<section class="slide dark" id="cover" data-title="Cover">
+  <div class="arch"></div>
+  <div class="arch two"></div>
+  <div class="kicker rv">Patina · Internal Product Review · June 2026</div>
+  <div class="giant rv">The portal runs<br>the <span class="it">design.</span><br>Who runs the <span class="it">business?</span></div>
+  <p class="lede rv" style="margin-top:34px;max-width:58ch">A full review of the Designer Portal — 107 routes, 95 tables, 27 edge functions — measured against an interior designer's complete working day, and benchmarked against the five tools they pay for today.</p>
+  <div class="coverfoot rv">
+    <div>Scope<b>Designer Portal + data layer + client portal</b></div>
+    <div>Method<b>Code audit · workflow trace · competitor research</b></div>
+    <div>Audience<b>Internal roadmap</b></div>
+  </div>
+  <div class="scrollhint">Scroll or press ↓</div>
+</section>
+
+<!-- ============ 02 · EXEC SUMMARY ============ -->
+<section class="slide" id="exec" data-title="Executive summary">
+  <div class="kicker rv">01 — Executive summary</div>
+  <h2 class="rv">Strong spine, <em>missing limbs.</em></h2>
+  <p class="lede rv" style="margin-bottom:34px">Patina has built the hardest parts — a proposal engine with real revision semantics, a structured decision system, a procurement backbone, and an AI moat nobody in the category has. But a designer still cannot <strong>bill an hour, send an invoice, collect a payment, or build a mood board</strong> inside it. The design pipeline lives in Patina; the business still lives in QuickBooks, Canva, and email.</p>
+  <div class="triptych rv">
+    <div>
+      <h3>Strengths <span class="tag good">keep investing</span></h3>
+      <ul>
+        <li><b>Proposal lifecycle</b> — draft → sign → revise/supersede → atomic project activation. Best-in-category revision semantics.</li>
+        <li><b>Decision system</b> — optioned client approvals with e-sign, reminders, and FF&amp;E feed-through on win.</li>
+        <li><b>AI stack</b> — Aesthete engine, teaching loop, Claude companion. No competitor has an equivalent.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Critical gaps <span class="tag bad">table stakes</span></h3>
+      <ul>
+        <li><b>Time tracking: 0%</b> — the hook literally returns <code style="font-family:var(--mono);font-size:11.5px">null</code>. Every competitor ships this.</li>
+        <li><b>Invoicing &amp; payments: 25%</b> — milestones exist, but no invoice, no payment collection. Stripe is configured and dormant.</li>
+        <li><b>Visual presentation: 20%</b> — paint palettes only. No boards, the category's most-used daily surface.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Recommendation <span class="tag act">p0</span></h3>
+      <ul>
+        <li><b>Close the money loop first.</b> Time → invoice → payment is one connected chain; all three links are missing and all three are table stakes in every competing product.</li>
+        <li><b>Then win presentation</b> (boards) and ship procurement to everyone — it is built, and 100% of designers are staring at a “coming soon” page.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 · A DESIGNER'S DAY ============ -->
+<section class="slide deep" id="day" data-title="A designer's day">
+  <div class="kicker rv">02 — The test that matters</div>
+  <h2 class="rv">A designer's Tuesday,<br>hour by hour.</h2>
+  <p class="lede rv" style="margin-bottom:20px">The honest benchmark isn't a feature list — it's whether a working designer can stay inside the product from morning triage to end-of-day billing. Today, Patina holds them for roughly <strong>half the day</strong>.</p>
+  <div class="legend rv">
+    <span><i style="background:var(--verdigris)"></i>Patina covers it</span>
+    <span><i style="background:var(--ochre)"></i>Partial — leaves the app</span>
+    <span><i style="background:var(--rust)"></i>Not covered</span>
+  </div>
+  <div class="day rv">
+    <div class="hour cov-part">
+      <div class="t">7:30</div>
+      <div class="what"><b>Triage</b><span>email, vendor follow-ups, overdue items</span></div>
+      <div class="verdict">Dashboard surfaces overdue decisions and leads well — but vendor email lives outside; no inbound email, no unified follow-up queue.</div>
+      <div class="pill">Partial</div>
+    </div>
+    <div class="hour cov-none">
+      <div class="t">9:00</div>
+      <div class="what"><b>Design development</b><span>concepts, mood boards, scheme building</span></div>
+      <div class="verdict">The core creative block of the day happens in Canva, Figma, or a competitor's board tool. Patina has paint palettes — no canvas, no boards, no presentation builder.</div>
+      <div class="pill">Missing</div>
+    </div>
+    <div class="hour cov-part">
+      <div class="t">11:00</div>
+      <div class="what"><b>Client presentation</b><span>present scheme, capture approvals</span></div>
+      <div class="verdict">Proposals and decisions are genuinely strong for the <em>approval</em> half. The <em>visual</em> half — what the client actually looks at — is built elsewhere and attached.</div>
+      <div class="pill">Partial</div>
+    </div>
+    <div class="hour cov-full">
+      <div class="t">13:00</div>
+      <div class="what"><b>Sourcing</b><span>find products, clip, compare, spec</span></div>
+      <div class="verdict">Extension capture, three-layer library, collections, cross-layer search, vendor directory, AI recommendations. This is a strength.</div>
+      <div class="pill">Covered</div>
+    </div>
+    <div class="hour cov-part">
+      <div class="t">14:30</div>
+      <div class="what"><b>Procurement chase</b><span>POs, ETAs, receiving, damage claims</span></div>
+      <div class="verdict">The full workspace exists — POs, payment schedules, receiving inspections, damage claims, delivery calendar. But it's pilot-gated: most designers see “coming soon.”</div>
+      <div class="pill">Gated</div>
+    </div>
+    <div class="hour cov-none">
+      <div class="t">16:00</div>
+      <div class="what"><b>Site &amp; install</b><span>walkthroughs, punch lists, progress photos</span></div>
+      <div class="verdict">Nothing. No punch lists, no site photos, no install-day coordination, no warranty/care handoff. The phase where projects are won or lost is invisible to the platform.</div>
+      <div class="pill">Missing</div>
+    </div>
+    <div class="hour cov-none">
+      <div class="t">17:30</div>
+      <div class="what"><b>Billing &amp; admin</b><span>log hours, invoice, chase payments</span></div>
+      <div class="verdict">No time entry, no invoice generation, no payment collection, no A/R. The day ends in QuickBooks and a spreadsheet — the moment the designer decides what software is essential.</div>
+      <div class="pill">Missing</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 · STRENGTHS I ============ -->
+<section class="slide dark" id="strengths1" data-title="Strengths — the deal spine">
+  <div class="kicker rv">03 — Strengths</div>
+  <div class="splitcols">
+    <div>
+      <h2 class="rv">The deal spine is <em>real</em> engineering.</h2>
+      <p class="lede rv">From lead to signed proposal to live project, the pipeline is not a demo — it's transactional, audited, and atomic. This is the part competitors fake with PDFs and status fields.</p>
+      <p class="cite rv">clone_proposal / send_proposal RPCs · 00176<br>activate_proposal_as_project · 00140<br>apply_decision FF&amp;E feed-through · 00175</p>
+    </div>
+    <div class="strengthlist rv">
+      <div class="strength">
+        <h3><span class="n">S·1</span>Proposal lifecycle with supersede semantics</h3>
+        <p>Draft → send → track views → sign (name + IP + timestamp) → <b>revise with full child-table cloning and sibling supersede</b>, killing the stale-signature hole. On acceptance, one RPC atomically activates the project: rooms, FF&amp;E items, phases, payment milestones, team, palettes all carry over. None of the five competitors has revision semantics this clean.</p>
+      </div>
+      <div class="strength">
+        <h3><span class="n">S·2</span>A decision system with an audit trail</h3>
+        <p>Structured client approvals with options, cost/lead-time deltas, due dates, blocking status, reminder crons, and resolution notifications. A winning option with a product <b>auto-creates the FF&amp;E line</b> with provenance. Competitors offer an “approve” button; Patina offers a record.</p>
+      </div>
+      <div class="strength">
+        <h3><span class="n">S·3</span>Leads with match scoring</h3>
+        <p>Inbound leads with response deadlines, match scores, and lifecycle stages feeding a real CRM (nurture queue, reviews, client lifecycle). Only Houzz Pro offers demand-gen — and its lead quality is the single loudest complaint in its reviews.</p>
+      </div>
+    </div>
+  </div>
+  <div class="pagenum">03 / 14</div>
+</section>
+
+<!-- ============ 05 · STRENGTHS II ============ -->
+<section class="slide dark" id="strengths2" data-title="Strengths — the moats">
+  <div class="kicker rv">04 — Strengths</div>
+  <div class="splitcols">
+    <div>
+      <h2 class="rv">Three moats nobody else is digging.</h2>
+      <p class="lede rv">The library, the procurement backbone, and the AI stack are durable advantages — two of them just aren't reaching users yet.</p>
+      <p class="cite rv">three-layer catalog · 00152 · graduated for all on c7ef6a4c<br>procurement workspace · 00148–00150 · pilot-gated<br>services/aesthete-engine · FastAPI + pgvector + MLflow</p>
+    </div>
+    <div class="strengthlist rv">
+      <div class="strength">
+        <h3><span class="n">S·4</span>Three-layer library + capture</h3>
+        <p>Chrome extension clipping, <b>My Library / Studio / Patina Catalog</b> layering, collections, cross-layer search, duplicate detection, vendor directory. The layering model (private → shared → curated) is a genuinely better information architecture than any competitor's flat product library.</p>
+      </div>
+      <div class="strength">
+        <h3><span class="n">S·5</span>A procurement backbone most rivals lack</h3>
+        <p>POs with payment patterns (50/50, 30/70, net-30, milestones), <b>receiving inspections with photo evidence, damage claims, delivery-conflict calendar, QBO bills export</b>. Already deeper than Mydoma and DesignFiles. It's finished enough to matter — and hidden behind a pilot flag.</p>
+      </div>
+      <div class="strength">
+        <h3><span class="n">S·6</span>An AI stack the category can't copy quickly</h3>
+        <p>Multimodal embeddings, hybrid retrieval, explainable recommendations, a <b>designer teaching loop</b> that compounds, and a Claude-powered companion. DesignFiles ships AI renders; Programa ships utilities. Nobody has a learning system trained by working designers.</p>
+      </div>
+    </div>
+  </div>
+  <div class="pagenum">04 / 14</div>
+</section>
+
+<!-- ============ 06 · SCORECARD ============ -->
+<section class="slide" id="scorecard" data-title="Maturity scorecard">
+  <div class="kicker rv">05 — Where every domain actually stands</div>
+  <h2 class="rv" style="margin-bottom:14px">Maturity scorecard.</h2>
+  <p class="lede rv" style="margin-bottom:22px">Twelve domains of a designer's workflow, scored from the code — every number traceable to routes, tables, and hooks.</p>
+  <div class="score rv">
+    <div class="scorerow"><div class="dom">Proposals<span>00140 · 00176 · full lifecycle</span></div><div class="bar b-good"><i style="--w:85%"></i></div><div class="pct">85</div><div class="note">Post-acceptance kickoff (auto-PO, notifications) is the remaining gap.</div></div>
+    <div class="scorerow"><div class="dom">Procurement<span>00148–150 · pilot-gated</span></div><div class="bar b-good"><i style="--w:80%"></i></div><div class="pct">80</div><div class="note">Built and tested; invisible to non-pilot users. No vendor comms or carrier sync.</div></div>
+    <div class="scorerow"><div class="dom">Sourcing &amp; library<span>00152 · extension capture</span></div><div class="bar b-mid"><i style="--w:65%"></i></div><div class="pct">65</div><div class="note">Static prices &amp; lead times; no stock alerts feeding live projects.</div></div>
+    <div class="scorerow"><div class="dom">Budgets &amp; financials<span>useProjectFinancials · 00139</span></div><div class="bar b-mid"><i style="--w:65%"></i></div><div class="pct">65</div><div class="note">Project-level only — no studio P&amp;L, margins, or budget alerts.</div></div>
+    <div class="scorerow"><div class="dom">Client communication<span>00062 · realtime threads</span></div><div class="bar b-mid"><i style="--w:60%"></i></div><div class="pct">60</div><div class="note">Threads + client portal are solid; no inbound email, no change-order flow.</div></div>
+    <div class="scorerow"><div class="dom">Room planning<span>room_scans · 00019–20</span></div><div class="bar b-mid"><i style="--w:60%"></i></div><div class="pct">60</div><div class="note">iOS LiDAR scans captured, then dead-end — no 3D, placement, or annotation.</div></div>
+    <div class="scorerow"><div class="dom">Vendor management<span>00009 · directory + relations</span></div><div class="bar b-mid"><i style="--w:55%"></i></div><div class="pct">55</div><div class="note">No trade pricing, performance tracking, or vendor-facing surface.</div></div>
+    <div class="scorerow"><div class="dom">Scheduling &amp; tasks<span>00169 · phases + gates</span></div><div class="bar b-mid"><i style="--w:50%"></i></div><div class="pct">50</div><div class="note">Tasks &amp; phase gates exist; no calendar sync, dependencies, or crew logistics.</div></div>
+    <div class="scorerow"><div class="dom">Documents &amp; contracts<span>00169–170 · storage + sign fields</span></div><div class="bar b-low"><i style="--w:45%"></i></div><div class="pct">45</div><div class="note">Upload + manual sign capture; no e-sign provider, templates, or spec sheets.</div></div>
+    <div class="scorerow"><div class="dom">Invoicing &amp; payments<span>designer_earnings orphaned</span></div><div class="bar b-low"><i style="--w:25%"></i></div><div class="pct">25</div><div class="note">Milestones exist; no invoice, no collection. Stripe configured, never wired.</div></div>
+    <div class="scorerow"><div class="dom">Visual presentation<span>palettes only · 00131–132</span></div><div class="bar b-low"><i style="--w:20%"></i></div><div class="pct">20</div><div class="note">Paint palettes and swatches; no boards, canvas, or material schemes.</div></div>
+    <div class="scorerow"><div class="dom">Time tracking<span>useProjectTimeTracking → null</span></div><div class="bar b-low"><i style="--w:2%"></i></div><div class="pct">0</div><div class="note">The hook returns null by design; the panel renders nothing on real projects.</div></div>
+  </div>
+</section>
+
+<!-- ============ 07 · GAP 1 MONEY ============ -->
+<section class="slide deep" id="gap-money" data-title="Gap — the money loop">
+  <div class="kicker rv">06 — Gap deep-dive · № 1</div>
+  <div class="gaphead rv">
+    <h2 style="margin-bottom:0">The money loop<br>is <em>open.</em></h2>
+    <div class="bigpct">0→25%</div>
+  </div>
+  <p class="lede rv" style="margin-top:22px">Designers bill in three ways — hourly fees, flat fees by phase, and product markup. Patina models the <strong>structure</strong> of all three and the <strong>execution</strong> of none. Time is never captured, invoices are never generated, and money never moves. This is the chain that makes business software indispensable; every competitor ships it end-to-end.</p>
+  <div class="gapgrid">
+    <div class="rv have">
+      <h4>What exists in the schema</h4>
+      <ul>
+        <li><b>Payment milestones</b> on proposals and projects, seeded on activation <span style="font-family:var(--mono);font-size:11px">(00066 · 00084)</span></li>
+        <li><b>PO payment tracking</b> — deposits, balances, due dates <span style="font-family:var(--mono);font-size:11px">(po_payments · 00148)</span></li>
+        <li><b>designer_earnings / designer_payouts</b> tables — orphaned since 00014, no engine behind them</li>
+        <li><b>Stripe</b> — env vars + session column present, zero active usage</li>
+        <li><b>QBO bills export</b> for purchase orders (one-way, procurement only)</li>
+      </ul>
+    </div>
+    <div class="rv miss">
+      <h4>What never happens</h4>
+      <ul>
+        <li><b>No time entry</b> — no timer, no rates, no billable hours <span style="font-family:var(--mono);font-size:11px">(useProjectTimeTracking returns null)</span></li>
+        <li><b>No invoice generation</b> — milestones never become a document a client can pay</li>
+        <li><b>No payment collection</b> — no card/ACH, no retainers, no client-fund handling</li>
+        <li><b>No A/R</b> — no aging, no reminders, no overdue escalation</li>
+        <li><b>Earnings page shows numbers</b> with no billing engine producing them</li>
+      </ul>
+    </div>
+  </div>
+  <p class="cite rv" style="margin-top:26px">Competitive floor: Studio Designer runs 5 concurrent timers + full GL + StudioPay (ACH 0.5–1%) · Houzz Pro invoices from time entries · Programa shipped split invoicing + Programa Pay in March 2026 · even $55/mo DesignFiles has Stripe payments and retainers.</p>
+</section>
+
+<!-- ============ 08 · GAP 2 VISUAL ============ -->
+<section class="slide" id="gap-visual" data-title="Gap — visual studio">
+  <div class="kicker rv">07 — Gap deep-dive · № 2</div>
+  <div class="gaphead rv">
+    <h2 style="margin-bottom:0">No room for<br>the <em>design</em> work.</h2>
+    <div class="bigpct">20%</div>
+  </div>
+  <p class="lede rv" style="margin-top:22px">Mood boards are the most-used daily surface in every competing product — the artifact clients react to, the thing designers post, the reason DesignFiles exists. Patina has the <strong>ingredients</strong> (captured products, palettes, room scans, an AI that understands style) and no <strong>canvas</strong> to combine them on.</p>
+  <div class="gapgrid">
+    <div class="rv have">
+      <h4>Ingredients already on hand</h4>
+      <ul>
+        <li><b>Captured products</b> with imagery, pricing, and vendor data from the extension</li>
+        <li><b>Paint palettes &amp; swatches</b> with brand codes, linked to proposal images by pixel coordinates <span style="font-family:var(--mono);font-size:11px">(00131–132)</span></li>
+        <li><b>Room scans</b> with dimensions and photos from the iOS app</li>
+        <li><b>Aesthete engine</b> — style-aware recommendations that could auto-suggest board candidates</li>
+      </ul>
+    </div>
+    <div class="rv miss">
+      <h4>Missing surface</h4>
+      <ul>
+        <li><b>No board canvas</b> — no drag-drop layout, layering, or background removal</li>
+        <li><b>No material schemes</b> — fabric, finish, and texture have no home; paint only</li>
+        <li><b>No client-facing presentation</b> — boards that flow into proposals and decisions</li>
+        <li><b>No spec/tear sheets</b> — product data exists; no branded export a designer can hand over</li>
+        <li><b>Scan → design bridge absent</b> — LiDAR data dead-ends in a list view</li>
+      </ul>
+    </div>
+  </div>
+  <p class="cite rv" style="margin-top:26px">Competitive floor: DesignFiles — drag-drop editor, 1-click background removal, 2M-product catalog, AI photorealistic renders · Houzz Pro — boards + LiDAR 3D floor planner + AR walkthroughs · Programa shipped Presentations with live product approvals syncing to schedules, June 2026.</p>
+</section>
+
+<!-- ============ 09 · GAP 3 INSTALL ============ -->
+<section class="slide deep" id="gap-site" data-title="Gap — install day">
+  <div class="kicker rv">08 — Gap deep-dive · № 3</div>
+  <div class="gaphead rv">
+    <h2 style="margin-bottom:0">The project ends<br>before <em>install day.</em></h2>
+    <div class="bigpct">∅</div>
+  </div>
+  <p class="lede rv" style="margin-top:22px">Patina tracks a project up to “delivered” — then goes dark. The reveal, the punch list, the damaged-sconce drama, the care handoff: the most emotionally loaded phase for the client, and the phase that produces the review, has <strong>no representation in the product</strong>.</p>
+  <div class="gapgrid">
+    <div class="rv have">
+      <h4>Closest existing pieces</h4>
+      <ul>
+        <li><b>Delivery calendar</b> + conflict detection merges PO ETAs and milestones <span style="font-family:var(--mono);font-size:11px">(delivery_events · 00150)</span></li>
+        <li><b>Receiving inspections</b> with photos and damage claims — warehouse-side only</li>
+        <li><b>Review requests</b> fire on project completion <span style="font-family:var(--mono);font-size:11px">(review-requests cron)</span></li>
+        <li><b>project_documents</b> bucket could hold site photos — nothing structures them</li>
+      </ul>
+    </div>
+    <div class="rv miss">
+      <h4>The missing last mile</h4>
+      <ul>
+        <li><b>No punch lists</b> — deficiencies live in someone's Notes app</li>
+        <li><b>No site photo / progress documentation</b> tied to rooms and phases</li>
+        <li><b>No install-day coordination</b> — crew scheduling, delivery sequencing, day-of run sheet</li>
+        <li><b>No warranty &amp; care handoff</b> — the closing deliverable that keeps the relationship warm</li>
+        <li><b>No post-project service loop</b> — touch-ups, reorders, future-phase nurture</li>
+      </ul>
+    </div>
+  </div>
+  <p class="cite rv" style="margin-top:26px">Note: this is also where Patina could leap rather than catch up — none of the designer-first tools do install day well either; only construction-DNA Houzz Pro has daily logs.</p>
+</section>
+
+<!-- ============ 10 · GAP 4 VENDOR + OPS ============ -->
+<section class="slide" id="gap-vendor" data-title="Gap — vendor & ops depth">
+  <div class="kicker rv">09 — Gap deep-dive · № 4</div>
+  <div class="gaphead rv">
+    <h2 style="margin-bottom:0">Vendors are a directory,<br>not a <em>relationship.</em></h2>
+    <div class="bigpct">55%</div>
+  </div>
+  <p class="lede rv" style="margin-top:22px">Trade pricing is the economic engine of the industry — designers buy at trade and sell at retail. Patina stores per-item markup but has no concept of <strong>negotiated vendor terms</strong>, and the supporting ops (calendar, contracts, documents) all stop one step short of usable.</p>
+  <div class="gapgrid">
+    <div class="rv miss">
+      <h4>Vendor depth</h4>
+      <ul>
+        <li><b>No trade pricing / discount tiers</b> per vendor — markup is manual, per line item</li>
+        <li><b>No vendor performance</b> — lead-time accuracy, damage rates, on-time % all uncaptured despite receiving data that could feed it</li>
+        <li><b>Encrypted vendor credentials stored, never used</b> <span style="font-family:var(--mono);font-size:11px">(designer_vendor_accounts · 00009)</span></li>
+        <li><b>No vendor-facing surface</b> — POs leave by email and vanish</li>
+      </ul>
+    </div>
+    <div class="rv miss">
+      <h4>Operational short-stops</h4>
+      <ul>
+        <li><b>Documents:</b> storage + manual sign fields, but no e-sign provider, templates, or versioned approvals <span style="font-family:var(--mono);font-size:11px">(45%)</span></li>
+        <li><b>Scheduling:</b> tasks and phase gates, but no external calendar sync, dependencies, or reminders <span style="font-family:var(--mono);font-size:11px">(50%)</span></li>
+        <li><b>Financial visibility:</b> per-project only — no studio P&amp;L, margin, or profitability by client <span style="font-family:var(--mono);font-size:11px">(65%)</span></li>
+        <li><b>Sourcing freshness:</b> snapshot prices and lead times never re-verified against the live world</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 · CHOKEPOINTS ============ -->
+<section class="slide dark" id="chokepoints" data-title="Six broken workflows">
+  <div class="kicker rv">10 — Missing workflows</div>
+  <h2 class="rv">Six places the flow <em>dead-ends.</em></h2>
+  <p class="lede rv" style="margin-bottom:30px">Beyond missing features, these are built workflows that stop one step short of paying off — each one strands momentum the product already earned.</p>
+  <div class="chokes rv">
+    <div class="choke">
+      <div class="cn">W·1</div>
+      <div>
+        <div class="flow"><span class="node">Proposal signed</span><span class="ar">→</span><span class="node">Project activated</span><span class="ar">→</span><span class="dead">⨯ no kickoff — POs, client welcome, and phase start are all manual</span></div>
+        <div class="why">The activation RPC carries rooms, items, phases and milestones — then nothing tells the vendor, the client, or the calendar. <code>activate_proposal_as_project · 00140</code></div>
+      </div>
+    </div>
+    <div class="choke">
+      <div class="cn">W·2</div>
+      <div>
+        <div class="flow"><span class="node">PO payments tracked</span><span class="ar">→</span><span class="dead">⨯ never becomes a client invoice — procurement and A/R are disconnected worlds</span></div>
+        <div class="why">Patina knows what the designer owes the vendor, but can't produce what the client owes the designer. <code>po_payments · 00148 — no bridge to billing</code></div>
+      </div>
+    </div>
+    <div class="choke">
+      <div class="cn">W·3</div>
+      <div>
+        <div class="flow"><span class="node">Earnings dashboard</span><span class="ar">→</span><span class="dead">⨯ no engine — earnings &amp; payout tables have no writers and no workflow</span></div>
+        <div class="why">A revenue page with nothing upstream of it. <code>designer_earnings / designer_payouts · orphaned since 00014</code></div>
+      </div>
+    </div>
+    <div class="choke">
+      <div class="cn">W·4</div>
+      <div>
+        <div class="flow"><span class="node">Room scanned (LiDAR)</span><span class="ar">→</span><span class="dead">⨯ dead-ends in a list — no 3D, no placement, no annotation, no design bridge</span></div>
+        <div class="why">Clients do real work capturing scans; the data never touches boards, proposals, or FF&amp;E selection. <code>room_scans · 00019–20</code></div>
+      </div>
+    </div>
+    <div class="choke">
+      <div class="cn">W·5</div>
+      <div>
+        <div class="flow"><span class="node">Product captured</span><span class="ar">→</span><span class="node">Specced on project</span><span class="ar">→</span><span class="dead">⨯ price &amp; lead time go stale silently</span></div>
+        <div class="why">Wishlist-style price-drop and back-in-stock checks exist for clients — nothing equivalent protects a designer's live project specs. <code>price-drop-check / back-in-stock-check edge fns</code></div>
+      </div>
+    </div>
+    <div class="choke">
+      <div class="cn">W·6</div>
+      <div>
+        <div class="flow"><span class="node">Procurement workspace built</span><span class="ar">→</span><span class="dead">⨯ pilot flag — most designers see “coming soon” on a finished feature</span></div>
+        <div class="why">Receiving, damage claims, calendar, QBO export — done, tested, and gated. <code>procurement-workspace-pilot · PostHog flag, fail-closed</code></div>
+      </div>
+    </div>
+  </div>
+  <div class="pagenum">10 / 14</div>
+</section>
+
+<!-- ============ 12 · COMPETITOR MATRIX ============ -->
+<section class="slide" id="matrix" data-title="Competitive field">
+  <div class="kicker rv">11 — The field</div>
+  <h2 class="rv" style="margin-bottom:14px">Patina against the five<br>tools designers pay for.</h2>
+  <p class="lede rv" style="margin-bottom:24px">Researched June 2026. The pattern is stark: Patina's gaps are precisely the rows where <strong>all five competitors are present</strong> — and Patina's strengths are rows where almost nobody is.</p>
+  <div class="matrixwrap rv">
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th>Capability</th>
+          <th class="patina-col">Patina</th>
+          <th>Studio Designer<span class="sub">$69–119/seat</span></th>
+          <th>Houzz Pro<span class="sub">$149–399/mo</span></th>
+          <th>Mydoma<span class="sub">$58/seat +$300</span></th>
+          <th>DesignFiles<span class="sub">$55–75/mo</span></th>
+          <th>Programa<span class="sub">$71+$31/seat</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Time tracking &amp; billing</td><td class="patina-col"><span class="dot-n">○</span></td><td><span class="dot-y">●</span><span class="sub">5 timers, GL-linked</span></td><td><span class="dot-y">●</span><span class="sub">time → invoice</span></td><td><span class="dot-y">●</span></td><td><span class="dot-y">●</span><span class="sub">top tier</span></td><td><span class="dot-y">●</span><span class="sub">Smart Timer '26</span></td></tr>
+        <tr><td>Invoicing + online payments</td><td class="patina-col"><span class="dot-n">○</span><span class="sub">milestones only</span></td><td><span class="dot-y">●</span><span class="sub">StudioPay ACH/card</span></td><td><span class="dot-y">●</span></td><td><span class="dot-y">●</span><span class="sub">Mydoma Pay</span></td><td><span class="dot-y">●</span><span class="sub">Stripe, retainers</span></td><td><span class="dot-y">●</span><span class="sub">Programa Pay '26</span></td></tr>
+        <tr><td>Accounting depth</td><td class="patina-col"><span class="dot-p">◐</span><span class="sub">QBO bills export</span></td><td><span class="dot-y">●</span><span class="sub">full GL — replaces QBO</span></td><td><span class="dot-p">◐</span><span class="sub">QBO one-way</span></td><td><span class="dot-p">◐</span><span class="sub">QBO export</span></td><td><span class="dot-p">◐</span><span class="sub">QBO sync</span></td><td><span class="dot-y">●</span><span class="sub">QBO + Xero</span></td></tr>
+        <tr><td>Mood boards / presentation</td><td class="patina-col"><span class="dot-n">○</span><span class="sub">palettes only</span></td><td><span class="dot-p">◐</span><span class="sub">PowerPoint-based</span></td><td><span class="dot-y">●</span><span class="sub">+3D, AR, renders</span></td><td><span class="dot-p">◐</span><span class="sub">weak, glitchy</span></td><td><span class="dot-y">●</span><span class="sub">best editor + AI render</span></td><td><span class="dot-y">●</span><span class="sub">Pinboards + Presentations</span></td></tr>
+        <tr><td>POs &amp; procurement</td><td class="patina-col"><span class="dot-y">●</span><span class="sub">gated · receiving + claims</span></td><td><span class="dot-y">●</span><span class="sub">expediting, RFQ</span></td><td><span class="dot-p">◐</span><span class="sub">manual statuses</span></td><td><span class="dot-p">◐</span><span class="sub">basic</span></td><td><span class="dot-p">◐</span><span class="sub">order tracker</span></td><td><span class="dot-y">●</span><span class="sub">Procurement Hub</span></td></tr>
+        <tr><td>Client portal</td><td class="patina-col"><span class="dot-y">●</span><span class="sub">decisions, scans, orders</span></td><td><span class="dot-p">◐</span><span class="sub">approve + pay</span></td><td><span class="dot-y">●</span><span class="sub">on Houzz domain</span></td><td><span class="dot-y">●</span></td><td><span class="dot-y">●</span></td><td><span class="dot-y">●</span><span class="sub">no-login, granular</span></td></tr>
+        <tr><td>Product clipper + library</td><td class="patina-col"><span class="dot-y">●</span><span class="sub">3-layer model</span></td><td><span class="dot-y">●</span><span class="sub">+300K trade catalog</span></td><td><span class="dot-y">●</span><span class="sub">AI extraction</span></td><td><span class="dot-y">●</span></td><td><span class="dot-y">●</span><span class="sub">+2M catalog</span></td><td><span class="dot-y">●</span><span class="sub">Smart Fill</span></td></tr>
+        <tr><td>E-signature w/ audit trail</td><td class="patina-col"><span class="dot-y">●</span><span class="sub">sign + supersede</span></td><td><span class="dot-n">○</span><span class="sub">approve button</span></td><td><span class="dot-y">●</span></td><td><span class="dot-p">◐</span><span class="sub">typed name</span></td><td><span class="dot-p">◐</span><span class="sub">typed name</span></td><td><span class="dot-n">○</span><span class="sub">none</span></td></tr>
+        <tr><td>Structured decisions</td><td class="patina-col"><span class="dot-y">●</span><span class="sub">unique</span></td><td><span class="dot-n">○</span></td><td><span class="dot-n">○</span></td><td><span class="dot-n">○</span></td><td><span class="dot-p">◐</span><span class="sub">approval tracker</span></td><td><span class="dot-p">◐</span><span class="sub">line-item approvals</span></td></tr>
+        <tr><td>AI depth</td><td class="patina-col"><span class="dot-y">●</span><span class="sub">engine + teaching + chat</span></td><td><span class="dot-p">◐</span><span class="sub">catalog renders</span></td><td><span class="dot-p">◐</span><span class="sub">AutoMate</span></td><td><span class="dot-n">○</span></td><td><span class="dot-p">◐</span><span class="sub">AI render</span></td><td><span class="dot-p">◐</span><span class="sub">utilities</span></td></tr>
+        <tr><td>Lead generation</td><td class="patina-col"><span class="dot-y">●</span><span class="sub">matched leads</span></td><td><span class="dot-n">○</span></td><td><span class="dot-y">●</span><span class="sub">quality complaints</span></td><td><span class="dot-n">○</span></td><td><span class="dot-n">○</span></td><td><span class="dot-n">○</span></td></tr>
+        <tr><td>Install day / site execution</td><td class="patina-col"><span class="dot-n">○</span></td><td><span class="dot-n">○</span></td><td><span class="dot-p">◐</span><span class="sub">daily logs</span></td><td><span class="dot-n">○</span></td><td><span class="dot-n">○</span></td><td><span class="dot-p">◐</span><span class="sub">install phase</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="matrixkey rv"><span><span class="dot-y">●</span>&nbsp;Shipping</span><span><span class="dot-p">◐</span>&nbsp;Partial / weak</span><span><span class="dot-n">○</span>&nbsp;Absent</span><span style="margin-left:auto">Sources: vendor sites, help centers, Capterra/G2, June 2026</span></div>
+</section>
+
+<!-- ============ 13 · WINS ============ -->
+<section class="slide deep" id="wins" data-title="Where Patina wins">
+  <div class="kicker rv">12 — The other side of the ledger</div>
+  <h2 class="rv">Where Patina already <em>wins.</em></h2>
+  <p class="lede rv" style="margin-bottom:28px">Closing gaps isn't enough to be fantastic — these are the differentiators worth protecting while the table stakes get built, because nobody in the field can answer them quickly.</p>
+  <div class="wins rv">
+    <div class="win">
+      <h3>Revision-safe agreements</h3>
+      <p>Signed proposals that can be revised with full clone-and-supersede semantics, and decisions with options, deltas, and provenance into FF&amp;E. The agreement layer is an audited system of record, not a PDF.</p>
+      <span class="vs">vs · Studio Designer: approve button, no e-sign · Programa: no contracts module at all</span>
+    </div>
+    <div class="win">
+      <h3>A compounding AI moat</h3>
+      <p>The Aesthete engine plus the teaching loop means every designer interaction improves the product for all designers. Competitors bolt on render APIs; nobody owns a designer-trained model.</p>
+      <span class="vs">vs · DesignFiles: AI renders only · Mydoma: AI still “planned” post-acquisition</span>
+    </div>
+    <div class="win">
+      <h3>Demand, not just admin</h3>
+      <p>Matched leads with response deadlines and a real CRM make Patina the only designer-first tool that brings designers business. Houzz Pro's lead gen exists — and is its most-complained-about feature.</p>
+      <span class="vs">vs · Houzz Pro: ~1★ BBB, lead-quality complaints · everyone else: none</span>
+    </div>
+  </div>
+  <p class="lede rv" style="margin-top:28px;font-size:15px">Also defensible: the three-layer library model, an ecosystem competitors lack (iOS scans + extension + client portal on one data spine), and a procurement backbone that out-builds every designer-first rival the day the flag flips.</p>
+</section>
+
+<!-- ============ 14 · ROADMAP ============ -->
+<section class="slide dark" id="roadmap" data-title="Roadmap">
+  <div class="kicker rv">13 — What to build, in order</div>
+  <h2 class="rv">The road to <em>indispensable.</em></h2>
+  <p class="lede rv" style="margin-bottom:30px">Sequenced by a simple rule: first the things designers <strong>leave the app for every single day</strong>, then the things that win the deal, then the things nobody else does.</p>
+  <div class="phases rv">
+    <div class="phase p0">
+      <div class="ph">P0 · Close the money loop</div>
+      <h3>Become the business.</h3>
+      <p class="why">One connected chain, not three features. All table stakes — every competitor ships every item. Most of the schema already exists.</p>
+      <ul>
+        <li><b>Time tracking</b> — timer + entries + billable rates; replace the null hook</li>
+        <li><b>Invoice generation</b> from payment milestones, time, and PO pass-throughs</li>
+        <li><b>Payment collection</b> — wire the dormant Stripe config; card + ACH + retainers</li>
+        <li><b>A/R basics</b> — aging, reminders, overdue escalation (cron pattern exists)</li>
+        <li><b>Wake designer_earnings</b> — real numbers from real invoices</li>
+      </ul>
+    </div>
+    <div class="phase p1">
+      <div class="ph">P1 · Win the presentation</div>
+      <h3>Own the daily canvas.</h3>
+      <p class="why">Where designers spend creative hours and clients form opinions. Patina's ingredients are already better than competitors' — they need a surface.</p>
+      <ul>
+        <li><b>Mood board canvas</b> — library products + palettes + scans, drag-drop, background removal</li>
+        <li><b>Boards → proposals → decisions</b> as one presentation flow</li>
+        <li><b>Spec &amp; tear sheets</b> — branded exports from existing product data</li>
+        <li><b>Procurement GA</b> — remove the pilot flag; ship the finished workspace</li>
+        <li><b>Proposal-acceptance kickoff</b> — auto-PO drafts, client welcome, calendar seed</li>
+      </ul>
+    </div>
+    <div class="phase p2">
+      <div class="ph">P2 · Own the whole project</div>
+      <h3>Go where no one else does.</h3>
+      <p class="why">Differentiators on top of a complete core — the phases of a project the whole category ignores.</p>
+      <ul>
+        <li><b>Install-day toolkit</b> — punch lists, site photos, day-of run sheet, care handoff</li>
+        <li><b>Vendor depth</b> — trade pricing terms, performance scores from receiving data</li>
+        <li><b>Scan → design bridge</b> — scans into boards and placement, closing the iOS loop</li>
+        <li><b>Spec freshness</b> — price/stock alerts on live project items (edge fns exist)</li>
+        <li><b>Studio financials</b> — P&amp;L, margins, profitability by client</li>
+      </ul>
+    </div>
+  </div>
+  <div class="pagenum">13 / 14</div>
+</section>
+
+<!-- ============ 15 · CLOSE ============ -->
+<section class="slide" id="close" data-title="Close">
+  <div class="kicker rv">14 — The bar</div>
+  <div class="giant2 rv">Fantastic means a designer opens Patina at <em>7:30</em> and doesn't need another tab until the lights go out.</div>
+  <div class="closing-list rv">
+    <div><span class="cn">I</span><span><b>The pipeline already earns the morning</b> — leads, proposals, decisions, and sourcing are genuinely strong and getting stronger.</span></div>
+    <div><span class="cn">II</span><span><b>The money loop earns the evening</b> — until hours become invoices become payments inside Patina, the product is an accessory to QuickBooks instead of the other way around.</span></div>
+    <div><span class="cn">III</span><span><b>The canvas earns the heart</b> — boards are where designers feel like designers; today that feeling happens in someone else's product.</span></div>
+    <div><span class="cn">IV</span><span><b>The flag costs nothing to flip</b> — procurement is built, tested, and hidden. Shipping finished work is the cheapest win on this list.</span></div>
+  </div>
+  <p class="cite rv" style="margin-top:36px;border-left-color:var(--clay)">Prepared June 9, 2026 · sources: full route/schema/hook audit of apps/designer-portal, packages/supabase, supabase/migrations, services/* · competitor research: studiodesigner.com, pro.houzz.com, mydomastudio.com, designfiles.co, programa.design, Capterra/G2/BBB reviews</p>
+</section>
+
+</main>
+
+<script>
+(function(){
+  const slides=[...document.querySelectorAll('section.slide')];
+  const rail=document.getElementById('rail');
+  const prog=document.getElementById('progress');
+
+  // build rail
+  slides.forEach((s,i)=>{
+    const a=document.createElement('a');
+    a.href='#'+s.id;
+    const sp=document.createElement('span');
+    sp.textContent=String(i).padStart(2,'0')+' · '+(s.dataset.title||s.id);
+    a.appendChild(sp);
+    rail.appendChild(a);
+  });
+  const dots=[...rail.querySelectorAll('a')];
+
+  // reveal + active dot
+  const io=new IntersectionObserver(es=>{
+    es.forEach(e=>{
+      if(e.isIntersecting){
+        e.target.classList.add('in-view');
+        const idx=slides.indexOf(e.target);
+        dots.forEach((d,i)=>d.classList.toggle('active',i===idx));
+      }
+    });
+  },{threshold:0.2});
+  slides.forEach(s=>io.observe(s));
+
+  // belt-and-braces: reveal whatever is on screen right now (fonts/observer startup races)
+  function revealVisible(){
+    slides.forEach(s=>{
+      const r=s.getBoundingClientRect();
+      if(r.top<innerHeight*0.8&&r.bottom>innerHeight*0.2)s.classList.add('in-view');
+    });
+  }
+  revealVisible();
+  window.addEventListener('load',revealVisible);
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(revealVisible);
+
+  // progress bar (+ reveal fallback for throttled observers)
+  function onScroll(){
+    const h=document.documentElement;
+    const p=h.scrollTop/(h.scrollHeight-h.clientHeight);
+    prog.style.width=(p*100)+'%';
+    revealVisible();
+  }
+  document.addEventListener('scroll',onScroll,{passive:true});
+  onScroll();
+
+  // keyboard nav
+  function current(){
+    const y=window.scrollY+window.innerHeight*0.45;
+    for(let i=slides.length-1;i>=0;i--){if(slides[i].offsetTop<=y)return i}
+    return 0;
+  }
+  document.addEventListener('keydown',e=>{
+    if(['ArrowDown','PageDown',' '].includes(e.key)&&!e.shiftKey){
+      e.preventDefault();
+      const i=Math.min(current()+1,slides.length-1);
+      slides[i].scrollIntoView({behavior:'smooth'});
+    }else if(['ArrowUp','PageUp'].includes(e.key)||(e.key===' '&&e.shiftKey)){
+      e.preventDefault();
+      const i=Math.max(current()-1,0);
+      slides[i].scrollIntoView({behavior:'smooth'});
+    }else if(e.key==='Home'){slides[0].scrollIntoView({behavior:'smooth'})}
+    else if(e.key==='End'){slides[slides.length-1].scrollIntoView({behavior:'smooth'})}
+  });
+})();
+</script>
+</body>
+</html>
