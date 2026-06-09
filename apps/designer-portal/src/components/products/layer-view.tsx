@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search } from 'lucide-react';
 import { Button, Input, FilterPill } from '@/components/ui/controls';
@@ -30,6 +30,12 @@ interface LayerViewProps {
   showProjectTags?: boolean;
   showUsageCount?: boolean;
   showAestheteMatch?: boolean;
+  /**
+   * Optional layer-scoped CTAs rendered alongside the search/filter controls.
+   * Used by My Library (personal) for + Add Product / Import — Studio and
+   * Catalog pass nothing (they're promotion-only / curated).
+   */
+  actions?: ReactNode;
 }
 
 /**
@@ -48,6 +54,7 @@ export function LayerView({
   showProjectTags = false,
   showUsageCount = false,
   showAestheteMatch = false,
+  actions,
 }: LayerViewProps) {
   const router = useRouter();
   const [search, setSearch] = useState('');
@@ -97,6 +104,8 @@ export function LayerView({
         </div>
 
         <StatusFilterBar value={status} onChange={setStatus} />
+
+        {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>
 
       {isLoading ? (

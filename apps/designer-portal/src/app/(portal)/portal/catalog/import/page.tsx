@@ -246,7 +246,7 @@ export default function BulkImportPage() {
         return;
       }
 
-      router.push('/portal/catalog');
+      router.push('/portal/library/personal');
     } catch {
       setImportError('Import failed. Please try again.');
       setImporting(false);

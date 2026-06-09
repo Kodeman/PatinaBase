@@ -9,6 +9,7 @@ import { useHydrated } from '@/hooks/use-hydrated';
 import { useNavCounts } from '@/hooks/use-nav-counts';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { ZONE_ACTIONS } from '@/config/navigation';
+import { LibraryLayerNav } from './library-layer-nav';
 import {
   useClient,
   useDecision,
@@ -177,8 +178,11 @@ export function SubNav() {
     'procurement-workspace-pilot',
   );
 
-  // No sub-nav for Today zone or when there are no items
-  if (!zone || subNavItems.length === 0) return null;
+  // Products renders the three-layer Library picker even though its
+  // ZONE_SUB_ITEMS is empty; every other zone with no items renders nothing.
+  const isProductsZone = zone === 'products';
+  if (!zone) return null;
+  if (!isProductsZone && subNavItems.length === 0) return null;
   if (zone === 'procurement' && !procurementPilotEnabled) return null;
 
   const action = zone ? ZONE_ACTIONS[zone] : undefined;
@@ -219,6 +223,10 @@ export function SubNav() {
               );
             })}
           </div>
+        ) : isProductsZone ? (
+          // Products: the three-layer Library picker (My Library / Studio /
+          // Patina Catalog) with its own + Add Product / Import actions.
+          <LibraryLayerNav />
         ) : (
           // Normal sub-nav mode
           <div className="flex h-[38px] flex-1 items-stretch gap-0">
@@ -275,8 +283,8 @@ export function SubNav() {
           </div>
         )}
 
-        {/* Right-side action */}
-        {!isDeepPage && action && action.href && (
+        {/* Right-side action (Products renders its own inside LibraryLayerNav) */}
+        {!isProductsZone && !isDeepPage && action && action.href && (
           <div className="ml-auto flex items-center">
             <Link
               href={action.href}

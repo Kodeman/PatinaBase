@@ -1,45 +1,26 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Search } from 'lucide-react';
-import { useLayerCounts, useLibraryPilotEnabled } from '@patina/supabase';
-import { LayerIcon, type Layer } from '@patina/catalog-ui';
-
-interface TabDef {
-  key: Layer;
-  label: string;
-  href: string;
-}
-
-const TABS: TabDef[] = [
-  { key: 'personal', label: 'My Library', href: '/portal/library/personal' },
-  { key: 'studio', label: 'Studio Library', href: '/portal/library/studio' },
-  { key: 'catalog', label: 'Patina Catalog', href: '/portal/library/catalog' },
-];
 
 /**
- * ProductsZone shell — the three-tab navigation framing the Personal /
- * Studio / Catalog layer views. Visual spec from
- * `docs/prds/patina-three-layer-product-catalog.html` §Navigation and PRD
- * engineering handoff §5.2.
+ * Library shell — page header + cross-layer search above the per-layer views.
  *
- * v1 lives at `/portal/library` alongside the existing single-tier
- * `/portal/catalog`. The rename + redirect cuts over after Sprint 3 pilot
- * (see plan §"Files NOT modified").
+ * The three-layer picker (My Library / Studio Library / Patina Catalog) used to
+ * live here; it now renders in the global sub-nav row for the Products zone
+ * (see components/portal/library-layer-nav.tsx). This layout keeps the page
+ * title and the cross-layer search box.
+ *
+ * The S3.12 pilot gate was removed on 2026-06-09 — the three-layer Library is
+ * now the Products experience for every org.
  */
 export default function LibraryLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { data: counts } = useLayerCounts();
-  const { enabled: pilotEnabled, isLoading: pilotLoading } = useLibraryPilotEnabled();
 
   const isSearchRoute = pathname === '/portal/library/search';
-  const activeTab = isSearchRoute
-    ? undefined
-    : (TABS.find((tab) => pathname?.startsWith(tab.href))?.key ?? 'personal');
   const initialQuery = isSearchRoute ? searchParams?.get('q') ?? '' : '';
   const [searchValue, setSearchValue] = useState(initialQuery);
 
@@ -48,18 +29,6 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     const trimmed = searchValue.trim();
     if (trimmed.length === 0) return;
     router.push(`/portal/library/search?q=${encodeURIComponent(trimmed)}`);
-  }
-
-  // S3.12 pilot launch gate. While organizations.settings.three_layer_catalog_enabled
-  // is false (default), surface a Coming-soon card rather than the live view so
-  // non-pilot studios stay on the existing /portal/catalog single-tier surface.
-  // The route itself isn't redirected — pilot operators can still deep-link to
-  // a layer for QA without flipping the flag globally.
-  if (pilotLoading) {
-    return null;
-  }
-  if (!pilotEnabled) {
-    return <LibraryComingSoon />;
   }
 
   return (
@@ -94,79 +63,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
         </div>
       </header>
 
-      <nav
-        role="tablist"
-        aria-label="Library layer"
-        className="flex items-center gap-1 border-b border-[var(--border-default)]"
-      >
-        {TABS.map((tab) => {
-          const isActive = tab.key === activeTab;
-          const count = counts?.[tab.key];
-          return (
-            <Link
-              key={tab.key}
-              role="tab"
-              aria-selected={isActive}
-              href={tab.href}
-              className="group flex items-center gap-2 px-4 py-3 transition-colors"
-              style={{
-                borderBottom: isActive
-                  ? '2px solid var(--accent-primary)'
-                  : '2px solid transparent',
-                marginBottom: -1, // overlap parent border
-              }}
-            >
-              <LayerIcon layer={tab.key} size="sm" />
-              <span
-                className="font-body text-[0.88rem]"
-                style={{
-                  color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
-                  fontWeight: isActive ? 600 : 500,
-                }}
-              >
-                {tab.label}
-              </span>
-              {typeof count === 'number' && (
-                <span
-                  className="type-meta-small"
-                  style={{ color: 'var(--text-muted)' }}
-                  aria-label={`${count} items`}
-                >
-                  · {count.toLocaleString()}
-                </span>
-              )}
-            </Link>
-          );
-        })}
-      </nav>
-
       <div>{children}</div>
-    </div>
-  );
-}
-
-function LibraryComingSoon() {
-  return (
-    <div className="pt-12">
-      <div className="mx-auto max-w-2xl rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-8 py-12 text-center">
-        <div
-          className="type-meta-small mb-3"
-          style={{
-            color: 'var(--color-clay, #C4A57B)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em',
-          }}
-        >
-          Pilot
-        </div>
-        <h1 className="type-section-head mb-3">Three-layer Library is in pilot</h1>
-        <p className="mx-auto max-w-md text-[0.85rem] leading-relaxed text-[var(--text-muted)]">
-          We&apos;re rolling out the new Library — Personal · Studio · Catalog —
-          with a small group of studios before flipping it on broadly. Talk to
-          your Patina contact if you&apos;d like to join the pilot. For now,
-          continue using <code>/portal/catalog</code> as usual.
-        </p>
-      </div>
     </div>
   );
 }

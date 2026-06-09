@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useLeads, useProposals, useProjects, useClients, useProducts, useAllDecisions } from '@patina/supabase';
+import { useLeads, useProposals, useProjects, useClients, useAllDecisions } from '@patina/supabase';
 import { useClientReviews, useNurtureTouchpoints, useTeachingQueue } from '@patina/supabase';
 import type { ZoneKey } from '@/config/navigation';
 
@@ -15,8 +15,7 @@ export function useNavCounts(zone: ZoneKey | null): Record<string, number | unde
   const { data: proposals } = useProposals(zone === 'pipeline' ? undefined : undefined);
   const { data: projects } = useProjects();
 
-  // Products counts
-  const { data: products } = useProducts();
+  // Aesthete counts (Products uses the picker's own useLayerCounts, not this hook)
   const { data: teachingQueue } = useTeachingQueue();
 
   // Clients counts
@@ -41,8 +40,7 @@ export function useNavCounts(zone: ZoneKey | null): Record<string, number | unde
       counts['Completed'] = completedProjects;
     }
 
-    if (zone === 'products') {
-      counts['Catalog'] = products?.data?.length;
+    if (zone === 'aesthete') {
       counts['Teaching'] = teachingQueue?.length;
     }
 
@@ -59,5 +57,5 @@ export function useNavCounts(zone: ZoneKey | null): Record<string, number | unde
     }
 
     return counts;
-  }, [zone, leads, proposals, projects, products, teachingQueue, clients, reviews, nurture, decisions]);
+  }, [zone, leads, proposals, projects, teachingQueue, clients, reviews, nurture, decisions]);
 }

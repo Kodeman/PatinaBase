@@ -8,12 +8,13 @@ import {
   DollarSign,
   Image,
   HelpCircle,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 
 // ─── Zone Definitions ────────────────────────────────────────────────────────
 
-export type ZoneKey = 'today' | 'pipeline' | 'procurement' | 'products' | 'clients' | 'messages';
+export type ZoneKey = 'today' | 'pipeline' | 'procurement' | 'products' | 'aesthete' | 'clients' | 'messages';
 
 export interface ZoneConfig {
   key: ZoneKey;
@@ -55,15 +56,25 @@ export const ZONES: ZoneConfig[] = [
   {
     key: 'products',
     label: 'Products',
-    href: '/portal/catalog',
+    // Products IS the three-layer Library now; the legacy single-tier
+    // /portal/catalog list page redirects here.
+    href: '/portal/library/personal',
     paths: [
-      '/portal/catalog',
-      '/portal/library', // three-layer catalog (S1.3) — co-exists with /portal/catalog through pilot
-      '/portal/teaching',
-      '/portal/companion',
+      '/portal/library',
+      '/portal/catalog', // detail / edit / new / import / collections / categories still live here
       '/portal/vendors', // vendor directory + detail join the products zone for the global breadcrumb
     ],
     icon: Package,
+  },
+  {
+    key: 'aesthete',
+    label: 'Aesthete',
+    href: '/portal/teaching',
+    paths: [
+      '/portal/teaching',
+      '/portal/companion',
+    ],
+    icon: Sparkles,
   },
   {
     key: 'clients',
@@ -113,10 +124,11 @@ export const ZONE_SUB_ITEMS: Record<ZoneKey, SubNavItem[]> = {
     { label: 'Calendar', href: '/portal/procurement/calendar' },
     { label: 'Receiving', href: '/portal/procurement/receiving' },
   ],
-  products: [
-    { label: 'Library', href: '/portal/library/personal' },
-    { label: 'Catalog', href: '/portal/catalog', exact: true },
-    { label: 'Capture Queue', href: '/portal/catalog/import' },
+  // Products renders the three-layer Library picker (My Library / Studio Library
+  // / Patina Catalog) via LibraryLayerNav, special-cased in SubNav — not these
+  // uniform tabs. Kept empty so the generic renderer has nothing to draw.
+  products: [],
+  aesthete: [
     { label: 'Teaching', href: '/portal/teaching' },
     { label: 'Aesthete Engine', href: '/portal/companion' },
   ],

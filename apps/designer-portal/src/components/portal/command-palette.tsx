@@ -15,6 +15,7 @@ import {
   CalendarDays,
   TrendingUp,
   Package,
+  Sparkles,
   Users,
   DollarSign,
   Settings,
@@ -105,9 +106,13 @@ export function CommandPalette() {
             <TrendingUp className="mr-2 h-4 w-4" />
             Pipeline
           </CommandItem>
-          <CommandItem onSelect={() => navigate('/portal/catalog')}>
+          <CommandItem onSelect={() => navigate('/portal/library/personal')}>
             <Package className="mr-2 h-4 w-4" />
             Products
+          </CommandItem>
+          <CommandItem onSelect={() => navigate('/portal/teaching')}>
+            <Sparkles className="mr-2 h-4 w-4" />
+            Aesthete
           </CommandItem>
           <CommandItem onSelect={() => navigate('/portal/clients')}>
             <Users className="mr-2 h-4 w-4" />

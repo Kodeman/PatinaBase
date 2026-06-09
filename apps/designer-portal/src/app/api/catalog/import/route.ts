@@ -118,6 +118,11 @@ export async function POST(request: NextRequest) {
         captured_by: user.id,
         captured_at: now,
         vendor_id: str(row.vendorId) || str(row.vendor) || null,
+        // Imported rows land in the designer's private My Library (layer=personal),
+        // matching the single-create route. Without this the 00152 trigger defaults
+        // a layer-less insert to 'catalog' (the shared Patina Catalog).
+        layer: 'personal',
+        owner_user_id: user.id,
       });
     });
 

@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/controls';
 type AnyCollection = any;
 
 const sectionLinks = [
-  { key: 'products', label: 'Products', href: '/portal/catalog' },
+  { key: 'products', label: 'Products', href: '/portal/library/personal' },
   { key: 'collections', label: 'Collections', href: '/portal/catalog/collections' },
   { key: 'categories', label: 'Categories', href: '/portal/catalog/categories' },
 ];

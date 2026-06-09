@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarDays, TrendingUp, ShoppingBag, Package, Users, MessageSquare } from 'lucide-react';
+import { CalendarDays, TrendingUp, ShoppingBag, Package, Sparkles, Users, MessageSquare } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useMessagesPanel } from '@/contexts/messages-panel-context';
 import { useUnreadCounts } from '@/hooks/use-unread-counts';
@@ -42,10 +42,17 @@ const tabs: Tab[] = [
   },
   {
     label: 'Products',
-    href: '/portal/catalog',
-    paths: ['/portal/catalog', '/portal/teaching', '/portal/companion'],
+    href: '/portal/library/personal',
+    paths: ['/portal/library', '/portal/catalog', '/portal/vendors'],
     icon: Package,
     tourAnchor: 'products',
+  },
+  {
+    label: 'Aesthete',
+    href: '/portal/teaching',
+    paths: ['/portal/teaching', '/portal/companion'],
+    icon: Sparkles,
+    tourAnchor: 'aesthete',
   },
   {
     label: 'Clients',
@@ -109,16 +116,6 @@ export function MobileTabBar() {
             >
               <tab.icon className="h-5 w-5" strokeWidth={1.5} />
               <span className="type-meta-small">{tab.label}</span>
-              {/* Aesthete tour anchor (step 3) — invisible sibling on the
-                  Products tab on mobile, mirroring the desktop TopBar. The
-                  Aesthete Engine is accessed via the Products subnav. */}
-              {tab.tourAnchor === 'products' && (
-                <span
-                  aria-hidden="true"
-                  data-tour-anchor="aesthete"
-                  className="pointer-events-none absolute inset-0"
-                />
-              )}
             </Link>
           );
         })}

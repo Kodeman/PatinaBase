@@ -99,7 +99,8 @@ export default function NewProductPage() {
       }
     }
 
-    router.push('/portal/catalog');
+    // New products are layer='personal', so return to My Library where they land.
+    router.push('/portal/library/personal');
   };
 
   return (

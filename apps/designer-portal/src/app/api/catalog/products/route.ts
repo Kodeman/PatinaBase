@@ -135,6 +135,13 @@ export async function POST(request: NextRequest) {
       captured_by: user.id,
       captured_at: new Date().toISOString(),
       vendor_id: body.vendorId || body.vendor_id || null,
+      // Portal captures land in the designer's private My Library (layer=personal).
+      // A layer-less insert would otherwise default to 'catalog' via the 00152
+      // trigger (products_normalize_layer_defaults). owner_user_id is set
+      // explicitly — the trigger also backfills it from captured_by for personal
+      // rows, but being explicit avoids relying on that.
+      layer: 'personal',
+      owner_user_id: user.id,
     };
 
     const { data, error } = await supabase

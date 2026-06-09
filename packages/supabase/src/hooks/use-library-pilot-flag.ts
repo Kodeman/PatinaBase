@@ -6,6 +6,11 @@ import { useOrganizations } from './use-organizations';
 const FLAG_KEY = 'three_layer_catalog_enabled';
 
 /**
+ * @deprecated The three-layer Library graduated to all orgs (2026-06-09) and
+ * the gate was removed from the Library layout. Retained (currently unused) to
+ * avoid churning the package export surface — safe to delete once no consumers
+ * remain.
+ *
  * PRD §14 / S3.12 pilot launch gate. Reads
  * `organizations.settings.three_layer_catalog_enabled` for each design
  * studio the caller belongs to. Returns true when ANY of the user's

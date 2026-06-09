@@ -8,7 +8,7 @@ import { LoadingStrata } from '@/components/portal/loading-strata';
 type AnyCategory = any;
 
 const sectionLinks = [
-  { key: 'products', label: 'Products', href: '/portal/catalog' },
+  { key: 'products', label: 'Products', href: '/portal/library/personal' },
   { key: 'collections', label: 'Collections', href: '/portal/catalog/collections' },
   { key: 'categories', label: 'Categories', href: '/portal/catalog/categories' },
 ];
