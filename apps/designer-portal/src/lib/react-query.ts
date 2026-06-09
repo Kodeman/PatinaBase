@@ -194,7 +194,20 @@ export const queryKeys = {
     ffeItems: (projectId: string) => [...queryKeys.projects.all, projectId, 'ffe-items'] as const,
     financials: (projectId: string) => [...queryKeys.projects.all, projectId, 'financials'] as const,
     timeTracking: (projectId: string) => [...queryKeys.projects.all, projectId, 'time-tracking'] as const,
+    timeEntries: (projectId: string, filters?: any) =>
+      filters
+        ? ([...queryKeys.projects.all, projectId, 'time-entries', filters] as const)
+        : ([...queryKeys.projects.all, projectId, 'time-entries'] as const),
+    unbilledTime: (projectId: string) => [...queryKeys.projects.all, projectId, 'unbilled-time'] as const,
     keyMetrics: (projectId: string) => [...queryKeys.projects.all, projectId, 'key-metrics'] as const,
+  },
+
+  // Time tracking (cross-project surfaces — running timer, my-week, etc.
+  // Timer hooks land in a later wave; the key group exists so all time
+  // surfaces share one namespace from day one.)
+  time: {
+    all: ['time'] as const,
+    runningTimer: (userId?: string) => [...queryKeys.time.all, 'running-timer', userId] as const,
   },
 
   // Threads & Messages

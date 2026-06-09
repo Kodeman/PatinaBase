@@ -16,6 +16,7 @@ import { projectsApi } from '@/lib/api-client';
 import { withMockData } from '@/lib/mock-data';
 import { queryKeys } from '@/lib/react-query';
 import { normalizePhaseSlug } from '@/types/project-ui';
+import { fetchTimeSummary } from '@/hooks/use-time-tracking';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (id: string) => UUID_RE.test(id);
@@ -433,16 +434,18 @@ export function useProjectFinancials(projectId: string | null) {
   });
 }
 
-// Time tracking is not yet a built feature. Slug fixtures keep their mock data
-// for demos; real (UUID) projects return null so TimeTrackingPanel renders
-// nothing rather than fabricating hours (was previously always-mock).
+// Time tracking (00177). Slug fixtures keep their mock data for demos; real
+// (UUID) projects aggregate project_time_entries + project_phases.estimated_hours
+// into the same MockTimeTracking shape via the shared fetchTimeSummary. A real
+// project with no entries/estimates returns a zeros summary (panel shows the
+// "Log time" empty state, not nothing).
 export function useProjectTimeTracking(projectId: string | null) {
   return useQuery({
     queryKey: projectId ? queryKeys.projects.timeTracking(projectId) : ['projects', 'time-tracking', 'null'],
     queryFn: () => {
       if (!projectId) throw new Error('Project ID required');
       if (!isUuid(projectId)) return Promise.resolve(mockData.getProjectTimeTracking(projectId));
-      return Promise.resolve(null);
+      return fetchTimeSummary(getSupabase(), projectId);
     },
     enabled: !!projectId,
   });

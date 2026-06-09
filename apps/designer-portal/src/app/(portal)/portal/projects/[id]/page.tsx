@@ -27,6 +27,7 @@ import {
   useCreateProjectPhase,
   useUpdateProjectPhaseStatus,
   useUpdatePaymentMilestoneStatus,
+  useProjectInvoices,
   useStartProjectThread,
   useSendMessage,
 } from '@patina/supabase';
@@ -54,6 +55,7 @@ import {
 import { Button } from '@/components/ui/controls';
 import { DecisionsPanel } from '@/components/portal/project-detail/decisions-panel';
 import { SendUpdateModal } from '@/components/portal/project-detail/send-update-modal';
+import { LogTimeDialog } from '@/components/portal/time/log-time-dialog';
 import { TeamPanel } from '@/components/portal/project-detail/team-panel';
 import { ProjectCommunicationsPanel } from '@/components/portal/project-communications-panel';
 import { adaptProjectRooms } from '@/lib/project-room-adapter';
@@ -74,6 +76,7 @@ export default function ProjectDetailPage({
   const hydrated = useHydrated();
   const [editMode, setEditMode] = useState(true);
   const [showUpdateComposer, setShowUpdateComposer] = useState(false);
+  const [showLogTime, setShowLogTime] = useState(false);
 
   // Core data
   const { data: project, isLoading } = useProject(id) as { data: AnyProject; isLoading: boolean };
@@ -94,6 +97,32 @@ export default function ProjectDetailPage({
   // row id. Resolve the real designer_clients.id so the decision composer inserts
   // a valid designer_client_id (raw auth uid fails the client_decisions RLS check).
   const { data: decisionClient } = useDesignerClientForClientUser(project?.client_id);
+
+  // Invoice linkage for the Financials panel: which payment milestones are
+  // already billed on a live (non-void) invoice, and where. Mock (slug)
+  // projects skip the query (UUID guard) and render the legacy controls.
+  const { data: projectInvoices = [] } = useProjectInvoices(
+    UUID_PATTERN.test(id) ? id : null,
+  );
+  const milestoneBilling = useMemo(() => {
+    const map: Record<
+      string,
+      { invoiceId: string; invoiceNumber: string | null; invoiceStatus: (typeof projectInvoices)[number]['status'] }
+    > = {};
+    for (const invoice of projectInvoices) {
+      if (invoice.status === 'void') continue;
+      for (const line of invoice.line_items ?? []) {
+        if (line.milestone_id) {
+          map[line.milestone_id] = {
+            invoiceId: invoice.id,
+            invoiceNumber: invoice.invoice_number,
+            invoiceStatus: invoice.status,
+          };
+        }
+      }
+    }
+    return map;
+  }, [projectInvoices]);
 
   // FFESummaryTile surfaces procurement KPIs + a CTA into /portal/procurement/*.
   // Pilot-gate it the same way the Today card and procurement zone are gated
@@ -414,6 +443,16 @@ export default function ProjectDetailPage({
         onSend={handleSendUpdate}
       />
 
+      {isRealProject && (
+        <LogTimeDialog
+          open={showLogTime}
+          projectId={id}
+          defaultPhase={phase}
+          onClose={() => setShowLogTime(false)}
+          onLogged={() => toast('Time logged', 'success')}
+        />
+      )}
+
       <div className="pt-8">
         {/* Zone 1: Project Identity — the global breadcrumb (SubNav) now
             carries the project name, so the header renders only the
@@ -513,6 +552,8 @@ export default function ProjectDetailPage({
               earnings={designerEarnings}
               editable={editable}
               onMilestoneStatusChange={handleMilestoneStatusChange}
+              projectId={UUID_PATTERN.test(id) ? id : undefined}
+              milestoneBilling={milestoneBilling}
             />
             <StrataMark variant="mini" />
           </>
@@ -540,11 +581,15 @@ export default function ProjectDetailPage({
 
         {/* Zones 8 + 9: Time Tracking + Recent Activity */}
         <div className="grid gap-8 md:grid-cols-2">
-          {/* Zone 8: Time Tracking */}
+          {/* Zone 8: Time Tracking — real projects always render the panel
+              (zeros summary + "Log time" affordance when empty, 00177);
+              slug fixtures keep their mock data, no log affordance. */}
           {timeTracking && (
             <TimeTrackingPanel
               tracking={timeTracking}
-              designFee={project.design_fee ?? 250000}
+              designFee={project.design_fee_cents ?? project.design_fee ?? 250000}
+              projectId={isRealProject ? id : undefined}
+              onLogTime={isRealProject ? () => setShowLogTime(true) : undefined}
             />
           )}
 
