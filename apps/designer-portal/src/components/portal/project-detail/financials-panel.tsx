@@ -1,5 +1,16 @@
+import Link from 'next/link';
+import type { InvoiceStatus } from '@patina/shared';
+import { INVOICE_STATUS_LABELS } from '@patina/shared';
 import type { FinancialLineItem, PaymentMilestone, DesignerEarnings } from '@/types/project-ui';
-import { Button } from '@/components/ui/controls';
+import { Button, StatusBadge } from '@/components/ui/controls';
+import { invoiceStatusToTone } from '@/lib/invoice-ui';
+
+/** Live-invoice linkage for a milestone (built from useProjectInvoices). */
+export interface MilestoneBillingInfo {
+  invoiceId: string;
+  invoiceNumber: string | null;
+  invoiceStatus: InvoiceStatus;
+}
 
 interface FinancialsPanelProps {
   items: FinancialLineItem[];
@@ -8,6 +19,10 @@ interface FinancialsPanelProps {
   /** When true, render inline status controls on each payment milestone. */
   editable?: boolean;
   onMilestoneStatusChange?: (milestoneId: string, status: PaymentMilestone['status']) => void;
+  /** Enables the Create-invoice affordance on unbilled milestones. */
+  projectId?: string;
+  /** milestone id → live invoice linkage; absent key = unbilled. */
+  milestoneBilling?: Record<string, MilestoneBillingInfo>;
 }
 
 function formatDollars(cents: number): string {
@@ -46,6 +61,8 @@ export function FinancialsPanel({
   earnings,
   editable = false,
   onMilestoneStatusChange,
+  projectId,
+  milestoneBilling,
 }: FinancialsPanelProps) {
   const totals = items.reduce(
     (acc, item) => ({
@@ -189,7 +206,9 @@ export function FinancialsPanel({
           >
             Payments
           </div>
-          {milestones.map((m) => (
+          {milestones.map((m) => {
+            const billing = milestoneBilling?.[m.id];
+            return (
             <div
               key={m.id}
               className="grid items-baseline gap-3 py-1"
@@ -212,43 +231,73 @@ export function FinancialsPanel({
                 >
                   {m.status === 'paid' ? m.date : milestoneStatusLabel[m.status]}
                 </div>
-                {editable && onMilestoneStatusChange && (
-                  <div className="flex gap-1">
-                    {m.status !== 'paid' && (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => onMilestoneStatusChange(m.id, 'paid')}
-                      >
-                        Mark paid
-                      </Button>
-                    )}
-                    {m.status === 'pending' && (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => onMilestoneStatusChange(m.id, 'outstanding')}
-                      >
-                        Mark due
-                      </Button>
-                    )}
-                    {m.status === 'paid' && (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => onMilestoneStatusChange(m.id, 'outstanding')}
-                      >
-                        Mark unpaid
-                      </Button>
-                    )}
-                  </div>
+                {billing ? (
+                  // Billed: surface the invoice number + status, linked to the
+                  // invoice detail page.
+                  <Link
+                    href={`/portal/billing/invoices/${billing.invoiceId}`}
+                    className="no-underline"
+                  >
+                    <StatusBadge tone={invoiceStatusToTone(billing.invoiceStatus)} dot>
+                      {billing.invoiceNumber ?? 'Draft'} ·{' '}
+                      {INVOICE_STATUS_LABELS[billing.invoiceStatus]}
+                    </StatusBadge>
+                  </Link>
+                ) : (
+                  editable && (
+                    <div className="flex gap-1">
+                      {/* Unbilled: invoicing is the primary path; the manual
+                          status flips stay as secondary affordances. */}
+                      {m.status !== 'paid' && projectId && (
+                        <Button asChild variant="primary" size="sm">
+                          <Link
+                            href={`/portal/billing/invoices/new?projectId=${projectId}&milestoneId=${m.id}`}
+                          >
+                            Create invoice
+                          </Link>
+                        </Button>
+                      )}
+                      {onMilestoneStatusChange && (
+                        <>
+                          {m.status !== 'paid' && (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => onMilestoneStatusChange(m.id, 'paid')}
+                            >
+                              Mark paid
+                            </Button>
+                          )}
+                          {m.status === 'pending' && (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => onMilestoneStatusChange(m.id, 'outstanding')}
+                            >
+                              Mark due
+                            </Button>
+                          )}
+                          {m.status === 'paid' && (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => onMilestoneStatusChange(m.id, 'outstanding')}
+                            >
+                              Mark unpaid
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Earnings */}

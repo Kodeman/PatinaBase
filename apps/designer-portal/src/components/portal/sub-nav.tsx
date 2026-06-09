@@ -17,6 +17,7 @@ import {
   useRoom,
   useLead,
   useVendor,
+  useInvoice,
 } from '@patina/supabase';
 import { useProject } from '@/hooks/use-projects';
 import { useProposal } from '@/hooks/use-proposals';
@@ -113,6 +114,16 @@ function VendorBreadcrumbLabel({ id }: { id: string }) {
   return renderResolved(data?.trade_name || data?.name, isLoading, 'Vendor');
 }
 
+/**
+ * Resolves an invoice breadcrumb segment to its number (drafts are unnumbered
+ * → "Draft Invoice"). Shares the detail page's ['invoices', id] cache.
+ */
+function InvoiceBreadcrumbLabel({ id }: { id: string }) {
+  const { data, isLoading } = useInvoice(id);
+  const label = data?.invoice_number || (data ? 'Draft Invoice' : undefined);
+  return renderResolved(label, isLoading, 'Invoice');
+}
+
 /** Resolves a lead breadcrumb segment to its display name. */
 function LeadBreadcrumbLabel({ id }: { id: string }) {
   const { data, isLoading } = useLead(id) as {
@@ -151,6 +162,8 @@ function BreadcrumbLabel({ crumb }: { crumb: BreadcrumbItem }) {
         return <LeadBreadcrumbLabel id={id} />;
       case 'vendor':
         return <VendorBreadcrumbLabel id={id} />;
+      case 'invoice':
+        return <InvoiceBreadcrumbLabel id={id} />;
       default: {
         // Exhaustiveness guard: adding an 8th resourceType without a resolver
         // here is a COMPILE error. At runtime we still fall through to the

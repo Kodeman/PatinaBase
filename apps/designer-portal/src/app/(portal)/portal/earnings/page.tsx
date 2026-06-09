@@ -43,6 +43,15 @@ function formatDate(dateStr: string): string {
   });
 }
 
+/** Human labels for designer_earnings.source_type (00178 adds design_fee). */
+const SOURCE_TYPE_LABELS: Record<string, string> = {
+  design_fee: 'Design fee',
+  product_commission: 'Commission',
+  referral: 'Referral',
+  bonus: 'Bonus',
+  adjustment: 'Adjustment',
+};
+
 export default function EarningsPage() {
   const hydrated = useHydrated();
   const [period, setPeriod] = useState<Period>('month');
@@ -84,10 +93,14 @@ export default function EarningsPage() {
       </div>
 
       {/* Top Metrics */}
-      <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-6 md:grid-cols-5">
         <MetricBlock
           label="Total Earnings"
           value={formatCents(stats?.totalEarnings ?? 0)}
+        />
+        <MetricBlock
+          label="Design Fees"
+          value={formatCents(stats?.bySource?.design_fee ?? 0)}
         />
         <MetricBlock
           label="Commissions"
@@ -120,7 +133,14 @@ export default function EarningsPage() {
             >
               <div>
                 <span className="type-label">
-                  {earning.description || earning.source_type}
+                  {earning.description ||
+                    SOURCE_TYPE_LABELS[earning.source_type] ||
+                    earning.source_type}
+                </span>
+                <span
+                  className="ml-3 inline-block rounded-full border border-[var(--border-default)] px-2 py-0.5 align-middle font-mono text-[0.55rem] uppercase tracking-[0.06em] text-[var(--text-muted)]"
+                >
+                  {SOURCE_TYPE_LABELS[earning.source_type] || earning.source_type}
                 </span>
                 <span className="type-meta ml-3">
                   {formatDate(earning.created_at)}

@@ -11,10 +11,14 @@ const getSupabase = () => createBrowserClient();
 export interface DesignerEarning {
   id: string;
   designer_id: string;
-  source_type: 'product_commission' | 'referral' | 'bonus' | 'adjustment';
+  source_type: 'product_commission' | 'referral' | 'bonus' | 'adjustment' | 'design_fee';
   proposal_id: string | null;
   proposal_item_id: string | null;
   order_id: string | null;
+  /** Invoice provenance (00178) — set on 'design_fee' rows. */
+  invoice_id?: string | null;
+  invoice_payment_id?: string | null;
+  project_id?: string | null;
   gross_amount: number;
   platform_fee: number;
   net_amount: number;
@@ -152,6 +156,9 @@ export function useEarningsStats() {
           })
           .reduce((sum: number, e: DesignerEarning) => sum + e.net_amount, 0),
         bySource: {
+          design_fee: earnings
+            .filter((e: DesignerEarning) => e.source_type === 'design_fee')
+            .reduce((sum: number, e: DesignerEarning) => sum + e.net_amount, 0),
           product_commission: earnings
             .filter((e: DesignerEarning) => e.source_type === 'product_commission')
             .reduce((sum: number, e: DesignerEarning) => sum + e.net_amount, 0),

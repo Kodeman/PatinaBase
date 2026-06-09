@@ -2,6 +2,7 @@ import {
   CalendarDays,
   TrendingUp,
   ShoppingBag,
+  Receipt,
   Package,
   Users,
   MessageSquare,
@@ -14,7 +15,7 @@ import {
 
 // ─── Zone Definitions ────────────────────────────────────────────────────────
 
-export type ZoneKey = 'today' | 'pipeline' | 'procurement' | 'products' | 'aesthete' | 'clients' | 'messages';
+export type ZoneKey = 'today' | 'pipeline' | 'procurement' | 'billing' | 'products' | 'aesthete' | 'clients' | 'messages';
 
 export interface ZoneConfig {
   key: ZoneKey;
@@ -52,6 +53,16 @@ export const ZONES: ZoneConfig[] = [
     href: '/portal/procurement',
     paths: ['/portal/procurement'],
     icon: ShoppingBag,
+  },
+  {
+    key: 'billing',
+    label: 'Billing',
+    href: '/portal/billing/invoices',
+    paths: [
+      '/portal/billing',
+      '/portal/earnings', // Earnings joins Billing as a sub-tab (still reachable from the profile menu)
+    ],
+    icon: Receipt,
   },
   {
     key: 'products',
@@ -124,6 +135,10 @@ export const ZONE_SUB_ITEMS: Record<ZoneKey, SubNavItem[]> = {
     { label: 'Calendar', href: '/portal/procurement/calendar' },
     { label: 'Receiving', href: '/portal/procurement/receiving' },
   ],
+  billing: [
+    { label: 'Invoices', href: '/portal/billing/invoices' },
+    { label: 'Earnings', href: '/portal/earnings' },
+  ],
   // Products renders the three-layer Library picker (My Library / Studio Library
   // / Patina Catalog) via LibraryLayerNav, special-cased in SubNav — not these
   // uniform tabs. Kept empty so the generic renderer has nothing to draw.
@@ -155,6 +170,7 @@ export interface SubNavAction {
 }
 
 export const ZONE_ACTIONS: Partial<Record<ZoneKey, SubNavAction>> = {
+  billing: { label: '+ New Invoice', href: '/portal/billing/invoices/new' },
   products: { label: '+ Add Product', href: '/portal/catalog/new' },
   clients: { label: '+ Add Client', href: '/portal/clients?add=1' },
 };

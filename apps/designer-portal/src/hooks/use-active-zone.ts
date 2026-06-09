@@ -16,7 +16,8 @@ export interface BreadcrumbItem {
     | 'product'
     | 'room'
     | 'lead'
-    | 'vendor';
+    | 'vendor'
+    | 'invoice';
   resourceId?: string;
 }
 
@@ -41,6 +42,7 @@ const RESOURCE_BY_ROOT: Record<string, BreadcrumbItem['resourceType']> = {
   leads: 'lead',
   rooms: 'room',
   vendors: 'vendor',
+  billing: 'invoice', // /portal/billing/invoices/[id] — the UUID is an invoices row
 };
 
 const BREADCRUMB_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -170,6 +172,9 @@ function detectDeepPage(pathname: string, zoneKey: ZoneKey): boolean {
       /^\/portal\/rooms\/[^/]+/,        // /portal/rooms/[id]
     ],
     procurement: [],                    // Sprint 1: no deep sub-routes
+    billing: [
+      /^\/portal\/billing\/invoices\/[^/]+/, // /portal/billing/invoices/[id], /new, /[id]/print
+    ],
     products: [
       /^\/portal\/catalog\/[^/]+/,      // /portal/catalog/[id], /catalog/import, /catalog/new (collections/categories stay non-deep via nonDeepPaths)
       /^\/portal\/vendors\/[^/]+/,      // /portal/vendors/[id], /vendors/new ("Vendors › New"), /vendors/saved ("Vendors › Saved")
@@ -217,6 +222,14 @@ function buildBreadcrumbs(
   for (let i = 0; i < segments.length; i++) {
     currentPath += '/' + segments[i];
     const segment = segments[i];
+
+    // Billing routes live one level deeper (/portal/billing/invoices/…): the
+    // zone crumb already reads "Billing", so the "billing" path segment itself
+    // is skipped without a crumb (it has no page of its own); the next segment
+    // ("invoices") renders normally with its real href.
+    if (i === 0 && segment === 'billing') {
+      continue;
+    }
 
     // Skip the first segment if it matches the zone name (e.g., "projects" for pipeline)
     // COUPLED with RESOURCE_BY_ROOT (above) + BreadcrumbLabel resolvers in
