@@ -9,8 +9,12 @@
  *   stay hidden without crashing) → flip the proposal to sent and assert the
  *   board rows persist.
  *
- * Drag/rotate aren't asserted — @dnd-kit-style pointer choreography is
- * brittle headless; canvas presence + DB persistence are the contract here.
+ * Drag/rotate pointer choreography isn't asserted — @dnd-kit-style dragging
+ * is brittle headless. The debounced layout-save path (useSaveBoardLayout)
+ * is still covered via the inspector's real Bring forward / Send back
+ * buttons (step 3b), which flush through the exact same batch upsert a drag
+ * does — that step is the regression guard for the RLS rejection where the
+ * upsert omitted board_id and every layout edit was silently lost.
  *
  * Designer-side only by design: the client-portal board-block half would
  * need a second portal session, and :3000/:3002 share one localhost Supabase
@@ -193,6 +197,65 @@ test.describe.serial('proposal boards: create → add items → persist', () => 
     // Stacking: the product (added second) sits above the note.
     const note = (await getBoardItems()).find((i) => i.type === 'note');
     expect(product!.z_index).toBeGreaterThan(note!.z_index);
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Step 3b: Z-order buttons persist through the debounced layout flush
+  //
+  // Bring forward / Send back merge into local state and flush through
+  // useSaveBoardLayout (600ms debounce) — the same batch upsert drags use.
+  // Asserting the DB row changed is the direct regression for the
+  // missing-board_id RLS rejection; the z >= 0 floor is the Send back
+  // renormalization contract (negative z renders behind the canvas
+  // background and the item vanishes).
+  // ────────────────────────────────────────────────────────────────────────
+  test('z-order buttons persist layout through the debounced flush', async ({
+    authenticatedPage: page,
+  }) => {
+    await page.goto(`/portal/proposals/${proposalId}/scope?tab=boards`, {
+      waitUntil: 'networkidle',
+    });
+
+    // Select the note on the canvas. Click its top-left corner — the product
+    // card sits above it in z and cascades 32px down-right, so that corner is
+    // the note's reliably exposed region.
+    const noteCard = page.getByText(NOTE_TEXT).first();
+    await noteCard.waitFor({ state: 'visible', timeout: 20_000 });
+    await noteCard.click({ position: { x: 2, y: 5 } });
+    await expect(page.getByText(/^Selected note$/i)).toBeVisible({ timeout: 10_000 });
+
+    const zOf = async (type: string) =>
+      (await getBoardItems()).find((i) => i.type === type)?.z_index;
+    const productZBefore = await zOf('product');
+    expect(productZBefore).toBeGreaterThan((await zOf('note'))!);
+
+    // Bring forward → the note's persisted z must rise above the product's.
+    await page.getByRole('button', { name: /bring forward/i }).click();
+    await expect
+      .poll(async () => (await zOf('note'))! > (await zOf('product'))!, {
+        message: 'bring-forward z change should persist through the layout flush',
+        timeout: 15_000,
+      })
+      .toBe(true);
+
+    // Send back → note drops below the product again. The inspector floor is
+    // 0, so this exercises the renormalization path (others shift up instead
+    // of the note going negative).
+    await page.getByRole('button', { name: /send back/i }).click();
+    await expect
+      .poll(async () => (await zOf('note'))! < (await zOf('product'))!, {
+        message: 'send-back z change should persist through the layout flush',
+        timeout: 15_000,
+      })
+      .toBe(true);
+    for (const item of await getBoardItems()) {
+      expect(item.z_index, `${item.type} z_index must stay >= 0`).toBeGreaterThanOrEqual(0);
+    }
+
+    // Server truth renders after a reload: both items still on the canvas.
+    await page.reload({ waitUntil: 'networkidle' });
+    await expect(page.getByText(NOTE_TEXT).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(SEED_PRODUCT_NAME).first()).toBeVisible({ timeout: 20_000 });
   });
 
   // ────────────────────────────────────────────────────────────────────────

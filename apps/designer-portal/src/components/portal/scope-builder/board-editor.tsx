@@ -107,6 +107,8 @@ export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
       .filter((i) => ids.has(i.id))
       .map((i) => ({
         id: i.id,
+        board_id: i.board_id,
+        type: i.type,
         x: Number(i.x),
         y: Number(i.y),
         z_index: i.z_index,
@@ -170,15 +172,25 @@ export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
     [],
   );
 
-  /** Add an item near the canvas center with a small random offset. */
+  /**
+   * Add an item near the canvas center, cascading each new item 32px
+   * down-right (keyed on item count) so a large new item can never land
+   * exactly on top of — and fully hide — an existing one.
+   */
   const addItemToBoard = useCallback(
     (input: Omit<AddBoardItemInput, 'boardId' | 'x' | 'y' | 'zIndex'>) => {
       if (!board) return;
       flushLayoutRef.current();
       const size = DEFAULT_SIZE[input.type] ?? { width: 240, height: null };
-      const jitter = () => Math.round(Math.random() * 80 - 40);
-      const x = Math.max(0, board.canvas_width / 2 - size.width / 2 + jitter());
-      const y = Math.max(0, board.canvas_height / 2 - (size.height ?? 220) / 2 + jitter());
+      const cascade = (itemsRef.current.length % 8) * 32;
+      const x = Math.min(
+        Math.max(0, board.canvas_width / 2 - size.width / 2 + cascade),
+        Math.max(0, board.canvas_width - size.width),
+      );
+      const y = Math.min(
+        Math.max(0, board.canvas_height / 2 - (size.height ?? 220) / 2 + cascade),
+        Math.max(0, board.canvas_height - (size.height ?? 220)),
+      );
       addItem.mutate(
         {
           boardId,
@@ -402,7 +414,7 @@ function AddPaletteSection({
   proposalId: string;
   onAdd: (input: Omit<AddBoardItemInput, 'boardId' | 'x' | 'y' | 'zIndex'>) => void;
 }) {
-  const { data: palettes = [] } = usePalettes(proposalId);
+  const { data: palettes = [], isLoading: palettesLoading } = usePalettes(proposalId);
   const [addingId, setAddingId] = useState<string | null>(null);
 
   const handleAdd = useCallback(
@@ -439,7 +451,9 @@ function AddPaletteSection({
 
   return (
     <SidebarSection title="Palettes">
-      {palettes.length === 0 ? (
+      {palettesLoading ? (
+        <p className="text-xs text-[var(--text-muted)]">Loading palettes…</p>
+      ) : palettes.length === 0 ? (
         <p className="text-xs text-[var(--text-muted)]">
           No palettes on this proposal yet — build one in the Palette tab.
         </p>
@@ -675,7 +689,20 @@ function ItemInspector({
   };
   const sendBackward = () => {
     const minZ = items.reduce((m, i) => Math.min(m, i.z_index), 0);
-    if (item.z_index >= minZ) onMergeLocal(item.id, { z_index: minZ - 1 });
+    if (item.z_index < minZ) return;
+    const newZ = minZ - 1;
+    if (newZ >= 0) {
+      onMergeLocal(item.id, { z_index: newZ });
+      return;
+    }
+    // Keep the z floor at 0 — negative z would render behind the opaque
+    // canvas background. Shift everything else up instead; each merge marks
+    // the item dirty so the whole restack persists in one batched flush.
+    const shift = -newZ;
+    for (const other of items) {
+      if (other.id !== item.id) onMergeLocal(other.id, { z_index: other.z_index + shift });
+    }
+    onMergeLocal(item.id, { z_index: 0 });
   };
 
   return (

@@ -141,6 +141,13 @@ export interface UpdateBoardItemInput {
 
 export interface BoardLayoutPosition {
   id: string;
+  /**
+   * Sent so the upsert's INSERT-path RLS WITH CHECK (which joins through
+   * board_id to the designer's proposal) can evaluate — without it Postgres
+   * rejects the whole statement even though every row takes the update path.
+   */
+  board_id: string;
+  type: BoardItemType;
   x: number;
   y: number;
   z_index: number;
@@ -418,9 +425,11 @@ export function useDeleteBoardItem() {
 
 /**
  * Persist a full canvas layout in one round trip: a single batch upsert of
- * `{id, x, y, z_index, rotation}` rows (onConflict: id). All ids must be
- * existing items — RLS confines the write to boards on the designer's own
- * proposals, and the conflict-update path only touches the provided columns.
+ * `{id, board_id, type, x, y, z_index, rotation}` rows (onConflict: id). All
+ * ids must be existing items, so every row takes the conflict-update path and
+ * only the layout columns change. board_id/type ride along solely because
+ * Postgres evaluates the INSERT-path RLS WITH CHECK (board → designer's
+ * proposal) on the proposed row before resolving the conflict.
  */
 export function useSaveBoardLayout() {
   const queryClient = useQueryClient();
@@ -442,6 +451,8 @@ export function useSaveBoardLayout() {
         .upsert(
           positions.map((p) => ({
             id: p.id,
+            board_id: p.board_id,
+            type: p.type,
             x: p.x,
             y: p.y,
             z_index: p.z_index,

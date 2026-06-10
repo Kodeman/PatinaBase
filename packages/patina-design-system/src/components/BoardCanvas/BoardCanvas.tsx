@@ -416,7 +416,9 @@ const BoardCanvasItem: React.FC<BoardCanvasItemProps> = ({
         top: item.position.y,
         width: item.size?.width,
         height: item.size?.height,
-        zIndex: item.zIndex ?? 0,
+        // Floor at 0: a negative z would stack behind the opaque canvas
+        // background div and make the item invisible.
+        zIndex: Math.max(0, item.zIndex ?? 0),
         transform: composedTransform,
       }}
       onClick={onClick}

@@ -2,6 +2,16 @@
 
 import { useCallback, useState } from 'react';
 import { Button, IconButton, Input, Select } from '@/components/ui/controls';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@patina/design-system';
 import { EmptyState, useHelpContent } from '@patina/help-system';
 import {
   useBoards,
@@ -58,14 +68,14 @@ export function BoardsBuilder({ proposalId }: BoardsBuilderProps) {
     [upsertBoard, proposalId],
   );
 
-  const handleDelete = useCallback(
-    (boardId: string) => {
-      if (!confirm('Delete this board? Its items will also be removed.')) return;
-      deleteBoard.mutate({ boardId, proposalId });
-      if (activeBoardId === boardId) setActiveBoardId(null);
-    },
-    [deleteBoard, proposalId, activeBoardId],
-  );
+  const [deleteTarget, setDeleteTarget] = useState<ProposalBoardSummary | null>(null);
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!deleteTarget) return;
+    deleteBoard.mutate({ boardId: deleteTarget.id, proposalId });
+    if (activeBoardId === deleteTarget.id) setActiveBoardId(null);
+    setDeleteTarget(null);
+  }, [deleteBoard, proposalId, activeBoardId, deleteTarget]);
 
   if (isLoading) {
     return (
@@ -85,8 +95,41 @@ export function BoardsBuilder({ proposalId }: BoardsBuilderProps) {
         onSelect={setActiveBoardId}
         onNew={() => void handleNewBoard()}
         onRename={handleRename}
-        onDelete={handleDelete}
+        onDelete={setDeleteTarget}
       />
+
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete board</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete <strong>{deleteTarget?.name}</strong>? Its{' '}
+              {deleteTarget?.item_count === 1
+                ? 'item'
+                : `${deleteTarget?.item_count ?? 0} items`}{' '}
+              will also be removed. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteBoard.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleConfirmDelete();
+              }}
+              disabled={deleteBoard.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteBoard.isPending ? 'Deleting…' : 'Delete board'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {active && (
         <>
@@ -130,7 +173,7 @@ interface BoardListProps {
   onSelect: (id: string) => void;
   onNew: () => void;
   onRename: (boardId: string, name: string) => void;
-  onDelete: (boardId: string) => void;
+  onDelete: (board: ProposalBoardSummary) => void;
 }
 
 function BoardList({ boards, activeId, onSelect, onNew, onRename, onDelete }: BoardListProps) {
@@ -190,7 +233,7 @@ function BoardList({ boards, activeId, onSelect, onNew, onRename, onDelete }: Bo
             label="Delete board"
             variant="ghost"
             size="sm"
-            onClick={() => onDelete(b.id)}
+            onClick={() => onDelete(b)}
           >
             ×
           </IconButton>
