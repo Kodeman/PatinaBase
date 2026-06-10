@@ -15,6 +15,7 @@ import SwiftUI
 import PhotosUI
 
 struct ReceiveDeliveryView: View {
+    @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel = ReceiveDeliveryViewModel()
 
     var body: some View {
@@ -27,6 +28,13 @@ struct ReceiveDeliveryView: View {
             .padding(.bottom, 120)
         }
         .background(PatinaColors.offWhite)
+        // R04: nav bar is hidden for this destination — pin a back
+        // affordance over the scroll content (matches RoomProjectView).
+        .overlay(alignment: .topLeading) {
+            BackChevronButton(style: .light) { coordinator.goBack() }
+                .padding(.top, 8)
+                .padding(.leading, 18)
+        }
         .task { await viewModel.loadArriving() }
         .refreshable { await viewModel.loadArriving() }
         .sheet(item: $bindable.selectedPO) { po in

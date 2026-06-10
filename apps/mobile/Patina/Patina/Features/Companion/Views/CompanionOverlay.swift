@@ -14,7 +14,7 @@ import Supabase
 /// The visual display state of The Companion (separate from internal CompanionState)
 enum CompanionDisplayMode: Equatable {
     case resting
-    case nudging(label: String)
+    case nudging(CompanionNudge)
     case expanded
     case journeyMode(progress: Double, step: Int, totalSteps: Int, stepLabel: String)
     case minimal
@@ -76,9 +76,11 @@ public struct CompanionOverlay: View {
         if case .styleQuiz = screen { return .minimal }
         if case .styleResult = screen { return .resting }
 
-        // Nudging based on context provider
+        // Nudging based on context provider. Derived fresh from
+        // `coordinator.currentScreen` on every render — never cached — so a
+        // nudge cannot outlive the screen that produced it (R11).
         if let nudge = CompanionActionProvider.nudge(for: screen, context: coordinator.companionContext) {
-            return .nudging(label: nudge)
+            return .nudging(nudge)
         }
 
         return .resting
@@ -118,8 +120,8 @@ public struct CompanionOverlay: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .safeAreaPadding(.bottom, 28)
 
-            case .nudging(let label):
-                nudgingView(label: label)
+            case .nudging(let nudge):
+                nudgingView(nudge: nudge)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .safeAreaPadding(.bottom, 28)
 
@@ -208,28 +210,35 @@ public struct CompanionOverlay: View {
     // MARK: - State 1: Resting
 
     private var restingView: some View {
-        companionMark
-            .onTapGesture { expandToPanel() }
-            .accessibilityIdentifier("companion.bubble")
+        companionMarkButton
     }
 
     // MARK: - State 2: Nudging
 
-    private func nudgingView(label: String) -> some View {
+    private func nudgingView(nudge: CompanionNudge) -> some View {
         VStack(spacing: 0) {
-            // Floating label
-            Text(label)
-                .font(PatinaTypography.caption)
-                .foregroundStyle(PatinaColors.offWhite)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(PatinaColors.charcoal)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .patinaShadow(PatinaShadows.md)
-                .padding(.bottom, 8)
+            // The pill is a real affordance, not décor (R01/R02): tapping it
+            // performs the suggested action; the mark below opens the panel.
+            Button {
+                handleNavigate(to: nudge.route)
+            } label: {
+                Text(nudge.label)
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.Text.inverse)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(PatinaColors.Interactive.active)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .patinaShadow(PatinaShadows.md)
+                    // 44pt hit target without inflating the visual pill.
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(nudge.label)
+            .accessibilityIdentifier("companion.nudge")
 
-            companionMark
-                .onTapGesture { expandToPanel() }
+            companionMarkButton
         }
     }
 
@@ -339,6 +348,9 @@ public struct CompanionOverlay: View {
                                         coordinator.presentAuthentication()
                                     case .openDesignServices(let roomId):
                                         coordinator.presentedSheet = .designServices(roomId: roomId)
+                                    case .switchToConsumerHome:
+                                        SettingsService.shared.setPreferredHomeMode(.consumer)
+                                        coordinator.navigate(to: .heroFrame)
                                     }
                                 }
                             }
@@ -473,10 +485,27 @@ public struct CompanionOverlay: View {
             }
             .patinaShadow(PatinaShadows.md)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Patina companion — menu")
+        .accessibilityHint("Opens quick actions for this screen.")
         .accessibilityIdentifier("companion.bubble")
     }
 
     // MARK: - Shared: Companion Mark (Resting circle with strata lines)
+
+    /// The tappable mark. A real `Button` (not a tap gesture) so VoiceOver
+    /// sees the companion as a labeled button instead of an anonymous
+    /// "Other" node (R21).
+    private var companionMarkButton: some View {
+        Button { expandToPanel() } label: {
+            companionMark
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Patina companion — menu")
+        .accessibilityHint("Opens quick actions for this screen.")
+        .accessibilityIdentifier("companion.bubble")
+    }
 
     private var companionMark: some View {
         ZStack {

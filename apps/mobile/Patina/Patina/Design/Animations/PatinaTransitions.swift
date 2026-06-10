@@ -40,6 +40,7 @@ struct BackChevronButton: View {
                 .overlay(Circle().stroke(stroke, lineWidth: 0.5))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Back")
     }
 
     private var foreground: Color {

@@ -23,7 +23,31 @@ public final class AppCoordinator: Coordinator {
     public private(set) var phase: AppPhase = .launching
 
     /// Navigation path for stack-based navigation
-    public var navigationPath = NavigationPath()
+    public var navigationPath = NavigationPath() {
+        didSet {
+            // Pops can originate outside `goBack()` (interactive edge swipe,
+            // system back) by mutating the path through ContentView's
+            // binding. Trim the mirror stack and restore the previous
+            // screen so context-driven UI (companion nudges) can't outlive
+            // its screen (R11).
+            guard navigationPath.count < screenStack.count else { return }
+            screenStack.removeLast(screenStack.count - navigationPath.count)
+            let previous = screenStack.last ?? rootScreen
+            if currentScreen != previous {
+                currentScreen = previous
+                updateContext(for: previous)
+            }
+        }
+    }
+
+    /// Pushed-route history mirroring `navigationPath`. `NavigationPath` is
+    /// opaque, so this parallel stack is what lets a pop restore
+    /// `currentScreen` + companion context (R11).
+    private var screenStack: [AppRoute] = []
+
+    /// The route shown when `navigationPath` is empty — `.heroFrame` or
+    /// `.designerHome` depending on the active home surface.
+    private var rootScreen: AppRoute = .heroFrame
 
     /// Whether the companion sheet is expanded
     public var isCompanionExpanded = false
@@ -258,77 +282,43 @@ public final class AppCoordinator: Coordinator {
 
         switch route {
         case .heroFrame:
+            rootScreen = route
+            screenStack = []
             navigationPath = NavigationPath()
             updateContext(for: route)
 
-        case .roomList, .yourSpaces:
-            navigationPath.append(route)
-            updateContext(for: route)
-
-        case .roomProject(let roomId):
-            navigationPath.append(AppRoute.roomProject(roomId: roomId))
-            updateContext(for: route)
-
-        case .roomSettings(let roomId):
-            navigationPath.append(AppRoute.roomSettings(roomId: roomId))
-            updateContext(for: route)
-
-        case .crossRoom:
-            navigationPath.append(route)
-            updateContext(for: route)
-
-        case .manualRoomEntry:
-            navigationPath.append(route)
-            updateContext(for: route)
-
-        case .roomDetail(let roomId):
-            navigationPath.append(AppRoute.roomDetail(roomId: roomId))
-            updateContext(for: route)
-
-        case .roomSavedItems(let roomId):
-            navigationPath.append(AppRoute.roomSavedItems(roomId: roomId))
-            updateContext(for: route)
-
-        case .table:
-            navigationPath.append(route)
-            updateContext(for: route)
-
-        case .scanFlow:
-            navigationPath.append(route)
-            updateContext(for: route)
-
-        case .emergence(let pieceId):
-            navigationPath.append(AppRoute.emergence(pieceId: pieceId))
-            updateContext(for: route)
-
-        case .roomEmergence(let roomId):
-            navigationPath.append(AppRoute.roomEmergence(roomId: roomId))
-            updateContext(for: route)
-
-        case .pieceDetail(let pieceId):
-            navigationPath.append(AppRoute.pieceDetail(pieceId: pieceId))
-            updateContext(for: route)
-
-        case .styleQuiz, .styleResult:
-            navigationPath.append(route)
-            updateContext(for: route)
-
-        case .arPlacement, .preScanChecklist,
-             .profile, .notifications, .designerConsultation:
-            navigationPath.append(route)
-            updateContext(for: route)
-
-        // MVP v1 expanded routes
         case .designerHome:
+            // The root home surface is picked by `preferredHomeMode` in
+            // ContentView.mainHomeView — without flipping it, this route
+            // resets the path but lands the user back on the consumer
+            // home (R09).
+            SettingsService.shared.setPreferredHomeMode(.designer)
+            rootScreen = route
+            screenStack = []
             navigationPath = NavigationPath()
             updateContext(for: route)
-        case .projectList, .projectDetail,
+
+        case .roomList, .yourSpaces, .roomProject, .roomSettings,
+             .crossRoom, .manualRoomEntry, .roomDetail, .roomSavedItems,
+             .table, .scanFlow, .emergence, .roomEmergence, .pieceDetail,
+             .styleQuiz, .styleResult,
+             .arPlacement, .preScanChecklist,
+             .profile, .notifications, .designerConsultation,
+             .projectList, .projectDetail,
              .decisionList, .decisionDetail,
              .threadList, .threadDetail,
              .receiveDelivery:
-            navigationPath.append(route)
+            push(route)
             updateContext(for: route)
         }
+    }
+
+    /// Append a pushed route to both the navigation path and its mirror
+    /// stack. Mirror first, so the `navigationPath.didSet` count comparison
+    /// doesn't misread a push as a pop.
+    private func push(_ route: AppRoute) {
+        screenStack.append(route)
+        navigationPath.append(route)
     }
 
     /// PostHog screen-view properties for a route. For `.scanFlow` this
@@ -351,6 +341,10 @@ public final class AppCoordinator: Coordinator {
     /// must still go through `navigate(to:)`.
     public func setCurrentScreen(_ route: AppRoute) {
         currentScreen = route
+        // Keep the pop-restore fallback in sync with whichever home surface
+        // is actually showing (consumer vs designer) — root views call this
+        // from `.onAppear`.
+        if navigationPath.isEmpty { rootScreen = route }
         trackScreen(for: route)
         updateContext(for: route)
     }
@@ -379,9 +373,9 @@ public final class AppCoordinator: Coordinator {
 
     public func goBack() {
         if !navigationPath.isEmpty {
+            // `navigationPath.didSet` trims the mirror stack and restores
+            // `currentScreen` + companion context to the revealed screen.
             navigationPath.removeLast()
-            // Update context to previous screen
-            // In a full implementation, we'd track the navigation stack
         }
     }
 

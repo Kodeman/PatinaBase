@@ -26,6 +26,11 @@ struct CompanionActionItem: Identifiable {
         /// Present the "Request design help" sheet (PT-3-8: design services
         /// is a `PresentedSheet`, not a navigation route).
         case openDesignServices(roomId: UUID?)
+        /// Flip the dual-role home preference back to consumer before
+        /// resetting to the root. Plain `.heroFrame` can't do it — the root
+        /// home surface is picked by `SettingsService.preferredHomeMode`,
+        /// which `navigate(to: .designerHome)` sets to `.designer` (R09).
+        case switchToConsumerHome
     }
 
     init(icon: String, label: String, hint: String, isSuggested: Bool = false, route: AppRoute) {
@@ -45,6 +50,16 @@ struct CompanionActionItem: Identifiable {
         self.route = nil
         self.specialAction = specialAction
     }
+}
+
+// MARK: - Companion Nudge
+
+/// A nudge pill shown above the resting Companion mark. Carries both the
+/// label and the route it navigates to so the pill is a real affordance,
+/// not décor (R01/R02).
+struct CompanionNudge: Equatable {
+    let label: String
+    let route: AppRoute
 }
 
 // MARK: - Context Provider
@@ -119,7 +134,7 @@ enum CompanionActionProvider {
                 items.append(CompanionActionItem(
                     icon: "house", label: "Consumer view",
                     hint: "Switch to your daily room",
-                    route: .heroFrame
+                    specialAction: .switchToConsumerHome
                 ))
             }
 
@@ -271,19 +286,32 @@ enum CompanionActionProvider {
         }
     }
 
-    /// Get the nudge label for a screen (shown above the Companion mark)
-    static func nudge(for screen: AppRoute, context: CompanionContext) -> String? {
+    /// Get the nudge for a screen — the tappable pill shown above the
+    /// Companion mark. Routes mirror the equivalent expanded-panel actions.
+    static func nudge(for screen: AppRoute, context: CompanionContext) -> CompanionNudge? {
         switch screen {
         case .heroFrame:
-            return context.roomCount == 0 ? "Scan a room →" : nil
+            return context.roomCount == 0
+                ? CompanionNudge(label: "Scan a room →", route: .scanFlow(reason: .fresh))
+                : nil
         case .emergence, .roomEmergence:
-            return "Try in your room →"
+            // AR try-in-room needs a concrete product, so only nudge when
+            // the browsing surface has reported one. (Previously the pill
+            // showed unconditionally but was dead — R01.)
+            guard let piece = context.viewingPiece else { return nil }
+            return CompanionNudge(
+                label: "Try in your room →",
+                route: .arPlacement(productId: piece.id)
+            )
         case .table:
-            return "Find more pieces →"
-        case .roomDetail:
-            return "See recommendations →"
+            return CompanionNudge(label: "Find more pieces →", route: .emergence(pieceId: nil))
+        case .roomDetail(let roomId):
+            return CompanionNudge(
+                label: "See recommendations →",
+                route: .roomEmergence(roomId: roomId)
+            )
         case .styleResult:
-            return "View recommendations →"
+            return CompanionNudge(label: "View recommendations →", route: .emergence(pieceId: nil))
         default:
             return nil
         }

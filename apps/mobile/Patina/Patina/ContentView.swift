@@ -132,6 +132,10 @@ struct ContentView: View {
                     .navigationDestination(for: AppRoute.self) { route in
                         destinationView(for: route)
                     }
+                    // R04: pushed destinations hide the system nav bar,
+                    // which disables UIKit's edge-swipe-back. Re-enable it
+                    // for the whole stack (guarded to never fire at root).
+                    .interactivePopGestureEnabled()
             }
 
             // Companion is always present in the `.main` phase. The

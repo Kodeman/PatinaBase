@@ -44,7 +44,11 @@ struct DailyStoryDetailView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .statusBar(hidden: true)
-        .toolbar(.hidden, for: .navigationBar)
+        // R07: presented as a conditional sibling over the home surface, so
+        // assistive tech needs the modal trait (background is also hidden by
+        // DailyRoomView) and the standard two-finger-scrub escape gesture.
+        .accessibilityAddTraits(.isModal)
+        .accessibilityAction(.escape) { dismiss() }
     }
 
     private var hero: some View {

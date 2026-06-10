@@ -8,10 +8,11 @@
 import SwiftUI
 import Auth
 
-/// Account screen presented as a sheet
+/// Account details screen. Presentation-agnostic: it does NOT own a
+/// `NavigationStack` — SettingsView pushes it inside the settings sheet's
+/// stack (a nested NavigationStack would make that push silently fail).
 struct AccountView: View {
     @Environment(\.appCoordinator) private var coordinator
-    @Environment(\.dismiss) private var dismiss
     @State private var showingSignOutAlert = false
     @State private var homeMode: SettingsService.HomeMode = SettingsService.shared.preferredHomeMode
 
@@ -37,44 +38,31 @@ struct AccountView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: PatinaSpacing.xl) {
-                    // Header
-                    headerSection
+        ScrollView {
+            VStack(spacing: PatinaSpacing.xl) {
+                // Header
+                headerSection
 
-                    // Account info
-                    accountSection
+                // Account info
+                accountSection
 
-                    if showsWorkspaceToggle {
-                        workspaceSection
-                    }
-
-                    // Actions
-                    actionsSection
-
-                    // Footer
-                    footerSection
+                if showsWorkspaceToggle {
+                    workspaceSection
                 }
-                .padding(.horizontal, PatinaSpacing.lg)
-                .padding(.top, PatinaSpacing.lg)
-                .padding(.bottom, PatinaSpacing.xxl)
+
+                // Actions
+                actionsSection
+
+                // Footer
+                footerSection
             }
-            .background(PatinaColors.Background.primary)
-            .navigationTitle("Account")
-            .toolbarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .font(PatinaTypography.bodyMedium)
-                    .foregroundStyle(PatinaColors.mocha)
-                }
-            }
+            .padding(.horizontal, PatinaSpacing.lg)
+            .padding(.top, PatinaSpacing.lg)
+            .padding(.bottom, PatinaSpacing.xxl)
         }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        .background(PatinaColors.Background.primary)
+        .navigationTitle("Account")
+        .toolbarTitleDisplayMode(.inline)
         .alert("Sign Out", isPresented: $showingSignOutAlert) {
             Button("Cancel", role: .cancel) {}
             Button("Sign Out") {
@@ -267,6 +255,8 @@ struct AccountView: View {
 }
 
 #Preview {
-    AccountView()
-        .environment(\.appCoordinator, AppCoordinator())
+    NavigationStack {
+        AccountView()
+    }
+    .environment(\.appCoordinator, AppCoordinator())
 }

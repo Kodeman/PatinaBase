@@ -42,44 +42,58 @@ struct DailyRoomView: View {
         }
     }
 
+    /// R07: the story/product detail "overlays" are conditional siblings in
+    /// this same ZStack, not real modal presentations — without explicit
+    /// hiding, every background home control stays in the VoiceOver tree
+    /// while one is open.
+    private var isDetailOverlayPresented: Bool {
+        expandedRecommendation != nil || expandedStory != nil
+    }
+
     private var screenBody: some View {
         ZStack(alignment: .bottom) {
             PatinaColors.offWhite.ignoresSafeArea()
 
-            if viewModel.rooms.isEmpty {
-                VStack(spacing: 16) {
-                    // PT-4-9: resume card sits above the empty state so a user
-                    // who abandoned a scan mid-walk can pick it back up.
-                    if let resumableScan {
-                        ContinueScanCard(
-                            photosCount: resumableScan.photosCount,
-                            createdAt: resumableScan.createdAt,
-                            onContinue: { continueSavedScan() },
-                            onDismiss: { dismissSavedScan() }
-                        )
-                        .padding(.horizontal, 20)
-                        .padding(.top, 60)
+            // R07: hide the home surface (and toast) from assistive tech
+            // while a detail overlay is up; the overlays themselves carry
+            // `.isModal` + an escape action.
+            Group {
+                if viewModel.rooms.isEmpty {
+                    VStack(spacing: 16) {
+                        // PT-4-9: resume card sits above the empty state so a user
+                        // who abandoned a scan mid-walk can pick it back up.
+                        if let resumableScan {
+                            ContinueScanCard(
+                                photosCount: resumableScan.photosCount,
+                                createdAt: resumableScan.createdAt,
+                                onContinue: { continueSavedScan() },
+                                onDismiss: { dismissSavedScan() }
+                            )
+                            .padding(.horizontal, 20)
+                            .padding(.top, 60)
+                        }
+                        DailyRoomEmptyState {
+                            // PT-4-7: a scan started from the empty home counts
+                            // toward the first-session activation funnel — this is
+                            // the quiz-first variant's numerator (no-op after the
+                            // first scan of the launch).
+                            OnboardingFunnel.shared.markFirstSessionScanStarted()
+                            coordinator.navigate(to: .scanFlow(reason: .fresh))
+                        }
                     }
-                    DailyRoomEmptyState {
-                        // PT-4-7: a scan started from the empty home counts
-                        // toward the first-session activation funnel — this is
-                        // the quiz-first variant's numerator (no-op after the
-                        // first scan of the launch).
-                        OnboardingFunnel.shared.markFirstSessionScanStarted()
-                        coordinator.navigate(to: .scanFlow(reason: .fresh))
-                    }
+                } else {
+                    content
                 }
-            } else {
-                content
-            }
 
-            if let toast = viewModel.toastMessage, expandedRecommendation == nil {
-                AddedToRoomToast(message: toast) {
-                    // No-op for now; could navigate to room project view.
+                if let toast = viewModel.toastMessage, expandedRecommendation == nil {
+                    AddedToRoomToast(message: toast) {
+                        // No-op for now; could navigate to room project view.
+                    }
+                    .padding(.bottom, 90)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                .padding(.bottom, 90)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+            .accessibilityHidden(isDetailOverlayPresented)
 
             if let rec = expandedRecommendation {
                 DailyProductDetailView(

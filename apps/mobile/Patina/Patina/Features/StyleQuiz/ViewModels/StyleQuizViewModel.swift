@@ -54,6 +54,48 @@ final class StyleQuizViewModel {
 
     init() {
         questionStartTime = Date()
+        restoreSavedProgress()
+    }
+
+    // MARK: - Saved Progress (R05)
+
+    /// Whether the user has answered anything yet — drives the exit ✕'s
+    /// "save or discard?" confirmation (no answers → exit silently).
+    var hasAnyAnswers: Bool {
+        currentQuestion > 0 || selections.contains { !$0.value.isEmpty }
+    }
+
+    private static let savedProgressKey = "styleQuiz.savedProgress.v1"
+
+    /// Snapshot persisted to UserDefaults on "Save progress & exit" so a
+    /// later quiz entry resumes at the same question with the same
+    /// selections. Question timings are deliberately not persisted — the
+    /// confidence heuristic tolerates missing timings.
+    private struct SavedProgress: Codable {
+        let currentQuestion: Int
+        let selections: [Int: Set<Int>]
+    }
+
+    /// Persist the in-flight answers + position ("Save progress & exit").
+    func saveProgress() {
+        let snapshot = SavedProgress(currentQuestion: currentQuestion, selections: selections)
+        if let data = try? JSONEncoder().encode(snapshot) {
+            UserDefaults.standard.set(data, forKey: Self.savedProgressKey)
+        }
+    }
+
+    /// Drop any persisted snapshot ("Discard & exit", or quiz submitted).
+    func discardSavedProgress() {
+        UserDefaults.standard.removeObject(forKey: Self.savedProgressKey)
+    }
+
+    /// Resume from a prior "Save progress & exit", if one exists. Called
+    /// once from `init` — the view creates a fresh view model per entry.
+    private func restoreSavedProgress() {
+        guard let data = UserDefaults.standard.data(forKey: Self.savedProgressKey),
+              let saved = try? JSONDecoder().decode(SavedProgress.self, from: data) else { return }
+        currentQuestion = min(max(saved.currentQuestion, 0), questions.count - 1)
+        selections = saved.selections
     }
 
     // MARK: - Selection
@@ -121,6 +163,9 @@ final class StyleQuizViewModel {
 
         // Record final question timing
         recordTiming()
+
+        // R05: a completed run supersedes any saved partial progress.
+        discardSavedProgress()
 
         // Build the local result so we can show something immediately if the
         // network is slow. It will be replaced with the server-authoritative

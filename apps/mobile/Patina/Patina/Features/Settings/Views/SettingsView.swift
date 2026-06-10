@@ -9,6 +9,8 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appCoordinator) private var coordinator
+    @Environment(\.openURL) private var openURL
     @State private var settings = SettingsService.shared
     /// Cellular opt-in for large scan artifact uploads. Backing store is
     /// read by `RoomScanSyncService` at upload-time — UserDefaults key
@@ -39,13 +41,20 @@ struct SettingsView: View {
                 // Account group
                 settingsGroup(title: "Account") {
                     NavigationLink {
+                        // AccountView is presentation-agnostic (no inner
+                        // NavigationStack) so this push works inside the
+                        // settings sheet's stack (R03).
                         AccountView()
                     } label: {
                         settingsRow(icon: "person.circle", iconColor: PatinaColors.clay, label: "Account")
                     }
                     .buttonStyle(.plain)
-                    settingsRow(icon: "paintpalette", iconColor: PatinaColors.sage, label: "Style Preferences")
-                    settingsRow(icon: "qrcode.viewfinder", iconColor: PatinaColors.dustyBlue, label: "Connected Portals")
+                    settingsButtonRow(icon: "qrcode.viewfinder", iconColor: PatinaColors.dustyBlue, label: "Connected Portals") {
+                        // Swap the active sheet from Settings → QR scanner.
+                        // `.sheet(item:)` in ContentView animates the change;
+                        // same pattern as AccountView's "Sign in to Web".
+                        coordinator.presentedSheet = .qr
+                    }
                 }
 
                 // Preferences group
@@ -69,14 +78,19 @@ struct SettingsView: View {
                         )
                     )
                     settingsToggleRow(icon: "antenna.radiowaves.left.and.right", iconColor: PatinaColors.dustyBlue, label: "Upload scans on cellular", isOn: $uploadOnCellular)
-                    settingsRow(icon: "moon", iconColor: PatinaColors.dustyBlue, label: "Appearance")
                 }
 
                 // Support group
                 settingsGroup(title: "Support") {
-                    settingsRow(icon: "questionmark.circle", iconColor: PatinaColors.sage, label: "Help Center")
-                    settingsRow(icon: "envelope", iconColor: PatinaColors.clay, label: "Contact Us")
-                    settingsRow(icon: "doc.text", iconColor: PatinaColors.agedOak, label: "Terms & Privacy")
+                    settingsButtonRow(icon: "questionmark.circle", iconColor: PatinaColors.sage, label: "Help Center") {
+                        openLink("https://patina.cloud/help")
+                    }
+                    settingsButtonRow(icon: "envelope", iconColor: PatinaColors.clay, label: "Contact Us") {
+                        openLink("mailto:hello@patina.cloud")
+                    }
+                    settingsButtonRow(icon: "doc.text", iconColor: PatinaColors.agedOak, label: "Terms & Privacy") {
+                        openLink("https://patina.cloud/terms")
+                    }
                 }
 
                 Spacer().frame(height: 120)
@@ -90,6 +104,20 @@ struct SettingsView: View {
     }
 
     // MARK: - Components
+
+    private func openLink(_ urlString: String) {
+        guard let url = URL(string: urlString) else { return }
+        openURL(url)
+    }
+
+    /// A chevron row that performs an action on tap. R03: every row that
+    /// looks tappable must be a real Button or NavigationLink.
+    private func settingsButtonRow(icon: String, iconColor: Color, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            settingsRow(icon: icon, iconColor: iconColor, label: label)
+        }
+        .buttonStyle(.plain)
+    }
 
     private func settingsGroup(title: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -157,6 +185,9 @@ struct SettingsView: View {
             Toggle("", isOn: isOn)
                 .tint(PatinaColors.Text.interactive)
                 .labelsHidden()
+                // R21: without this VoiceOver announces just "switch, on" —
+                // give the control the visible row label as its subject.
+                .accessibilityLabel(label)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)

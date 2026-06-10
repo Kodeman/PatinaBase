@@ -79,6 +79,11 @@ struct DailyProductDetailView: View {
             }
         }
         .statusBarHidden(true)
+        // R07: presented as a conditional sibling over the home surface, so
+        // assistive tech needs the modal trait (background is also hidden by
+        // DailyRoomView) and the standard two-finger-scrub escape gesture.
+        .accessibilityAddTraits(.isModal)
+        .accessibilityAction(.escape) { dismiss() }
     }
 
     // MARK: - Hero

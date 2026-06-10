@@ -11,6 +11,8 @@ struct StyleQuizView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel = StyleQuizViewModel()
+    /// R05: drives the mid-quiz "save or discard?" exit confirmation.
+    @State private var showExitDialog = false
 
     /// Optional callback when quiz completes (for onboarding flow)
     var onComplete: ((StyleProfileResult) -> Void)? = nil
@@ -47,6 +49,37 @@ struct StyleQuizView: View {
         }
         .background(PatinaColors.offWhite)
         .toolbar(.hidden, for: .navigationBar)
+        // R05: exit affordance. Shown only when the quiz was pushed via the
+        // coordinator (`onComplete == nil`). During onboarding (`onComplete`
+        // set by OnboardingFlowHost) there is deliberately NO ✕ — the
+        // `.onboarding` phase only flips to `.main` when onboarding is
+        // marked complete, and the host exposes no partial-exit path, so an
+        // exit here would either strand the user or falsely complete
+        // onboarding. Onboarding users finish the (short) quiz instead.
+        .overlay(alignment: .topTrailing) {
+            if onComplete == nil {
+                exitButton
+                    .padding(.top, 8)
+                    .padding(.trailing, 18)
+            }
+        }
+        .confirmationDialog(
+            "Leave the quiz?",
+            isPresented: $showExitDialog,
+            titleVisibility: .visible
+        ) {
+            Button("Save progress & exit") {
+                viewModel.saveProgress()
+                exitQuiz()
+            }
+            Button("Discard & exit", role: .destructive) {
+                viewModel.discardSavedProgress()
+                exitQuiz()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Save your answers so far and pick up where you left off next time.")
+        }
         .onChange(of: viewModel.isComplete) { _, complete in
             if complete, let result = viewModel.result {
                 if let onComplete {
@@ -56,6 +89,36 @@ struct StyleQuizView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Exit (R05)
+
+    /// Circular ✕ icon-button matching the BackChevronButton chrome used on
+    /// other nav-bar-hidden screens (36pt circle, light pill, pearl stroke).
+    private var exitButton: some View {
+        Button {
+            HapticManager.shared.impact(.light)
+            if viewModel.hasAnyAnswers {
+                showExitDialog = true
+            } else {
+                exitQuiz()
+            }
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(PatinaColors.charcoal)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(PatinaColors.offWhite.opacity(0.92)))
+                .overlay(Circle().stroke(PatinaColors.pearl, lineWidth: 0.5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Exit quiz")
+    }
+
+    /// Only reachable when `onComplete == nil`, i.e. the quiz was pushed via
+    /// the coordinator — pop back to wherever the user came from.
+    private func exitQuiz() {
+        coordinator.goBack()
     }
 
     // MARK: - Journey Progress Pill

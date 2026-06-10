@@ -14,7 +14,7 @@ import SwiftUI
 struct DecisionDetailView: View {
     let decisionId: String
     @State private var viewModel = DecisionDetailViewModel()
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.appCoordinator) private var coordinator
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -23,6 +23,9 @@ struct DecisionDetailView: View {
                     header(decision)
                     ForEach(viewModel.options) { option in
                         optionCard(option)
+                    }
+                    if let threadId = viewModel.discussThreadId {
+                        discussAction(threadId)
                     }
                 } else if let error = viewModel.error {
                     errorView(error)
@@ -36,11 +39,18 @@ struct DecisionDetailView: View {
             .padding(.bottom, 120)
         }
         .background(PatinaColors.offWhite)
+        // R04: nav bar is hidden for this destination — pin a back
+        // affordance over the scroll content (matches RoomProjectView).
+        .overlay(alignment: .topLeading) {
+            BackChevronButton(style: .light) { coordinator.goBack() }
+                .padding(.top, 8)
+                .padding(.leading, 18)
+        }
         .task { await viewModel.load(decisionId: decisionId) }
         .sheet(isPresented: consentSheetBinding) {
             if let option = pendingOption {
                 DecisionConsentSheet(
-                    optionTitle: option.title ?? "this option",
+                    optionTitle: option.resolvedTitle ?? "this option",
                     isSubmitting: viewModel.isSubmitting,
                     onConfirm: { consent, signature in
                         Task {
@@ -107,44 +117,35 @@ struct DecisionDetailView: View {
     private func optionCard(_ option: RemoteDecisionOption) -> some View {
         let isRecommended = option.is_recommended ?? false
         let isSelected = viewModel.isSelected(option)
+        // R06 render contract: title/description/image resolve through the
+        // manual fields first, then the linked product. A card with none of
+        // the three must say so and must not be approvable.
+        let hasDetails = option.hasRenderableContent
 
         return VStack(alignment: .leading, spacing: 12) {
-            if let url = option.image_url, let imageURL = URL(string: url) {
-                AsyncImage(url: imageURL) { phase in
-                    switch phase {
-                    case .empty:
-                        Rectangle()
-                            .fill(PatinaColors.pearl)
-                            .frame(height: 180)
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 180)
-                            .clipped()
-                    case .failure:
-                        Rectangle()
-                            .fill(PatinaColors.pearl)
-                            .frame(height: 180)
-                    @unknown default:
-                        Rectangle()
-                            .fill(PatinaColors.pearl)
-                            .frame(height: 180)
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+            if let imageURL = option.resolvedImageURL {
+                PatinaAsyncImage(url: imageURL)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 180)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
             }
 
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(option.title ?? "Option")
-                        .font(PatinaTypography.h5)
-                        .foregroundStyle(PatinaColors.charcoal)
-                    if let description = option.description, !description.isEmpty {
-                        Text(description)
-                            .font(PatinaTypography.caption)
-                            .foregroundStyle(PatinaColors.agedOak)
+                    if hasDetails {
+                        Text(option.resolvedTitle ?? "Option")
+                            .font(PatinaTypography.h5)
+                            .foregroundStyle(PatinaColors.charcoal)
+                        if let description = option.resolvedDescription {
+                            Text(description)
+                                .font(PatinaTypography.caption)
+                                .foregroundStyle(PatinaColors.agedOak)
+                        }
+                    } else {
+                        Text("Details unavailable — view in portal")
+                            .font(PatinaTypography.bodySmall)
+                            .foregroundStyle(PatinaColors.Text.muted)
                     }
                 }
                 Spacer()
@@ -160,13 +161,13 @@ struct DecisionDetailView: View {
             }
 
             HStack {
-                if let price = option.price_cents {
-                    Text("$\((price / 100).formatted())")
+                if let cents = option.resolvedPriceCents {
+                    Text(Self.formattedPrice(cents: cents))
                         .font(PatinaTypography.bodySmallMedium)
                         .foregroundStyle(PatinaColors.mocha)
                 }
                 Spacer()
-                optionAction(option, isSelected: isSelected)
+                optionAction(option, isSelected: isSelected, hasDetails: hasDetails)
             }
         }
         .padding(16)
@@ -180,7 +181,7 @@ struct DecisionDetailView: View {
     }
 
     @ViewBuilder
-    private func optionAction(_ option: RemoteDecisionOption, isSelected: Bool) -> some View {
+    private func optionAction(_ option: RemoteDecisionOption, isSelected: Bool, hasDetails: Bool) -> some View {
         if isSelected {
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.circle.fill")
@@ -191,16 +192,43 @@ struct DecisionDetailView: View {
             }
             .accessibilityIdentifier("decisionOption.selected")
         } else if !viewModel.isResolved {
+            // Approval is contractual — a contentless card can't be chosen
+            // here (R06); PatinaButton's isEnabled dims + disables.
             PatinaButton(
                 "Choose this",
                 style: .primary,
                 isLoading: viewModel.isSubmitting && viewModel.pendingOptionId == option.id,
-                isEnabled: !viewModel.isSubmitting
+                isEnabled: !viewModel.isSubmitting && hasDetails
             ) {
                 viewModel.beginSelection(optionId: option.id)
             }
             .accessibilityIdentifier("decisionOption.choose")
         }
+    }
+
+    /// Cents → "$1,234" (whole dollars), matching the app-wide convention
+    /// (see `SavedItem.fullFormattedPrice` / RoomItemRow).
+    private static func formattedPrice(cents: Int) -> String {
+        let dollars = cents / 100
+        return "$\(NumberFormatter.localizedString(from: NSNumber(value: dollars), number: .decimal))"
+    }
+
+    /// Quiet R20 affordance: jump to the project's comms thread to talk the
+    /// decision over before committing. Only shown when the thread resolved.
+    private func discussAction(_ threadId: String) -> some View {
+        Button {
+            coordinator.navigate(to: .threadDetail(threadId: threadId))
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "bubble.left")
+                Text("Discuss this with your designer")
+            }
+            .font(PatinaTypography.bodySmallMedium)
+            .foregroundStyle(PatinaColors.Text.interactive)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 24)
+        .accessibilityIdentifier("decisionDetail.discuss")
     }
 
     private func errorView(_ msg: String) -> some View {

@@ -45,6 +45,9 @@ final class DecisionDetailViewModel {
     /// Option the client has committed to (locally, after a successful
     /// `selectOption`). Mirrors the server `selected` flag for instant UI.
     var selectedOptionId: String?
+    /// The project's comms thread, when one exists and is visible to the
+    /// user — drives the "Discuss this" action. Nil hides the action.
+    var discussThreadId: String?
 
     func load(decisionId: String) async {
         isLoading = true
@@ -54,6 +57,7 @@ final class DecisionDetailViewModel {
         let (d, o) = await (decisionTask, optionsTask)
         self.decision = d ?? nil
         self.options = o
+        await resolveDiscussThread()
         // Seed local selection from whatever the server already has, so a
         // re-open of a resolved decision shows the choice without re-asking.
         self.selectedOptionId = o.first(where: { $0.selected == true })?.id
@@ -114,6 +118,18 @@ final class DecisionDetailViewModel {
             #endif
         }
         isSubmitting = false
+    }
+
+    /// Look up the project's comms thread for the "Discuss this" action.
+    /// Non-fatal: any failure (no project, no thread, RLS, network) just
+    /// leaves the action hidden.
+    private func resolveDiscussThread() async {
+        guard let projectId = decision?.project_id, !projectId.isEmpty else {
+            discussThreadId = nil
+            return
+        }
+        discussThreadId = (try? await DecisionsAPIClient.shared
+            .findProjectThread(projectId: projectId)) ?? nil
     }
 
     private func markViewed(decisionId: String) async {
