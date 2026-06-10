@@ -49,10 +49,10 @@ struct ItemActionMenu: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.productName)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(PatinaTypography.uiSmall)
                     .foregroundStyle(PatinaColors.Text.primary)
                 Text("\(item.makerName) · \(item.fullFormattedPrice)")
-                    .font(.custom("DMMono-Regular", size: 8))
+                    .font(PatinaTypography.monoLabel)
                     .tracking(0.3)
                     .foregroundStyle(PatinaColors.Text.muted)
             }
@@ -74,7 +74,7 @@ struct ItemActionMenu: View {
                     .font(.system(size: 16))
                     .frame(width: 24)
                 Text(title)
-                    .font(.system(size: 13))
+                    .font(PatinaTypography.bodySmall)
                 Spacer()
             }
             .foregroundStyle(destructive ? PatinaColors.terracotta : PatinaColors.Text.primary)

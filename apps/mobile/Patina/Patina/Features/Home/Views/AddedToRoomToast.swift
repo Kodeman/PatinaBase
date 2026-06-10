@@ -20,13 +20,13 @@ struct AddedToRoomToast: View {
                     .foregroundStyle(.white)
             }
             Text(message)
-                .font(.system(size: 12, weight: .medium))
+                .font(PatinaTypography.caption)
                 .foregroundStyle(PatinaColors.offWhite)
             Button {
                 onView()
             } label: {
                 Text("View")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.interactive)
             }
             .buttonStyle(.plain)

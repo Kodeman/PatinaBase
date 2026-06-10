@@ -13,11 +13,29 @@ import SwiftUI
 struct ThreadListView: View {
     @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel = ThreadListViewModel()
+    /// R26: inline thread filter. The screen hides the navigation bar (custom
+    /// header + pinned back chevron), so `.searchable` has nowhere to render —
+    /// a lightweight Patina-styled search field stands in for it.
+    @State private var searchText: String = ""
+
+    /// Threads matching the search text against the resolved title + preview.
+    private var filteredItems: [ThreadListItem] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return viewModel.items }
+        return viewModel.items.filter {
+            $0.title.localizedCaseInsensitiveContains(query)
+                || $0.preview.localizedCaseInsensitiveContains(query)
+        }
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
                 header
+                if !viewModel.items.isEmpty {
+                    searchField
+                        .padding(.horizontal, 24)
+                }
                 content
             }
             .padding(.bottom, 120)
@@ -57,9 +75,11 @@ struct ThreadListView: View {
             errorView(error)
         } else if viewModel.items.isEmpty {
             emptyView
+        } else if filteredItems.isEmpty {
+            noMatchesView
         } else {
             VStack(spacing: 0) {
-                ForEach(viewModel.items) { item in
+                ForEach(filteredItems) { item in
                     Button {
                         coordinator.navigate(to: .threadDetail(threadId: item.id))
                     } label: {
@@ -73,6 +93,54 @@ struct ThreadListView: View {
             .padding(.horizontal, 24)
             .padding(.top, 8)
         }
+    }
+
+    /// Patina-styled inline search field (stands in for `.searchable`,
+    /// which needs the hidden navigation bar to render).
+    private var searchField: some View {
+        HStack(spacing: PatinaSpacing.sm) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14))
+                .foregroundStyle(PatinaColors.Text.muted)
+            TextField("Search conversations", text: $searchText)
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.primary)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(PatinaColors.Text.muted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, PatinaSpacing.xsm)
+        .frame(height: 40)
+        .background(
+            RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous)
+                .fill(PatinaColors.Background.secondary)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous)
+                .stroke(PatinaColors.pearl, lineWidth: 1)
+        )
+        .accessibilityLabel("Search conversations")
+    }
+
+    private var noMatchesView: some View {
+        VStack(spacing: PatinaSpacing.sm) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 28))
+                .foregroundStyle(PatinaColors.Text.muted)
+            Text("No conversations match \u{201C}\(searchText)\u{201D}")
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 60)
     }
 
     private func threadRow(_ item: ThreadListItem) -> some View {

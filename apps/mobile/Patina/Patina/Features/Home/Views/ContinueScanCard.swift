@@ -20,9 +20,9 @@ struct ContinueScanCard: View {
     let onDismiss: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: PatinaSpacing.xsm) {
             ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous)
                     .fill(PatinaGradients.earth)
                     .frame(width: 44, height: 44)
                 Image(systemName: "camera.viewfinder")
@@ -30,7 +30,7 @@ struct ContinueScanCard: View {
                     .foregroundStyle(PatinaColors.offWhite)
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: PatinaSpacing.xxxs) {
                 Text("Continue your scan")
                     .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.primary)
@@ -51,14 +51,14 @@ struct ContinueScanCard: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Dismiss saved scan")
         }
-        .padding(12)
+        .padding(PatinaSpacing.xsm)
         .background(PatinaColors.Background.secondary)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous)
                 .stroke(PatinaColors.clay.opacity(0.35), lineWidth: 1)
         )
-        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous))
         .onTapGesture(perform: onContinue)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Continue your saved scan")

@@ -121,7 +121,7 @@ struct RoomProjectView: View {
                         ProgressView().tint(PatinaColors.offWhite)
                     }
                     Text(buttonLabel)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(PatinaTypography.bodySmallMedium)
                 }
                 .foregroundStyle(PatinaColors.offWhite)
                 .frame(maxWidth: .infinity)
@@ -138,7 +138,7 @@ struct RoomProjectView: View {
 
             if case .failed(let msg) = designerLeadState {
                 Text(msg)
-                    .font(.system(size: 11))
+                    .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.interactive)
                     .padding(.horizontal, 20)
             }
@@ -266,13 +266,13 @@ struct RoomProjectView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("Your Items")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(PatinaTypography.eyebrow)
                     .tracking(1.0)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.Text.muted)
                 Spacer()
                 Text("View in AR →")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.interactive)
             }
             .padding(.horizontal, 20)
@@ -311,13 +311,13 @@ struct RoomProjectView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text("Suggested Next")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(PatinaTypography.eyebrow)
                     .tracking(1.0)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.Text.muted)
                 Spacer()
                 Text("See all →")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.interactive)
             }
             Text("\"Your seating and surfaces are set. A rug would ground the arrangement.\"")
@@ -336,7 +336,7 @@ struct RoomProjectView: View {
                 .font(.custom("PlayfairDisplay-Regular", size: 18, relativeTo: .title3))
                 .foregroundStyle(PatinaColors.Text.primary)
             Text("We've already found pieces that would fit this space. Browse your Daily Room to start building this room.")
-                .font(.system(size: 12))
+                .font(PatinaTypography.caption)
                 .foregroundStyle(PatinaColors.Text.muted)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 240)
@@ -352,7 +352,7 @@ struct RoomProjectView: View {
     private func cta(primary title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 14, weight: .medium))
+                .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.inverse)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)

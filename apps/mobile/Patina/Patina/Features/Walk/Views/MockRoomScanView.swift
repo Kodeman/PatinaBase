@@ -15,6 +15,8 @@ struct MockRoomScanView: View {
 
     /// PT-6-16: typed channel that replaced `.mockScanCompleted`.
     @Environment(\.scanEventChannel) private var scanEvents
+    /// R26: the looping scan-line + pulse animations respect Reduce Motion.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var scanProgress: CGFloat = 0
     @State private var detectedItems: [MockDetectedItem] = []
@@ -145,6 +147,7 @@ struct MockRoomScanView: View {
             .frame(height: 2)
             .offset(y: scanLineOffset - height / 2)
             .onAppear {
+                guard !reduceMotion else { return }
                 withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
                     scanLineOffset = height
                 }
@@ -165,7 +168,7 @@ struct MockRoomScanView: View {
 
             // Label
             Text(item.label)
-                .font(.system(size: 10, weight: .medium))
+                .font(PatinaTypography.caption)
                 .foregroundStyle(item.color)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2)
@@ -196,6 +199,7 @@ struct MockRoomScanView: View {
                     .foregroundStyle(PatinaColors.Text.interactive)
             }
             .onAppear {
+                guard !reduceMotion else { return }
                 withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: false)) {
                     pulseScale = 2.0
                 }
@@ -208,7 +212,7 @@ struct MockRoomScanView: View {
 
             // Simulator notice
             Text("(Simulator Mode)")
-                .font(.system(size: 10))
+                .font(PatinaTypography.caption)
                 .foregroundStyle(PatinaColors.clay.opacity(0.5))
         }
     }

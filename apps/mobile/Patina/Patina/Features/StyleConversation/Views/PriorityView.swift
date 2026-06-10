@@ -53,8 +53,9 @@ struct PriorityView: View {
                 Text(card.label)
                     .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .callout))
                     .foregroundStyle(isSelected ? PatinaColors.Text.inverse : PatinaColors.Text.primary)
+                // Inter-Light is not bundled (silent system-font fallback).
                 Text(card.subtext)
-                    .font(.custom("Inter-Light", size: 12, relativeTo: .caption))
+                    .font(PatinaTypography.caption)
                     .foregroundStyle(isSelected ? PatinaColors.Text.inverse.opacity(0.8) : PatinaColors.Text.muted)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -193,7 +193,7 @@ struct ProfileView: View {
             Text(value)
                 .font(.custom("PlayfairDisplay-Medium", size: 22, relativeTo: .title2))
                 .foregroundStyle(PatinaColors.Text.primary)
-            MonoLabel(text: label, size: PatinaTypography.monoTiny)
+            MonoLabel(text: label, size: PatinaTypography.monoLabel)
         }
         .frame(maxWidth: .infinity)
     }
@@ -216,7 +216,7 @@ struct ProfileView: View {
                     .font(PatinaTypography.uiSmall)
                     .foregroundStyle(PatinaColors.Text.primary)
 
-                MonoLabel(text: "Scanned \(Self.scannedDateFormatter.string(from: room.createdAt))", size: PatinaTypography.monoTiny)
+                MonoLabel(text: "Scanned \(Self.scannedDateFormatter.string(from: room.createdAt))", size: PatinaTypography.monoLabel)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)

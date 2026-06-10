@@ -10,11 +10,37 @@ import SwiftUI
 struct ProjectListView: View {
     @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel = ProjectsListViewModel()
+    /// R26: inline project filter. The screen hides the navigation bar (custom
+    /// header + pinned back chevron), so `.searchable` has nowhere to render —
+    /// a lightweight Patina-styled search field stands in for it.
+    @State private var searchText: String = ""
+
+    /// Projects matching the search text against name, status, and phase labels.
+    private var filteredProjects: [RemoteProject] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return viewModel.projects }
+        return viewModel.projects.filter { project in
+            if project.name.localizedCaseInsensitiveContains(query) { return true }
+            if let status = project.status,
+               PhaseDisplay.statusLabel(for: status).localizedCaseInsensitiveContains(query) {
+                return true
+            }
+            if let phase = project.current_phase,
+               PhaseDisplay.label(for: phase).localizedCaseInsensitiveContains(query) {
+                return true
+            }
+            return false
+        }
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
                 header
+                if !viewModel.projects.isEmpty {
+                    searchField
+                        .padding(.horizontal, 24)
+                }
                 content
             }
             .padding(.bottom, 120)
@@ -54,9 +80,11 @@ struct ProjectListView: View {
             errorView(error)
         } else if viewModel.projects.isEmpty {
             emptyView
+        } else if filteredProjects.isEmpty {
+            noMatchesView
         } else {
             VStack(spacing: 12) {
-                ForEach(viewModel.projects) { project in
+                ForEach(filteredProjects) { project in
                     Button {
                         coordinator.navigate(to: .projectDetail(projectId: project.id))
                     } label: {
@@ -68,6 +96,54 @@ struct ProjectListView: View {
             .padding(.horizontal, 24)
             .padding(.top, 12)
         }
+    }
+
+    /// Patina-styled inline search field (stands in for `.searchable`,
+    /// which needs the hidden navigation bar to render).
+    private var searchField: some View {
+        HStack(spacing: PatinaSpacing.sm) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14))
+                .foregroundStyle(PatinaColors.Text.muted)
+            TextField("Search projects", text: $searchText)
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.primary)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(PatinaColors.Text.muted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, PatinaSpacing.xsm)
+        .frame(height: 40)
+        .background(
+            RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous)
+                .fill(PatinaColors.Background.secondary)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous)
+                .stroke(PatinaColors.pearl, lineWidth: 1)
+        )
+        .accessibilityLabel("Search projects")
+    }
+
+    private var noMatchesView: some View {
+        VStack(spacing: PatinaSpacing.sm) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 28))
+                .foregroundStyle(PatinaColors.Text.muted)
+            Text("No projects match \u{201C}\(searchText)\u{201D}")
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 60)
     }
 
     private func projectCard(_ project: RemoteProject) -> some View {

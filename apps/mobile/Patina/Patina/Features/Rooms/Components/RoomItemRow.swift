@@ -16,16 +16,16 @@ struct RoomItemRow: View {
     var onActions: () -> Void = {}
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: PatinaSpacing.xsm) {
             // R10: the row content is a real Button so saved items can be
             // opened. The inner ⋯ Button stays a separate sibling target —
             // both use .buttonStyle(.plain) so the two don't conflict.
             Button(action: onTap) {
-                HStack(spacing: 12) {
+                HStack(spacing: PatinaSpacing.xsm) {
                     ZStack(alignment: .bottomTrailing) {
                         item.placeholderGradient
                             .frame(width: 64, height: 64)
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md, style: .continuous))
                         if item.hasAR {
                             Circle()
                                 .fill(PatinaColors.clay)
@@ -46,11 +46,11 @@ struct RoomItemRow: View {
                             .textCase(.uppercase)
                             .foregroundStyle(PatinaColors.Text.muted)
                         Text(item.productName)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(PatinaTypography.uiSmall)
                             .foregroundStyle(PatinaColors.Text.primary)
                             .lineLimit(2)
                         Text(item.fullFormattedPrice)
-                            .font(.custom("PlayfairDisplay-Medium", size: 15, relativeTo: .subheadline))
+                            .font(PatinaTypography.h5)
                             .foregroundStyle(PatinaColors.Text.primary)
                     }
 
@@ -69,7 +69,7 @@ struct RoomItemRow: View {
                     .foregroundStyle(PatinaColors.Text.primary)
                     .frame(width: 28, height: 28)
                     .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        RoundedRectangle(cornerRadius: PatinaRadius.md, style: .continuous)
                             .fill(PatinaColors.Background.secondary)
                     )
                     .frame(minWidth: 44, minHeight: 44)
@@ -79,7 +79,7 @@ struct RoomItemRow: View {
             .accessibilityLabel("More actions")
             .accessibilityHint("Shows options for \(item.productName).")
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, PatinaSpacing.mdLarge)
         .padding(.vertical, 10)
     }
 

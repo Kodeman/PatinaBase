@@ -56,17 +56,35 @@ struct NotificationFeedView: View {
         } else if viewModel.notifications.isEmpty {
             emptyView
         } else {
-            ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 0) {
-                    ForEach(viewModel.notifications) { notification in
-                        notificationRow(notification)
-                            .onTapGesture {
-                                handleTap(notification)
+            // R26: rows live in a plain List (full-bleed, separators hidden —
+            // the row draws its own hairline) so native `.swipeActions` work.
+            // The API only supports marking opened (no unread reversal), so
+            // the swipe exposes a single mark-read action on unread rows.
+            List {
+                ForEach(viewModel.notifications) { notification in
+                    notificationRow(notification)
+                        .onTapGesture {
+                            handleTap(notification)
+                        }
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            if !notification.isRead {
+                                Button {
+                                    viewModel.markRead(notification)
+                                } label: {
+                                    Label("Mark read", systemImage: "envelope.open")
+                                }
+                                .tint(PatinaColors.clay)
                             }
-                    }
+                        }
                 }
-                .padding(.bottom, 120)
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .scrollIndicators(.hidden)
+            .contentMargins(.bottom, 120, for: .scrollContent)
         }
     }
 

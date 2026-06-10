@@ -38,8 +38,8 @@ struct SettingsView: View {
                     .font(PatinaTypography.h3)
                     .foregroundStyle(PatinaColors.Text.primary)
                     .padding(.top, 56)
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 24)
+                    .padding(.horizontal, PatinaSpacing.lg)
+                    .padding(.bottom, PatinaSpacing.lg)
 
                 // Account group
                 settingsGroup(title: "Account") {
@@ -112,9 +112,9 @@ struct SettingsView: View {
     /// Appearance picker row (Wave 3 dark-mode). Mirrors the settingsRow
     /// visual language with a trailing menu picker instead of a chevron.
     private var appearanceRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: PatinaSpacing.xsm) {
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: PatinaRadius.md)
                     .fill(PatinaColors.mocha.opacity(0.15))
                     .frame(width: 32, height: 32)
                 Image(systemName: "circle.lefthalf.filled")
@@ -137,8 +137,8 @@ struct SettingsView: View {
             .tint(PatinaColors.Text.secondary)
             .accessibilityLabel("Appearance")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, PatinaSpacing.md)
+        .padding(.vertical, PatinaSpacing.sm)
         .overlay(alignment: .bottom) {
             Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
                 .padding(.leading, 60)
@@ -163,23 +163,25 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 0) {
             MonoLabel(text: title, size: PatinaTypography.monoSmall)
                 .tracking(1)
-                .padding(.horizontal, 28)
-                .padding(.bottom, 8)
+                // Card inset (24) + 4 so the label optically aligns with the
+                // row content inside the rounded group card.
+                .padding(.horizontal, PatinaSpacing.lg + PatinaSpacing.xxs)
+                .padding(.bottom, PatinaSpacing.sm)
 
             VStack(spacing: 0) {
                 content()
             }
             .background(PatinaColors.Background.secondary)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .padding(.horizontal, 24)
+            .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.xl))
+            .padding(.horizontal, PatinaSpacing.lg)
         }
-        .padding(.bottom, 24)
+        .padding(.bottom, PatinaSpacing.lg)
     }
 
     private func settingsRow(icon: String, iconColor: Color, label: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: PatinaSpacing.xsm) {
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: PatinaRadius.md)
                     .fill(iconColor.opacity(0.15))
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
@@ -197,8 +199,8 @@ struct SettingsView: View {
                 .font(.system(size: 14))
                 .foregroundStyle(PatinaColors.Text.muted)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.horizontal, PatinaSpacing.md)
+        .padding(.vertical, PatinaSpacing.xsm)
         .overlay(alignment: .bottom) {
             Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
                 .padding(.leading, 60)
@@ -206,9 +208,9 @@ struct SettingsView: View {
     }
 
     private func settingsToggleRow(icon: String, iconColor: Color, label: String, isOn: Binding<Bool>) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: PatinaSpacing.xsm) {
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: PatinaRadius.md)
                     .fill(iconColor.opacity(0.15))
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
@@ -229,8 +231,8 @@ struct SettingsView: View {
                 // give the control the visible row label as its subject.
                 .accessibilityLabel(label)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.horizontal, PatinaSpacing.md)
+        .padding(.vertical, PatinaSpacing.xsm)
         .overlay(alignment: .bottom) {
             Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
                 .padding(.leading, 60)

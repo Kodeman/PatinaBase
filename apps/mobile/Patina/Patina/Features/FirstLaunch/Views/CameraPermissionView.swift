@@ -22,6 +22,7 @@ struct CameraPermissionView: View {
 
     // MARK: - State
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var contentVisible = false
     @State private var showingPrivacySheet = false
     @State private var permissionDenied = false
@@ -220,7 +221,7 @@ struct CameraPermissionView: View {
                     onPermissionResult(.granted)
                 case .denied:
                     HapticManager.shared.notification(.error)
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
                         permissionDenied = true
                     }
                 case .notDetermined:
@@ -242,7 +243,8 @@ struct CameraPermissionView: View {
     }
 
     private func animateEntrance() {
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2)) {
+        // Reduce Motion: content appears in place instead of springing up.
+        withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8).delay(0.2)) {
             contentVisible = true
         }
     }

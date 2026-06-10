@@ -56,6 +56,12 @@ public enum PatinaTypography {
 
     public static let captionMedium = Font.custom(bodyFont + "-SemiBold", size: 12, relativeTo: .caption)
 
+    /// Smallest UI text — 10px Inter, dense metadata (room context bars,
+    /// insight/pairing strips, badge numerals). R22: replaces the raw
+    /// 9–10pt `.system(size:)` calls so the smallest copy scales with
+    /// Dynamic Type.
+    public static let captionSmall = Font.custom(bodyFont + "-Regular", size: 10, relativeTo: .caption2)
+
     // MARK: - Mono Styles (DM Mono) — Metadata, Labels, Tags
 
     /// Standard metadata — 10px, categories, tags

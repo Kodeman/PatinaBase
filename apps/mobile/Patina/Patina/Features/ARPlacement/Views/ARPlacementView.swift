@@ -115,7 +115,7 @@ struct ARPlacementView: View {
 
     private func toastPill(text: String, tint: Color) -> some View {
         Text(text)
-            .font(.system(size: 13, weight: .medium))
+            .font(PatinaTypography.uiSmall)
             .foregroundStyle(PatinaColors.offWhite)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)

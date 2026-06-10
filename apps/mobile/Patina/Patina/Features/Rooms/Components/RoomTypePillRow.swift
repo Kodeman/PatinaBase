@@ -28,7 +28,7 @@ struct RoomTypePillRow: View {
                     selected = item.raw
                 } label: {
                     Text(item.label)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(PatinaTypography.caption)
                         .foregroundStyle(isSelected ? .white : PatinaColors.Text.secondary)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)

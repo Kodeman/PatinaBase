@@ -22,12 +22,12 @@ struct DailyRoomEmptyState: View {
             .padding(.bottom, 16)
 
             Text("Start your first room")
-                .font(.custom("PlayfairDisplay-Regular", size: 20))
+                .font(PatinaTypography.h4)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .padding(.bottom, 6)
 
             Text("Capture a room to see daily picks tailored to your space")
-                .font(.system(size: 13))
+                .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.muted)
                 .multilineTextAlignment(.center)
                 .lineSpacing(2)
@@ -38,7 +38,7 @@ struct DailyRoomEmptyState: View {
                 onScan()
             } label: {
                 Text("Scan a Room")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.inverse)
                     .padding(.vertical, 12)
                     .padding(.horizontal, 28)

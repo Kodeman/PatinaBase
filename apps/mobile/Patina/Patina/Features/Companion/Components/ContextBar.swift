@@ -37,14 +37,16 @@ public struct ContextBar: View {
 
             // Context label (spec: 11pt Inter, Mocha Brown)
             Text(contextLabel)
-                .font(.system(size: 11, weight: .regular))  // 11pt Inter
+                .font(PatinaTypography.caption)
                 .foregroundStyle(hasNotification ? .white : PatinaColors.Text.secondary)
                 .lineLimit(1)
 
             Spacer()
         }
         .padding(.horizontal, PatinaSpacing.md)
-        .frame(height: barHeight)
+        // minHeight so the bar grows with Dynamic Type instead of
+        // squeezing the single-line label at accessibility sizes.
+        .frame(minHeight: barHeight)
         .background(hasNotification ? PatinaColors.clay : PatinaColors.Background.secondary)
     }
 

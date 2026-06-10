@@ -11,6 +11,9 @@ struct DailyRoomView: View {
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    /// Reduce Motion: nil animation = instant state change, so card→detail
+    /// morphs and the toast appear without movement.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var viewModel = DailyRoomViewModel()
     /// PT-3-7: drives the bell unread-count badge in the greeting header.
     @State private var notificationsViewModel = NotificationsViewModel()
@@ -100,7 +103,7 @@ struct DailyRoomView: View {
                     recommendation: rec,
                     namespace: cardNamespace,
                     onDismiss: {
-                        withAnimation(.patinaHero) {
+                        withAnimation(reduceMotion ? nil : .patinaHero) {
                             expandedRecommendation = nil
                         }
                     }
@@ -117,7 +120,7 @@ struct DailyRoomView: View {
                     featuredProduct: featured,
                     namespace: cardNamespace,
                     onDismiss: {
-                        withAnimation(.patinaHero) {
+                        withAnimation(reduceMotion ? nil : .patinaHero) {
                             expandedStory = nil
                         }
                     }
@@ -126,7 +129,7 @@ struct DailyRoomView: View {
                 .transition(.identity)
             }
         }
-        .animation(.easeOut(duration: 0.25), value: viewModel.toastMessage)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: viewModel.toastMessage)
         .toolbar(.hidden, for: .navigationBar)
         .task {
             viewModel.modelContext = modelContext
@@ -217,7 +220,7 @@ struct DailyRoomView: View {
 
                 if let story = viewModel.todayStory {
                     Button {
-                        withAnimation(.patinaHero) {
+                        withAnimation(reduceMotion ? nil : .patinaHero) {
                             expandedStory = story
                         }
                     } label: {
@@ -270,7 +273,7 @@ struct DailyRoomView: View {
                                 namespace: cardNamespace,
                                 isExpanded: expandedRecommendation?.id == rec.id,
                                 onExpand: {
-                                    withAnimation(.patinaHero) {
+                                    withAnimation(reduceMotion ? nil : .patinaHero) {
                                         expandedRecommendation = rec
                                     }
                                 },
@@ -339,7 +342,7 @@ struct DailyRoomView: View {
         Task { @MainActor in
             await ScanRecoveryService.shared.discard(candidate.id, in: ctx)
         }
-        withAnimation(.easeOut(duration: 0.2)) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
             resumableScan = nil
         }
     }

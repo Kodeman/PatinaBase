@@ -44,7 +44,7 @@ struct MoveOrCopyItemSheet: View {
                     .padding(.bottom, 10)
 
                 Text("Select destination room")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 24)
@@ -75,10 +75,10 @@ struct MoveOrCopyItemSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.productName)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(PatinaTypography.uiSmall)
                     .foregroundStyle(PatinaColors.Text.primary)
                 Text("\(item.makerName) · \(item.fullFormattedPrice)")
-                    .font(.custom("DMMono-Regular", size: 8))
+                    .font(PatinaTypography.monoLabel)
                     .tracking(0.3)
                     .foregroundStyle(PatinaColors.Text.muted)
             }
@@ -102,7 +102,7 @@ struct MoveOrCopyItemSheet: View {
         let selected = mode == value
         return Button { mode = value } label: {
             Text(title)
-                .font(.system(size: 12, weight: .medium))
+                .font(PatinaTypography.caption)
                 .foregroundStyle(selected ? .white : PatinaColors.Text.secondary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)
@@ -128,12 +128,12 @@ struct MoveOrCopyItemSheet: View {
                     .frame(width: 36, height: 36)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 Text(room.name)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.primary)
                 Spacer()
                 if isCurrent {
                     Text("Current")
-                        .font(.custom("DMMono-Regular", size: 7))
+                        .font(PatinaTypography.monoLabel)
                         .tracking(0.3)
                         .textCase(.uppercase)
                         .foregroundStyle(PatinaColors.Text.muted)

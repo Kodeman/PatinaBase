@@ -43,13 +43,13 @@ struct DailyGreetingHeader: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(dateString)
-                    .font(PatinaTypography.monoTiny)
+                    .font(PatinaTypography.monoLabel)
                     .tracking(0.5)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.Text.muted)
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("Your Daily Room")
-                        .font(.custom("PlayfairDisplay-Regular", size: 21))
+                        .font(PatinaTypography.h4)
                         .foregroundStyle(PatinaColors.Text.primary)
                         .lineSpacing(0)
                     // Contextual help: explains what the "Daily Room" feed
@@ -72,7 +72,7 @@ struct DailyGreetingHeader: View {
                 if let roleChip {
                     Button(action: roleChip.onTap) {
                         MonoLabel(text: roleChip.label, size: PatinaTypography.monoSmall, color: PatinaColors.Text.secondary, tracking: 1.5)
-                            .padding(.horizontal, 10)
+                            .padding(.horizontal, PatinaSpacing.sm)
                             .padding(.vertical, 6)
                             .background(
                                 Capsule().fill(PatinaColors.Background.secondary)
@@ -126,7 +126,7 @@ struct DailyGreetingHeader: View {
                 .firstLaunchTourAnchor(.profileMonogram)
         }
         .padding(.top, 56)
-        .padding(.horizontal, 20)
+        .padding(.horizontal, PatinaSpacing.mdLarge)
     }
 
     /// PT-0-6: the profile monogram. A `Button` when `onMonogramTap` is set,
@@ -138,6 +138,9 @@ struct DailyGreetingHeader: View {
                 .fill(PatinaGradients.earth)
                 .frame(width: 36, height: 36)
             Text(monogram)
+                // Deliberately fixed-size: a monogram initial inside a fixed
+                // 36pt avatar circle is a glyph decoration, not running text —
+                // scaling it with Dynamic Type would overflow the circle.
                 .font(.custom("PlayfairDisplay-Medium", size: 14))
                 .foregroundStyle(PatinaColors.offWhite)
         }
@@ -163,9 +166,9 @@ private struct UnreadBadge: View {
     var body: some View {
         if count > 0 {
             Text(count > 9 ? "9+" : "\(count)")
-                .font(.system(size: 9, weight: .semibold))
+                .font(PatinaTypography.captionSmall)
                 .foregroundStyle(PatinaColors.offWhite)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, PatinaSpacing.xs)
                 .frame(minWidth: 14, minHeight: 14)
                 .background(Capsule().fill(PatinaColors.clay))
                 .accessibilityHidden(true)

@@ -86,7 +86,7 @@ public struct QuickActionChip: View {
                 }
 
                 Text(action.title)
-                    .font(.system(size: 12, weight: .medium))  // Spec: Inter Medium 12pt
+                    .font(PatinaTypography.caption)  // Spec: Inter Medium 12pt
             }
             .foregroundStyle(action.isPrimary ? .white : PatinaColors.Text.secondary)
             .padding(.horizontal, 14)  // Spec: 14px horizontal

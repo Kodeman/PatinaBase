@@ -23,10 +23,10 @@ struct AddToRoomSheet: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("Add to Room")
-                    .font(.custom("PlayfairDisplay-Regular", size: 17))
+                    .font(PatinaTypography.h5)
                     .foregroundStyle(PatinaColors.Text.primary)
                 Text("Choose Destination")
-                    .font(.custom("DMMono-Regular", size: 8))
+                    .font(PatinaTypography.monoSmall)
                     .tracking(0.4)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.Text.muted)
@@ -46,7 +46,7 @@ struct AddToRoomSheet: View {
                 onNewRoom()
             } label: {
                 Text("+ New Room")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.interactive)
             }
             .buttonStyle(.plain)
@@ -70,17 +70,17 @@ struct AddToRoomSheet: View {
                     .frame(width: 44, height: 44)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(room.name)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(PatinaTypography.uiSmall)
                         .foregroundStyle(isSelected ? PatinaColors.Text.inverse : PatinaColors.Text.primary)
                     Text("\(room.itemCount) items · \(room.squareFeet) sq ft")
-                        .font(.custom("DMMono-Regular", size: 7))
+                        .font(PatinaTypography.monoSmall)
                         .tracking(0.3)
                         .textCase(.uppercase)
                         .foregroundStyle(isSelected ? PatinaColors.Text.interactive : PatinaColors.Text.muted)
                 }
                 Spacer()
                 Text("+")
-                    .font(.system(size: 15))
+                    .font(PatinaTypography.uiAction)
                     .foregroundStyle(isSelected ? PatinaColors.Text.inverse : PatinaColors.Text.interactive)
             }
             .padding(11)

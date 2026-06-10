@@ -37,8 +37,9 @@ struct InvestmentPerspectiveView: View {
                             relativeTo: .body
                         ))
                         .foregroundStyle(PatinaColors.Text.primary)
+                    // Inter-Light is not bundled (silent system-font fallback).
                     Text(tier.descriptionText)
-                        .font(.custom("Inter-Light", size: 12, relativeTo: .caption))
+                        .font(PatinaTypography.caption)
                         .foregroundStyle(PatinaColors.Text.muted)
                 }
 

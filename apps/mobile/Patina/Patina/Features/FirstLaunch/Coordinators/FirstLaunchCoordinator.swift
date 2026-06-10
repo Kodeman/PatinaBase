@@ -68,7 +68,10 @@ public final class FirstLaunchCoordinator {
         guard newState != currentState else { return }
         let previousState = currentState
 
-        withAnimation(.easeInOut(duration: 0.5)) {
+        // Coordinator (not a View) — read Reduce Motion from UIKit, matching
+        // the CompanionState precedent. nil animation = instant step change.
+        let reduceMotion = UIAccessibility.isReduceMotionEnabled
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.5)) {
             currentState = newState
         }
 

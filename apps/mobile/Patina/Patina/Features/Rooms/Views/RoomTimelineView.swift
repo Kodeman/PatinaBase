@@ -98,10 +98,10 @@ private struct TimelineRow: View {
                 .padding(.top, 6)
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.label)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.primary)
                 Text(event.at.prefix(10))
-                    .font(.system(size: 11))
+                    .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.muted)
             }
             Spacer()

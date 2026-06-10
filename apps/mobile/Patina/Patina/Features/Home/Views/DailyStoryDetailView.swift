@@ -12,6 +12,7 @@ struct DailyStoryDetailView: View {
     var onDismiss: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismissEnv
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var chromeVisible = false
     @State private var dragOffset: CGFloat = 0
 
@@ -39,7 +40,7 @@ struct DailyStoryDetailView: View {
         .scaleEffect(1 - dismissProgress * 0.05)
         .gesture(dragToDismiss)
         .onAppear {
-            withAnimation(.patinaChrome) {
+            withAnimation(reduceMotion ? nil : .patinaChrome) {
                 chromeVisible = true
             }
         }
@@ -78,7 +79,7 @@ struct DailyStoryDetailView: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(story.tag)
-                    .font(.custom("DMMono-Regular", size: 8))
+                    .font(PatinaTypography.monoSmall)
                     .tracking(0.6)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.Text.interactive)
@@ -109,10 +110,10 @@ struct DailyStoryDetailView: View {
                     .frame(width: 44, height: 44)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(story.makerName)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(PatinaTypography.bodySmallMedium)
                         .foregroundStyle(PatinaColors.offWhite)
                     Text(story.makerLocation)
-                        .font(.custom("DMMono-Regular", size: 8))
+                        .font(PatinaTypography.monoSmall)
                         .tracking(0.5)
                         .textCase(.uppercase)
                         .foregroundStyle(PatinaColors.Text.interactive)
@@ -121,7 +122,7 @@ struct DailyStoryDetailView: View {
             .padding(.bottom, 16)
 
             Text(story.body)
-                .font(.system(size: 14))
+                .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.pearl)
                 .lineSpacing(8)
                 .padding(.bottom, 18)
@@ -145,7 +146,7 @@ struct DailyStoryDetailView: View {
                 if value.translation.height > 120 || value.predictedEndTranslation.height > 240 {
                     dismiss()
                 } else {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.82)) {
                         dragOffset = 0
                     }
                 }
@@ -153,7 +154,7 @@ struct DailyStoryDetailView: View {
     }
 
     private func dismiss() {
-        withAnimation(.easeIn(duration: 0.15)) {
+        withAnimation(reduceMotion ? nil : .easeIn(duration: 0.15)) {
             chromeVisible = false
         }
         if let onDismiss {
@@ -170,15 +171,15 @@ struct DailyStoryDetailView: View {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(product.name)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(PatinaTypography.uiSmall)
                         .foregroundStyle(PatinaColors.offWhite)
                     Text(product.formattedPrice)
-                        .font(.custom("PlayfairDisplay-Medium", size: 16))
+                        .font(PatinaTypography.h5)
                         .foregroundStyle(PatinaColors.offWhite)
                 }
                 Spacer()
                 Text("View")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.offWhite)
                     .padding(.vertical, 8)
                     .padding(.horizontal, 14)

@@ -194,7 +194,7 @@ struct ProductDetailView: View {
                         if viewModel.roomContextRemoteId != nil {
                             HStack(alignment: .firstTextBaseline, spacing: 4) {
                                 Text("Place in your room")
-                                    .font(.system(size: 12, weight: .medium))
+                                    .font(PatinaTypography.caption)
                                     .foregroundStyle(PatinaColors.Text.secondary)
                                 HelpInfoIcon(
                                     surfaceKey: SurfaceKeys.IOSApp.ProductDetail.spatialContext,
@@ -212,7 +212,7 @@ struct ProductDetailView: View {
                                         id: \.key
                                     ) { _, value in
                                         Text(value)
-                                            .font(.system(size: 11))
+                                            .font(PatinaTypography.caption)
                                             .foregroundStyle(PatinaColors.Text.primary)
                                             .padding(.horizontal, 10)
                                             .padding(.vertical, 5)
@@ -280,11 +280,7 @@ struct ProductDetailView: View {
     /// Portal deep link for a piece — matches the designer-portal product
     /// detail route at `app/(portal)/portal/catalog/[id]` on app.patina.cloud.
     private static func shareURL(for product: Product) -> URL {
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = "app.patina.cloud"
-        components.path = "/portal/catalog/\(product.id)"
-        return components.url ?? URL(string: "https://app.patina.cloud/portal/catalog")!
+        PatinaPortalLinks.productURL(forProductId: product.id)
     }
 
     private func floatingCircleButton(icon: String) -> some View {
@@ -301,7 +297,7 @@ struct ProductDetailView: View {
     private func materialBadge(text: String) -> some View {
         HStack(spacing: 5) {
             Text(text)
-                .font(.system(size: 11))
+                .font(PatinaTypography.caption)
                 .foregroundStyle(PatinaColors.Text.secondary)
         }
         .padding(.horizontal, 12)

@@ -31,8 +31,10 @@ struct ConversationHeaderView: View {
                 .padding(.top, 2)
 
             if let subtext {
+                // Inter-Light is not bundled (silent system-font fallback) —
+                // use the Regular-weight body-small token instead.
                 Text(subtext)
-                    .font(.custom("Inter-Light", size: 13, relativeTo: .footnote))
+                    .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.Text.muted)
                     .padding(.top, 8)
             }

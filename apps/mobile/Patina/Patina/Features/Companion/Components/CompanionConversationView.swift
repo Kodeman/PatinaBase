@@ -15,6 +15,8 @@ import SwiftUI
 /// Scrollable conversation view with message bubbles for the Companion sheet
 /// Patina messages aligned left, User messages aligned right
 public struct CompanionConversationView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let messages: [Message]
     var showTypingIndicator: Bool = false
 
@@ -41,8 +43,8 @@ public struct CompanionConversationView: View {
                 .padding(.vertical, PatinaSpacing.sm)
             }
             .onChange(of: messages.count) { _, _ in
-                // Scroll to latest message
-                withAnimation(.easeOut(duration: 0.3)) {
+                // Scroll to latest message (jump cut under Reduce Motion)
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) {
                     if showTypingIndicator {
                         proxy.scrollTo("typing", anchor: .bottom)
                     } else if let lastMessage = messages.last {
@@ -81,7 +83,7 @@ public struct CompanionMessageBubble: View {
                 // Sender label (optional, for first message or after gap)
                 if isPatina {
                     Text("Patina")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(PatinaTypography.captionSmall)
                         .foregroundStyle(PatinaColors.Text.muted)
                 }
 

@@ -83,6 +83,11 @@ struct CollectionsView: View {
                     allItemsContent
                 }
             }
+            // R26: pull-to-refresh re-fetches the local store and awaits the
+            // remote saved-items reconciliation.
+            .refreshable {
+                await viewModel.refresh(context: modelContext)
+            }
         }
         .background(PatinaColors.Background.primary)
         .toolbarTitleDisplayMode(.inline)
@@ -212,10 +217,17 @@ struct CollectionsView: View {
                 }
                 .frame(maxWidth: .infinity)
             } else {
+                // R26: rows live in a VStack (not a List), so swipe actions
+                // can't apply — the card's context menu carries the
+                // remove/share/details actions instead.
                 ForEach(viewModel.savedItems) { item in
                     ProductCard(
                         data: ProductCardData(tableItem: item),
-                        style: .list
+                        style: .list,
+                        shareURL: item.productId.map { PatinaPortalLinks.productURL(forProductId: $0) },
+                        onRemove: {
+                            viewModel.removeSavedItem(item, context: modelContext)
+                        }
                     ) {
                         let pieceId = item.productId ?? item.id.uuidString
                         coordinator.navigate(to: .pieceDetail(pieceId: pieceId))

@@ -91,7 +91,7 @@ struct AuthScreenView: View {
 
             // Footer
             Text("By continuing, you agree to our Terms of Service\nand Privacy Policy")
-                .font(.system(size: 11))
+                .font(PatinaTypography.caption)
                 .foregroundStyle(PatinaColors.Text.muted)
                 .multilineTextAlignment(.center)
                 .lineSpacing(2)

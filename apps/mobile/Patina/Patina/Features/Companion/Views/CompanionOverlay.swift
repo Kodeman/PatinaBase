@@ -142,7 +142,7 @@ public struct CompanionOverlay: View {
                     .padding(.trailing, 20)
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: displayMode)
+        .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.85), value: displayMode)
         // PT-5-10: expand/collapse haptics are now declarative, keyed on the
         // expanded state. Expanding fires the soft companion pulse; collapsing
         // fires a light impact — matching the prior imperative calls in
@@ -584,10 +584,10 @@ public struct CompanionOverlay: View {
         // `.sensoryFeedback(trigger: state.isExpanded)` below.
         CompanionAnalytics.shared.trackFABTapped(screen: coordinator.currentScreen.displayName)
 
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.85)) {
             state = .expanded
         }
-        withAnimation(.easeIn(duration: 0.2).delay(0.15)) {
+        withAnimation(reduceMotion ? nil : .easeIn(duration: 0.2).delay(0.15)) {
             contentOpacity = 1
         }
         coordinator.isCompanionExpanded = true
@@ -624,8 +624,8 @@ public struct CompanionOverlay: View {
         // reappear next expansion (PT-6-9).
         if showCoachmark { dismissCoachmark() }
 
-        withAnimation(.easeOut(duration: 0.1)) { contentOpacity = 0 }
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.85).delay(0.05)) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.1)) { contentOpacity = 0 }
+        withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.85).delay(0.05)) {
             state = .button
         }
         coordinator.isCompanionExpanded = false

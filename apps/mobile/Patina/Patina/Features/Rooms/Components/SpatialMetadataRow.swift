@@ -38,7 +38,7 @@ struct SpatialMetadataRow: View {
         HStack(spacing: 6) {
             Text(icon).font(.system(size: 14))
             Text(text)
-                .font(.system(size: 11, weight: bold ? .medium : .regular))
+                .font(PatinaTypography.caption)
                 .foregroundStyle(bold ? PatinaColors.Text.primary : PatinaColors.Text.secondary)
         }
     }

@@ -60,7 +60,7 @@ struct RoomDetailView: View {
                             } label: {
                                 HStack {
                                     Text("Room Through Time")
-                                        .font(.system(size: 14, weight: .medium))
+                                        .font(PatinaTypography.bodySmallMedium)
                                         .foregroundStyle(PatinaColors.Text.primary)
                                     Spacer()
                                     Image(systemName: "chevron.right")

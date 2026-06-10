@@ -40,40 +40,40 @@ struct DailyStoryCard: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
 
             // Content
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: PatinaSpacing.xxxs) {
                 Text(story.tag)
-                    .font(.custom("DMMono-Regular", size: 7))
+                    .font(PatinaTypography.monoSmall)
                     .tracking(0.6)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.Text.interactive)
                     .padding(.bottom, 1)
                 Text(story.title)
-                    .font(.custom("PlayfairDisplay-Regular", size: 18))
+                    .font(PatinaTypography.h5)
                     .foregroundStyle(PatinaColors.offWhite)
                     .lineSpacing(0)
                     .lineLimit(2)
                 Text(story.subtitle)
-                    .font(.system(size: 11))
+                    .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.pearl)
                     .lineLimit(2)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 14)
+            .padding(.horizontal, PatinaSpacing.md)
+            .padding(.bottom, PatinaSpacing.md)
 
             // Read time pill
             Text(story.readTimeLabel)
-                .font(.custom("DMMono-Regular", size: 7))
+                .font(PatinaTypography.monoSmall)
                 .tracking(0.3)
                 .textCase(.uppercase)
                 .foregroundStyle(PatinaColors.offWhite)
                 .padding(.vertical, 3)
-                .padding(.horizontal, 8)
+                .padding(.horizontal, PatinaSpacing.sm)
                 .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    RoundedRectangle(cornerRadius: PatinaRadius.md, style: .continuous)
                         .fill(PatinaColors.charcoal.opacity(0.5))
                 )
-                .padding(.top, 10)
-                .padding(.leading, 12)
+                .padding(.top, PatinaSpacing.xsm)
+                .padding(.leading, PatinaSpacing.xsm)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             // Unread dot
@@ -81,15 +81,15 @@ struct DailyStoryCard: View {
                 Circle()
                     .fill(PatinaColors.clay)
                     .frame(width: 7, height: 7)
-                    .padding(.top, 11)
-                    .padding(.trailing, 11)
+                    .padding(.top, PatinaSpacing.xsm)
+                    .padding(.trailing, PatinaSpacing.xsm)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             }
         }
         .frame(height: 180)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .padding(.top, 14)
-        .padding(.horizontal, 20)
+        .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous))
+        .padding(.top, PatinaSpacing.md)
+        .padding(.horizontal, PatinaSpacing.mdLarge)
         .opacity(isExpanded ? 0 : 1)
     }
 }

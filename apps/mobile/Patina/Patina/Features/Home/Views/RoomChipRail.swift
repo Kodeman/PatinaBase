@@ -16,13 +16,13 @@ struct RoomChipRail: View {
         // view instead of leaving the active room off-screen (Theme V).
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 7) {
+                HStack(spacing: PatinaSpacing.sm) {
                     ForEach(rooms) { room in
                         chip(for: room)
                             .id(room.id)
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, PatinaSpacing.mdLarge)
             }
             .onChange(of: selectedID) { _, newValue in
                 guard let newValue else { return }
@@ -31,7 +31,7 @@ struct RoomChipRail: View {
                 }
             }
         }
-        .padding(.top, 16)
+        .padding(.top, PatinaSpacing.md)
     }
 
     @ViewBuilder
@@ -40,7 +40,7 @@ struct RoomChipRail: View {
         Button {
             onSelect(room)
         } label: {
-            HStack(spacing: 7) {
+            HStack(spacing: PatinaSpacing.sm) {
                 ZStack(alignment: .topTrailing) {
                     Circle()
                         .fill(room.thumbGradient)
@@ -54,22 +54,22 @@ struct RoomChipRail: View {
                     }
                 }
                 Text(room.name)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(PatinaTypography.caption)
                     .foregroundStyle(isActive ? PatinaColors.Text.inverse : PatinaColors.Text.primary)
                 Text("\(room.itemCount)")
-                    .font(.custom("DMMono-Regular", size: 7))
+                    .font(PatinaTypography.monoSmall)
                     .foregroundStyle(PatinaColors.offWhite)
                     .padding(.vertical, 1)
-                    .padding(.horizontal, 5)
+                    .padding(.horizontal, PatinaSpacing.xs)
                     .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        RoundedRectangle(cornerRadius: PatinaRadius.md, style: .continuous)
                             .fill(PatinaColors.clay)
                     )
-                    .padding(.leading, 2)
+                    .padding(.leading, PatinaSpacing.xxxs)
             }
-            .padding(.leading, 5)
-            .padding(.trailing, 12)
-            .padding(.vertical, 5)
+            .padding(.leading, PatinaSpacing.xs)
+            .padding(.trailing, PatinaSpacing.xsm)
+            .padding(.vertical, PatinaSpacing.xs)
             // Theme V: unambiguous selected state — the active chip is a
             // filled charcoal capsule, inactive chips read as outlines on
             // the off-white home surface.

@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct OnboardingFlowView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var currentPage = 0
     var onComplete: () -> Void
     var onSkip: () -> Void
@@ -45,7 +46,7 @@ struct OnboardingFlowView: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .animation(.easeInOut(duration: 0.3), value: currentPage)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: currentPage)
 
             // Skip button (not on last page)
             if currentPage < pages.count - 1 {
@@ -123,7 +124,7 @@ struct OnboardingFlowView: View {
                 // CTA Button
                 PatinaButton(page.ctaText, style: .primary) {
                     if currentPage < pages.count - 1 {
-                        withAnimation {
+                        withAnimation(reduceMotion ? nil : .default) {
                             currentPage += 1
                         }
                     } else {

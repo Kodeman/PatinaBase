@@ -27,6 +27,8 @@ import SwiftUI
 
 struct OnboardingFlowHost: View {
     @Environment(\.appCoordinator) private var coordinator
+    /// Reduce Motion: step changes cut instantly instead of cross-fading.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum Step {
         case carousel
@@ -49,7 +51,7 @@ struct OnboardingFlowHost: View {
             content
                 .transition(.opacity)
         }
-        .animation(.easeInOut(duration: 0.4), value: stepKey)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.4), value: stepKey)
         .onAppear(perform: resolveVariant)
     }
 
@@ -62,7 +64,7 @@ struct OnboardingFlowHost: View {
         let variant = OnboardingFunnel.shared.beginOnboarding(walkFirstEnabled: walkFirstEnabled)
         isWalkFirst = (variant == .walkFirst)
         if variant == .walkFirst {
-            withAnimation(.easeInOut(duration: 0.4)) {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.4)) {
                 step = .walkPermission
             }
         }
@@ -92,7 +94,7 @@ struct OnboardingFlowHost: View {
 
         case .styleQuiz:
             StyleQuizView(onComplete: { result in
-                withAnimation(.easeInOut(duration: 0.4)) {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.4)) {
                     step = .styleResult(result)
                 }
             })
@@ -105,7 +107,7 @@ struct OnboardingFlowHost: View {
     }
 
     private func advanceToQuiz() {
-        withAnimation(.easeInOut(duration: 0.4)) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.4)) {
             step = .styleQuiz
         }
     }

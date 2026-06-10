@@ -157,7 +157,7 @@ struct YourSpacesView: View {
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("No rooms yet")
-                    .font(.custom("PlayfairDisplay-Regular", size: 20))
+                    .font(PatinaTypography.h4)
                     .foregroundStyle(PatinaColors.Text.primary)
                 // Empty-state help: explains why scanning matters. The
                 // copy below is a CTA; this tooltip explains the *why*
@@ -169,7 +169,7 @@ struct YourSpacesView: View {
                 )
             }
             Text("Scan a room and Patina fills it with furniture that knows your space — your light, your walls, your style.")
-                .font(.system(size: 13))
+                .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.muted)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 260)
@@ -181,7 +181,7 @@ struct YourSpacesView: View {
                     Text("◎")
                     Text("Scan Your First Room")
                 }
-                .font(.system(size: 14, weight: .medium))
+                .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.inverse)
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
@@ -214,7 +214,7 @@ struct YourSpacesView: View {
             Image(systemName: systemImage)
                 .font(.system(size: 9, weight: .regular))
             Text(text)
-                .font(.custom("DMMono-Regular", size: 9))
+                .font(PatinaTypography.monoSmall)
                 .tracking(0.5)
                 .textCase(.uppercase)
         }

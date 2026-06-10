@@ -25,8 +25,8 @@ struct RoomContextBar: View {
                 }
             }
         }
-        .padding(.top, 10)
-        .padding(.horizontal, 20)
+        .padding(.top, PatinaSpacing.sm)
+        .padding(.horizontal, PatinaSpacing.mdLarge)
         .padding(.bottom, 6)
     }
 
@@ -40,7 +40,7 @@ struct RoomContextBar: View {
             + Text(" · ").foregroundStyle(muted)
             + Text("\(room.windowCount) window\(room.windowCount == 1 ? "" : "s")").foregroundStyle(strong).fontWeight(.medium)
         )
-        .font(.system(size: 10))
+        .font(PatinaTypography.captionSmall)
     }
 
     private func filterPill(_ filter: DailyRoomViewModel.CategoryFilter) -> some View {
@@ -49,12 +49,12 @@ struct RoomContextBar: View {
             onSelectFilter(filter)
         } label: {
             Text(filter.label)
-                .font(.system(size: 9, weight: .medium))
+                .font(PatinaTypography.captionSmall)
                 .foregroundStyle(isActive ? PatinaColors.Text.inverse : PatinaColors.Text.secondary)
                 .padding(.vertical, 3)
-                .padding(.horizontal, 9)
+                .padding(.horizontal, PatinaSpacing.sm)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous)
                         .fill(isActive ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
                 )
         }

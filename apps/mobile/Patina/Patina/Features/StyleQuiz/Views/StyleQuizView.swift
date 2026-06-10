@@ -10,6 +10,8 @@ import SwiftUI
 struct StyleQuizView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appCoordinator) private var coordinator
+    /// R26: selection/progress springs respect Reduce Motion.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var viewModel = StyleQuizViewModel()
     /// R05: drives the mid-quiz "save or discard?" exit confirmation.
     @State private var showExitDialog = false
@@ -151,8 +153,10 @@ struct StyleQuizView: View {
                         .stroke(PatinaColors.clay, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                         .frame(width: 40, height: 40)
                         .rotationEffect(.degrees(-90))
-                        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: progress)
+                        .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.85), value: progress)
 
+                    // Deliberately fixed: lives inside a 40pt progress ring;
+                    // Dynamic Type scaling would overflow the gauge.
                     Text("\(Int(progress * 100))%")
                         .font(.custom("PlayfairDisplay-Medium", size: 13))
                         .foregroundStyle(PatinaColors.offWhite)
@@ -192,7 +196,7 @@ struct StyleQuizView: View {
             .padding(.horizontal, 40)
         }
         .buttonStyle(.plain)
-        .animation(.spring(response: 0.3), value: nudge)
+        .animation(reduceMotion ? nil : .spring(response: 0.3), value: nudge)
     }
 
     private func quizDotColor(step: Int, currentStep: Int) -> Color {
@@ -244,7 +248,7 @@ struct StyleQuizView: View {
                             .stroke(selections.contains(index) ? PatinaColors.clay : Color.clear, lineWidth: 2.5)
                     )
                     .scaleEffect(selections.contains(index) ? 0.97 : 1.0)
-                    .animation(.spring(response: 0.3), value: selections.contains(index))
+                    .animation(reduceMotion ? nil : .spring(response: 0.3), value: selections.contains(index))
                 }
                 .buttonStyle(.plain)
             }
@@ -291,7 +295,7 @@ struct StyleQuizView: View {
                         .background(selections.contains(index) ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                         .scaleEffect(selections.contains(index) ? 0.97 : 1.0)
-                        .animation(.spring(response: 0.3), value: selections.contains(index))
+                        .animation(reduceMotion ? nil : .spring(response: 0.3), value: selections.contains(index))
                     }
                     .buttonStyle(.plain)
                 }
@@ -331,7 +335,7 @@ struct StyleQuizView: View {
                         .background(selections.contains(index) ? PatinaColors.clay : PatinaColors.Background.secondary)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                         .scaleEffect(selections.contains(index) ? 0.97 : 1.0)
-                        .animation(.spring(response: 0.3), value: selections.contains(index))
+                        .animation(reduceMotion ? nil : .spring(response: 0.3), value: selections.contains(index))
                     }
                     .buttonStyle(.plain)
                 }

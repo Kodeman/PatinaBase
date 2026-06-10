@@ -12,6 +12,7 @@ struct DailyProductDetailView: View {
     let namespace: Namespace.ID
     let onDismiss: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var chromeVisible = false
     @State private var dragOffset: CGFloat = 0
 
@@ -79,7 +80,7 @@ struct DailyProductDetailView: View {
         .scaleEffect(1 - dismissProgress * 0.05, anchor: .center)
         .gesture(dragToDismiss)
         .onAppear {
-            withAnimation(.patinaChrome) {
+            withAnimation(reduceMotion ? nil : .patinaChrome) {
                 chromeVisible = true
             }
         }
@@ -170,10 +171,10 @@ struct DailyProductDetailView: View {
                 .frame(width: 34, height: 34)
             VStack(alignment: .leading, spacing: 1) {
                 Text(product.makerName)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(PatinaTypography.uiSmall)
                     .foregroundStyle(PatinaColors.Text.primary)
                 Text(product.makerLocation ?? "")
-                    .font(.custom("DMMono-Regular", size: 8))
+                    .font(PatinaTypography.monoSmall)
                     .tracking(0.5)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.Text.muted)
@@ -184,18 +185,21 @@ struct DailyProductDetailView: View {
     private var nameAndPrice: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(product.name)
-                .font(.custom("PlayfairDisplay-Regular", size: 28))
+                .font(PatinaTypography.displaySmall)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .lineSpacing(2)
             Text(product.formattedPrice)
-                .font(.custom("PlayfairDisplay-Medium", size: 22))
+                // Playfair Medium 22 (matches ProfileView stat values) — no
+                // exact token; nearest (h4) drops the Medium weight the price
+                // needs, so keep size + scale via relativeTo.
+                .font(.custom("PlayfairDisplay-Medium", size: 22, relativeTo: .title2))
                 .foregroundStyle(PatinaColors.Text.primary)
         }
     }
 
     private var whyQuote: some View {
         Text("“\(recommendation.whyCopy)”")
-            .font(.custom("PlayfairDisplay-Italic", size: 15))
+            .font(.custom("PlayfairDisplay-Italic", size: 15, relativeTo: .subheadline))
             .foregroundStyle(PatinaColors.Text.secondary)
             .lineSpacing(4)
     }
@@ -207,14 +211,14 @@ struct DailyProductDetailView: View {
                 .foregroundStyle(PatinaColors.Text.secondary)
                 .padding(.top, 2)
             Text(insight.text)
-                .font(.system(size: 12))
+                .font(PatinaTypography.caption)
                 .foregroundStyle(PatinaColors.Text.secondary)
                 .lineSpacing(3)
             Spacer(minLength: 0)
         }
-        .padding(12)
+        .padding(PatinaSpacing.xsm)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous)
                 .fill(PatinaColors.Background.secondary)
         )
     }
@@ -225,14 +229,14 @@ struct DailyProductDetailView: View {
                 .fill(pairing.thumbGradient)
                 .frame(width: 40, height: 40)
             Text(pairing.text)
-                .font(.system(size: 12))
+                .font(PatinaTypography.caption)
                 .foregroundStyle(PatinaColors.Text.secondary)
                 .lineSpacing(3)
             Spacer(minLength: 0)
         }
-        .padding(12)
+        .padding(PatinaSpacing.xsm)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous)
                 .fill(PatinaColors.sage.opacity(0.12))
         )
     }
@@ -245,7 +249,7 @@ struct DailyProductDetailView: View {
                 .textCase(.uppercase)
                 .foregroundStyle(PatinaColors.Text.muted)
             Text(story)
-                .font(.system(size: 14))
+                .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.secondary)
                 .lineSpacing(5)
         }
@@ -289,7 +293,7 @@ struct DailyProductDetailView: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(label)
-                    .font(.custom("DMMono-Regular", size: 8))
+                    .font(PatinaTypography.monoSmall)
                     .tracking(0.5)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.Text.muted)
@@ -302,7 +306,7 @@ struct DailyProductDetailView: View {
                 }
             }
             Text(value)
-                .font(.system(size: 13, weight: .medium))
+                .font(PatinaTypography.uiSmall)
                 .foregroundStyle(PatinaColors.Text.primary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -314,10 +318,10 @@ struct DailyProductDetailView: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(product.formattedPrice)
-                        .font(.custom("PlayfairDisplay-Medium", size: 20))
+                        .font(PatinaTypography.h5)
                         .foregroundStyle(PatinaColors.Text.primary)
                     Text("\(recommendation.matchScore)% match for your room")
-                        .font(.system(size: 10))
+                        .font(PatinaTypography.captionSmall)
                         .foregroundStyle(PatinaColors.Text.muted)
                 }
                 Spacer()
@@ -325,7 +329,7 @@ struct DailyProductDetailView: View {
                     // Add-to-room action wired from parent in a follow-up.
                 } label: {
                     Text("Add to Room")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(PatinaTypography.bodySmallMedium)
                         .foregroundStyle(PatinaColors.Text.inverse)
                         .padding(.horizontal, 22)
                         .padding(.vertical, 14)
@@ -362,7 +366,7 @@ struct DailyProductDetailView: View {
                 if value.translation.height > 120 || value.predictedEndTranslation.height > 240 {
                     dismiss()
                 } else {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.82)) {
                         dragOffset = 0
                     }
                 }
@@ -370,7 +374,7 @@ struct DailyProductDetailView: View {
     }
 
     private func dismiss() {
-        withAnimation(.easeIn(duration: 0.15)) {
+        withAnimation(reduceMotion ? nil : .easeIn(duration: 0.15)) {
             chromeVisible = false
         }
         // Kick off parent dismissal in the same frame so matched geometry reverses.

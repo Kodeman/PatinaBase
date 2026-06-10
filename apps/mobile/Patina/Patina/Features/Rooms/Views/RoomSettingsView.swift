@@ -78,7 +78,7 @@ struct RoomSettingsView: View {
     private var nameField: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Room Name")
-                .font(.system(size: 11, weight: .medium))
+                .font(PatinaTypography.caption)
                 .foregroundStyle(PatinaColors.Text.secondary)
             TextField("Room name", text: $name)
                 .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body))
@@ -100,7 +100,7 @@ struct RoomSettingsView: View {
     private var typeField: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Room Type")
-                .font(.system(size: 11, weight: .medium))
+                .font(PatinaTypography.caption)
                 .foregroundStyle(PatinaColors.Text.secondary)
             RoomTypePillRow(selected: $roomType)
                 .onChange(of: roomType) { _, new in
@@ -115,7 +115,7 @@ struct RoomSettingsView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Scan Data")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(PatinaTypography.uiSmall)
                     .foregroundStyle(PatinaColors.Text.primary)
                 Spacer()
                 Text(scanDate(room))
@@ -125,14 +125,14 @@ struct RoomSettingsView: View {
                     .foregroundStyle(PatinaColors.Text.muted)
             }
             Text(scanSummary(room))
-                .font(.system(size: 11))
+                .font(PatinaTypography.caption)
                 .foregroundStyle(PatinaColors.Text.muted)
             Button {
                 saveIfChanged()
                 coordinator.navigate(to: .scanFlow(reason: .rescan))
             } label: {
                 Text("Re-Scan This Room")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.primary)
                     .frame(maxWidth: .infinity)
                     .frame(height: 40)
@@ -161,7 +161,7 @@ struct RoomSettingsView: View {
                 Text("↗")
                 Text("Share with Designer")
             }
-            .font(.system(size: 13, weight: .medium))
+            .font(PatinaTypography.uiSmall)
             .foregroundStyle(PatinaColors.offWhite)
             .frame(maxWidth: .infinity)
             .frame(height: 46)
@@ -178,7 +178,7 @@ struct RoomSettingsView: View {
             showDeleteConfirm = true
         } label: {
             Text("Delete This Room")
-                .font(.system(size: 13, weight: .medium))
+                .font(PatinaTypography.uiSmall)
                 .foregroundStyle(PatinaColors.terracotta)
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)

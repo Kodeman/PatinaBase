@@ -115,17 +115,19 @@ struct DailyFeedEmptyModule: View {
                 .padding(.bottom, 6)
 
             Text(bodyText)
-                .font(.system(size: 13))
+                .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.muted)
                 .lineSpacing(3)
                 .padding(.bottom, 16)
 
             Button(action: primaryAction) {
                 Text(primaryTitle)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.inverse)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 44)
+                    // minHeight (not height) so the CTA grows instead of
+                    // clipping its label at accessibility type sizes.
+                    .frame(minHeight: 44)
                     .background(Capsule().fill(PatinaColors.Interactive.active))
             }
             .buttonStyle(.plain)
@@ -133,7 +135,7 @@ struct DailyFeedEmptyModule: View {
             if let secondary {
                 Button(action: secondary.action) {
                     Text(secondary.title)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(PatinaTypography.caption)
                         .foregroundStyle(PatinaColors.Text.interactive)
                         .frame(maxWidth: .infinity)
                         .frame(minHeight: 36)

@@ -18,6 +18,7 @@ public struct InputBar: View {
     var onVoiceEnd: () -> Void
 
     @FocusState private var isFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // Per spec: 56px height
     private let barHeight: CGFloat = 56
@@ -79,7 +80,7 @@ public struct InputBar: View {
         }
         .frame(height: barHeight)
         .padding(.horizontal, PatinaSpacing.md)
-        .animation(.easeInOut(duration: 0.2), value: text.isEmpty)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: text.isEmpty)
     }
 
     private func sendMessage() {

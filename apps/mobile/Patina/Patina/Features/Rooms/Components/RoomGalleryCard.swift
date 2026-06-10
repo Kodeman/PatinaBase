@@ -45,10 +45,10 @@ struct RoomGalleryCard: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(room.name)
-                    .font(.custom("PlayfairDisplay-Regular", size: 20))
+                    .font(PatinaTypography.h4)
                     .foregroundStyle(PatinaColors.offWhite)
                 Text(room.galleryMetaLine)
-                    .font(.custom("DMMono-Regular", size: 8))
+                    .font(PatinaTypography.monoLabel)
                     .tracking(0.5)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.Text.interactive)
@@ -74,7 +74,7 @@ struct RoomGalleryCard: View {
 
     private func badge(label: String, color: Color) -> some View {
         Text(label)
-            .font(.custom("DMMono-Regular", size: 7))
+            .font(PatinaTypography.monoLabel)
             .tracking(0.4)
             .textCase(.uppercase)
             .foregroundStyle(PatinaColors.offWhite)
@@ -106,10 +106,10 @@ struct RoomGalleryCard: View {
     private func stat(value: String, label: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.custom("PlayfairDisplay-Medium", size: 16))
+                .font(PatinaTypography.h5)
                 .foregroundStyle(PatinaColors.Text.primary)
             Text(label)
-                .font(.custom("DMMono-Regular", size: 7))
+                .font(PatinaTypography.monoLabel)
                 .tracking(0.6)
                 .textCase(.uppercase)
                 .foregroundStyle(PatinaColors.Text.muted)

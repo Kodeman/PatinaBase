@@ -17,7 +17,7 @@ struct RoomBudgetBar: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Room investment")
-                    .font(.system(size: 11))
+                    .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.pearl)
                 Spacer()
                 Text(formatted(totalCents))

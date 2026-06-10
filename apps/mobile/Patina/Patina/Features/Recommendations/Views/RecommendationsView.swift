@@ -147,6 +147,28 @@ struct RecommendationsView: View {
         .onTapGesture {
             coordinator.navigate(to: .pieceDetail(pieceId: product.id))
         }
+        // R26: long-press menu mirroring the card's real actions — save,
+        // share (same portal URL pattern as ProductDetailView's ShareLink),
+        // and open details.
+        .contextMenu {
+            Button {
+                viewModel.saveProduct(product, context: modelContext)
+            } label: {
+                Label("Save", systemImage: "heart")
+            }
+            ShareLink(
+                item: PatinaPortalLinks.productURL(forProductId: product.id),
+                subject: Text(product.name),
+                message: Text("\(product.name) by \(product.makerName) on Patina")
+            ) {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+            Button {
+                coordinator.navigate(to: .pieceDetail(pieceId: product.id))
+            } label: {
+                Label("View details", systemImage: "arrow.up.right")
+            }
+        }
         // Swipe gestures
         .gesture(
             DragGesture(minimumDistance: 50)

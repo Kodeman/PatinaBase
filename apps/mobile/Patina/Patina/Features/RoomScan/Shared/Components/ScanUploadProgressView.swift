@@ -35,12 +35,12 @@ public struct ScanUploadProgressView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(headerColor)
                 Text(headerText)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(PatinaTypography.uiSmall)
                     .foregroundStyle(headerColor)
                 Spacer()
                 if state.photosTotal > 0 {
                     Text("\(state.photosUploaded)/\(state.photosTotal) photos")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(PatinaTypography.caption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -59,7 +59,7 @@ public struct ScanUploadProgressView: View {
             if let err = package.lastError, !err.isEmpty,
                package.status == .failed || package.status == .pending {
                 Text(err)
-                    .font(.system(size: 11))
+                    .font(PatinaTypography.caption)
                     .foregroundStyle(.orange)
                     .lineLimit(2)
             }
@@ -106,7 +106,7 @@ public struct ScanUploadProgressView: View {
             Image(systemName: pillIcon(for: artifact.status))
                 .font(.system(size: 9, weight: .bold))
             Text(shortLabel(for: artifact.kind))
-                .font(.system(size: 10, weight: .medium))
+                .font(PatinaTypography.caption)
         }
         .foregroundStyle(color)
         .padding(.horizontal, 8)
@@ -221,7 +221,7 @@ public struct ScanUploadBadgeView: View {
                 Image(systemName: "arrow.up.circle")
                     .font(.system(size: 10, weight: .semibold))
                 Text("\(badge.syncingCount) uploading")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(PatinaTypography.caption)
             }
             .foregroundStyle(.white)
             .padding(.horizontal, 8)

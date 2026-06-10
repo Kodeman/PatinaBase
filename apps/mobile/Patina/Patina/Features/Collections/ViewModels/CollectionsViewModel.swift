@@ -102,4 +102,27 @@ final class CollectionsViewModel {
         board.addItem(productId)
         HapticManager.shared.impact(.light)
     }
+
+    // MARK: - Saved Items
+
+    /// R26: remove a saved item from the local store (the source the
+    /// "All Items" tab reads). Backs the row's context-menu Remove action.
+    func removeSavedItem(_ item: TableItemModel, context: ModelContext) {
+        context.delete(item)
+        savedItems.removeAll { $0.id == item.id }
+        HapticManager.shared.impact(.light)
+    }
+
+    /// R26: pull-to-refresh — re-fetch the local store and await the remote
+    /// `saved_items` reconciliation instead of firing it in the background.
+    @MainActor
+    func refresh(context: ModelContext) async {
+        let boardDescriptor = FetchDescriptor<BoardModel>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
+        boards = (try? context.fetch(boardDescriptor)) ?? boards
+
+        let itemDescriptor = FetchDescriptor<TableItemModel>(sortBy: [SortDescriptor(\.savedAt, order: .reverse)])
+        savedItems = (try? context.fetch(itemDescriptor)) ?? savedItems
+
+        await reconcileWithRemote(context: context)
+    }
 }

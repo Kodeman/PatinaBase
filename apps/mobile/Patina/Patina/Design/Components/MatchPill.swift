@@ -12,7 +12,7 @@ struct MatchPill: View {
 
     var body: some View {
         Text("\(score)% match")
-            .font(PatinaTypography.monoTiny)
+            .font(PatinaTypography.monoLabel)
             .tracking(0.5)
             .textCase(.uppercase)
             .foregroundStyle(PatinaColors.Text.secondary)

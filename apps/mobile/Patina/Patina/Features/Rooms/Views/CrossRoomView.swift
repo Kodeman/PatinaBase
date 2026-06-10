@@ -87,7 +87,7 @@ struct CrossRoomView: View {
         Button { tab = value } label: {
             VStack(spacing: 6) {
                 Text(title)
-                    .font(.system(size: 12, weight: tab == value ? .medium : .regular))
+                    .font(PatinaTypography.caption)
                     .foregroundStyle(tab == value ? PatinaColors.Text.primary : PatinaColors.Text.muted)
                 Rectangle()
                     .fill(tab == value ? PatinaColors.clay : .clear)
@@ -110,10 +110,10 @@ struct CrossRoomView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.productName)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(PatinaTypography.uiSmall)
                         .foregroundStyle(PatinaColors.Text.primary)
                     Text(item.makerName)
-                        .font(.custom("DMMono-Regular", size: 7))
+                        .font(PatinaTypography.monoLabel)
                         .tracking(0.4)
                         .textCase(.uppercase)
                         .foregroundStyle(PatinaColors.Text.muted)
@@ -123,7 +123,7 @@ struct CrossRoomView: View {
                                 .fill(roomColor(item.room))
                                 .frame(width: 6, height: 6)
                             Text(roomName)
-                                .font(.system(size: 9))
+                                .font(PatinaTypography.monoSmall)
                                 .foregroundStyle(PatinaColors.Text.secondary)
                         }
                         .padding(.horizontal, 8)
@@ -135,7 +135,7 @@ struct CrossRoomView: View {
                 }
                 Spacer(minLength: 0)
                 Text(item.fullFormattedPrice)
-                    .font(.custom("PlayfairDisplay-Medium", size: 14))
+                    .font(PatinaTypography.h5)
                     .foregroundStyle(PatinaColors.Text.primary)
             }
             .padding(.horizontal, 20)
@@ -152,7 +152,7 @@ struct CrossRoomView: View {
 
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.custom("DMMono-Regular", size: 8))
+            .font(PatinaTypography.monoLabel)
             .tracking(0.6)
             .textCase(.uppercase)
             .foregroundStyle(PatinaColors.Text.muted)

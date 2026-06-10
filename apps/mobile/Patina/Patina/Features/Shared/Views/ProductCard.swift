@@ -56,14 +56,23 @@ public struct ProductCard: View {
     let data: ProductCardData
     let style: Style
     let onTap: () -> Void
+    /// R26: optional context-menu hooks. When either is set the card grows a
+    /// long-press menu with View details / Share / Remove — only actions the
+    /// call site can actually perform today.
+    let shareURL: URL?
+    let onRemove: (() -> Void)?
 
     public init(
         data: ProductCardData,
         style: Style = .list,
+        shareURL: URL? = nil,
+        onRemove: (() -> Void)? = nil,
         onTap: @escaping () -> Void
     ) {
         self.data = data
         self.style = style
+        self.shareURL = shareURL
+        self.onRemove = onRemove
         self.onTap = onTap
     }
 
@@ -77,31 +86,37 @@ public struct ProductCard: View {
             }
         }
         .buttonStyle(.plain)
+        .modifier(ProductCardContextMenu(
+            name: data.name,
+            shareURL: shareURL,
+            onRemove: onRemove,
+            onViewDetails: onTap
+        ))
     }
 
     // MARK: - List (saved items)
 
     private var listLayout: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: PatinaSpacing.xsm) {
             thumbnail
                 .frame(width: 72, height: 72)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
                 if let maker = data.makerName, !maker.isEmpty {
                     Text(maker)
-                        .font(.custom("DMMono-Regular", size: 7))
+                        .font(PatinaTypography.monoLabel)
                         .tracking(0.5)
                         .textCase(.uppercase)
                         .foregroundStyle(PatinaColors.Text.muted)
                 }
                 Text(data.name)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(PatinaTypography.uiSmall)
                     .foregroundStyle(PatinaColors.Text.primary)
                     .lineLimit(2)
                 if let price = data.formattedPrice {
                     Text(price)
-                        .font(.custom("PlayfairDisplay-Medium", size: 16))
+                        .font(PatinaTypography.h5)
                         .foregroundStyle(PatinaColors.Text.primary)
                         .padding(.top, 2)
                 }
@@ -113,9 +128,9 @@ public struct ProductCard: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(PatinaColors.Text.muted)
         }
-        .padding(12)
+        .padding(PatinaSpacing.xsm)
         .background(PatinaColors.Background.secondary)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous))
     }
 
     // MARK: - Tile (board preview grid)
@@ -123,11 +138,11 @@ public struct ProductCard: View {
     private var tileLayout: some View {
         thumbnail
             .aspectRatio(1, contentMode: .fill)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous))
             .overlay(alignment: .bottomLeading) {
                 if let price = data.formattedPrice {
                     Text(price)
-                        .font(.custom("PlayfairDisplay-Medium", size: 11))
+                        .font(.custom("PlayfairDisplay-Medium", size: 11, relativeTo: .caption2))
                         .foregroundStyle(PatinaColors.offWhite)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
@@ -149,6 +164,43 @@ public struct ProductCard: View {
             PatinaAsyncImage(url: url, contentMode: .fill)
         } else {
             PatinaGradients.warm
+        }
+    }
+}
+
+// MARK: - Context menu (R26)
+
+/// Attaches a `.contextMenu` only when the card has at least one action
+/// beyond opening it — a one-item long-press menu is just noise.
+private struct ProductCardContextMenu: ViewModifier {
+    let name: String
+    let shareURL: URL?
+    let onRemove: (() -> Void)?
+    let onViewDetails: () -> Void
+
+    func body(content: Content) -> some View {
+        if shareURL == nil && onRemove == nil {
+            content
+        } else {
+            content.contextMenu {
+                Button {
+                    onViewDetails()
+                } label: {
+                    Label("View details", systemImage: "arrow.up.right")
+                }
+                if let shareURL {
+                    ShareLink(item: shareURL, subject: Text(name)) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                }
+                if let onRemove {
+                    Button(role: .destructive) {
+                        onRemove()
+                    } label: {
+                        Label("Remove", systemImage: "trash")
+                    }
+                }
+            }
         }
     }
 }

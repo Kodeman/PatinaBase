@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct SplashView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var wordmarkOpacity: Double = 0
     @State private var wordmarkOffset: CGFloat = 8
     @State private var strataOpacity: Double = 0
@@ -38,14 +39,16 @@ struct SplashView: View {
             }
         }
         .onAppear {
+            // Reduce Motion: show the wordmark + strata instantly (nil
+            // animation applies state in the same frame, no fade/slide).
             // Wordmark fade in + slide up
-            withAnimation(.easeOut(duration: 2.0)) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 2.0)) {
                 wordmarkOpacity = 1
                 wordmarkOffset = 0
             }
 
             // Strata lines fade in after 0.5s delay
-            withAnimation(.easeOut(duration: 1.0).delay(0.5)) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 1.0).delay(0.5)) {
                 strataOpacity = 1
             }
 
