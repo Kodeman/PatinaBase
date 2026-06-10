@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   useAllDecisions,
   useDecisionMetrics,
@@ -112,10 +113,19 @@ function getClientName(decision: {
   );
 }
 
-export default function DecisionsDashboardPage() {
+function DecisionsDashboardContent() {
   const hydrated = useHydrated();
+  const searchParams = useSearchParams();
   const [filter, setFilter] = useState<FilterKey>('open');
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Auto-open the New Decision picker when ?new=1 is present (e.g. from the
+  // header + New menu) — same pattern as the clients page's ?add=1.
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setPickerOpen(true);
+    }
+  }, [searchParams]);
 
   const statusFilter: DecisionStatus[] | undefined =
     filter === 'resolved' ? ['responded'] : undefined;
@@ -281,5 +291,15 @@ export default function DecisionsDashboardPage() {
 
       {pickerOpen && <DecisionNewPicker onClose={() => setPickerOpen(false)} />}
     </div>
+  );
+}
+
+export default function DecisionsDashboardPage() {
+  // useSearchParams needs a Suspense boundary for static prerender (same
+  // wrapper the clients page uses).
+  return (
+    <Suspense fallback={<LoadingStrata />}>
+      <DecisionsDashboardContent />
+    </Suspense>
   );
 }

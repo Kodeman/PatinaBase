@@ -50,6 +50,9 @@ export function DecisionNewPicker({ onClose }: DecisionNewPickerProps) {
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="New decision"
         className="w-full max-w-[520px] rounded-md border bg-[var(--bg-surface)] p-6 shadow-xl"
         style={{ borderColor: 'var(--border-default)' }}
         onClick={(e) => e.stopPropagation()}
