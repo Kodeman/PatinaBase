@@ -6,6 +6,7 @@ import { EnhancedTimeline } from '@/components/timeline/enhanced-timeline';
 import { ProjectOverview } from '@/components/project-overview';
 import { ProjectScopeDetails } from '@/components/project-scope-details';
 import { BudgetOverview } from '@/components/budget-overview';
+import { ProjectInvoicesSummary } from '@/components/project-invoices-summary';
 import { FFEStatus } from '@/components/ffe-status';
 import { StrataMark } from '@/components/strata-mark';
 import { ProjectActivityFeed } from '@/components/project/ProjectActivityFeed';
@@ -49,6 +50,8 @@ export function ProjectViewWrapper({
       {showOverview && <ProjectScopeDetails projectId={projectId} />}
 
       {showOverview && <BudgetOverview projectId={projectId} />}
+
+      {showOverview && <ProjectInvoicesSummary projectId={projectId} />}
 
       {showOverview && <FFEStatus projectId={projectId} />}
 

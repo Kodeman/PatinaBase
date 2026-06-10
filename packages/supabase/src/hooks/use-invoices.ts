@@ -92,6 +92,7 @@ export interface Invoice {
   // Joined data
   project?: { id: string; name: string };
   client?: { id: string; full_name: string | null; email: string };
+  designer?: { id: string; full_name: string | null; business_name: string | null };
   line_items?: InvoiceLineItem[];
   payments?: InvoicePayment[];
 }
@@ -265,6 +266,7 @@ export function useInvoice(invoiceId: string | null | undefined) {
           *,
           project:projects!invoices_project_id_fkey(id, name),
           client:profiles!invoices_client_id_fkey(id, full_name, email),
+          designer:profiles!invoices_designer_id_fkey(id, full_name, business_name),
           line_items:invoice_line_items(*),
           payments:invoice_payments(*)
         `
@@ -542,6 +544,54 @@ export function useRecordPayment() {
       return data as InvoicePayment;
     },
     onSuccess: (_payment, { projectId }) => {
+      invalidateInvoiceEffects(queryClient, projectId);
+    },
+  });
+}
+
+/**
+ * Sends (or resends) the invoice email to the client via the invoice-send
+ * edge function (designer JWT goes along automatically; the function verifies
+ * ownership + issued status, emails the client through the compliance
+ * chokepoint, and stamps sent_at if missing). Optional personal message.
+ */
+export function useSendInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      invoiceId,
+      message,
+    }: {
+      invoiceId: string;
+      projectId?: string;
+      message?: string;
+    }): Promise<{
+      ok: boolean;
+      invoiceId: string;
+      recipient: string;
+      emailSent: boolean;
+      suppressed: boolean;
+    }> => {
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.functions.invoke('invoice-send', {
+        body: { invoiceId, message: message?.trim() || undefined },
+      });
+      if (error) {
+        // FunctionsHttpError carries the response; surface the JSON error code
+        // (e.g. no_recipient, invoice_not_issued) instead of a generic message.
+        let detail: string | undefined;
+        try {
+          const body = await (error as { context?: Response }).context?.json();
+          detail = body?.detail ?? body?.error;
+        } catch {
+          /* fall through to the generic message */
+        }
+        throw new Error(detail ?? error.message ?? 'Failed to send invoice');
+      }
+      if (data?.error) throw new Error(data.detail ?? data.error);
+      return data;
+    },
+    onSuccess: (_data, { projectId }) => {
       invalidateInvoiceEffects(queryClient, projectId);
     },
   });

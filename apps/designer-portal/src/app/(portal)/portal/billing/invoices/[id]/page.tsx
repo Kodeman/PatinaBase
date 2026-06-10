@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import {
   useInvoice,
   useIssueInvoice,
+  useSendInvoice,
   useRecordPayment,
   useVoidInvoice,
   type Invoice,
@@ -62,10 +63,12 @@ export default function InvoiceDetailPage() {
 
   const { data: invoice, isLoading } = useInvoice(id);
   const issueInvoice = useIssueInvoice();
+  const sendInvoice = useSendInvoice();
   const voidInvoice = useVoidInvoice();
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showVoidDialog, setShowVoidDialog] = useState(false);
+  const [sendDialogMode, setSendDialogMode] = useState<'issue' | 'resend' | null>(null);
 
   if (!hydrated || isLoading) return <LoadingStrata />;
   if (!invoice) {
@@ -84,15 +87,58 @@ export default function InvoiceDetailPage() {
     ['draft', 'sent', 'partially_paid'].includes(invoice.status) &&
     invoice.amount_paid_cents === 0;
 
-  const handleIssue = async () => {
+  const canResend = invoice.status === 'sent' || invoice.status === 'partially_paid';
+
+  // Issue & Send: issue_invoice RPC first (number, totals, milestone flips),
+  // then the invoice-send edge function. A send failure does NOT roll back the
+  // issue — the designer can Resend from the now-issued invoice.
+  const handleIssueAndSend = async (message?: string) => {
+    let issued: Invoice;
     try {
-      const issued = await issueInvoice.mutateAsync({
+      issued = await issueInvoice.mutateAsync({
         invoiceId: invoice.id,
         projectId: invoice.project_id,
       });
       toast(`Invoice ${issued.invoice_number} issued`, 'success');
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Failed to issue invoice', 'error');
+      return;
+    }
+    try {
+      const result = await sendInvoice.mutateAsync({
+        invoiceId: invoice.id,
+        projectId: invoice.project_id,
+        message,
+      });
+      toast(
+        result.emailSent ? `Invoice emailed to ${result.recipient}` : 'Invoice issued — email skipped',
+        result.emailSent ? 'success' : 'info'
+      );
+    } catch (e) {
+      toast(
+        e instanceof Error
+          ? `Issued, but the email failed: ${e.message}. Use Resend to retry.`
+          : 'Issued, but the email failed. Use Resend to retry.',
+        'error'
+      );
+    }
+    setSendDialogMode(null);
+  };
+
+  const handleResend = async (message?: string) => {
+    try {
+      const result = await sendInvoice.mutateAsync({
+        invoiceId: invoice.id,
+        projectId: invoice.project_id,
+        message,
+      });
+      toast(
+        result.emailSent ? `Invoice emailed to ${result.recipient}` : 'Email skipped (recipient suppressed)',
+        result.emailSent ? 'success' : 'info'
+      );
+      setSendDialogMode(null);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Failed to send invoice', 'error');
     }
   };
 
@@ -131,10 +177,19 @@ export default function InvoiceDetailPage() {
                 type="button"
                 variant="primary"
                 size="sm"
-                loading={issueInvoice.isPending}
-                onClick={handleIssue}
+                onClick={() => setSendDialogMode('issue')}
               >
-                Issue
+                Issue &amp; Send
+              </Button>
+            )}
+            {canResend && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setSendDialogMode('resend')}
+              >
+                Resend
               </Button>
             )}
             {canRecordPayment && (
@@ -333,6 +388,16 @@ export default function InvoiceDetailPage() {
         </p>
       )}
 
+      <SendDialog
+        mode={sendDialogMode}
+        invoice={invoice}
+        pending={issueInvoice.isPending || sendInvoice.isPending}
+        onClose={() => setSendDialogMode(null)}
+        onConfirm={(message) =>
+          sendDialogMode === 'issue' ? handleIssueAndSend(message) : handleResend(message)
+        }
+      />
+
       <RecordPaymentModal
         open={showPaymentModal}
         invoice={invoice}
@@ -416,6 +481,99 @@ function StatusTimeline({ invoice }: { invoice: Invoice }) {
           </StatusBadge>
         </span>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Issue & Send / Resend confirmation with an optional personal note that
+ * lands as a quoted block in the client's email.
+ */
+function SendDialog({
+  mode,
+  invoice,
+  pending,
+  onClose,
+  onConfirm,
+}: {
+  mode: 'issue' | 'resend' | null;
+  invoice: Invoice;
+  pending: boolean;
+  onClose: () => void;
+  onConfirm: (message?: string) => void;
+}) {
+  const [message, setMessage] = useState('');
+
+  if (!mode) return null;
+
+  const isIssue = mode === 'issue';
+  const recipient = invoice.client?.email;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.4)' }}
+      onClick={onClose}
+    >
+      <div
+        className="w-[90vw] max-w-md rounded-md border bg-[var(--bg-surface)] p-5"
+        style={{ borderColor: 'var(--border-default)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3
+          style={{
+            fontFamily: 'var(--font-heading)',
+            fontSize: '1.1rem',
+            fontWeight: 600,
+            marginBottom: '0.25rem',
+          }}
+        >
+          {isIssue ? 'Issue & Send' : `Resend ${invoice.invoice_number ?? 'invoice'}`}
+        </h3>
+        <p
+          className="type-body"
+          style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}
+        >
+          {isIssue
+            ? 'Issuing assigns the invoice number, locks the totals, and emails the invoice to your client.'
+            : 'Sends the invoice email to your client again.'}
+          {recipient ? (
+            <>
+              {' '}
+              It will go to <strong>{recipient}</strong>.
+            </>
+          ) : (
+            <> We&rsquo;ll email the client on this project.</>
+          )}
+        </p>
+
+        <div className="mb-1" style={labelStyle}>
+          Personal note (optional)
+        </div>
+        <Textarea
+          autoFocus
+          rows={3}
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="A short note included in the email…"
+        />
+
+        <div className="mt-3 flex justify-end gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            disabled={pending}
+            loading={pending}
+            onClick={() => onConfirm(message.trim() || undefined)}
+          >
+            {isIssue ? 'Issue & send' : 'Resend email'}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

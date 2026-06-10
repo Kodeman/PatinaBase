@@ -1014,6 +1014,7 @@ export {
   useUpsertLineItems,
   useDeleteLineItem,
   useIssueInvoice,
+  useSendInvoice,
   useRecordPayment,
   useVoidInvoice,
 } from './use-invoices';
