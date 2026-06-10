@@ -44,6 +44,7 @@ import {
   ProjectIdentityHeader,
   KeyMetricsRow,
   ProjectBriefPanel,
+  ProjectBoardsSection,
   RoomScopeGrid,
   PhaseTimelineV2,
   FFESummaryTile,
@@ -505,6 +506,11 @@ export default function ProjectDetailPage({
           projectId={id}
           kickoffMessage={(project as { kickoff_message?: string | null }).kickoff_message ?? null}
         />
+
+        {/* Zone 3a': Mood boards carried from the signed proposal (00180).
+            Renders nothing when the project has none; slug fixtures skip the
+            query (project_boards.project_id is a uuid column). */}
+        <ProjectBoardsSection projectId={isRealProject ? id : null} />
 
         {/* Zone 3b: Room-by-Room Scope */}
         {(adaptedRooms.length > 0 || editable) && (

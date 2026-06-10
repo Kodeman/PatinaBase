@@ -10,3 +10,4 @@ export { DocumentGrid } from './document-grid';
 export { TimeTrackingPanel } from './time-tracking-panel';
 export { RecentActivityPanel } from './recent-activity-panel';
 export { ProjectBriefPanel } from './project-brief-panel';
+export { ProjectBoardsSection } from './project-boards-section';

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { Fragment, useEffect, useRef, useCallback } from 'react';
 import { createBrowserClient } from '@patina/supabase';
 import type {
   Proposal,
@@ -10,6 +10,7 @@ import type {
   ProposalPhase,
   ProposalExclusion,
   ProposalScopeRoom,
+  ProposalBoardSummary,
 } from '@patina/supabase';
 import {
   LineItemsBlock,
@@ -20,6 +21,7 @@ import {
 } from '@patina/design-system';
 import { useAuth } from '@/hooks/use-auth';
 import { StrataMark } from '@/components/strata-mark';
+import { BoardsBlock } from '@/components/board-block';
 import { proposalClientEvents } from '@/lib/analytics/events';
 
 interface ProposalDocumentProps {
@@ -30,6 +32,7 @@ interface ProposalDocumentProps {
   phases?: ProposalPhase[];
   exclusions?: ProposalExclusion[];
   scopeRooms?: ProposalScopeRoom[];
+  boards?: ProposalBoardSummary[];
 }
 
 function formatCurrency(amount: number): string {
@@ -56,6 +59,7 @@ export function ProposalDocument({
   phases = [],
   exclusions = [],
   scopeRooms = [],
+  boards = [],
 }: ProposalDocumentProps) {
   const { user } = useAuth();
   const hasRecordedOpen = useRef(false);
@@ -106,6 +110,10 @@ export function ProposalDocument({
     }
   }, [trackEngagement, user, proposal.id, proposal.status, proposal.designer_id, recordEvent]);
 
+  // boards.length is a dep so the observer re-binds once the (async-loaded)
+  // boards section is in the DOM — otherwise it would never be observed.
+  const boardCount = boards.length;
+
   useEffect(() => {
     if (!trackEngagement) return;
     if (!sections || sections.length === 0) return;
@@ -151,9 +159,21 @@ export function ProposalDocument({
       observer.disconnect();
       window.removeEventListener('beforeunload', handleUnload);
     };
-  }, [trackEngagement, sections, recordEvent]);
+  }, [trackEngagement, sections, recordEvent, boardCount]);
 
   const items = proposal.items ?? [];
+
+  // Mood boards render after the `concept` section when one exists, else just
+  // before `selections`, else after the last section. A negative index means
+  // "before all sections" (selections-first or section-less proposals).
+  const conceptIndex = sections.findIndex((s) => s.type === 'concept');
+  const selectionsIndex = sections.findIndex((s) => s.type === 'selections');
+  const boardsAfterIndex =
+    conceptIndex >= 0
+      ? conceptIndex
+      : selectionsIndex >= 0
+        ? selectionsIndex - 1
+        : sections.length - 1;
 
   return (
     <article
@@ -200,8 +220,11 @@ export function ProposalDocument({
         </span>
       </header>
 
+      {boardsAfterIndex < 0 && <BoardsBlock boards={boards} />}
+
       {sections.map((section, index) => (
-        <div key={section.id} data-section-type={section.type}>
+        <Fragment key={section.id}>
+        <div data-section-type={section.type}>
           {index > 0 && <StrataMark variant="micro" />}
 
           <section className="py-8">
@@ -302,6 +325,8 @@ export function ProposalDocument({
             )}
           </section>
         </div>
+        {index === boardsAfterIndex && <BoardsBlock boards={boards} />}
+        </Fragment>
       ))}
 
       <footer className="mt-12 flex items-baseline justify-between border-t border-[var(--border-subtle)] pt-6">

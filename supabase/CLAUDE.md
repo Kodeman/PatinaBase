@@ -31,7 +31,7 @@ Pre-00139 rows have `total_amount_cents` backfilled from `budget_cents` and may 
 
 ## Proposal → project activation
 
-`activate_proposal_as_project(p_proposal_id, p_start_date)` (latest body in `00140_proposal_project_richer_carry.sql`) is the bridge. Preconditions: `proposals.status = 'accepted'` and `proposals.project_id IS NULL`.
+`activate_proposal_as_project(p_proposal_id, p_start_date)` (latest body in `00180_activation_carry_boards.sql`; prior revisions: 00140 richer carry → 00167 created_by fix) is the bridge. Preconditions: `proposals.status = 'accepted'` and `proposals.project_id IS NULL`.
 
 Status transitions and side effects:
 
@@ -65,6 +65,7 @@ Data copied 1:1 (with back-references where useful):
 | `proposal_team_members` | `project_team_members` | `assigned_by = proposal.designer_id`, `ON CONFLICT DO NOTHING` |
 | `proposal_sections` | `project_narrative_sections` | back-ref `source_section_id` |
 | `proposal_palettes` (+ `palette_swatches`) | `project_palettes.swatches` (JSONB) | swatches embedded; scope_room re-mapped |
+| `proposal_boards` (+ `proposal_board_items`) | `project_boards.items` (JSONB) | back-ref `source_board_id` (soft, no FK); items embedded ordered by `z_index, created_at` (no `id`/`locked` fields); scope_room re-mapped to `project_room_id` |
 
 Lead designer (`proposals.designer_id`) and primary client (`proposals.client_id`) carry over to the project columns of the same name — they are **not** also inserted into `proposal_team_members` / `project_team_members`.
 

@@ -58,6 +58,26 @@ export interface BoardWithItems extends ProposalBoard {
   items: ProposalBoardItem[];
 }
 
+/**
+ * One embedded item inside project_boards.items (JSONB). Written by the
+ * activation RPC (migration 00180) via jsonb_build_object — note it carries
+ * NO `id` or `locked` fields (renderers should key by array index), and the
+ * array is pre-ordered by z_index then created_at.
+ */
+export interface ProjectBoardItem {
+  type: BoardItemType;
+  x: number;
+  y: number;
+  width: number;
+  height: number | null;
+  z_index: number;
+  rotation: number;
+  product_id: string | null;
+  image_url: string | null;
+  content: string | null;
+  data: Record<string, unknown>;
+}
+
 /** Snapshot row carried onto an activated project (items embedded as JSONB). */
 export interface ProjectBoard {
   id: string;
@@ -69,7 +89,7 @@ export interface ProjectBoard {
   canvas_width: number;
   canvas_height: number;
   background_color: string;
-  items: Array<Record<string, unknown>>;
+  items: ProjectBoardItem[];
   sort_order: number;
   created_at: string;
 }

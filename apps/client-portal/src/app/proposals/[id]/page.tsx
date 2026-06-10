@@ -9,6 +9,7 @@ import {
   useProposalPhases,
   useProposalExclusions,
   useProposalScopeRooms,
+  useBoards,
 } from '@patina/supabase';
 import { useClientProposal } from '@/hooks/use-proposals-client';
 import { ProposalDocument } from '@/components/proposal-document';
@@ -35,6 +36,8 @@ export default function ClientProposalDetailPage({
   const { data: phases } = useProposalPhases(id);
   const { data: exclusions } = useProposalExclusions(id);
   const { data: scopeRooms } = useProposalScopeRooms(id);
+  // RLS restricts board reads to non-draft proposals the client is on.
+  const { data: boards } = useBoards(id);
   const [declineOpen, setDeclineOpen] = useState(false);
 
   if (proposalLoading || sectionsLoading) {
@@ -161,6 +164,7 @@ export default function ClientProposalDetailPage({
         phases={phases ?? []}
         exclusions={exclusions ?? []}
         scopeRooms={scopeRooms ?? []}
+        boards={boards ?? []}
       />
 
       {isActionable && (
