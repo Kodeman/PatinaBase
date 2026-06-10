@@ -44,9 +44,9 @@ struct PatinaCard<Content: View>: View {
     private var backgroundColor: Color {
         switch style {
         case .surface:
-            return PatinaColors.softCream
+            return PatinaColors.Background.secondary
         case .elevated:
-            return PatinaColors.offWhite
+            return PatinaColors.Background.primary
         case .outline:
             return .clear
         }

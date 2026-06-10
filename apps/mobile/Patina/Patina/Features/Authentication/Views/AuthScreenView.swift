@@ -23,14 +23,14 @@ struct AuthScreenView: View {
             // PATINA wordmark
             Text("PATINA")
                 .font(PatinaTypography.authLogo)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .tracking(6)
 
             // Strata mini mark
             VStack(spacing: 3) {
-                Capsule().fill(PatinaColors.mocha).frame(width: 40, height: 1.5)
-                Capsule().fill(PatinaColors.clay).frame(width: 32, height: 1.5)
-                Capsule().fill(PatinaColors.clay.opacity(0.5)).frame(width: 24, height: 1.5)
+                Capsule().fill(PatinaColors.Strata.line1).frame(width: 40, height: 1.5)
+                Capsule().fill(PatinaColors.Strata.line2).frame(width: 32, height: 1.5)
+                Capsule().fill(PatinaColors.Strata.line3).frame(width: 24, height: 1.5)
             }
             .padding(.top, 10)
             .padding(.bottom, 40)
@@ -38,12 +38,12 @@ struct AuthScreenView: View {
             // Welcome text
             Text("Welcome home")
                 .font(PatinaTypography.h3)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .padding(.bottom, 6)
 
             Text("Join thousands of design enthusiasts")
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
                 .padding(.bottom, 32)
 
             // Auth buttons
@@ -68,11 +68,11 @@ struct AuthScreenView: View {
 
             // Divider
             HStack(spacing: 16) {
-                Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+                Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
                 Text("or")
                     .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.agedOak)
-                Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+                    .foregroundStyle(PatinaColors.Text.muted)
+                Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
             }
             .padding(.horizontal, 28)
             .padding(.vertical, 20)
@@ -92,13 +92,13 @@ struct AuthScreenView: View {
             // Footer
             Text("By continuing, you agree to our Terms of Service\nand Privacy Policy")
                 .font(.system(size: 11))
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
                 .multilineTextAlignment(.center)
                 .lineSpacing(2)
                 .padding(.bottom, 40)
         }
         .frame(maxWidth: .infinity)
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
     }
 }
 

@@ -57,7 +57,7 @@ public struct CompanionAuthPanel: View {
     private var header: some View {
         VStack(spacing: PatinaSpacing.md) {
             // Strata Mark
-            StrataMarkView(color: PatinaColors.mocha, scale: 1.2)
+            StrataMarkView(color: PatinaColors.Strata.line1, scale: 1.2)
                 .accessibilityHidden(true)
 
             // Title
@@ -151,7 +151,7 @@ public struct CompanionAuthPanel: View {
                 showEmailAuth()
             }
             .font(PatinaTypography.bodySmallMedium)
-            .foregroundStyle(PatinaColors.mocha)
+            .foregroundStyle(PatinaColors.Text.secondary)
             .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             .accessibilityLabel("Sign in to existing account")
         }

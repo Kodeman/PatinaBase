@@ -16,6 +16,10 @@ struct PatinaApp: App {
     /// names + the `pendingScanRecovery` UserDefaults flag.
     @State private var scanEvents = ScanEventChannel()
     @Environment(\.scenePhase) private var scenePhase
+    /// Wave 3 dark-mode: user appearance override (System / Light / Dark),
+    /// set from Settings → Preferences → Appearance. `system` resolves to a
+    /// nil preferredColorScheme so the app follows the OS appearance.
+    @AppStorage(AppearanceSetting.storageKey) private var appearanceRaw = AppearanceSetting.system.rawValue
 
     /// Whether the app is running in UI test mode
     static var isUITesting: Bool {
@@ -73,6 +77,7 @@ struct PatinaApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .preferredColorScheme((AppearanceSetting(rawValue: appearanceRaw) ?? .system).colorScheme)
                 .environment(\.appCoordinator, coordinator)
                 .environment(\.scanEventChannel, scanEvents)
                 .modelContainer(PersistenceController.shared.container)

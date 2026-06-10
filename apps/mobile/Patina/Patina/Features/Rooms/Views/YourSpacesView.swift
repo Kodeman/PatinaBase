@@ -24,7 +24,7 @@ struct YourSpacesView: View {
 
     var body: some View {
         ZStack {
-            PatinaColors.offWhite.ignoresSafeArea()
+            PatinaColors.Background.primary.ignoresSafeArea()
 
             if rooms.isEmpty {
                 emptyState
@@ -89,7 +89,7 @@ struct YourSpacesView: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("Your Spaces")
                     .font(PatinaTypography.h3)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 // Contextual help: explains the "Your Spaces" model —
                 // every captured room as a gallery card with budget +
                 // item count, plus a Whole Home aggregate at the top.
@@ -107,7 +107,7 @@ struct YourSpacesView: View {
             } label: {
                 Image(systemName: "questionmark.circle")
                     .font(.system(size: 17, weight: .regular))
-                    .foregroundStyle(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .frame(width: 36, height: 36)
                     .contentShape(Rectangle())
             }
@@ -130,11 +130,11 @@ struct YourSpacesView: View {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(PatinaColors.charcoal)
+                        .fill(PatinaColors.Interactive.active)
                         .frame(width: 36, height: 36)
                     Text("+")
                         .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.Text.inverse)
                 }
             }
             .buttonStyle(.plain)
@@ -151,14 +151,14 @@ struct YourSpacesView: View {
             Spacer()
             ZStack {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(PatinaColors.softCream)
+                    .fill(PatinaColors.Background.secondary)
                     .frame(width: 80, height: 80)
                 Text("⌂").font(.system(size: 32))
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("No rooms yet")
                     .font(.custom("PlayfairDisplay-Regular", size: 20))
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 // Empty-state help: explains why scanning matters. The
                 // copy below is a CTA; this tooltip explains the *why*
                 // for a designer-curious user not ready to scan yet.
@@ -170,7 +170,7 @@ struct YourSpacesView: View {
             }
             Text("Scan a room and Patina fills it with furniture that knows your space — your light, your walls, your style.")
                 .font(.system(size: 13))
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 260)
                 .padding(.bottom, 8)
@@ -182,10 +182,10 @@ struct YourSpacesView: View {
                     Text("Scan Your First Room")
                 }
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(PatinaColors.offWhite)
+                .foregroundStyle(PatinaColors.Text.inverse)
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
-                .background(Capsule().fill(PatinaColors.charcoal))
+                .background(Capsule().fill(PatinaColors.Interactive.active))
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 32)
@@ -218,10 +218,10 @@ struct YourSpacesView: View {
                 .tracking(0.5)
                 .textCase(.uppercase)
         }
-        .foregroundStyle(PatinaColors.agedOak)
+        .foregroundStyle(PatinaColors.Text.muted)
         .padding(.vertical, 4)
         .padding(.horizontal, 10)
-        .background(Capsule().fill(PatinaColors.softCream))
+        .background(Capsule().fill(PatinaColors.Background.secondary))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(text))
     }

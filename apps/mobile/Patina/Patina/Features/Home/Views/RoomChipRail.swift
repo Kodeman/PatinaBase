@@ -49,13 +49,13 @@ struct RoomChipRail: View {
                         Circle()
                             .fill(PatinaColors.clay)
                             .frame(width: 8, height: 8)
-                            .overlay(Circle().stroke(PatinaColors.offWhite, lineWidth: 1.5))
+                            .overlay(Circle().stroke(PatinaColors.Background.primary, lineWidth: 1.5))
                             .offset(x: 1, y: -1)
                     }
                 }
                 Text(room.name)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(isActive ? PatinaColors.offWhite : PatinaColors.charcoal)
+                    .foregroundStyle(isActive ? PatinaColors.Text.inverse : PatinaColors.Text.primary)
                 Text("\(room.itemCount)")
                     .font(.custom("DMMono-Regular", size: 7))
                     .foregroundStyle(PatinaColors.offWhite)
@@ -75,11 +75,11 @@ struct RoomChipRail: View {
             // the off-white home surface.
             .background(
                 Capsule()
-                    .fill(isActive ? PatinaColors.charcoal : PatinaColors.offWhite)
+                    .fill(isActive ? PatinaColors.Interactive.active : PatinaColors.Background.primary)
             )
             .overlay(
                 Capsule()
-                    .stroke(isActive ? PatinaColors.charcoal : PatinaColors.pearl, lineWidth: 1.5)
+                    .stroke(isActive ? PatinaColors.Interactive.active : PatinaColors.Text.muted.opacity(0.25), lineWidth: 1.5)
             )
         }
         .buttonStyle(.plain)
@@ -89,5 +89,5 @@ struct RoomChipRail: View {
 
 #Preview {
     RoomChipRail(rooms: RoomSummary.mockAll, selectedID: RoomSummary.mockAll.first?.id) { _ in }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
 }

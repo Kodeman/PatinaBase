@@ -38,7 +38,7 @@ struct WholeHomeCrossRoomBar: View {
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(PatinaColors.charcoal)
+                    .fill(PatinaColors.Background.dark)
             )
         }
         .buttonStyle(.plain)

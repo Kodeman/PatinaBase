@@ -32,7 +32,7 @@ extension View {
                     .foregroundStyle(PatinaColors.Text.primary)
                     .frame(maxWidth: .infinity)
                     .padding(PatinaSpacing.md)
-                    .background(PatinaColors.softCream)
+                    .background(PatinaColors.Background.secondary)
                     .clipShape(.rect(cornerRadius: PatinaRadius.lg))
             }
         }

@@ -46,7 +46,7 @@ struct DesignerHomeView: View {
             }
             .padding(.bottom, 120)
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         .task { await viewModel.load() }
         // PT-3-7: hydrate the unread count for the header bell badge.
         .task { await notificationsViewModel.load() }
@@ -87,7 +87,7 @@ struct DesignerHomeView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("Your studio today")
                         .font(PatinaTypography.h2)
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                     // Contextual help: explains what the "studio today"
                     // dashboard shows — the morning brief of designer state
                     // across projects, leads, decisions, and conversations.
@@ -99,7 +99,7 @@ struct DesignerHomeView: View {
                 }
                 Text("\(viewModel.activeProjects.count) active · \(viewModel.leads.count) open lead\(viewModel.leads.count == 1 ? "" : "s") · \(viewModel.pendingDecisions.count) decision\(viewModel.pendingDecisions.count == 1 ? "" : "s")")
                     .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
             Spacer()
             HStack(spacing: 4) {
@@ -108,10 +108,10 @@ struct DesignerHomeView: View {
                     Button {
                         switchToConsumerHome()
                     } label: {
-                        MonoLabel(text: "CONSUMER", size: PatinaTypography.monoSmall, color: PatinaColors.mocha, tracking: 1.5)
+                        MonoLabel(text: "CONSUMER", size: PatinaTypography.monoSmall, color: PatinaColors.Text.secondary, tracking: 1.5)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(Capsule().fill(PatinaColors.softCream))
+                            .background(Capsule().fill(PatinaColors.Background.secondary))
                             .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
@@ -125,7 +125,7 @@ struct DesignerHomeView: View {
                 } label: {
                     Image(systemName: "bell")
                         .font(.system(size: 17, weight: .regular))
-                        .foregroundStyle(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.Text.secondary)
                         .frame(width: 36, height: 36)
                         .overlay(alignment: .topTrailing) {
                             if unreadCount > 0 {
@@ -153,7 +153,7 @@ struct DesignerHomeView: View {
                 } label: {
                     Image(systemName: "questionmark.circle")
                         .font(.system(size: 17, weight: .regular))
-                        .foregroundStyle(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.Text.secondary)
                         .frame(width: 36, height: 36)
                         .contentShape(Rectangle())
                 }
@@ -222,23 +222,23 @@ struct DesignerHomeView: View {
                 HStack(spacing: 10) {
                     Image(systemName: "shippingbox")
                         .font(.system(size: 16))
-                        .foregroundStyle(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.Text.secondary)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Receive delivery")
                             .font(PatinaTypography.bodySmallMedium)
-                            .foregroundStyle(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.Text.primary)
                         Text("Inspect arriving POs on-site")
                             .font(PatinaTypography.caption)
-                            .foregroundStyle(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.Text.muted)
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12))
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(PatinaColors.softCream)
+                .background(PatinaColors.Background.secondary)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
             }
             .buttonStyle(.plain)
@@ -257,15 +257,15 @@ struct DesignerHomeView: View {
                     Spacer()
                     Text("\(value)")
                         .font(PatinaTypography.h4)
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                 }
                 Text(title)
                     .font(PatinaTypography.uiSmall)
-                    .foregroundStyle(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.Text.secondary)
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(PatinaColors.softCream)
+            .background(PatinaColors.Background.secondary)
             .clipShape(RoundedRectangle(cornerRadius: 14))
         }
         .buttonStyle(.plain)
@@ -340,7 +340,7 @@ struct DesignerHomeView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(project.name)
                         .font(PatinaTypography.bodySmallMedium)
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                     // R16: human phase/status vocabulary in the dashboard row —
                     // compact label keeps the price column clear; statusLabel
                     // already renders "—" for a nil status.
@@ -348,17 +348,17 @@ struct DesignerHomeView: View {
                         ? PhaseDisplay.shortLabel(for: project.current_phase)
                         : PhaseDisplay.statusLabel(for: project.status))
                         .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                 }
                 Spacer()
                 if let total = project.total_amount_cents ?? project.budget_cents {
                     Text(formatPrice(total))
                         .font(PatinaTypography.monoTiny)
-                        .foregroundStyle(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.Text.secondary)
                 }
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12))
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
             .padding(.vertical, 12)
             .padding(.horizontal, 16)
@@ -371,16 +371,16 @@ struct DesignerHomeView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(lead.project_type?.replacingOccurrences(of: "_", with: " ").capitalized ?? "Consultation")
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 Text(lead.project_description ?? "No description")
                     .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
                     .lineLimit(2)
             }
             Spacer()
             Text(lead.budget_range ?? "")
                 .font(PatinaTypography.monoTiny)
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 16)
@@ -394,16 +394,16 @@ struct DesignerHomeView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(decision.title ?? "Untitled decision")
                         .font(PatinaTypography.bodySmallMedium)
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                     Text(decision.description ?? "")
                         .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                         .lineLimit(2)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12))
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
             .padding(.vertical, 12)
             .padding(.horizontal, 16)
@@ -419,15 +419,15 @@ struct DesignerHomeView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(thread.title ?? thread.kind.capitalized)
                         .font(PatinaTypography.bodySmallMedium)
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                     Text(thread.last_message_at ?? "")
                         .font(PatinaTypography.monoTiny)
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12))
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
             .padding(.vertical, 12)
             .padding(.horizontal, 16)
@@ -438,7 +438,7 @@ struct DesignerHomeView: View {
     private func emptyRow(_ message: String) -> some View {
         Text(message)
             .font(PatinaTypography.caption)
-            .foregroundStyle(PatinaColors.agedOak)
+            .foregroundStyle(PatinaColors.Text.muted)
             .padding(.vertical, 16)
             .padding(.horizontal, 16)
     }
@@ -494,7 +494,7 @@ private struct Section<Content: View>: View {
             VStack(spacing: 0) {
                 content()
             }
-            .background(PatinaColors.softCream)
+            .background(PatinaColors.Background.secondary)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .padding(.horizontal, 24)
         }

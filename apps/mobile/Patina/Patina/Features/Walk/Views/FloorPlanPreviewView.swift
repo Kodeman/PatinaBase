@@ -21,7 +21,7 @@ struct FloorPlanPreviewView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Your Room")
                     .font(PatinaTypography.h3)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 MonoLabel(text: "\(roomData.roomName.uppercased()) · \(confidenceLabel)")
             }
@@ -32,13 +32,13 @@ struct FloorPlanPreviewView: View {
 
             // Floor plan view
             ZStack {
-                PatinaColors.softCream
+                PatinaColors.Background.secondary
 
                 // Room outline
                 ZStack {
                     // Room shape
                     RoundedRectangle(cornerRadius: 3)
-                        .stroke(PatinaColors.mocha, lineWidth: 2)
+                        .stroke(PatinaColors.Text.secondary, lineWidth: 2)
                         .frame(
                             width: roomWidth,
                             height: roomHeight
@@ -54,13 +54,13 @@ struct FloorPlanPreviewView: View {
                     // Width label (bottom)
                     Text(String(format: "%.1fm", dimensions.width))
                         .font(PatinaTypography.monoTiny)
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                         .offset(y: roomHeight / 2 + 14)
 
                     // Length label (right)
                     Text(String(format: "%.1fm", dimensions.length))
                         .font(PatinaTypography.monoTiny)
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                         .offset(x: roomWidth / 2 + 20)
                 }
 
@@ -92,20 +92,20 @@ struct FloorPlanPreviewView: View {
                 Button(action: onRescan) {
                     Text("Rescan")
                         .font(PatinaTypography.uiAction)
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
-                        .background(PatinaColors.softCream)
+                        .background(PatinaColors.Background.secondary)
                         .clipShape(Capsule())
                 }
 
                 Button(action: onUseScan) {
                     Text("Use This Scan")
                         .font(PatinaTypography.uiAction)
-                        .foregroundStyle(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.Text.inverse)
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
-                        .background(PatinaColors.charcoal)
+                        .background(PatinaColors.Interactive.active)
                         .clipShape(Capsule())
                 }
             }
@@ -113,7 +113,7 @@ struct FloorPlanPreviewView: View {
             .padding(.top, 12)
             .padding(.bottom, 100) // Companion space
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         .toolbar(.hidden, for: .navigationBar)
     }
 
@@ -197,16 +197,16 @@ struct FloorPlanPreviewView: View {
         VStack(spacing: 2) {
             Text(value)
                 .font(PatinaTypography.h5)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
 
             Text(label.uppercased())
                 .font(PatinaTypography.monoTiny)
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
                 .tracking(0.5)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
-        .background(PatinaColors.softCream)
+        .background(PatinaColors.Background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }

@@ -46,11 +46,11 @@ struct DailyGreetingHeader: View {
                     .font(PatinaTypography.monoTiny)
                     .tracking(0.5)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("Your Daily Room")
                         .font(.custom("PlayfairDisplay-Regular", size: 21))
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                         .lineSpacing(0)
                     // Contextual help: explains what the "Daily Room" feed
                     // is — a curated mix of one editorial story and a stream
@@ -71,11 +71,11 @@ struct DailyGreetingHeader: View {
                 // PT-4-10: dual-role mode-switch chip.
                 if let roleChip {
                     Button(action: roleChip.onTap) {
-                        MonoLabel(text: roleChip.label, size: PatinaTypography.monoSmall, color: PatinaColors.mocha, tracking: 1.5)
+                        MonoLabel(text: roleChip.label, size: PatinaTypography.monoSmall, color: PatinaColors.Text.secondary, tracking: 1.5)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                             .background(
-                                Capsule().fill(PatinaColors.softCream)
+                                Capsule().fill(PatinaColors.Background.secondary)
                             )
                             .contentShape(Capsule())
                     }
@@ -89,7 +89,7 @@ struct DailyGreetingHeader: View {
                     Button(action: onBellTap) {
                         Image(systemName: "bell")
                             .font(.system(size: 17, weight: .regular))
-                            .foregroundStyle(PatinaColors.mocha)
+                            .foregroundStyle(PatinaColors.Text.secondary)
                             .frame(width: 36, height: 36)
                             .overlay(alignment: .topTrailing) {
                                 UnreadBadge(count: unreadCount)
@@ -110,7 +110,7 @@ struct DailyGreetingHeader: View {
                     Button(action: onHelpTap) {
                         Image(systemName: "questionmark.circle")
                             .font(.system(size: 17, weight: .regular))
-                            .foregroundStyle(PatinaColors.mocha)
+                            .foregroundStyle(PatinaColors.Text.secondary)
                             .frame(width: 36, height: 36)
                             .contentShape(Rectangle())
                     }
@@ -186,5 +186,5 @@ private struct UnreadBadge: View {
             roleChip: .init(label: "DESIGNER", onTap: {})
         )
     }
-    .background(PatinaColors.offWhite)
+    .background(PatinaColors.Background.primary)
 }

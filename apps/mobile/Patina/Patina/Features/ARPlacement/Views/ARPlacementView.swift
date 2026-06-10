@@ -42,7 +42,7 @@ struct ARPlacementView: View {
                     if let product = viewModel.product {
                         Text(product.name)
                             .font(PatinaTypography.h5)
-                            .foregroundStyle(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.Text.primary)
                             .padding(.horizontal, 18)
                             .padding(.vertical, 8)
                             // PT-5-7: Liquid Glass replaces the
@@ -219,7 +219,7 @@ struct ARPlacementView: View {
             .overlay(
                 Image(systemName: icon)
                     .font(.system(size: 18))
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
             )
     }
 }

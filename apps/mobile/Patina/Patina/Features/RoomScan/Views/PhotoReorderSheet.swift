@@ -41,19 +41,19 @@ struct PhotoReorderSheet: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(reorderableTitle(for: photo))
                                     .font(PatinaTypography.uiSmall)
-                                    .foregroundStyle(PatinaColors.charcoal)
+                                    .foregroundStyle(PatinaColors.Text.primary)
                                 if let caption = captions[photo.id] ?? photo.userAnnotation,
                                    !caption.isEmpty {
                                     Text(caption)
                                         .font(.custom("Inter-Regular", size: 11, relativeTo: .caption2))
-                                        .foregroundStyle(PatinaColors.agedOak)
+                                        .foregroundStyle(PatinaColors.Text.muted)
                                         .lineLimit(1)
                                 }
                             }
                             Spacer()
                             Image(systemName: "line.3.horizontal")
                                 .font(.system(size: 14, weight: .regular))
-                                .foregroundStyle(PatinaColors.agedOak.opacity(0.6))
+                                .foregroundStyle(PatinaColors.Text.muted.opacity(0.6))
                         }
                         .padding(.vertical, 4)
                     }
@@ -64,14 +64,14 @@ struct PhotoReorderSheet: View {
             }
             .listStyle(.plain)
             .environment(\.editMode, .constant(.active))
-            .background(PatinaColors.offWhite.ignoresSafeArea())
+            .background(PatinaColors.Background.primary.ignoresSafeArea())
             .scrollContentBackground(.hidden)
             .navigationTitle("Reorder Photos")
             .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { onDismiss() }
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                 }
             }
         }

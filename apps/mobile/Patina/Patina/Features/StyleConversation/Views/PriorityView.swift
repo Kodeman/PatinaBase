@@ -52,22 +52,22 @@ struct PriorityView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(card.label)
                     .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .callout))
-                    .foregroundStyle(isSelected ? PatinaColors.offWhite : PatinaColors.charcoal)
+                    .foregroundStyle(isSelected ? PatinaColors.Text.inverse : PatinaColors.Text.primary)
                 Text(card.subtext)
                     .font(.custom("Inter-Light", size: 12, relativeTo: .caption))
-                    .foregroundStyle(isSelected ? PatinaColors.pearl : PatinaColors.agedOak)
+                    .foregroundStyle(isSelected ? PatinaColors.Text.inverse.opacity(0.8) : PatinaColors.Text.muted)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 20)
             .padding(.horizontal, 22)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? PatinaColors.charcoal : PatinaColors.softCream)
+                    .fill(isSelected ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(
-                        isSelected ? PatinaColors.charcoal : PatinaColors.pearl,
+                        isSelected ? PatinaColors.Interactive.active : PatinaColors.pearl,
                         lineWidth: 1.5
                     )
             )

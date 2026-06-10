@@ -19,11 +19,11 @@ struct RecommendationsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Perfect for your space")
                     .font(PatinaTypography.h4)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 Text(viewModel.headerSubtitle)
                     .font(PatinaTypography.uiSmall)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
             .padding(.top, 56)
             .padding(.horizontal, 24)
@@ -63,7 +63,7 @@ struct RecommendationsView: View {
                 }
             }
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         .toolbarTitleDisplayMode(.inline)
         .task {
             await viewModel.loadRecommendations()
@@ -92,7 +92,7 @@ struct RecommendationsView: View {
                 // Match badge
                 Text(product.matchLabel)
                     .font(PatinaTypography.monoSmall)
-                    .foregroundStyle(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .tracking(0.3)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
@@ -113,7 +113,7 @@ struct RecommendationsView: View {
                                 .overlay(
                                     Image(systemName: "heart")
                                         .font(.system(size: 14))
-                                        .foregroundStyle(PatinaColors.mocha)
+                                        .foregroundStyle(PatinaColors.Text.secondary)
                                 )
                                 .contentShape(Rectangle())
                         }
@@ -130,19 +130,19 @@ struct RecommendationsView: View {
 
                 Text(product.name)
                     .font(PatinaTypography.uiSmall)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .lineLimit(2)
                     .padding(.top, 2)
 
                 Text(product.fullFormattedPrice)
                     .font(PatinaTypography.h5)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .padding(.top, 4)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
         }
-        .background(PatinaColors.softCream)
+        .background(PatinaColors.Background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .onTapGesture {
             coordinator.navigate(to: .pieceDetail(pieceId: product.id))
@@ -196,7 +196,7 @@ struct RecommendationsView: View {
             }
             Text("Curating your pieces...")
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
             Spacer()
         }
         .frame(maxWidth: .infinity)

@@ -36,10 +36,10 @@ struct InvestmentPerspectiveView: View {
                             size: 18,
                             relativeTo: .body
                         ))
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                     Text(tier.descriptionText)
                         .font(.custom("Inter-Light", size: 12, relativeTo: .caption))
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                 }
 
                 Spacer()

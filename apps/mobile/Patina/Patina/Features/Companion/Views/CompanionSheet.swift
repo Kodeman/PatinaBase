@@ -52,7 +52,7 @@ public struct CompanionSheet: View {
 
                 Text(viewModel.context.contextSummary)
                     .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility2) // Cap at 150% per spec
             }
             .padding(.horizontal, PatinaSpacing.lg)
@@ -123,7 +123,7 @@ struct QuickActionButton: View {
             // Ensure minimum touch target (44pt per Apple HIG)
             .frame(maxWidth: .infinity, minHeight: 44)
             .background(action.isPrimary ? PatinaColors.clay : Color.clear)
-            .foregroundStyle(action.isPrimary ? PatinaColors.offWhite : PatinaColors.charcoal)
+            .foregroundStyle(action.isPrimary ? PatinaColors.offWhite : PatinaColors.Text.primary)
             .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
             .overlay(
                 RoundedRectangle(cornerRadius: PatinaRadius.lg)
@@ -144,7 +144,7 @@ struct QuickActionButton: View {
 #Preview("Quick Actions") {
     CompanionSheet(viewModel: CompanionViewModel())
         .frame(height: 350)
-        .background(PatinaColors.warmWhite)
+        .background(PatinaColors.Background.tertiary)
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .padding()
         .background(PatinaColors.Background.primary)

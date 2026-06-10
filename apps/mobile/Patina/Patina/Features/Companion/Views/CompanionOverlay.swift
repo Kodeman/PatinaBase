@@ -359,7 +359,9 @@ public struct CompanionOverlay: View {
                 }
             }
             .padding(20)
-            .background(PatinaColors.charcoal)
+            // Deliberately dark Companion panel — charcoal in both modes
+            // (subtle elevation over the graphite canvas in dark).
+            .background(PatinaColors.Background.dark)
             .clipShape(RoundedRectangle(cornerRadius: 24))
             .patinaShadow(PatinaShadows.companion)
             .overlay(alignment: .top) {
@@ -380,7 +382,7 @@ public struct CompanionOverlay: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("This is your Companion. Tap any time for what to do next.")
                 .font(.custom("PlayfairDisplay-Italic", size: 15, relativeTo: .subheadline))
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Button {
@@ -398,7 +400,7 @@ public struct CompanionOverlay: View {
         }
         .padding(16)
         .frame(maxWidth: 280, alignment: .leading)
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .patinaShadow(PatinaShadows.md)
         .padding(.horizontal, 12)
@@ -454,7 +456,8 @@ public struct CompanionOverlay: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .background(PatinaColors.charcoal)
+        // Deliberately dark journey pill — charcoal in both modes.
+        .background(PatinaColors.Background.dark)
         .clipShape(Capsule())
         .patinaShadow(PatinaShadows.companion)
         .padding(.horizontal, 40)
@@ -515,9 +518,9 @@ public struct CompanionOverlay: View {
                 .frame(width: 58, height: 58)
                 .scaleEffect(reduceMotion ? 1.0 : breatheScale)
 
-            // Main circle
+            // Main circle — deliberately dark mark, charcoal in both modes.
             Circle()
-                .fill(PatinaColors.charcoal)
+                .fill(PatinaColors.Background.dark)
                 .frame(width: 52, height: 52)
                 .patinaShadow(PatinaShadows.companion)
 
@@ -670,7 +673,7 @@ private extension View {
 
 #Preview("Resting") {
     ZStack {
-        PatinaColors.offWhite.ignoresSafeArea()
+        PatinaColors.Background.primary.ignoresSafeArea()
         Text("Home Screen Content")
         CompanionOverlay()
     }

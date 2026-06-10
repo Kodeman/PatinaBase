@@ -36,7 +36,8 @@ struct AddedToRoomToast: View {
         .padding(.horizontal, 18)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(PatinaColors.charcoal)
+                // Deliberately dark toast surface — charcoal in both modes.
+                .fill(PatinaColors.Background.dark)
         )
         .shadow(color: PatinaColors.charcoal.opacity(0.25), radius: 16, x: 0, y: 8)
     }
@@ -45,5 +46,5 @@ struct AddedToRoomToast: View {
 #Preview {
     AddedToRoomToast(message: "Added to Living Room") { }
         .padding()
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
 }

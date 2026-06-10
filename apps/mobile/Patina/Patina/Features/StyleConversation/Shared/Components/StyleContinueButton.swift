@@ -31,14 +31,14 @@ struct StyleContinueButton: View {
             Text(title)
                 .font(PatinaTypography.uiAction)
                 .tracking(0.3)
-                .foregroundStyle(PatinaColors.offWhite)
+                .foregroundStyle(PatinaColors.Text.inverse)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
                 .background(
                     RoundedRectangle(cornerRadius: 26)
                         .fill(isEnabled
-                            ? PatinaColors.charcoal
-                            : PatinaColors.charcoal.opacity(0.3))
+                            ? PatinaColors.Interactive.active
+                            : PatinaColors.Interactive.active.opacity(0.3))
                 )
         }
         .buttonStyle(.plain)

@@ -38,7 +38,7 @@ struct DecisionDetailView: View {
             }
             .padding(.bottom, 120)
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         // R04: nav bar is hidden for this destination — pin a back
         // affordance over the scroll content (matches RoomProjectView).
         .overlay(alignment: .topLeading) {
@@ -89,11 +89,11 @@ struct DecisionDetailView: View {
                 .tracking(2)
             Text(decision.title ?? "Decision")
                 .font(PatinaTypography.h2)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
             if let description = decision.description, !description.isEmpty {
                 Text(description)
                     .font(PatinaTypography.bodySmall)
-                    .foregroundStyle(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.Text.secondary)
             }
             if viewModel.isResolved {
                 resolvedBanner
@@ -136,11 +136,11 @@ struct DecisionDetailView: View {
                     if hasDetails {
                         Text(option.resolvedTitle ?? "Option")
                             .font(PatinaTypography.h5)
-                            .foregroundStyle(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.Text.primary)
                         if let description = option.resolvedDescription {
                             Text(description)
                                 .font(PatinaTypography.caption)
-                                .foregroundStyle(PatinaColors.agedOak)
+                                .foregroundStyle(PatinaColors.Text.muted)
                         }
                     } else {
                         Text("Details unavailable — view in portal")
@@ -164,14 +164,14 @@ struct DecisionDetailView: View {
                 if let cents = option.resolvedPriceCents {
                     Text(Self.formattedPrice(cents: cents))
                         .font(PatinaTypography.bodySmallMedium)
-                        .foregroundStyle(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.Text.secondary)
                 }
                 Spacer()
                 optionAction(option, isSelected: isSelected, hasDetails: hasDetails)
             }
         }
         .padding(16)
-        .background(PatinaColors.softCream)
+        .background(PatinaColors.Background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
@@ -235,7 +235,7 @@ struct DecisionDetailView: View {
         VStack(spacing: 12) {
             Text(msg)
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
             Button("Try Again") {
                 Task { await viewModel.load(decisionId: decisionId) }
             }
@@ -279,20 +279,20 @@ private struct DecisionConsentSheet: View {
                         .tracking(2)
                     Text(optionTitle)
                         .font(PatinaTypography.h3)
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                     Text("Approving sends your decision to your designer and unblocks any work waiting on it.")
                         .font(PatinaTypography.bodySmall)
-                        .foregroundStyle(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.Text.secondary)
                 }
 
                 Toggle(isOn: $requireSignature) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Add my signature")
                             .font(PatinaTypography.bodySmallMedium)
-                            .foregroundStyle(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.Text.primary)
                         Text("Type your full name to e-sign this approval.")
                             .font(PatinaTypography.caption)
-                            .foregroundStyle(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.Text.muted)
                     }
                 }
                 .tint(PatinaColors.clay)
@@ -331,7 +331,7 @@ private struct DecisionConsentSheet: View {
             }
             .padding(24)
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
     }
 }
 

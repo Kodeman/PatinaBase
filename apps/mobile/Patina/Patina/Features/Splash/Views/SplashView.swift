@@ -16,23 +16,23 @@ struct SplashView: View {
 
     var body: some View {
         ZStack {
-            PatinaColors.offWhite
+            PatinaColors.Background.primary
                 .ignoresSafeArea()
 
             VStack(spacing: 16) {
                 // PATINA wordmark
                 Text("PATINA")
                     .font(PatinaTypography.wordmark)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .tracking(8)
                     .opacity(wordmarkOpacity)
                     .offset(y: wordmarkOffset)
 
                 // Strata mark lines
                 VStack(spacing: 4) {
-                    splashStrataLine(width: 60, color: PatinaColors.mocha)
-                    splashStrataLine(width: 48, color: PatinaColors.clay)
-                    splashStrataLine(width: 36, color: PatinaColors.clay.opacity(0.5))
+                    splashStrataLine(width: 60, color: PatinaColors.Strata.line1)
+                    splashStrataLine(width: 48, color: PatinaColors.Strata.line2)
+                    splashStrataLine(width: 36, color: PatinaColors.Strata.line3)
                 }
                 .opacity(strataOpacity)
             }

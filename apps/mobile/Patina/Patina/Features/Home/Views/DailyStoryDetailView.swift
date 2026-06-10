@@ -30,7 +30,8 @@ struct DailyStoryDetailView: View {
         }
         .scrollDisabled(dragOffset > 0)
         .background(
-            PatinaColors.charcoal
+            // Deliberately dark immersive reader — stays charcoal in both modes.
+            PatinaColors.Background.dark
                 .ignoresSafeArea()
                 .opacity(chromeVisible ? 1 - dismissProgress * 0.3 : 0)
         )

@@ -43,7 +43,7 @@ struct ProductDetailView: View {
                 errorView
             }
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         .toolbar(.hidden, for: .navigationBar)
         // Contextual help panel — `?` floating button in the top bar
         // toggles `isHelpPanelPresented`. Empty state ships until Sanity
@@ -149,14 +149,14 @@ struct ProductDetailView: View {
                         // Product name
                         Text(product.name)
                             .font(PatinaTypography.h2)
-                            .foregroundStyle(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.Text.primary)
                             .padding(.bottom, 4)
 
                         // Subtitle (provenance)
                         if !product.materialTags.isEmpty {
                             Text(product.materialTags.map { $0.capitalized }.joined(separator: " · "))
                                 .font(PatinaTypography.bodySmall)
-                                .foregroundStyle(PatinaColors.agedOak)
+                                .foregroundStyle(PatinaColors.Text.muted)
                                 .padding(.bottom, 16)
                         }
 
@@ -168,7 +168,7 @@ struct ProductDetailView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
                             Text(product.fullFormattedPrice)
                                 .font(PatinaTypography.displaySmall)
-                                .foregroundStyle(PatinaColors.charcoal)
+                                .foregroundStyle(PatinaColors.Text.primary)
 
                             HelpTooltip(
                                 surfaceKey: SurfaceKeys.IOSApp.Home.matchPill,
@@ -195,7 +195,7 @@ struct ProductDetailView: View {
                             HStack(alignment: .firstTextBaseline, spacing: 4) {
                                 Text("Place in your room")
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(PatinaColors.mocha)
+                                    .foregroundStyle(PatinaColors.Text.secondary)
                                 HelpInfoIcon(
                                     surfaceKey: SurfaceKeys.IOSApp.ProductDetail.spatialContext,
                                     fallback: "Spatial cues compare the piece against your room's scale, lighting, and existing palette. Pills below summarize what fits and what to watch for.",
@@ -213,7 +213,7 @@ struct ProductDetailView: View {
                                     ) { _, value in
                                         Text(value)
                                             .font(.system(size: 11))
-                                            .foregroundStyle(PatinaColors.charcoal)
+                                            .foregroundStyle(PatinaColors.Text.primary)
                                             .padding(.horizontal, 10)
                                             .padding(.vertical, 5)
                                             .background(
@@ -235,7 +235,7 @@ struct ProductDetailView: View {
                                     .font(PatinaTypography.monoSmall)
                                     .tracking(0.5)
                                     .textCase(.uppercase)
-                                    .foregroundStyle(PatinaColors.agedOak)
+                                    .foregroundStyle(PatinaColors.Text.muted)
                                 HelpInfoIcon(
                                     surfaceKey: SurfaceKeys.IOSApp.ProductDetail.materials,
                                     fallback: "Provenance badges signal verified claims about materials, craft, and origin. Tap a badge family to read how Patina vets each one.",
@@ -294,7 +294,7 @@ struct ProductDetailView: View {
             .overlay(
                 Image(systemName: icon)
                     .font(.system(size: 16))
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
             )
     }
 
@@ -302,11 +302,11 @@ struct ProductDetailView: View {
         HStack(spacing: 5) {
             Text(text)
                 .font(.system(size: 11))
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(PatinaColors.softCream)
+        .background(PatinaColors.Background.secondary)
         .clipShape(Capsule())
     }
 
@@ -320,7 +320,7 @@ struct ProductDetailView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name)
                         .font(PatinaTypography.bodySmallMedium)
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
 
                     if let location {
                         MonoLabel(text: location, size: PatinaTypography.monoSmall)
@@ -330,12 +330,12 @@ struct ProductDetailView: View {
 
             Text("\u{201C}\(story)\u{201D}")
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .italic()
                 .lineSpacing(4)
         }
         .padding(20)
-        .background(PatinaColors.softCream)
+        .background(PatinaColors.Background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -357,12 +357,12 @@ struct ProductDetailView: View {
                     )
                 } label: {
                     Circle()
-                        .fill(PatinaColors.softCream)
+                        .fill(PatinaColors.Background.secondary)
                         .frame(width: 50, height: 50)
                         .overlay(
                             Image(systemName: "arkit")
                                 .font(.system(size: 18))
-                                .foregroundStyle(PatinaColors.charcoal)
+                                .foregroundStyle(PatinaColors.Text.primary)
                         )
                 }
                 .accessibilityLabel("Place in AR")
@@ -380,10 +380,10 @@ struct ProductDetailView: View {
             } label: {
                 Text(viewModel.isSaved ? "Saved ✓" : "Add to Room")
                     .font(PatinaTypography.uiAction)
-                    .foregroundStyle(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.Text.inverse)
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
-                    .background(viewModel.isSaved ? PatinaColors.clay : PatinaColors.charcoal)
+                    .background(viewModel.isSaved ? PatinaColors.clay : PatinaColors.Interactive.active)
                     .clipShape(Capsule())
             }
         }
@@ -421,10 +421,10 @@ struct ProductDetailView: View {
             Spacer()
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 28))
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
             Text(viewModel.error ?? "Couldn't load this piece")
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .multilineTextAlignment(.center)
             if let productId {
                 Button("Let's try that again") {
@@ -466,7 +466,7 @@ private struct GlassActionBarBackground: ViewModifier {
             content.glassEffect(.regular, in: .rect)
         } else {
             content.background(
-                PatinaColors.offWhite
+                PatinaColors.Background.primary
                     .shadow(color: PatinaColors.mocha.opacity(0.08), radius: 8, y: -4)
             )
         }

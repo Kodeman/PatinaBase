@@ -88,7 +88,7 @@ public struct QuickActionChip: View {
                 Text(action.title)
                     .font(.system(size: 12, weight: .medium))  // Spec: Inter Medium 12pt
             }
-            .foregroundStyle(action.isPrimary ? .white : PatinaColors.mocha)
+            .foregroundStyle(action.isPrimary ? .white : PatinaColors.Text.secondary)
             .padding(.horizontal, 14)  // Spec: 14px horizontal
             .padding(.vertical, 8)      // Spec: 8px vertical
             .background(
@@ -124,7 +124,7 @@ public struct ContextIndicator: View {
 
                 Image(systemName: context.contextIcon)
                     .font(.system(size: 12))
-                    .foregroundStyle(hasNotification ? .white : PatinaColors.mocha)
+                    .foregroundStyle(hasNotification ? .white : PatinaColors.Text.secondary)
             }
 
             // Context text
@@ -212,13 +212,13 @@ public struct CompanionNotificationBanner: View {
                 PatinaLog.companion.debug("Selected: \(action.title)")
             }
         )
-        .background(Color.white)
+        .background(PatinaColors.Background.tertiary)
 
         QuickActionsBar(
             actions: QuickActionFactory.actions(for: .emergence(pieceId: nil)),
             onAction: { _ in }
         )
-        .background(Color.white)
+        .background(PatinaColors.Background.tertiary)
     }
     .padding()
     .background(PatinaColors.Background.primary)

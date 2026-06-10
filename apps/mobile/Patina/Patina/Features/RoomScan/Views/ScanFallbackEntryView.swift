@@ -68,7 +68,7 @@ struct ScanFallbackEntryView: View {
                 .padding(.bottom, 42)
             }
         }
-        .background(PatinaColors.offWhite.ignoresSafeArea())
+        .background(PatinaColors.Background.primary.ignoresSafeArea())
         .onAppear {
             if let saved = UserDefaults.standard.string(forKey: unitKey),
                let parsed = Unit(rawValue: saved) {
@@ -99,17 +99,17 @@ struct ScanFallbackEntryView: View {
                         Text(label)
                             .font(PatinaTypography.caption)
                     }
-                    .foregroundStyle(selectedType == id ? PatinaColors.offWhite : PatinaColors.charcoal)
+                    .foregroundStyle(selectedType == id ? PatinaColors.Text.inverse : PatinaColors.Text.primary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(selectedType == id ? PatinaColors.charcoal : PatinaColors.softCream)
+                            .fill(selectedType == id ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(
-                                selectedType == id ? PatinaColors.charcoal : PatinaColors.pearl,
+                                selectedType == id ? PatinaColors.Interactive.active : PatinaColors.pearl,
                                 lineWidth: 1.5
                             )
                     )
@@ -145,19 +145,19 @@ struct ScanFallbackEntryView: View {
             }) {
                 Text("ft")
                     .font(PatinaTypography.mono)
-                    .foregroundStyle(unit == .feet ? PatinaColors.charcoal : PatinaColors.agedOak)
+                    .foregroundStyle(unit == .feet ? PatinaColors.Text.primary : PatinaColors.Text.muted)
             }
             .buttonStyle(.plain)
             Text("/")
                 .font(PatinaTypography.mono)
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
             Button(action: {
                 unit = .meters
                 UserDefaults.standard.set(unit.rawValue, forKey: unitKey)
             }) {
                 Text("m")
                     .font(PatinaTypography.mono)
-                    .foregroundStyle(unit == .meters ? PatinaColors.charcoal : PatinaColors.agedOak)
+                    .foregroundStyle(unit == .meters ? PatinaColors.Text.primary : PatinaColors.Text.muted)
             }
             .buttonStyle(.plain)
         }
@@ -177,12 +177,12 @@ struct ScanFallbackEntryView: View {
             TextField("", text: text)
                 .keyboardType(.decimalPad)
                 .font(.custom("Inter-Regular", size: 15, relativeTo: .subheadline))
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .padding(.horizontal, 16)
                 .frame(height: 48)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(PatinaColors.softCream)
+                        .fill(PatinaColors.Background.secondary)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
@@ -212,26 +212,26 @@ struct ScanFallbackEntryView: View {
         HStack {
             Text(title)
                 .font(PatinaTypography.uiSmall)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
             Spacer()
             Button(action: { if value.wrappedValue > 0 { value.wrappedValue -= 1 } }) {
                 Image(systemName: "minus")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .frame(width: 32, height: 32)
-                    .background(Circle().fill(PatinaColors.softCream))
+                    .background(Circle().fill(PatinaColors.Background.secondary))
             }
             .buttonStyle(.plain)
             Text("\(value.wrappedValue)")
                 .font(.custom("DMMono-Regular", size: 14, relativeTo: .subheadline))
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .frame(minWidth: 20)
             Button(action: { value.wrappedValue += 1 }) {
                 Image(systemName: "plus")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .frame(width: 32, height: 32)
-                    .background(Circle().fill(PatinaColors.softCream))
+                    .background(Circle().fill(PatinaColors.Background.secondary))
             }
             .buttonStyle(.plain)
         }
@@ -239,7 +239,7 @@ struct ScanFallbackEntryView: View {
         .frame(height: 48)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(PatinaColors.softCream)
+                .fill(PatinaColors.Background.secondary)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)

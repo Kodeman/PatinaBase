@@ -59,7 +59,7 @@ struct RoomTimelineView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Room Through Time")
                     .font(PatinaTypography.h4)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
 
@@ -82,7 +82,7 @@ struct RoomTimelineView: View {
             }
             .padding(.bottom, 40)
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         .task { await viewModel.load(roomRemoteId: roomRemoteId) }
     }
 }
@@ -99,10 +99,10 @@ private struct TimelineRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.label)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 Text(event.at.prefix(10))
                     .font(.system(size: 11))
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
             Spacer()
         }

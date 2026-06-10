@@ -31,7 +31,7 @@ struct ManualRoomEntryView: View {
                 group(title: "Room Name") {
                     TextField("e.g. Living Room", text: $name)
                         .font(.custom("PlayfairDisplay-Regular", size: 16))
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                         .padding(.horizontal, 14)
                         .frame(height: 46)
                         .background(fieldBackground)
@@ -53,7 +53,7 @@ struct ManualRoomEntryView: View {
                         Text("Vaulted").tag("vaulted")
                     }
                     .pickerStyle(.menu)
-                    .tint(PatinaColors.charcoal)
+                    .tint(PatinaColors.Text.primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14)
                     .frame(height: 46)
@@ -65,7 +65,7 @@ struct ManualRoomEntryView: View {
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.center)
                             .font(.custom("PlayfairDisplay-Regular", size: 16))
-                            .foregroundStyle(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.Text.primary)
                             .frame(width: 60, height: 46)
                             .background(fieldBackground)
                         Picker("Orientation", selection: $orientationRaw) {
@@ -75,7 +75,7 @@ struct ManualRoomEntryView: View {
                             Text("West-facing").tag("west")
                         }
                         .pickerStyle(.menu)
-                        .tint(PatinaColors.charcoal)
+                        .tint(PatinaColors.Text.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 14)
                         .frame(height: 46)
@@ -86,17 +86,17 @@ struct ManualRoomEntryView: View {
                 Button(action: save) {
                     Text("Save Room")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.Text.inverse)
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
-                        .background(Capsule().fill(PatinaColors.charcoal))
+                        .background(Capsule().fill(PatinaColors.Interactive.active))
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 8)
             }
             .padding(20)
         }
-        .background(PatinaColors.offWhite.ignoresSafeArea())
+        .background(PatinaColors.Background.primary.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
     }
 
@@ -111,13 +111,13 @@ struct ManualRoomEntryView: View {
             .padding(.top, 20)
             Text("Room details")
                 .font(PatinaTypography.h4)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .padding(.top, 12)
             Text("Help us understand your space")
                 .font(PatinaTypography.monoSmall)
                 .tracking(0.4)
                 .textCase(.uppercase)
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
         }
     }
 
@@ -125,7 +125,7 @@ struct ManualRoomEntryView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
             content()
         }
     }
@@ -136,7 +136,7 @@ struct ManualRoomEntryView: View {
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.center)
                 .font(.custom("PlayfairDisplay-Regular", size: 16))
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
                 .background(fieldBackground)
@@ -144,13 +144,13 @@ struct ManualRoomEntryView: View {
                 .font(.custom("DMMono-Regular", size: 7))
                 .tracking(0.4)
                 .textCase(.uppercase)
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
         }
     }
 
     private var fieldBackground: some View {
         RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill(PatinaColors.softCream)
+            .fill(PatinaColors.Background.secondary)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(PatinaColors.pearl, lineWidth: 1.5)

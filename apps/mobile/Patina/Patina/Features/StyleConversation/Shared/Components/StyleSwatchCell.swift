@@ -90,5 +90,5 @@ private let previewGradient = LinearGradient(
         StyleSwatchCell(label: "Aged Leather", gradient: previewGradient, isSelected: true, onTap: {})
     }
     .padding()
-    .background(PatinaColors.offWhite)
+    .background(PatinaColors.Background.primary)
 }

@@ -33,10 +33,10 @@ struct ContinueScanCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Continue your scan")
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 Text("\(photosCount) photo\(photosCount == 1 ? "" : "s") captured · \(relativeStarted)")
                     .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
 
             Spacer(minLength: 0)
@@ -44,7 +44,7 @@ struct ContinueScanCard: View {
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
@@ -52,7 +52,7 @@ struct ContinueScanCard: View {
             .accessibilityLabel("Dismiss saved scan")
         }
         .padding(12)
-        .background(PatinaColors.softCream)
+        .background(PatinaColors.Background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -82,5 +82,5 @@ struct ContinueScanCard: View {
         onDismiss: {}
     )
     .padding(20)
-    .background(PatinaColors.offWhite)
+    .background(PatinaColors.Background.primary)
 }

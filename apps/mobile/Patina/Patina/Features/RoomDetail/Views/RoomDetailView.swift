@@ -61,16 +61,16 @@ struct RoomDetailView: View {
                                 HStack {
                                     Text("Room Through Time")
                                         .font(.system(size: 14, weight: .medium))
-                                        .foregroundStyle(PatinaColors.charcoal)
+                                        .foregroundStyle(PatinaColors.Text.primary)
                                     Spacer()
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 12, weight: .semibold))
-                                        .foregroundStyle(PatinaColors.agedOak)
+                                        .foregroundStyle(PatinaColors.Text.muted)
                                 }
                                 .padding(16)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(PatinaColors.softCream)
+                                        .fill(PatinaColors.Background.secondary)
                                 )
                                 .padding(.horizontal, 20)
                             }

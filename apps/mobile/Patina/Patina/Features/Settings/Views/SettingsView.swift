@@ -16,6 +16,9 @@ struct SettingsView: View {
     /// read by `RoomScanSyncService` at upload-time — UserDefaults key
     /// `patina.scanUploadOnCellularEnabled` keeps the two sides in sync.
     @AppStorage("patina.scanUploadOnCellularEnabled") private var uploadOnCellular = false
+    /// Wave 3 dark-mode: appearance override (System / Light / Dark).
+    /// PatinaApp reads the same key and applies `.preferredColorScheme`.
+    @AppStorage(AppearanceSetting.storageKey) private var appearanceRaw = AppearanceSetting.system.rawValue
 
     var body: some View {
         // PT-0-5: this is the real settings sheet (was previously
@@ -33,7 +36,7 @@ struct SettingsView: View {
                 // Header
                 Text("Settings")
                     .font(PatinaTypography.h3)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .padding(.top, 56)
                     .padding(.horizontal, 24)
                     .padding(.bottom, 24)
@@ -78,6 +81,7 @@ struct SettingsView: View {
                         )
                     )
                     settingsToggleRow(icon: "antenna.radiowaves.left.and.right", iconColor: PatinaColors.dustyBlue, label: "Upload scans on cellular", isOn: $uploadOnCellular)
+                    appearanceRow
                 }
 
                 // Support group
@@ -96,7 +100,7 @@ struct SettingsView: View {
                 Spacer().frame(height: 120)
             }
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         .toolbarTitleDisplayMode(.inline)
         .task {
             await settings.load()
@@ -104,6 +108,42 @@ struct SettingsView: View {
     }
 
     // MARK: - Components
+
+    /// Appearance picker row (Wave 3 dark-mode). Mirrors the settingsRow
+    /// visual language with a trailing menu picker instead of a chevron.
+    private var appearanceRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(PatinaColors.mocha.opacity(0.15))
+                    .frame(width: 32, height: 32)
+                Image(systemName: "circle.lefthalf.filled")
+                    .font(.system(size: 14))
+                    .foregroundStyle(PatinaColors.mocha)
+            }
+
+            Text("Appearance")
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.primary)
+
+            Spacer()
+
+            Picker("Appearance", selection: $appearanceRaw) {
+                ForEach(AppearanceSetting.allCases) { option in
+                    Text(option.label).tag(option.rawValue)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(PatinaColors.Text.secondary)
+            .accessibilityLabel("Appearance")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
+                .padding(.leading, 60)
+        }
+    }
 
     private func openLink(_ urlString: String) {
         guard let url = URL(string: urlString) else { return }
@@ -129,7 +169,7 @@ struct SettingsView: View {
             VStack(spacing: 0) {
                 content()
             }
-            .background(PatinaColors.softCream)
+            .background(PatinaColors.Background.secondary)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .padding(.horizontal, 24)
         }
@@ -149,18 +189,18 @@ struct SettingsView: View {
 
             Text(label)
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
 
             Spacer()
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 14))
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .overlay(alignment: .bottom) {
-            Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+            Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
                 .padding(.leading, 60)
         }
     }
@@ -178,7 +218,7 @@ struct SettingsView: View {
 
             Text(label)
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
 
             Spacer()
 
@@ -192,7 +232,7 @@ struct SettingsView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .overlay(alignment: .bottom) {
-            Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+            Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
                 .padding(.leading, 60)
         }
     }

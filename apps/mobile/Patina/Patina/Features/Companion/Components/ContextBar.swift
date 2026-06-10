@@ -32,13 +32,13 @@ public struct ContextBar: View {
 
                 Image(systemName: context.contextIcon)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(hasNotification ? .white : PatinaColors.mocha)
+                    .foregroundStyle(hasNotification ? .white : PatinaColors.Text.secondary)
             }
 
             // Context label (spec: 11pt Inter, Mocha Brown)
             Text(contextLabel)
                 .font(.system(size: 11, weight: .regular))  // 11pt Inter
-                .foregroundStyle(hasNotification ? .white : PatinaColors.mocha)
+                .foregroundStyle(hasNotification ? .white : PatinaColors.Text.secondary)
                 .lineLimit(1)
 
             Spacer()

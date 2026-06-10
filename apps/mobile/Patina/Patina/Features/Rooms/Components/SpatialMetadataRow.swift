@@ -30,7 +30,7 @@ struct SpatialMetadataRow: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(PatinaColors.softCream)
+                .fill(PatinaColors.Background.secondary)
         )
     }
 
@@ -39,7 +39,7 @@ struct SpatialMetadataRow: View {
             Text(icon).font(.system(size: 14))
             Text(text)
                 .font(.system(size: 11, weight: bold ? .medium : .regular))
-                .foregroundStyle(bold ? PatinaColors.charcoal : PatinaColors.mocha)
+                .foregroundStyle(bold ? PatinaColors.Text.primary : PatinaColors.Text.secondary)
         }
     }
 

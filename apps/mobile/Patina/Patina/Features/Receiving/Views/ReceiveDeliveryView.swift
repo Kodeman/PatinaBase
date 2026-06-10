@@ -27,7 +27,7 @@ struct ReceiveDeliveryView: View {
             }
             .padding(.bottom, 120)
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         // R04: nav bar is hidden for this destination — pin a back
         // affordance over the scroll content (matches RoomProjectView).
         .overlay(alignment: .topLeading) {
@@ -50,7 +50,7 @@ struct ReceiveDeliveryView: View {
                 .tracking(2)
             Text(viewModel.arrivingPOs.isEmpty ? "Nothing arriving" : "Arriving deliveries")
                 .font(PatinaTypography.h3)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
         }
         .padding(.top, 56)
         .padding(.horizontal, 24)
@@ -90,7 +90,7 @@ struct ReceiveDeliveryView: View {
             HStack {
                 Text(po.vendor?.name ?? "Vendor")
                     .font(PatinaTypography.h5)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 Spacer()
                 Text(po.status.replacing("_", with: " ").capitalized)
                     .font(PatinaTypography.monoTiny)
@@ -103,28 +103,28 @@ struct ReceiveDeliveryView: View {
             if let project = po.project?.name {
                 Text(project)
                     .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
             HStack(spacing: 6) {
                 if let eta = po.confirmed_eta {
                     Image(systemName: "calendar")
                         .font(.system(size: 11))
-                        .foregroundStyle(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.Text.secondary)
                     Text("ETA \(eta)")
                         .font(PatinaTypography.monoTiny)
-                        .foregroundStyle(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.Text.secondary)
                 }
                 if let poNumber = po.vendor_po_number {
                     Spacer().frame(width: 12)
                     Text("PO \(poNumber)")
                         .font(PatinaTypography.monoTiny)
-                        .foregroundStyle(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.Text.secondary)
                 }
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(PatinaColors.softCream)
+        .background(PatinaColors.Background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 
@@ -137,7 +137,7 @@ struct ReceiveDeliveryView: View {
                 .foregroundStyle(PatinaColors.sage)
             Text("No deliveries arriving")
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 80)
@@ -147,7 +147,7 @@ struct ReceiveDeliveryView: View {
         VStack(spacing: 10) {
             Text(msg)
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
             Button("Let's try that again") { Task { await viewModel.loadArriving() } }
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.interactive)
@@ -183,7 +183,7 @@ struct ReceiveInspectionSheet: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 24)
             }
-            .background(PatinaColors.offWhite)
+            .background(PatinaColors.Background.primary)
             .navigationTitle("Inspect delivery")
             .toolbarTitleDisplayMode(.inline)
             .toolbar {
@@ -218,28 +218,28 @@ struct ReceiveInspectionSheet: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(purchaseOrder.vendor?.name ?? "Vendor")
                 .font(PatinaTypography.h4)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
             if let project = purchaseOrder.project?.name {
                 Text(project)
                     .font(PatinaTypography.bodySmall)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
             HStack(spacing: 10) {
                 if let poNumber = purchaseOrder.vendor_po_number {
                     Text("PO \(poNumber)")
                         .font(PatinaTypography.monoTiny)
-                        .foregroundStyle(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.Text.secondary)
                 }
                 if let eta = purchaseOrder.confirmed_eta {
                     Text("ETA \(eta)")
                         .font(PatinaTypography.monoTiny)
-                        .foregroundStyle(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.Text.secondary)
                 }
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(PatinaColors.softCream)
+        .background(PatinaColors.Background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -248,7 +248,7 @@ struct ReceiveInspectionSheet: View {
             HStack {
                 Text("Photos (\(viewModel.photos.count) / \(viewModel.maxPhotos))")
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 Spacer()
                 if viewModel.photos.count < viewModel.maxPhotos {
                     PhotosPicker(
@@ -293,7 +293,7 @@ struct ReceiveInspectionSheet: View {
             }
             Text("Photos help the desktop team triage. Capture damage from multiple angles.")
                 .font(PatinaTypography.caption)
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
         }
     }
 
@@ -304,10 +304,10 @@ struct ReceiveInspectionSheet: View {
             .overlay(
                 VStack(spacing: 4) {
                     Image(systemName: "camera")
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                     Text("Tap Add to capture photos")
                         .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                 }
             )
     }
@@ -316,12 +316,12 @@ struct ReceiveInspectionSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Notes (optional)")
                 .font(PatinaTypography.bodySmallMedium)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
             TextEditor(text: $viewModel.notes)
                 .font(PatinaTypography.body)
                 .frame(minHeight: 96)
                 .padding(8)
-                .background(PatinaColors.softCream)
+                .background(PatinaColors.Background.secondary)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
         }
     }
@@ -353,8 +353,8 @@ struct ReceiveInspectionSheet: View {
                     }
                 }
                 .frame(maxWidth: .infinity, minHeight: 48)
-                .foregroundStyle(.white)
-                .background(viewModel.outcome == nil ? PatinaColors.agedOak.opacity(0.5) : PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.inverse)
+                .background(viewModel.outcome == nil ? PatinaColors.agedOak.opacity(0.5) : PatinaColors.Interactive.active)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             .disabled(viewModel.outcome == nil || viewModel.isSubmitting)
@@ -378,7 +378,7 @@ struct ReceiveInspectionSheet: View {
                     .foregroundStyle(accent)
                 Text(title)
                     .font(PatinaTypography.bodyMedium)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 Spacer()
                 if isSelected {
                     Image(systemName: "checkmark")
@@ -390,7 +390,7 @@ struct ReceiveInspectionSheet: View {
             .background(
                 isSelected
                     ? accent.opacity(0.12)
-                    : PatinaColors.softCream
+                    : PatinaColors.Background.secondary
             )
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(

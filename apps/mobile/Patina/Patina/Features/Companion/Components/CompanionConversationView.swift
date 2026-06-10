@@ -177,7 +177,7 @@ public struct CompanionTypingIndicator: View {
         showTypingIndicator: false
     )
     .frame(height: 300)
-    .background(Color.white)
+    .background(PatinaColors.Background.primary)
 }
 
 #Preview("With Typing") {
@@ -191,5 +191,5 @@ public struct CompanionTypingIndicator: View {
         showTypingIndicator: true
     )
     .frame(height: 200)
-    .background(Color.white)
+    .background(PatinaColors.Background.primary)
 }

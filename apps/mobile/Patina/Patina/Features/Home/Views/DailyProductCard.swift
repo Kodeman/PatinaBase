@@ -25,7 +25,7 @@ struct DailyProductCard: View {
                     .modifier(MatchedImage(namespace: namespace, id: recommendation.id, isSource: !isExpanded))
                 bodyArea
             }
-            .background(PatinaColors.softCream)
+            .background(PatinaColors.Background.secondary)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .padding(.bottom, 14)
             .opacity(isExpanded ? 0 : 1)
@@ -111,20 +111,20 @@ struct DailyProductCard: View {
                         .font(.custom("DMMono-Regular", size: 7))
                         .tracking(0.5)
                         .textCase(.uppercase)
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                     Text(recommendation.product.name)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                         .lineLimit(2)
                         .padding(.bottom, 2)
                     Text(recommendation.product.formattedPrice)
                         .font(.custom("PlayfairDisplay-Medium", size: 16))
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
 
                     if let spatial = firstSpatialCopy {
                         Text(spatial)
                             .font(.system(size: 11))
-                            .foregroundStyle(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.Text.muted)
                             .lineLimit(2)
                             .padding(.top, 2)
                     }
@@ -139,10 +139,10 @@ struct DailyProductCard: View {
                         Text("Add")
                             .font(.system(size: 11, weight: .medium))
                     }
-                    .foregroundStyle(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.Text.inverse)
                     .padding(.vertical, 8)
                     .padding(.horizontal, 14)
-                    .background(Capsule().fill(PatinaColors.charcoal))
+                    .background(Capsule().fill(PatinaColors.Interactive.active))
                 }
                 .buttonStyle(.plain)
             }
@@ -164,11 +164,11 @@ struct DailyProductCard: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: insight.icon)
                 .font(.system(size: 11))
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .padding(.top, 1)
             Text(insight.text)
                 .font(.system(size: 10))
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .lineSpacing(2)
             Spacer(minLength: 0)
         }
@@ -176,7 +176,7 @@ struct DailyProductCard: View {
         .padding(.horizontal, 12)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(PatinaColors.offWhite)
+                .fill(PatinaColors.Background.primary)
         )
     }
 
@@ -187,7 +187,7 @@ struct DailyProductCard: View {
                 .frame(width: 32, height: 32)
             Text(pairing.text)
                 .font(.system(size: 10))
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .lineSpacing(2)
             Spacer(minLength: 0)
         }
@@ -227,5 +227,5 @@ private struct MatchedImage: ViewModifier {
         }
         .padding(20)
     }
-    .background(PatinaColors.offWhite)
+    .background(PatinaColors.Background.primary)
 }

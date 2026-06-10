@@ -122,7 +122,7 @@ struct ScanThresholdView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Begin walking to start, or tap here.")
                         .font(.custom("PlayfairDisplay-Italic", size: 17, relativeTo: .body))
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                     Text("Start scanning now")
                         .font(PatinaTypography.mono)
                         .tracking(0.6)

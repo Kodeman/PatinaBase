@@ -87,9 +87,9 @@ public struct PatinaButton: View {
     private var foregroundColor: Color {
         switch style {
         case .primary:
-            return PatinaColors.offWhite
+            return PatinaColors.Text.inverse
         case .secondary:
-            return PatinaColors.charcoal
+            return PatinaColors.Text.primary
         case .ghost:
             return PatinaColors.Text.interactive
         case .clay:
@@ -102,9 +102,9 @@ public struct PatinaButton: View {
     private var backgroundColor: Color {
         switch style {
         case .primary:
-            return PatinaColors.charcoal
+            return PatinaColors.Interactive.active
         case .secondary:
-            return PatinaColors.offWhite
+            return PatinaColors.Background.primary
         case .ghost:
             return .clear
         case .clay:
@@ -157,10 +157,10 @@ struct AuthButton: View {
                 Text(title)
                     .font(PatinaTypography.uiAction)
             }
-            .foregroundStyle(style == .apple ? PatinaColors.offWhite : PatinaColors.charcoal)
+            .foregroundStyle(style == .apple ? PatinaColors.Text.inverse : PatinaColors.Text.primary)
             .frame(maxWidth: .infinity)
             .frame(height: 50)
-            .background(style == .apple ? PatinaColors.charcoal : PatinaColors.offWhite)
+            .background(style == .apple ? PatinaColors.Interactive.active : PatinaColors.Background.primary)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)

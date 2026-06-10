@@ -35,7 +35,7 @@ struct OnboardingFlowView: View {
 
     var body: some View {
         ZStack {
-            PatinaColors.offWhite
+            PatinaColors.Background.primary
                 .ignoresSafeArea()
 
             TabView(selection: $currentPage) {
@@ -56,7 +56,7 @@ struct OnboardingFlowView: View {
                             onSkip()
                         }
                         .font(PatinaTypography.uiSmall)
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                         .padding(.top, 58)
                         .padding(.trailing, 24)
                     }
@@ -91,13 +91,13 @@ struct OnboardingFlowView: View {
             VStack(spacing: 0) {
                 Text(page.title)
                     .font(PatinaTypography.h2)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .multilineTextAlignment(.center)
                     .padding(.bottom, 12)
 
                 Text(page.body)
                     .font(PatinaTypography.uiAction)
-                    .foregroundStyle(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
                     .frame(maxWidth: 300)
@@ -111,7 +111,7 @@ struct OnboardingFlowView: View {
                                 .frame(width: 24, height: 8)
                         } else {
                             Circle()
-                                .fill(PatinaColors.pearl)
+                                .fill(PatinaColors.Text.muted.opacity(0.25))
                                 .frame(width: 8, height: 8)
                         }
                     }

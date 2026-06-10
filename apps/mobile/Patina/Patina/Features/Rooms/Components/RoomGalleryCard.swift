@@ -20,7 +20,7 @@ struct RoomGalleryCard: View {
                 hero
                 stats
             }
-            .background(PatinaColors.softCream)
+            .background(PatinaColors.Background.secondary)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -107,12 +107,12 @@ struct RoomGalleryCard: View {
         VStack(spacing: 2) {
             Text(value)
                 .font(.custom("PlayfairDisplay-Medium", size: 16))
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
             Text(label)
                 .font(.custom("DMMono-Regular", size: 7))
                 .tracking(0.6)
                 .textCase(.uppercase)
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
         }
         .frame(maxWidth: .infinity)
     }

@@ -19,10 +19,10 @@ struct FilterChip: View {
         } label: {
             Text(title)
                 .font(PatinaTypography.caption)
-                .foregroundStyle(isActive ? PatinaColors.offWhite : PatinaColors.mocha)
+                .foregroundStyle(isActive ? PatinaColors.Text.inverse : PatinaColors.Text.secondary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
-                .background(isActive ? PatinaColors.charcoal : PatinaColors.softCream)
+                .background(isActive ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -37,5 +37,5 @@ struct FilterChip: View {
         FilterChip(title: "Lighting", isActive: false)
     }
     .padding()
-    .background(PatinaColors.offWhite)
+    .background(PatinaColors.Background.primary)
 }

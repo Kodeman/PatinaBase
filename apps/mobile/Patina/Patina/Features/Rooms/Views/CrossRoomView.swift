@@ -42,7 +42,7 @@ struct CrossRoomView: View {
                 }
             }
         }
-        .background(PatinaColors.offWhite.ignoresSafeArea())
+        .background(PatinaColors.Background.primary.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
     }
 
@@ -55,12 +55,12 @@ struct CrossRoomView: View {
             VStack(alignment: .trailing, spacing: 2) {
                 Text("All Items")
                     .font(PatinaTypography.h4)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 Text(summary)
                     .font(PatinaTypography.monoSmall)
                     .tracking(0.4)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
         }
         .padding(.horizontal, 20)
@@ -88,7 +88,7 @@ struct CrossRoomView: View {
             VStack(spacing: 6) {
                 Text(title)
                     .font(.system(size: 12, weight: tab == value ? .medium : .regular))
-                    .foregroundStyle(tab == value ? PatinaColors.charcoal : PatinaColors.agedOak)
+                    .foregroundStyle(tab == value ? PatinaColors.Text.primary : PatinaColors.Text.muted)
                 Rectangle()
                     .fill(tab == value ? PatinaColors.clay : .clear)
                     .frame(height: 2)
@@ -111,12 +111,12 @@ struct CrossRoomView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.productName)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                     Text(item.makerName)
                         .font(.custom("DMMono-Regular", size: 7))
                         .tracking(0.4)
                         .textCase(.uppercase)
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                     if let roomName = item.room?.name {
                         HStack(spacing: 4) {
                             Circle()
@@ -124,19 +124,19 @@ struct CrossRoomView: View {
                                 .frame(width: 6, height: 6)
                             Text(roomName)
                                 .font(.system(size: 9))
-                                .foregroundStyle(PatinaColors.mocha)
+                                .foregroundStyle(PatinaColors.Text.secondary)
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
                         .background(
-                            Capsule().fill(PatinaColors.softCream)
+                            Capsule().fill(PatinaColors.Background.secondary)
                         )
                     }
                 }
                 Spacer(minLength: 0)
                 Text(item.fullFormattedPrice)
                     .font(.custom("PlayfairDisplay-Medium", size: 14))
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
@@ -155,7 +155,7 @@ struct CrossRoomView: View {
             .font(.custom("DMMono-Regular", size: 8))
             .tracking(0.6)
             .textCase(.uppercase)
-            .foregroundStyle(PatinaColors.agedOak)
+            .foregroundStyle(PatinaColors.Text.muted)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 20)
             .padding(.top, 16)

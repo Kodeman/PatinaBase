@@ -54,11 +54,11 @@ struct ScanReviewPhotoLoader {
                 .scaledToFill()
         } else {
             Rectangle()
-                .fill(PatinaColors.softCream)
+                .fill(PatinaColors.Background.secondary)
                 .overlay(
                     Image(systemName: "photo")
                         .font(.system(size: 28))
-                        .foregroundStyle(PatinaColors.agedOak.opacity(0.5))
+                        .foregroundStyle(PatinaColors.Text.muted.opacity(0.5))
                 )
         }
     }

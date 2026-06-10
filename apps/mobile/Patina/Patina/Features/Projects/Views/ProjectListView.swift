@@ -19,7 +19,7 @@ struct ProjectListView: View {
             }
             .padding(.bottom, 120)
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         // R04: nav bar is hidden for this destination — pin a back
         // affordance over the scroll content (matches RoomProjectView).
         .overlay(alignment: .topLeading) {
@@ -37,7 +37,7 @@ struct ProjectListView: View {
                 .tracking(2)
             Text(viewModel.projects.isEmpty ? "No projects yet" : "\(viewModel.projects.count) project\(viewModel.projects.count == 1 ? "" : "s")")
                 .font(PatinaTypography.h3)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
         }
         .padding(.top, 56)
         .padding(.horizontal, 24)
@@ -75,7 +75,7 @@ struct ProjectListView: View {
             HStack {
                 Text(project.name)
                     .font(PatinaTypography.h5)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 Spacer()
                 if let status = project.status {
                     // R16: human status vocabulary, never raw enum values.
@@ -101,7 +101,7 @@ struct ProjectListView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(PatinaColors.softCream)
+        .background(PatinaColors.Background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(projectAccessibilityLabel(project))
@@ -125,7 +125,7 @@ struct ProjectListView: View {
             MonoLabel(text: caption)
             Text(value)
                 .font(PatinaTypography.bodySmallMedium)
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
         }
     }
 
@@ -133,10 +133,10 @@ struct ProjectListView: View {
         VStack(spacing: 8) {
             Image(systemName: "rectangle.stack")
                 .font(.system(size: 28))
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
             Text("No projects to show yet")
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 80)
@@ -146,7 +146,7 @@ struct ProjectListView: View {
         VStack(spacing: 10) {
             Text(msg)
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
             Button("Let's try that again") {
                 Task { await viewModel.load() }
             }

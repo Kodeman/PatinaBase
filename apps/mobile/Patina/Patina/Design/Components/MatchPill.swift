@@ -15,13 +15,13 @@ struct MatchPill: View {
             .font(PatinaTypography.monoTiny)
             .tracking(0.5)
             .textCase(.uppercase)
-            .foregroundStyle(PatinaColors.mocha)
+            .foregroundStyle(PatinaColors.Text.secondary)
             .padding(.vertical, 3)
             .padding(.horizontal, 8)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(PatinaColors.offWhite.opacity(0.92))
+                    .fill(PatinaColors.Background.primary.opacity(0.92))
             )
     }
 }

@@ -34,5 +34,5 @@ struct TierPill: View {
         TierPill(tier: .standard)
     }
     .padding()
-    .background(PatinaColors.softCream)
+    .background(PatinaColors.Background.secondary)
 }

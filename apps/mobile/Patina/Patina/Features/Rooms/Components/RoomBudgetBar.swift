@@ -50,7 +50,7 @@ struct RoomBudgetBar: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(PatinaColors.charcoal)
+                .fill(PatinaColors.Background.dark)
         )
     }
 

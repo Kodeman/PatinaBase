@@ -20,7 +20,7 @@ struct StyleConversationContainerView: View {
 
     var body: some View {
         ZStack {
-            PatinaColors.offWhite.ignoresSafeArea()
+            PatinaColors.Background.primary.ignoresSafeArea()
 
             if let profile = currentProfile {
                 // Q5 → Contemplative Pause → onComplete

@@ -31,11 +31,11 @@ struct ScanDetailsSection: View {
                     HStack {
                         Text(row.label)
                             .font(.custom("Inter-Regular", size: 13, relativeTo: .footnote))
-                            .foregroundStyle(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.Text.muted)
                         Spacer()
                         Text(row.value)
                             .font(.custom("DMMono-Regular", size: 12, relativeTo: .caption))
-                            .foregroundStyle(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.Text.primary)
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
@@ -49,7 +49,7 @@ struct ScanDetailsSection: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(PatinaColors.softCream)
+                    .fill(PatinaColors.Background.secondary)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)

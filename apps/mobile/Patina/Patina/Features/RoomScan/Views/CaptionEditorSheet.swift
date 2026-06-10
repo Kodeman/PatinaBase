@@ -35,14 +35,14 @@ struct CaptionEditorSheet: View {
 
                 ZStack(alignment: .topLeading) {
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(PatinaColors.softCream)
+                        .fill(PatinaColors.Background.secondary)
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(PatinaColors.pearl, lineWidth: 1.5)
 
                     if caption.isEmpty {
                         Text("What's worth noticing here?")
                             .font(PatinaTypography.bodySmall)
-                            .foregroundStyle(PatinaColors.agedOak.opacity(0.7))
+                            .foregroundStyle(PatinaColors.Text.muted.opacity(0.7))
                             .padding(.horizontal, 16)
                             .padding(.vertical, 14)
                             .allowsHitTesting(false)
@@ -50,7 +50,7 @@ struct CaptionEditorSheet: View {
 
                     TextEditor(text: $caption)
                         .font(PatinaTypography.bodySmall)
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                         .scrollContentBackground(.hidden)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
@@ -60,12 +60,12 @@ struct CaptionEditorSheet: View {
                 Spacer()
             }
             .padding(24)
-            .background(PatinaColors.offWhite.ignoresSafeArea())
+            .background(PatinaColors.Background.primary.ignoresSafeArea())
             .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { onDismiss() }
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                 }
             }
         }

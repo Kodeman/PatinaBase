@@ -29,12 +29,12 @@ struct RoomTypePillRow: View {
                 } label: {
                     Text(item.label)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(isSelected ? .white : PatinaColors.mocha)
+                        .foregroundStyle(isSelected ? .white : PatinaColors.Text.secondary)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
-                                .fill(isSelected ? PatinaColors.clay : PatinaColors.softCream)
+                                .fill(isSelected ? PatinaColors.clay : PatinaColors.Background.secondary)
                         )
                         .overlay(
                             Capsule()

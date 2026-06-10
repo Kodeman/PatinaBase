@@ -12,7 +12,7 @@ struct MonoLabel: View {
     let text: String
     var size: Font = PatinaTypography.mono
     var uppercase: Bool = true
-    var color: Color = PatinaColors.agedOak
+    var color: Color = PatinaColors.Text.muted
     var tracking: CGFloat = 0.5
 
     var body: some View {
@@ -44,5 +44,5 @@ private struct UppercaseModifier: ViewModifier {
         MonoLabel(text: "Step 2 of 4", size: PatinaTypography.monoSmall, color: PatinaColors.clay)
     }
     .padding()
-    .background(PatinaColors.offWhite)
+    .background(PatinaColors.Background.primary)
 }

@@ -40,7 +40,7 @@ struct RoomSettingsView: View {
             }
             .padding(20)
         }
-        .background(PatinaColors.offWhite.ignoresSafeArea())
+        .background(PatinaColors.Background.primary.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             if let room {
@@ -65,13 +65,13 @@ struct RoomSettingsView: View {
             .padding(.top, 20)
             Text("Room Settings")
                 .font(PatinaTypography.h4)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .padding(.top, 12)
             Text(room?.name ?? "")
                 .font(PatinaTypography.monoSmall)
                 .tracking(0.4)
                 .textCase(.uppercase)
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
         }
     }
 
@@ -79,15 +79,15 @@ struct RoomSettingsView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Room Name")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
             TextField("Room name", text: $name)
                 .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body))
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .padding(.horizontal, 14)
                 .frame(height: 46)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(PatinaColors.softCream)
+                        .fill(PatinaColors.Background.secondary)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -101,7 +101,7 @@ struct RoomSettingsView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Room Type")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
             RoomTypePillRow(selected: $roomType)
                 .onChange(of: roomType) { _, new in
                     if let room {
@@ -116,28 +116,28 @@ struct RoomSettingsView: View {
             HStack {
                 Text("Scan Data")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 Spacer()
                 Text(scanDate(room))
                     .font(.custom("DMMono-Regular", size: 8, relativeTo: .caption2))
                     .tracking(0.3)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
             Text(scanSummary(room))
                 .font(.system(size: 11))
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
             Button {
                 saveIfChanged()
                 coordinator.navigate(to: .scanFlow(reason: .rescan))
             } label: {
                 Text("Re-Scan This Room")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .frame(maxWidth: .infinity)
                     .frame(height: 40)
                     .background(
-                        Capsule().fill(PatinaColors.offWhite)
+                        Capsule().fill(PatinaColors.Background.primary)
                     )
                     .overlay(
                         Capsule().stroke(PatinaColors.pearl, lineWidth: 1.5)
@@ -148,7 +148,7 @@ struct RoomSettingsView: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(PatinaColors.softCream)
+                .fill(PatinaColors.Background.secondary)
         )
     }
 

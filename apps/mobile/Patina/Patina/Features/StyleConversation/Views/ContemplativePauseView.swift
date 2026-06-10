@@ -22,12 +22,12 @@ struct ContemplativePauseView: View {
 
     var body: some View {
         ZStack {
-            PatinaColors.offWhite.ignoresSafeArea()
+            PatinaColors.Background.primary.ignoresSafeArea()
 
             VStack(spacing: 32) {
                 Text("Let me think about this.")
                     .font(.custom("PlayfairDisplay-Italic", size: 20, relativeTo: .title3))
-                    .foregroundStyle(PatinaColors.charcoal.opacity(0.6))
+                    .foregroundStyle(PatinaColors.Text.primary.opacity(0.6))
 
                 HStack(spacing: 6) {
                     ForEach(0..<3, id: \.self) { i in

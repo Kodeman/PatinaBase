@@ -33,7 +33,7 @@ struct DailyFeedEmptyModule: View {
                     .font(PatinaTypography.monoLabel)
                     .tracking(0.5)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
                     .padding(.leading, 2)
             }
 
@@ -104,29 +104,29 @@ struct DailyFeedEmptyModule: View {
                     .font(PatinaTypography.monoLabel)
                     .tracking(0.8)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.clayDeep)
+                    .foregroundStyle(PatinaColors.Text.interactive)
             }
             .padding(.bottom, 8)
 
             Text(headline)
                 .font(.custom("PlayfairDisplay-Regular", size: 20, relativeTo: .title3))
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .lineSpacing(2)
                 .padding(.bottom, 6)
 
             Text(bodyText)
                 .font(.system(size: 13))
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
                 .lineSpacing(3)
                 .padding(.bottom, 16)
 
             Button(action: primaryAction) {
                 Text(primaryTitle)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.Text.inverse)
                     .frame(maxWidth: .infinity)
                     .frame(height: 44)
-                    .background(Capsule().fill(PatinaColors.charcoal))
+                    .background(Capsule().fill(PatinaColors.Interactive.active))
             }
             .buttonStyle(.plain)
 
@@ -147,7 +147,7 @@ struct DailyFeedEmptyModule: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(PatinaColors.softCream)
+                .fill(PatinaColors.Background.secondary)
         )
     }
 
@@ -163,7 +163,7 @@ struct DailyFeedEmptyModule: View {
         onBrowse: {}
     )
     .padding(20)
-    .background(PatinaColors.offWhite)
+    .background(PatinaColors.Background.primary)
 }
 
 #Preview("Scan prompt") {
@@ -176,5 +176,5 @@ struct DailyFeedEmptyModule: View {
         onBrowse: {}
     )
     .padding(20)
-    .background(PatinaColors.offWhite)
+    .background(PatinaColors.Background.primary)
 }

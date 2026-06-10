@@ -52,7 +52,7 @@ struct DailyRoomView: View {
 
     private var screenBody: some View {
         ZStack(alignment: .bottom) {
-            PatinaColors.offWhite.ignoresSafeArea()
+            PatinaColors.Background.primary.ignoresSafeArea()
 
             // R07: hide the home surface (and toast) from assistive tech
             // while a detail overlay is up; the overlays themselves carry

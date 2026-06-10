@@ -16,7 +16,7 @@ struct AddToRoomSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             RoundedRectangle(cornerRadius: 2)
-                .fill(PatinaColors.pearl)
+                .fill(PatinaColors.Text.muted.opacity(0.25))
                 .frame(width: 36, height: 4)
                 .padding(.top, 18)
                 .padding(.bottom, 14)
@@ -24,12 +24,12 @@ struct AddToRoomSheet: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Add to Room")
                     .font(.custom("PlayfairDisplay-Regular", size: 17))
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 Text("Choose Destination")
                     .font(.custom("DMMono-Regular", size: 8))
                     .tracking(0.4)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
                     .padding(.bottom, 14)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -54,7 +54,7 @@ struct AddToRoomSheet: View {
             .padding(.bottom, 36)
         }
         .frame(maxWidth: .infinity)
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         .presentationDetents([.medium])
     }
 
@@ -71,22 +71,22 @@ struct AddToRoomSheet: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(room.name)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(isSelected ? PatinaColors.offWhite : PatinaColors.charcoal)
+                        .foregroundStyle(isSelected ? PatinaColors.Text.inverse : PatinaColors.Text.primary)
                     Text("\(room.itemCount) items · \(room.squareFeet) sq ft")
                         .font(.custom("DMMono-Regular", size: 7))
                         .tracking(0.3)
                         .textCase(.uppercase)
-                        .foregroundStyle(isSelected ? PatinaColors.Text.interactive : PatinaColors.agedOak)
+                        .foregroundStyle(isSelected ? PatinaColors.Text.interactive : PatinaColors.Text.muted)
                 }
                 Spacer()
                 Text("+")
                     .font(.system(size: 15))
-                    .foregroundStyle(isSelected ? PatinaColors.offWhite : PatinaColors.Text.interactive)
+                    .foregroundStyle(isSelected ? PatinaColors.Text.inverse : PatinaColors.Text.interactive)
             }
             .padding(11)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isSelected ? PatinaColors.charcoal : PatinaColors.softCream)
+                    .fill(isSelected ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
             )
         }
         .buttonStyle(.plain)

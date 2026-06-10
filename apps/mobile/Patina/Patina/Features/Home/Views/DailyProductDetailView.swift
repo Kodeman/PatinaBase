@@ -23,7 +23,7 @@ struct DailyProductDetailView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            PatinaColors.offWhite
+            PatinaColors.Background.primary
                 .ignoresSafeArea()
                 .opacity(chromeVisible ? 1 - dismissProgress * 0.4 : 0)
 
@@ -50,7 +50,7 @@ struct DailyProductDetailView: View {
                             if let pairing = recommendation.pairing {
                                 pairingBlock(pairing)
                             }
-                            Divider().background(PatinaColors.pearl)
+                            Divider().background(PatinaColors.Text.muted.opacity(0.25))
                             // R25: only render the story section when the
                             // maker actually has one — no canned filler copy
                             // pretending to be provenance.
@@ -171,12 +171,12 @@ struct DailyProductDetailView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(product.makerName)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 Text(product.makerLocation ?? "")
                     .font(.custom("DMMono-Regular", size: 8))
                     .tracking(0.5)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
         }
     }
@@ -185,18 +185,18 @@ struct DailyProductDetailView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(product.name)
                 .font(.custom("PlayfairDisplay-Regular", size: 28))
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .lineSpacing(2)
             Text(product.formattedPrice)
                 .font(.custom("PlayfairDisplay-Medium", size: 22))
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
         }
     }
 
     private var whyQuote: some View {
         Text("“\(recommendation.whyCopy)”")
             .font(.custom("PlayfairDisplay-Italic", size: 15))
-            .foregroundStyle(PatinaColors.mocha)
+            .foregroundStyle(PatinaColors.Text.secondary)
             .lineSpacing(4)
     }
 
@@ -204,18 +204,18 @@ struct DailyProductDetailView: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: insight.icon)
                 .font(.system(size: 13))
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .padding(.top, 2)
             Text(insight.text)
                 .font(.system(size: 12))
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .lineSpacing(3)
             Spacer(minLength: 0)
         }
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(PatinaColors.softCream)
+                .fill(PatinaColors.Background.secondary)
         )
     }
 
@@ -226,7 +226,7 @@ struct DailyProductDetailView: View {
                 .frame(width: 40, height: 40)
             Text(pairing.text)
                 .font(.system(size: 12))
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .lineSpacing(3)
             Spacer(minLength: 0)
         }
@@ -243,10 +243,10 @@ struct DailyProductDetailView: View {
                 .font(PatinaTypography.monoSmall)
                 .tracking(0.8)
                 .textCase(.uppercase)
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
             Text(story)
                 .font(.system(size: 14))
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .lineSpacing(5)
         }
     }
@@ -257,7 +257,7 @@ struct DailyProductDetailView: View {
                 .font(PatinaTypography.monoSmall)
                 .tracking(0.8)
                 .textCase(.uppercase)
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
             LazyVGrid(
                 columns: [GridItem(.flexible()), GridItem(.flexible())],
                 alignment: .leading,
@@ -292,7 +292,7 @@ struct DailyProductDetailView: View {
                     .font(.custom("DMMono-Regular", size: 8))
                     .tracking(0.5)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
                 if let helpSurfaceKey {
                     HelpInfoIcon(
                         surfaceKey: helpSurfaceKey,
@@ -303,7 +303,7 @@ struct DailyProductDetailView: View {
             }
             Text(value)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -315,10 +315,10 @@ struct DailyProductDetailView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(product.formattedPrice)
                         .font(.custom("PlayfairDisplay-Medium", size: 20))
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                     Text("\(recommendation.matchScore)% match for your room")
                         .font(.system(size: 10))
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                 }
                 Spacer()
                 Button {
@@ -326,10 +326,10 @@ struct DailyProductDetailView: View {
                 } label: {
                     Text("Add to Room")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.Text.inverse)
                         .padding(.horizontal, 22)
                         .padding(.vertical, 14)
-                        .background(Capsule().fill(PatinaColors.charcoal))
+                        .background(Capsule().fill(PatinaColors.Interactive.active))
                 }
                 .buttonStyle(.plain)
             }
@@ -337,12 +337,12 @@ struct DailyProductDetailView: View {
             .padding(.top, 14)
             .padding(.bottom, 34)
             .background(
-                PatinaColors.offWhite
+                PatinaColors.Background.primary
                     .opacity(0.96)
                     .overlay(
                         Rectangle()
                             .frame(height: 0.5)
-                            .foregroundStyle(PatinaColors.pearl),
+                            .foregroundStyle(PatinaColors.Text.muted.opacity(0.25)),
                         alignment: .top
                     )
                     .ignoresSafeArea(edges: .bottom)

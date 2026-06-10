@@ -20,7 +20,7 @@ struct PatinaEmptyState: View {
         VStack(spacing: PatinaSpacing.md) {
             Image(systemName: icon)
                 .font(.system(size: 40, weight: .light))
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
 
             VStack(spacing: PatinaSpacing.xs) {
                 Text(title)

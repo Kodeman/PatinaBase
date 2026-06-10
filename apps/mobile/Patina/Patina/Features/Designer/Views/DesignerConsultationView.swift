@@ -37,7 +37,7 @@ struct DesignerConsultationView: View {
                 .padding(24)
                 .padding(.top, 40)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(PatinaColors.charcoal)
+                .background(PatinaColors.Background.dark)
 
                 // Designer card
                 designerCard
@@ -48,12 +48,12 @@ struct DesignerConsultationView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Which rooms?")
                         .font(PatinaTypography.bodySmallMedium)
-                        .foregroundStyle(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.Text.secondary)
 
                     if rooms.isEmpty {
                         Text("No rooms scanned yet — scan a room first for better recommendations")
                             .font(PatinaTypography.caption)
-                            .foregroundStyle(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.Text.muted)
                     } else {
                         FlowLayout(spacing: 8) {
                             ForEach(rooms) { room in
@@ -69,13 +69,13 @@ struct DesignerConsultationView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Your vision")
                         .font(PatinaTypography.bodySmallMedium)
-                        .foregroundStyle(PatinaColors.mocha)
+                        .foregroundStyle(PatinaColors.Text.secondary)
 
                     ZStack(alignment: .topLeading) {
                         if visionText.isEmpty {
                             Text("I want a space that feels...")
                                 .font(PatinaTypography.bodySmall)
-                                .foregroundStyle(PatinaColors.agedOak)
+                                .foregroundStyle(PatinaColors.Text.muted)
                                 .italic()
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 12)
@@ -83,13 +83,13 @@ struct DesignerConsultationView: View {
 
                         TextEditor(text: $visionText)
                             .font(PatinaTypography.bodySmall)
-                            .foregroundStyle(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.Text.primary)
                             .scrollContentBackground(.hidden)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 8)
                     }
                     .frame(minHeight: 100)
-                    .background(PatinaColors.softCream)
+                    .background(PatinaColors.Background.secondary)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
@@ -110,7 +110,7 @@ struct DesignerConsultationView: View {
                 .opacity(isSubmitting ? 0.6 : 1)
             }
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         .toolbarTitleDisplayMode(.inline)
         .onAppear { loadRooms() }
         .overlay {
@@ -131,18 +131,18 @@ struct DesignerConsultationView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Matched Designer")
                     .font(PatinaTypography.h5)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 MonoLabel(text: "Based on your style profile")
 
                 Text("We'll pair you with a designer who understands your aesthetic")
                     .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .lineSpacing(2)
             }
         }
         .padding(20)
-        .background(PatinaColors.softCream)
+        .background(PatinaColors.Background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 
@@ -160,10 +160,10 @@ struct DesignerConsultationView: View {
         } label: {
             Text(room.name)
                 .font(PatinaTypography.caption)
-                .foregroundStyle(isSelected ? .white : PatinaColors.mocha)
+                .foregroundStyle(isSelected ? .white : PatinaColors.Text.secondary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(isSelected ? PatinaColors.clay : PatinaColors.softCream)
+                .background(isSelected ? PatinaColors.clay : PatinaColors.Background.secondary)
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
@@ -220,11 +220,11 @@ struct DesignerConsultationView: View {
 
                 Text("Request Submitted")
                     .font(PatinaTypography.h3)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 Text("A designer will reach out within 48 hours")
                     .font(PatinaTypography.bodySmall)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
                     .multilineTextAlignment(.center)
 
                 PatinaButton("Done", style: .primary) {
@@ -234,7 +234,7 @@ struct DesignerConsultationView: View {
                 .padding(.top, 8)
             }
             .padding(32)
-            .background(PatinaColors.offWhite)
+            .background(PatinaColors.Background.primary)
             .clipShape(RoundedRectangle(cornerRadius: 24))
             .padding(.horizontal, 32)
         }

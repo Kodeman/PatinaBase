@@ -27,7 +27,7 @@ struct CollectionsView: View {
             HStack {
                 Text("Collections")
                     .font(PatinaTypography.h2)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 Spacer()
 
@@ -58,7 +58,7 @@ struct CollectionsView: View {
                         VStack(spacing: 0) {
                             Text(tab)
                                 .font(PatinaTypography.bodySmall)
-                                .foregroundStyle(tab == viewModel.activeTab ? PatinaColors.charcoal : PatinaColors.agedOak)
+                                .foregroundStyle(tab == viewModel.activeTab ? PatinaColors.Text.primary : PatinaColors.Text.muted)
                                 .fontWeight(tab == viewModel.activeTab ? .medium : .regular)
                                 .padding(.vertical, 12)
 
@@ -84,7 +84,7 @@ struct CollectionsView: View {
                 }
             }
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         .toolbarTitleDisplayMode(.inline)
         .onAppear {
             viewModel.loadData(context: modelContext)
@@ -123,11 +123,11 @@ struct CollectionsView: View {
 
             Text("No boards yet")
                 .font(PatinaTypography.h5)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
 
             Text("Save pieces from recommendations to create your first board")
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 260)
 
@@ -136,10 +136,10 @@ struct CollectionsView: View {
             } label: {
                 Text("Create Board")
                     .font(PatinaTypography.uiAction)
-                    .foregroundStyle(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.Text.inverse)
                     .padding(.horizontal, 24)
                     .frame(height: 44)
-                    .background(PatinaColors.charcoal)
+                    .background(PatinaColors.Interactive.active)
                     .clipShape(Capsule())
             }
             .padding(.top, 8)
@@ -152,7 +152,7 @@ struct CollectionsView: View {
             HStack {
                 Text(board.name)
                     .font(PatinaTypography.h5)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 Spacer()
                 MonoLabel(text: "\(board.itemCount) items")
             }
@@ -185,12 +185,12 @@ struct CollectionsView: View {
                 }
             } else {
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(PatinaColors.softCream)
+                    .fill(PatinaColors.Background.secondary)
                     .frame(height: 80)
                     .overlay(
                         Text("Empty board")
                             .font(PatinaTypography.caption)
-                            .foregroundStyle(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.Text.muted)
                     )
             }
         }
@@ -205,10 +205,10 @@ struct CollectionsView: View {
                     Spacer().frame(height: 40)
                     Text("No saved items yet")
                         .font(PatinaTypography.h5)
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                     Text("Browse recommendations and save pieces you love")
                         .font(PatinaTypography.bodySmall)
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                 }
                 .frame(maxWidth: .infinity)
             } else {

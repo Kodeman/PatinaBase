@@ -39,7 +39,7 @@ struct ItemActionMenu: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 36)
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
     }
 
     private var header: some View {
@@ -50,18 +50,18 @@ struct ItemActionMenu: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.productName)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 Text("\(item.makerName) · \(item.fullFormattedPrice)")
                     .font(.custom("DMMono-Regular", size: 8))
                     .tracking(0.3)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
             Spacer(minLength: 0)
         }
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(PatinaColors.softCream)
+                .fill(PatinaColors.Background.secondary)
         )
     }
 
@@ -77,11 +77,11 @@ struct ItemActionMenu: View {
                     .font(.system(size: 13))
                 Spacer()
             }
-            .foregroundStyle(destructive ? PatinaColors.terracotta : PatinaColors.charcoal)
+            .foregroundStyle(destructive ? PatinaColors.terracotta : PatinaColors.Text.primary)
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(PatinaColors.offWhite)
+            .background(PatinaColors.Background.primary)
         }
         .buttonStyle(.plain)
     }

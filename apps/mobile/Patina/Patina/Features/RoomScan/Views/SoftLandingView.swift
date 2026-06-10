@@ -33,7 +33,7 @@ struct SoftLandingView: View {
     var body: some View {
         ZStack {
             // Background crossfades from the dark scan view to Off-White
-            (backgroundIsOffWhite ? PatinaColors.offWhite : Color.black)
+            (backgroundIsOffWhite ? PatinaColors.Background.primary : Color.black)
                 .ignoresSafeArea()
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.8), value: backgroundIsOffWhite)
 
@@ -42,7 +42,7 @@ struct SoftLandingView: View {
                 if showTransitionText && !transitionTextFadedOut {
                     Text("Now let's talk about you.")
                         .font(PatinaTypography.patinaVoiceLarge)
-                        .foregroundStyle(PatinaColors.charcoal.opacity(0.8))
+                        .foregroundStyle(PatinaColors.Text.primary.opacity(0.8))
                         .transition(.opacity)
                 }
                 Spacer()
@@ -107,30 +107,30 @@ struct SoftLandingView: View {
         VStack(spacing: 16) {
             Text("You've done this before.")
                 .font(PatinaTypography.patinaVoice)
-                .foregroundStyle(PatinaColors.charcoal.opacity(0.8))
+                .foregroundStyle(PatinaColors.Text.primary.opacity(0.8))
             Text("Your style: \(profile.aestheticName)")
                 .font(.custom("Inter-Regular", size: 13, relativeTo: .footnote))
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
 
             Button(action: { onOutcome(.skipToFloorPlan(profile)) }) {
                 Text("Use my style")
                     .font(PatinaTypography.uiAction)
-                    .foregroundStyle(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.Text.inverse)
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
-                    .background(RoundedRectangle(cornerRadius: 26).fill(PatinaColors.charcoal))
+                    .background(RoundedRectangle(cornerRadius: 26).fill(PatinaColors.Interactive.active))
             }
             .buttonStyle(.plain)
 
             Button(action: { onOutcome(.startConversation) }) {
                 Text("Update my style")
                     .font(PatinaTypography.uiAction)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
                     .background(
                         RoundedRectangle(cornerRadius: 26)
-                            .stroke(PatinaColors.charcoal, lineWidth: 1.5)
+                            .stroke(PatinaColors.Interactive.active, lineWidth: 1.5)
                     )
             }
             .buttonStyle(.plain)

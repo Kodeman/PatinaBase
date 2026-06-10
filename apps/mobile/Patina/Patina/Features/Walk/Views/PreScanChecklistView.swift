@@ -27,13 +27,13 @@ struct PreScanChecklistView: View {
             // Header
             Text("Before we begin")
                 .font(PatinaTypography.h3)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .padding(.top, 56)
                 .padding(.horizontal, 24)
 
             Text("A quick check to get the best results")
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
                 .padding(.top, 4)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 24)
@@ -118,7 +118,7 @@ struct PreScanChecklistView: View {
             .padding(.bottom, 40)
             .opacity(cameraReady || !hasCheckedPermission ? 1 : 0.5)
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         .toolbar(.hidden, for: .navigationBar)
     }
 
@@ -153,17 +153,17 @@ struct PreScanChecklistView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(PatinaTypography.uiAction)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 Text(subtitle)
                     .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
 
             Spacer()
         }
         .padding(18)
-        .background(PatinaColors.softCream)
+        .background(PatinaColors.Background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 

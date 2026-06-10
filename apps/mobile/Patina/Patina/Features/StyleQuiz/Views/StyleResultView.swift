@@ -25,7 +25,7 @@ struct StyleResultView: View {
                     .frame(width: 96, height: 96)
 
                 Circle()
-                    .fill(PatinaColors.softCream)
+                    .fill(PatinaColors.Background.secondary)
                     .frame(width: 76, height: 76)
 
                 Text("✦")
@@ -36,7 +36,7 @@ struct StyleResultView: View {
             // Style name
             Text(result.displayName)
                 .font(PatinaTypography.h1)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .padding(.bottom, 4)
 
             // Subtitle
@@ -80,10 +80,10 @@ struct StyleResultView: View {
             } label: {
                 Text("View Recommendations")
                     .font(PatinaTypography.uiAction)
-                    .foregroundStyle(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.Text.inverse)
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
-                    .background(PatinaColors.charcoal)
+                    .background(PatinaColors.Interactive.active)
                     .clipShape(Capsule())
             }
             .padding(.horizontal, 28)
@@ -101,7 +101,7 @@ struct StyleResultView: View {
             Spacer()
         }
         .padding(.horizontal, 28)
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         .toolbar(.hidden, for: .navigationBar)
     }
 
@@ -111,11 +111,11 @@ struct StyleResultView: View {
         VStack(spacing: 2) {
             Text(value)
                 .font(PatinaTypography.h3)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
 
             Text(label.uppercased())
                 .font(PatinaTypography.monoTiny)
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
         }
     }
 }

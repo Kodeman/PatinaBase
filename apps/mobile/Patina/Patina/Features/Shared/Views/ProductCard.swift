@@ -93,16 +93,16 @@ public struct ProductCard: View {
                         .font(.custom("DMMono-Regular", size: 7))
                         .tracking(0.5)
                         .textCase(.uppercase)
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                 }
                 Text(data.name)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .lineLimit(2)
                 if let price = data.formattedPrice {
                     Text(price)
                         .font(.custom("PlayfairDisplay-Medium", size: 16))
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                         .padding(.top, 2)
                 }
             }
@@ -111,10 +111,10 @@ public struct ProductCard: View {
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
         }
         .padding(12)
-        .background(PatinaColors.softCream)
+        .background(PatinaColors.Background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
@@ -144,16 +144,9 @@ public struct ProductCard: View {
     @ViewBuilder
     private var thumbnail: some View {
         if let urlString = data.imageURL, let url = URL(string: urlString) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFill()
-                case .failure, .empty:
-                    PatinaGradients.warm
-                @unknown default:
-                    PatinaGradients.warm
-                }
-            }
+            // R15: route the app's last remote image through PatinaAsyncImage
+            // so loading/failure states share the branded placeholder.
+            PatinaAsyncImage(url: url, contentMode: .fill)
         } else {
             PatinaGradients.warm
         }

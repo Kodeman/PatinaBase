@@ -31,8 +31,8 @@ struct RoomContextBar: View {
     }
 
     private func contextText(for room: RoomSummary) -> some View {
-        let strong = Color(PatinaColors.charcoal)
-        let muted = Color(PatinaColors.agedOak)
+        let strong = Color(PatinaColors.Text.primary)
+        let muted = Color(PatinaColors.Text.muted)
         return (
             Text("\(room.squareFeet) sq ft").foregroundStyle(strong).fontWeight(.medium)
             + Text(" · ").foregroundStyle(muted)
@@ -50,12 +50,12 @@ struct RoomContextBar: View {
         } label: {
             Text(filter.label)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(isActive ? PatinaColors.offWhite : PatinaColors.mocha)
+                .foregroundStyle(isActive ? PatinaColors.Text.inverse : PatinaColors.Text.secondary)
                 .padding(.vertical, 3)
                 .padding(.horizontal, 9)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(isActive ? PatinaColors.charcoal : PatinaColors.softCream)
+                        .fill(isActive ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
                 )
         }
         .buttonStyle(.plain)
@@ -68,5 +68,5 @@ struct RoomContextBar: View {
         filters: DailyRoomViewModel.defaultFilters,
         activeFilterID: "all"
     ) { _ in }
-    .background(PatinaColors.offWhite)
+    .background(PatinaColors.Background.primary)
 }

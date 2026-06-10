@@ -23,17 +23,17 @@ struct StylePillButton: View {
                 Text(label)
                     .font(PatinaTypography.bodySmall)
             }
-            .foregroundStyle(isSelected ? PatinaColors.offWhite : PatinaColors.charcoal)
+            .foregroundStyle(isSelected ? PatinaColors.Text.inverse : PatinaColors.Text.primary)
             .padding(.vertical, 14)
             .padding(.horizontal, 18)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? PatinaColors.charcoal : PatinaColors.softCream)
+                    .fill(isSelected ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(
-                        isSelected ? PatinaColors.charcoal : PatinaColors.pearl,
+                        isSelected ? PatinaColors.Interactive.active : PatinaColors.pearl,
                         lineWidth: 1.5
                     )
             )
@@ -61,5 +61,5 @@ struct StylePillButton: View {
         )
     }
     .padding()
-    .background(PatinaColors.offWhite)
+    .background(PatinaColors.Background.primary)
 }

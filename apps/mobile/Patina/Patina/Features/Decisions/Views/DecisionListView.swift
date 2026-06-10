@@ -19,7 +19,7 @@ struct DecisionListView: View {
             }
             .padding(.bottom, 120)
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         // R04: nav bar is hidden for this destination — pin a back
         // affordance over the scroll content (matches RoomProjectView).
         .overlay(alignment: .topLeading) {
@@ -37,7 +37,7 @@ struct DecisionListView: View {
                 .tracking(2)
             Text(viewModel.decisions.isEmpty ? "Nothing waiting on you" : "Awaiting your call")
                 .font(PatinaTypography.h3)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
         }
         .padding(.top, 56)
         .padding(.horizontal, 24)
@@ -75,7 +75,7 @@ struct DecisionListView: View {
             HStack {
                 Text(d.title ?? "Decision")
                     .font(PatinaTypography.h5)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 Spacer()
                 if let type = d.decision_type {
                     Text(type.capitalized)
@@ -97,13 +97,13 @@ struct DecisionListView: View {
             if let description = d.description, !description.isEmpty {
                 Text(description)
                     .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
                     .lineLimit(3)
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(PatinaColors.softCream)
+        .background(PatinaColors.Background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(decisionAccessibilityLabel(d))
@@ -126,7 +126,7 @@ struct DecisionListView: View {
                 .foregroundStyle(PatinaColors.sage)
             Text("All caught up")
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 80)
@@ -136,7 +136,7 @@ struct DecisionListView: View {
         VStack(spacing: 10) {
             Text(msg)
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
             Button("Let's try that again") { Task { await viewModel.load() } }
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.interactive)

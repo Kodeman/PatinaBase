@@ -153,7 +153,7 @@ struct QuietConversationFlowHost: View {
     private var content: some View {
         switch step {
         case .initial:
-            PatinaColors.offWhite.ignoresSafeArea()
+            PatinaColors.Background.primary.ignoresSafeArea()
 
         case .threshold:
             if let vm = scanViewModel {
@@ -359,7 +359,7 @@ private struct ProfileSkipBridge: View {
     let action: () -> Void
 
     var body: some View {
-        PatinaColors.offWhite
+        PatinaColors.Background.primary
             .ignoresSafeArea()
             .onAppear(perform: action)
     }

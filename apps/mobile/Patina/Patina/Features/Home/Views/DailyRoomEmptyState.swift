@@ -13,22 +13,22 @@ struct DailyRoomEmptyState: View {
             Spacer()
             ZStack {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(PatinaColors.softCream)
+                    .fill(PatinaColors.Background.secondary)
                     .frame(width: 80, height: 80)
                 Image(systemName: "house")
                     .font(.system(size: 32, weight: .light))
-                    .foregroundStyle(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.Text.secondary)
             }
             .padding(.bottom, 16)
 
             Text("Start your first room")
                 .font(.custom("PlayfairDisplay-Regular", size: 20))
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .padding(.bottom, 6)
 
             Text("Capture a room to see daily picks tailored to your space")
                 .font(.system(size: 13))
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
                 .multilineTextAlignment(.center)
                 .lineSpacing(2)
                 .frame(maxWidth: 260)
@@ -39,10 +39,10 @@ struct DailyRoomEmptyState: View {
             } label: {
                 Text("Scan a Room")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(PatinaColors.offWhite)
+                    .foregroundStyle(PatinaColors.Text.inverse)
                     .padding(.vertical, 12)
                     .padding(.horizontal, 28)
-                    .background(Capsule().fill(PatinaColors.charcoal))
+                    .background(Capsule().fill(PatinaColors.Interactive.active))
             }
             .buttonStyle(.plain)
 
@@ -50,7 +50,7 @@ struct DailyRoomEmptyState: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 32)
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
     }
 }
 

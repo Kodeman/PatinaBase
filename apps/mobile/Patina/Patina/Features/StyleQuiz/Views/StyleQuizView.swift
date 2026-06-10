@@ -34,7 +34,7 @@ struct StyleQuizView: View {
                 // Question text
                 Text(viewModel.currentQuestionData.title)
                     .font(PatinaTypography.h3)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .padding(.top, 72)
                     .padding(.horizontal, 24)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -49,7 +49,7 @@ struct StyleQuizView: View {
             quizProgressPill
                 .padding(.bottom, 28)
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         .toolbar(.hidden, for: .navigationBar)
         // R05: exit affordance. Shown only when the quiz was pushed via the
         // coordinator (`onComplete == nil`). During onboarding (`onComplete`
@@ -108,9 +108,9 @@ struct StyleQuizView: View {
         } label: {
             Image(systemName: "xmark")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .frame(width: 36, height: 36)
-                .background(Circle().fill(PatinaColors.offWhite.opacity(0.92)))
+                .background(Circle().fill(PatinaColors.Background.primary.opacity(0.92)))
                 .overlay(Circle().stroke(PatinaColors.pearl, lineWidth: 0.5))
         }
         .buttonStyle(.plain)
@@ -186,7 +186,7 @@ struct StyleQuizView: View {
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
-            .background(PatinaColors.charcoal)
+            .background(PatinaColors.Background.dark)
             .clipShape(Capsule())
             .patinaShadow(PatinaShadows.companion)
             .padding(.horizontal, 40)
@@ -232,11 +232,11 @@ struct StyleQuizView: View {
                             .frame(minHeight: 120)
                         Text(option.label)
                             .font(PatinaTypography.uiSmall)
-                            .foregroundStyle(selections.contains(index) ? .white : PatinaColors.charcoal)
+                            .foregroundStyle(selections.contains(index) ? .white : PatinaColors.Text.primary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 10)
                             .frame(maxWidth: .infinity)
-                            .background(selections.contains(index) ? PatinaColors.clay : PatinaColors.softCream)
+                            .background(selections.contains(index) ? PatinaColors.clay : PatinaColors.Background.secondary)
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                     .overlay(
@@ -267,7 +267,7 @@ struct StyleQuizView: View {
                                     Text(icon)
                                         .font(.system(size: 20))
                                         .frame(width: 44, height: 44)
-                                        .background(selections.contains(index) ? PatinaColors.clay : PatinaColors.softCream)
+                                        .background(selections.contains(index) ? PatinaColors.clay : PatinaColors.Background.secondary)
                                         .clipShape(RoundedRectangle(cornerRadius: 11))
                                 } else {
                                     Text(icon)
@@ -278,17 +278,17 @@ struct StyleQuizView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(option.label)
                                     .font(PatinaTypography.uiAction)
-                                    .foregroundStyle(selections.contains(index) ? .white : PatinaColors.charcoal)
+                                    .foregroundStyle(selections.contains(index) ? PatinaColors.Text.inverse : PatinaColors.Text.primary)
                                 if let subtitle = option.subtitle {
                                     Text(subtitle)
                                         .font(PatinaTypography.caption)
-                                        .foregroundStyle(selections.contains(index) ? .white.opacity(0.8) : PatinaColors.agedOak)
+                                        .foregroundStyle(selections.contains(index) ? PatinaColors.Text.inverse.opacity(0.8) : PatinaColors.Text.muted)
                                 }
                             }
                             Spacer()
                         }
                         .padding(16)
-                        .background(selections.contains(index) ? PatinaColors.charcoal : PatinaColors.softCream)
+                        .background(selections.contains(index) ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                         .scaleEffect(selections.contains(index) ? 0.97 : 1.0)
                         .animation(.spring(response: 0.3), value: selections.contains(index))
@@ -318,17 +318,17 @@ struct StyleQuizView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(option.label)
                                     .font(PatinaTypography.uiAction)
-                                    .foregroundStyle(selections.contains(index) ? .white : PatinaColors.charcoal)
+                                    .foregroundStyle(selections.contains(index) ? .white : PatinaColors.Text.primary)
                                 if let subtitle = option.subtitle {
                                     Text(subtitle)
                                         .font(PatinaTypography.caption)
-                                        .foregroundStyle(selections.contains(index) ? .white.opacity(0.8) : PatinaColors.agedOak)
+                                        .foregroundStyle(selections.contains(index) ? .white.opacity(0.8) : PatinaColors.Text.muted)
                                 }
                             }
                             Spacer()
                         }
                         .padding(14)
-                        .background(selections.contains(index) ? PatinaColors.clay : PatinaColors.softCream)
+                        .background(selections.contains(index) ? PatinaColors.clay : PatinaColors.Background.secondary)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                         .scaleEffect(selections.contains(index) ? 0.97 : 1.0)
                         .animation(.spring(response: 0.3), value: selections.contains(index))

@@ -98,7 +98,7 @@ public struct AuthenticationView: View {
 
     private var header: some View {
         VStack(spacing: PatinaSpacing.md) {
-            StrataMarkView(color: PatinaColors.mocha, scale: 1.2)
+            StrataMarkView(color: PatinaColors.Strata.line1, scale: 1.2)
                 .padding(.bottom, PatinaSpacing.sm)
 
             Text(headerTitle)
@@ -221,7 +221,7 @@ public struct AuthenticationView: View {
             // Email icon
             Image(systemName: "envelope.open.fill")
                 .font(.system(size: 48))
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .padding(.bottom, PatinaSpacing.sm)
 
             Text("Check your email")
@@ -250,7 +250,7 @@ public struct AuthenticationView: View {
                 HStack {
                     if viewModel.isLoading {
                         ProgressView()
-                            .tint(PatinaColors.mocha)
+                            .tint(PatinaColors.Text.secondary)
                     } else {
                         Text(viewModel.magicLinkCooldown > 0
                              ? "Resend in \(viewModel.magicLinkCooldown)s"
@@ -258,14 +258,14 @@ public struct AuthenticationView: View {
                     }
                 }
                 .font(PatinaTypography.bodyMedium)
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, PatinaSpacing.md)
                 .background(PatinaColors.Background.secondary)
                 .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
                 .overlay(
                     RoundedRectangle(cornerRadius: PatinaRadius.lg)
-                        .stroke(PatinaColors.mocha, lineWidth: 1)
+                        .stroke(PatinaColors.Text.secondary, lineWidth: 1)
                 )
             }
             .disabled(viewModel.magicLinkCooldown > 0 || viewModel.isLoading)
@@ -279,7 +279,7 @@ public struct AuthenticationView: View {
             } label: {
                 Text("Enter code instead")
                     .font(PatinaTypography.bodySmall)
-                    .foregroundStyle(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.Text.secondary)
             }
             .accessibilityIdentifier("auth.magicLink.enterCodeButton")
 
@@ -303,7 +303,7 @@ public struct AuthenticationView: View {
             // Number-pad / lock icon
             Image(systemName: "number")
                 .font(.system(size: 48))
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .padding(.bottom, PatinaSpacing.sm)
 
             Text("Enter your sign-in code")
@@ -365,7 +365,7 @@ public struct AuthenticationView: View {
                 .padding(.vertical, PatinaSpacing.md)
                 .background(
                     (viewModel.otpToken.count == 6 && !viewModel.isVerifyingOtp)
-                    ? PatinaColors.charcoal
+                    ? PatinaColors.Interactive.active
                     : PatinaColors.clay
                 )
                 .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
@@ -398,7 +398,7 @@ public struct AuthenticationView: View {
             // Inbox icon
             Image(systemName: "envelope.badge.fill")
                 .font(.system(size: 48))
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .padding(.bottom, PatinaSpacing.sm)
 
             Text("Check your inbox")
@@ -444,7 +444,7 @@ public struct AuthenticationView: View {
                 HStack {
                     if viewModel.isResendingVerification {
                         ProgressView()
-                            .tint(PatinaColors.mocha)
+                            .tint(PatinaColors.Text.secondary)
                     } else {
                         Text(viewModel.verificationResendCooldown > 0
                              ? "Resend in \(viewModel.verificationResendCooldown)s"
@@ -452,14 +452,14 @@ public struct AuthenticationView: View {
                     }
                 }
                 .font(PatinaTypography.bodyMedium)
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, PatinaSpacing.md)
                 .background(PatinaColors.Background.secondary)
                 .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
                 .overlay(
                     RoundedRectangle(cornerRadius: PatinaRadius.lg)
-                        .stroke(PatinaColors.mocha, lineWidth: 1)
+                        .stroke(PatinaColors.Text.secondary, lineWidth: 1)
                 )
             }
             .disabled(viewModel.isResendingVerification
@@ -499,7 +499,7 @@ public struct AuthenticationView: View {
             .foregroundStyle(PatinaColors.Text.inverse)
             .frame(maxWidth: .infinity)
             .padding(.vertical, PatinaSpacing.md)
-            .background(viewModel.isFormValid ? PatinaColors.charcoal : PatinaColors.clay)
+            .background(viewModel.isFormValid ? PatinaColors.Interactive.active : PatinaColors.clay)
             .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
         }
         .disabled(!viewModel.isFormValid || viewModel.isLoading)
@@ -613,7 +613,7 @@ public struct AuthenticationView: View {
                     viewModel.clearForm()
                 }
                 .font(PatinaTypography.bodySmallMedium)
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .accessibilityIdentifier("auth.form.modeSwitcherButton")
             }
         }
@@ -664,13 +664,13 @@ struct AuthTextField: View {
             if isSecure {
                 SecureField(placeholder, text: $text)
                     .foregroundStyle(PatinaColors.Text.primary)
-                    .tint(PatinaColors.mocha)
+                    .tint(PatinaColors.Text.secondary)
             } else {
                 TextField(placeholder, text: $text)
                     .keyboardType(keyboardType)
                     .textInputAutocapitalization(autocapitalization)
                     .foregroundStyle(PatinaColors.Text.primary)
-                    .tint(PatinaColors.mocha)
+                    .tint(PatinaColors.Text.secondary)
             }
         }
         .font(PatinaTypography.body)

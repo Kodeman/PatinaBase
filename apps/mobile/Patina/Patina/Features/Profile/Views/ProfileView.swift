@@ -39,7 +39,7 @@ struct ProfileView: View {
                         } label: {
                             Image(systemName: "questionmark.circle")
                                 .font(.system(size: 17, weight: .regular))
-                                .foregroundStyle(PatinaColors.mocha)
+                                .foregroundStyle(PatinaColors.Text.secondary)
                                 .frame(width: 36, height: 36)
                                 .contentShape(Rectangle())
                         }
@@ -63,7 +63,7 @@ struct ProfileView: View {
 
                     Text(viewModel.userName)
                         .font(PatinaTypography.h3)
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                         .padding(.bottom, 4)
 
                     // "Member since…" — wrapped in HelpTooltip because the
@@ -89,11 +89,11 @@ struct ProfileView: View {
                             Text("✦")
                             Text(viewModel.styleBadge)
                                 .font(PatinaTypography.uiSmall)
-                                .foregroundStyle(PatinaColors.mocha)
+                                .foregroundStyle(PatinaColors.Text.secondary)
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 6)
-                        .background(PatinaColors.softCream)
+                        .background(PatinaColors.Background.secondary)
                         .clipShape(Capsule())
                         .padding(.top, 12)
                         .accessibilityLabel("Style: \(viewModel.styleBadge). More information available.")
@@ -127,10 +127,10 @@ struct ProfileView: View {
                 .padding(.vertical, 20)
                 .padding(.horizontal, 24)
                 .overlay(alignment: .top) {
-                    Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+                    Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
                 }
                 .overlay(alignment: .bottom) {
-                    Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+                    Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
                 }
 
                 // Your Rooms section
@@ -138,7 +138,7 @@ struct ProfileView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("YOUR ROOMS")
                             .font(PatinaTypography.monoMedium)
-                            .foregroundStyle(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.Text.muted)
                             .tracking(1)
 
                         ScrollView(.horizontal, showsIndicators: false) {
@@ -173,7 +173,7 @@ struct ProfileView: View {
                 Spacer().frame(height: 120)
             }
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         .toolbarTitleDisplayMode(.inline)
         .onAppear {
             viewModel.loadData(context: modelContext)
@@ -192,7 +192,7 @@ struct ProfileView: View {
         VStack(spacing: 2) {
             Text(value)
                 .font(.custom("PlayfairDisplay-Medium", size: 22, relativeTo: .title2))
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
             MonoLabel(text: label, size: PatinaTypography.monoTiny)
         }
         .frame(maxWidth: .infinity)
@@ -200,7 +200,7 @@ struct ProfileView: View {
 
     private var statDivider: some View {
         Rectangle()
-            .fill(PatinaColors.pearl)
+            .fill(PatinaColors.Text.muted.opacity(0.25))
             .frame(width: 1, height: 36)
     }
 
@@ -214,7 +214,7 @@ struct ProfileView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(room.name)
                     .font(PatinaTypography.uiSmall)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 MonoLabel(text: "Scanned \(Self.scannedDateFormatter.string(from: room.createdAt))", size: PatinaTypography.monoTiny)
             }
@@ -222,7 +222,7 @@ struct ProfileView: View {
             .padding(.vertical, 8)
         }
         .frame(width: 140)
-        .background(PatinaColors.softCream)
+        .background(PatinaColors.Background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
@@ -238,16 +238,16 @@ struct ProfileView: View {
 
                 Text(label)
                     .font(PatinaTypography.uiAction)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 Spacer()
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 13))
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
             .padding(14)
-            .background(PatinaColors.softCream)
+            .background(PatinaColors.Background.secondary)
             .clipShape(RoundedRectangle(cornerRadius: 14))
         }
         .buttonStyle(.plain)

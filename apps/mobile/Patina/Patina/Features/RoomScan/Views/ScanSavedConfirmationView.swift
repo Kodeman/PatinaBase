@@ -35,7 +35,7 @@ struct ScanSavedConfirmationView: View {
 
     var body: some View {
         ZStack {
-            PatinaColors.offWhite.ignoresSafeArea()
+            PatinaColors.Background.primary.ignoresSafeArea()
 
             VStack(spacing: 24) {
                 Spacer()
@@ -43,22 +43,22 @@ struct ScanSavedConfirmationView: View {
                 VStack(spacing: 16) {
                     Image(systemName: "checkmark.circle")
                         .font(.system(size: 52, weight: .light))
-                        .foregroundStyle(PatinaColors.charcoal.opacity(0.85))
+                        .foregroundStyle(PatinaColors.Text.primary.opacity(0.85))
 
                     Text("Saved to your rooms")
                         .font(.custom("PlayfairDisplay-Italic", size: 24, relativeTo: .title2))
-                        .foregroundStyle(PatinaColors.charcoal.opacity(0.9))
+                        .foregroundStyle(PatinaColors.Text.primary.opacity(0.9))
                         .multilineTextAlignment(.center)
 
                     if let name = displayRoomName, !name.isEmpty {
                         Text(name)
                             .font(PatinaTypography.bodySmallMedium)
-                            .foregroundStyle(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.Text.muted)
                     }
 
                     Text("Your scan is on this phone. We'll finish uploading it quietly in the background — you can close this anytime.")
                         .font(.custom("Inter-Regular", size: 13, relativeTo: .footnote))
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)
                         .fixedSize(horizontal: false, vertical: true)
@@ -79,7 +79,7 @@ struct ScanSavedConfirmationView: View {
                     Button(action: onSetStyle) {
                         Text("Set my style")
                             .font(PatinaTypography.bodySmallMedium)
-                            .foregroundStyle(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.Text.muted)
                             .frame(maxWidth: .infinity)
                             .frame(height: 44)
                     }
@@ -105,7 +105,7 @@ struct ScanSavedConfirmationView: View {
                 Spacer()
                 Text(progressLabel)
                     .font(.custom("DMMono-Regular", size: 11, relativeTo: .caption2))
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
 
             GeometryReader { proxy in
@@ -113,7 +113,7 @@ struct ScanSavedConfirmationView: View {
                     Capsule()
                         .fill(PatinaColors.pearl.opacity(0.5))
                     Capsule()
-                        .fill(PatinaColors.charcoal.opacity(0.75))
+                        .fill(PatinaColors.Interactive.active.opacity(0.75))
                         .frame(width: max(4, proxy.size.width * CGFloat(progressFraction)))
                         .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: progressFraction)
                 }
@@ -123,14 +123,14 @@ struct ScanSavedConfirmationView: View {
             if let hint = progressHint {
                 Text(hint)
                     .font(.custom("Inter-Regular", size: 12, relativeTo: .caption))
-                    .foregroundStyle(PatinaColors.agedOak.opacity(0.85))
+                    .foregroundStyle(PatinaColors.Text.muted.opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(PatinaColors.softCream)
+                .fill(PatinaColors.Background.secondary)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14)

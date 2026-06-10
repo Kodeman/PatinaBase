@@ -41,7 +41,7 @@ struct ProjectDetailView: View {
             }
             .padding(.bottom, 120)
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
         // R04: nav bar is hidden for this destination — pin a back
         // affordance over the scroll content (matches RoomProjectView).
         .overlay(alignment: .topLeading) {
@@ -60,12 +60,12 @@ struct ProjectDetailView: View {
                 .tracking(2)
             Text(project.name)
                 .font(PatinaTypography.h2)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
             if let phase = project.current_phase {
                 // R16: formatted phase vocabulary, never the raw slug.
                 Text("Currently: \(PhaseDisplay.label(for: phase))")
                     .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
         }
         .padding(.top, 56)
@@ -93,13 +93,13 @@ struct ProjectDetailView: View {
                         MonoLabel(text: fact.0)
                         Text(fact.1)
                             .font(PatinaTypography.bodySmallMedium)
-                            .foregroundStyle(PatinaColors.mocha)
+                            .foregroundStyle(PatinaColors.Text.secondary)
                     }
                 }
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(PatinaColors.softCream)
+            .background(PatinaColors.Background.secondary)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .padding(.horizontal, 24)
         }
@@ -141,7 +141,7 @@ struct ProjectDetailView: View {
     private var portalHintCard: some View {
         Text("Set up \(joinedList(missingSectionNames)) in the portal →")
             .font(PatinaTypography.caption)
-            .foregroundStyle(PatinaColors.agedOak)
+            .foregroundStyle(PatinaColors.Text.muted)
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .overlay(
@@ -175,7 +175,7 @@ struct ProjectDetailView: View {
                     phaseRow(phase)
                 }
             }
-            .background(PatinaColors.softCream)
+            .background(PatinaColors.Background.secondary)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .padding(.horizontal, 24)
         }
@@ -191,16 +191,16 @@ struct ProjectDetailView: View {
                 // designer label for the slug — never `phase_key.capitalized`.
                 Text(phase.name ?? PhaseDisplay.label(for: phase.phase_key))
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 Text(PhaseDisplay.statusLabel(for: phase.status ?? "pending"))
                     .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
             Spacer()
             if let fee = phase.fee_cents {
                 Text(formatPrice(fee))
                     .font(PatinaTypography.monoTiny)
-                    .foregroundStyle(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.Text.secondary)
             }
         }
         .padding(.vertical, 14)
@@ -234,7 +234,7 @@ struct ProjectDetailView: View {
                     milestoneRow(milestone)
                 }
             }
-            .background(PatinaColors.softCream)
+            .background(PatinaColors.Background.secondary)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .padding(.horizontal, 24)
         }
@@ -245,18 +245,18 @@ struct ProjectDetailView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(m.title ?? "Payment")
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 if let due = m.due_date {
                     Text("Due \(due)")
                         .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                 }
             }
             Spacer()
             if let amount = m.amount_cents {
                 Text(formatPrice(amount))
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.Text.secondary)
             }
         }
         .padding(.vertical, 14)
@@ -280,12 +280,12 @@ struct ProjectDetailView: View {
                     HStack {
                         Text(item.name ?? "Item")
                             .font(PatinaTypography.bodySmall)
-                            .foregroundStyle(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.Text.primary)
                         Spacer()
                         if let total = item.line_total_cents {
                             Text(formatPrice(total))
                                 .font(PatinaTypography.monoTiny)
-                                .foregroundStyle(PatinaColors.mocha)
+                                .foregroundStyle(PatinaColors.Text.secondary)
                         }
                     }
                     .padding(.vertical, 12)
@@ -297,7 +297,7 @@ struct ProjectDetailView: View {
                     }
                 }
             }
-            .background(PatinaColors.softCream)
+            .background(PatinaColors.Background.secondary)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .padding(.horizontal, 24)
         }
@@ -307,7 +307,7 @@ struct ProjectDetailView: View {
         VStack(spacing: 12) {
             Text(msg)
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.mocha)
+                .foregroundStyle(PatinaColors.Text.secondary)
             Button("Try Again") {
                 Task { await viewModel.load(projectId: projectId) }
             }

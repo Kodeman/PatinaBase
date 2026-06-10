@@ -58,7 +58,7 @@ struct VisualResonanceView: View {
 
                 if isSelected {
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(PatinaColors.charcoal, lineWidth: 3)
+                        .stroke(PatinaColors.Interactive.active, lineWidth: 3)
 
                     VStack {
                         Spacer()

@@ -60,7 +60,7 @@ public struct PatinaTextField: View {
     private var borderColor: Color {
         if hasError { return PatinaColors.error }
         return isFocused
-            ? PatinaColors.clayDeep.opacity(0.5)
+            ? PatinaColors.Text.interactive.opacity(0.5)
             : PatinaColors.clay.opacity(0.2)
     }
 
@@ -83,7 +83,7 @@ public struct PatinaTextField: View {
 
                 field
                     .foregroundStyle(PatinaColors.Text.primary)
-                    .tint(PatinaColors.mocha)
+                    .tint(PatinaColors.Text.secondary)
                     .focused($isFocused)
             }
             .font(PatinaTypography.body)

@@ -40,7 +40,7 @@ struct HeroPickerSheet: View {
                                         RoundedRectangle(cornerRadius: 12)
                                             .stroke(
                                                 isEffectiveHero(photoId: photo.id)
-                                                    ? PatinaColors.charcoal
+                                                    ? PatinaColors.Interactive.active
                                                     : PatinaColors.pearl,
                                                 lineWidth: isEffectiveHero(photoId: photo.id) ? 2 : 1
                                             )
@@ -49,7 +49,7 @@ struct HeroPickerSheet: View {
                                 if isEffectiveHero(photoId: photo.id) {
                                     Image(systemName: "checkmark.circle.fill")
                                         .font(.system(size: 18))
-                                        .foregroundStyle(PatinaColors.charcoal)
+                                        .foregroundStyle(PatinaColors.Text.primary)
                                         .padding(8)
                                 }
                             }
@@ -59,13 +59,13 @@ struct HeroPickerSheet: View {
                 }
                 .padding(16)
             }
-            .background(PatinaColors.offWhite.ignoresSafeArea())
+            .background(PatinaColors.Background.primary.ignoresSafeArea())
             .navigationTitle("Pick Hero Photo")
             .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { onDismiss() }
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                 }
             }
         }

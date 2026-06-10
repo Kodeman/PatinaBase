@@ -45,7 +45,7 @@ struct MoveOrCopyItemSheet: View {
 
                 Text("Select destination room")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(PatinaColors.mocha)
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 24)
                     .padding(.bottom, 6)
@@ -61,11 +61,11 @@ struct MoveOrCopyItemSheet: View {
                 .padding(.bottom, 24)
             } else {
                 Text("Item not found")
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
                     .padding()
             }
         }
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
     }
 
     private func productHeader(_ item: SavedItem) -> some View {
@@ -76,18 +76,18 @@ struct MoveOrCopyItemSheet: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.productName)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 Text("\(item.makerName) · \(item.fullFormattedPrice)")
                     .font(.custom("DMMono-Regular", size: 8))
                     .tracking(0.3)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
             Spacer(minLength: 0)
         }
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(PatinaColors.softCream)
+                .fill(PatinaColors.Background.secondary)
         )
     }
 
@@ -103,12 +103,12 @@ struct MoveOrCopyItemSheet: View {
         return Button { mode = value } label: {
             Text(title)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(selected ? .white : PatinaColors.mocha)
+                .foregroundStyle(selected ? .white : PatinaColors.Text.secondary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(selected ? PatinaColors.clay : PatinaColors.softCream)
+                        .fill(selected ? PatinaColors.clay : PatinaColors.Background.secondary)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -129,14 +129,14 @@ struct MoveOrCopyItemSheet: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 Text(room.name)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                 Spacer()
                 if isCurrent {
                     Text("Current")
                         .font(.custom("DMMono-Regular", size: 7))
                         .tracking(0.3)
                         .textCase(.uppercase)
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                 } else {
                     Text("→")
                         .font(.system(size: 14))
@@ -146,7 +146,7 @@ struct MoveOrCopyItemSheet: View {
             .padding(10)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(PatinaColors.softCream)
+                    .fill(PatinaColors.Background.secondary)
             )
             .opacity(isCurrent ? 0.5 : 1)
         }

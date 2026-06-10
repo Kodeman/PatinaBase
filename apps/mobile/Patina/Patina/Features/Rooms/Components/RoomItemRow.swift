@@ -44,14 +44,14 @@ struct RoomItemRow: View {
                             .font(PatinaTypography.bodySmall)
                             .tracking(0.5)
                             .textCase(.uppercase)
-                            .foregroundStyle(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.Text.muted)
                         Text(item.productName)
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.Text.primary)
                             .lineLimit(2)
                         Text(item.fullFormattedPrice)
                             .font(.custom("PlayfairDisplay-Medium", size: 15, relativeTo: .subheadline))
-                            .foregroundStyle(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.Text.primary)
                     }
 
                     Spacer(minLength: 0)
@@ -66,11 +66,11 @@ struct RoomItemRow: View {
             Button(action: onActions) {
                 Text("⋯")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .frame(width: 28, height: 28)
                     .background(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(PatinaColors.softCream)
+                            .fill(PatinaColors.Background.secondary)
                     )
                     .frame(minWidth: 44, minHeight: 44)
                     .contentShape(Rectangle())

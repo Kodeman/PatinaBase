@@ -18,20 +18,20 @@ struct ScanReviewHeader: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Your room, your way")
                 .font(PatinaTypography.patinaVoiceLarge)
-                .foregroundStyle(PatinaColors.charcoal.opacity(0.85))
+                .foregroundStyle(PatinaColors.Text.primary.opacity(0.85))
             Text("Give the room a name, pick the photo you love most, and jot down anything worth remembering. You can share it later.")
                 .font(.custom("Inter-Regular", size: 13, relativeTo: .footnote))
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
                 .fixedSize(horizontal: false, vertical: true)
 
             TextField("Room name", text: $roomName)
                 .font(.custom("Inter-Regular", size: 15, relativeTo: .subheadline))
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .padding(.horizontal, 16)
                 .frame(height: 48)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(PatinaColors.softCream)
+                        .fill(PatinaColors.Background.secondary)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)

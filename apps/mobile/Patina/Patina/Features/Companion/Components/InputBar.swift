@@ -189,7 +189,7 @@ public struct VoiceButton: View {
             onVoiceEnd: { PatinaLog.companion.debug("Voice end") }
         )
     }
-    .background(Color.white)
+    .background(PatinaColors.Background.primary)
 }
 
 #Preview("With Text") {
@@ -202,7 +202,7 @@ public struct VoiceButton: View {
             onVoiceEnd: { PatinaLog.companion.debug("Voice end") }
         )
     }
-    .background(Color.white)
+    .background(PatinaColors.Background.primary)
 }
 
 #Preview("Voice Active") {
@@ -216,5 +216,5 @@ public struct VoiceButton: View {
             onVoiceEnd: { PatinaLog.companion.debug("Voice end") }
         )
     }
-    .background(Color.white)
+    .background(PatinaColors.Background.primary)
 }

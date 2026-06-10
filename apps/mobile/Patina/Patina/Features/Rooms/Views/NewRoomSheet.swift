@@ -20,7 +20,7 @@ struct NewRoomSheet: View {
 
             Text("Add a new room")
                 .font(.custom("PlayfairDisplay-Regular", size: 18))
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 16)
@@ -38,8 +38,8 @@ struct NewRoomSheet: View {
 
             option(
                 icon: "📐",
-                iconBackground: PatinaColors.softCream,
-                iconForeground: PatinaColors.charcoal,
+                iconBackground: PatinaColors.Background.secondary,
+                iconForeground: PatinaColors.Text.primary,
                 title: "Enter manually",
                 subtitle: "Add room type and dimensions. No AR, but you'll still get style-matched picks."
             ) {
@@ -50,7 +50,7 @@ struct NewRoomSheet: View {
             Spacer().frame(height: 24)
         }
         .padding(.horizontal, 20)
-        .background(PatinaColors.offWhite)
+        .background(PatinaColors.Background.primary)
     }
 
     private func option(icon: String, iconBackground: Color, iconForeground: Color,
@@ -69,10 +69,10 @@ struct NewRoomSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                     Text(subtitle)
                         .font(.system(size: 11))
-                        .foregroundStyle(PatinaColors.agedOak)
+                        .foregroundStyle(PatinaColors.Text.muted)
                         .multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 0)
@@ -80,7 +80,7 @@ struct NewRoomSheet: View {
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(PatinaColors.softCream)
+                    .fill(PatinaColors.Background.secondary)
             )
         }
         .buttonStyle(.plain)

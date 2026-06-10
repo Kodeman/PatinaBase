@@ -63,7 +63,7 @@ public struct ClayCircleBackground: View {
     var textureIntensity: Double
     var color: Color
 
-    public init(size: CGFloat = 64, textureIntensity: Double = 0.3, color: Color = PatinaColors.warmWhite) {
+    public init(size: CGFloat = 64, textureIntensity: Double = 0.3, color: Color = PatinaColors.Background.tertiary) {
         self.size = size
         self.textureIntensity = textureIntensity
         self.color = color
@@ -198,7 +198,7 @@ public struct PaperBackground: View {
         ZStack {
             // Base warm white color
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(PatinaColors.warmWhite)
+                .fill(PatinaColors.Background.tertiary)
 
             // Paper texture overlay
             PaperTextureOverlay(intensity: textureIntensity)

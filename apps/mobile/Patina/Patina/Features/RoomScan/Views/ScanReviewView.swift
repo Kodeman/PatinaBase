@@ -84,7 +84,7 @@ public struct ScanReviewView: View {
 
     public var body: some View {
         ZStack {
-            PatinaColors.offWhite.ignoresSafeArea()
+            PatinaColors.Background.primary.ignoresSafeArea()
 
             if let manifest = manifest {
                 loadedContent(manifest: manifest)
@@ -105,10 +105,10 @@ public struct ScanReviewView: View {
         VStack(spacing: 16) {
             Spacer()
             ProgressView()
-                .tint(PatinaColors.charcoal)
+                .tint(PatinaColors.Text.primary)
             Text("Preparing your scan…")
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
             Spacer()
         }
     }
@@ -118,29 +118,29 @@ public struct ScanReviewView: View {
             Spacer()
             Text("Something went wrong")
                 .font(PatinaTypography.patinaVoiceLarge)
-                .foregroundStyle(PatinaColors.charcoal.opacity(0.8))
+                .foregroundStyle(PatinaColors.Text.primary.opacity(0.8))
             if let loadError {
                 Text(loadError)
                     .font(.custom("Inter-Regular", size: 13, relativeTo: .footnote))
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
             }
             Text("Your other rooms are safe — this only affects this scan.")
                 .font(.custom("Inter-Regular", size: 12, relativeTo: .caption))
-                .foregroundStyle(PatinaColors.agedOak.opacity(0.8))
+                .foregroundStyle(PatinaColors.Text.muted.opacity(0.8))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
             Spacer()
             Button(action: onCancel) {
                 Text("Discard this scan")
                     .font(PatinaTypography.uiAction)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
                     .background(
                         RoundedRectangle(cornerRadius: 26)
-                            .stroke(PatinaColors.charcoal, lineWidth: 1.5)
+                            .stroke(PatinaColors.Interactive.active, lineWidth: 1.5)
                     )
             }
             .buttonStyle(.plain)
@@ -172,14 +172,14 @@ public struct ScanReviewView: View {
                 .padding(.top, 24)
                 .padding(.bottom, 32)
             }
-            .background(PatinaColors.offWhite.ignoresSafeArea())
+            .background(PatinaColors.Background.primary.ignoresSafeArea())
             .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: onCancel) {
                         Text("Discard")
                             .font(PatinaTypography.bodySmall)
-                            .foregroundStyle(PatinaColors.agedOak)
+                            .foregroundStyle(PatinaColors.Text.muted)
                     }
                     .buttonStyle(.plain)
                 }
@@ -233,17 +233,17 @@ public struct ScanReviewView: View {
         HStack(spacing: 12) {
             Image(systemName: "checkmark.seal")
                 .font(.system(size: 18, weight: .regular))
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
             Text("No photos captured — the scan shape is still saved.")
                 .font(.custom("Inter-Regular", size: 13, relativeTo: .footnote))
-                .foregroundStyle(PatinaColors.agedOak)
+                .foregroundStyle(PatinaColors.Text.muted)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(PatinaColors.softCream)
+                .fill(PatinaColors.Background.secondary)
         )
     }
 
@@ -267,11 +267,11 @@ public struct ScanReviewView: View {
                         Text("Change")
                             .font(PatinaTypography.caption)
                     }
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(
-                        Capsule().fill(PatinaColors.offWhite.opacity(0.92))
+                        Capsule().fill(PatinaColors.Background.primary.opacity(0.92))
                     )
                     .padding(12)
                 }
@@ -298,7 +298,7 @@ public struct ScanReviewView: View {
                             Text("Reorder")
                                 .font(.custom("Inter-Medium", size: 11, relativeTo: .caption2))
                         }
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(Capsule().stroke(PatinaColors.pearl, lineWidth: 1))
@@ -308,14 +308,14 @@ public struct ScanReviewView: View {
                 }
                 Text("\(visibleSupportingPhotos(manifest: manifest).count)")
                     .font(PatinaTypography.mono)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
 
             let supporting = visibleSupportingPhotos(manifest: manifest)
             if supporting.isEmpty {
                 Text("No additional photos captured.")
                     .font(.custom("Inter-Regular", size: 13, relativeTo: .footnote))
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
                     .padding(.vertical, 16)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -376,10 +376,10 @@ public struct ScanReviewView: View {
                             Text("Note")
                                 .font(.custom("Inter-Medium", size: 10, relativeTo: .caption2))
                         }
-                        .foregroundStyle(PatinaColors.charcoal)
+                        .foregroundStyle(PatinaColors.Text.primary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Capsule().fill(PatinaColors.offWhite.opacity(0.92)))
+                        .background(Capsule().fill(PatinaColors.Background.primary.opacity(0.92)))
                         .padding(8)
                     }
                 }
@@ -410,14 +410,14 @@ public struct ScanReviewView: View {
 
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(PatinaColors.softCream)
+                    .fill(PatinaColors.Background.secondary)
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(PatinaColors.pearl, lineWidth: 1.5)
 
                 if roomNotes.isEmpty {
                     Text("Anything worth remembering? (private to you for now)")
                         .font(PatinaTypography.bodySmall)
-                        .foregroundStyle(PatinaColors.agedOak.opacity(0.7))
+                        .foregroundStyle(PatinaColors.Text.muted.opacity(0.7))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 14)
                         .allowsHitTesting(false)
@@ -425,7 +425,7 @@ public struct ScanReviewView: View {
 
                 TextEditor(text: $roomNotes)
                     .font(PatinaTypography.bodySmall)
-                    .foregroundStyle(PatinaColors.charcoal)
+                    .foregroundStyle(PatinaColors.Text.primary)
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -445,7 +445,7 @@ public struct ScanReviewView: View {
             Button(action: { Task { await submit(skipping: true) } }) {
                 Text("Save without notes")
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(PatinaColors.agedOak)
+                    .foregroundStyle(PatinaColors.Text.muted)
                     .frame(maxWidth: .infinity)
                     .frame(height: 44)
             }
