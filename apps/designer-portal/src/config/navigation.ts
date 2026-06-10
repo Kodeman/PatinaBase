@@ -137,6 +137,7 @@ export const ZONE_SUB_ITEMS: Record<ZoneKey, SubNavItem[]> = {
   ],
   billing: [
     { label: 'Invoices', href: '/portal/billing/invoices' },
+    { label: 'A/R', href: '/portal/billing/ar' },
     { label: 'Earnings', href: '/portal/earnings' },
   ],
   // Products renders the three-layer Library picker (My Library / Studio Library

@@ -25,14 +25,23 @@
 //   5. Stamp invoices.sent_at if null (issue_invoice normally stamps it; this
 //      covers resend-after-anomaly paths).
 //
-// Body: { invoiceId: string, message?: string }  (message = personal note)
+// Body: { invoiceId: string, message?: string, type?: 'sent' | 'reminder' }
+//   message = personal note; type defaults to 'sent'.
+//   type 'reminder' = designer-initiated manual nudge from the A/R page: it
+//   renders the overdue-notice template instead of invoice_sent, requires a
+//   live receivable (sent/partially_paid), and does NOT touch reminder_count /
+//   last_reminder_at / sent_at — the automated invoice-reminders cadence is
+//   unaffected by manual nudges.
 // Returns counts/ids JSON like sibling functions.
 
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { sendCompliantEmail } from '../_shared/send-email.ts';
-import { buildInvoiceSentEmail } from '../_shared/invoice-emails.ts';
+import {
+  buildInvoiceOverdueNoticeEmail,
+  buildInvoiceSentEmail,
+} from '../_shared/invoice-emails.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -51,6 +60,7 @@ interface InvoiceRow {
   invoice_number: string | null;
   status: string;
   total_cents: number;
+  amount_paid_cents: number;
   currency: string;
   due_date: string | null;
   sent_at: string | null;
@@ -87,10 +97,12 @@ Deno.serve(async (req: Request) => {
 
   let invoiceId: string | undefined;
   let personalMessage: string | undefined;
+  let sendType: 'sent' | 'reminder' = 'sent';
   try {
     const body = await req.json();
     invoiceId = body?.invoiceId;
     personalMessage = typeof body?.message === 'string' ? body.message : undefined;
+    if (body?.type === 'reminder') sendType = 'reminder';
   } catch {
     return json({ error: 'invalid_body' }, 400);
   }
@@ -110,7 +122,7 @@ Deno.serve(async (req: Request) => {
     .select(
       `
       id, designer_id, client_id, project_id, invoice_number, status,
-      total_cents, currency, due_date, sent_at,
+      total_cents, amount_paid_cents, currency, due_date, sent_at,
       project:projects!invoices_project_id_fkey(id, name, client_id),
       client:profiles!invoices_client_id_fkey(id, full_name, email),
       designer:profiles!invoices_designer_id_fkey(id, full_name, business_name)
@@ -134,6 +146,13 @@ Deno.serve(async (req: Request) => {
   }
   if (invoice.status === 'void') {
     return json({ error: 'invoice_void', detail: 'A voided invoice cannot be sent.' }, 409);
+  }
+  // Manual reminders only make sense on a live receivable.
+  if (sendType === 'reminder' && invoice.status !== 'sent' && invoice.status !== 'partially_paid') {
+    return json(
+      { error: 'invoice_not_open', detail: 'Reminders can only be sent on open (sent or partially paid) invoices.' },
+      409,
+    );
   }
 
   // ── Resolve recipient ──────────────────────────────────────────────────
@@ -180,17 +199,35 @@ Deno.serve(async (req: Request) => {
   const invoiceNumber = invoice.invoice_number ?? 'Invoice';
   const portalUrl = `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
 
-  const rendered = buildInvoiceSentEmail({
-    invoiceNumber,
-    projectName,
-    designerName,
-    clientName: recipientName,
-    totalCents: invoice.total_cents,
-    dueDate: invoice.due_date,
-    portalUrl,
-    personalMessage,
-    currency: invoice.currency,
-  });
+  // type 'reminder' renders the overdue-notice template (manual nudge from the
+  // A/R page) without touching the automated cadence counters; default 'sent'
+  // is the original invoice_sent announcement.
+  const rendered =
+    sendType === 'reminder'
+      ? buildInvoiceOverdueNoticeEmail({
+          invoiceNumber,
+          projectName,
+          designerName,
+          clientName: recipientName,
+          balanceCents: Math.max(
+            (invoice.total_cents || 0) - (invoice.amount_paid_cents || 0),
+            0,
+          ),
+          dueDate: invoice.due_date,
+          portalUrl,
+          currency: invoice.currency,
+        })
+      : buildInvoiceSentEmail({
+          invoiceNumber,
+          projectName,
+          designerName,
+          clientName: recipientName,
+          totalCents: invoice.total_cents,
+          dueDate: invoice.due_date,
+          portalUrl,
+          personalMessage,
+          currency: invoice.currency,
+        });
 
   let sendResult;
   try {
@@ -199,16 +236,19 @@ Deno.serve(async (req: Request) => {
       subject: rendered.subject,
       html: rendered.html,
       userId: clientUserId ?? undefined,
-      notificationType: 'invoice_sent',
+      notificationType: sendType === 'reminder' ? 'invoice_reminder' : 'invoice_sent',
       category: 'operational',
-      templateId: 'invoice-sent',
+      templateId: sendType === 'reminder' ? 'invoice-reminder-manual' : 'invoice-sent',
       // subject/message/deep_link double as the in-app inbox rendering (the
       // client portal surfaces this notification_log row — see header note).
       metadata: {
         invoice_id: invoice.id,
         project_id: invoice.project_id,
         subject: rendered.subject,
-        message: `${designerName} sent invoice ${invoiceNumber} for ${projectName}.`,
+        message:
+          sendType === 'reminder'
+            ? `${designerName} sent a reminder about invoice ${invoiceNumber} for ${projectName}.`
+            : `${designerName} sent invoice ${invoiceNumber} for ${projectName}.`,
         deep_link: `/invoices/${invoice.id}`,
       },
     });
@@ -226,9 +266,10 @@ Deno.serve(async (req: Request) => {
 
   // ── Stamp sent_at if missing ───────────────────────────────────────────
   // issue_invoice stamps sent_at at issue time, so this is normally a no-op;
-  // it backstops rows that reached an issued status without a stamp.
+  // it backstops rows that reached an issued status without a stamp. Manual
+  // reminders never stamp — they aren't the send event.
   let stampedSentAt = false;
-  if (!invoice.sent_at) {
+  if (sendType === 'sent' && !invoice.sent_at) {
     const { error: stampErr } = await admin
       .from('invoices')
       .update({ sent_at: new Date().toISOString() })
