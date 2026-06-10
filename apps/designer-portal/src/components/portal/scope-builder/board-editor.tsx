@@ -31,6 +31,7 @@ import {
   type ProductPickResult,
 } from '../proposals/product-picker-modal';
 import { renderBoardItem } from './board-item-renderer';
+import { BoardSuggestionsRail } from './board-suggestions-rail';
 
 // Debounced layout autosave interval — mirrors the blur/600ms idiom used by
 // the palette swatch editor.
@@ -352,6 +353,11 @@ export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
             + Add product or capture
           </Button>
         </SidebarSection>
+
+        {/* Similar-product suggestions (hidden until a product item exists and
+            the similarity RPC returns matches — degrades silently without
+            embeddings). Collapsible so it doesn't crowd the inspector. */}
+        <BoardSuggestionsRail items={items} onAdd={addItemToBoard} />
 
         {/* Add palette */}
         <AddPaletteSection proposalId={proposalId} onAdd={addItemToBoard} />
