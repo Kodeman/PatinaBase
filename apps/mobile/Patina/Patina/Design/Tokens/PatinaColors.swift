@@ -98,7 +98,11 @@ public enum PatinaColors {
         public static let secondary = Color.patinaDynamic(
             light: softCream, dark: DarkPalette.backgroundSecondary
         )
-        public static let tertiary = warmWhite
+        /// Hero sections, special backgrounds — tracks the primary canvas in dark.
+        public static let tertiary = Color.patinaDynamic(
+            light: warmWhite, dark: DarkPalette.background
+        )
+        /// Deliberately dark surface (camera chrome, immersive overlays) — static by design.
         public static let dark = charcoal
     }
 
@@ -112,22 +116,34 @@ public enum PatinaColors {
         public static let muted = Color.patinaDynamic(
             light: agedOak, dark: DarkPalette.textMuted
         )
-        public static let inverse = offWhite
+        /// Text on inverted surfaces (e.g. charcoal buttons in light mode,
+        /// light buttons in dark mode) — pairs with `Interactive.active`.
+        public static let inverse = Color.patinaDynamic(
+            light: offWhite, dark: DarkPalette.background
+        )
         public static let interactive = Color.patinaDynamic(
             light: clayDeep, dark: DarkPalette.textInteractive
         )
     }
 
     public enum Interactive {
+        /// Brand accent — clay reads correctly on both schemes.
         public static let `default` = clay
-        public static let hover = agedOak
-        public static let active = charcoal
+        public static let hover = Color.patinaDynamic(
+            light: agedOak, dark: DarkPalette.textMuted
+        )
+        /// Filled control surface — pair its label with `Text.inverse`.
+        public static let active = Color.patinaDynamic(
+            light: charcoal, dark: DarkPalette.textPrimary
+        )
     }
 
     // MARK: - Strata Mark Colors
 
     public enum Strata {
-        public static let line1 = mocha
+        public static let line1 = Color.patinaDynamic(
+            light: mocha, dark: DarkPalette.textSecondary
+        )
         public static let line2 = clay
         public static let line3 = clay.opacity(0.5)
     }
