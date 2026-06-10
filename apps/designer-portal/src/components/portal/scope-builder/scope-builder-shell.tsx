@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { RoomsInScope } from './rooms-in-scope';
 import { FFEScheduleBuilder } from './ffe-schedule-builder';
 import { PaletteBuilder } from './palette-builder';
+import { BoardsBuilder } from './boards-builder';
 import { PhaseBuilder } from './phase-builder';
 import { ExclusionsList } from './exclusions-list';
 import { PaymentMilestonesBuilder } from './payment-milestones-builder';
@@ -19,12 +20,13 @@ interface ScopeBuilderShellProps {
   onGenerateProposal: () => void;
 }
 
-type Tab = 'rooms' | 'ffe' | 'palette' | 'phases' | 'exclusions' | 'payments' | 'terms';
+type Tab = 'rooms' | 'ffe' | 'palette' | 'boards' | 'phases' | 'exclusions' | 'payments' | 'terms';
 
 const TABS: Array<{ value: Tab; label: string }> = [
   { value: 'rooms', label: 'Rooms' },
   { value: 'ffe', label: 'FF&E' },
   { value: 'palette', label: 'Palette' },
+  { value: 'boards', label: 'Boards' },
   { value: 'phases', label: 'Phases' },
   { value: 'exclusions', label: 'Exclusions' },
   { value: 'payments', label: 'Payments' },
@@ -227,6 +229,19 @@ export function ScopeBuilderShell({
             Capture colors three ways: extract from an inspiration image, search a brand catalog, or pick manually.
           </p>
           <PaletteBuilder proposalId={proposalId} />
+        </section>
+      )}
+
+      {tab === 'boards' && (
+        <section>
+          <div className="mb-1">
+            <h3 className="font-display text-lg font-medium">Mood Boards</h3>
+          </div>
+          <p className="type-body-small mb-4 text-[var(--text-muted)]">
+            Freeform canvases that collage products, captures, palettes, room scans, and notes.
+            Link a board to a room or keep it whole-home.
+          </p>
+          <BoardsBuilder proposalId={proposalId} />
         </section>
       )}
 

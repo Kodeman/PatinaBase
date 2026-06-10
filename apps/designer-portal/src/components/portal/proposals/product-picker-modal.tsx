@@ -36,6 +36,12 @@ export interface ProductPickResult {
   vendorName: string | null; // brand ?? vendor.name ?? null
   /** Library layer the product was picked from, when known (for a badge). */
   layer?: LayerProductLayer;
+  /**
+   * Set when the pick originated from the Captures tab — the id of the
+   * `proposal_captures` row. Callers that distinguish capture-sourced picks
+   * (e.g. mood-board 'capture' items) can key off this.
+   */
+  captureId?: string;
   /** Room selected in the modal (or the default it opened with), null = Unassigned. */
   scopeRoomId: string | null;
 }
@@ -595,6 +601,7 @@ function CapturesTab({ onPick }: { onPick: (pick: TabPick) => void }) {
         priceCents,
         vendorName: captureVendorName(capture),
         layer: 'personal',
+        captureId: capture.id,
       });
     } catch (err) {
       setPromoteError(err instanceof Error ? err.message : 'Failed to promote draft');
@@ -644,6 +651,7 @@ function CapturesTab({ onPick }: { onPick: (pick: TabPick) => void }) {
                   imageUrl: capture.thumbnail_url ?? null,
                   priceCents: capturePriceCents(capture),
                   vendorName: vendor,
+                  captureId: capture.id,
                 });
               } else {
                 void handlePromoteAndPick(capture);
