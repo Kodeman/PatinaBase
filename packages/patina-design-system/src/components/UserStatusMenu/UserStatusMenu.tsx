@@ -30,6 +30,13 @@ import {
 import { cn } from '../../utils/cn'
 
 /**
+ * @deprecated No app consumes this component anymore. The designer portal
+ * replaced it with a portal-local AccountMenu (canonical design language,
+ * persisted availability via @patina/supabase useAvailability). Kept for
+ * reference; prefer building portal-local menus on Popover.
+ */
+
+/**
  * User presence status type
  */
 export type UserPresenceStatus = 'online' | 'offline' | 'busy' | 'away'

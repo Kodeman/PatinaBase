@@ -330,6 +330,14 @@ export {
 } from './use-settings';
 export type { UserProfile, UserSettings } from './use-settings';
 export {
+  useAvailability,
+  useSetAvailability,
+  useAvailabilityRealtime,
+  availabilityKeys,
+  AVAILABILITY_STATUSES,
+} from './use-availability';
+export type { AvailabilityStatus } from './use-availability';
+export {
   useRoomScans,
   useRoomScan,
   useClientRoomScans,

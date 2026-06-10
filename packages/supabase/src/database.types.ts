@@ -5769,6 +5769,8 @@ export type Database = {
       }
       profiles: {
         Row: {
+          availability_changed_at: string | null
+          availability_status: string
           avatar_url: string | null
           behavioral_tracking_opt_out: boolean
           bio: string | null
@@ -5806,6 +5808,8 @@ export type Database = {
           zip: string | null
         }
         Insert: {
+          availability_changed_at?: string | null
+          availability_status?: string
           avatar_url?: string | null
           behavioral_tracking_opt_out?: boolean
           bio?: string | null
@@ -5843,6 +5847,8 @@ export type Database = {
           zip?: string | null
         }
         Update: {
+          availability_changed_at?: string | null
+          availability_status?: string
           avatar_url?: string | null
           behavioral_tracking_opt_out?: boolean
           bio?: string | null

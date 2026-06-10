@@ -6,9 +6,6 @@ import {
   Package,
   Users,
   MessageSquare,
-  DollarSign,
-  Image,
-  HelpCircle,
   Sparkles,
   type LucideIcon,
 } from 'lucide-react';
@@ -60,7 +57,7 @@ export const ZONES: ZoneConfig[] = [
     href: '/portal/billing/invoices',
     paths: [
       '/portal/billing',
-      '/portal/earnings', // Earnings joins Billing as a sub-tab (still reachable from the profile menu)
+      '/portal/earnings', // Earnings joins Billing as a sub-tab (also in the ⌘K Business group)
       '/portal/time', // Studio time report — hours feed invoices feed earnings
     ],
     icon: Receipt,
@@ -178,18 +175,3 @@ export const ZONE_ACTIONS: Partial<Record<ZoneKey, SubNavAction>> = {
   clients: { label: '+ Add Client', href: '/portal/clients?add=1' },
 };
 
-// ─── Profile Menu Items ──────────────────────────────────────────────────────
-
-export interface ProfileMenuItem {
-  label: string;
-  icon: LucideIcon;
-  href: string;
-  /** Optional meta text shown right-aligned */
-  meta?: string;
-}
-
-export const PROFILE_MENU_ITEMS: ProfileMenuItem[] = [
-  { label: 'Earnings', icon: DollarSign, href: '/portal/earnings' },
-  { label: 'Portfolio', icon: Image, href: '/portal/portfolio' },
-  { label: 'Help & Resources', icon: HelpCircle, href: '/portal/resources' },
-];

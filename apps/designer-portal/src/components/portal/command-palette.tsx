@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   CommandDialog,
@@ -22,17 +22,14 @@ import {
   Search,
   GitBranch,
   Timer,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useAllDecisions } from '@patina/supabase';
 import { useCommandPalette } from '@/contexts/command-palette-context';
-import { useProjects } from '@/hooks/use-projects';
+import { useStartableProjects } from '@/hooks/use-startable-projects';
 import { useRunningTimer, useStartTimer } from '@/hooks/use-time-tracking';
 import { useToast } from '@/components/portal/toast-provider';
 import { StopTimerDialog } from '@/components/portal/time/stop-timer-dialog';
-
-// Mock fixture projects use slug ids ('olsen-residence') — timers need a real
-// projects row, so only UUID-backed projects are startable.
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function CommandPalette() {
   const { isOpen, close } = useCommandPalette();
@@ -60,22 +57,11 @@ export function CommandPalette() {
 
   // ── Time group — stop the running timer, or start one on an active project ──
   const { data: runningTimer } = useRunningTimer();
-  const { data: projects } = useProjects();
   const startTimer = useStartTimer();
   const { toast } = useToast();
 
-  const timerProjects = useMemo(() => {
-    if (runningTimer) return [];
-    const q = search.trim().toLowerCase();
-    return ((projects ?? []) as Array<{ id: string; name?: string | null; status?: string | null }>)
-      .filter(
-        (p) =>
-          UUID_RE.test(p.id) &&
-          (p.status === 'active' || p.status === 'planning')
-      )
-      .filter((p) => !q || (p.name ?? '').toLowerCase().includes(q))
-      .slice(0, 6);
-  }, [projects, runningTimer, search]);
+  const startableProjects = useStartableProjects(search);
+  const timerProjects = runningTimer ? [] : startableProjects;
 
   const handleStartTimer = useCallback(
     (projectId: string, projectName: string) => {
@@ -224,6 +210,10 @@ export function CommandPalette() {
           <CommandItem onSelect={() => navigate('/portal/earnings')}>
             <DollarSign className="mr-2 h-4 w-4" />
             Earnings
+          </CommandItem>
+          <CommandItem onSelect={() => navigate('/portal/portfolio')}>
+            <ImageIcon className="mr-2 h-4 w-4" />
+            Portfolio
           </CommandItem>
           <CommandItem onSelect={() => navigate('/portal/settings')}>
             <Settings className="mr-2 h-4 w-4" />
