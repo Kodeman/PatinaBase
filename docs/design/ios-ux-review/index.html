@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina iOS — UX/UI Master Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@400;500;600&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F6F2E9;
+  --paper-deep:#EFE8DA;
+  --cream:#FBF8F2;
+  --ink:#2C2926;
+  --ink-soft:#5A5248;
+  --ink-mute:#8A7F70;
+  --clay:#A8674A;
+  --clay-deep:#8C4F36;
+  --oak:#C9A87C;
+  --gold:#B08D3E;
+  --moss:#6E7050;
+  --error:#9C3D2E;
+  --warn:#B07C2A;
+  --calm:#7A7466;
+  --charcoal:#211E1B;
+  --charcoal-2:#2C2926;
+  --hair:rgba(44,41,38,.14);
+  --serif:'Playfair Display',Georgia,serif;
+  --sans:'Inter',-apple-system,sans-serif;
+  --mono:'DM Mono','SF Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:16px;
+  line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:999;opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+::selection{background:var(--clay);color:var(--cream)}
+
+/* ---------- progress + nav ---------- */
+#bar{position:fixed;top:0;left:0;height:3px;background:var(--clay);width:0;z-index:1000;transition:width .1s linear}
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:900;
+  display:flex;justify-content:space-between;align-items:center;
+  padding:14px 28px;
+  background:color-mix(in srgb,var(--paper) 88%,transparent);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--hair);
+}
+nav .mark{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-soft)}
+nav .mark b{color:var(--clay);font-weight:500}
+nav .links{display:flex;gap:22px}
+nav .links a{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-mute);text-decoration:none;transition:color .2s}
+nav .links a:hover{color:var(--clay)}
+@media(max-width:900px){nav .links{display:none}}
+
+/* ---------- structure ---------- */
+.wrap{max-width:1180px;margin:0 auto;padding:0 36px}
+section{padding:110px 0 40px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--clay);display:flex;align-items:center;gap:14px;margin-bottom:22px}
+.eyebrow::before{content:"";width:34px;height:1px;background:var(--clay)}
+.eyebrow .num{color:var(--ink-mute)}
+h2{font-family:var(--serif);font-weight:500;font-size:clamp(30px,4vw,46px);line-height:1.12;letter-spacing:-.01em;max-width:760px}
+h2 em{font-style:italic;color:var(--clay)}
+.lede{font-size:17.5px;color:var(--ink-soft);max-width:680px;margin-top:20px}
+.lede b{color:var(--ink);font-weight:600}
+
+/* ---------- cover ---------- */
+header.cover{min-height:100svh;display:flex;flex-direction:column;justify-content:center;position:relative;overflow:hidden}
+.strata{position:absolute;right:-120px;top:50%;transform:translateY(-50%);width:560px;height:560px;opacity:.9;pointer-events:none}
+.strata div{position:absolute;left:0;right:0;border-radius:999px}
+.strata .s1{top:8%;height:84px;background:linear-gradient(105deg,#D8BC92,#C9A87C 60%,#B98F60);transform:rotate(-9deg)}
+.strata .s2{top:34%;height:110px;background:linear-gradient(105deg,#B5734F,#A8674A 55%,#8C4F36);transform:rotate(-9deg) translateX(36px)}
+.strata .s3{top:64%;height:74px;background:linear-gradient(105deg,#3A352F,#2C2926);transform:rotate(-9deg) translateX(-22px)}
+@media(max-width:1000px){.strata{opacity:.25}}
+.cover .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.34em;text-transform:uppercase;color:var(--ink-mute);margin-bottom:30px;animation:rise .9s .1s both}
+.cover h1{font-family:var(--serif);font-weight:500;font-size:clamp(52px,8.4vw,108px);line-height:1.02;letter-spacing:-.02em;max-width:880px;animation:rise .9s .25s both}
+.cover h1 em{font-style:italic;color:var(--clay)}
+.cover .sub{margin-top:34px;font-size:18px;color:var(--ink-soft);max-width:560px;animation:rise .9s .4s both}
+.cover .meta{margin-top:54px;display:flex;gap:42px;flex-wrap:wrap;animation:rise .9s .55s both}
+.cover .meta div{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-mute)}
+.cover .meta b{display:block;color:var(--ink);font-weight:500;margin-top:5px;font-size:12.5px}
+@keyframes rise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
+
+/* ---------- reveal ---------- */
+.rv{opacity:0;transform:translateY(26px);transition:opacity .7s ease,transform .7s ease}
+.rv.on{opacity:1;transform:none}
+
+/* ---------- methodology strip ---------- */
+.method{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1px;background:var(--hair);border:1px solid var(--hair);margin-top:54px}
+.method div{background:var(--cream);padding:26px 24px}
+.method .n{font-family:var(--serif);font-style:italic;font-size:26px;color:var(--clay)}
+.method h4{font-size:13.5px;font-weight:600;margin:10px 0 6px;letter-spacing:.01em}
+.method p{font-size:13.5px;color:var(--ink-soft)}
+
+/* ---------- scorecard ---------- */
+.score{margin-top:54px;border-top:1px solid var(--ink)}
+.score .row{display:grid;grid-template-columns:64px 1fr 320px 92px;gap:24px;align-items:center;padding:20px 6px;border-bottom:1px solid var(--hair)}
+.score .row:hover{background:var(--cream)}
+.score .idx{font-family:var(--mono);font-size:11px;color:var(--ink-mute)}
+.score .area{font-family:var(--serif);font-size:20px;font-weight:500}
+.score .note{font-size:13px;color:var(--ink-soft)}
+.score .grade{font-family:var(--serif);font-style:italic;font-size:30px;text-align:right}
+.g-b{color:var(--moss)} .g-c{color:var(--warn)} .g-d{color:var(--error)}
+@media(max-width:880px){.score .row{grid-template-columns:1fr 70px}.score .idx,.score .note{display:none}}
+
+/* ---------- filmstrip ---------- */
+.strip{display:flex;gap:22px;overflow-x:auto;padding:34px 4px 18px;scroll-snap-type:x proximity}
+.strip::-webkit-scrollbar{height:6px}
+.strip::-webkit-scrollbar-thumb{background:var(--oak);border-radius:99px}
+.shot{flex:0 0 auto;scroll-snap-align:start;width:218px}
+.shot .frame{
+  border-radius:26px;overflow:hidden;background:var(--charcoal);
+  padding:7px;box-shadow:0 18px 40px -18px rgba(44,41,38,.45),0 2px 8px rgba(44,41,38,.12);
+  transition:transform .35s ease,box-shadow .35s ease;
+}
+.shot .frame:hover{transform:translateY(-6px);box-shadow:0 30px 56px -20px rgba(44,41,38,.55)}
+.shot img{display:block;width:100%;border-radius:20px}
+.shot figcaption{margin-top:13px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute);line-height:1.6}
+.shot figcaption b{display:block;color:var(--ink);font-weight:500;font-size:11px}
+.shot .flag{display:inline-block;margin-top:6px;font-size:9.5px;padding:2.5px 8px;border-radius:99px;letter-spacing:.12em}
+.flag.bug{background:rgba(156,61,46,.12);color:var(--error)}
+.flag.ok{background:rgba(110,112,80,.14);color:var(--moss)}
+
+/* ---------- finding blocks ---------- */
+.theme{margin-top:74px;padding-top:44px;border-top:1px solid var(--ink)}
+.theme-head{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:48px;align-items:end}
+@media(max-width:880px){.theme-head{grid-template-columns:1fr}}
+.theme h3{font-family:var(--serif);font-weight:500;font-size:clamp(24px,3vw,34px);line-height:1.15}
+.theme h3 .tn{font-family:var(--mono);font-size:11px;letter-spacing:.26em;color:var(--clay);display:block;margin-bottom:12px;text-transform:uppercase}
+.theme .verdict{font-size:14.5px;color:var(--ink-soft);border-left:2px solid var(--oak);padding-left:18px}
+.findings{margin-top:36px;display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:18px}
+.card{background:var(--cream);border:1px solid var(--hair);border-radius:4px;padding:24px 24px 20px;position:relative;transition:border-color .25s,transform .25s}
+.card:hover{border-color:var(--clay);transform:translateY(-2px)}
+.card .chips{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.chip{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;padding:3.5px 10px;border-radius:99px}
+.chip.p0{background:var(--error);color:var(--cream)}
+.chip.p1{background:rgba(176,124,42,.16);color:var(--warn);border:1px solid rgba(176,124,42,.4)}
+.chip.p2{background:transparent;color:var(--calm);border:1px solid var(--hair)}
+.chip.ev{background:rgba(168,103,74,.1);color:var(--clay)}
+.chip.fx{background:transparent;color:var(--ink-mute);border:1px dashed var(--hair)}
+.card h5{font-family:var(--serif);font-size:18.5px;font-weight:600;line-height:1.3;margin-bottom:9px}
+.card p{font-size:13.5px;color:var(--ink-soft)}
+.card p+p{margin-top:8px}
+.card .fix{margin-top:14px;padding-top:13px;border-top:1px dashed var(--hair);font-size:13px}
+.card .fix b{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--moss);display:block;margin-bottom:4px;font-weight:500}
+.card code{font-family:var(--mono);font-size:11.5px;background:var(--paper-deep);padding:1px 6px;border-radius:3px;color:var(--clay-deep)}
+
+/* ---------- evidence pair ---------- */
+.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:26px;margin-top:36px;align-items:start}
+.pair .shot{width:auto}
+
+/* ---------- dark spread ---------- */
+.darkband{background:var(--charcoal);color:#EDE6DA;margin-top:90px;padding:90px 0}
+.darkband .eyebrow{color:var(--oak)}
+.darkband .eyebrow::before{background:var(--oak)}
+.darkband h2{color:#F2EDE6}
+.darkband .lede{color:#B9AE9E}
+.darkband .lede b{color:#F2EDE6}
+.darkband .shot figcaption{color:#8A8073}
+.darkband .shot figcaption b{color:#EDE6DA}
+.darkband .frame{background:#0E0D0B;box-shadow:0 26px 60px -20px rgba(0,0,0,.8)}
+.darkband .card{background:#2C2926;border-color:rgba(242,237,230,.1)}
+.darkband .card h5{color:#F2EDE6}
+.darkband .card p{color:#B9AE9E}
+.darkband .card .fix{border-color:rgba(242,237,230,.14)}
+.darkband .card code{background:#211E1B;color:var(--oak)}
+
+/* ---------- matrix ---------- */
+table.matrix{width:100%;border-collapse:collapse;margin-top:48px;font-size:13.5px}
+.matrix th{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-mute);text-align:left;padding:12px 14px;border-bottom:1px solid var(--ink);font-weight:500}
+.matrix td{padding:13px 14px;border-bottom:1px solid var(--hair);vertical-align:top}
+.matrix tr:hover td{background:var(--cream)}
+.matrix .t{font-weight:600;font-size:13.5px}
+.matrix .w{font-family:var(--mono);font-size:11px;color:var(--ink-mute)}
+.matrix td:first-child{font-family:var(--mono);font-size:11px;color:var(--ink-mute);white-space:nowrap}
+.eff{font-family:var(--mono);font-size:11px;letter-spacing:.1em}
+
+/* ---------- roadmap ---------- */
+.phases{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:22px;margin-top:52px}
+.phase{border:1px solid var(--hair);border-radius:4px;background:var(--cream);overflow:hidden;display:flex;flex-direction:column}
+.phase .ph-head{padding:26px 26px 20px;border-bottom:1px solid var(--hair)}
+.phase.p-1 .ph-head{background:linear-gradient(135deg,#A8674A,#8C4F36);color:var(--cream)}
+.phase.p-2 .ph-head{background:linear-gradient(135deg,#C9A87C,#B98F60);color:var(--charcoal)}
+.phase.p-3 .ph-head{background:linear-gradient(135deg,#3A352F,#211E1B);color:var(--cream)}
+.phase .ph-num{font-family:var(--mono);font-size:10px;letter-spacing:.3em;text-transform:uppercase;opacity:.75}
+.phase h4{font-family:var(--serif);font-size:24px;font-weight:500;margin-top:8px}
+.phase .ph-sub{font-size:12.5px;opacity:.85;margin-top:5px}
+.phase ul{list-style:none;padding:20px 26px 26px;display:flex;flex-direction:column;gap:11px}
+.phase li{font-size:13.5px;color:var(--ink-soft);padding-left:20px;position:relative}
+.phase li::before{content:"—";position:absolute;left:0;color:var(--clay)}
+.phase li b{color:var(--ink);font-weight:600}
+
+/* ---------- appendix ---------- */
+.appx{font-size:13px;color:var(--ink-soft);columns:2;column-gap:48px;margin-top:40px}
+@media(max-width:780px){.appx{columns:1}}
+.appx h6{font-family:var(--mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--clay);margin:18px 0 8px;break-after:avoid}
+.appx p{margin-bottom:8px}
+.appx code{font-family:var(--mono);font-size:11px;color:var(--clay-deep)}
+
+footer{margin-top:110px;border-top:1px solid var(--ink);padding:44px 0 64px;display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap}
+footer .sig{font-family:var(--serif);font-style:italic;font-size:20px}
+footer .fm{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-mute);line-height:2}
+
+@media print{
+  nav,#bar{display:none}
+  body::before{display:none}
+  section{padding:40px 0}
+  .rv{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+<div id="bar"></div>
+<nav>
+  <div class="mark">PATINA <b>/</b> iOS UX MASTER PLAN</div>
+  <div class="links">
+    <a href="#summary">Summary</a><a href="#journey">Journeys</a><a href="#findings">Findings</a><a href="#dark">Dark Mode</a><a href="#matrix">Matrix</a><a href="#roadmap">Roadmap</a><a href="#appendix">Appendix</a>
+  </div>
+</nav>
+
+<!-- ================= COVER ================= -->
+<header class="cover">
+  <div class="strata"><div class="s1"></div><div class="s2"></div><div class="s3"></div></div>
+  <div class="wrap">
+    <div class="kicker">Design Review &amp; Master Plan · June 10, 2026</div>
+    <h1>The craft is in the code.<br>Now put it <em>on the surface.</em></h1>
+    <p class="sub">A screen-by-screen review of the Patina iOS app — walked on a physical iPhone 17 Pro Max, traced through 45+ SwiftUI screens — with a prioritized plan to make it intuitive, simple, and worthy of the brand.</p>
+    <div class="meta">
+      <div>REVIEWED ON<b>iPhone 17 Pro Max · iOS 26.6 · live build</b></div>
+      <div>EVIDENCE<b>24 device captures + full code audit</b></div>
+      <div>FINDINGS<b>26 recommendations · 8 P0</b></div>
+      <div>FOR<b>The Patina Team</b></div>
+    </div>
+  </div>
+</header>
+
+<!-- ================= 01 SUMMARY ================= -->
+<section id="summary">
+  <div class="wrap">
+    <div class="eyebrow rv"><span class="num">01</span> Executive Summary</div>
+    <h2 class="rv">A beautiful instrument with <em>broken strings.</em></h2>
+    <p class="lede rv">Patina iOS has a design soul most apps never find — Playfair and clay, whisper bars, haptic milestones, a layered strata icon. The token system rivals the web portal's. But on a real device the experience contradicts the craft: <b>the home screen's primary call-to-action does not respond to taps</b>, decision options render with no content above an "Approve" button, several core screens are navigation dead ends, four Settings rows do nothing, and dark mode — fully designed in <code>PatinaColors</code> — is simply never used. The gap is not design vision. It is adoption, wiring, and finish.</p>
+
+    <div class="method rv">
+      <div><div class="n">i.</div><h4>Walked the app on device</h4><p>Every reachable surface on a physical iPhone — consumer and designer modes — driven by touch, verified by screenshot.</p></div>
+      <div><div class="n">ii.</div><h4>Read the accessibility tree</h4><p>Each screen's element tree inspected for traits, labels, tap-target geometry, and what VoiceOver actually hears.</p></div>
+      <div><div class="n">iii.</div><h4>Audited the source</h4><p>All 45+ screens, the design tokens, components, and flows in <code>apps/mobile/Patina</code> traced against what shipped.</p></div>
+      <div><div class="n">iv.</div><h4>Planned the fix</h4><p>26 recommendations, each tied to evidence and a file path, sequenced into three phases a small team can ship.</p></div>
+    </div>
+
+    <div class="score rv">
+      <div class="row"><div class="idx">A</div><div><div class="area">Brand &amp; visual foundation</div><div style="font-size:12.5px;color:var(--ink-mute)">Tokens, typography, iconography, motion vocabulary</div></div><div class="note">Token system is excellent; features bypass it with off-grid spacing, ad-hoc fonts, hardcoded colors.</div><div class="grade g-b">B+</div></div>
+      <div class="row"><div class="idx">B</div><div><div class="area">Navigation &amp; wayfinding</div><div style="font-size:12.5px;color:var(--ink-mute)">Getting around, getting back, knowing where you are</div></div><div class="note">Decision &amp; project details have no back affordance; quiz is a trap screen; companion is the only escape hatch.</div><div class="grade g-d">D</div></div>
+      <div class="row"><div class="idx">C</div><div><div class="area">Home &amp; discovery</div><div style="font-size:12.5px;color:var(--ink-mute)">Daily Room, recommendations, collections</div></div><div class="note">Primary CTA dead to taps; rails empty below the fold; recommendations unreachable; quiz swatches lack imagery.</div><div class="grade g-c">C−</div></div>
+      <div class="row"><div class="idx">D</div><div><div class="area">Scan flow</div><div style="font-size:12.5px;color:var(--ink-mute)">Threshold, walk, review, save</div></div><div class="note">Core walk UX is genuinely strong; empty finishes silently create rooms; no exit path from pause menu.</div><div class="grade g-b">B−</div></div>
+      <div class="row"><div class="idx">E</div><div><div class="area">Designer workspace</div><div style="font-size:12.5px;color:var(--ink-mute)">Projects, decisions, receiving</div></div><div class="note">Decision options render contentless; raw enums (<span style="font-family:var(--mono);font-size:11px">design_development</span>) on cards; stacked empty states.</div><div class="grade g-d">D+</div></div>
+      <div class="row"><div class="idx">F</div><div><div class="area">Messaging &amp; notifications</div><div style="font-size:12.5px;color:var(--ink-mute)">Threads, feed, badges</div></div><div class="note">Messages render as undifferentiated text — no bubbles, senders, or timestamps; threads titled "Direct" with no preview.</div><div class="grade g-c">C−</div></div>
+      <div class="row"><div class="idx">G</div><div><div class="area">Accessibility</div><div style="font-size:12.5px;color:var(--ink-mute)">VoiceOver, Dynamic Type, tap targets</div></div><div class="note">281 labels show real intent — but unlabeled switches, 15-pt text CTAs, AX-invisible companion, no Dynamic Type.</div><div class="grade g-c">C−</div></div>
+      <div class="row"><div class="idx">H</div><div><div class="area">Resilience &amp; states</div><div style="font-size:12.5px;color:var(--ink-mute)">Offline, errors, images, empty states</div></div><div class="note">Empty states are thoughtful and present; image failures show blank squares; no offline indicator; silent error swallowing.</div><div class="grade g-c">C+</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 02 JOURNEYS ================= -->
+<section id="journey">
+  <div class="wrap">
+    <div class="eyebrow rv"><span class="num">02</span> The Two Journeys</div>
+    <h2 class="rv">One app, two lives: <em>homeowner</em> and <em>designer.</em></h2>
+    <p class="lede rv">The account we walked is dual-role. The consumer journey (scan → style → recommend → save) and the designer journey (projects → decisions → messages → receiving) share one navigation spine and one companion. Below, the actual screens as captured — annotated where the seams show.</p>
+  </div>
+  <div class="wrap rv">
+    <div class="strip">
+      <figure class="shot"><div class="frame"><img src="screenshots/01-home-daily-room.png" alt="Daily Room home"></div><figcaption><b>Daily Room (home)</b>Maker story, room chips, scan CTA<span class="flag bug">CTA dead to taps</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/02-story-detail.png" alt="Story detail"></div><figcaption><b>Maker story detail</b>Editorial overlay<span class="flag ok">Lovely surface</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/03-home-empty-rail.png" alt="Home scrolled"></div><figcaption><b>Home, below the fold</b>Filter chips over an empty rail<span class="flag bug">Nothing to filter</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/09-companion-menu.png" alt="Companion menu"></div><figcaption><b>Companion hub</b>"Where to begin?" nav menu<span class="flag ok">Strong concept</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/10-scan-walk-entry.png" alt="Scan walk"></div><figcaption><b>Scan walk</b>Whisper bar + shutter + HUD<span class="flag ok">Core UX is strong</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/11-scan-paused.png" alt="Scan paused"></div><figcaption><b>Scan paused</b>Resume / finish / start over<span class="flag bug">No exit option</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/06-room-detail.png" alt="Room detail"></div><figcaption><b>Room detail</b>Items, budget, actions<span class="flag bug">Blank item images</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/12-designer-home.png" alt="Designer home"></div><figcaption><b>Designer studio</b>Stats, projects, leads, decisions<span class="flag ok">Good density</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/13-decision-list.png" alt="Decision list"></div><figcaption><b>Decisions inbox</b>"Awaiting your call"<span class="flag bug">No project context</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/14-decision-detail.png" alt="Decision detail"></div><figcaption><b>Decision detail</b>Approve… what, exactly?<span class="flag bug">Contentless options</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/17-thread-list.png" alt="Thread list"></div><figcaption><b>Conversations</b>Threads named "Direct"<span class="flag bug">No previews</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/18-thread-detail.png" alt="Thread detail"></div><figcaption><b>Thread detail</b>Plain stacked text<span class="flag bug">No chat affordances</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/21-style-quiz.png" alt="Style quiz"></div><figcaption><b>Style quiz</b>"Which room speaks to you?"<span class="flag bug">No imagery, no exit</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/22-qr-scanner.png" alt="QR scanner"></div><figcaption><b>Connect to portal</b>QR handoff to web<span class="flag ok">Clear + closeable</span></figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 03 FINDINGS ================= -->
+<section id="findings">
+  <div class="wrap">
+    <div class="eyebrow rv"><span class="num">03</span> Findings &amp; Recommendations</div>
+    <h2 class="rv">Twenty-six fixes, <em>in the order they hurt.</em></h2>
+    <p class="lede rv">Each finding below was either reproduced on the device or verified in source. <b>P0</b> = broken or trust-damaging, fix first. <b>P1</b> = friction that erodes the experience. <b>P2</b> = polish that compounds. Effort is sized S / M / L.</p>
+
+    <!-- THEME 1 -->
+    <div class="theme rv">
+      <div class="theme-head">
+        <h3><span class="tn">Theme I — Reachability</span>Buttons that don't work are promises broken.</h3>
+        <p class="verdict">The single most damaging pattern found: primary actions rendered as 15-pt static text, hit areas swallowed by neighbors or by the companion's gesture layer, and rows with chevrons that go nowhere. Users will not file bugs — they will conclude the app is broken and leave.</p>
+      </div>
+      <div class="findings">
+        <div class="card"><div class="chips"><span class="chip p0">P0</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort S</span></div>
+          <h5>"Scan a room" — the home CTA — does not respond to taps</h5>
+          <p>The app's most important button is an 88×15 pt <code>StaticText</code> with no button trait. Repeated taps at its center do nothing; the companion's pull-gesture overlay appears to swallow touches near the bottom edge. The flow only opens via the companion menu.</p>
+          <div class="fix"><b>Recommendation</b>Make it a real <code>Button</code> wrapped in <code>PatinaButton</code> (44 pt min target), and exclude the companion's gesture region from content hit-testing. Add a UI test that taps it.</div></div>
+        <div class="card"><div class="chips"><span class="chip p0">P0</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort S</span></div>
+          <h5>"See recommendations" is unreachable by touch</h5>
+          <p>On room detail the link sits 1 px above the full-width "Work with a Designer" button; every tap — even dead center — triggers the button instead. Recommendations, a core consumer promise, cannot be opened from a room.</p>
+          <div class="fix"><b>Recommendation</b>Promote it to a secondary <code>PatinaButton</code> in the action bar with its own 44 pt row; never stack a text link flush against a full-width button.</div></div>
+        <div class="card"><div class="chips"><span class="chip p0">P0</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort M</span></div>
+          <h5>Four Settings rows are dead — including Account</h5>
+          <p>Account, Style Preferences, Connected Portals, and Appearance all render with chevrons; none navigate. Account is the path to sign-out and profile management — likely a <code>NavigationLink</code> inside a sheet that has no <code>NavigationStack</code>, so it silently no-ops.</p>
+          <div class="fix"><b>Recommendation</b>Wrap the Settings sheet in <code>NavigationStack</code>; remove or build the placeholder rows. A chevron is a contract — never ship one that does nothing. <code>Features/Settings/Views/SettingsView.swift</code></div></div>
+        <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort S</span></div>
+          <h5>Companion "Designer workspace" action goes nowhere</h5>
+          <p>From the consumer home, tapping the companion's "Designer workspace — Projects · Decisions · Messages" row closes the menu and stays put. The header's switch-mode chip works; the companion intent doesn't.</p>
+          <div class="fix"><b>Recommendation</b>Route the intent through the same <code>AppCoordinator.handleIntent</code> path the role chip uses, and add intent-coverage tests for every companion action.</div></div>
+        <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort S</span></div>
+          <h5>Room items can't be opened</h5>
+          <p>Item rows in a room ("Walnut Lounge Chair, $1,850") respond only via their overflow "More actions" button — tapping the row itself does nothing, so there is no path from an owned item to its product page.</p>
+          <div class="fix"><b>Recommendation</b>Make the whole row tappable → <code>ProductDetailView</code>; keep the overflow for move/copy/remove.</div></div>
+        <div class="card"><div class="chips"><span class="chip p2">P2</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort S</span></div>
+          <h5>Room chips give no feedback</h5>
+          <p>Tapping a room chip on home produces no visible change (it filters an empty rail). Selection state, if any, is imperceptible.</p>
+          <div class="fix"><b>Recommendation</b>Show selected state (filled chip), scroll to the rail, and when the rail is empty for that room, swap in a contextual empty state ("Nothing saved for Kitchen yet — scan or browse").</div></div>
+      </div>
+    </div>
+
+    <!-- THEME 2 -->
+    <div class="theme rv">
+      <div class="theme-head">
+        <h3><span class="tn">Theme II — Wayfinding</span>Every screen needs a way back.</h3>
+        <p class="verdict">Decision detail, project detail, and the conversations list shipped with no back affordance and edge-swipe disabled; the style quiz cannot be exited at all. The companion becomes an accidental escape hatch — clever, but no substitute for navigation.</p>
+      </div>
+      <div class="findings">
+        <div class="card"><div class="chips"><span class="chip p0">P0</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort M</span></div>
+          <h5>Designer screens are navigation dead ends</h5>
+          <p>Decision detail and project detail render zero navigation controls — no back chevron, no toolbar, and interactive edge-swipe is disabled by the hidden navigation bar. The accessibility tree confirms: the only buttons on decision detail are three "Approve"s.</p>
+          <div class="fix"><b>Recommendation</b>Standardize a screen chrome: every pushed view gets the back chevron pattern already used on Profile and Notifications. Re-enable <code>interactivePopGesture</code> when hiding the bar.</div></div>
+        <div class="card"><div class="chips"><span class="chip p0">P0</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort S</span></div>
+          <h5>The style quiz is a trap screen</h5>
+          <p>Once opened, the quiz offers four answers and a progress bar — no close, no back, no skip. The only exits are answering all five questions or force-quitting the app.</p>
+          <div class="fix"><b>Recommendation</b>Add an ✕ with a "Save progress &amp; exit?" confirm. Persist partial answers so returning resumes at question N.</div></div>
+        <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort S</span></div>
+          <h5>An orphaned overlay follows you across screens</h5>
+          <p>After leaving room detail, its "See recommendations →" pill persisted on top of the Profile screen — a floating fragment of a previous screen's UI (state leak in the overlay layer).</p>
+          <div class="fix"><b>Recommendation</b>Bind overlay pills to screen lifecycle (<code>.onDisappear</code> teardown) rather than the global overlay host; add a regression test.</div></div>
+        <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip fx">Effort M</span></div>
+          <h5>The companion is the de-facto tab bar — make wayfinding honest</h5>
+          <p>With no tab bar, every cross-section jump routes through the companion. It's a distinctive idea, but today it's also masking missing navigation: users must discover that the floating dot is the menu.</p>
+          <div class="fix"><b>Recommendation</b>Keep the companion, but (a) give it a visible label on first sessions ("Menu"), (b) ensure every section is also reachable by conventional means (header buttons, back chevrons), and (c) instrument it — if &gt;50% of navigation flows through it, consider a slim tab bar for Home / Spaces / Saved / Studio.</div></div>
+      </div>
+    </div>
+
+    <!-- THEME 3 -->
+    <div class="theme rv">
+      <div class="theme-head">
+        <h3><span class="tn">Theme III — The Decision Moment</span>Approval needs evidence.</h3>
+        <p class="verdict">Decisions are Patina's highest-stakes interaction — money and taste change hands. On device, option cards rendered as the word "Option" above an Approve button: no title, no image, no price, no comparison. Whether data or rendering, the safeguard is the same: never let an approve button appear without content.</p>
+      </div>
+      <div class="pair">
+        <figure class="shot"><div class="frame"><img src="screenshots/14-decision-detail.png" alt="Decision detail with contentless options"></div><figcaption><b>As captured</b>Three options, zero information, three Approve buttons</figcaption></figure>
+        <div class="findings" style="margin-top:0">
+          <div class="card"><div class="chips"><span class="chip p0">P0</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort M</span></div>
+            <h5>Decision options render without content</h5>
+            <p>Option title falls back to the literal string "Option"; description, image, and price are absent. A client cannot tell what they're approving — and an approval here is contractual.</p>
+            <div class="fix"><b>Recommendation</b>Require a minimum render contract: name + image-or-placeholder + price. If fields are missing, show "Details unavailable — view in portal" and <i>disable Approve</i>. Fix the data path from <code>client_decisions</code> options. <code>Features/Decisions/Views/DecisionDetailView.swift</code></div></div>
+          <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip fx">Effort S</span></div>
+            <h5>Decisions lack project context and a discussion path</h5>
+            <p>The inbox lists "Task lamp / Pendant scale" with no project name; detail offers approve-or-nothing. Web supports comments and clarification; iOS should not force a binary.</p>
+            <div class="fix"><b>Recommendation</b>Add the project name + room to each row; add a "Discuss this" action on detail that deep-links into the project thread.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- THEME 4 -->
+    <div class="theme rv">
+      <div class="theme-head">
+        <h3><span class="tn">Theme IV — The Scan Ritual</span>Protect the magic moment.</h3>
+        <p class="verdict">The walk itself — whisper bar, haptic milestones, motion-triggered threshold — is the app's best work. The edges betray it: an empty "finish" silently created a room named Kitchen, the pause menu has no exit, and the review screen never appeared.</p>
+      </div>
+      <div class="findings">
+        <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort S</span></div>
+          <h5>Empty scans finish silently — and still create a room</h5>
+          <p>"Finish With What We Have" on a zero-data scan returned straight to home with no review, no message — and a new "Kitchen" room appeared in the chip rail. The user is never told anything happened.</p>
+          <div class="fix"><b>Recommendation</b>Below a data threshold, disable Finish with an inline reason ("Walk a little more first"). Never create a room without showing the review step or a confirmation toast.</div></div>
+        <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort S</span></div>
+          <h5>The pause menu can't abandon a scan</h5>
+          <p>Paused offers Resume / Finish / Start Over. There is no "Exit without saving" — Start Over restarts the capture; leaving entirely means finishing or killing the app.</p>
+          <div class="fix"><b>Recommendation</b>Add "Leave scan" with a discard confirm; route home via the coordinator.</div></div>
+        <div class="card"><div class="chips"><span class="chip p2">P2</span><span class="chip fx">Effort S</span></div>
+          <h5>Motion-only start needs a fallback cue</h5>
+          <p>The threshold auto-starts on motion — poetic, but a first-timer holding still sees a black screen with no instruction to move.</p>
+          <div class="fix"><b>Recommendation</b>If no motion within ~5 s, fade in a whisper: "Begin walking to start" + a manual Start. <code>Features/RoomScan/Views/ScanThresholdView.swift</code></div></div>
+        <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip fx">Effort M</span></div>
+          <h5>Upload failures are swallowed</h5>
+          <p>From the code audit: scan upload errors log to PostHog and the UI proceeds regardless. Offline queueing exists (good); user-facing truth does not.</p>
+          <div class="fix"><b>Recommendation</b>Surface a quiet sync status on the room card ("Uploading… / Will retry when online") fed by <code>RoomScanSyncService</code>.</div></div>
+      </div>
+    </div>
+
+    <!-- THEME 5 -->
+    <div class="theme rv">
+      <div class="theme-head">
+        <h3><span class="tn">Theme V — Content Integrity</span>Placeholders are showing.</h3>
+        <p class="verdict">Blank brown squares where product photos should be, gradient rectangles labeled "Which room speaks to you?", rooms rendered as anonymous swatches, raw enum strings on project cards. The brand sells material truth; the screens must too.</p>
+      </div>
+      <div class="findings">
+        <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort S</span></div>
+          <h5>Failed images render as blank rectangles</h5>
+          <p>Room items show flat brown squares; profile room cards show bare gradients; decision images fall to nothing. <code>AsyncImage</code> failure cases are unstyled across the app.</p>
+          <div class="fix"><b>Recommendation</b>One shared <code>PatinaAsyncImage</code> with a branded failure state (strata mark on linen texture + retry on tap). Replace all raw <code>AsyncImage</code> uses.</div></div>
+        <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort S</span></div>
+          <h5>Raw enums leak into the UI</h5>
+          <p>Project cards and detail print <code>design_development</code> verbatim. The portal formats these; iOS must too.</p>
+          <div class="fix"><b>Recommendation</b>A <code>PhaseDisplayName</code> formatter mirroring the portal's vocabulary ("Design Development"), used everywhere a phase or status renders.</div></div>
+        <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort M</span></div>
+          <h5>The quiz asks about rooms but shows none</h5>
+          <p>"Which room speaks to you?" presents four flat gradient swatches. The question is unanswerable as posed — and this is the moment that seeds the style profile.</p>
+          <div class="fix"><b>Recommendation</b>Ship four real room photographs per question (bundled assets, art-directed per aesthetic). If imagery isn't ready, rewrite the prompt to match swatches ("Which palette feels like home?").</div></div>
+        <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort M</span></div>
+          <h5>Project detail is a stack of empty states</h5>
+          <p>"No phases yet / No payment milestones yet / No FF&amp;E items yet" — three grey shrugs and nothing else, for a project the list says is worth $48,000 in design development.</p>
+          <div class="fix"><b>Recommendation</b>Lead with what exists (name, phase, budget, client, last activity); collapse absent sections into a single "Set up in the portal →" hint rather than three empties.</div></div>
+        <div class="card"><div class="chips"><span class="chip p2">P2</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort S</span></div>
+          <h5>Home's lower half is dead air</h5>
+          <p>Below the room chips: a filter row over an empty rail, then 350 points of nothing. The screen reads as unfinished on first launch.</p>
+          <div class="fix"><b>Recommendation</b>When the rail is empty, replace chips+void with one editorial module: tour card, quiz prompt, or maker story #2 — never bare filters.</div></div>
+        <div class="card"><div class="chips"><span class="chip p2">P2</span><span class="chip fx">Effort S</span></div>
+          <h5>Hardcoded fallback copy</h5>
+          <p>"Handcrafted by artisans in the Patina network" stands in for every missing product story; the share tooltip describes behavior that doesn't exist (share is a no-op in <code>ProductDetailView</code>).</p>
+          <div class="fix"><b>Recommendation</b>Implement share via <code>ShareLink</code> to the portal URL; vary fallback copy by maker/category or hide the section.</div></div>
+      </div>
+    </div>
+
+    <!-- THEME 6 -->
+    <div class="theme rv">
+      <div class="theme-head">
+        <h3><span class="tn">Theme VI — Conversation</span>Messages deserve a shape.</h3>
+        <p class="verdict">Threads titled "Direct" with ISO timestamps; messages as undifferentiated stacked sentences — no bubbles, no senders, no time, no read state. For an app whose business is designer-client trust, the conversation surface is the relationship.</p>
+      </div>
+      <div class="pair">
+        <figure class="shot"><div class="frame"><img src="screenshots/18-thread-detail.png" alt="Thread detail, plain text messages"></div><figcaption><b>As captured</b>Who said what, and when? Unanswerable.</figcaption></figure>
+        <div class="findings" style="margin-top:0">
+          <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort M</span></div>
+            <h5>Message rendering lacks every chat affordance</h5>
+            <p>No sender attribution, no left/right alignment, no timestamps, no grouping. Two parties' words are visually identical.</p>
+            <div class="fix"><b>Recommendation</b>Standard chat anatomy in Patina's voice: own messages right-aligned on clay, theirs on cream with sender name; day separators in DM Mono; relative timestamps. <code>Features/Messaging/Views/ThreadDetailView.swift</code></div></div>
+          <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort S</span></div>
+            <h5>Threads are unidentifiable from the list</h5>
+            <p>Multiple rows titled "Direct"; no participant name, no last-message preview, no unread weight. VoiceOver reads raw ISO-8601 strings.</p>
+            <div class="fix"><b>Recommendation</b>Title = counterpart's name (resolve from participants); subtitle = last message preview; trailing relative time; bold-on-unread. Format dates before they reach AX labels.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- THEME 7 -->
+    <div class="theme rv">
+      <div class="theme-head">
+        <h3><span class="tn">Theme VII — Accessibility</span>The tree tells the truth.</h3>
+        <p class="verdict">Reading the live accessibility tree exposed what screenshots can't: overlays that leave the whole background screen tappable to VoiceOver, switches with no labels, the companion bubble absent from the tree entirely, and a typography system whose hardcoded sizes ignore Dynamic Type.</p>
+      </div>
+      <div class="findings">
+        <div class="card"><div class="chips"><span class="chip p0">P0</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort M</span></div>
+          <h5>Overlays don't hide the screen beneath</h5>
+          <p>With the story detail open, every home control — chips, bell, profile — remained in the AX tree as visible and enabled. VoiceOver users will tab through a ghost screen behind the content.</p>
+          <div class="fix"><b>Recommendation</b><code>.accessibilityHidden(true)</code> on background content while any overlay/expanded card is presented; audit story, product, and companion overlays.</div></div>
+        <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort S</span></div>
+          <h5>The companion is invisible to assistive tech</h5>
+          <p>The floating bubble — the app's primary navigator — has no button trait and no label (an "Other" node, sometimes absent entirely). VoiceOver users cannot find the menu.</p>
+          <div class="fix"><b>Recommendation</b><code>.accessibilityElement()</code> with label "Patina companion — menu", trait <code>.button</code>; verify the pull gesture has an AX action equivalent.</div></div>
+        <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort S</span></div>
+          <h5>Unlabeled switches in Settings</h5>
+          <p>The Notifications/Haptics toggles expose no AXLabel — VoiceOver announces "switch, on" with no subject.</p>
+          <div class="fix"><b>Recommendation</b>Label every <code>Toggle</code>; add a lint/test pass asserting no interactive element ships label-less.</div></div>
+        <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip fx">Effort L</span></div>
+          <h5>Dynamic Type is effectively unsupported</h5>
+          <p>Tokens use fixed sizes (7–56 pt, some off-scale like 11/13/21 pt) plus raw <code>.system(size:)</code> calls; accessibility text sizes change nothing. <code>Inter-Light</code> is referenced but not embedded — it silently falls back.</p>
+          <div class="fix"><b>Recommendation</b>Route <code>PatinaTypography</code> through <code>@ScaledMetric</code>/<code>relativeTo</code> everywhere, kill raw <code>.system(size:)</code> in features, embed or remove Inter-Light. Test at AX1–AX5.</div></div>
+      </div>
+    </div>
+
+    <!-- THEME 8 -->
+    <div class="theme rv">
+      <div class="theme-head">
+        <h3><span class="tn">Theme VIII — System Cohesion</span>One kit, used everywhere.</h3>
+        <p class="verdict">The token files are genuinely good — semantic colors with a warm dark palette, a full spacing/radius scale, five button styles. Features then hand-roll their own: 14 pt corners that exist in no scale, 9/10/20/28 pt padding, system fonts beside brand fonts, a dark-themed services sheet inside a light app.</p>
+      </div>
+      <div class="findings">
+        <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip fx">Effort M</span></div>
+          <h5>Token adoption pass</h5>
+          <p>Off-grid spacing and radii across Home, Settings, product cards; <code>DailyProductCard</code>, <code>ProductCard</code>, <code>RoomChipRail</code>, <code>SettingsView</code> are the worst offenders.</p>
+          <div class="fix"><b>Recommendation</b>One sweep: map every hardcoded value to <code>PatinaSpacing</code>/<code>PatinaRadius</code> (extend the scale where 14/20 pt is genuinely wanted). Add a danger-style grep check to CI.</div></div>
+        <div class="card"><div class="chips"><span class="chip p1">P1</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort S</span></div>
+          <h5>The services sheet breaks theme</h5>
+          <p>"Get Design Help" renders charcoal-on-dark inside an otherwise light app — the only dark surface, and not by design system intent.</p>
+          <div class="fix"><b>Recommendation</b>Restyle on <code>Background.primary</code>/<code>PatinaCard</code>; reserve dark surfaces for camera/AR contexts where they earn their keep.</div></div>
+        <div class="card"><div class="chips"><span class="chip p2">P2</span><span class="chip fx">Effort M</span></div>
+          <h5>Button fragmentation</h5>
+          <p><code>PatinaButton</code> (capsule, 52 pt) coexists with <code>AuthButton</code> (12 pt corners, 50 pt), bespoke <code>BackChevronButton</code>s, and inline-styled buttons.</p>
+          <div class="fix"><b>Recommendation</b>Fold OAuth + back-chevron variants into <code>PatinaButton</code> styles; deprecate the rest.</div></div>
+        <div class="card"><div class="chips"><span class="chip p2">P2</span><span class="chip fx">Effort M</span></div>
+          <h5>Native patterns are missing where users expect them</h5>
+          <p>No <code>.searchable</code> on lists, no <code>.swipeActions</code> (delete/archive), no <code>.contextMenu</code> on cards, pull-to-refresh inconsistent, no Reduce Motion checks.</p>
+          <div class="fix"><b>Recommendation</b>Adopt platform furniture deliberately: search on Conversations/Projects, swipe actions on saved items and notifications, context menus on product cards, <code>accessibilityReduceMotion</code> gates on the big animations.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= DARK MODE BAND ================= -->
+  <div class="darkband" id="dark">
+    <div class="wrap">
+      <div class="eyebrow rv"><span class="num">04</span> The Dark Mode Spread</div>
+      <h2 class="rv">A dark palette exists. <em>The app never calls it.</em></h2>
+      <p class="lede rv">We flipped the device to Dark Appearance and re-shot the same screens: <b>nothing changed.</b> The app doesn't force light mode — <code>PatinaColors.DarkPalette</code> and the <code>patinaDynamic()</code> bridge are built and waiting — but features hardcode <code>offWhite</code>, <code>softCream</code>, and <code>charcoal</code> directly (~14 dynamic usages in the entire app). Tonight, every user who reads in dark mode gets a flashlight.</p>
+      <div class="pair rv">
+        <figure class="shot"><div class="frame"><img src="screenshots/23-darkmode-home-still-light.png" alt="Home in system dark mode, rendering light"></div><figcaption><b>System dark · Home</b>Renders identically light</figcaption></figure>
+        <figure class="shot"><div class="frame"><img src="screenshots/24-darkmode-settings-still-light.png" alt="Settings in system dark mode, rendering light"></div><figcaption><b>System dark · Settings</b>Renders identically light</figcaption></figure>
+        <div class="findings" style="margin-top:0">
+          <div class="card"><div class="chips"><span class="chip p0">P0</span><span class="chip ev">Device-verified</span><span class="chip fx">Effort L</span></div>
+            <h5>Adopt the semantic palette, screen by screen</h5>
+            <p>Replace direct palette references with semantic roles — <code>Background.primary</code>, <code>Text.primary</code>, <code>Interactive.*</code> — which already resolve through <code>patinaDynamic()</code> to the warm-graphite dark set.</p>
+            <div class="fix"><b>Recommendation</b>Phase it: tokens are ready, so this is mechanical. Sequence: Home → Settings/Profile → Rooms → Designer → sheets. Until complete, declare <code>UIUserInterfaceStyle = Light</code> in Info.plist so mixed system components (alerts, share sheets) don't render half-dark against light screens.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 05 MATRIX ================= -->
+<section id="matrix">
+  <div class="wrap">
+    <div class="eyebrow rv"><span class="num">05</span> Priority Matrix</div>
+    <h2 class="rv">Every recommendation, <em>one table.</em></h2>
+    <table class="matrix rv">
+      <thead><tr><th>#</th><th>Recommendation</th><th>Where</th><th>Pri</th><th>Effort</th></tr></thead>
+      <tbody>
+        <tr><td>R01</td><td><span class="t">Make "Scan a room" a real, tappable button</span></td><td class="w">DailyRoomView</td><td><span class="chip p0">P0</span></td><td class="eff">S</td></tr>
+        <tr><td>R02</td><td><span class="t">Unbury "See recommendations" from the action bar</span></td><td class="w">RoomProjectView</td><td><span class="chip p0">P0</span></td><td class="eff">S</td></tr>
+        <tr><td>R03</td><td><span class="t">Fix dead Settings rows (Account/sign-out path)</span></td><td class="w">SettingsView</td><td><span class="chip p0">P0</span></td><td class="eff">M</td></tr>
+        <tr><td>R04</td><td><span class="t">Back affordance on every pushed screen; restore edge-swipe</span></td><td class="w">Decision/Project/Threads</td><td><span class="chip p0">P0</span></td><td class="eff">M</td></tr>
+        <tr><td>R05</td><td><span class="t">Exit affordance on the style quiz</span></td><td class="w">StyleQuizView</td><td><span class="chip p0">P0</span></td><td class="eff">S</td></tr>
+        <tr><td>R06</td><td><span class="t">Decision options: minimum render contract; gate Approve</span></td><td class="w">DecisionDetailView</td><td><span class="chip p0">P0</span></td><td class="eff">M</td></tr>
+        <tr><td>R07</td><td><span class="t">Hide background from VoiceOver under overlays</span></td><td class="w">Story/product/companion overlays</td><td><span class="chip p0">P0</span></td><td class="eff">M</td></tr>
+        <tr><td>R08</td><td><span class="t">Dark mode adoption (semantic colors); force Light until done</span></td><td class="w">App-wide</td><td><span class="chip p0">P0</span></td><td class="eff">L</td></tr>
+        <tr><td>R09</td><td><span class="t">Wire companion "Designer workspace" intent</span></td><td class="w">CompanionOverlay → AppCoordinator</td><td><span class="chip p1">P1</span></td><td class="eff">S</td></tr>
+        <tr><td>R10</td><td><span class="t">Tappable room item rows → product detail</span></td><td class="w">RoomProjectView</td><td><span class="chip p1">P1</span></td><td class="eff">S</td></tr>
+        <tr><td>R11</td><td><span class="t">Fix orphaned overlay pill state leak</span></td><td class="w">Overlay host</td><td><span class="chip p1">P1</span></td><td class="eff">S</td></tr>
+        <tr><td>R12</td><td><span class="t">Block/explain empty-scan finish; no silent room creation</span></td><td class="w">ScanViewModel / pause menu</td><td><span class="chip p1">P1</span></td><td class="eff">S</td></tr>
+        <tr><td>R13</td><td><span class="t">"Leave scan" option in pause menu</span></td><td class="w">ScanWalkView</td><td><span class="chip p1">P1</span></td><td class="eff">S</td></tr>
+        <tr><td>R14</td><td><span class="t">Surface upload/sync status on room cards</span></td><td class="w">RoomScanSyncService → cards</td><td><span class="chip p1">P1</span></td><td class="eff">M</td></tr>
+        <tr><td>R15</td><td><span class="t">Branded image-failure state (PatinaAsyncImage)</span></td><td class="w">App-wide</td><td><span class="chip p1">P1</span></td><td class="eff">S</td></tr>
+        <tr><td>R16</td><td><span class="t">Human-readable phase/status formatter</span></td><td class="w">Projects, designer home</td><td><span class="chip p1">P1</span></td><td class="eff">S</td></tr>
+        <tr><td>R17</td><td><span class="t">Real room imagery in style quiz</span></td><td class="w">StyleQuizView assets</td><td><span class="chip p1">P1</span></td><td class="eff">M</td></tr>
+        <tr><td>R18</td><td><span class="t">Chat anatomy for threads (bubbles, senders, time)</span></td><td class="w">ThreadDetailView</td><td><span class="chip p1">P1</span></td><td class="eff">M</td></tr>
+        <tr><td>R19</td><td><span class="t">Thread list identity: names, previews, unread weight</span></td><td class="w">ThreadListView</td><td><span class="chip p1">P1</span></td><td class="eff">S</td></tr>
+        <tr><td>R20</td><td><span class="t">Decision rows: project context + "Discuss this"</span></td><td class="w">DecisionList/Detail</td><td><span class="chip p1">P1</span></td><td class="eff">S</td></tr>
+        <tr><td>R21</td><td><span class="t">Companion AX identity + labels on all switches</span></td><td class="w">CompanionOverlay, SettingsView</td><td><span class="chip p1">P1</span></td><td class="eff">S</td></tr>
+        <tr><td>R22</td><td><span class="t">Dynamic Type via scaled tokens; embed/remove Inter-Light</span></td><td class="w">PatinaTypography + features</td><td><span class="chip p1">P1</span></td><td class="eff">L</td></tr>
+        <tr><td>R23</td><td><span class="t">Project detail: lead with substance, collapse empties</span></td><td class="w">ProjectDetailView</td><td><span class="chip p1">P1</span></td><td class="eff">M</td></tr>
+        <tr><td>R24</td><td><span class="t">Token adoption sweep (spacing/radius/fonts) + CI guard</span></td><td class="w">Home, Settings, cards</td><td><span class="chip p1">P1</span></td><td class="eff">M</td></tr>
+        <tr><td>R25</td><td><span class="t">Implement product share (ShareLink); fix fallback copy</span></td><td class="w">ProductDetailView</td><td><span class="chip p2">P2</span></td><td class="eff">S</td></tr>
+        <tr><td>R26</td><td><span class="t">Native patterns: search, swipe actions, context menus, Reduce Motion</span></td><td class="w">Lists app-wide</td><td><span class="chip p2">P2</span></td><td class="eff">M</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ================= 06 ROADMAP ================= -->
+<section id="roadmap">
+  <div class="wrap">
+    <div class="eyebrow rv"><span class="num">06</span> The Master Plan</div>
+    <h2 class="rv">Three phases. <em>Trust, then flow, then delight.</em></h2>
+    <p class="lede rv">Sequenced so each phase ships a coherent, testable promise. Phase 1 is almost entirely small/medium tickets — a focused two-week push by one or two engineers, because nothing else matters while primary buttons don't work.</p>
+    <div class="phases rv">
+      <div class="phase p-1">
+        <div class="ph-head"><div class="ph-num">Phase One · ~2 weeks</div><h4>Make it trustworthy</h4><div class="ph-sub">Every tap lands. Every screen exits. Every approval is informed.</div></div>
+        <ul>
+          <li><b>R01–R03</b> Reachability: scan CTA, recommendations, Settings rows</li>
+          <li><b>R04–R05</b> Wayfinding: universal back, quiz exit</li>
+          <li><b>R06</b> Decision render contract + Approve gating</li>
+          <li><b>R09–R12</b> Companion intent, item rows, overlay leak, silent scan finish</li>
+          <li><b>R07</b> Overlay AX hiding (ships with the overlay fix)</li>
+          <li>Exit criteria: tap-through test of all 26 entry points passes; zero dead chevrons</li>
+        </ul>
+      </div>
+      <div class="phase p-2">
+        <div class="ph-head"><div class="ph-num">Phase Two · ~3 weeks</div><h4>Make it whole</h4><div class="ph-sub">Content integrity, conversation, and the system speaking with one voice.</div></div>
+        <ul>
+          <li><b>R15–R17</b> Image failure states, phase formatter, quiz imagery</li>
+          <li><b>R18–R20</b> Messaging anatomy + thread identity + decision context</li>
+          <li><b>R13–R14</b> Scan exit + visible sync status</li>
+          <li><b>R23–R24</b> Project detail substance; token adoption sweep + CI guard</li>
+          <li><b>R21</b> Companion &amp; switch accessibility labels</li>
+          <li>Exit criteria: no raw enums or blank rectangles anywhere; messaging readable at a glance</li>
+        </ul>
+      </div>
+      <div class="phase p-3">
+        <div class="ph-head"><div class="ph-num">Phase Three · ~3–4 weeks</div><h4>Make it sing</h4><div class="ph-sub">Dark mode, Dynamic Type, and the platform furniture power users expect.</div></div>
+        <ul>
+          <li><b>R08</b> Dark-mode adoption, surface by surface (tokens are ready)</li>
+          <li><b>R22</b> Dynamic Type across the typography system</li>
+          <li><b>R25–R26</b> Share, search, swipe actions, context menus, Reduce Motion</li>
+          <li>Re-grade against this scorecard; target B+ or better on every row</li>
+          <li>Unlocks next: Aesthete recommendations land in a rail that's no longer empty</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 07 APPENDIX ================= -->
+<section id="appendix">
+  <div class="wrap">
+    <div class="eyebrow rv"><span class="num">07</span> Appendix</div>
+    <h2 class="rv">Inventory &amp; <em>capture notes.</em></h2>
+    <div class="appx rv">
+      <h6>What we deliberately credit</h6>
+      <p>The walk experience (whisper bar, haptic milestones at 25/50/75%, idle + tracking-loss recovery, abandoned-scan resume), the empty states ("You're all caught up", "Nothing waiting on you"), the single-sheet-driver architecture in <code>AppCoordinator</code>, 281 accessibility labels, the layered dynamic app icon, and a token system (<code>PatinaColors / Typography / Spacing / Shadows / Gradients</code>) that most teams would envy. The bones are right.</p>
+      <h6>Screen inventory (code audit)</h6>
+      <p>45+ screens: Auth (AuthScreenView, AuthenticationView, QR approval), Onboarding (carousel, camera primer, quiz/result), Consumer (DailyRoom + detail overlays, YourSpaces, RoomProject, RoomSettings, CrossRoom, ManualRoomEntry, Collections, Recommendations, ProductDetail, ARPlacement, Profile), Scan (threshold, walk, review + 3 sheets, saved, soft landing, style conversation, floor plan), Designer (DesignerHome, ProjectList/Detail, DecisionList/Detail, ReceiveDelivery, Consultation), Messaging (ThreadList/Detail), Notifications, Settings/Account, and the Companion overlay.</p>
+      <h6>Not captured on device, and why</h6>
+      <p><b>Auth &amp; onboarding</b> — capturing would have required signing out the only session on the device with the Account screen unreachable (R03); reviewed from source. <b>Scan review &amp; AR placement</b> — require a physical LiDAR walk of a real room; the phone was stationary during review. <b>Recommendations grid</b> — unreachable via touch (R02); the Aesthete engine behind it is also still a placeholder (<code>AestheteEngineService.swift</code>). These should be re-shot in the Phase-1 verification pass.</p>
+      <h6>Session side-effects</h6>
+      <p>Reviewing on the live account created one junk room ("Kitchen", via the silent empty-scan finish — itself finding R12) alongside the pre-existing "New room" test entries. Recommend cleaning these up when verifying R12.</p>
+      <h6>Evidence</h6>
+      <p>24 captures in <code>screenshots/</code>, numbered 01–24 and referenced throughout. Accessibility-tree excerpts quoted in findings were read live from the running app via the device's AX API.</p>
+    </div>
+
+    <footer class="rv">
+      <div>
+        <div class="sig">Patina — measured twice.</div>
+        <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-mute);margin-top:8px">UX/UI Master Plan · v1 · For team review &amp; feedback</div>
+      </div>
+      <div class="fm">June 10, 2026<br>iPhone 17 Pro Max · iOS 26.6<br>apps/mobile/Patina @ main</div>
+    </footer>
+  </div>
+</section>
+
+<script>
+const bar=document.getElementById('bar');
+addEventListener('scroll',()=>{
+  const h=document.documentElement;
+  bar.style.width=(h.scrollTop/(h.scrollHeight-h.clientHeight)*100)+'%';
+},{passive:true});
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('on');io.unobserve(e.target)}}),{threshold:.08});
+document.querySelectorAll('.rv').forEach(el=>io.observe(el));
+</script>
+</body>
+</html>
