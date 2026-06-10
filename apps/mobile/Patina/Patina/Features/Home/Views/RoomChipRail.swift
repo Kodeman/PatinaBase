@@ -11,13 +11,25 @@ struct RoomChipRail: View {
     let onSelect: (RoomSummary) -> Void
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 7) {
-                ForEach(rooms) { room in
-                    chip(for: room)
+        // ScrollViewReader so selecting a chip (tap or programmatic, e.g.
+        // RoomSelectionStore restoring a just-scanned room) scrolls it into
+        // view instead of leaving the active room off-screen (Theme V).
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 7) {
+                    ForEach(rooms) { room in
+                        chip(for: room)
+                            .id(room.id)
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+            .onChange(of: selectedID) { _, newValue in
+                guard let newValue else { return }
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo(newValue, anchor: .center)
                 }
             }
-            .padding(.horizontal, 20)
         }
         .padding(.top, 16)
     }
@@ -58,9 +70,12 @@ struct RoomChipRail: View {
             .padding(.leading, 5)
             .padding(.trailing, 12)
             .padding(.vertical, 5)
+            // Theme V: unambiguous selected state — the active chip is a
+            // filled charcoal capsule, inactive chips read as outlines on
+            // the off-white home surface.
             .background(
                 Capsule()
-                    .fill(isActive ? PatinaColors.charcoal : PatinaColors.softCream)
+                    .fill(isActive ? PatinaColors.charcoal : PatinaColors.offWhite)
             )
             .overlay(
                 Capsule()
@@ -68,6 +83,7 @@ struct RoomChipRail: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 }
 

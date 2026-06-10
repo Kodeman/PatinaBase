@@ -341,7 +341,12 @@ struct DesignerHomeView: View {
                     Text(project.name)
                         .font(PatinaTypography.bodySmallMedium)
                         .foregroundStyle(PatinaColors.charcoal)
-                    Text(project.current_phase ?? project.status?.capitalized ?? "—")
+                    // R16: human phase/status vocabulary in the dashboard row —
+                    // compact label keeps the price column clear; statusLabel
+                    // already renders "—" for a nil status.
+                    Text(project.current_phase != nil
+                        ? PhaseDisplay.shortLabel(for: project.current_phase)
+                        : PhaseDisplay.statusLabel(for: project.status))
                         .font(PatinaTypography.caption)
                         .foregroundStyle(PatinaColors.agedOak)
                 }

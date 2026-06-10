@@ -19,9 +19,17 @@ struct ProjectDetailView: View {
             VStack(alignment: .leading, spacing: 24) {
                 if let project = viewModel.project {
                     header(project)
-                    phasesSection
-                    milestonesSection
-                    ffeSection
+                    // R23: lead with substance — budget, dates, visibility —
+                    // before any section can render as an empty placeholder.
+                    overviewCard(project)
+                    if !viewModel.phases.isEmpty { phasesSection }
+                    if !viewModel.milestones.isEmpty { milestonesSection }
+                    if !viewModel.ffe.isEmpty { ffeSection }
+                    // R23: empty sections collapse into one quiet portal hint
+                    // instead of stacked "No X yet" rows.
+                    if !missingSectionNames.isEmpty {
+                        portalHintCard
+                    }
                 } else if let error = viewModel.error {
                     errorView(error)
                 } else {
@@ -54,7 +62,8 @@ struct ProjectDetailView: View {
                 .font(PatinaTypography.h2)
                 .foregroundStyle(PatinaColors.charcoal)
             if let phase = project.current_phase {
-                Text("Currently: \(phase)")
+                // R16: formatted phase vocabulary, never the raw slug.
+                Text("Currently: \(PhaseDisplay.label(for: phase))")
                     .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.agedOak)
             }
@@ -63,28 +72,112 @@ struct ProjectDetailView: View {
         .padding(.horizontal, 24)
     }
 
+    // MARK: - Overview (R23)
+
+    /// Key facts card rendered directly under the project name: budget,
+    /// status, start/target dates, and client visibility when present.
+    @ViewBuilder
+    private func overviewCard(_ project: RemoteProject) -> some View {
+        let facts = overviewFacts(project)
+        if !facts.isEmpty {
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), alignment: .topLeading),
+                    GridItem(.flexible(), alignment: .topLeading),
+                ],
+                alignment: .leading,
+                spacing: 14
+            ) {
+                ForEach(facts, id: \.0) { fact in
+                    VStack(alignment: .leading, spacing: 2) {
+                        MonoLabel(text: fact.0)
+                        Text(fact.1)
+                            .font(PatinaTypography.bodySmallMedium)
+                            .foregroundStyle(PatinaColors.mocha)
+                    }
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(PatinaColors.softCream)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .padding(.horizontal, 24)
+        }
+    }
+
+    private func overviewFacts(_ project: RemoteProject) -> [(String, String)] {
+        var facts: [(String, String)] = []
+        if let total = project.total_amount_cents ?? project.budget_cents {
+            facts.append(("Budget", formatPrice(total)))
+        }
+        if let status = project.status {
+            facts.append(("Status", PhaseDisplay.statusLabel(for: status)))
+        }
+        if let start = project.start_date {
+            facts.append(("Started", formatDate(start)))
+        }
+        if let target = project.target_end_date {
+            facts.append(("Target", formatDate(target)))
+        }
+        if let tier = project.client_visibility_tier, !tier.isEmpty {
+            facts.append(("Client view", tier.replacingOccurrences(of: "_", with: " ").capitalized))
+        }
+        return facts
+    }
+
+    // MARK: - Portal hint (R23)
+
+    /// Display names for whichever of the three sections have no data yet.
+    private var missingSectionNames: [String] {
+        var missing: [String] = []
+        if viewModel.phases.isEmpty { missing.append("phases") }
+        if viewModel.milestones.isEmpty { missing.append("payments") }
+        if viewModel.ffe.isEmpty { missing.append("FF&E") }
+        return missing
+    }
+
+    /// One quiet, informational card covering every not-yet-set-up section —
+    /// setup happens in the portal, so there is no tap target on iOS.
+    private var portalHintCard: some View {
+        Text("Set up \(joinedList(missingSectionNames)) in the portal →")
+            .font(PatinaTypography.caption)
+            .foregroundStyle(PatinaColors.agedOak)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(PatinaColors.pearl, lineWidth: 1)
+            )
+            .padding(.horizontal, 24)
+    }
+
+    /// "phases" / "phases and payments" / "phases, payments, and FF&E".
+    private func joinedList(_ items: [String]) -> String {
+        switch items.count {
+        case 0: return ""
+        case 1: return items[0]
+        case 2: return "\(items[0]) and \(items[1])"
+        default: return items.dropLast().joined(separator: ", ") + ", and \(items.last!)"
+        }
+    }
+
     // MARK: - Phases
 
+    // R23: only rendered when phases exist — the empty state collapses
+    // into `portalHintCard` instead.
     private var phasesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             MonoLabel(text: "Phases")
                 .padding(.horizontal, 24)
 
-            if viewModel.phases.isEmpty {
-                Text("No phases yet")
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.agedOak)
-                    .padding(.horizontal, 24)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(viewModel.phases) { phase in
-                        phaseRow(phase)
-                    }
+            VStack(spacing: 0) {
+                ForEach(viewModel.phases) { phase in
+                    phaseRow(phase)
                 }
-                .background(PatinaColors.softCream)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .padding(.horizontal, 24)
             }
+            .background(PatinaColors.softCream)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .padding(.horizontal, 24)
         }
     }
 
@@ -94,10 +187,12 @@ struct ProjectDetailView: View {
                 .fill(phaseColor(for: phase.status))
                 .frame(width: 10, height: 10)
             VStack(alignment: .leading, spacing: 2) {
-                Text(phase.name ?? phase.phase_key.capitalized)
+                // R16: designer-defined name wins; otherwise the formatted
+                // designer label for the slug — never `phase_key.capitalized`.
+                Text(phase.name ?? PhaseDisplay.label(for: phase.phase_key))
                     .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.charcoal)
-                Text((phase.status ?? "pending").capitalized)
+                Text(PhaseDisplay.statusLabel(for: phase.status ?? "pending"))
                     .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.agedOak)
             }
@@ -128,26 +223,20 @@ struct ProjectDetailView: View {
 
     // MARK: - Milestones
 
+    // R23: only rendered when milestones exist (see `portalHintCard`).
     private var milestonesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             MonoLabel(text: "Payments")
                 .padding(.horizontal, 24)
 
-            if viewModel.milestones.isEmpty {
-                Text("No payment milestones yet")
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.agedOak)
-                    .padding(.horizontal, 24)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(viewModel.milestones) { milestone in
-                        milestoneRow(milestone)
-                    }
+            VStack(spacing: 0) {
+                ForEach(viewModel.milestones) { milestone in
+                    milestoneRow(milestone)
                 }
-                .background(PatinaColors.softCream)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .padding(.horizontal, 24)
             }
+            .background(PatinaColors.softCream)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .padding(.horizontal, 24)
         }
     }
 
@@ -181,42 +270,36 @@ struct ProjectDetailView: View {
 
     // MARK: - FF&E summary
 
+    // R23: only rendered when FF&E items exist (see `portalHintCard`).
     private var ffeSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             MonoLabel(text: "FF&E")
                 .padding(.horizontal, 24)
-            if viewModel.ffe.isEmpty {
-                Text("No FF&E items yet")
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.agedOak)
-                    .padding(.horizontal, 24)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(viewModel.ffe) { item in
-                        HStack {
-                            Text(item.name ?? "Item")
-                                .font(PatinaTypography.bodySmall)
-                                .foregroundStyle(PatinaColors.charcoal)
-                            Spacer()
-                            if let total = item.line_total_cents {
-                                Text(formatPrice(total))
-                                    .font(PatinaTypography.monoTiny)
-                                    .foregroundStyle(PatinaColors.mocha)
-                            }
-                        }
-                        .padding(.vertical, 12)
-                        .padding(.horizontal, 16)
-                        .overlay(alignment: .bottom) {
-                            Rectangle()
-                                .fill(PatinaColors.pearl)
-                                .frame(height: 1)
+            VStack(spacing: 0) {
+                ForEach(viewModel.ffe) { item in
+                    HStack {
+                        Text(item.name ?? "Item")
+                            .font(PatinaTypography.bodySmall)
+                            .foregroundStyle(PatinaColors.charcoal)
+                        Spacer()
+                        if let total = item.line_total_cents {
+                            Text(formatPrice(total))
+                                .font(PatinaTypography.monoTiny)
+                                .foregroundStyle(PatinaColors.mocha)
                         }
                     }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .overlay(alignment: .bottom) {
+                        Rectangle()
+                            .fill(PatinaColors.pearl)
+                            .frame(height: 1)
+                    }
                 }
-                .background(PatinaColors.softCream)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .padding(.horizontal, 24)
             }
+            .background(PatinaColors.softCream)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .padding(.horizontal, 24)
         }
     }
 
@@ -238,6 +321,16 @@ struct ProjectDetailView: View {
     private func formatPrice(_ cents: Int) -> String {
         let dollars = cents / 100
         return "$\(dollars.formatted())"
+    }
+
+    /// Render a Postgres `date` string ("2026-04-01") as "Apr 1, 2026";
+    /// falls back to the raw value if it doesn't parse.
+    private func formatDate(_ raw: String) -> String {
+        let parser = DateFormatter()
+        parser.dateFormat = "yyyy-MM-dd"
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        guard let date = parser.date(from: String(raw.prefix(10))) else { return raw }
+        return date.formatted(date: .abbreviated, time: .omitted)
     }
 }
 

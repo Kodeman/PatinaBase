@@ -49,6 +49,10 @@ struct QuizOption: Identifiable {
     var subtitle: String? = nil
     var gradient: LinearGradient? = nil
     var icon: String? = nil
+    /// R17: future photography slot — when real room/material photography
+    /// ships, options can render an image instead of the flat gradient
+    /// swatch. Unused for now; nil everywhere.
+    var imageAsset: String? = nil
     /// Machine-readable key for API submission
     var key: String
 }
@@ -59,7 +63,9 @@ enum QuizContent {
     static let allQuestions: [QuizQuestion] = [
         QuizQuestion(
             id: 0,
-            title: "Which room speaks to you?",
+            // R17: the options render as flat color swatches, not room
+            // photos — ask about palettes, not rooms.
+            title: "Which palette feels like home?",
             type: .imageGrid([
                 QuizOption(label: "Warm Minimal", gradient: PatinaGradients.warm, key: "warm_minimal"),
                 QuizOption(label: "Cool Modern", gradient: PatinaGradients.metal, key: "cool_modern"),
@@ -80,7 +86,9 @@ enum QuizContent {
         ),
         QuizQuestion(
             id: 2,
-            title: "What texture calls to you?",
+            // R17: swatches show material colorways, not tactile texture —
+            // ask about materials, matching the option labels.
+            title: "Which material draws you in?",
             type: .materialCards([
                 QuizOption(label: "Weathered Oak", subtitle: "Warmth & history", gradient: PatinaGradients.wood, key: "weathered_oak"),
                 QuizOption(label: "Soft Linen", subtitle: "Light & breathable", gradient: PatinaGradients.linen, key: "soft_linen"),

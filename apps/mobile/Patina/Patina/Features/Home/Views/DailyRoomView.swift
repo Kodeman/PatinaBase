@@ -236,44 +236,65 @@ struct DailyRoomView: View {
                     onSelect: { viewModel.selectRoom($0) }
                 )
 
-                RoomContextBar(
-                    room: viewModel.selectedRoom,
-                    filters: viewModel.categoryFilters,
-                    activeFilterID: viewModel.activeFilterID,
-                    onSelectFilter: { viewModel.selectFilter($0) }
-                )
-
-                LazyVStack(spacing: 0) {
-                    ForEach(Array(viewModel.recommendations.enumerated()), id: \.element.id) { index, rec in
-                        let card = DailyProductCard(
-                            recommendation: rec,
-                            namespace: cardNamespace,
-                            isExpanded: expandedRecommendation?.id == rec.id,
-                            onExpand: {
-                                withAnimation(.patinaHero) {
-                                    expandedRecommendation = rec
-                                }
-                            },
-                            onAdd: {
-                                viewModel.presentAdd(for: rec.product)
-                            },
-                            spatialContext: viewModel.spatialContext[rec.product.id] ?? [:]
+                // Theme V: when the recommendations rail is empty the filter
+                // chips have nothing to filter — so the chips + void are
+                // replaced by ONE editorial module (quiz prompt when no style
+                // profile exists, otherwise a scan/browse prompt). While the
+                // feed request is still in flight we render neither, so the
+                // module doesn't flash before the first response lands.
+                if viewModel.allRecommendations.isEmpty {
+                    if !viewModel.isFeedLoading {
+                        DailyFeedEmptyModule(
+                            roomName: viewModel.selectedRoom?.name,
+                            roomHasItems: (viewModel.selectedRoom?.itemCount ?? 0) > 0,
+                            hasStyleProfile: viewModel.hasStyleProfile,
+                            onTakeQuiz: { coordinator.navigate(to: .styleQuiz) },
+                            onScanRoom: { coordinator.navigate(to: .scanFlow(reason: .fresh)) },
+                            onBrowse: { coordinator.navigate(to: .emergence(pieceId: nil)) }
                         )
-                        if index == 0 {
-                            // First-launch tour anchor — Step 2's popover
-                            // attaches to the topmost daily product card, the
-                            // surface that carries the heart/save affordance
-                            // the step describes. Only the first card carries
-                            // the anchor so the popover doesn't render
-                            // multiple times for users with a long feed.
-                            card.firstLaunchTourAnchor(.savedHeart)
-                        } else {
-                            card
+                        .padding(.horizontal, 20)
+                        .padding(.top, 14)
+                    }
+                } else {
+                    RoomContextBar(
+                        room: viewModel.selectedRoom,
+                        filters: viewModel.categoryFilters,
+                        activeFilterID: viewModel.activeFilterID,
+                        onSelectFilter: { viewModel.selectFilter($0) }
+                    )
+
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(viewModel.recommendations.enumerated()), id: \.element.id) { index, rec in
+                            let card = DailyProductCard(
+                                recommendation: rec,
+                                namespace: cardNamespace,
+                                isExpanded: expandedRecommendation?.id == rec.id,
+                                onExpand: {
+                                    withAnimation(.patinaHero) {
+                                        expandedRecommendation = rec
+                                    }
+                                },
+                                onAdd: {
+                                    viewModel.presentAdd(for: rec.product)
+                                },
+                                spatialContext: viewModel.spatialContext[rec.product.id] ?? [:]
+                            )
+                            if index == 0 {
+                                // First-launch tour anchor — Step 2's popover
+                                // attaches to the topmost daily product card, the
+                                // surface that carries the heart/save affordance
+                                // the step describes. Only the first card carries
+                                // the anchor so the popover doesn't render
+                                // multiple times for users with a long feed.
+                                card.firstLaunchTourAnchor(.savedHeart)
+                            } else {
+                                card
+                            }
                         }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 6)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 6)
 
                 Spacer().frame(height: 120)
             }

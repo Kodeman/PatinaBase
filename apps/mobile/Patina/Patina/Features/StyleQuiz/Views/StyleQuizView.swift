@@ -21,7 +21,9 @@ struct StyleQuizView: View {
     private let stepLabels = [
         "Your visual style",
         "How you live",
-        "Textures you love",
+        // R17: kept in step with the question copy — the swatches show
+        // materials/palettes, not tactile textures.
+        "Materials you love",
         "Your investment",
         "Your catalyst"
     ]

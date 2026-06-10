@@ -78,7 +78,8 @@ struct ProjectListView: View {
                     .foregroundStyle(PatinaColors.charcoal)
                 Spacer()
                 if let status = project.status {
-                    Text(status.capitalized)
+                    // R16: human status vocabulary, never raw enum values.
+                    Text(PhaseDisplay.statusLabel(for: status))
                         .font(PatinaTypography.monoTiny)
                         .foregroundStyle(PatinaColors.Text.interactive)
                         .padding(.horizontal, 8)
@@ -89,7 +90,9 @@ struct ProjectListView: View {
             }
             HStack(spacing: 16) {
                 if let phase = project.current_phase {
-                    label("Phase", phase)
+                    // R16: compact display label ("Design Dev"), not the raw
+                    // slug ("design_development") — two columns share the row.
+                    label("Phase", PhaseDisplay.shortLabel(for: phase))
                 }
                 if let total = project.total_amount_cents ?? project.budget_cents {
                     label("Total", formatPrice(total))
@@ -108,8 +111,9 @@ struct ProjectListView: View {
     /// so focus lands once instead of stopping on each Text.
     private func projectAccessibilityLabel(_ project: RemoteProject) -> String {
         var parts: [String] = [project.name]
-        if let status = project.status { parts.append(status.capitalized) }
-        if let phase = project.current_phase { parts.append("Phase \(phase)") }
+        if let status = project.status { parts.append(PhaseDisplay.statusLabel(for: status)) }
+        // R16: VoiceOver reads the full designer label ("Design Development").
+        if let phase = project.current_phase { parts.append("Phase \(PhaseDisplay.label(for: phase))") }
         if let total = project.total_amount_cents ?? project.budget_cents {
             parts.append("Total \(formatPrice(total))")
         }

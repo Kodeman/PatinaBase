@@ -76,15 +76,14 @@ struct RecommendationsView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Image with overlays
             ZStack(alignment: .topLeading) {
-                // Product image or gradient placeholder
+                // Product image via PatinaAsyncImage (R15) — branded strata
+                // placeholder for loading/failure; category gradient remains
+                // the deliberate no-URL fallback.
                 if let imageURL = product.imageURL, let url = URL(string: imageURL) {
-                    AsyncImage(url: url) { image in
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        product.placeholderGradient
-                    }
-                    .frame(height: 160)
-                    .clipped()
+                    PatinaAsyncImage(url: url)
+                        .frame(height: 160)
+                        .frame(maxWidth: .infinity)
+                        .clipped()
                 } else {
                     product.placeholderGradient
                         .frame(height: 160)

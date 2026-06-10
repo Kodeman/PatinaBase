@@ -40,6 +40,16 @@ final class DailyRoomViewModel {
     var presentingAddFor: Product?
     var toastMessage: String?
 
+    /// Whether the user has any persisted style profile (quiz / teaching
+    /// output). Drives the empty-rail editorial module on the home screen:
+    /// no profile → quiz prompt, profile present → scan/browse prompt.
+    var hasStyleProfile: Bool = false
+
+    /// True while the room-aware feed request is in flight. The home view
+    /// uses this to avoid flashing the empty-rail editorial module before
+    /// the first response lands.
+    var isFeedLoading: Bool = false
+
     /// Spatial-context copy keyed by product ID, populated from the
     /// room-aware feed response so DailyProductCard can render "why it fits"
     /// text under the product name.
@@ -84,6 +94,7 @@ final class DailyRoomViewModel {
         todayStory = nil
         refreshTodaysStory()
         if let ctx = modelContext {
+            hasStyleProfile = ((try? ctx.fetchCount(FetchDescriptor<StylePreferenceModel>())) ?? 0) > 0
             let store = RoomStore(context: ctx)
             let realRooms = store.allRooms()
             if realRooms.isEmpty {
@@ -144,9 +155,11 @@ final class DailyRoomViewModel {
               let remoteId = remoteIdByLocal[localId] else {
             spatialContext = [:]
             allRecommendations = []
+            isFeedLoading = false
             return
         }
         feedTask?.cancel()
+        isFeedLoading = true
         feedTask = Task { [weak self] in
             do {
                 let response = try await FeedAPIClient.shared.fetchFeed(roomId: remoteId)
@@ -160,11 +173,16 @@ final class DailyRoomViewModel {
                 self.allRecommendations = response.products.map { fp in
                     DailyRoomViewModel.recommendation(from: fp)
                 }
+                self.isFeedLoading = false
             } catch {
                 #if DEBUG
                 PatinaLog.ui.error("[DailyRoomVM] feed fetch failed: \(error)")
                 #endif
+                // A cancelled task means a newer refresh superseded this one —
+                // leave state alone so the in-flight request owns it.
+                guard !Task.isCancelled else { return }
                 self?.allRecommendations = []
+                self?.isFeedLoading = false
             }
         }
     }

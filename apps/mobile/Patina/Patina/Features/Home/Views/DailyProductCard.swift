@@ -45,9 +45,20 @@ struct DailyProductCard: View {
 
     private var imageArea: some View {
         ZStack(alignment: .topLeading) {
-            recommendation.product.placeholderGradient
-                .frame(height: 210)
-                .clipped()
+            // R15: real product photo through PatinaAsyncImage when the feed
+            // provides one (branded strata placeholder while loading / on
+            // failure); the category gradient stays the no-URL fallback.
+            Group {
+                if let imageURL = recommendation.product.imageURL,
+                   let url = URL(string: imageURL) {
+                    PatinaAsyncImage(url: url)
+                } else {
+                    recommendation.product.placeholderGradient
+                }
+            }
+            .frame(height: 210)
+            .frame(maxWidth: .infinity)
+            .clipped()
 
             // Why caption overlay (bottom)
             VStack {

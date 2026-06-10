@@ -71,16 +71,16 @@ struct ProductDetailView: View {
         ZStack(alignment: .bottom) {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
-                    // Hero image
+                    // Hero image — rendered through PatinaAsyncImage (R15)
+                    // so loading/failure states show the branded strata
+                    // placeholder instead of a bare rectangle. The category
+                    // gradient remains the deliberate no-URL fallback.
                     ZStack(alignment: .top) {
                         if let imageURL = product.imageURL, let url = URL(string: imageURL) {
-                            AsyncImage(url: url) { image in
-                                image.resizable().aspectRatio(contentMode: .fill)
-                            } placeholder: {
-                                product.placeholderGradient
-                            }
-                            .frame(height: 340)
-                            .clipped()
+                            PatinaAsyncImage(url: url)
+                                .frame(height: 340)
+                                .frame(maxWidth: .infinity)
+                                .clipped()
                         } else {
                             product.placeholderGradient
                                 .frame(height: 340)
@@ -107,18 +107,26 @@ struct ProductDetailView: View {
                             .accessibilityHint("Opens the help panel for this product.")
                             .accessibilityIdentifier("ProductDetailView.HelpButton")
 
-                            // Share button — icon-only action. Wrapped in
-                            // HelpTooltip so a tap reveals a brief, CMS-
-                            // backed explanation. Share routing is a
-                            // follow-up task; until then the tooltip is
-                            // the entire interaction.
-                            HelpTooltip(
-                                surfaceKey: SurfaceKeys.IOSApp.ProductDetail.shareAction,
-                                fallback: "Share this piece — copy a link or send it to a collaborator. Sharing keeps your room context intact for the recipient."
+                            // Share button — real ShareLink (R25) sharing the
+                            // product name + its portal URL. Not wrapped in
+                            // HelpTooltip: the tooltip's tap-to-reveal gesture
+                            // would conflict with the ShareLink's own tap
+                            // (same pattern as the AR button below), so the
+                            // share-action help copy ships through the help
+                            // panel (`?` button) instead.
+                            ShareLink(
+                                item: Self.shareURL(for: product),
+                                subject: Text(product.name),
+                                message: Text("\(product.name) by \(product.makerName) on Patina")
                             ) {
                                 floatingCircleButton(icon: "square.and.arrow.up")
-                                    .accessibilityLabel("Share")
                             }
+                            .simultaneousGesture(TapGesture().onEnded {
+                                viewModel.trackShare()
+                            })
+                            .accessibilityLabel("Share")
+                            .accessibilityHint("Shares a link to this piece.")
+                            .accessibilityIdentifier("ProductDetailView.ShareButton")
 
                             Button { viewModel.toggleSave(context: modelContext) } label: {
                                 floatingCircleButton(icon: viewModel.isSaved ? "heart.fill" : "heart")
@@ -268,6 +276,16 @@ struct ProductDetailView: View {
     }
 
     // MARK: - Components
+
+    /// Portal deep link for a piece — matches the designer-portal product
+    /// detail route at `app/(portal)/portal/catalog/[id]` on app.patina.cloud.
+    private static func shareURL(for product: Product) -> URL {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "app.patina.cloud"
+        components.path = "/portal/catalog/\(product.id)"
+        return components.url ?? URL(string: "https://app.patina.cloud/portal/catalog")!
+    }
 
     private func floatingCircleButton(icon: String) -> some View {
         Circle()

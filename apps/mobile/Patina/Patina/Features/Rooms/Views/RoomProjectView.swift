@@ -280,9 +280,17 @@ struct RoomProjectView: View {
             .padding(.bottom, 8)
 
             ForEach(Array(room.items.enumerated()), id: \.element.id) { pair in
-                RoomItemRow(item: pair.element) {
-                    actionItem = pair.element
-                }
+                RoomItemRow(
+                    item: pair.element,
+                    // R10: tapping the row body opens the piece detail —
+                    // mirrors the .viewDetail action in handle(_:item:).
+                    onTap: {
+                        coordinator.navigate(to: .pieceDetail(pieceId: pair.element.productId))
+                    },
+                    onActions: {
+                        actionItem = pair.element
+                    }
+                )
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     Button(role: .destructive) {
                         let store = RoomStore(context: modelContext)

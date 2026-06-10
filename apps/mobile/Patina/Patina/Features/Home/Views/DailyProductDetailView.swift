@@ -51,7 +51,12 @@ struct DailyProductDetailView: View {
                                 pairingBlock(pairing)
                             }
                             Divider().background(PatinaColors.pearl)
-                            description
+                            // R25: only render the story section when the
+                            // maker actually has one — no canned filler copy
+                            // pretending to be provenance.
+                            if let story = product.makerStory {
+                                description(story)
+                            }
                             specsGrid
                             Spacer(minLength: 140)
                         }
@@ -90,7 +95,15 @@ struct DailyProductDetailView: View {
 
     private var hero: some View {
         ZStack(alignment: .topLeading) {
-            product.placeholderGradient
+            // R15: real product photo through PatinaAsyncImage when the feed
+            // provides one; the category gradient stays as the deliberate
+            // no-URL fallback. Matches the card's image area so the
+            // matchedGeometryEffect morph stays visually continuous.
+            if let imageURL = product.imageURL, let url = URL(string: imageURL) {
+                PatinaAsyncImage(url: url)
+            } else {
+                product.placeholderGradient
+            }
 
             LinearGradient(
                 colors: [PatinaColors.charcoal.opacity(0.55), .clear],
@@ -224,14 +237,14 @@ struct DailyProductDetailView: View {
         )
     }
 
-    private var description: some View {
+    private func description(_ story: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("About this piece")
                 .font(PatinaTypography.monoSmall)
                 .tracking(0.8)
                 .textCase(.uppercase)
                 .foregroundStyle(PatinaColors.agedOak)
-            Text(product.makerStory ?? placeholderDescription)
+            Text(story)
                 .font(.system(size: 14))
                 .foregroundStyle(PatinaColors.mocha)
                 .lineSpacing(5)
@@ -364,9 +377,6 @@ struct DailyProductDetailView: View {
         onDismiss()
     }
 
-    private var placeholderDescription: String {
-        "Made slow, made once. Each piece is cut, joined, and finished by hand in a small shop where the maker knows every board by name. Expect subtle variation — that's the point."
-    }
 }
 
 #Preview {

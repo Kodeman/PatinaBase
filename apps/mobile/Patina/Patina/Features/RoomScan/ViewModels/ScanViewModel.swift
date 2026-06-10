@@ -79,7 +79,10 @@ public final class ScanViewModel {
 
     private var motionManager: CMMotionManager?
     private var lastMotionAt: Date = .distantPast
-    private var hasStartedFromMotion: Bool = false
+    /// True once movement (or the manual-start cue) has kicked off capture.
+    /// Public read-only so the Threshold view can decide whether to surface
+    /// the "Begin walking to start, or tap here" cue (Theme IV).
+    public private(set) var hasStartedFromMotion: Bool = false
 
     /// Timer-based auto-complete: progress must stay ≥0.95 for this long.
     private var readyToCompleteSince: Date?
@@ -156,6 +159,35 @@ public final class ScanViewModel {
         analytics.context = nil
     }
 
+    // MARK: - Meaningful-data threshold (R12)
+
+    /// Coverage below which a scan is considered effectively empty unless
+    /// RoomPlan has locked onto real structure. 0.15 matches the
+    /// CoverageAnalyzer's own `.beginning` → `.exploring` phase boundary —
+    /// under it the analyzer itself still says "Let's begin".
+    public static let meaningfulScanProgressThreshold: Float = 0.15
+
+    /// Whether the scan has captured enough real data for "Finish With What
+    /// We Have" to produce a reviewable bundle. Below this the pause menu
+    /// disables the finish row ("Walk a little more first") so an
+    /// effectively-empty scan can never silently "finish" — the old behavior
+    /// classified it as an abandonment and dropped the user back home with
+    /// zero acknowledgment (device review R12).
+    public var hasMeaningfulScanData: Bool {
+        // No bundle on disk → nothing the review step could load.
+        guard captureService.currentScanId != nil else { return false }
+        if scanProgress >= Self.meaningfulScanProgressThreshold { return true }
+        // Low coverage can still be worth keeping if RoomPlan has resolved
+        // actual surfaces/walls (small rooms hit structure before coverage).
+        if let coverage = captureService.coverageResult, coverage.detectedSurfaces > 0 {
+            return true
+        }
+        if let room = captureService.capturedRoom, !room.walls.isEmpty {
+            return true
+        }
+        return false
+    }
+
     // MARK: - Actions from the view
 
     public func didTapPause() {
@@ -182,6 +214,11 @@ public final class ScanViewModel {
         // captureService.currentScanId, nothing on disk to review), treat it
         // as an abandonment instead of a zero-data finish. Otherwise the
         // review step would try to load a manifest that was never written.
+        //
+        // R12: this branch should be unreachable from the pause menu — the
+        // finish row is disabled below `hasMeaningfulScanData` — but the
+        // guard stays as a backstop so a zero-data finish can never push an
+        // empty bundle into review/upload.
         if captureService.currentScanId == nil || scanProgress <= 0.001 {
             analytics.track(.scanAbandoned(progress: scanProgress))
             captureService.stopCapture()
@@ -190,6 +227,18 @@ public final class ScanViewModel {
         }
         analytics.track(.scanPartialAccepted(progress: scanProgress))
         completeScan(reason: .userFinish)
+    }
+
+    /// "Leave Scan" from the pause menu (R13). The user has already passed a
+    /// "Discard this scan?" confirmation in PauseMenuView. Stops capture and
+    /// completes with `.userAbandon`, which the flow host routes straight
+    /// home without presenting review or creating any room.
+    public func didTapLeaveScan() {
+        showPauseMenu = false
+        isPaused = false
+        analytics.track(.scanAbandoned(progress: scanProgress))
+        captureService.stopCapture()
+        completeScan(reason: .userAbandon)
     }
 
     public func didTapStartOver() {
@@ -537,6 +586,17 @@ public final class ScanViewModel {
         guard !captureService.isScanning else { return }
         captureService.startCapture()
         analytics.track(.scanStarted)
+    }
+
+    /// Theme IV: explicit manual start for users who stand still at the
+    /// threshold. Capture normally begins on motion (PRD §4.1); the
+    /// Threshold view surfaces a "tap to start" cue after ~5s of stillness
+    /// and routes here.
+    public func didTapManualStart() {
+        guard !captureService.isScanning else { return }
+        hasStartedFromMotion = true
+        lastMotionAt = Date() // don't trip the 30s idle state immediately
+        startCaptureIfNeeded()
     }
 
     private func checkIdleState() {

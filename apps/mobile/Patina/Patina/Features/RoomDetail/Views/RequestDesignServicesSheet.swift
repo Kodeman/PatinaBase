@@ -299,7 +299,7 @@ struct RequestDesignServicesSheet: View {
             if let error = errorMessage {
                 Text(error)
                     .font(PatinaTypography.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(PatinaColors.error)
                     .padding(.top, PatinaSpacing.sm)
             }
         }
@@ -350,9 +350,12 @@ struct RequestDesignServicesSheet: View {
 
     // MARK: - Success Overlay
 
+    // Theme VIII: light success card on the scrim (matching the
+    // DesignerConsultationView pattern) — the old white-on-black text was
+    // the lone dark-styled surface inside the light app.
     private var successOverlay: some View {
         ZStack {
-            Color.black.opacity(0.5)
+            Color.black.opacity(0.4)
                 .ignoresSafeArea()
 
             VStack(spacing: PatinaSpacing.lg) {
@@ -360,7 +363,7 @@ struct RequestDesignServicesSheet: View {
                     .font(.system(size: 60))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [PatinaColors.clay, PatinaColors.softCream],
+                            colors: [PatinaColors.clay, PatinaColors.terracotta],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -368,19 +371,21 @@ struct RequestDesignServicesSheet: View {
 
                 Text("Request Sent!")
                     .font(PatinaTypography.h2)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(PatinaColors.Text.primary)
 
                 Text("We'll match you with designers who specialize in \(selectedService.displayName.lowercased())")
                     .font(PatinaTypography.body)
-                    .foregroundStyle(.white.opacity(0.8))
+                    .foregroundStyle(PatinaColors.Text.secondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, PatinaSpacing.xl)
 
                 Text("You'll hear back within 24 hours")
                     .font(PatinaTypography.caption)
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(PatinaColors.Text.muted)
             }
             .padding(PatinaSpacing.xxl)
+            .background(PatinaColors.Background.primary)
+            .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.xxl))
+            .padding(.horizontal, PatinaSpacing.xl)
         }
         .transition(.opacity)
     }

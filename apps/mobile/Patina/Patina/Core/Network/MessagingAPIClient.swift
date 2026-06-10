@@ -40,6 +40,52 @@ public struct RemoteCommsMessage: Codable, Sendable, Identifiable {
     public let deleted_at: String?
 }
 
+/// Participant row embedded in thread summaries. `last_read_at` for the
+/// current user's own row powers the unread indicator.
+public struct RemoteCommsParticipant: Codable, Sendable {
+    public let profile_id: String
+    public let role: String
+    public let last_read_at: String?
+    public let left_at: String?
+}
+
+/// Latest-message preview embedded in thread summaries.
+public struct RemoteCommsMessagePreview: Codable, Sendable {
+    public let sender_id: String?
+    public let body: String
+    public let system: Bool
+    public let created_at: String
+    public let deleted_at: String?
+}
+
+/// Embedded `projects(name)` reference for project threads.
+public struct RemoteCommsProjectRef: Codable, Sendable {
+    public let name: String?
+}
+
+/// Thread row with everything the inbox needs in one round trip:
+/// latest message, participant rows, and the project name.
+public struct RemoteCommsThreadSummary: Codable, Sendable, Identifiable {
+    public let id: String
+    public let kind: String
+    public let project_id: String?
+    public let title: String?
+    public let last_message_at: String?
+    public let comms_messages: [RemoteCommsMessagePreview]?
+    public let comms_thread_participants: [RemoteCommsParticipant]?
+    public let projects: RemoteCommsProjectRef?
+
+    /// Participants who have not left the thread.
+    public var activeParticipants: [RemoteCommsParticipant] {
+        (comms_thread_participants ?? []).filter { $0.left_at == nil }
+    }
+
+    /// Latest non-deleted state of the most recent message, if any.
+    public var latestMessage: RemoteCommsMessagePreview? {
+        comms_messages?.first
+    }
+}
+
 public struct SendMessagePayload: Encodable {
     public let thread_id: String
     public let sender_id: String
@@ -96,6 +142,36 @@ public actor MessagingAPIClient {
             throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         }
         return try decoder.decode([RemoteCommsThread].self, from: data)
+    }
+
+    /// Thread list enriched for the inbox in a single round trip: the
+    /// latest message (preview), the participant rows (counterpart
+    /// identity + own `last_read_at` for the unread dot), and the
+    /// project name for project threads. Uses PostgREST resource
+    /// embedding with a per-parent order/limit on `comms_messages`, so
+    /// this stays one query regardless of thread count. RLS on each
+    /// embedded table still applies — rows the user can't see simply
+    /// come back empty and the UI falls back to generic labels.
+    public func listThreadSummaries(limit: Int = 50) async throws -> [RemoteCommsThreadSummary] {
+        let select = "id,kind,project_id,title,last_message_at,"
+            + "comms_messages(sender_id,body,system,created_at,deleted_at),"
+            + "comms_thread_participants(profile_id,role,last_read_at,left_at),"
+            + "projects(name)"
+        let url = baseURL.appendingPathComponent("/rest/v1/comms_threads")
+            .appending(queryItems: [
+                URLQueryItem(name: "select", value: select),
+                URLQueryItem(name: "comms_messages.order", value: "created_at.desc"),
+                URLQueryItem(name: "comms_messages.limit", value: "1"),
+                URLQueryItem(name: "order", value: "last_message_at.desc"),
+                URLQueryItem(name: "limit", value: String(limit)),
+            ])
+        var request = URLRequest(url: url)
+        await applyHeaders(to: &request)
+        let (data, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+        return try decoder.decode([RemoteCommsThreadSummary].self, from: data)
     }
 
     // MARK: - Messages

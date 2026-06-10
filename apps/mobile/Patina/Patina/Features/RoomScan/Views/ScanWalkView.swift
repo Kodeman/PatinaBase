@@ -108,7 +108,9 @@ struct ScanWalkView: View {
                     onResume: viewModel.didTapResume,
                     onFinish: viewModel.didTapFinishPartial,
                     onStartOver: viewModel.didTapStartOver,
-                    onDismiss: viewModel.didDismissPauseMenu
+                    onLeave: viewModel.didTapLeaveScan,
+                    onDismiss: viewModel.didDismissPauseMenu,
+                    isFinishEnabled: viewModel.hasMeaningfulScanData
                 )
                 .transition(.opacity)
             }

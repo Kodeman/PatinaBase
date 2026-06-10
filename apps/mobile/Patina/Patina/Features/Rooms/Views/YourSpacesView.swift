@@ -18,6 +18,10 @@ struct YourSpacesView: View {
     /// Toggled by the `?` button in the header.
     @State private var isHelpPanelPresented: Bool = false
 
+    /// R14: scan-upload sync state. `RoomScanSyncService` is `@Observable`,
+    /// so reading its properties in `body` keeps the pill live.
+    private var syncService: RoomScanSyncService { .shared }
+
     var body: some View {
         ZStack {
             PatinaColors.offWhite.ignoresSafeArea()
@@ -30,6 +34,12 @@ struct YourSpacesView: View {
                         header
                             .padding(.horizontal, 20)
                             .padding(.top, 56)
+
+                        // R14: quiet sync pill — only present while an upload
+                        // is in flight or parked waiting for a connection.
+                        syncStatusPill
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 20)
 
                         // Whole Home bar with a sibling HelpInfoIcon — the
                         // bar itself stays a tappable navigation target, the
@@ -134,6 +144,10 @@ struct YourSpacesView: View {
 
     private var emptyState: some View {
         VStack(spacing: 16) {
+            // R14: a just-finished scan uploads before any local room card
+            // exists, so the empty state needs the pill too.
+            syncStatusPill
+                .padding(.top, 72)
             Spacer()
             ZStack {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -178,6 +192,38 @@ struct YourSpacesView: View {
             Spacer()
         }
         .padding(.horizontal, 32)
+    }
+
+    // MARK: - Sync status (R14)
+
+    /// Quiet, header-level sync pill. `RoomScanSyncService` doesn't expose
+    /// per-room upload state, so this is the honest aggregate version:
+    /// "Uploading…" while scan data is in flight, "Will retry when online"
+    /// when uploads are parked offline. Renders nothing otherwise.
+    @ViewBuilder
+    private var syncStatusPill: some View {
+        if !syncService.isNetworkAvailable && syncService.pendingUploads > 0 {
+            syncPill(text: "Will retry when online", systemImage: "wifi.slash")
+        } else if syncService.isSyncing {
+            syncPill(text: "Uploading…", systemImage: "arrow.up.circle")
+        }
+    }
+
+    private func syncPill(text: String, systemImage: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: systemImage)
+                .font(.system(size: 9, weight: .regular))
+            Text(text)
+                .font(.custom("DMMono-Regular", size: 9))
+                .tracking(0.5)
+                .textCase(.uppercase)
+        }
+        .foregroundStyle(PatinaColors.agedOak)
+        .padding(.vertical, 4)
+        .padding(.horizontal, 10)
+        .background(Capsule().fill(PatinaColors.softCream))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(text))
     }
 
     // MARK: - Aggregates

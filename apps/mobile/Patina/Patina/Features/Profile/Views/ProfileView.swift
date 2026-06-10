@@ -206,8 +206,10 @@ struct ProfileView: View {
 
     private func roomCard(_ room: RoomModel) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            PatinaGradients.warm
-                .frame(height: 100)
+            // Theme V: use the room's scan hero photo when one exists
+            // instead of a bare gradient; falls back to the room-type
+            // gradient for unscanned/manual rooms.
+            RoomCardHeroImage(room: room)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(room.name)
@@ -249,6 +251,113 @@ struct ProfileView: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Room card hero (Theme V)
+
+/// Hero image for a profile room card. Prefers the room's scan hero photo —
+/// the legacy v1 `heroFrameData` blob first, then the hero photo inside the
+/// newest v2/v3 scan bundle on disk (same bundle layout ScanReviewPhotoLoader
+/// reads) — and falls back to the room-type gradient when neither exists.
+private struct RoomCardHeroImage: View {
+    let room: RoomModel
+
+    @Environment(\.modelContext) private var modelContext
+    @State private var heroImage: UIImage?
+
+    var body: some View {
+        Group {
+            if let heroImage {
+                Image(uiImage: heroImage)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                gradient
+            }
+        }
+        .frame(width: 140, height: 100)
+        .clipped()
+        .task(id: room.id) {
+            await loadHero()
+        }
+    }
+
+    /// Room-type gradient fallback — same mapping RoomGalleryCard and
+    /// RoomProjectView use, so the profile cards stay consistent with the
+    /// rest of the Room System until a photo exists.
+    private var gradient: LinearGradient {
+        switch room.roomType.lowercased() {
+        case "living", "living_room", "living room": return PatinaGradients.warm
+        case "bedroom":                               return PatinaGradients.dusk
+        case "office":                                return PatinaGradients.sageGradient
+        case "dining", "dining_room":                 return PatinaGradients.earth
+        case "kitchen":                               return PatinaGradients.rattan
+        default:                                      return PatinaGradients.linen
+        }
+    }
+
+    private func loadHero() async {
+        // 1. Legacy v1 single hero frame stored directly on the room.
+        if let data = room.heroFrameData {
+            let decoded = await Task.detached(priority: .utility) {
+                UIImage(data: data)
+            }.value
+            if let decoded {
+                heroImage = decoded
+                return
+            }
+        }
+
+        // 2. v2/v3 scan bundle — newest RoomScanPackage for this room, hero
+        //    photo (review thumbnail preferred) read off disk.
+        guard let url = bundleHeroPhotoURL() else { return }
+        let decoded = await Task.detached(priority: .utility) { () -> UIImage? in
+            guard let data = try? Data(contentsOf: url) else { return nil }
+            return UIImage(data: data)
+        }.value
+        if let decoded {
+            heroImage = decoded
+        }
+    }
+
+    /// Resolve the on-disk URL of the hero photo in the room's most recent
+    /// scan bundle (Application Support/{package.bundlePath}). Hero pick
+    /// order mirrors the review step: user-picked hero id → user-selected
+    /// flag → captured hero kind → best quality score.
+    private func bundleHeroPhotoURL() -> URL? {
+        let roomId = room.id
+        var descriptor = FetchDescriptor<RoomScanPackage>(
+            predicate: #Predicate { $0.roomLocalId == roomId },
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+        guard let package = try? modelContext.fetch(descriptor).first else { return nil }
+
+        let fm = FileManager.default
+        guard let appSupport = try? fm.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: false
+        ) else { return nil }
+        let bundleURL = appSupport.appendingPathComponent(package.bundlePath, isDirectory: true)
+        guard let manifest = try? ScanBundleWriter.readManifest(at: bundleURL) else { return nil }
+
+        let photos = manifest.photos
+        let hero = photos.first(where: { $0.id == package.heroPhotoId })
+            ?? photos.first(where: { $0.isUserSelectedHero })
+            ?? photos.first(where: { $0.kind == .hero })
+            ?? photos.max(by: { ($0.qualityScore ?? 0) < ($1.qualityScore ?? 0) })
+        guard let hero else { return nil }
+
+        // The ~256px review thumbnail is plenty for a 140pt card; fall back
+        // to the full-resolution photo when no thumbnail was generated.
+        for relative in [hero.thumbnailRelativePath, hero.relativePath].compactMap({ $0 }) {
+            let url = bundleURL.appendingPathComponent(relative)
+            if fm.fileExists(atPath: url.path) { return url }
+        }
+        return nil
     }
 }
 

@@ -4,51 +4,64 @@
 //
 //  One saved-item row inside Room Project view. 64×64 thumbnail,
 //  optional AR badge, maker + name + price, trailing ⋯ action button.
+//  The row body itself is a Button (R10) — tapping anywhere outside the
+//  ⋯ overflow opens the piece detail via the `onTap` closure.
 //
 
 import SwiftUI
 
 struct RoomItemRow: View {
     let item: SavedItem
+    var onTap: () -> Void = {}
     var onActions: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 12) {
-            ZStack(alignment: .bottomTrailing) {
-                item.placeholderGradient
-                    .frame(width: 64, height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                if item.hasAR {
-                    Circle()
-                        .fill(PatinaColors.clay)
-                        .frame(width: 18, height: 18)
-                        .overlay(
-                            Text("◎")
-                                .font(.system(size: 9))
-                                .foregroundStyle(PatinaColors.offWhite)
-                        )
-                        .padding(3)
-                }
-            }
+            // R10: the row content is a real Button so saved items can be
+            // opened. The inner ⋯ Button stays a separate sibling target —
+            // both use .buttonStyle(.plain) so the two don't conflict.
+            Button(action: onTap) {
+                HStack(spacing: 12) {
+                    ZStack(alignment: .bottomTrailing) {
+                        item.placeholderGradient
+                            .frame(width: 64, height: 64)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        if item.hasAR {
+                            Circle()
+                                .fill(PatinaColors.clay)
+                                .frame(width: 18, height: 18)
+                                .overlay(
+                                    Text("◎")
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(PatinaColors.offWhite)
+                                )
+                                .padding(3)
+                        }
+                    }
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.makerName)
-                    .font(PatinaTypography.bodySmall)
-                    .tracking(0.5)
-                    .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.agedOak)
-                Text(item.productName)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(PatinaColors.charcoal)
-                    .lineLimit(2)
-                Text(item.fullFormattedPrice)
-                    .font(.custom("PlayfairDisplay-Medium", size: 15, relativeTo: .subheadline))
-                    .foregroundStyle(PatinaColors.charcoal)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.makerName)
+                            .font(PatinaTypography.bodySmall)
+                            .tracking(0.5)
+                            .textCase(.uppercase)
+                            .foregroundStyle(PatinaColors.agedOak)
+                        Text(item.productName)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(PatinaColors.charcoal)
+                            .lineLimit(2)
+                        Text(item.fullFormattedPrice)
+                            .font(.custom("PlayfairDisplay-Medium", size: 15, relativeTo: .subheadline))
+                            .foregroundStyle(PatinaColors.charcoal)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(rowAccessibilityLabel)
-
-            Spacer(minLength: 0)
+            .accessibilityHint("Opens the detail page for \(item.productName).")
 
             Button(action: onActions) {
                 Text("⋯")

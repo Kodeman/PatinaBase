@@ -132,4 +132,14 @@ final class ProductDetailViewModel {
             )
         }
     }
+
+    /// Fired when the user taps the ShareLink in the top bar (R25).
+    func trackShare() {
+        guard let product else { return }
+        Task {
+            await ProductAPIClient.shared.trackInteraction(
+                InteractionEvent(productId: product.id, eventType: .share, metadata: nil)
+            )
+        }
+    }
 }
