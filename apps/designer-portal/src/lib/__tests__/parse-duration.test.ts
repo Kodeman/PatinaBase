@@ -1,4 +1,4 @@
-import { parseDurationToMinutes, formatMinutes } from '../parse-duration';
+import { parseDurationToMinutes, formatMinutes, formatElapsedSeconds } from '../parse-duration';
 
 describe('parseDurationToMinutes', () => {
   it('parses h:mm', () => {
@@ -48,5 +48,21 @@ describe('formatMinutes', () => {
     expect(formatMinutes(90)).toBe('1:30');
     expect(formatMinutes(45)).toBe('0:45');
     expect(formatMinutes(605)).toBe('10:05');
+  });
+});
+
+describe('formatElapsedSeconds', () => {
+  it('formats h:mm:ss', () => {
+    expect(formatElapsedSeconds(0)).toBe('0:00:00');
+    expect(formatElapsedSeconds(5)).toBe('0:00:05');
+    expect(formatElapsedSeconds(65)).toBe('0:01:05');
+    expect(formatElapsedSeconds(3600)).toBe('1:00:00');
+    expect(formatElapsedSeconds(5025)).toBe('1:23:45');
+    expect(formatElapsedSeconds(36005)).toBe('10:00:05');
+  });
+
+  it('clamps negative and fractional input down', () => {
+    expect(formatElapsedSeconds(-10)).toBe('0:00:00');
+    expect(formatElapsedSeconds(59.9)).toBe('0:00:59');
   });
 });

@@ -6,6 +6,7 @@ import { useActiveZone } from '@/hooks/use-active-zone';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { ZONES, type ZoneKey } from '@/config/navigation';
 import { UtilityBar } from './utility-bar';
+import { RunningTimerChip } from './time/running-timer-chip';
 
 // ─── First Project Walkthrough tour anchors (Sprint 3 W1) ────────────────────
 //
@@ -85,6 +86,9 @@ export function TopBar() {
             );
           })}
         </nav>
+
+        {/* Running timer chip — renders nothing unless a timer is live */}
+        <RunningTimerChip />
 
         {/* Utility Bar — Search, Notifications, Messages, Profile */}
         <UtilityBar />

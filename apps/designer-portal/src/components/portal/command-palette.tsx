@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   CommandDialog,
@@ -21,15 +21,25 @@ import {
   Settings,
   Search,
   GitBranch,
+  Timer,
 } from 'lucide-react';
 import { useAllDecisions } from '@patina/supabase';
 import { useCommandPalette } from '@/contexts/command-palette-context';
+import { useProjects } from '@/hooks/use-projects';
+import { useRunningTimer, useStartTimer } from '@/hooks/use-time-tracking';
+import { useToast } from '@/components/portal/toast-provider';
+import { StopTimerDialog } from '@/components/portal/time/stop-timer-dialog';
+
+// Mock fixture projects use slug ids ('olsen-residence') — timers need a real
+// projects row, so only UUID-backed projects are startable.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function CommandPalette() {
   const { isOpen, close } = useCommandPalette();
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [stopTimerOpen, setStopTimerOpen] = useState(false);
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedSearch(search.trim()), 150);
@@ -48,6 +58,37 @@ export function CommandPalette() {
   );
   const decisions = debouncedSearch.length >= 2 ? (decisionResults ?? []).slice(0, 6) : [];
 
+  // ── Time group — stop the running timer, or start one on an active project ──
+  const { data: runningTimer } = useRunningTimer();
+  const { data: projects } = useProjects();
+  const startTimer = useStartTimer();
+  const { toast } = useToast();
+
+  const timerProjects = useMemo(() => {
+    if (runningTimer) return [];
+    const q = search.trim().toLowerCase();
+    return ((projects ?? []) as Array<{ id: string; name?: string | null; status?: string | null }>)
+      .filter(
+        (p) =>
+          UUID_RE.test(p.id) &&
+          (p.status === 'active' || p.status === 'planning')
+      )
+      .filter((p) => !q || (p.name ?? '').toLowerCase().includes(q))
+      .slice(0, 6);
+  }, [projects, runningTimer, search]);
+
+  const handleStartTimer = useCallback(
+    (projectId: string, projectName: string) => {
+      startTimer.mutate(
+        { projectId },
+        // Failure toasts (incl. the 23505 already-running case) live in the hook.
+        { onSuccess: () => toast(`Timer started on ${projectName}`, 'success') }
+      );
+      close();
+    },
+    [startTimer, toast, close]
+  );
+
   const navigate = useCallback(
     (href: string) => {
       router.push(href);
@@ -57,6 +98,7 @@ export function CommandPalette() {
   );
 
   return (
+    <>
     <CommandDialog open={isOpen} onOpenChange={(open) => !open && close()}>
       <CommandInput
         placeholder="Search projects, products, clients, decisions..."
@@ -92,6 +134,37 @@ export function CommandPalette() {
                   </CommandItem>
                 );
               })}
+            </CommandGroup>
+            <CommandSeparator />
+          </>
+        )}
+
+        {(runningTimer || timerProjects.length > 0) && (
+          <>
+            <CommandGroup heading="Time">
+              {runningTimer ? (
+                <CommandItem
+                  value={`stop-timer-${runningTimer.project?.name ?? 'running'}`}
+                  onSelect={() => {
+                    close();
+                    setStopTimerOpen(true);
+                  }}
+                >
+                  <Timer className="mr-2 h-4 w-4" />
+                  Stop timer — {runningTimer.project?.name ?? 'Untitled project'}
+                </CommandItem>
+              ) : (
+                timerProjects.map((p) => (
+                  <CommandItem
+                    key={p.id}
+                    value={`start-timer-${p.id}-${p.name ?? ''}`}
+                    onSelect={() => handleStartTimer(p.id, p.name ?? 'project')}
+                  >
+                    <Timer className="mr-2 h-4 w-4" />
+                    Start timer: {p.name ?? 'Untitled project'}
+                  </CommandItem>
+                ))
+              )}
             </CommandGroup>
             <CommandSeparator />
           </>
@@ -159,5 +232,12 @@ export function CommandPalette() {
         </CommandGroup>
       </CommandList>
     </CommandDialog>
+
+    {/* Stop-timer dialog (palette-owned instance — the chip owns its own).
+        Mount-conditional so state re-initializes from the timer each open. */}
+    {runningTimer && stopTimerOpen && (
+      <StopTimerDialog timer={runningTimer} onClose={() => setStopTimerOpen(false)} />
+    )}
+    </>
   );
 }

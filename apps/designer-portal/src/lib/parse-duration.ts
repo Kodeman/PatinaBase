@@ -56,3 +56,15 @@ export function formatMinutes(minutes: number): string {
   const m = Math.round(minutes % 60);
   return `${h}:${String(m).padStart(2, '0')}`;
 }
+
+/**
+ * Format elapsed seconds as a ticking timer readout — H:MM:SS.
+ * 5025 → "1:23:45", 65 → "0:01:05". Negative/fractional input clamps down.
+ */
+export function formatElapsedSeconds(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}

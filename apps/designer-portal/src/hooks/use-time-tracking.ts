@@ -1,16 +1,18 @@
 /**
  * Hooks for Project Time Tracking (public.project_time_entries, 00177).
  *
- * Wave 1 = manual entries + summaries. Running-timer hooks land in a later
- * wave (the table already supports them: duration_minutes IS NULL = running,
- * one per user). database.types.ts is not regenerated yet, so the Supabase
- * client is cast `as any` like the other portal hooks (see use-projects.ts).
+ * Wave 1 = manual entries + summaries. Wave 2 adds the running timer:
+ * duration_minutes IS NULL = a running timer, one per user (partial unique
+ * index — a duplicate INSERT raises SQLSTATE 23505). database.types.ts is not
+ * regenerated yet, so the Supabase client is cast `as any` like the other
+ * portal hooks (see use-projects.ts).
  */
 
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '@patina/supabase';
 import { normalizePhaseSlug, ALL_PHASE_SLUGS, type PhaseSlug } from '@patina/types';
 import { queryKeys } from '@/lib/react-query';
+import { useToast } from '@/components/portal/toast-provider';
 import type { MockTimeTracking, TimeEntry as TimeSummaryEntry } from '@/types/project-ui';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -322,6 +324,195 @@ export function useDeleteTimeEntry() {
       if (error) throw error;
     },
     onSuccess: (_, { projectId }) => invalidateProjectTime(queryClient, projectId),
+  });
+}
+
+// ── Running timer (Wave 2) ──
+// duration_minutes IS NULL marks the (single, per-user) running row. The chip
+// ticks client-side from started_at, so no refetchInterval here.
+
+export interface RunningTimer {
+  id: string;
+  project_id: string;
+  phase_key: string | null;
+  task_id: string | null;
+  user_id: string;
+  started_at: string;
+  notes: string | null;
+  billable: boolean;
+  project?: { name: string | null; current_phase: string | null } | null;
+}
+
+/** The signed-in user's running timer, or null. */
+export function useRunningTimer() {
+  return useQuery({
+    queryKey: queryKeys.time.runningTimer(),
+    queryFn: async (): Promise<RunningTimer | null> => {
+      const supabase = getSupabase();
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id;
+      if (!userId) return null;
+
+      const { data, error } = await supabase
+        .from('project_time_entries')
+        .select('*, project:projects(name, current_phase)')
+        .is('duration_minutes', null)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (error) throw error;
+      return (data ?? null) as RunningTimer | null;
+    },
+    staleTime: 30_000,
+  });
+}
+
+export interface StartTimerInput {
+  projectId: string;
+  phaseKey?: string | null;
+  taskId?: string | null;
+}
+
+/**
+ * Start a running timer. The partial unique index enforces one per user —
+ * a duplicate start surfaces as SQLSTATE 23505, which we toast (and refresh
+ * the runningTimer query so the chip shows the existing timer).
+ */
+export function useStartTimer() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (input: StartTimerInput) => {
+      const supabase = getSupabase();
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id;
+      if (!userId) throw new Error('Not signed in');
+
+      const { data, error } = await supabase
+        .from('project_time_entries')
+        .insert({
+          project_id: input.projectId,
+          user_id: userId,
+          duration_minutes: null, // running
+          started_at: new Date().toISOString(),
+          phase_key: input.phaseKey ?? null,
+          task_id: input.taskId ?? null,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data as RunningTimer;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
+    },
+    onError: (error: unknown) => {
+      if ((error as { code?: string } | null)?.code === '23505') {
+        toast('You already have a timer running', 'warning');
+        // Another tab/device may have started it — make the chip catch up.
+        queryClient.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
+      } else {
+        toast('Could not start the timer. Please try again.', 'error');
+      }
+    },
+  });
+}
+
+export interface StopTimerInput {
+  entryId: string;
+  notes?: string | null;
+  phaseKey?: string | null;
+  billable?: boolean;
+}
+
+/**
+ * Stop a running timer: snapshot the hourly rate (project change-order rate →
+ * profile default — the same precedence the project_unbilled_time view in
+ * 00177 resolves at read time) and write the elapsed duration (min 1 minute).
+ */
+export function useStopTimer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: StopTimerInput) => {
+      const supabase = getSupabase();
+
+      // Re-read the row — started_at/project_id from the server, not the cache.
+      const { data: entry, error: entryError } = await supabase
+        .from('project_time_entries')
+        .select('id, project_id, user_id, started_at, duration_minutes')
+        .eq('id', input.entryId)
+        .maybeSingle();
+      if (entryError) throw entryError;
+      if (!entry) throw new Error('Timer not found — it may have been discarded elsewhere.');
+      if (entry.duration_minutes !== null) throw new Error('This timer was already stopped.');
+
+      // Rate snapshot. NULLIF(..., 0) parity with the view: a 0 change-order
+      // rate falls through to the profile default.
+      const [projectRes, profileRes] = await Promise.all([
+        supabase
+          .from('projects')
+          .select('change_order_terms')
+          .eq('id', entry.project_id)
+          .maybeSingle(),
+        supabase
+          .from('profiles')
+          .select('default_hourly_rate_cents')
+          .eq('id', entry.user_id)
+          .maybeSingle(),
+      ]);
+      if (projectRes.error) throw projectRes.error;
+      if (profileRes.error) throw profileRes.error;
+
+      const projectRateRaw = Number(projectRes.data?.change_order_terms?.hourly_rate_cents);
+      const projectRate =
+        Number.isFinite(projectRateRaw) && projectRateRaw !== 0 ? Math.round(projectRateRaw) : null;
+      const hourlyRateCents = projectRate ?? profileRes.data?.default_hourly_rate_cents ?? null;
+
+      const elapsedSeconds = Math.max(0, (Date.now() - new Date(entry.started_at).getTime()) / 1000);
+      const durationMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
+
+      const updates: Record<string, unknown> = {
+        duration_minutes: durationMinutes,
+        hourly_rate_cents: hourlyRateCents,
+      };
+      if (input.notes !== undefined) updates.notes = input.notes;
+      if (input.phaseKey !== undefined) updates.phase_key = input.phaseKey;
+      if (input.billable !== undefined) updates.billable = input.billable;
+
+      const { data, error } = await supabase
+        .from('project_time_entries')
+        .update(updates)
+        .eq('id', input.entryId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as ProjectTimeEntry;
+    },
+    onSuccess: (entry) => {
+      // invalidateProjectTime covers queryKeys.time.all (→ runningTimer) too.
+      invalidateProjectTime(queryClient, entry.project_id);
+    },
+  });
+}
+
+/** Discard the running timer — delete the row, log nothing. */
+export function useDiscardTimer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ entryId }: { entryId: string }) => {
+      const supabase = getSupabase();
+      const { error } = await supabase
+        .from('project_time_entries')
+        .delete()
+        .eq('id', entryId)
+        .is('duration_minutes', null); // never delete a completed entry by accident
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
+    },
   });
 }
 
