@@ -255,6 +255,12 @@ inspector_port = 8083
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
 # entrypoint = "./functions/MY_FUNCTION_NAME/index.ts"
 
+# Stripe calls this endpoint directly and can't carry a Supabase JWT.
+# Authenticity is enforced inside the function via the Stripe signature
+# (STRIPE_WEBHOOK_SECRET).
+[functions.stripe-webhook]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

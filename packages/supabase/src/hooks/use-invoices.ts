@@ -6,6 +6,7 @@
 // contract until `pnpm db:generate` is run. Follows use-procurement.ts house
 // style.
 
+import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 
@@ -310,6 +311,105 @@ export function useProjectInvoices(projectId: string | null | undefined) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// A/R AGING (client-side bucketing of useInvoices data)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type ArBucketKey = 'current' | 'days_1_30' | 'days_31_60' | 'days_61_90' | 'days_90_plus';
+
+export const AR_BUCKET_LABELS: Record<ArBucketKey, string> = {
+  current: 'Current',
+  days_1_30: '1–30 days',
+  days_31_60: '31–60 days',
+  days_61_90: '61–90 days',
+  days_90_plus: '90+ days',
+};
+
+export interface ArAgingBucket {
+  key: ArBucketKey;
+  label: string;
+  invoices: Invoice[];
+  balanceCents: number;
+}
+
+export interface ArAging {
+  /** Open receivables (sent / partially_paid with a due date), due-date ascending. */
+  openInvoices: Invoice[];
+  /** Open invoices that exhausted the automated reminder cadence (ar_flagged_at set). */
+  flagged: Invoice[];
+  /** Aging buckets over openInvoices, keyed off days past due_date. */
+  buckets: ArAgingBucket[];
+  totalBalanceCents: number;
+}
+
+/** Remaining balance on an invoice header row. */
+function arBalanceCents(invoice: Invoice): number {
+  return Math.max((invoice.total_cents || 0) - (invoice.amount_paid_cents || 0), 0);
+}
+
+/** Whole days past due (UTC-pinned bare DATE math). <= 0 means not yet due. */
+export function invoiceDaysOverdue(invoice: Pick<Invoice, 'due_date'>): number {
+  if (!invoice.due_date) return 0;
+  const due = Date.parse(`${invoice.due_date.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(due)) return 0;
+  const now = new Date();
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.floor((today - due) / 86_400_000);
+}
+
+function arBucketKey(daysOverdue: number): ArBucketKey {
+  if (daysOverdue <= 0) return 'current';
+  if (daysOverdue <= 30) return 'days_1_30';
+  if (daysOverdue <= 60) return 'days_31_60';
+  if (daysOverdue <= 90) return 'days_61_90';
+  return 'days_90_plus';
+}
+
+export function computeArAging(invoices: Invoice[]): ArAging {
+  const openInvoices = invoices
+    .filter(
+      (inv) =>
+        (inv.status === 'sent' || inv.status === 'partially_paid') && inv.due_date != null
+    )
+    .sort((a, b) => (a.due_date! < b.due_date! ? -1 : a.due_date! > b.due_date! ? 1 : 0));
+
+  const buckets: ArAgingBucket[] = (
+    ['current', 'days_1_30', 'days_31_60', 'days_61_90', 'days_90_plus'] as ArBucketKey[]
+  ).map((key) => ({ key, label: AR_BUCKET_LABELS[key], invoices: [], balanceCents: 0 }));
+  const byKey = Object.fromEntries(buckets.map((b) => [b.key, b])) as Record<
+    ArBucketKey,
+    ArAgingBucket
+  >;
+
+  let totalBalanceCents = 0;
+  for (const inv of openInvoices) {
+    const bucket = byKey[arBucketKey(invoiceDaysOverdue(inv))];
+    bucket.invoices.push(inv);
+    bucket.balanceCents += arBalanceCents(inv);
+    totalBalanceCents += arBalanceCents(inv);
+  }
+
+  return {
+    openInvoices,
+    flagged: openInvoices.filter((inv) => inv.ar_flagged_at != null),
+    buckets,
+    totalBalanceCents,
+  };
+}
+
+/**
+ * A/R aging view for the designer billing surface: open invoices bucketed
+ * (current / 1-30 / 31-60 / 61-90 / 90+) by days past due_date, plus the
+ * "needs follow-up" set (ar_flagged_at stamped by the invoice-reminders
+ * cadence). Pure client-side derivation over useInvoices — designer invoice
+ * volumes are small.
+ */
+export function useArAging() {
+  const query = useInvoices();
+  const aging = useMemo(() => computeArAging(query.data ?? []), [query.data]);
+  return { ...query, aging };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MUTATION HOOKS
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -554,6 +654,10 @@ export function useRecordPayment() {
  * edge function (designer JWT goes along automatically; the function verifies
  * ownership + issued status, emails the client through the compliance
  * chokepoint, and stamps sent_at if missing). Optional personal message.
+ *
+ * Pass type: 'reminder' for a designer-initiated manual nudge (A/R page):
+ * renders the overdue-notice template instead of invoice_sent and leaves the
+ * automated cadence counters (reminder_count / last_reminder_at) untouched.
  */
 export function useSendInvoice() {
   const queryClient = useQueryClient();
@@ -561,10 +665,12 @@ export function useSendInvoice() {
     mutationFn: async ({
       invoiceId,
       message,
+      type,
     }: {
       invoiceId: string;
       projectId?: string;
       message?: string;
+      type?: 'sent' | 'reminder';
     }): Promise<{
       ok: boolean;
       invoiceId: string;
@@ -574,7 +680,7 @@ export function useSendInvoice() {
     }> => {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase.functions.invoke('invoice-send', {
-        body: { invoiceId, message: message?.trim() || undefined },
+        body: { invoiceId, message: message?.trim() || undefined, type },
       });
       if (error) {
         // FunctionsHttpError carries the response; surface the JSON error code
@@ -593,6 +699,39 @@ export function useSendInvoice() {
     },
     onSuccess: (_data, { projectId }) => {
       invalidateInvoiceEffects(queryClient, projectId);
+    },
+  });
+}
+
+/**
+ * Starts a Stripe Checkout session for an issued invoice's remaining balance
+ * via the create-checkout-session edge function (caller JWT goes along
+ * automatically; the function verifies the caller is the invoice's client or
+ * designer, reuses a still-open session when the amount matches, and persists
+ * a pending stripe payment row). On success redirect to the returned `url`.
+ */
+export function useStartCheckout() {
+  return useMutation({
+    mutationFn: async ({ invoiceId }: { invoiceId: string }): Promise<{ url: string }> => {
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+        body: { invoiceId },
+      });
+      if (error) {
+        // FunctionsHttpError carries the response; surface the JSON error code
+        // (e.g. invoice_not_payable, payment_processing) over the generic message.
+        let detail: string | undefined;
+        try {
+          const body = await (error as { context?: Response }).context?.json();
+          detail = body?.detail ?? body?.error;
+        } catch {
+          /* fall through to the generic message */
+        }
+        throw new Error(detail ?? error.message ?? 'Failed to start checkout');
+      }
+      if (data?.error) throw new Error(data.detail ?? data.error);
+      if (!data?.url) throw new Error('No checkout URL returned');
+      return data as { url: string };
     },
   });
 }

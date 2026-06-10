@@ -7,8 +7,10 @@
 // client-invite: inline styles, Inter stack, Patina ink (#2c2926) on white,
 // muted #766a5c metadata, clay-dark button.
 //
-// buildPaymentReceiptEmail is exported for the Stripe wave (payment webhook →
-// receipt); it is intentionally unused by invoice-send today.
+// buildPaymentReceiptEmail and buildPaymentFailedEmail are consumed by the
+// stripe-webhook function (Stripe wave): receipt when a payment flips to
+// succeeded, failure notice on checkout.session.async_payment_failed (ACH
+// bank debit returned after checkout).
 //
 // Currency is formatted inline (Intl) because edge functions are Deno and
 // cannot import the Node @patina/shared package — keep the cents → dollars
@@ -117,6 +119,178 @@ export function buildInvoiceSentEmail(params: InvoiceSentEmailParams): RenderedI
   return { subject, html };
 }
 
+// ─── A/R reminder cadence templates (invoice-reminders edge function) ────────
+//
+// Four client-facing stages keyed to invoices.reminder_count (offsets vs
+// due_date: -3 / +1 / +7 / +14), plus a designer-facing escalation once the
+// final notice has gone out and the invoice gets ar_flagged_at. Tone escalates
+// per stage; the frame/wrap stays identical to buildInvoiceSentEmail.
+
+export interface InvoiceReminderEmailParams {
+  invoiceNumber: string;
+  projectName: string;
+  designerName: string;
+  /** Greeting name; falls back to "there". */
+  clientName?: string | null;
+  /** Remaining balance (total - paid), not the original total. */
+  balanceCents: number;
+  /** DATE string from invoices.due_date. */
+  dueDate?: string | null;
+  /** Absolute client-portal link to the invoice. */
+  portalUrl: string;
+  currency?: string;
+}
+
+function reminderFacts(params: InvoiceReminderEmailParams): string {
+  const due = formatInvoiceEmailDate(params.dueDate);
+  return `
+      <p style="margin:0 0 12px"><strong>Invoice:</strong> ${escapeHtml(params.invoiceNumber)}</p>
+      <p style="margin:0 0 12px"><strong>Balance due:</strong> ${formatInvoiceCurrency(
+        params.balanceCents,
+        params.currency,
+      )}</p>
+      ${due ? `<p style="margin:0 0 12px"><strong>Due date:</strong> ${due}</p>` : ""}
+  `;
+}
+
+/** Stage 0 (due_date − 3 days): friendly upcoming-due nudge. */
+export function buildInvoiceUpcomingReminderEmail(
+  params: InvoiceReminderEmailParams,
+): RenderedInvoiceEmail {
+  const clientName = params.clientName?.trim() || "there";
+  const subject = `Reminder: invoice ${params.invoiceNumber} is due soon — ${params.projectName}`;
+  const html = wrap(
+    `
+      <p>Hi ${escapeHtml(clientName)},</p>
+      <p>Just a friendly reminder that ${escapeHtml(params.designerName)}&rsquo;s invoice for
+        <strong>${escapeHtml(params.projectName)}</strong> is coming due.</p>
+      ${reminderFacts(params)}
+      <p style="margin:0 0 12px;color:#766a5c"><em>If you&rsquo;ve already arranged payment, you can disregard this note.</em></p>
+    `,
+    params.portalUrl,
+    "View &amp; pay invoice",
+  );
+  return { subject, html };
+}
+
+/** Stage 1 (due_date + 1 day): the invoice is now past due. */
+export function buildInvoiceOverdueNoticeEmail(
+  params: InvoiceReminderEmailParams,
+): RenderedInvoiceEmail {
+  const clientName = params.clientName?.trim() || "there";
+  const subject = `Invoice ${params.invoiceNumber} is past due — ${params.projectName}`;
+  const html = wrap(
+    `
+      <p>Hi ${escapeHtml(clientName)},</p>
+      <p>Invoice <strong>${escapeHtml(params.invoiceNumber)}</strong> from
+        ${escapeHtml(params.designerName)} for <strong>${escapeHtml(params.projectName)}</strong>
+        is now past its due date.</p>
+      ${reminderFacts(params)}
+      <p style="margin:0 0 12px">When you have a moment, please settle the balance so the project can keep moving without interruption.</p>
+      <p style="margin:0 0 12px;color:#766a5c"><em>If payment is already on its way, thank you — no further action is needed.</em></p>
+    `,
+    params.portalUrl,
+    "Pay invoice",
+  );
+  return { subject, html };
+}
+
+/** Stage 2 (due_date + 7 days): firmer second notice. */
+export function buildInvoiceSecondNoticeEmail(
+  params: InvoiceReminderEmailParams,
+): RenderedInvoiceEmail {
+  const clientName = params.clientName?.trim() || "there";
+  const subject = `Second notice: invoice ${params.invoiceNumber} is overdue — ${params.projectName}`;
+  const html = wrap(
+    `
+      <p>Hi ${escapeHtml(clientName)},</p>
+      <p>This is a second notice that invoice <strong>${escapeHtml(params.invoiceNumber)}</strong>
+        from ${escapeHtml(params.designerName)} for <strong>${escapeHtml(params.projectName)}</strong>
+        remains unpaid a week past its due date.</p>
+      ${reminderFacts(params)}
+      <p style="margin:0 0 12px">Please arrange payment promptly. If something about this invoice looks off, reply to this email or reach out to ${escapeHtml(
+        params.designerName,
+      )} directly so it can be sorted out.</p>
+    `,
+    params.portalUrl,
+    "Pay invoice now",
+  );
+  return { subject, html };
+}
+
+/** Stage 3 (due_date + 14 days): final automated notice before A/R flag. */
+export function buildInvoiceFinalNoticeEmail(
+  params: InvoiceReminderEmailParams,
+): RenderedInvoiceEmail {
+  const clientName = params.clientName?.trim() || "there";
+  const subject = `Final notice: invoice ${params.invoiceNumber} is seriously overdue — ${params.projectName}`;
+  const html = wrap(
+    `
+      <p>Hi ${escapeHtml(clientName)},</p>
+      <p>This is the <strong>final automated notice</strong> for invoice
+        <strong>${escapeHtml(params.invoiceNumber)}</strong> from ${escapeHtml(
+          params.designerName,
+        )} for <strong>${escapeHtml(params.projectName)}</strong>, now two weeks past due.</p>
+      ${reminderFacts(params)}
+      <p style="margin:0 0 12px">Immediate payment is required. The outstanding balance has been flagged for direct follow-up by ${escapeHtml(
+        params.designerName,
+      )}, and continued non-payment may pause work on the project.</p>
+    `,
+    params.portalUrl,
+    "Pay invoice immediately",
+  );
+  return { subject, html };
+}
+
+export interface InvoiceArEscalationEmailParams {
+  invoiceNumber: string;
+  projectName: string;
+  clientName?: string | null;
+  /** Greeting name for the designer; falls back to "there". */
+  designerName?: string | null;
+  balanceCents: number;
+  dueDate?: string | null;
+  daysOverdue: number;
+  /** Absolute designer-portal link to the A/R page. */
+  arUrl: string;
+  currency?: string;
+}
+
+/**
+ * Designer-facing escalation, sent once when the automated cadence is
+ * exhausted (final notice delivered, ar_flagged_at stamped). The client
+ * receives no further automated emails after this.
+ */
+export function buildInvoiceArEscalationEmail(
+  params: InvoiceArEscalationEmailParams,
+): RenderedInvoiceEmail {
+  const designerName = params.designerName?.trim() || "there";
+  const clientLine = params.clientName?.trim()
+    ? ` to ${escapeHtml(params.clientName.trim())}`
+    : "";
+  const due = formatInvoiceEmailDate(params.dueDate);
+  const subject = `${params.invoiceNumber} is ${params.daysOverdue}+ days overdue — automated reminders exhausted`;
+  const html = wrap(
+    `
+      <p>Hi ${escapeHtml(designerName)},</p>
+      <p>Invoice <strong>${escapeHtml(params.invoiceNumber)}</strong>${clientLine} for
+        <strong>${escapeHtml(params.projectName)}</strong> is now
+        <strong>${params.daysOverdue}+ days overdue</strong> and the automated reminder
+        sequence (upcoming nudge, overdue notice, second notice, final notice) has been
+        exhausted without payment.</p>
+      <p style="margin:0 0 12px"><strong>Outstanding balance:</strong> ${formatInvoiceCurrency(
+        params.balanceCents,
+        params.currency,
+      )}</p>
+      ${due ? `<p style="margin:0 0 12px"><strong>Original due date:</strong> ${due}</p>` : ""}
+      <p style="margin:0 0 12px">No further automated emails will be sent to the client. This invoice has been flagged in your A/R workspace for direct follow-up — a phone call or personal note tends to work best at this stage.</p>
+    `,
+    params.arUrl,
+    "Open A/R workspace",
+  );
+  return { subject, html };
+}
+
 export interface PaymentReceiptEmailParams {
   invoiceNumber: string;
   projectName: string;
@@ -166,6 +340,53 @@ export function buildPaymentReceiptEmail(
     `,
     params.portalUrl,
     "View receipt",
+  );
+
+  return { subject, html };
+}
+
+export interface PaymentFailedEmailParams {
+  invoiceNumber: string;
+  projectName: string;
+  designerName: string;
+  clientName?: string | null;
+  /** The payment amount that failed to clear. */
+  amountCents: number;
+  portalUrl: string;
+  currency?: string;
+}
+
+/**
+ * Sent to the client when an asynchronous payment (ACH bank debit started in
+ * Stripe Checkout) fails to clear — e.g. insufficient funds or a returned
+ * debit. The invoice balance is unchanged; the client should try again.
+ * Consumed by stripe-webhook on checkout.session.async_payment_failed.
+ */
+export function buildPaymentFailedEmail(
+  params: PaymentFailedEmailParams,
+): RenderedInvoiceEmail {
+  const clientName = params.clientName?.trim() || "there";
+  const subject = `Payment didn't go through — invoice ${params.invoiceNumber}`;
+
+  const html = wrap(
+    `
+      <p>Hi ${escapeHtml(clientName)},</p>
+      <p>Unfortunately your bank transfer of <strong>${formatInvoiceCurrency(
+        params.amountCents,
+        params.currency,
+      )}</strong> toward invoice <strong>${escapeHtml(
+        params.invoiceNumber,
+      )}</strong> for ${escapeHtml(params.projectName)}, billed by ${escapeHtml(
+        params.designerName,
+      )}, could not be completed.</p>
+      <p style="margin:0 0 12px">No money was taken, and the invoice balance is unchanged.
+        Please try again from the invoice page — you can use a card or retry the bank
+        transfer.</p>
+      <p style="margin:0 0 12px;color:#766a5c"><em>If you believe this is an error, reply to
+        this email or reach out to ${escapeHtml(params.designerName)} directly.</em></p>
+    `,
+    params.portalUrl,
+    "Try payment again",
   );
 
   return { subject, html };
