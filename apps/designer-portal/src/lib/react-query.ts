@@ -208,6 +208,7 @@ export const queryKeys = {
   time: {
     all: ['time'] as const,
     runningTimer: (userId?: string) => [...queryKeys.time.all, 'running-timer', userId] as const,
+    studioReport: (period: string) => [...queryKeys.time.all, 'studio-report', period] as const,
   },
 
   // Threads & Messages

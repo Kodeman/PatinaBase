@@ -10,6 +10,7 @@ import {
   formatInvoiceDate,
   invoiceBalanceCents,
   isInvoiceOverdue,
+  timeLineHoursLabel,
 } from '@patina/shared';
 
 // Client-facing invoice detail. RLS only exposes issued (non-draft) invoices
@@ -287,10 +288,21 @@ export default function ClientInvoiceDetailPage({
             >
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-[var(--text-primary)]">{line.description}</p>
-                {Number(line.quantity) !== 1 && (
+                {line.kind === 'time' ? (
+                  // Rolled-up design time: annotate with the logged hours from
+                  // the line metadata (quantity is a synthetic 1 — no qty math).
                   <p className="type-meta-small mt-0.5 text-[var(--text-muted)]">
-                    {Number(line.quantity)} × {formatCurrency(line.unit_amount_cents, invoice.currency)}
+                    Design time logged by your designer
+                    {timeLineHoursLabel(line.metadata)
+                      ? ` · ${timeLineHoursLabel(line.metadata)}`
+                      : ''}
                   </p>
+                ) : (
+                  Number(line.quantity) !== 1 && (
+                    <p className="type-meta-small mt-0.5 text-[var(--text-muted)]">
+                      {Number(line.quantity)} × {formatCurrency(line.unit_amount_cents, invoice.currency)}
+                    </p>
+                  )
                 )}
               </div>
               <span className="type-label text-[var(--text-primary)]">

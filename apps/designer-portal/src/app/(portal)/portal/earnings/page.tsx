@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import {
   useEarnings,
   useEarningsStats,
@@ -78,7 +79,16 @@ export default function EarningsPage() {
     <div className="pt-8">
       {/* Header */}
       <div className="mb-6 flex items-baseline justify-between">
-        <h1 className="type-section-head">Earnings</h1>
+        <div className="flex items-baseline gap-4">
+          <h1 className="type-section-head">Earnings</h1>
+          {/* Companion report: logged hours → invoices → these earnings. */}
+          <Link
+            href="/portal/time"
+            className="type-meta-small text-[var(--accent-primary)] no-underline hover:text-[var(--text-primary)]"
+          >
+            Time report &rarr;
+          </Link>
+        </div>
         <div className="flex gap-4">
           {periods.map((p) => (
             <FilterPill

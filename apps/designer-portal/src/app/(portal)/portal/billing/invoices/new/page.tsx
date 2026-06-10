@@ -7,6 +7,7 @@ import {
   useProjectPaymentMilestones,
   useProjectInvoices,
   useCreateDraftInvoice,
+  useDeleteDraftInvoice,
   type DraftLineInput,
 } from '@patina/supabase';
 import { computeInvoiceTotals, formatCurrency } from '@patina/shared';
@@ -14,6 +15,8 @@ import { ListPageHeader } from '@/components/portal/list-page-header';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { Button, Input, Select, Textarea } from '@/components/ui/controls';
 import { useHydrated } from '@/hooks/use-hydrated';
+import { useUnbilledTime, useClaimTimeEntries } from '@/hooks/use-time-tracking';
+import { buildTimeLineDraft, formatHoursLabel } from '@/lib/time-billing';
 
 interface AdHocLine {
   description: string;
@@ -55,6 +58,7 @@ export default function NewInvoicePage() {
   const [selectedMilestoneIds, setSelectedMilestoneIds] = useState<Set<string>>(
     () => new Set(preselectMilestoneId ? [preselectMilestoneId] : [])
   );
+  const [selectedTimeIds, setSelectedTimeIds] = useState<Set<string>>(() => new Set());
   const [adHocLines, setAdHocLines] = useState<AdHocLine[]>([{ ...EMPTY_ADHOC }]);
   const [taxRatePercent, setTaxRatePercent] = useState('0');
   const [termsDays, setTermsDays] = useState('15');
@@ -64,7 +68,10 @@ export default function NewInvoicePage() {
   const { data: projects, isLoading: projectsLoading } = useProjects();
   const { data: milestones } = useProjectPaymentMilestones(projectId);
   const { data: projectInvoices } = useProjectInvoices(projectId || null);
+  const { data: unbilledTime } = useUnbilledTime(projectId || null);
   const createDraft = useCreateDraftInvoice();
+  const deleteDraft = useDeleteDraftInvoice();
+  const claimTime = useClaimTimeEntries();
 
   const activeProjects = useMemo(
     () =>
@@ -104,14 +111,36 @@ export default function NewInvoicePage() {
     [milestones, billedMilestoneIds]
   );
 
-  // Drop selections that no longer apply when the project changes.
+  const unbilledEntries = useMemo(() => unbilledTime?.entries ?? [], [unbilledTime]);
+
+  // Drop selections that no longer apply when the project changes — but only
+  // once the query has actually returned, otherwise the ?milestoneId=
+  // preselect is pruned against an empty list before the data arrives.
   useEffect(() => {
+    if (!milestones) return;
     setSelectedMilestoneIds((prev) => {
       const valid = new Set(unbilledMilestones.map((m) => m.id));
       const next = new Set([...prev].filter((id) => valid.has(id)));
       return next.size === prev.size ? prev : next;
     });
-  }, [unbilledMilestones]);
+  }, [milestones, unbilledMilestones]);
+
+  useEffect(() => {
+    if (!unbilledTime) return;
+    setSelectedTimeIds((prev) => {
+      const valid = new Set(unbilledEntries.map((e) => e.id));
+      const next = new Set([...prev].filter((id) => valid.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [unbilledTime, unbilledEntries]);
+
+  // ONE kind='time' line per invoice: qty 1, unit = amount = the sum of the
+  // selected entries' view-resolved amounts; hours + entry ids ride in the
+  // description/metadata (see lib/time-billing.ts for the rationale).
+  const timeLine = useMemo(
+    () => buildTimeLineDraft(unbilledEntries.filter((e) => selectedTimeIds.has(e.id))),
+    [unbilledEntries, selectedTimeIds]
+  );
 
   const lines: DraftLineInput[] = useMemo(() => {
     const milestoneLines: DraftLineInput[] = unbilledMilestones
@@ -124,6 +153,21 @@ export default function NewInvoicePage() {
         unitAmountCents: m.amount_cents,
         sortOrder: i,
       }));
+    const timeLines: DraftLineInput[] = timeLine
+      ? [
+          {
+            kind: 'time' as const,
+            description: timeLine.description,
+            quantity: 1,
+            unitAmountCents: timeLine.amountCents,
+            sortOrder: milestoneLines.length,
+            metadata: {
+              time_entry_ids: timeLine.entryIds,
+              total_minutes: timeLine.totalMinutes,
+            },
+          },
+        ]
+      : [];
     const adhoc: DraftLineInput[] = adHocLines
       .filter((l) => l.description.trim() && dollarsToCents(l.unitDollars) > 0)
       .map((l, i) => ({
@@ -131,10 +175,10 @@ export default function NewInvoicePage() {
         description: l.description.trim(),
         quantity: parseFloat(l.quantity) > 0 ? parseFloat(l.quantity) : 1,
         unitAmountCents: dollarsToCents(l.unitDollars),
-        sortOrder: milestoneLines.length + i,
+        sortOrder: milestoneLines.length + timeLines.length + i,
       }));
-    return [...milestoneLines, ...adhoc];
-  }, [unbilledMilestones, selectedMilestoneIds, adHocLines]);
+    return [...milestoneLines, ...timeLines, ...adhoc];
+  }, [unbilledMilestones, selectedMilestoneIds, timeLine, adHocLines]);
 
   const taxRate = useMemo(() => {
     const parsed = parseFloat(taxRatePercent);
@@ -150,12 +194,14 @@ export default function NewInvoicePage() {
     [lines, taxRate]
   );
 
-  const canCreate = !!projectId && lines.length > 0 && !createDraft.isPending;
+  const creating = createDraft.isPending || claimTime.isPending || deleteDraft.isPending;
+  const canCreate = !!projectId && lines.length > 0 && !creating;
 
   const handleCreate = async () => {
     setError(null);
+    let invoice;
     try {
-      const invoice = await createDraft.mutateAsync({
+      invoice = await createDraft.mutateAsync({
         projectId,
         clientId: selectedProject?.client_id ?? null,
         taxRate,
@@ -163,10 +209,34 @@ export default function NewInvoicePage() {
         memo: memo.trim() || undefined,
         lines,
       });
-      router.push(`/portal/billing/invoices/${invoice.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create invoice');
+      return;
     }
+
+    // Claim the time entries onto the draft (stamps invoice_id → the 00177
+    // trigger locks them). If a concurrent invoice grabbed any of them, the
+    // claim rolls itself back — compensate by deleting the just-created draft
+    // so no orphaned time line survives, and let the section refresh.
+    if (timeLine) {
+      try {
+        await claimTime.mutateAsync({
+          invoiceId: invoice.id,
+          projectId,
+          entryIds: timeLine.entryIds,
+        });
+      } catch (e) {
+        try {
+          await deleteDraft.mutateAsync({ invoiceId: invoice.id, projectId });
+        } catch {
+          /* the draft survives with an unclaimed time line — designer can void it */
+        }
+        setError(e instanceof Error ? e.message : 'Failed to attach time entries');
+        return;
+      }
+    }
+
+    router.push(`/portal/billing/invoices/${invoice.id}`);
   };
 
   if (!hydrated || projectsLoading) return <LoadingStrata />;
@@ -239,6 +309,70 @@ export default function NewInvoicePage() {
                 No unbilled milestones on this project — add ad-hoc lines below.
               </p>
             )}
+          </div>
+        )}
+
+        {/* Unbilled time (00177 pull-through) */}
+        {projectId && unbilledEntries.length > 0 && (
+          <div className="mb-8">
+            <div className="mb-2 flex items-baseline justify-between">
+              <div style={sectionLabelStyle}>Unbilled Time</div>
+              <button
+                type="button"
+                className="type-meta-small cursor-pointer text-[var(--accent-primary)] hover:text-[var(--text-primary)]"
+                onClick={() =>
+                  setSelectedTimeIds((prev) =>
+                    prev.size === unbilledEntries.length
+                      ? new Set()
+                      : new Set(unbilledEntries.map((e) => e.id))
+                  )
+                }
+              >
+                {selectedTimeIds.size === unbilledEntries.length ? 'Clear all' : 'Select all'}
+              </button>
+            </div>
+            <div className="rounded-md border border-[var(--border-default)]">
+              {unbilledEntries.map((entry) => (
+                <label
+                  key={entry.id}
+                  className="flex cursor-pointer items-baseline gap-3 border-b border-[var(--border-subtle)] px-4 py-2.5 last:border-b-0 hover:bg-[var(--bg-hover)]"
+                >
+                  <input
+                    type="checkbox"
+                    className="relative top-[1px] accent-[var(--accent-primary)]"
+                    checked={selectedTimeIds.has(entry.id)}
+                    onChange={(e) => {
+                      setSelectedTimeIds((prev) => {
+                        const next = new Set(prev);
+                        if (e.target.checked) next.add(entry.id);
+                        else next.delete(entry.id);
+                        return next;
+                      });
+                    }}
+                  />
+                  <span className="type-body min-w-0 flex-1 truncate text-[0.85rem]">
+                    {new Date(entry.started_at).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                    {entry.notes && (
+                      <span className="ml-2 text-[var(--text-muted)]">{entry.notes}</span>
+                    )}
+                  </span>
+                  <span className="type-meta-small text-[var(--text-muted)]">
+                    {formatHoursLabel(entry.duration_minutes)}
+                  </span>
+                  <span className="font-heading text-[0.85rem]">
+                    {formatCurrency(entry.amount_cents)}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <p className="type-meta-small mt-2 text-[var(--text-muted)]">
+              {timeLine
+                ? `Billing ${formatHoursLabel(timeLine.totalMinutes)} as one line — ${formatCurrency(timeLine.amountCents)}. Selected entries lock once the draft is created; voiding releases them.`
+                : 'Selected entries are billed as a single line and locked to this invoice.'}
+            </p>
           </div>
         )}
 
@@ -368,7 +502,7 @@ export default function NewInvoicePage() {
             type="button"
             variant="primary"
             disabled={!canCreate}
-            loading={createDraft.isPending}
+            loading={creating}
             onClick={handleCreate}
           >
             Create draft

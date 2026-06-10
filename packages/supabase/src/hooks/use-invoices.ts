@@ -579,6 +579,36 @@ export function useDeleteLineItem() {
 }
 
 /**
+ * Deletes a draft invoice outright (lines CASCADE). RLS scopes the delete to
+ * the designer's own invoices; the status guard here keeps issued history
+ * safe client-side (issued invoices are voided, never deleted). Used by the
+ * composer as a compensating delete when claiming time entries fails after
+ * the draft was created.
+ */
+export function useDeleteDraftInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      invoiceId,
+    }: {
+      invoiceId: string;
+      projectId?: string;
+    }): Promise<void> => {
+      const supabase = getSupabase() as any;
+      const { error } = await supabase
+        .from('invoices')
+        .delete()
+        .eq('id', invoiceId)
+        .eq('status', 'draft');
+      if (error) throw error;
+    },
+    onSuccess: (_data, { projectId }) => {
+      invalidateInvoiceEffects(queryClient, projectId);
+    },
+  });
+}
+
+/**
  * Issues a draft invoice via the issue_invoice RPC (00178): assigns the
  * sequential number, recomputes totals, flips linked pending milestones to
  * outstanding. Pass projectId so milestone/financial caches refresh.

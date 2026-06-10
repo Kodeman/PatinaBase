@@ -1012,6 +1012,7 @@ export {
   useProjectInvoices,
   useCreateDraftInvoice,
   useUpdateDraftInvoice,
+  useDeleteDraftInvoice,
   useUpsertLineItems,
   useDeleteLineItem,
   useIssueInvoice,

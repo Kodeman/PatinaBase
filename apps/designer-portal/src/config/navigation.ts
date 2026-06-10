@@ -61,6 +61,7 @@ export const ZONES: ZoneConfig[] = [
     paths: [
       '/portal/billing',
       '/portal/earnings', // Earnings joins Billing as a sub-tab (still reachable from the profile menu)
+      '/portal/time', // Studio time report — hours feed invoices feed earnings
     ],
     icon: Receipt,
   },
@@ -138,6 +139,7 @@ export const ZONE_SUB_ITEMS: Record<ZoneKey, SubNavItem[]> = {
   billing: [
     { label: 'Invoices', href: '/portal/billing/invoices' },
     { label: 'A/R', href: '/portal/billing/ar' },
+    { label: 'Time', href: '/portal/time' },
     { label: 'Earnings', href: '/portal/earnings' },
   ],
   // Products renders the three-layer Library picker (My Library / Studio Library

@@ -9,6 +9,7 @@ import {
   formatCurrency,
   formatInvoiceDate,
   invoiceBalanceCents,
+  timeLineHoursLabel,
 } from '@patina/shared';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { Button } from '@/components/ui/controls';
@@ -179,18 +180,42 @@ export default function InvoicePrintPage() {
             </tr>
           </thead>
           <tbody>
-            {(invoice.line_items ?? []).map((line) => (
-              <tr key={line.id} style={{ borderBottom: '1px solid #E5E2DD' }}>
-                <td className="py-2.5 pr-4">{line.description}</td>
-                <td className="py-2.5 text-right">{Number(line.quantity)}</td>
-                <td className="py-2.5 text-right">
-                  {formatCurrency(line.unit_amount_cents, invoice.currency)}
-                </td>
-                <td className="py-2.5 text-right">
-                  {formatCurrency(line.amount_cents, invoice.currency)}
-                </td>
-              </tr>
-            ))}
+            {(invoice.line_items ?? []).map((line) => {
+              // Time lines roll many entries into one amount (qty 1, unit =
+              // total) — print the logged hours instead of a misleading
+              // "1 × $X" that reads like an hourly rate.
+              const timeHours = line.kind === 'time' ? timeLineHoursLabel(line.metadata) : null;
+              return (
+                <tr key={line.id} style={{ borderBottom: '1px solid #E5E2DD' }}>
+                  <td className="py-2.5 pr-4">
+                    {line.description}
+                    {line.kind === 'time' && (
+                      <span
+                        style={{
+                          display: 'block',
+                          fontSize: '0.7rem',
+                          color: '#8A857C',
+                          marginTop: '0.15rem',
+                        }}
+                      >
+                        Logged design time{timeHours ? ` · ${timeHours}` : ''}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2.5 text-right">
+                    {line.kind === 'time' ? '—' : Number(line.quantity)}
+                  </td>
+                  <td className="py-2.5 text-right">
+                    {line.kind === 'time'
+                      ? '—'
+                      : formatCurrency(line.unit_amount_cents, invoice.currency)}
+                  </td>
+                  <td className="py-2.5 text-right">
+                    {formatCurrency(line.amount_cents, invoice.currency)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 

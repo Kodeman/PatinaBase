@@ -12,6 +12,7 @@ import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tansta
 import { createBrowserClient } from '@patina/supabase';
 import { normalizePhaseSlug, ALL_PHASE_SLUGS, type PhaseSlug } from '@patina/types';
 import { queryKeys } from '@/lib/react-query';
+import { studioPeriodStartISO, type StudioPeriod } from '@/lib/time-billing';
 import { useToast } from '@/components/portal/toast-provider';
 import type { MockTimeTracking, TimeEntry as TimeSummaryEntry } from '@/types/project-ui';
 
@@ -512,6 +513,202 @@ export function useDiscardTimer() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
+    },
+  });
+}
+
+// ── Invoice claim / release (kind='time' pull-through, 00178) ──
+// "Claiming" stamps invoice_id on unbilled entries when the composer creates
+// a draft carrying a time line; once stamped, the 00177 guard trigger locks
+// the entries' priced columns. "Releasing" nulls invoice_id back out (the
+// void_invoice RPC does this server-side; the client hook exists for
+// compensation paths and future draft-editing UI).
+
+export interface ClaimTimeEntriesInput {
+  invoiceId: string;
+  projectId: string;
+  entryIds: string[];
+}
+
+/**
+ * Atomically-guarded claim: only rows still unbilled (`invoice_id IS NULL`)
+ * are stamped. If another invoice claimed any of them since the composer
+ * loaded, the partial claim is rolled back and the mutation throws so the
+ * caller can compensate (delete the draft) and refresh.
+ */
+export function useClaimTimeEntries() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ invoiceId, entryIds }: ClaimTimeEntriesInput) => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase
+        .from('project_time_entries')
+        .update({ invoice_id: invoiceId })
+        .in('id', entryIds)
+        .is('invoice_id', null)
+        .select('id');
+      if (error) throw error;
+
+      const claimed = (data ?? []) as Array<{ id: string }>;
+      if (claimed.length !== entryIds.length) {
+        // Roll back whatever we did stamp, then surface the conflict.
+        await supabase
+          .from('project_time_entries')
+          .update({ invoice_id: null })
+          .eq('invoice_id', invoiceId);
+        throw new Error(
+          'Some of the selected time entries were just billed on another invoice. Refresh and try again.'
+        );
+      }
+      return claimed.map((row) => row.id);
+    },
+    onSuccess: (_ids, { projectId }) => {
+      invalidateProjectTime(queryClient, projectId);
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+    },
+  });
+}
+
+/** Release every entry attached to an invoice back to the unbilled pool. */
+export function useReleaseTimeEntries() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ invoiceId }: { invoiceId: string; projectId: string }) => {
+      const supabase = getSupabase();
+      const { error } = await supabase
+        .from('project_time_entries')
+        .update({ invoice_id: null })
+        .eq('invoice_id', invoiceId);
+      if (error) throw error;
+    },
+    onSuccess: (_data, { projectId }) => {
+      invalidateProjectTime(queryClient, projectId);
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+    },
+  });
+}
+
+// ── Studio time report (/portal/time) ──
+
+export interface StudioTimeEntry extends ProjectTimeEntry {
+  project?: { name: string | null } | null;
+}
+
+export interface StudioProjectRollup {
+  projectId: string;
+  projectName: string;
+  totalMinutes: number;
+  billableMinutes: number;
+  entryCount: number;
+  /** All-time unbilled balance on the project (not period-scoped). */
+  unbilledMinutes: number;
+  unbilledAmountCents: number;
+}
+
+export interface StudioTimeReport {
+  /** Completed entries inside the period, newest first, with project names. */
+  entries: StudioTimeEntry[];
+  totalMinutes: number;
+  billableMinutes: number;
+  invoicedMinutes: number;
+  /** All-time unbilled balance across every project (a balance, not a flow). */
+  unbilledMinutes: number;
+  unbilledAmountCents: number;
+  /** Per-project rollups, most period-minutes first. */
+  projects: StudioProjectRollup[];
+}
+
+/**
+ * Cross-project rollup for the studio time report. Two RLS-scoped reads:
+ * the period's completed entries (rolling window per studioPeriodStartISO,
+ * mirroring the earnings page's periods) and the all-time unbilled view —
+ * unbilled is shown as a balance, so it deliberately ignores the period.
+ */
+export function useStudioTimeReport(period: StudioPeriod) {
+  return useQuery({
+    queryKey: queryKeys.time.studioReport(period),
+    queryFn: async (): Promise<StudioTimeReport> => {
+      const supabase = getSupabase();
+      const startISO = studioPeriodStartISO(period);
+
+      const [entriesRes, unbilledRes] = await Promise.all([
+        supabase
+          .from('project_time_entries')
+          .select(
+            '*, project:projects(name), profile:profiles!project_time_entries_user_id_fkey(full_name)'
+          )
+          .not('duration_minutes', 'is', null)
+          .gte('started_at', startISO)
+          .order('started_at', { ascending: false }),
+        supabase
+          .from('project_unbilled_time')
+          .select('project_id, duration_minutes, amount_cents'),
+      ]);
+      if (entriesRes.error) throw entriesRes.error;
+      if (unbilledRes.error) throw unbilledRes.error;
+
+      const entries = (entriesRes.data ?? []) as StudioTimeEntry[];
+      const unbilledRows = (unbilledRes.data ?? []) as Array<{
+        project_id: string;
+        duration_minutes: number;
+        amount_cents: number;
+      }>;
+
+      const byProject = new Map<string, StudioProjectRollup>();
+      const ensure = (projectId: string, name?: string | null) => {
+        let rollup = byProject.get(projectId);
+        if (!rollup) {
+          rollup = {
+            projectId,
+            projectName: name || 'Untitled project',
+            totalMinutes: 0,
+            billableMinutes: 0,
+            entryCount: 0,
+            unbilledMinutes: 0,
+            unbilledAmountCents: 0,
+          };
+          byProject.set(projectId, rollup);
+        } else if (name && rollup.projectName === 'Untitled project') {
+          rollup.projectName = name;
+        }
+        return rollup;
+      };
+
+      let totalMinutes = 0;
+      let billableMinutes = 0;
+      let invoicedMinutes = 0;
+      for (const entry of entries) {
+        const minutes = entry.duration_minutes || 0;
+        totalMinutes += minutes;
+        if (entry.billable) billableMinutes += minutes;
+        if (entry.invoice_id) invoicedMinutes += minutes;
+        const rollup = ensure(entry.project_id, entry.project?.name);
+        rollup.totalMinutes += minutes;
+        if (entry.billable) rollup.billableMinutes += minutes;
+        rollup.entryCount += 1;
+      }
+
+      let unbilledMinutes = 0;
+      let unbilledAmountCents = 0;
+      for (const row of unbilledRows) {
+        unbilledMinutes += row.duration_minutes || 0;
+        unbilledAmountCents += row.amount_cents || 0;
+        const rollup = ensure(row.project_id);
+        rollup.unbilledMinutes += row.duration_minutes || 0;
+        rollup.unbilledAmountCents += row.amount_cents || 0;
+      }
+
+      return {
+        entries,
+        totalMinutes,
+        billableMinutes,
+        invoicedMinutes,
+        unbilledMinutes,
+        unbilledAmountCents,
+        projects: [...byProject.values()].sort((a, b) => b.totalMinutes - a.totalMinutes),
+      };
     },
   });
 }

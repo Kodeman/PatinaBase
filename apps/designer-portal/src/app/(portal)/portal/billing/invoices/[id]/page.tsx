@@ -19,6 +19,7 @@ import {
   formatInvoiceDate,
   invoiceBalanceCents,
   isInvoiceOverdue,
+  timeLineHoursLabel,
 } from '@patina/shared';
 import { PageActionBar } from '@/components/portal/page-action-bar';
 import { LoadingStrata } from '@/components/portal/loading-strata';
@@ -294,10 +295,22 @@ export default function InvoiceDetailPage() {
               {line.kind === 'milestone' && (
                 <span className="type-meta-small ml-2 text-[var(--text-muted)]">milestone</span>
               )}
+              {line.kind === 'time' && (
+                <span className="type-meta-small ml-2 text-[var(--text-muted)]">
+                  logged time
+                  {timeLineHoursLabel(line.metadata) ? ` · ${timeLineHoursLabel(line.metadata)}` : ''}
+                </span>
+              )}
             </div>
-            <span className="type-body text-right text-[0.85rem]">{Number(line.quantity)}</span>
+            {/* Time lines are a single rolled-up amount (qty 1, unit = total);
+                showing "1 × $X" would read like an hourly rate, so dash both. */}
             <span className="type-body text-right text-[0.85rem]">
-              {formatCurrency(line.unit_amount_cents, invoice.currency)}
+              {line.kind === 'time' ? '—' : Number(line.quantity)}
+            </span>
+            <span className="type-body text-right text-[0.85rem]">
+              {line.kind === 'time'
+                ? '—'
+                : formatCurrency(line.unit_amount_cents, invoice.currency)}
             </span>
             <span className="text-right font-heading text-[0.85rem]">
               {formatCurrency(line.amount_cents, invoice.currency)}

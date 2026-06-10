@@ -109,6 +109,44 @@ export function formatInvoiceDate(value: string | null | undefined): string {
   });
 }
 
+// ── Time lines (kind='time' — unbilled-time pull-through, 00177) ────────────
+// The designer composer writes ONE time line per invoice: quantity 1,
+// unit_amount_cents = amount_cents = the sum of the claimed entries'
+// view-resolved amounts. The hours live here, in metadata, so every renderer
+// (designer detail, print, client detail) can annotate the line without
+// re-deriving money.
+
+/** metadata shape the composer stamps on kind='time' invoice lines. */
+export interface TimeLineMetadata {
+  /** project_time_entries ids claimed by this line (provenance). */
+  time_entry_ids: string[];
+  /** Total logged minutes across the claimed entries. */
+  total_minutes: number;
+}
+
+/** 270 → "4h 30m", 120 → "2h", 45 → "45m", 0 → "0m". */
+export function formatMinutesAsHours(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes || 0));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
+  return `${m}m`;
+}
+
+/**
+ * Hours label for a kind='time' line ("4h 30m"), from the metadata the
+ * composer stamped. Null when the metadata is missing/malformed so renderers
+ * can skip the annotation rather than print garbage.
+ */
+export function timeLineHoursLabel(
+  metadata: Record<string, unknown> | null | undefined
+): string | null {
+  const minutes = Number((metadata as { total_minutes?: unknown } | null)?.total_minutes);
+  if (!Number.isFinite(minutes) || minutes <= 0) return null;
+  return formatMinutesAsHours(minutes);
+}
+
 /** Live receivable past its due date? (draft/paid/void are never overdue) */
 export function isInvoiceOverdue(invoice: {
   status: InvoiceStatus | string;
