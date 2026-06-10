@@ -27,17 +27,27 @@ import { leadDisplayName } from '@/lib/lead-format';
 //
 // Each entity type gets its own resolver component so the entity's React Query
 // hook only runs when a crumb of that type is actually present in the trail.
-// All resolvers share one loading contract (renderResolved below): NEVER show
+// All resolvers share one loading contract (ResolvedLabel below): NEVER show
 // the raw UUID — render a skeleton while loading, a generic singular label on
 // error/missing data, and the real name once resolved.
 
-/** Skeleton + generic-label contract shared by every resolver. */
-function renderResolved(
-  name: string | null | undefined,
-  isLoading: boolean,
-  fallback: string,
-): ReactNode {
-  if (isLoading) {
+/**
+ * Skeleton + generic-label contract shared by every resolver. Gated on
+ * useHydrated: the server's query cache can be warm when the client's isn't,
+ * so both must render the skeleton until after hydration or React flags a
+ * mismatch on every scope-page load.
+ */
+function ResolvedLabel({
+  name,
+  isLoading,
+  fallback,
+}: {
+  name: string | null | undefined;
+  isLoading: boolean;
+  fallback: string;
+}): ReactNode {
+  const hydrated = useHydrated();
+  if (!hydrated || isLoading) {
     return (
       <span className="inline-block h-3 w-20 animate-pulse rounded bg-[var(--border-default)]" />
     );
@@ -52,7 +62,7 @@ function renderResolved(
 function ClientBreadcrumbLabel({ id }: { id: string }) {
   const { data, isLoading } = useClient(id);
   const name = data?.client?.full_name || data?.client_name || data?.client_email;
-  return renderResolved(name, isLoading, 'Client');
+  return <ResolvedLabel name={name} isLoading={isLoading} fallback="Client" />;
 }
 
 /**
@@ -66,20 +76,20 @@ function ProjectBreadcrumbLabel({ id }: { id: string }) {
     data?: { name?: string };
     isLoading: boolean;
   };
-  return renderResolved(data?.name, isLoading, 'Project');
+  return <ResolvedLabel name={data?.name} isLoading={isLoading} fallback="Project" />;
 }
 
 /** Resolves a proposal breadcrumb segment to its title. */
 function ProposalBreadcrumbLabel({ id }: { id: string }) {
   // useProposal returns a typed `Proposal` (has `title`) — no cast needed.
   const { data, isLoading } = useProposal(id);
-  return renderResolved(data?.title, isLoading, 'Proposal');
+  return <ResolvedLabel name={data?.title} isLoading={isLoading} fallback="Proposal" />;
 }
 
 /** Resolves a decision breadcrumb segment to its title. */
 function DecisionBreadcrumbLabel({ id }: { id: string }) {
   const { data, isLoading } = useDecision(id);
-  return renderResolved(data?.title, isLoading, 'Decision');
+  return <ResolvedLabel name={data?.title} isLoading={isLoading} fallback="Decision" />;
 }
 
 /**
@@ -89,14 +99,14 @@ function DecisionBreadcrumbLabel({ id }: { id: string }) {
 function ProductBreadcrumbLabel({ id }: { id: string }) {
   // useProduct queries a typed SupabaseClient<Database> (products.name) — no cast needed.
   const { data, isLoading } = useProduct(id);
-  return renderResolved(data?.name, isLoading, 'Product');
+  return <ResolvedLabel name={data?.name} isLoading={isLoading} fallback="Product" />;
 }
 
 /** Resolves a room breadcrumb segment to its name. */
 function RoomBreadcrumbLabel({ id }: { id: string }) {
   // useRoom returns a typed `Room` (has `name`) — no cast needed.
   const { data, isLoading } = useRoom(id);
-  return renderResolved(data?.name, isLoading, 'Room');
+  return <ResolvedLabel name={data?.name} isLoading={isLoading} fallback="Room" />;
 }
 
 /**
@@ -111,7 +121,7 @@ function VendorBreadcrumbLabel({ id }: { id: string }) {
     data?: { trade_name?: string; name?: string };
     isLoading: boolean;
   };
-  return renderResolved(data?.trade_name || data?.name, isLoading, 'Vendor');
+  return <ResolvedLabel name={data?.trade_name || data?.name} isLoading={isLoading} fallback="Vendor" />;
 }
 
 /**
@@ -121,7 +131,7 @@ function VendorBreadcrumbLabel({ id }: { id: string }) {
 function InvoiceBreadcrumbLabel({ id }: { id: string }) {
   const { data, isLoading } = useInvoice(id);
   const label = data?.invoice_number || (data ? 'Draft Invoice' : undefined);
-  return renderResolved(label, isLoading, 'Invoice');
+  return <ResolvedLabel name={label} isLoading={isLoading} fallback="Invoice" />;
 }
 
 /** Resolves a lead breadcrumb segment to its display name. */
@@ -130,10 +140,12 @@ function LeadBreadcrumbLabel({ id }: { id: string }) {
     data?: Parameters<typeof leadDisplayName>[0];
     isLoading: boolean;
   };
-  return renderResolved(
-    data ? leadDisplayName(data) : undefined,
-    isLoading,
-    'Lead',
+  return (
+    <ResolvedLabel
+      name={data ? leadDisplayName(data) : undefined}
+      isLoading={isLoading}
+      fallback="Lead"
+    />
   );
 }
 
