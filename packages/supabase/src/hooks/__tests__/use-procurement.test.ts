@@ -134,6 +134,7 @@ import {
   useUpdateDamageClaim,
   useUpdatePurchaseOrderETA,
   // Wave 1 procurement overhaul — DB triggers (00184) own state propagation
+  useAdvancePaymentToDue,
   useUpdatePurchaseOrderStatus,
   invalidateFfeCaches,
   // Sprint 3 — QBO export
@@ -1400,6 +1401,112 @@ describe('useUpdateDamageClaim', () => {
     await expect(
       config.mutationFn({ id: 'claim-3', state: 'drafted' }),
     ).rejects.toThrow(/Invalid damage_claim state transition/);
+  });
+
+  it('same-state edit: drafted → drafted with description update writes state + description but NOT vendor_notified_at or resolved_at', async () => {
+    // Sequential calls to damage_claims:
+    //   1. SELECT current state via .single() → returns 'drafted' (same as input).
+    //   2. UPDATE → returns the updated row via .single().
+    queueTableResults(
+      'damage_claims',
+      // 1. current state read
+      { data: { id: 'claim-4', state: 'drafted' }, error: null },
+      // 2. update result
+      {
+        data: {
+          id: 'claim-4',
+          state: 'drafted',
+          description: 'Updated description',
+          vendor_notified_at: null,
+          resolved_at: null,
+        },
+        error: null,
+      },
+    );
+
+    const config = useUpdateDamageClaim() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await config.mutationFn({
+      id: 'claim-4',
+      state: 'drafted',
+      description: 'Updated description',
+    });
+
+    const builder = builders.damage_claims;
+    const updates = builder.__chain.filter((c) => c.method === 'update');
+    expect(updates).toHaveLength(1);
+
+    const payload = updates[0].args[0] as Record<string, unknown>;
+    // state is preserved as-is
+    expect(payload.state).toBe('drafted');
+    // description is included
+    expect(payload.description).toBe('Updated description');
+    // timestamp columns must NOT be set — neither transition branch applies
+    expect(payload.vendor_notified_at).toBeUndefined();
+    expect(payload.resolved_at).toBeUndefined();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useAdvancePaymentToDue  (Wave 1 procurement overhaul — migration 00184)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useAdvancePaymentToDue', () => {
+  it('happy path: single UPDATE on po_payments with state=due and correct eq scoping; no writes to purchase_orders or project_ffe_items', async () => {
+    // A single round-trip: UPDATE + .select().single().
+    queueTableResults('po_payments', {
+      data: {
+        id: 'pay-balance',
+        purchase_order_id: 'po-2',
+        kind: 'balance',
+        state: 'due',
+        due_date: '2026-07-01',
+        sort_order: 1,
+      },
+      error: null,
+    });
+
+    const config = useAdvancePaymentToDue() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+      onSuccess: (result: unknown, input: { purchaseOrderId: string }) => void;
+    };
+
+    const result = await config.mutationFn({
+      paymentId: 'pay-balance',
+      purchaseOrderId: 'po-2',
+      dueDate: '2026-07-01',
+    });
+
+    // Exactly one UPDATE on po_payments.
+    const builder = builders.po_payments;
+    const updates = builder.__chain.filter((c) => c.method === 'update');
+    expect(updates).toHaveLength(1);
+
+    // Payload must contain state='due' and the supplied dueDate.
+    const payload = updates[0].args[0] as Record<string, unknown>;
+    expect(payload.state).toBe('due');
+    expect(payload.due_date).toBe('2026-07-01');
+
+    // Scope: filtered by paymentId only.
+    const eqArgs = builder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
+    expect(eqArgs).toEqual([['id', 'pay-balance']]);
+
+    // The returned row is the updated payment.
+    expect((result as { id: string }).id).toBe('pay-balance');
+
+    // DB triggers (00184) own all PO/FFE side effects after this — the hook
+    // must NOT write to purchase_orders or project_ffe_items.
+    expect(builders.purchase_orders).toBeUndefined();
+    expect(builders.project_ffe_items).toBeUndefined();
+
+    // onSuccess: invalidates the PO's payment list and both PO namespaces.
+    config.onSuccess(result, { purchaseOrderId: 'po-2' });
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['po-payments', 'po-2']);
+    expect(invalidatedKeys).toContainEqual(['purchase-orders']);
+    expect(invalidatedKeys).toContainEqual(['purchase-order', 'po-2']);
   });
 });
 
