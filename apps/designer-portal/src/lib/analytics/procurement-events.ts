@@ -93,6 +93,15 @@ export const procurementEvents = {
   statusAdvanced: (properties: { from: string; to: string; is_override: boolean }) =>
     track('procurement_status_advanced', properties),
 
+  /**
+   * Fired when a designer logs a vendor acknowledgment on a purchase order
+   * (W3-T3a popover → `log_po_acknowledgment` RPC). `days_since_sent` is
+   * null until purchase_orders carries a sent_at timestamp (Wave 4) — pass
+   * null so the days-to-ack metric stays honest about missing data.
+   */
+  poAcknowledgmentLogged: (properties: { days_since_sent: number | null }) =>
+    track('procurement_po_acknowledgment_logged', properties),
+
   // ────────────────────────────────────────────────────────────────────────
   // Future events (documented but not yet wired — see
   // docs/follow-ups/procurement-pilot-metrics.md):

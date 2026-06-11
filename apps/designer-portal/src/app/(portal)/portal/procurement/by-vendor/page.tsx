@@ -4,7 +4,14 @@ import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowUpDown, X } from 'lucide-react';
-import { usePurchaseOrders, useIsStudioOwner, type PurchaseOrder } from '@patina/supabase';
+import {
+  usePurchaseOrders,
+  useProcurementItems,
+  useVendors,
+  useIsStudioOwner,
+  type ProcurementItemRow,
+  type PurchaseOrder,
+} from '@patina/supabase';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { SearchInput } from '@/components/portal/search-input';
 import { Button, FilterPill } from '@/components/ui/controls';
@@ -26,6 +33,37 @@ import {
   type OrderAssistantVendor,
 } from '@/components/portal/procurement/order-assistant';
 import type { PaymentPattern } from '@patina/supabase';
+
+// ─── Orderable items (W3-T3a) ────────────────────────────────────────────────
+
+/**
+ * The `select('*')` in useProcurementItems carries the 00185 trade price and
+ * the decision-block link even though the canonical ProcurementItemRow
+ * interface hasn't been widened yet — extend locally for type-safe access.
+ */
+type OrderableItem = ProcurementItemRow & {
+  trade_price_cents?: number | null;
+  blocked_by_decision_id?: string | null;
+};
+
+/**
+ * An item is orderable when it's approved and not yet linked to a PO. Items
+ * held by a pending blocks_procurement decision are excluded up front
+ * (mirrors the FF&E board's pre-queue filter) so the Order Assistant never
+ * opens on a batch it would refuse.
+ */
+function isOrderable(it: OrderableItem): boolean {
+  if (it.status !== 'approved' || it.purchase_order_id) return false;
+  if (it.blocked && it.blocked_by_decision_id) return false;
+  return !!it.vendor_id;
+}
+
+/** One Order Assistant session — one (vendor, project) pair → one PO. */
+interface PendingOrder {
+  vendor: OrderAssistantVendor;
+  project: OrderAssistantProject;
+  ffeItems: OrderAssistantFFEItem[];
+}
 
 // ─── Grouping helper ─────────────────────────────────────────────────────────
 
@@ -125,15 +163,15 @@ function ByVendorContent() {
   // so the dialog only ever rendered "Order 0 items totalling $0" with a
   // disabled Confirm button. The gold CTA on the vendor card now renders as
   // disabled with an explanatory tooltip instead — see `vendor-section-card`.
-  // State for the Order Assistant side panel (Wave 1.4). Opens scoped to a
-  // single vendor + project pair; the synthetic ffeItems list mirrors the
-  // vendor's draft POs against that project. See `openOrderAssistantFor`.
-  const [orderAssistant, setOrderAssistant] = useState<{
-    vendor: OrderAssistantVendor;
-    project: OrderAssistantProject;
-    ffeItems: OrderAssistantFFEItem[];
-    scopeDisclaimer?: string;
-  } | null>(null);
+  //
+  // Order Assistant queue (W3-T3a). "Order all" feeds REAL approved-unordered
+  // project_ffe_items into the assistant — the Wave 1.4 synthetic draft-PO
+  // rows (which created 0-total, item-less POs) are retired. One PO covers
+  // one project, so a vendor whose orderable items span projects enqueues one
+  // PendingOrder per (vendor, project) and the assistant walks the queue —
+  // same mechanism as the FF&E board's bulk "Generate POs".
+  const [orderQueue, setOrderQueue] = useState<PendingOrder[]>([]);
+  const activeOrder = orderQueue[0] ?? null;
 
   // Bookkeeper Export modal (Wave 3.2). The CTA is gated by studio-owner role
   // per PRD §11 + W3.1 dossier §4 — hidden, not disabled, for non-owners. The
@@ -144,6 +182,40 @@ function ByVendorContent() {
   const { data: orders, isLoading, isError, error } = usePurchaseOrders(
     projectId ? { projectId } : undefined,
   );
+
+  // W3-T3a — real orderable items for the "Order all" CTA. One cross-project
+  // query (server-filtered by the ?projectId= deep link when present),
+  // grouped client-side per vendor. Shares the ['procurement-items'] cache
+  // namespace with By Status, and invalidateFfeCaches sweeps it after PO
+  // creation so counts stay truthful.
+  const { data: procurementItems } = useProcurementItems(
+    projectId ? { projectId } : undefined,
+  );
+
+  // Vendor directory — enriches the assistant's vendor context (payment
+  // terms, trade portal URL/email) beyond the slim join usePurchaseOrders
+  // carries. Mirrors the FF&E board's vendorById map.
+  const { data: vendorsResult } = useVendors();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const vendorById = useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const map = new Map<string, any>();
+    // useVendors() returns { data, pagination }, not a bare array.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const v of ((vendorsResult as any)?.data ?? []) as any[]) map.set(v.id, v);
+    return map;
+  }, [vendorsResult]);
+
+  const orderableByVendor = useMemo(() => {
+    const map = new Map<string, OrderableItem[]>();
+    for (const it of (procurementItems ?? []) as OrderableItem[]) {
+      if (!isOrderable(it)) continue;
+      const arr = map.get(it.vendor_id as string) ?? [];
+      arr.push(it);
+      map.set(it.vendor_id as string, arr);
+    }
+    return map;
+  }, [procurementItems]);
 
   const allOrders = useMemo<PurchaseOrder[]>(
     () => (orders ?? []) as PurchaseOrder[],
@@ -317,87 +389,77 @@ function ByVendorContent() {
       {groups.length > 0 && (
         <div className="flex flex-col gap-4">
           {groups.map((group) => {
-            // ── "Order all N" wiring (Wave 1.4) ──────────────────────────
-            // A draft PO is one whose vendor confirmation + payment pattern
-            // hasn't been logged yet. Each draft PO header is one "item" in
-            // the assistant's UI list. Non-Catalog vendors only; Catalog
-            // vendors use the OrderViaPatina dialog instead.
-            const draftOrders = group.orders.filter((po) => po.status === 'draft');
-            const draftCount = draftOrders.length;
-            // Pick a single project to scope the assistant against — the
-            // first project the draft POs target. If draft POs span multiple
-            // projects we surface a disclaimer (one PO covers one project per
-            // the data model, so a "true" multi-project flow needs separate
-            // panel sessions).
-            const draftProjectIds = new Set(
-              draftOrders.map((po) => po.project_id),
-            );
-            const firstDraft = draftOrders[0];
-            const canOrderAll =
-              !group.isPatinaCatalog && draftCount > 0 && !!firstDraft?.project;
+            // ── "Order all N" wiring (W3-T3a) ─────────────────────────────
+            // Real approved-unordered project_ffe_items for this vendor
+            // (already filtered by ?projectId= server-side when present).
+            // Non-Catalog vendors only; Catalog vendors keep the disabled
+            // gold CTA until the OrderViaPatina ready-items feed lands.
+            const orderable = orderableByVendor.get(group.vendorId) ?? [];
+            const showOrderAll = !group.isPatinaCatalog;
 
             const handleOrderAll = () => {
-              if (!firstDraft?.project) return;
-              const scopedDrafts = draftOrders.filter(
-                (po) => po.project_id === firstDraft.project_id,
-              );
-              // ffeItems are display-only here: each draft PO becomes one
-              // row in the assistant's "Copy item details" list. The `id`
-              // field is the draft PO's id, surfaced so the row has a stable
-              // React key — it is NOT used as a `project_ffe_items.id`
-              // because the assistant calls `useCreatePurchaseOrder` which
-              // creates a NEW PO header. The proper FFE→PO linking flow
-              // requires a `project_ffe_items` source (the per-project FF&E
-              // board), which lives outside the cross-project By Vendor
-              // view's data shape. `displayOnly: true` makes the assistant
-              // exclude these synthetic ids from the `ffeItemIds` it sends
-              // to the create_purchase_order RPC (00186), which hard-rejects
-              // unknown ids.
-              const ffeItems: OrderAssistantFFEItem[] = scopedDrafts.map(
-                (po) => ({
-                  id: po.id,
-                  name: po.vendor_po_number
-                    ? `${group.vendorName} · ${po.vendor_po_number}`
-                    : `${group.vendorName} order`,
-                  room: po.project?.name,
-                  line_total_cents: po.total_cents,
-                  displayOnly: true,
+              if (orderable.length === 0) return;
+              const rec = vendorById.get(group.vendorId);
+              const vendor: OrderAssistantVendor = {
+                id: group.vendorId,
+                name: group.vendorName,
+                default_payment_terms:
+                  ((rec?.default_payment_terms ??
+                    group.defaultPaymentTerms) as PaymentPattern | null) ?? null,
+                trade_portal_url: rec?.trade_portal_url ?? undefined,
+                trade_account_email: rec?.trade_account_email ?? undefined,
+                is_patina_catalog: rec?.is_patina_catalog ?? group.isPatinaCatalog,
+              };
+              // One PO covers one project — group per project and enqueue one
+              // assistant session per (vendor, project) pair.
+              const byProject = new Map<string, OrderableItem[]>();
+              for (const it of orderable) {
+                const arr = byProject.get(it.project_id) ?? [];
+                arr.push(it);
+                byProject.set(it.project_id, arr);
+              }
+              const sessions: PendingOrder[] = Array.from(byProject.entries()).map(
+                ([pid, list]) => ({
+                  vendor,
+                  project: { id: pid, name: list[0].project?.name ?? 'Project' },
+                  ffeItems: list.map((it) => ({
+                    id: it.id,
+                    name: it.name,
+                    room: it.room?.name,
+                    line_total_cents: it.line_total_cents ?? 0,
+                    // Dual pricing (00185/00186): the assistant totals
+                    // COALESCE(trade, unit) × qty — the vendor TRADE total
+                    // the create_purchase_order RPC computes server-side.
+                    quantity: it.quantity ?? 1,
+                    unit_price_cents: it.unit_price_cents ?? null,
+                    trade_price_cents: it.trade_price_cents ?? null,
+                    blocked: it.blocked,
+                    blocked_by_decision_id: it.blocked_by_decision_id ?? null,
+                    blocked_reason: it.blocked_reason,
+                  })),
                 }),
               );
-              const disclaimer =
-                draftProjectIds.size > 1
-                  ? `Showing ${scopedDrafts.length} of ${draftCount} items for ${firstDraft.project!.name}; remaining items will need separate orders.`
-                  : undefined;
-              setOrderAssistant({
-                vendor: {
-                  id: group.vendorId,
-                  name: group.vendorName,
-                  default_payment_terms:
-                    (group.defaultPaymentTerms as PaymentPattern | null) ?? null,
-                  // PRD §6 surfaces the trade portal URL + account email here.
-                  // The current `vendors` query projection in
-                  // `usePurchaseOrders` only joins id/name/default_payment_terms,
-                  // so the panel renders the "No trade portal on file" fallback
-                  // until the join is widened. Out of lane for W1.4.
-                  trade_portal_url: undefined,
-                  trade_account_email: undefined,
-                },
-                project: {
-                  id: firstDraft.project!.id,
-                  name: firstDraft.project!.name,
-                },
-                ffeItems,
-                scopeDisclaimer: disclaimer,
-              });
+              setOrderQueue(sessions);
             };
 
             return (
               <VendorSectionCard
                 key={group.vendorId}
                 group={group}
-                onOrderAllClick={canOrderAll ? handleOrderAll : undefined}
+                onOrderAllClick={
+                  showOrderAll && orderable.length > 0 ? handleOrderAll : undefined
+                }
                 orderAllLabel={
-                  canOrderAll ? `Order all ${draftCount}` : undefined
+                  showOrderAll
+                    ? orderable.length > 0
+                      ? `Order all ${orderable.length}`
+                      : 'Order all'
+                    : undefined
+                }
+                orderAllDisabledReason={
+                  showOrderAll && orderable.length === 0
+                    ? 'No approved, unordered items for this vendor.'
+                    : undefined
                 }
                 // W1.5.5: `onOrderViaPatina` is intentionally not passed.
                 // For Catalog vendors the gold CTA renders as disabled with
@@ -410,16 +472,22 @@ function ByVendorContent() {
         </div>
       )}
 
-      {orderAssistant && (
+      {/* Order Assistant — one (vendor, project) session at a time; closing
+          advances the queue (same mechanism as the FF&E board). */}
+      {activeOrder && (
         <OrderAssistant
-          open={!!orderAssistant}
+          open={!!activeOrder}
           onOpenChange={(open) => {
-            if (!open) setOrderAssistant(null);
+            if (!open) setOrderQueue((q) => q.slice(1));
           }}
-          vendor={orderAssistant.vendor}
-          project={orderAssistant.project}
-          ffeItems={orderAssistant.ffeItems}
-          scopeDisclaimer={orderAssistant.scopeDisclaimer}
+          vendor={activeOrder.vendor}
+          project={activeOrder.project}
+          ffeItems={activeOrder.ffeItems}
+          scopeDisclaimer={
+            orderQueue.length > 1
+              ? `${orderQueue.length} project orders queued for ${activeOrder.vendor.name} — you'll confirm each in turn.`
+              : undefined
+          }
         />
       )}
 

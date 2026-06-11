@@ -70,19 +70,11 @@ export interface OrderAssistantFFEItem {
    * Dual-pricing fields (00185/00186). The PO total is the vendor TRADE
    * total — COALESCE(trade, unit) × quantity per item — matching what the
    * `create_purchase_order` RPC computes server-side. Items without either
-   * unit price (e.g. the By Vendor view's synthetic rows) fall back to
-   * `line_total_cents` for the display total.
+   * unit price fall back to `line_total_cents` for the display total.
    */
   quantity?: number;
   unit_price_cents?: number | null;
   trade_price_cents?: number | null;
-  /**
-   * True when `id` is NOT a real `project_ffe_items.id` (e.g. the By Vendor
-   * view passes draft-PO rows for display only). Display-only items are
-   * excluded from the `ffeItemIds` sent to `create_purchase_order` — the
-   * RPC hard-rejects unknown ids (00186).
-   */
-  displayOnly?: boolean;
   /**
    * Three-layer catalog layer of the underlying product, when known.
    * Drives the routing-mode badge in the assistant header and (in
@@ -160,10 +152,17 @@ function parseDollarsToCents(input: string): number {
 /**
  * Vendor-facing TRADE amount for one item: COALESCE(trade, unit) × quantity,
  * mirroring the `create_purchase_order` total computation (00186). Items
- * without dual-pricing data (synthetic display-only rows) fall back to
- * `line_total_cents`.
+ * without dual-pricing data fall back to `line_total_cents`.
+ *
+ * Exported so every PO surface displays the same trade-based total the RPC
+ * stores (OrderViaPatina imports it instead of summing client prices).
  */
-function itemTradeCents(item: OrderAssistantFFEItem): number {
+export function itemTradeCents(
+  item: Pick<
+    OrderAssistantFFEItem,
+    'line_total_cents' | 'quantity' | 'unit_price_cents' | 'trade_price_cents'
+  >
+): number {
   const unit = item.trade_price_cents ?? item.unit_price_cents;
   if (unit === null || unit === undefined) return item.line_total_cents;
   return unit * (item.quantity ?? 1);
@@ -222,10 +221,11 @@ export function OrderAssistant(props: OrderAssistantProps) {
     [ffeItems]
   );
 
-  // Only real project_ffe_items rows are sent to the RPC — it rejects
-  // unknown ids (00186). Display-only rows (By Vendor synthetics) drop out.
+  // Every caller now passes real project_ffe_items rows (the By Vendor view's
+  // synthetic display-only draft-PO rows were retired in W3-T3a), so all ids
+  // go to the create_purchase_order RPC (which hard-rejects unknown ids, 00186).
   const submittableFfeItemIds = useMemo(
-    () => ffeItems.filter((i) => !i.displayOnly).map((i) => i.id),
+    () => ffeItems.map((i) => i.id),
     [ffeItems]
   );
 

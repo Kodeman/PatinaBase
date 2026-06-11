@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useUpdateFFEItemPricing } from '@patina/supabase';
+import { useUpdateFFEItemPricing, type FfeItemCoverage } from '@patina/supabase';
 import { StageSelect, poSync } from '@/components/portal/ffe/stage-select';
 import { useToast } from '@/components/portal/toast-provider';
 import { StrataInfoIcon, SurfaceKeys } from '@patina/help-system';
@@ -37,6 +37,7 @@ export function FFEItemDrawer({
   vendors,
   isStudioOwner,
   canEditPricing,
+  invoiceCoverage,
   onClose,
   onUpdateStatus,
   onGeneratePO,
@@ -50,6 +51,13 @@ export function FFEItemDrawer({
   isStudioOwner: boolean;
   /** False for slug-fixture (mock) projects with no Supabase row to update. */
   canEditPricing: boolean;
+  /**
+   * Invoice coverage for THIS item (00187 — useFfeInvoiceCoverage on the
+   * page). When 'invoiced'/'paid' the Remove action is disabled: the
+   * chk_line_items_ffe_kind guard would reject the delete server-side, so
+   * the drawer says why up front. null/undefined = not billed.
+   */
+  invoiceCoverage?: FfeItemCoverage | null;
   onClose: () => void;
   onUpdateStatus: (status: string) => Promise<void>;
   onGeneratePO?: () => void;
@@ -61,6 +69,32 @@ export function FFEItemDrawer({
   // blocks_procurement decision (blocked flag + a blocked_by_decision_id)
   // cannot be ordered until the client responds.
   const isOrderBlocked = Boolean(item.blocked) && Boolean(item.blocked_by_decision_id);
+
+  // Billed-item guard (00187): an item on a live invoice line can't be
+  // deleted — the chk_line_items_ffe_kind CHECK rejects the FK's ON DELETE
+  // SET NULL. Disable Remove with the invoice context instead of letting the
+  // designer hit the constraint.
+  const billedCoverage =
+    invoiceCoverage &&
+    (invoiceCoverage.coverage === 'invoiced' || invoiceCoverage.coverage === 'paid')
+      ? invoiceCoverage
+      : null;
+  const billedNote = billedCoverage
+    ? `On invoice ${billedCoverage.invoiceNumber ?? '(unnumbered)'} — void the invoice to remove this item`
+    : null;
+
+  const handleRemove = async () => {
+    if (!onRemove) return;
+    try {
+      await onRemove();
+    } catch {
+      // Global mutation toast already fired — for the 00187 billed-item
+      // constraint (23514 / chk_line_items_ffe_kind) error-handler.ts maps
+      // it to the friendly "void the invoice" copy. Swallowing here keeps
+      // the drawer open (the page only navigates after a successful delete)
+      // and avoids an unhandled rejection.
+    }
+  };
 
   // ── Dual-pricing editor state (00185) ────────────────────────────────────
   // Dollars in the UI, cents in the API. Empty field ⇄ NULL ("unknown").
@@ -452,12 +486,18 @@ export function FFEItemDrawer({
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => void onRemove()}
+              onClick={() => void handleRemove()}
               className="ml-auto"
-              title="Remove this item from the project"
+              disabled={!!billedCoverage}
+              title={billedNote ?? 'Remove this item from the project'}
             >
               Remove item
             </Button>
+          )}
+          {billedNote && (
+            <p className="w-full text-right type-meta-small text-[var(--text-muted)]">
+              {billedNote}.
+            </p>
           )}
         </div>
 

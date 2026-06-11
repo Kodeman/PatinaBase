@@ -14,6 +14,7 @@ import {
   useIsStudioOwner,
   useVendors,
   useFFECategories,
+  useFfeInvoiceCoverage,
   type PaymentPattern,
 } from '@patina/supabase';
 import { FFE_STAGE_KEYS, type FFEStageKey } from '@patina/types';
@@ -173,6 +174,14 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
   // mock data and have no Supabase row to insert against.
   const isRealProject = UUID_RE.test(projectId);
   const addControlsRef = useRef<AddFFEItemControlsHandle>(null);
+
+  // Invoice coverage (00187): items billed on a live invoice line can't be
+  // removed — the chk_line_items_ffe_kind guard rejects the delete. The
+  // drawer uses this map to disable Remove proactively with the invoice
+  // number. Missing key = not covered.
+  const { data: invoiceCoverage } = useFfeInvoiceCoverage(projectId, {
+    enabled: isRealProject,
+  });
 
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<FacetSelections>({});
@@ -740,6 +749,7 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
           vendors={vendorList}
           isStudioOwner={isStudioOwner}
           canEditPricing={isRealProject}
+          invoiceCoverage={invoiceCoverage?.[drawerItem.id] ?? null}
           onClose={() => router.push(`/portal/projects/${projectId}/ffe`)}
           onUpdateStatus={async (status) => {
             // Through handleStageChange so drawer picks fire the same

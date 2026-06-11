@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { POPayment, PurchaseOrder } from '@patina/supabase';
 import { PaymentPill } from './payment-pill';
+import { LogAcknowledgmentPopover } from './log-acknowledgment-popover';
 import { Button } from '@/components/ui/controls';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
@@ -127,14 +128,20 @@ interface VendorSectionCardProps {
    */
   onOrderViaPatina?: () => void;
   /**
-   * Click handler for the secondary "Order all N" CTA. Rendered to the left
-   * of the primary "View orders" button for non-Catalog vendors that have at
-   * least one item waiting to be placed (Wave 1.4). Launches the Order
-   * Assistant side panel. When `undefined`, the button is not rendered.
+   * Click handler for the "Order all N" CTA (non-Catalog vendors). Launches
+   * the Order Assistant fed with the vendor's approved, unordered FF&E items
+   * (W3-T3a). When `undefined` AND `orderAllDisabledReason` is supplied, the
+   * button renders disabled with the reason as its tooltip; when both are
+   * `undefined` the button is not rendered.
    */
   onOrderAllClick?: () => void;
   /** Label for the "Order all N" CTA (e.g. "Order all 3"). */
   orderAllLabel?: string;
+  /**
+   * Tooltip shown on the disabled "Order all" CTA when the vendor has no
+   * orderable items (e.g. "No approved, unordered items for this vendor.").
+   */
+  orderAllDisabledReason?: string;
 }
 
 export function VendorSectionCard({
@@ -144,6 +151,7 @@ export function VendorSectionCard({
   onOrderViaPatina,
   onOrderAllClick,
   orderAllLabel,
+  orderAllDisabledReason,
 }: VendorSectionCardProps) {
   const [expanded, setExpanded] = useState(true);
 
@@ -249,11 +257,18 @@ export function VendorSectionCard({
             </Button>
           ) : (
             <div className="flex items-center gap-2">
-              {onOrderAllClick && (
+              {(onOrderAllClick || orderAllDisabledReason) && (
                 <Button
                   variant="primary"
                   size="sm"
                   onClick={onOrderAllClick}
+                  disabled={!onOrderAllClick}
+                  title={!onOrderAllClick ? orderAllDisabledReason : undefined}
+                  aria-label={
+                    !onOrderAllClick && orderAllDisabledReason
+                      ? `Order all (${orderAllDisabledReason})`
+                      : undefined
+                  }
                 >
                   {orderAllLabel ?? 'Order all'}
                 </Button>
@@ -299,6 +314,21 @@ export function VendorSectionCard({
                       ETA {formatDate(po.confirmed_eta)}
                     </span>
                   )}
+                  {/* Vendor acknowledgment (W3-T3a): draft POs get the
+                      log-acknowledgment popover; acknowledged POs show a
+                      muted "Ack {date}" meta instead. POs advanced past
+                      draft without an acknowledgment show neither. */}
+                  {po.acknowledged_at ? (
+                    <span className="font-mono text-[0.58rem] text-[var(--text-muted)]">
+                      Ack {formatDate(po.acknowledged_at)}
+                    </span>
+                  ) : po.status === 'draft' ? (
+                    <LogAcknowledgmentPopover
+                      purchaseOrderId={po.id}
+                      vendorPoNumber={po.vendor_po_number}
+                      confirmedEta={po.confirmed_eta}
+                    />
+                  ) : null}
                 </div>
               </div>
 

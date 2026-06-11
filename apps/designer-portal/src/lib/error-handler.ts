@@ -303,6 +303,28 @@ export function handleApiError(error: any): AppError {
         401
       );
     }
+
+    // Postgres CHECK violation from the 00187 invoice guard: deleting a
+    // project_ffe_items row that a live invoice line bills makes the FK's
+    // ON DELETE SET NULL violate chk_line_items_ffe_kind. Translate the raw
+    // constraint error into designer language here so the global mutation
+    // toast is friendly. (The FF&E drawer also disables Remove proactively
+    // via useFfeInvoiceCoverage — this mapping is the fallback for stale
+    // coverage caches and non-drawer delete paths.)
+    if (
+      error.code === '23514' &&
+      typeof error.message === 'string' &&
+      error.message.includes('chk_line_items_ffe_kind')
+    ) {
+      return new AppError(
+        {
+          code: 'FFE_ITEM_BILLED',
+          message: 'This item is on an invoice — void the invoice before removing it.',
+          details: { code: error.code },
+        },
+        409
+      );
+    }
   }
 
   // Axios error

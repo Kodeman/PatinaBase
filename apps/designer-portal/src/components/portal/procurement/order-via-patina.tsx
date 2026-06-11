@@ -41,6 +41,7 @@ import {
   BlockedByDecisionInline,
   getBlockedItems,
 } from '@/components/portal/procurement/blocked-by-decision-notice';
+import { itemTradeCents } from '@/components/portal/procurement/order-assistant';
 import { Button } from '@/components/ui/controls';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
@@ -54,6 +55,13 @@ export interface OrderViaPatinaProps {
     id: string;
     name: string;
     line_total_cents: number;
+    // Dual-pricing fields (00185/00186) — the displayed total is the vendor
+    // TRADE total (COALESCE(trade, unit) × qty via itemTradeCents), matching
+    // the total the create_purchase_order RPC stores server-side. Items
+    // without either unit price fall back to line_total_cents.
+    quantity?: number;
+    unit_price_cents?: number | null;
+    trade_price_cents?: number | null;
     // Decision-Framework integrity fields (PT-D-2-T3-1). Optional — callers
     // without blocking context leave them undefined.
     blocked?: boolean | null;
@@ -86,8 +94,12 @@ export function OrderViaPatina({
   const { toast } = useToast();
   const createPO = useCreatePurchaseOrder();
 
+  // Vendor TRADE total — Σ COALESCE(trade, unit) × qty (00186), the same
+  // computation as the Order Assistant and the server-stored PO total. The
+  // old client-price sum here disagreed with the stored total whenever trade
+  // and client prices diverged.
   const totalCents = useMemo(
-    () => ffeItems.reduce((sum, item) => sum + (item.line_total_cents ?? 0), 0),
+    () => ffeItems.reduce((sum, item) => sum + itemTradeCents(item), 0),
     [ffeItems],
   );
   const itemCount = ffeItems.length;
