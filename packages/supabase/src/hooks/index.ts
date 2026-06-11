@@ -938,6 +938,8 @@ export {
   useVendorPaymentTerms,
   useUpdateVendorPaymentTerms,
   useCreatePurchaseOrder,
+  // W3-T1 — atomic create RPC + vendor acknowledgment (migration 00186)
+  useLogPOAcknowledgment,
   useLogPaymentPaid,
   useAdvancePaymentToDue,
   useUpdatePurchaseOrderETA,
@@ -975,6 +977,7 @@ export type {
   ProcurementItemRow,
   ProcurementItemFilters,
   CreatePurchaseOrderInput,
+  LogPOAcknowledgmentInput,
   UpdatePurchaseOrderStatusInput,
   // Sprint 2 — Receiving, damage claims, calendar
   ReceivingInspectionOutcome,

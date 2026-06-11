@@ -8472,6 +8472,7 @@ export type Database = {
       }
       purchase_orders: {
         Row: {
+          acknowledged_at: string | null
           confirmed_eta: string | null
           created_at: string
           delivered_date: string | null
@@ -8481,6 +8482,7 @@ export type Database = {
           notes: string | null
           payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
           project_id: string
+          sidemark: string | null
           status: string
           total_cents: number
           updated_at: string
@@ -8488,6 +8490,7 @@ export type Database = {
           vendor_po_number: string | null
         }
         Insert: {
+          acknowledged_at?: string | null
           confirmed_eta?: string | null
           created_at?: string
           delivered_date?: string | null
@@ -8497,6 +8500,7 @@ export type Database = {
           notes?: string | null
           payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
           project_id: string
+          sidemark?: string | null
           status?: string
           total_cents?: number
           updated_at?: string
@@ -8504,6 +8508,7 @@ export type Database = {
           vendor_po_number?: string | null
         }
         Update: {
+          acknowledged_at?: string | null
           confirmed_eta?: string | null
           created_at?: string
           delivered_date?: string | null
@@ -8513,6 +8518,7 @@ export type Database = {
           notes?: string | null
           payment_pattern?: Database["public"]["Enums"]["purchase_order_payment_pattern"]
           project_id?: string
+          sidemark?: string | null
           status?: string
           total_cents?: number
           updated_at?: string
@@ -11892,6 +11898,46 @@ export type Database = {
         }
         Returns: string
       }
+      create_purchase_order: {
+        Args: {
+          p_confirmed_eta?: string
+          p_custom_milestones?: Json
+          p_deposit_amount_cents?: number
+          p_deposit_due_date?: string
+          p_ffe_item_ids: string[]
+          p_is_patina_catalog?: boolean
+          p_notes?: string
+          p_payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          p_project_id: string
+          p_sidemark?: string
+          p_vendor_id: string
+          p_vendor_po_number?: string
+        }
+        Returns: {
+          acknowledged_at: string | null
+          confirmed_eta: string | null
+          created_at: string
+          delivered_date: string | null
+          designer_id: string
+          id: string
+          is_patina_catalog: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          project_id: string
+          sidemark: string | null
+          status: string
+          total_cents: number
+          updated_at: string
+          vendor_id: string
+          vendor_po_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       decrement_room_saved_items: {
         Args: { p_count?: number; p_room_id: string }
         Returns: undefined
@@ -12181,6 +12227,37 @@ export type Database = {
           scope_rooms_count: number
           title: string
         }[]
+      }
+      log_po_acknowledgment: {
+        Args: {
+          p_confirmed_eta?: string
+          p_po_id: string
+          p_vendor_po_number?: string
+        }
+        Returns: {
+          acknowledged_at: string | null
+          confirmed_eta: string | null
+          created_at: string
+          delivered_date: string | null
+          designer_id: string
+          id: string
+          is_patina_catalog: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          project_id: string
+          sidemark: string | null
+          status: string
+          total_cents: number
+          updated_at: string
+          vendor_id: string
+          vendor_po_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       mark_scan_upload_complete: {
         Args: { p_scan_id: string }

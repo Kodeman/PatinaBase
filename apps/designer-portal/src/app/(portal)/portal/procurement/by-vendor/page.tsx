@@ -349,8 +349,10 @@ function ByVendorContent() {
               // creates a NEW PO header. The proper FFE→PO linking flow
               // requires a `project_ffe_items` source (the per-project FF&E
               // board), which lives outside the cross-project By Vendor
-              // view's data shape. Submit therefore passes an empty
-              // `ffeItemIds: []` (handled inside OrderAssistant).
+              // view's data shape. `displayOnly: true` makes the assistant
+              // exclude these synthetic ids from the `ffeItemIds` it sends
+              // to the create_purchase_order RPC (00186), which hard-rejects
+              // unknown ids.
               const ffeItems: OrderAssistantFFEItem[] = scopedDrafts.map(
                 (po) => ({
                   id: po.id,
@@ -359,6 +361,7 @@ function ByVendorContent() {
                     : `${group.vendorName} order`,
                   room: po.project?.name,
                   line_total_cents: po.total_cents,
+                  displayOnly: true,
                 }),
               );
               const disclaimer =

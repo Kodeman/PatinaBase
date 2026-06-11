@@ -124,16 +124,18 @@ export function OrderViaPatina({
         // Patina internally — `full_upfront` is the most accurate single-row
         // payment shape ("Patina charges once on our side") and the
         // is_patina_catalog flag overrides the UI treatment anyway.
+        // total_cents is server-computed by the create_purchase_order RPC
+        // (00186) as the vendor TRADE total over the linked items.
         paymentPattern: 'full_upfront',
-        totalCents,
         ffeItemIds: ffeItems.map((i) => i.id),
         isPatinaCatalog: true,
       },
       {
-        onSuccess: () => {
+        onSuccess: (po) => {
           procurementEvents.poCreated({
             payment_pattern: 'full_upfront',
-            total_cents: totalCents,
+            // Server-computed TRADE total (00186) — authoritative.
+            total_cents: po.total_cents,
             is_patina_catalog: true,
             vendor_id: vendor.id,
             project_id: project.id,

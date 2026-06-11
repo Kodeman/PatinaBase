@@ -5,9 +5,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 //
 // Mirror the use-phase-deliverables / use-phase-templates rigs but extend the
 // builder so a single table-builder can return different results for each
-// successive terminal call (.single() / await). useCreatePurchaseOrder and
-// useLogPaymentPaid both perform multiple operations against the same
-// underlying table and need distinct responses per call.
+// successive terminal call (.single() / await). useUpdateDamageClaim and
+// useUpdatePurchaseOrderETA both perform a read-then-update against the same
+// underlying table and need distinct responses per call. RPC-backed hooks
+// (useCreatePurchaseOrder / useLogPOAcknowledgment, 00186) go through
+// supabaseClient.rpc instead.
 // ─────────────────────────────────────────────────────────────────────────────
 
 type BuilderResult = { data: unknown; error: unknown };
@@ -108,6 +110,8 @@ function setTableDefault(table: string, result: BuilderResult): MockBuilder {
 const supabaseClient = {
   auth: { getUser: vi.fn(), getSession: vi.fn() },
   from: vi.fn((table: string) => getBuilder(table)),
+  // RPC mock — W3-T1 (00186): create_purchase_order / log_po_acknowledgment.
+  rpc: vi.fn(),
 };
 
 vi.mock('@supabase/ssr', () => ({
@@ -128,6 +132,8 @@ import {
   useProcurementItems,
   usePOPayments,
   useCreatePurchaseOrder,
+  // W3-T1 — atomic create RPC + vendor acknowledgment (migration 00186)
+  useLogPOAcknowledgment,
   useLogPaymentPaid,
   // Sprint 2 — Receiving, damage claims, calendar
   useDeliveryCalendar,
@@ -156,6 +162,7 @@ beforeEach(() => {
   invalidateQueries.mockReset();
   supabaseClient.auth.getUser.mockReset();
   supabaseClient.auth.getSession.mockReset();
+  supabaseClient.rpc.mockReset();
   // Clear the table-call log so cross-table ordering assertions (which use
   // indexOf over from.mock.calls) never see calls from earlier tests.
   supabaseClient.from.mockClear();
@@ -364,30 +371,76 @@ describe('usePOPayments', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('useCreatePurchaseOrder', () => {
-  it('inserts PO header, inserts 2 pending payment rows for fifty_fifty, then updates each ffe item', async () => {
-    supabaseClient.auth.getUser.mockResolvedValue({
-      data: { user: { id: 'user-1' } },
+  const createdPo = {
+    id: 'po-new',
+    designer_id: 'user-1',
+    project_id: 'proj-1',
+    vendor_id: 'vendor-1',
+    payment_pattern: 'fifty_fifty',
+    // Server-computed TRADE total (00186) — the client no longer sends one.
+    total_cents: 210000,
+    status: 'draft',
+    sidemark: null,
+    acknowledged_at: null,
+  };
+
+  it('calls the create_purchase_order RPC with the item ids and NO client-computed total', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: createdPo, error: null });
+
+    const config = useCreatePurchaseOrder() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    const result = await config.mutationFn({
+      projectId: 'proj-1',
+      vendorId: 'vendor-1',
+      paymentPattern: 'fifty_fifty',
+      ffeItemIds: ['ffe-1', 'ffe-2'],
+      depositDueDate: '2026-07-01',
+      depositAmountCents: 100000,
     });
 
-    // PO insert → returns the new PO row.
-    queueTableResults('purchase_orders', {
-      data: {
-        id: 'po-new',
-        designer_id: 'user-1',
-        project_id: 'proj-1',
-        vendor_id: 'vendor-1',
-        payment_pattern: 'fifty_fifty',
-        total_cents: 100000,
-        status: 'draft',
-      },
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
+    const [fnName, payload] = supabaseClient.rpc.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(fnName).toBe('create_purchase_order');
+    expect(payload).toEqual({
+      p_project_id: 'proj-1',
+      p_vendor_id: 'vendor-1',
+      p_payment_pattern: 'fifty_fifty',
+      p_ffe_item_ids: ['ffe-1', 'ffe-2'],
+      p_vendor_po_number: null,
+      p_confirmed_eta: null,
+      p_is_patina_catalog: false,
+      p_deposit_due_date: '2026-07-01',
+      p_deposit_amount_cents: 100000,
+      p_custom_milestones: [],
+      p_sidemark: null,
+      p_notes: null,
+    });
+
+    // The total is server-computed — no totalCents key may leak into the
+    // payload under any name.
+    expect(Object.keys(payload)).not.toContain('totalCents');
+    expect(Object.keys(payload)).not.toContain('p_total_cents');
+
+    // The mutation resolves with the RPC's purchase_orders row as-is —
+    // onSuccess consumers read .id and .project_id off it.
+    expect(result).toEqual(createdPo);
+
+    // The atomic RPC owns header + payments + linking — the hook must not
+    // touch any table directly (no compensating-delete machinery left).
+    expect(supabaseClient.from).not.toHaveBeenCalled();
+    expect(supabaseClient.auth.getUser).not.toHaveBeenCalled();
+  });
+
+  it('maps optional fields (vendor PO number, ETA, catalog flag, sidemark, notes) onto the RPC payload', async () => {
+    supabaseClient.rpc.mockResolvedValue({
+      data: { ...createdPo, id: 'po-opt', sidemark: 'Middlewest / Olsen / Lake House / Great Room' },
       error: null,
     });
-    // po_payments insert terminates via await; default suffices.
-    setTableDefault('po_payments', { data: null, error: null });
-    // project_ffe_items updates now terminate via `.select('id')` (await on
-    // the builder) — return a single-row array so linkedCount matches
-    // ffeItemIds.length and the success path doesn't warn.
-    setTableDefault('project_ffe_items', { data: [{ id: 'placeholder' }], error: null });
 
     const config = useCreatePurchaseOrder() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
@@ -396,125 +449,36 @@ describe('useCreatePurchaseOrder', () => {
     await config.mutationFn({
       projectId: 'proj-1',
       vendorId: 'vendor-1',
-      paymentPattern: 'fifty_fifty',
-      totalCents: 100000,
-      ffeItemIds: ['ffe-1', 'ffe-2'],
-    });
-
-    // 1. purchase_orders insert
-    const poBuilder = builders.purchase_orders;
-    const poInsert = poBuilder.__chain.find((c) => c.method === 'insert');
-    expect(poInsert?.args[0]).toEqual(
-      expect.objectContaining({
-        designer_id: 'user-1',
-        project_id: 'proj-1',
-        vendor_id: 'vendor-1',
-        payment_pattern: 'fifty_fifty',
-        total_cents: 100000,
-        status: 'draft',
-      })
-    );
-
-    // 2. po_payments insert — single call, 2-row array, deposit + balance, pending
-    const payBuilder = builders.po_payments;
-    const payInsert = payBuilder.__chain.find((c) => c.method === 'insert');
-    expect(Array.isArray(payInsert?.args[0])).toBe(true);
-    const rows = payInsert?.args[0] as Array<Record<string, unknown>>;
-    expect(rows).toHaveLength(2);
-    expect(rows[0]).toEqual(
-      expect.objectContaining({
-        kind: 'deposit',
-        amount_cents: 50000,
-        state: 'pending',
-        sort_order: 0,
-        purchase_order_id: 'po-new',
-      })
-    );
-    expect(rows[1]).toEqual(
-      expect.objectContaining({
-        kind: 'balance',
-        amount_cents: 50000,
-        state: 'pending',
-        sort_order: 1,
-        purchase_order_id: 'po-new',
-      })
-    );
-
-    // 3. project_ffe_items update — one update per ffeItemId, each scoped
-    //    by both id AND project_id (C-1 defence-in-depth).
-    const ffeBuilder = builders.project_ffe_items;
-    const ffeUpdates = ffeBuilder.__chain.filter((c) => c.method === 'update');
-    expect(ffeUpdates).toHaveLength(2);
-    ffeUpdates.forEach((u) => {
-      expect(u.args[0]).toEqual({ purchase_order_id: 'po-new' });
-    });
-    const ffeEqs = ffeBuilder.__chain.filter((c) => c.method === 'eq');
-    expect(ffeEqs.map((e) => e.args)).toEqual([
-      ['id', 'ffe-1'],
-      ['project_id', 'proj-1'],
-      ['id', 'ffe-2'],
-      ['project_id', 'proj-1'],
-    ]);
-
-    // Verify call order across tables: PO → payments → ffe links.
-    const fromCalls = (supabaseClient.from as unknown as { mock: { calls: unknown[][] } }).mock
-      .calls.map((c) => c[0] as string);
-    expect(fromCalls.indexOf('purchase_orders')).toBeLessThan(
-      fromCalls.indexOf('po_payments')
-    );
-    expect(fromCalls.indexOf('po_payments')).toBeLessThan(
-      fromCalls.indexOf('project_ffe_items')
-    );
-  });
-
-  it('inserts a single balance row with no deposit for net_30 pattern', async () => {
-    supabaseClient.auth.getUser.mockResolvedValue({
-      data: { user: { id: 'user-1' } },
-    });
-    queueTableResults('purchase_orders', {
-      data: { id: 'po-net30', project_id: 'proj-2' },
-      error: null,
-    });
-    setTableDefault('po_payments', { data: null, error: null });
-    setTableDefault('project_ffe_items', { data: null, error: null });
-
-    const config = useCreatePurchaseOrder() as unknown as {
-      mutationFn: (input: unknown) => Promise<unknown>;
-    };
-
-    await config.mutationFn({
-      projectId: 'proj-2',
-      vendorId: 'vendor-2',
+      vendorPoNumber: 'NA-2026-001',
+      confirmedEta: '2026-08-15',
       paymentPattern: 'net_30',
-      totalCents: 420000,
-      ffeItemIds: [],
+      isPatinaCatalog: true,
+      ffeItemIds: ['ffe-1'],
+      sidemark: 'Middlewest / Olsen / Lake House / Great Room',
+      notes: 'White-glove delivery only.',
     });
 
-    const payBuilder = builders.po_payments;
-    const payInsert = payBuilder.__chain.find((c) => c.method === 'insert');
-    const rows = payInsert?.args[0] as Array<Record<string, unknown>>;
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toEqual(
+    const [, payload] = supabaseClient.rpc.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(payload).toEqual(
       expect.objectContaining({
-        kind: 'balance',
-        amount_cents: 420000,
-        state: 'pending',
-        sort_order: 0,
-        purchase_order_id: 'po-net30',
+        p_vendor_po_number: 'NA-2026-001',
+        p_confirmed_eta: '2026-08-15',
+        p_payment_pattern: 'net_30',
+        p_is_patina_catalog: true,
+        p_sidemark: 'Middlewest / Olsen / Lake House / Great Room',
+        p_notes: 'White-glove delivery only.',
       })
     );
   });
 
-  it('iterates customMilestones and inserts each with its sort_order, label, and milestone kind', async () => {
-    supabaseClient.auth.getUser.mockResolvedValue({
-      data: { user: { id: 'user-1' } },
-    });
-    queueTableResults('purchase_orders', {
-      data: { id: 'po-cm', project_id: 'proj-3' },
+  it('maps customMilestones to the snake_case JSONB shape the RPC consumes', async () => {
+    supabaseClient.rpc.mockResolvedValue({
+      data: { ...createdPo, id: 'po-cm', payment_pattern: 'custom_milestones' },
       error: null,
     });
-    setTableDefault('po_payments', { data: null, error: null });
-    setTableDefault('project_ffe_items', { data: null, error: null });
 
     const config = useCreatePurchaseOrder() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
@@ -524,8 +488,7 @@ describe('useCreatePurchaseOrder', () => {
       projectId: 'proj-3',
       vendorId: 'vendor-3',
       paymentPattern: 'custom_milestones',
-      totalCents: 960000,
-      ffeItemIds: [],
+      ffeItemIds: ['ffe-9'],
       customMilestones: [
         { label: 'Deposit — 30%', amountCents: 288000, dueDate: '2026-03-15', sortOrder: 0 },
         { label: 'Mid-production — 40%', amountCents: 384000, sortOrder: 1 },
@@ -533,130 +496,24 @@ describe('useCreatePurchaseOrder', () => {
       ],
     });
 
-    const payBuilder = builders.po_payments;
-    const payInsert = payBuilder.__chain.find((c) => c.method === 'insert');
-    const rows = payInsert?.args[0] as Array<Record<string, unknown>>;
-    expect(rows).toHaveLength(3);
-    expect(rows[0]).toEqual(
-      expect.objectContaining({
-        kind: 'milestone',
-        amount_cents: 288000,
-        label: 'Deposit — 30%',
-        due_date: '2026-03-15',
-        sort_order: 0,
-        state: 'pending',
-        purchase_order_id: 'po-cm',
-      })
-    );
-    expect(rows[1]).toEqual(
-      expect.objectContaining({
-        kind: 'milestone',
-        amount_cents: 384000,
-        label: 'Mid-production — 40%',
-        sort_order: 1,
-      })
-    );
-    expect(rows[2]).toEqual(
-      expect.objectContaining({
-        kind: 'milestone',
-        amount_cents: 288000,
-        label: 'Before ship — 30%',
-        sort_order: 2,
-      })
-    );
-  });
-
-  // ───────────────────────────────────────────────────────────────────────
-  // C-1: Step 3 FFE link scopes its UPDATE by both id AND project_id.
-  // Reviewer flagged that filtering by id alone allows another project's
-  // FFE row to be redirected to this PO if RLS ever regresses.
-  // ───────────────────────────────────────────────────────────────────────
-  it('scopes each project_ffe_items UPDATE by both id and project_id (C-1)', async () => {
-    supabaseClient.auth.getUser.mockResolvedValue({
-      data: { user: { id: 'user-1' } },
-    });
-
-    queueTableResults('purchase_orders', {
-      data: {
-        id: 'po-scope',
-        designer_id: 'user-1',
-        project_id: 'proj-42',
-        vendor_id: 'vendor-1',
-        payment_pattern: 'full_upfront',
-        total_cents: 50000,
-      },
-      error: null,
-    });
-    setTableDefault('po_payments', { data: null, error: null });
-    // Return a single-row array per FFE update so linkedCount === ffeItemIds.length.
-    setTableDefault('project_ffe_items', { data: [{ id: 'placeholder' }], error: null });
-
-    const config = useCreatePurchaseOrder() as unknown as {
-      mutationFn: (input: unknown) => Promise<unknown>;
-    };
-
-    await config.mutationFn({
-      projectId: 'proj-42',
-      vendorId: 'vendor-1',
-      paymentPattern: 'full_upfront',
-      totalCents: 50000,
-      ffeItemIds: ['ffe-a', 'ffe-b', 'ffe-c'],
-    });
-
-    const ffeBuilder = builders.project_ffe_items;
-    const eqArgs = ffeBuilder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
-
-    // Three FFE items × two eq filters each (id + project_id) = 6 .eq() calls.
-    expect(eqArgs).toEqual([
-      ['id', 'ffe-a'],
-      ['project_id', 'proj-42'],
-      ['id', 'ffe-b'],
-      ['project_id', 'proj-42'],
-      ['id', 'ffe-c'],
-      ['project_id', 'proj-42'],
+    const [, payload] = supabaseClient.rpc.mock.calls[0] as [
+      string,
+      { p_custom_milestones: Array<Record<string, unknown>> },
+    ];
+    expect(payload.p_custom_milestones).toEqual([
+      { label: 'Deposit — 30%', amount_cents: 288000, due_date: '2026-03-15', sort_order: 0 },
+      { label: 'Mid-production — 40%', amount_cents: 384000, due_date: null, sort_order: 1 },
+      { label: 'Before ship — 30%', amount_cents: 288000, due_date: null, sort_order: 2 },
     ]);
-
-    // Every update should also include the select('id') terminator so the
-    // hook can count affected rows.
-    const selects = ffeBuilder.__chain.filter((c) => c.method === 'select');
-    expect(selects).toHaveLength(3);
-    selects.forEach((s) => expect(s.args).toEqual(['id']));
   });
 
-  // ───────────────────────────────────────────────────────────────────────
-  // H-2: when Step 2 (payment insert) fails, the hook issues a compensating
-  // DELETE on purchase_orders so the header isn't orphaned in the DB.
-  // ───────────────────────────────────────────────────────────────────────
-  it('issues compensating DELETE on purchase_orders when payment-row insert fails (H-2)', async () => {
-    supabaseClient.auth.getUser.mockResolvedValue({
-      data: { user: { id: 'user-1' } },
-    });
-
-    // Step 1 succeeds → returns the new PO id.
-    // Step "compensate" → DELETE on purchase_orders (await, no .single()),
-    // returns success.
-    queueTableResults(
-      'purchase_orders',
-      // 1. PO insert
-      {
-        data: {
-          id: 'po-orphan',
-          designer_id: 'user-1',
-          project_id: 'proj-1',
-          vendor_id: 'vendor-1',
-          payment_pattern: 'fifty_fifty',
-          total_cents: 100000,
-        },
-        error: null,
-      },
-      // 2. compensating delete result
-      { data: null, error: null }
-    );
-
-    // Step 2 fails.
-    setTableDefault('po_payments', {
+  it('throws a contextual error when the RPC rejects (server-side guard raised)', async () => {
+    supabaseClient.rpc.mockResolvedValue({
       data: null,
-      error: { message: 'simulated payment insert failure' },
+      error: {
+        message:
+          'create_purchase_order: 1 FF&E item(s) are blocked pending a client decision',
+      },
     });
 
     const config = useCreatePurchaseOrder() as unknown as {
@@ -668,61 +525,9 @@ describe('useCreatePurchaseOrder', () => {
         projectId: 'proj-1',
         vendorId: 'vendor-1',
         paymentPattern: 'fifty_fifty',
-        totalCents: 100000,
-        ffeItemIds: ['ffe-1'],
+        ffeItemIds: ['ffe-blocked'],
       })
-    ).rejects.toThrow(/simulated payment insert failure/);
-
-    // The compensating delete must have been called against purchase_orders
-    // and scoped to the orphaned PO id.
-    const poBuilder = builders.purchase_orders;
-    const deletes = poBuilder.__chain.filter((c) => c.method === 'delete');
-    expect(deletes).toHaveLength(1);
-
-    // Walk the chain to confirm the delete was followed by .eq('id', 'po-orphan').
-    const deleteIdx = poBuilder.__chain.findIndex((c) => c.method === 'delete');
-    const afterDelete = poBuilder.__chain.slice(deleteIdx + 1);
-    expect(afterDelete[0]).toEqual({ method: 'eq', args: ['id', 'po-orphan'] });
-
-    // Step 3 should not have run.
-    expect(builders.project_ffe_items).toBeUndefined();
-
-    // Re-run with a fresh mock-state to capture the actual Error message and
-    // confirm it surfaces both the original failure and the cleanup outcome.
-    Object.keys(builders).forEach((k) => delete builders[k]);
-    supabaseClient.auth.getUser.mockResolvedValue({
-      data: { user: { id: 'user-1' } },
-    });
-    queueTableResults(
-      'purchase_orders',
-      { data: { id: 'po-orphan-2', project_id: 'proj-1' }, error: null },
-      { data: null, error: null }
-    );
-    setTableDefault('po_payments', {
-      data: null,
-      error: { message: 'simulated payment insert failure' },
-    });
-
-    let caughtError: Error | undefined;
-    try {
-      await (
-        useCreatePurchaseOrder() as unknown as {
-          mutationFn: (input: unknown) => Promise<unknown>;
-        }
-      ).mutationFn({
-        projectId: 'proj-1',
-        vendorId: 'vendor-1',
-        paymentPattern: 'fifty_fifty',
-        totalCents: 100000,
-        ffeItemIds: [],
-      });
-    } catch (e) {
-      caughtError = e as Error;
-    }
-
-    expect(caughtError).toBeDefined();
-    expect(caughtError?.message).toMatch(/simulated payment insert failure/);
-    expect(caughtError?.message).toMatch(/compensating delete succeeded/);
+    ).rejects.toThrow(/blocked pending a client decision/);
   });
 
   it('onSuccess invalidates PO keys AND both FF&E namespaces (00184 ratchet trigger advances items)', () => {
@@ -739,6 +544,103 @@ describe('useCreatePurchaseOrder', () => {
     // invalidateFfeCaches: package namespace + portal namespace + cross-project view.
     expect(invalidatedKeys).toContainEqual(['project-ffe-items', 'proj-1']);
     expect(invalidatedKeys).toContainEqual(['projects', 'proj-1']);
+    expect(invalidatedKeys).toContainEqual(['procurement-items']);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useLogPOAcknowledgment  (W3-T1 — migration 00186)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useLogPOAcknowledgment', () => {
+  const ackedPo = {
+    id: 'po-ack',
+    project_id: 'proj-1',
+    status: 'confirmed',
+    vendor_po_number: 'ACK-123',
+    confirmed_eta: '2026-08-01',
+    acknowledged_at: '2026-06-11T10:00:00.000Z',
+  };
+
+  it('calls the log_po_acknowledgment RPC with coalesce-safe NULLs for omitted fields', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: ackedPo, error: null });
+
+    const config = useLogPOAcknowledgment() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    const result = await config.mutationFn({ purchaseOrderId: 'po-ack' });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
+    const [fnName, payload] = supabaseClient.rpc.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(fnName).toBe('log_po_acknowledgment');
+    // NULL args tell the RPC to preserve the existing vendor_po_number /
+    // confirmed_eta (COALESCE server-side).
+    expect(payload).toEqual({
+      p_po_id: 'po-ack',
+      p_vendor_po_number: null,
+      p_confirmed_eta: null,
+    });
+
+    expect(result).toEqual(ackedPo);
+    expect(supabaseClient.from).not.toHaveBeenCalled();
+  });
+
+  it('passes vendorPoNumber and confirmedEta through when supplied', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: ackedPo, error: null });
+
+    const config = useLogPOAcknowledgment() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await config.mutationFn({
+      purchaseOrderId: 'po-ack',
+      vendorPoNumber: 'ACK-123',
+      confirmedEta: '2026-08-01',
+    });
+
+    const [, payload] = supabaseClient.rpc.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(payload).toEqual({
+      p_po_id: 'po-ack',
+      p_vendor_po_number: 'ACK-123',
+      p_confirmed_eta: '2026-08-01',
+    });
+  });
+
+  it('throws a contextual error when the RPC rejects (wrong status / non-owner)', async () => {
+    supabaseClient.rpc.mockResolvedValue({
+      data: null,
+      error: {
+        message:
+          'log_po_acknowledgment: purchase order po-shipped is shipped, expected draft or confirmed',
+      },
+    });
+
+    const config = useLogPOAcknowledgment() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await expect(
+      config.mutationFn({ purchaseOrderId: 'po-shipped' })
+    ).rejects.toThrow(/expected draft or confirmed/);
+  });
+
+  it('onSuccess invalidates the PO list, the single-PO key, and the By Status item rows', () => {
+    const config = useLogPOAcknowledgment() as unknown as {
+      onSuccess: (po: { id: string }) => void;
+    };
+
+    config.onSuccess({ id: 'po-ack' });
+
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['purchase-orders']);
+    expect(invalidatedKeys).toContainEqual(['purchase-order', 'po-ack']);
     expect(invalidatedKeys).toContainEqual(['procurement-items']);
   });
 });

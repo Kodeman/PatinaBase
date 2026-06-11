@@ -66,6 +66,23 @@ export interface OrderAssistantFFEItem {
   room?: string;
   line_total_cents: number;
   /**
+   * Dual-pricing fields (00185/00186). The PO total is the vendor TRADE
+   * total — COALESCE(trade, unit) × quantity per item — matching what the
+   * `create_purchase_order` RPC computes server-side. Items without either
+   * unit price (e.g. the By Vendor view's synthetic rows) fall back to
+   * `line_total_cents` for the display total.
+   */
+  quantity?: number;
+  unit_price_cents?: number | null;
+  trade_price_cents?: number | null;
+  /**
+   * True when `id` is NOT a real `project_ffe_items.id` (e.g. the By Vendor
+   * view passes draft-PO rows for display only). Display-only items are
+   * excluded from the `ffeItemIds` sent to `create_purchase_order` — the
+   * RPC hard-rejects unknown ids (00186).
+   */
+  displayOnly?: boolean;
+  /**
    * Three-layer catalog layer of the underlying product, when known.
    * Drives the routing-mode badge in the assistant header and (in
    * Sprint 3) selects between the Patina one-click path and the
@@ -139,6 +156,18 @@ function parseDollarsToCents(input: string): number {
   return Math.round(n * 100);
 }
 
+/**
+ * Vendor-facing TRADE amount for one item: COALESCE(trade, unit) × quantity,
+ * mirroring the `create_purchase_order` total computation (00186). Items
+ * without dual-pricing data (synthetic display-only rows) fall back to
+ * `line_total_cents`.
+ */
+function itemTradeCents(item: OrderAssistantFFEItem): number {
+  const unit = item.trade_price_cents ?? item.unit_price_cents;
+  if (unit === null || unit === undefined) return item.line_total_cents;
+  return unit * (item.quantity ?? 1);
+}
+
 function formatItemDetailsForClipboard(
   vendor: OrderAssistantVendor,
   project: OrderAssistantProject,
@@ -151,10 +180,11 @@ function formatItemDetailsForClipboard(
     lines.push(`${idx + 1}. ${item.name}`);
     if (item.room) lines.push(`   Room: ${item.room}`);
     lines.push(`   Ship to: ${SHIP_TO_PLACEHOLDER}`);
-    lines.push(`   ${formatDollars(item.line_total_cents)}`);
+    // Vendor-facing amounts are TRADE cost (00186) — never client prices.
+    lines.push(`   ${formatDollars(itemTradeCents(item))}`);
     lines.push('');
   });
-  const total = items.reduce((sum, i) => sum + i.line_total_cents, 0);
+  const total = items.reduce((sum, i) => sum + itemTradeCents(i), 0);
   lines.push(`Total: ${formatDollars(total)}`);
   return lines.join('\n');
 }
@@ -183,8 +213,18 @@ function freshMilestone(): MilestoneRow {
 export function OrderAssistant(props: OrderAssistantProps) {
   const { open, onOpenChange, vendor, project, ffeItems, scopeDisclaimer, onCreated } = props;
 
+  // Vendor TRADE total — Σ COALESCE(trade, unit) × qty (00186), matching the
+  // server-computed `purchase_orders.total_cents`. Drives the header display,
+  // the deposit prefills, and the custom-milestones sum validation.
   const totalCents = useMemo(
-    () => ffeItems.reduce((sum, i) => sum + i.line_total_cents, 0),
+    () => ffeItems.reduce((sum, i) => sum + itemTradeCents(i), 0),
+    [ffeItems]
+  );
+
+  // Only real project_ffe_items rows are sent to the RPC — it rejects
+  // unknown ids (00186). Display-only rows (By Vendor synthetics) drop out.
+  const submittableFfeItemIds = useMemo(
+    () => ffeItems.filter((i) => !i.displayOnly).map((i) => i.id),
     [ffeItems]
   );
 
@@ -253,17 +293,20 @@ export function OrderAssistant(props: OrderAssistantProps) {
       return;
     }
     try {
-      await createPO.mutateAsync({
+      const po = await createPO.mutateAsync({
         projectId: project.id,
         vendorId: vendor.id,
         paymentPattern: 'net_30',
-        totalCents,
         isPatinaCatalog: true,
-        ffeItemIds: ffeItems.map((i) => i.id),
+        ffeItemIds: submittableFfeItemIds,
+        // The sidemark input ships with the v2 Order Assistant UI — the
+        // wire is ready, the field just isn't rendered yet.
+        sidemark: undefined,
       });
       procurementEvents.poCreated({
         payment_pattern: 'net_30',
-        total_cents: totalCents,
+        // Server-computed TRADE total (00186) — authoritative.
+        total_cents: po.total_cents,
         is_patina_catalog: true,
         vendor_id: vendor.id,
         project_id: project.id,
@@ -360,6 +403,16 @@ export function OrderAssistant(props: OrderAssistantProps) {
           return 'Each milestone amount must be greater than zero.';
         }
       }
+      // The create_purchase_order RPC (00186) rejects milestone sets that
+      // don't sum to the trade total — validate here first so the designer
+      // gets a field-level message instead of a raw RPC error.
+      const milestoneSum = milestones.reduce(
+        (sum, m) => sum + parseDollarsToCents(m.amountInput),
+        0
+      );
+      if (milestoneSum !== totalCents) {
+        return `Milestone amounts (${formatDollars(milestoneSum)}) must add up to the order total (${formatDollars(totalCents)}).`;
+      }
     }
 
     return null;
@@ -395,9 +448,11 @@ export function OrderAssistant(props: OrderAssistantProps) {
       vendorPoNumber: vendorPoNumber.trim() || undefined,
       confirmedEta: confirmedEta || undefined,
       paymentPattern,
-      totalCents,
       isPatinaCatalog: false,
-      ffeItemIds: ffeItems.map((i) => i.id),
+      ffeItemIds: submittableFfeItemIds,
+      // The sidemark input ships with the v2 Order Assistant UI — the wire
+      // is ready, the field just isn't rendered yet.
+      sidemark: undefined,
     };
 
     if (paymentPattern === 'fifty_fifty' || paymentPattern === 'thirty_seventy') {
@@ -418,11 +473,12 @@ export function OrderAssistant(props: OrderAssistantProps) {
     // net_30: no extra fields; hook builds a single balance row at totalCents.
 
     try {
-      await createPO.mutateAsync(input);
+      const po = await createPO.mutateAsync(input);
 
       procurementEvents.poCreated({
         payment_pattern: paymentPattern,
-        total_cents: totalCents,
+        // Server-computed TRADE total (00186) — authoritative.
+        total_cents: po.total_cents,
         is_patina_catalog: false,
         vendor_id: vendor.id,
         project_id: project.id,
@@ -434,7 +490,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
               parseDollarsToCents(depositAmountInput)
             )} due ${depositDueDate || 'soon'}.`
           : paymentPattern === 'full_upfront'
-            ? `PO created — full payment of ${formatDollars(totalCents)} due ${
+            ? `PO created — full payment of ${formatDollars(po.total_cents)} due ${
                 depositDueDate || 'soon'
               }.`
             : paymentPattern === 'net_30'

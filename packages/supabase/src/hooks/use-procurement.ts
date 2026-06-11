@@ -42,9 +42,20 @@ export interface PurchaseOrder {
   vendor_po_number: string | null;
   confirmed_eta: string | null;
   payment_pattern: PaymentPattern;
+  /**
+   * Vendor-facing TRADE total (00186): server-computed by the
+   * create_purchase_order RPC as Σ COALESCE(trade_price_cents,
+   * unit_price_cents, 0) × quantity over the linked items at creation time.
+   * Rows created before 00186 keep the CLIENT-price totals they were
+   * written with.
+   */
   total_cents: number;
   status: POStatus;
   is_patina_catalog: boolean;
+  /** Shipment sidemark (Studio / Client / Project / Room), 00186. */
+  sidemark: string | null;
+  /** When the vendor confirmed receipt of the order (00186). */
+  acknowledged_at: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -86,7 +97,6 @@ export interface CreatePurchaseOrderInput {
   vendorPoNumber?: string;
   confirmedEta?: string;
   paymentPattern: PaymentPattern;
-  totalCents: number;
   isPatinaCatalog?: boolean;
   ffeItemIds: string[];
   depositDueDate?: string;
@@ -97,6 +107,17 @@ export interface CreatePurchaseOrderInput {
     dueDate?: string;
     sortOrder: number;
   }>;
+  /** Shipment sidemark (Studio / Client / Project / Room), 00186. */
+  sidemark?: string;
+  notes?: string;
+}
+
+export interface LogPOAcknowledgmentInput {
+  purchaseOrderId: string;
+  /** When supplied, overwrites vendor_po_number; omitted/undefined preserves it. */
+  vendorPoNumber?: string;
+  /** When supplied, overwrites confirmed_eta; omitted/undefined preserves it. */
+  confirmedEta?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -130,113 +151,6 @@ export function invalidateFfeCaches(queryClient: QueryClient, projectId: string)
   // Cross-project procurement views (By Status) read items under this
   // prefix; the project-scoped keys above can't reach it, so sweep it whole.
   queryClient.invalidateQueries({ queryKey: ['procurement-items'] });
-}
-
-/**
- * Builds the po_payments insert payload from a payment pattern + amounts.
- * Returns an array of row shapes (without purchase_order_id which is filled in
- * later) ordered by sort_order ascending.
- */
-function buildPaymentRowsForPattern(
-  input: CreatePurchaseOrderInput
-): Array<{
-  kind: POPaymentKind;
-  amount_cents: number;
-  due_date: string | null;
-  state: POPaymentState;
-  label: string | null;
-  sort_order: number;
-}> {
-  const { paymentPattern, totalCents, depositDueDate, depositAmountCents, customMilestones } =
-    input;
-
-  switch (paymentPattern) {
-    case 'fifty_fifty': {
-      const deposit = depositAmountCents ?? Math.floor(totalCents / 2);
-      const balance = totalCents - deposit;
-      return [
-        {
-          kind: 'deposit',
-          amount_cents: deposit,
-          due_date: depositDueDate ?? null,
-          state: 'pending',
-          label: null,
-          sort_order: 0,
-        },
-        {
-          kind: 'balance',
-          amount_cents: balance,
-          due_date: null,
-          state: 'pending',
-          label: null,
-          sort_order: 1,
-        },
-      ];
-    }
-    case 'thirty_seventy': {
-      const deposit = depositAmountCents ?? Math.floor(totalCents * 0.3);
-      const balance = totalCents - deposit;
-      return [
-        {
-          kind: 'deposit',
-          amount_cents: deposit,
-          due_date: depositDueDate ?? null,
-          state: 'pending',
-          label: null,
-          sort_order: 0,
-        },
-        {
-          kind: 'balance',
-          amount_cents: balance,
-          due_date: null,
-          state: 'pending',
-          label: null,
-          sort_order: 1,
-        },
-      ];
-    }
-    case 'full_upfront': {
-      return [
-        {
-          kind: 'deposit',
-          amount_cents: totalCents,
-          due_date: depositDueDate ?? null,
-          state: 'pending',
-          label: null,
-          sort_order: 0,
-        },
-      ];
-    }
-    case 'net_30': {
-      return [
-        {
-          kind: 'balance',
-          amount_cents: totalCents,
-          due_date: null,
-          state: 'pending',
-          label: null,
-          sort_order: 0,
-        },
-      ];
-    }
-    case 'custom_milestones': {
-      const milestones = customMilestones ?? [];
-      return milestones.map((m) => ({
-        kind: 'milestone' as const,
-        amount_cents: m.amountCents,
-        due_date: m.dueDate ?? null,
-        state: 'pending' as POPaymentState,
-        label: m.label,
-        sort_order: m.sortOrder,
-      }));
-    }
-    default: {
-      // Exhaustiveness guard
-      const _exhaustive: never = paymentPattern;
-      void _exhaustive;
-      return [];
-    }
-  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -474,18 +388,21 @@ export function useUpdateVendorPaymentTerms() {
 }
 
 /**
- * Mutation: creates a purchase_orders header row and the appropriate
- * po_payments rows for the chosen payment_pattern. Also updates
- * project_ffe_items.purchase_order_id atomically (best-effort sequential
- * within the same mutation function — the JS client cannot wrap these in a
- * Postgres transaction, so we issue compensating deletes when a later step
- * fails to avoid orphaned PO headers / payment rows in the DB).
+ * Mutation: creates a purchase order via the atomic `create_purchase_order`
+ * RPC (migration 00186). One server-side transaction owns everything the old
+ * 3-step client flow stitched together with compensating deletes:
  *
- * Project scope: every project_ffe_items UPDATE is filtered by both `id` and
- * `project_id` so a malicious or buggy caller cannot redirect another
- * project's FFE row to their own PO. The 00066 RLS policy
- * ("Designers manage their project FFE items") already enforces designer
- * scope, but defence-in-depth at the hook layer is cheap.
+ *   * header INSERT with `total_cents` = vendor TRADE total, server-computed
+ *     as Σ COALESCE(trade_price_cents, unit_price_cents, 0) × quantity over
+ *     the supplied items (the client no longer sends a total),
+ *   * po_payments rows for the chosen pattern (the old
+ *     buildPaymentRowsForPattern logic, now in SQL),
+ *   * project_ffe_items linking with server-side guards — cross-project,
+ *     already-ordered, and decision-blocked items all hard-fail the whole
+ *     transaction instead of silently no-op'ing.
+ *
+ * Resolves with the created purchase_orders row (same shape the old hook
+ * returned from its header INSERT).
  */
 export function useCreatePurchaseOrder() {
   const queryClient = useQueryClient();
@@ -493,110 +410,32 @@ export function useCreatePurchaseOrder() {
     mutationFn: async (input: CreatePurchaseOrderInput): Promise<PurchaseOrder> => {
       const supabase = getSupabase() as any;
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      const { data, error } = await supabase.rpc('create_purchase_order', {
+        p_project_id: input.projectId,
+        p_vendor_id: input.vendorId,
+        p_payment_pattern: input.paymentPattern,
+        p_ffe_item_ids: input.ffeItemIds,
+        p_vendor_po_number: input.vendorPoNumber ?? null,
+        p_confirmed_eta: input.confirmedEta ?? null,
+        p_is_patina_catalog: input.isPatinaCatalog ?? false,
+        p_deposit_due_date: input.depositDueDate ?? null,
+        p_deposit_amount_cents: input.depositAmountCents ?? null,
+        p_custom_milestones: (input.customMilestones ?? []).map((m) => ({
+          label: m.label,
+          amount_cents: m.amountCents,
+          due_date: m.dueDate ?? null,
+          sort_order: m.sortOrder,
+        })),
+        p_sidemark: input.sidemark ?? null,
+        p_notes: input.notes ?? null,
+      });
 
-      // Step 1: insert the PO header.
-      const { data: po, error: poError } = await supabase
-        .from('purchase_orders')
-        .insert({
-          designer_id: user.id,
-          project_id: input.projectId,
-          vendor_id: input.vendorId,
-          vendor_po_number: input.vendorPoNumber ?? null,
-          confirmed_eta: input.confirmedEta ?? null,
-          payment_pattern: input.paymentPattern,
-          total_cents: input.totalCents,
-          is_patina_catalog: input.isPatinaCatalog ?? false,
-          status: 'draft',
-        })
-        .select()
-        .single();
-
-      if (poError) {
+      if (error) {
         throw new Error(
-          `Failed to create purchase order header: ${poError.message ?? String(poError)}`
+          `Failed to create purchase order: ${error.message ?? String(error)}`
         );
       }
-
-      const purchaseOrderId = (po as { id: string }).id;
-
-      // Compensating-delete helper. Deletes the PO header; the po_payments
-      // CASCADE removes any inserted payment rows automatically. Returns a
-      // short status string describing whether cleanup succeeded so the
-      // re-thrown error can surface it to the caller.
-      const compensatingDelete = async (): Promise<string> => {
-        try {
-          const { error: deleteError } = await supabase
-            .from('purchase_orders')
-            .delete()
-            .eq('id', purchaseOrderId);
-          if (deleteError) {
-            return `compensating delete FAILED: ${
-              deleteError.message ?? String(deleteError)
-            }`;
-          }
-          return 'compensating delete succeeded';
-        } catch (e) {
-          return `compensating delete THREW: ${
-            (e as Error)?.message ?? String(e)
-          }`;
-        }
-      };
-
-      // Step 2: insert po_payments rows for the chosen pattern.
-      const rows = buildPaymentRowsForPattern(input).map((r) => ({
-        ...r,
-        purchase_order_id: purchaseOrderId,
-      }));
-
-      if (rows.length > 0) {
-        const { error: paymentsError } = await supabase.from('po_payments').insert(rows);
-        if (paymentsError) {
-          const cleanupStatus = await compensatingDelete();
-          throw new Error(
-            `PO header created (${purchaseOrderId}) but payment rows failed to insert: ${
-              paymentsError.message ?? String(paymentsError)
-            }. ${cleanupStatus}.`
-          );
-        }
-      }
-
-      // Step 3: link the supplied project_ffe_items to this PO. Each UPDATE
-      // is scoped to both id AND project_id so a buggy/malicious caller
-      // cannot redirect another project's FFE row to this PO. We also count
-      // affected rows (returned via .select()) and warn if any update was a
-      // no-op (RLS-denied or already-linked row).
-      let linkedCount = 0;
-      for (const ffeItemId of input.ffeItemIds) {
-        const { data: updatedRows, error: linkError } = await supabase
-          .from('project_ffe_items')
-          .update({ purchase_order_id: purchaseOrderId })
-          .eq('id', ffeItemId)
-          .eq('project_id', input.projectId)
-          .select('id');
-        if (linkError) {
-          const cleanupStatus = await compensatingDelete();
-          throw new Error(
-            `PO ${purchaseOrderId} created with payments but failed to link FFE item ${ffeItemId}: ${
-              linkError.message ?? String(linkError)
-            }. ${cleanupStatus}.`
-          );
-        }
-        linkedCount += (updatedRows ?? []).length;
-      }
-
-      if (input.ffeItemIds.length > 0 && linkedCount !== input.ffeItemIds.length) {
-        // Non-fatal: RLS-denied or already-linked rows produce zero updates.
-        // The caller (and downstream telemetry) should know.
-        console.warn(
-          `useCreatePurchaseOrder: requested ${input.ffeItemIds.length} FFE links but only ${linkedCount} rows were updated for PO ${purchaseOrderId}.`
-        );
-      }
-
-      return po as PurchaseOrder;
+      return data as PurchaseOrder;
     },
     onSuccess: (po) => {
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
@@ -606,6 +445,49 @@ export function useCreatePurchaseOrder() {
       // (aaa_ffe_ratchet_to_po_stage), so both FF&E cache namespaces must
       // refetch — not just the package-side ['project-ffe-items'] key.
       invalidateFfeCaches(queryClient, po.project_id);
+    },
+  });
+}
+
+/**
+ * Mutation: records the vendor's acknowledgment of a purchase order via the
+ * `log_po_acknowledgment` RPC (migration 00186). Server-side it stamps
+ * `acknowledged_at` (idempotent — re-acknowledging never overwrites the
+ * original timestamp), advances draft → confirmed (00184 Trigger B keeps
+ * linked items at 'ordered' — rank no-op), and coalesce-updates
+ * vendor_po_number / confirmed_eta (undefined inputs preserve existing
+ * values). Owner-scoped; rejects POs past 'confirmed'.
+ *
+ * Invalidates: ['purchase-orders'], ['purchase-order', id],
+ *              ['procurement-items'].
+ */
+export function useLogPOAcknowledgment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: LogPOAcknowledgmentInput): Promise<PurchaseOrder> => {
+      const supabase = getSupabase() as any;
+
+      const { data, error } = await supabase.rpc('log_po_acknowledgment', {
+        p_po_id: input.purchaseOrderId,
+        p_vendor_po_number: input.vendorPoNumber ?? null,
+        p_confirmed_eta: input.confirmedEta ?? null,
+      });
+
+      if (error) {
+        throw new Error(
+          `Failed to log PO acknowledgment for ${input.purchaseOrderId}: ${
+            error.message ?? String(error)
+          }`
+        );
+      }
+      return data as PurchaseOrder;
+    },
+    onSuccess: (po) => {
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-order', po.id] });
+      // The By Status per-item rows read status/vendor_po_number/confirmed_eta
+      // off the joined PO.
+      queryClient.invalidateQueries({ queryKey: ['procurement-items'] });
     },
   });
 }

@@ -534,6 +534,12 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
           name: it.name,
           room: it.room?.name,
           line_total_cents: it.line_total_cents || 0,
+          // Dual pricing (00185/00186): the Order Assistant totals
+          // COALESCE(trade, unit) × qty — the vendor TRADE total the
+          // create_purchase_order RPC computes server-side.
+          quantity: it.quantity ?? 1,
+          unit_price_cents: it.unit_price_cents ?? null,
+          trade_price_cents: it.trade_price_cents ?? null,
           // Decision-Framework integrity (PT-D-2-T3-1): carry the blocked flag
           // + decision link so the Order Assistant can refuse ordering and
           // deep-link the designer to the pending decision.
