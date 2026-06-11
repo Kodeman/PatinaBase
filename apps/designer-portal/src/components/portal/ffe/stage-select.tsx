@@ -186,7 +186,7 @@ export function StageSelect({
           tabIndex={-1}
           ref={(el) => el?.focus()}
           onKeyDown={onListKeyDown}
-          className="absolute left-0 z-40 mt-1 max-h-[280px] w-[180px] overflow-auto rounded-md border bg-[var(--bg-surface)] py-1 shadow-lg outline-none"
+          className="absolute left-0 z-40 mt-1 max-h-[280px] w-[220px] overflow-auto rounded-md border bg-[var(--bg-surface)] py-1 shadow-lg outline-none"
           style={{ borderColor: 'var(--border-default)' }}
         >
           {/* PO-sync explainer — informational header, not an option. */}
@@ -200,8 +200,7 @@ export function StageSelect({
                 fontFamily: 'var(--font-body)',
               }}
             >
-              This item follows its purchase order. Picking a stage manually
-              overrides the sync until the next PO update.
+              Manual pick overrides PO sync until the next PO update.
             </li>
           )}
           {STAGES.map((stage, idx) => {

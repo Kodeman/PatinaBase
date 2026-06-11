@@ -378,10 +378,21 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
     });
 
   const bulkAdvance = async (toStatus: string) => {
-    const ids = Array.from(selected);
+    const to = toStatus as FFEStageKey;
+    const selectedItems = items.filter((it) => selected.has(it.id));
+    // Capture each item's pre-advance status before any mutation so analytics
+    // reflect the real from→to transition even if items share the same stage.
+    const snapshots = selectedItems.map((it) => ({
+      itemId: it.id,
+      from: (it.status || 'specified') as FFEStageKey,
+      is_override: poSync(it).systemSet,
+    }));
     await Promise.all(
-      ids.map((itemId) => updateStatus.mutateAsync({ itemId, projectId, status: toStatus }))
+      snapshots.map(({ itemId }) => updateStatus.mutateAsync({ itemId, projectId, status: to }))
     );
+    for (const snap of snapshots) {
+      procurementEvents.statusAdvanced({ from: snap.from, to, is_override: snap.is_override });
+    }
     setSelected(new Set());
   };
 

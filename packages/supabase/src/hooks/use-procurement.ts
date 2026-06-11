@@ -113,11 +113,12 @@ function today(): string {
 /**
  * Invalidates both FF&E cache namespaces for a project.
  *
- * Dual-namespace bridge: the portal caches FF&E under
- * `['projects', id, 'ffe-items']` while this package's hooks use
- * `['project-ffe-items', id]`. Prefix-invalidating `['projects', projectId]`
- * covers the portal namespace (plus the project financial rollups that the
- * 00184 stage-ratchet triggers feed into).
+ * Both this package and the portal now key FF&E items under
+ * `['project-ffe-items', id]`. The `['projects', projectId]` prefix sweep
+ * is kept for the financial rollups, key-metrics, and project detail queries
+ * that the 00184 stage-ratchet triggers feed into — those live under the
+ * portal's `['projects', id, 'financials'/'key-metrics'/detail]` namespace
+ * and are not matched by the `['project-ffe-items']` key above.
  *
  * Call this from any mutation whose write can cause the DB triggers
  * (migration 00184) to advance project_ffe_items rows server-side — the

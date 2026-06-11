@@ -77,7 +77,7 @@ describe('StageSelect PO-sync indicator', () => {
     fireEvent.click(screen.getByRole('button'));
     expect(
       screen.getByText(
-        /follows its purchase order\. Picking a stage manually overrides the sync until the next PO update/i
+        /Manual pick overrides PO sync until the next PO update/i
       )
     ).toBeInTheDocument();
 
@@ -87,5 +87,31 @@ describe('StageSelect PO-sync indicator', () => {
     // A manual pick (the override) still goes through to the parent.
     fireEvent.click(screen.getByRole('option', { name: /Delivered/ }));
     await waitFor(() => expect(onChangeStatus).toHaveBeenCalledWith('delivered'));
+  });
+
+  it('opens via ArrowDown, navigates with ArrowDown, and selects with Enter', async () => {
+    // Guards activeIndex init (lines 65-67): when the listbox opens it
+    // highlights the current stage; ArrowDown then moves to the next option,
+    // and Enter confirms the selection.
+    const onChangeStatus = jest.fn();
+    // Use 'specified' (index 0) so ArrowDown lands on 'quoted' (index 1).
+    render(
+      <StageSelect currentStatus="specified" onChangeStatus={onChangeStatus} />
+    );
+
+    const trigger = screen.getByRole('button');
+
+    // Open via ArrowDown keypress on the trigger.
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    const listbox = await screen.findByRole('listbox');
+    expect(listbox).toBeInTheDocument();
+
+    // Active index should have initialised to the current stage (index 0).
+    // Press ArrowDown to advance to index 1 ('quoted').
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' });
+
+    // Confirm with Enter — should call onChangeStatus with 'quoted'.
+    fireEvent.keyDown(listbox, { key: 'Enter' });
+    await waitFor(() => expect(onChangeStatus).toHaveBeenCalledWith('quoted'));
   });
 });
