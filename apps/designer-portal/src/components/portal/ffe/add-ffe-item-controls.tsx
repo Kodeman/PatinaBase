@@ -40,6 +40,13 @@ interface AddFFEItemControlsProps {
   hideButtons?: boolean;
   /** Label for the primary product button. */
   productLabel?: string;
+  /**
+   * Forwarded to AllowanceForm — shows Trade price + Markup % inputs only on
+   * surfaces whose write path persists trade columns (project FF&E board).
+   * Defaults to false so proposal surfaces never render inputs that would be
+   * silently discarded by useAddProposalItem.
+   */
+  showTradePricing?: boolean;
 }
 
 /**
@@ -61,6 +68,7 @@ export const AddFFEItemControls = forwardRef<AddFFEItemControlsHandle, AddFFEIte
       onAddTbd,
       hideButtons = false,
       productLabel = '+ Add Product',
+      showTradePricing = false,
     },
     ref
   ) {
@@ -114,6 +122,7 @@ export const AddFFEItemControls = forwardRef<AddFFEItemControlsHandle, AddFFEIte
               rooms={rooms}
               categories={categories}
               isSaving={isSaving}
+              showTradePricing={showTradePricing}
               onCancel={() => setAllowanceMode(false)}
               onSave={async (form) => {
                 try {

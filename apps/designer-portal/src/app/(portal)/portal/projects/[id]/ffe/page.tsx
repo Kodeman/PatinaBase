@@ -602,6 +602,7 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
             pickerScope="library"
             isSaving={addItem.isPending}
             productLabel="+ Add FF&E"
+            showTradePricing={true}
             onAddProduct={handleAddProduct}
             onAddAllowance={handleAddAllowance}
             onAddTbd={handleAddTbd}
@@ -887,6 +888,11 @@ function ItemDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
 
+  // Client price recompute (line_total = unit × qty) is only valid for fixed
+  // items — allowance line totals are the budget-range midpoint, owned by
+  // useUpdateProjectFFEItem (see useUpdateFFEItemPricing JSDoc).
+  const clientEditable = item.item_type === 'fixed';
+
   const deriveClient = (trade: string, markup: string) => {
     const t = parseDollarsToCents(trade);
     const m = parsePercentInput(markup);
@@ -896,11 +902,15 @@ function ItemDrawer({
   };
   const handleTradeChange = (v: string) => {
     setTradeInput(v);
-    deriveClient(v, markupInput);
+    // Only derive the client price for fixed items — allowance/TBD client
+    // values come from the budget-range midpoint and cannot be saved here,
+    // so deriving would paint a misleading (unsaveable) preview on locked
+    // client price fields.
+    if (clientEditable) deriveClient(v, markupInput);
   };
   const handleMarkupChange = (v: string) => {
     setMarkupInput(v);
-    deriveClient(tradeInput, v);
+    if (clientEditable) deriveClient(tradeInput, v);
   };
   const handleClientChange = (v: string) => {
     setClientInput(v);
@@ -920,11 +930,6 @@ function ItemDrawer({
   const markupInvalid = markupInput.trim() !== '' && markupPct === null;
   const clientInvalid = clientInput.trim() !== '' && clientCents === null;
   const anyInvalid = tradeInvalid || markupInvalid || clientInvalid;
-
-  // Client price recompute (line_total = unit × qty) is only valid for fixed
-  // items — allowance line totals are the budget-range midpoint, owned by
-  // useUpdateProjectFFEItem (see useUpdateFFEItemPricing JSDoc).
-  const clientEditable = item.item_type === 'fixed';
 
   // Save sends only changed fields; explicit null clears trade/markup. Client
   // price is not nullable — an emptied client field means "unchanged".
@@ -1126,9 +1131,12 @@ function ItemDrawer({
               </label>
             </div>
             {/* Margin readout — studio owners only (hidden, not disabled, for
-                everyone else), and only when trade is set. Live preview from
-                the current field values; (client − trade) × qty. */}
-            {isStudioOwner && marginCents !== null && (
+                everyone else). Only shown for fixed items with a real client
+                price: allowance/TBD line totals are budget-range midpoints and
+                the client field is disabled, so marginCents is always null for
+                those item types — gating on clientEditable makes that explicit
+                without relying on the null guard alone. */}
+            {isStudioOwner && clientEditable && marginCents !== null && (
               <div className="mt-2 type-meta-small text-[var(--text-muted)]">
                 Margin: {formatSignedDollars(marginCents)}
                 {marginPct !== null ? ` · ${marginPct}%` : ''}

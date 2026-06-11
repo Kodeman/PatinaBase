@@ -8,6 +8,12 @@ import { Button, Input, Select, Textarea } from '@/components/ui/controls';
 // supplies rooms + categories and an onSave that performs the actual write
 // (useAddProposalItem on proposals, useAddProjectFFEItem on projects). Inputs
 // are in dollars — the caller converts to cents before persisting.
+//
+// Trade price + Markup % fields are gated behind `showTradePricing` (default
+// false) so proposal surfaces — whose write path (useAddProposalItem) has no
+// trade columns — never render inputs that would silently be discarded. Pass
+// showTradePricing={true} only on the project FF&E board where
+// useAddProjectFFEItem persists both fields.
 
 /** A room the item can be targeted at. Both proposal scope rooms and project rooms fit. */
 export interface FormRoom {
@@ -49,12 +55,21 @@ export function AllowanceForm({
   onSave,
   onCancel,
   isSaving,
+  showTradePricing = false,
 }: {
   rooms: FormRoom[];
   categories: Array<{ slug: string; label: string }>;
   onSave: (form: AllowanceFormState) => void;
   onCancel: () => void;
   isSaving: boolean;
+  /**
+   * When true, renders the Trade price + Markup % inputs (00185 dual pricing).
+   * Only pass true on surfaces whose write path persists trade columns
+   * (useAddProjectFFEItem on the project FF&E board). Proposal surfaces omit
+   * these fields because useAddProposalItem has no trade columns to write.
+   * Defaults to false.
+   */
+  showTradePricing?: boolean;
 }) {
   const [form, setForm] = useState<AllowanceFormState>(EMPTY_ALLOWANCE_FORM);
 
@@ -142,39 +157,41 @@ export function AllowanceForm({
         </label>
       </div>
 
-      {/* Optional dual-pricing fields (00185). Project-board saves pass these
-          through to useAddProjectFFEItem; surfaces whose write path has no
-          trade columns (proposal schedule builder) simply ignore them. */}
-      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        <label className="block">
-          <span className="type-meta mb-1 block">Trade price (optional)</span>
-          <div className="relative">
-            <span
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-body text-[0.88rem]"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              $
-            </span>
+      {/* Optional dual-pricing fields (00185). Only rendered when the caller
+          passes showTradePricing={true} (project FF&E board). Proposal surfaces
+          omit these inputs because useAddProposalItem has no trade columns. */}
+      {showTradePricing && (
+        <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+          <label className="block">
+            <span className="type-meta mb-1 block">Trade price (optional)</span>
+            <div className="relative">
+              <span
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-body text-[0.88rem]"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                $
+              </span>
+              <Input
+                type="number"
+                min="0"
+                value={form.tradeDollars}
+                onChange={(e) => update('tradeDollars', e.target.value)}
+                placeholder="Vendor cost"
+                className="pl-7"
+              />
+            </div>
+          </label>
+          <label className="block">
+            <span className="type-meta mb-1 block">Markup % (optional)</span>
             <Input
               type="number"
-              min="0"
-              value={form.tradeDollars}
-              onChange={(e) => update('tradeDollars', e.target.value)}
-              placeholder="Vendor cost"
-              className="pl-7"
+              value={form.markupPercent}
+              onChange={(e) => update('markupPercent', e.target.value)}
+              placeholder="e.g. 30"
             />
-          </div>
-        </label>
-        <label className="block">
-          <span className="type-meta mb-1 block">Markup % (optional)</span>
-          <Input
-            type="number"
-            value={form.markupPercent}
-            onChange={(e) => update('markupPercent', e.target.value)}
-            placeholder="e.g. 30"
-          />
-        </label>
-      </div>
+          </label>
+        </div>
+      )}
 
       <label className="block">
         <span className="type-meta mb-1 block">Notes (optional)</span>
