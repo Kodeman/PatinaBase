@@ -1,11 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { ArrowUpDown } from 'lucide-react';
+import { Suspense, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { ArrowUpDown, X } from 'lucide-react';
 import { usePurchaseOrders, useIsStudioOwner, type PurchaseOrder } from '@patina/supabase';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { SearchInput } from '@/components/portal/search-input';
-import { Button } from '@/components/ui/controls';
+import { Button, FilterPill } from '@/components/ui/controls';
 import { QboExportModal } from '@/components/portal/procurement/qbo-export-modal';
 import {
   VendorSectionCard,
@@ -75,9 +77,9 @@ function groupByVendor(orders: PurchaseOrder[]): VendorGroup[] {
 }
 
 // ─── Sort row ────────────────────────────────────────────────────────────────
-// NOTE: faceted filtering (vendor terms, has-due-payment, project) is still a
-// Sprint-2 follow-up; sort is wired here. The free-text search above already
-// filters the list.
+// NOTE: faceted filtering (vendor terms, has-due-payment) is still a Sprint-2
+// follow-up; sort is wired here. The free-text search above already filters
+// the list, and W1-T6 added a ?projectId= server-side filter (dismissible pill).
 
 type VendorSortKey = 'due' | 'total' | 'vendor';
 
@@ -108,6 +110,14 @@ function SortRow({
 // ─── Page content ────────────────────────────────────────────────────────────
 
 function ByVendorContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // W1-T6 — ?projectId= deep link (e.g. from the project-detail Procurement
+  // tile). Passed server-side into usePurchaseOrders; the query key embeds the
+  // filters object so the filtered view is its own cache entry.
+  const projectId = searchParams.get('projectId');
+
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<VendorSortKey>('due');
   // NOTE(W1.5.5): the Order-via-Patina dialog state was removed. In v1 the
@@ -131,12 +141,33 @@ function ByVendorContent() {
   const [qboExportOpen, setQboExportOpen] = useState(false);
   const { isStudioOwner, isLoading: studioOwnerLoading } = useIsStudioOwner();
 
-  const { data: orders, isLoading, isError, error } = usePurchaseOrders();
+  const { data: orders, isLoading, isError, error } = usePurchaseOrders(
+    projectId ? { projectId } : undefined,
+  );
 
   const allOrders = useMemo<PurchaseOrder[]>(
     () => (orders ?? []) as PurchaseOrder[],
     [orders],
   );
+
+  // Project name for the filter pill — derived from the loaded POs' joined
+  // project data (all rows share the project when the server filter is on).
+  // Falls back to a generic label when the filtered result is empty so the
+  // pill can still be dismissed.
+  const projectName = useMemo(() => {
+    if (!projectId) return null;
+    for (const po of allOrders) {
+      if (po.project?.name) return po.project.name;
+    }
+    return null;
+  }, [projectId, allOrders]);
+
+  const clearProjectFilter = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('projectId');
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -228,11 +259,27 @@ function ByVendorContent() {
 
       {/* Filter / sort row */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Search vendor, project, or PO number…"
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Search vendor, project, or PO number…"
+          />
+          {projectId && (
+            <FilterPill
+              active
+              onClick={clearProjectFilter}
+              aria-label={
+                projectName
+                  ? `Remove project filter: ${projectName}`
+                  : 'Remove project filter'
+              }
+            >
+              {projectName ? `Project: ${projectName}` : 'Project filter'}
+              <X className="h-3 w-3" aria-hidden />
+            </FilterPill>
+          )}
+        </div>
         <SortRow value={sortKey} onChange={setSortKey} />
       </div>
 
@@ -246,9 +293,22 @@ function ByVendorContent() {
           </p>
           <p className="mt-1 text-[0.8rem] text-[var(--text-muted)]">
             {allOrders.length === 0
-              ? 'Create a purchase order from the FF&E board to see it here.'
+              ? "Select approved items on a project's FF&E board and choose Create PO."
               : 'Try a different vendor, project, or PO number.'}
           </p>
+          {allOrders.length === 0 && (
+            <Link
+              href={
+                projectId
+                  ? `/portal/projects/${projectId}/ffe?focus=approved`
+                  : '/portal/projects'
+              }
+              className="type-meta-small mt-3 inline-block text-[var(--accent-primary)] no-underline"
+              style={{ letterSpacing: '0.04em' }}
+            >
+              {projectId ? <>Open the FF&amp;E board &rarr;</> : <>Browse projects &rarr;</>}
+            </Link>
+          )}
           {/* TODO(help-system): wire CMS empty-state when surface keys are assigned */}
         </div>
       )}
@@ -368,5 +428,11 @@ function ByVendorContent() {
 }
 
 export default function ProcurementByVendorPage() {
-  return <ByVendorContent />;
+  // useSearchParams requires a Suspense boundary in Next 15 (same pattern as
+  // the By Status page).
+  return (
+    <Suspense fallback={<LoadingStrata />}>
+      <ByVendorContent />
+    </Suspense>
+  );
 }

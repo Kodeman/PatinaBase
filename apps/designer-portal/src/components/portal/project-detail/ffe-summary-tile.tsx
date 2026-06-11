@@ -283,7 +283,7 @@ export function FFESummaryTile({ projectId }: FFESummaryTileProps) {
             </Link>
           )}
           <Link
-            href="/portal/procurement/by-vendor"
+            href={`/portal/procurement/by-vendor?projectId=${projectId}`}
             className="rounded-[3px] border px-3 py-1.5 text-[var(--text-primary)] no-underline"
             style={{
               borderColor: 'var(--border-default)',

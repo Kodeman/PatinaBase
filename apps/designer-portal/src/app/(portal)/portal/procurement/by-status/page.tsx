@@ -27,6 +27,7 @@
  */
 
 import { Suspense, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Pencil } from 'lucide-react';
 import {
@@ -593,8 +594,24 @@ function ByStatusContent() {
             No FF&amp;E items yet
           </p>
           <p className="mt-1 text-[0.8rem] text-[var(--text-muted)]">
-            Add items to a project&rsquo;s FF&amp;E board to see them here.
+            Add items to a project&rsquo;s FF&amp;E board to see them here —
+            select approved items and choose Create PO to start purchasing.
           </p>
+          <Link
+            href={
+              searchParams.get('projectId')
+                ? `/portal/projects/${searchParams.get('projectId')}/ffe?focus=approved`
+                : '/portal/projects'
+            }
+            className="type-meta-small mt-3 inline-block text-[var(--accent-primary)] no-underline"
+            style={{ letterSpacing: '0.04em' }}
+          >
+            {searchParams.get('projectId') ? (
+              <>Open the FF&amp;E board &rarr;</>
+            ) : (
+              <>Browse projects &rarr;</>
+            )}
+          </Link>
           {/* TODO(help-system): wire CMS empty-state when Procurement surface keys are assigned */}
         </div>
       ) : (
