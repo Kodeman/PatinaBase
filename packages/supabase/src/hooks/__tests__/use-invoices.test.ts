@@ -30,6 +30,9 @@ import {
   useFfeInvoiceCoverage,
   buildLineRow,
   useCreateDraftInvoice,
+  useUpdateDraftInvoice,
+  useUpsertLineItems,
+  useDeleteLineItem,
   useIssueInvoice,
   useRecordPayment,
   useVoidInvoice,
@@ -251,5 +254,65 @@ describe('ffe-invoice-coverage invalidation', () => {
     };
     config.onSuccess({ project_id: 'proj-1' }, { invoiceId: 'inv-1', projectId: 'proj-1' });
     expect(invalidatedKeys()).toContainEqual(['ffe-invoice-coverage', 'proj-1']);
+  });
+
+  it('useUpdateDraftInvoice onSuccess calls invalidateInvoiceEffects with invoice.project_id', () => {
+    const config = useUpdateDraftInvoice() as unknown as {
+      onSuccess: (invoice: { project_id: string }) => void;
+    };
+    config.onSuccess({ project_id: 'proj-1' });
+    expect(invalidatedKeys()).toContainEqual(['invoices']);
+    expect(invalidatedKeys()).toContainEqual(['ffe-invoice-coverage', 'proj-1']);
+    expect(invalidatedKeys()).toContainEqual(['project-financials', 'proj-1']);
+  });
+
+  it('useUpsertLineItems onSuccess calls invalidateInvoiceEffects with projectId', () => {
+    const config = useUpsertLineItems() as unknown as {
+      onSuccess: (
+        data: void,
+        vars: { invoiceId: string; lines: DraftLineInput[]; projectId?: string }
+      ) => void;
+    };
+    config.onSuccess(undefined, { invoiceId: 'inv-1', lines: [], projectId: 'proj-1' });
+    expect(invalidatedKeys()).toContainEqual(['invoices']);
+    expect(invalidatedKeys()).toContainEqual(['ffe-invoice-coverage', 'proj-1']);
+    expect(invalidatedKeys()).toContainEqual(['project-financials', 'proj-1']);
+  });
+
+  it('useUpsertLineItems without projectId drops the whole coverage namespace', () => {
+    const config = useUpsertLineItems() as unknown as {
+      onSuccess: (
+        data: void,
+        vars: { invoiceId: string; lines: DraftLineInput[]; projectId?: string }
+      ) => void;
+    };
+    config.onSuccess(undefined, { invoiceId: 'inv-1', lines: [] });
+    expect(invalidatedKeys()).toContainEqual(['invoices']);
+    expect(invalidatedKeys()).toContainEqual(['ffe-invoice-coverage']);
+  });
+
+  it('useDeleteLineItem onSuccess calls invalidateInvoiceEffects with projectId', () => {
+    const config = useDeleteLineItem() as unknown as {
+      onSuccess: (
+        data: void,
+        vars: { invoiceId: string; lineItemId: string; projectId?: string }
+      ) => void;
+    };
+    config.onSuccess(undefined, { invoiceId: 'inv-1', lineItemId: 'line-1', projectId: 'proj-1' });
+    expect(invalidatedKeys()).toContainEqual(['invoices']);
+    expect(invalidatedKeys()).toContainEqual(['ffe-invoice-coverage', 'proj-1']);
+    expect(invalidatedKeys()).toContainEqual(['project-financials', 'proj-1']);
+  });
+
+  it('useDeleteLineItem without projectId drops the whole coverage namespace', () => {
+    const config = useDeleteLineItem() as unknown as {
+      onSuccess: (
+        data: void,
+        vars: { invoiceId: string; lineItemId: string; projectId?: string }
+      ) => void;
+    };
+    config.onSuccess(undefined, { invoiceId: 'inv-1', lineItemId: 'line-1' });
+    expect(invalidatedKeys()).toContainEqual(['invoices']);
+    expect(invalidatedKeys()).toContainEqual(['ffe-invoice-coverage']);
   });
 });

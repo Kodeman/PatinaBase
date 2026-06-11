@@ -145,7 +145,7 @@ COMMENT ON TABLE public.invoice_line_items IS
 -- Provenance: body is the live 00178 revision VERBATIM — 00182 changed only
 -- the chk_invoices_number_when_issued TABLE constraint, never this function
 -- (verified: `grep -l void_invoice supabase/migrations/*.sql` → 00178,
--- 00182 only) — except ONE addition: the "Release FF&E billing slots" block
+-- 00182 only in prior migrations) — except ONE addition: the "Release FF&E billing slots" block
 -- after the milestone-status reset, mirroring the milestone release
 -- (metadata audit crumb || pointer cleared || kind rewritten to 'adhoc' so
 -- chk_line_items_ffe_kind keeps holding). CREATE OR REPLACE preserves the

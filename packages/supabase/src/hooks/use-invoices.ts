@@ -579,8 +579,7 @@ export function useUpdateDraftInvoice() {
       return data as Invoice;
     },
     onSuccess: (invoice) => {
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
-      void invoice;
+      invalidateInvoiceEffects(queryClient, invoice.project_id);
     },
   });
 }
@@ -598,6 +597,7 @@ export function useUpsertLineItems() {
     }: {
       invoiceId: string;
       lines: Array<DraftLineInput & { id?: string }>;
+      projectId?: string;
     }): Promise<void> => {
       const supabase = getSupabase() as any;
 
@@ -631,12 +631,8 @@ export function useUpsertLineItems() {
 
       await recomputeDraftTotals(supabase, invoiceId);
     },
-    onSuccess: (_data, { invoiceId }) => {
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
-      // Line edits can attach/detach FF&E billing slots; only the invoiceId
-      // is in hand, so drop the whole coverage namespace (00187).
-      queryClient.invalidateQueries({ queryKey: ['ffe-invoice-coverage'] });
-      void invoiceId;
+    onSuccess: (_data, { projectId }) => {
+      invalidateInvoiceEffects(queryClient, projectId);
     },
   });
 }
@@ -653,6 +649,7 @@ export function useDeleteLineItem() {
     }: {
       invoiceId: string;
       lineItemId: string;
+      projectId?: string;
     }): Promise<void> => {
       const supabase = getSupabase() as any;
       const { error } = await supabase
@@ -663,10 +660,8 @@ export function useDeleteLineItem() {
       if (error) throw error;
       await recomputeDraftTotals(supabase, invoiceId);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
-      // Deleting an ffe line frees the item's billing slot (00187).
-      queryClient.invalidateQueries({ queryKey: ['ffe-invoice-coverage'] });
+    onSuccess: (_data, { projectId }) => {
+      invalidateInvoiceEffects(queryClient, projectId);
     },
   });
 }
