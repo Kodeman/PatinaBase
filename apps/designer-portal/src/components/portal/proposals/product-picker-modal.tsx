@@ -33,6 +33,13 @@ export interface ProductPickResult {
   name: string;
   imageUrl: string | null; // images?.[0] ?? null
   priceCents: number | null; // products.price_retail (already cents)
+  /**
+   * Catalog trade (vendor) unit cost in cents — products.price_trade (00185
+   * dual pricing). null = unknown (drafts, captures, and rows without trade
+   * data). Optional so existing consumers are untouched; none spread the pick
+   * into a DB insert, so the extra key is wire-safe.
+   */
+  priceTradeCents?: number | null;
   vendorName: string | null; // brand ?? vendor.name ?? null
   /** Library layer the product was picked from, when known (for a badge). */
   layer?: LayerProductLayer;
@@ -84,6 +91,7 @@ interface CatalogProductRow {
   name: string;
   brand: string | null;
   price_retail: number | null;
+  price_trade: number | null;
   vendor?: { name?: string | null } | null;
   images: string[];
 }
@@ -101,6 +109,8 @@ interface GridRow {
   name: string;
   brand: string | null;
   price_retail: number | null;
+  /** Trade cost in cents when the source query carries it (00185). */
+  price_trade?: number | null;
   images: string[] | null;
   /** Catalog rows carry a joined vendor; library rows only have `brand`. */
   vendorName?: string | null;
@@ -145,6 +155,7 @@ function ProductResultGrid({
               name: p.name,
               imageUrl: p.images?.[0] ?? null,
               priceCents: p.price_retail ?? null,
+              priceTradeCents: p.price_trade ?? null,
               vendorName: p.vendorName ?? p.brand ?? null,
               layer: p.layer,
             })
@@ -244,6 +255,7 @@ function CatalogTab({
     name: p.name,
     brand: p.brand,
     price_retail: p.price_retail,
+    price_trade: p.price_trade,
     images: p.images,
     vendorName: p.vendor?.name ?? null,
     layer: 'catalog',
@@ -310,6 +322,7 @@ function LibraryTab({ onPick }: { onPick: (pick: TabPick) => void }) {
       name: r.name,
       brand: r.brand,
       price_retail: r.price_retail,
+      price_trade: r.price_trade,
       images: r.images,
       layer,
     }));
@@ -445,6 +458,7 @@ function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
         imageUrl: null,
         priceCents:
           priceRetailDollars !== undefined ? Math.round(priceRetailDollars * 100) : null,
+        priceTradeCents: null, // drafts carry no trade cost
         vendorName: brand.trim() || null,
         layer: 'personal',
       });
@@ -599,6 +613,7 @@ function CapturesTab({ onPick }: { onPick: (pick: TabPick) => void }) {
         name: captureName(capture),
         imageUrl: capture.thumbnail_url ?? null,
         priceCents,
+        priceTradeCents: null, // captures carry no trade cost
         vendorName: captureVendorName(capture),
         layer: 'personal',
         captureId: capture.id,
@@ -650,6 +665,7 @@ function CapturesTab({ onPick }: { onPick: (pick: TabPick) => void }) {
                   name,
                   imageUrl: capture.thumbnail_url ?? null,
                   priceCents: capturePriceCents(capture),
+                  priceTradeCents: null, // captures carry no trade cost
                   vendorName: vendor,
                   captureId: capture.id,
                 });

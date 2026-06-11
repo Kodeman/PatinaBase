@@ -358,6 +358,10 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
       name: r.name,
       quantity: 1,
       unitPriceCents: r.priceCents ?? 0,
+      // Catalog trade cost rides along when the picker knows it (00185).
+      // Markup stays null — the price relationship is unknown at add time;
+      // the pricing drawer can derive it later.
+      tradePriceCents: r.priceTradeCents ?? null,
       vendorName: r.vendorName ?? undefined,
       itemType: 'fixed',
       projectRoomId: r.scopeRoomId,

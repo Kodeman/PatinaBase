@@ -36,6 +36,8 @@ export interface LayerProductRow {
   name: string;
   brand: string | null;
   price_retail: number | null;
+  /** Trade (vendor) unit cost in cents — 00185 dual pricing. null = unknown. */
+  price_trade: number | null;
   images: string[] | null;
   source_url: string | null;
   status: string | null;
@@ -68,7 +70,7 @@ export function useLayerProducts(opts: UseLayerProductsOptions) {
       let query = supabase
         .from('products')
         .select(
-          'id, name, brand, price_retail, images, source_url, status, category, layer, owner_user_id, studio_id, created_at',
+          'id, name, brand, price_retail, price_trade, images, source_url, status, category, layer, owner_user_id, studio_id, created_at',
         )
         .eq('layer', layer)
         .limit(limit);

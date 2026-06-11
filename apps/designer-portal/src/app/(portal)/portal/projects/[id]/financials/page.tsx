@@ -3,6 +3,7 @@
 import { use, useMemo, useState } from 'react';
 import { useProject, useProjectFinancials, useProjectMilestones, useProjectFFEItems } from '@/hooks/use-projects';
 import { useAuth } from '@/hooks/use-auth';
+import { useIsStudioOwner } from '@patina/supabase';
 import { PageActionBar } from '@/components/portal';
 import { Button, IconButton } from '@/components/ui/controls';
 import { MetricBlock } from '@/components/portal/metric-block';
@@ -39,6 +40,33 @@ function formatCurrencyCompact(cents: number): string {
   return `$${dollars.toLocaleString()}`;
 }
 
+/** "-$420" for negative cents (formatCurrency alone renders "$-420"). */
+function formatSignedCurrency(cents: number): string {
+  return cents < 0 ? `-${formatCurrency(Math.abs(cents))}` : formatCurrency(cents);
+}
+
+/** Studio-owner margin rollup (00185 dual pricing), from useProjectFinancials. */
+interface FinancialsMarginInfo {
+  marginCents: number | null;
+  tradeTotalCents: number | null;
+  itemsWithTradeCount: number;
+  totalItemCount: number;
+}
+
+/**
+ * "$X (Y% of client total)" — same semantics as the project-detail
+ * FinancialsPanel: client total = margin + trade over the trade-priced subset
+ * (the prices the client pays for those items). Percent is omitted when that
+ * total is 0 (can't divide).
+ */
+function marginValueLabel(margin: FinancialsMarginInfo): string {
+  const marginCents = margin.marginCents ?? 0;
+  const clientTotalCents = marginCents + (margin.tradeTotalCents ?? 0);
+  if (clientTotalCents <= 0) return formatSignedCurrency(marginCents);
+  const pct = Math.round((marginCents / clientTotalCents) * 100);
+  return `${formatSignedCurrency(marginCents)} (${pct}% of client total)`;
+}
+
 // Variance color per spec: <0% Sage, 0-5% Clay, 5-10% Gold, >10% Terracotta
 function varianceColor(budgetCents: number, actualCents: number): string {
   if (budgetCents <= 0) return 'var(--text-muted)';
@@ -68,6 +96,10 @@ export default function ProjectFinancialsPage({
   const { user } = useAuth();
   const { data: project, isLoading } = useProject(id) as { data: AnyData; isLoading: boolean };
   const { data: financials } = useProjectFinancials(id);
+  // Margin visibility (00185 dual pricing): trade cost + margin are studio-
+  // owner-only. While roles load this is false → margin row simply hidden —
+  // same gating as the project detail page's FinancialsPanel.
+  const { isStudioOwner } = useIsStudioOwner();
   const { data: milestones = [] } = useProjectMilestones(id);
   const { data: ffeItems = [] } = useProjectFFEItems(id);
 
@@ -157,6 +189,20 @@ export default function ProjectFinancialsPage({
   const commissions = Math.round(productSpend * commissionRate);
   const leadDesignerId = project?.lead_designer_id ?? project?.designer_id ?? null;
   const isLeadDesigner = !!user?.id && !!leadDesignerId && leadDesignerId === user.id;
+
+  // Margin row (00185 dual pricing) — studio owners only; hidden (not
+  // disabled) for everyone else, and skipped for mock (array-shape) financials
+  // which carry no trade data. marginCents stays null (never 0-coalesced) when
+  // no item has a trade cost → em-dash, matching the project-detail panel.
+  const financialsMargin: FinancialsMarginInfo | undefined =
+    isStudioOwner && financials && !Array.isArray(financials)
+      ? {
+          marginCents: fin.marginCents ?? null,
+          tradeTotalCents: fin.tradeTotalCents ?? null,
+          itemsWithTradeCount: fin.itemsWithTradeCount ?? 0,
+          totalItemCount: fin.totalItemCount ?? 0,
+        }
+      : undefined;
 
   return (
     <div className="pt-8">
@@ -258,6 +304,38 @@ export default function ProjectFinancialsPage({
           />
         </div>
         <VarianceTable rows={variances} totals={totalsRow} onDrill={setDrillCategory} />
+
+        {/* Margin row (00185 dual pricing) — rendered only for studio owners
+            on real projects (financialsMargin gating above). marginCents ===
+            null means no item carries a trade cost yet → the page's
+            placeholder idiom ("—"), never $0. The percent denominator is the
+            CLIENT total of the trade-priced subset (margin + trade), so
+            partial coverage stays honest and is qualified by the
+            "(n of m items…)" note. Mirrors the project-detail FinancialsPanel. */}
+        {financialsMargin && (
+          <div
+            className="grid items-baseline gap-3 border-b py-3"
+            style={{ gridTemplateColumns: '1fr auto', borderColor: 'rgba(229, 226, 221, 0.6)' }}
+          >
+            <span className="flex items-baseline gap-2">
+              <span className="type-body text-[0.85rem] font-medium">Margin</span>
+              {financialsMargin.marginCents !== null &&
+                financialsMargin.itemsWithTradeCount < financialsMargin.totalItemCount && (
+                  <span className="type-meta-small text-[var(--text-muted)]">
+                    ({financialsMargin.itemsWithTradeCount} of {financialsMargin.totalItemCount} items have trade cost)
+                  </span>
+                )}
+            </span>
+            <span
+              className="text-right font-heading text-[0.88rem] font-semibold"
+              style={{
+                color: financialsMargin.marginCents === null ? 'var(--text-muted)' : undefined,
+              }}
+            >
+              {financialsMargin.marginCents === null ? '—' : marginValueLabel(financialsMargin)}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Two-column: Milestones + Earnings */}

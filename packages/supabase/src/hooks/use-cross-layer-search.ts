@@ -7,7 +7,7 @@ import type { LayerProductLayer, LayerProductRow } from './use-layer-products';
 const getSupabase = () => createBrowserClient();
 
 const PRODUCT_FIELDS =
-  'id, name, brand, price_retail, images, source_url, status, category, layer, owner_user_id, studio_id, created_at';
+  'id, name, brand, price_retail, price_trade, images, source_url, status, category, layer, owner_user_id, studio_id, created_at';
 
 export interface CrossLayerSearchResult {
   /** Items keyed by layer. RLS removes anything the caller can't see. */
