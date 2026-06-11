@@ -64,6 +64,11 @@ COMMENT ON COLUMN public.project_ffe_items.markup_percent IS
   'proposal_items.markup_percent. Client price is the source of truth — this '
   'records intent and need not exactly equal unit_price/trade − 1.';
 
+-- Partial index on source_proposal_item_id: tier-a backfill join + future provenance lookups; matches the partial-index idiom of idx_project_ffe_items_product.
+CREATE INDEX IF NOT EXISTS idx_project_ffe_items_source_proposal_item
+  ON public.project_ffe_items(source_proposal_item_id)
+  WHERE source_proposal_item_id IS NOT NULL;
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 2. BACKFILL — three tiers, each idempotent via `trade_price_cents IS NULL`
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -665,8 +670,7 @@ COMMENT ON FUNCTION apply_decision(UUID, UUID, UUID) IS
 -- ═══════════════════════════════════════════════════════════════════════════
 
 COMMENT ON COLUMN public.purchase_orders.total_cents IS
-  'PO total in cents. SEMANTIC FLIP AT 00186: rows created before 00186 (UI '
-  'summed project_ffe_items.unit_price_cents = client prices) hold '
-  'CLIENT-price totals; rows created from 00186 on (create_purchase_order '
-  'RPC) hold vendor-facing TRADE totals (trade_price_cents). Comment-only '
+  'Current semantics: CLIENT-price total (UI summed client prices at creation). '
+  'Becomes vendor-facing TRADE total when the create_purchase_order RPC ships '
+  '(00186); rows keep the semantics they were written with. Comment-only '
   'marker added in 00185.';

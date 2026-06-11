@@ -325,7 +325,10 @@ VALUES ('dddd0000-0000-4000-8000-000000000091', '88888888-8888-4888-8888-8888888
 
 -- Item with negative markup: trade 50000, markup -10.00, client 45000.
 INSERT INTO proposal_items (id, proposal_id, name, quantity, unit_price, markup_percent, unit_sell_price, line_total_cents, item_type, position)
-VALUES ('dddd0000-0000-4000-8000-000000000092', 'dddd0000-0000-4000-8000-000000000091', 'Discounted item', 1, 50000, -10.00, 45000, 45000, 'fixed', 0);
+VALUES
+  ('dddd0000-0000-4000-8000-000000000092', 'dddd0000-0000-4000-8000-000000000091', 'Discounted item',    1, 50000, -10.00, 45000, 45000, 'fixed', 0),
+  -- Negative unit_price (-5000) AND negative markup (-10.00): GREATEST clamp must fire on trade_price_cents → 0.
+  ('dddd0000-0000-4000-8000-000000000093', 'dddd0000-0000-4000-8000-000000000091', 'Negative trade item', 1, -5000, -10.00,  4500,  4500, 'fixed', 1);
 
 SELECT activate_proposal_as_project('dddd0000-0000-4000-8000-000000000091'::uuid);
 
@@ -345,7 +348,18 @@ BEGIN
   ASSERT r.unit_price_cents = 45000,
     'FAIL 4d: unit_price_cents (client sell price) must pass through unclamped as 45000, got ' || COALESCE(r.unit_price_cents::text, 'NULL');
 
-  RAISE NOTICE 'Case 4 passed: negative markup/trade clamped on activation; client price unclamped.';
+  -- Item with negative unit_price (-5000): GREATEST(-5000, 0) = 0; clamp actually fires on trade_price_cents.
+  SELECT unit_price_cents, trade_price_cents, markup_percent INTO r
+    FROM project_ffe_items
+   WHERE source_proposal_item_id = 'dddd0000-0000-4000-8000-000000000093';
+  ASSERT FOUND,
+    'FAIL 4e: activation with negative unit_price should succeed and create the FF&E row';
+  ASSERT r.trade_price_cents = 0,
+    'FAIL 4f: negative unit_price must be clamped to trade_price_cents = 0 (GREATEST actually fires), got ' || COALESCE(r.trade_price_cents::text, 'NULL');
+  ASSERT r.markup_percent = 0,
+    'FAIL 4g: negative markup_percent must be clamped to 0, got ' || COALESCE(r.markup_percent::text, 'NULL');
+
+  RAISE NOTICE 'Case 4 passed: negative markup/trade clamped on activation; client price unclamped; GREATEST clamp fires on negative unit_price.';
 END
 $$;
 
