@@ -1,0 +1,268 @@
+/**
+ * Desk derivation — spec v1.1 §7, rulings R1/R2.
+ *
+ * Pure functions from `document_state` rows (migration 00188) to the Desk's
+ * two populations: needs-your-hand folders (each with exactly ONE need line —
+ * "the one thing") and in-motion chips (never actionable).
+ *
+ * Deliberately dependency-free: no stages.ts import (it pulls
+ * @patina/help-system, the Jest ESM trap), no design-system imports. Stamp
+ * colors are CSS-var strings resolved by the portal's globals.css tokens.
+ *
+ * Hesitation thresholds (DECISIONS.md I6, tune with Leah):
+ *   sent & unopened > 3 days · opened & unsigned > 5 days.
+ */
+
+export type EngagementKind = 'project' | 'proposal' | 'lead' | 'relationship';
+
+export type SectionKey =
+  | 'brief'
+  | 'discovery'
+  | 'direction'
+  | 'proposal'
+  | 'project'
+  | 'install'
+  | 'care';
+
+export interface DocumentStateRow {
+  engagement_kind: EngagementKind;
+  engagement_id: string;
+  project_id: string | null;
+  proposal_id: string | null;
+  lead_id: string | null;
+  designer_id: string | null;
+  client_profile_id: string | null;
+  client_name: string;
+  title: string;
+  project_status: string | null;
+  current_phase: string | null;
+  active_section: SectionKey;
+  is_paused: boolean;
+  is_archived: boolean;
+  proposal_status: string | null;
+  proposal_sent_at: string | null;
+  proposal_viewed_at: string | null;
+  lead_response_deadline: string | null;
+  lead_status: string | null;
+  overdue_decision_count: number;
+  earliest_overdue_due: string | null;
+  awaiting_inspection_count: number;
+  blocked_item_count: number;
+  in_flight_count: number;
+  installed_count: number;
+  item_count: number;
+  updated_at: string;
+}
+
+export type NeedKind =
+  | 'overdue_decision'
+  | 'proposal_declined'
+  | 'proposal_expired'
+  | 'new_lead'
+  | 'hesitating_proposal'
+  | 'awaiting_inspection';
+
+export interface NeedLine {
+  kind: NeedKind;
+  text: string;
+  stamp: { label: string; color: string };
+  urgent: boolean;
+}
+
+export interface DeskFolder {
+  row: DocumentStateRow;
+  need: NeedLine;
+}
+
+export interface MotionChip {
+  row: DocumentStateRow;
+  text: string;
+}
+
+const DAY_MS = 86_400_000;
+const HESITATION_UNOPENED_DAYS = 3;
+const HESITATION_UNSIGNED_DAYS = 5;
+const LEAD_URGENT_WINDOW_MS = 48 * 3_600_000;
+const MAX_MOTION_CHIPS = 6;
+
+/** Severity rank — lower sorts first within the needs stack. */
+const NEED_RANK: Record<NeedKind, number> = {
+  overdue_decision: 0,
+  proposal_declined: 1,
+  proposal_expired: 2,
+  new_lead: 3,
+  hesitating_proposal: 4,
+  awaiting_inspection: 5,
+};
+
+const STAMP_COLOR = {
+  goldenHour: 'var(--color-golden-hour)',
+  terracotta: 'var(--color-terracotta)',
+  clay: 'var(--color-clay)',
+  dustyBlue: 'var(--color-dusty-blue)',
+  sage: 'var(--color-sage)',
+} as const;
+
+const fmtDay = (iso: string) =>
+  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(iso));
+
+const daysBetween = (earlierIso: string, now: Date) =>
+  Math.floor((now.getTime() - new Date(earlierIso).getTime()) / DAY_MS);
+
+/** The ONE thing this engagement needs from the designer today, or null. */
+export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
+  if (row.is_archived || row.is_paused) return null;
+
+  if (row.overdue_decision_count > 0) {
+    const oldest = row.earliest_overdue_due ? ` — oldest due ${fmtDay(row.earliest_overdue_due)}` : '';
+    const n = row.overdue_decision_count;
+    return {
+      kind: 'overdue_decision',
+      text: n === 1 ? `1 decision overdue${oldest}` : `${n} decisions overdue${oldest}`,
+      stamp: { label: 'DECISION DUE', color: STAMP_COLOR.goldenHour },
+      urgent: true,
+    };
+  }
+
+  if (row.engagement_kind === 'proposal') {
+    if (row.proposal_status === 'declined') {
+      return {
+        kind: 'proposal_declined',
+        text: 'Proposal declined — follow up',
+        stamp: { label: 'DECLINED', color: STAMP_COLOR.terracotta },
+        urgent: false,
+      };
+    }
+    if (row.proposal_status === 'expired') {
+      return {
+        kind: 'proposal_expired',
+        text: 'Proposal expired — revise or follow up',
+        stamp: { label: 'EXPIRED', color: STAMP_COLOR.terracotta },
+        urgent: false,
+      };
+    }
+    if (row.proposal_status === 'sent' && row.proposal_sent_at && !row.proposal_viewed_at) {
+      const days = daysBetween(row.proposal_sent_at, now);
+      if (days > HESITATION_UNOPENED_DAYS) {
+        return {
+          kind: 'hesitating_proposal',
+          text: `Sent ${fmtDay(row.proposal_sent_at)} — not yet opened`,
+          stamp: { label: 'SENT', color: STAMP_COLOR.dustyBlue },
+          urgent: false,
+        };
+      }
+    }
+    if (row.proposal_status === 'viewed' && row.proposal_viewed_at) {
+      const days = daysBetween(row.proposal_viewed_at, now);
+      if (days > HESITATION_UNSIGNED_DAYS) {
+        return {
+          kind: 'hesitating_proposal',
+          text: `Opened ${fmtDay(row.proposal_viewed_at)} — no signature yet`,
+          stamp: { label: 'VIEWED', color: STAMP_COLOR.dustyBlue },
+          urgent: false,
+        };
+      }
+    }
+    return null;
+  }
+
+  if (row.engagement_kind === 'lead') {
+    const deadline = row.lead_response_deadline;
+    const msLeft = deadline ? new Date(deadline).getTime() - now.getTime() : null;
+    const closing = msLeft !== null && msLeft < LEAD_URGENT_WINDOW_MS;
+    const text =
+      deadline === null
+        ? 'New lead — respond'
+        : msLeft! < 0
+          ? 'Response window passed — reply anyway'
+          : closing
+            ? `Respond by ${fmtDay(deadline)} — closing soon`
+            : `New lead — respond by ${fmtDay(deadline)}`;
+    return {
+      kind: 'new_lead',
+      text,
+      stamp: { label: 'NEW LEAD', color: STAMP_COLOR.clay },
+      urgent: closing,
+    };
+  }
+
+  if (row.awaiting_inspection_count > 0) {
+    const n = row.awaiting_inspection_count;
+    return {
+      kind: 'awaiting_inspection',
+      text:
+        n === 1
+          ? '1 piece delivered — awaiting inspection'
+          : `${n} pieces delivered — awaiting inspection`,
+      stamp: { label: 'DELIVERED', color: STAMP_COLOR.sage },
+      urgent: false,
+    };
+  }
+
+  return null;
+}
+
+/** One quiet line for an engagement progressing without the designer. */
+export function deriveMotion(row: DocumentStateRow, now: Date): string | null {
+  if (row.is_archived) return null;
+  if (row.is_paused) return 'Paused';
+
+  if (row.engagement_kind === 'proposal') {
+    if (row.proposal_status === 'draft') return 'Proposal drafting';
+    if (row.proposal_status === 'sent' || row.proposal_status === 'viewed') {
+      const since = row.proposal_sent_at ? ` since ${fmtDay(row.proposal_sent_at)}` : '';
+      return `With client${since}`;
+    }
+    return null;
+  }
+
+  if (row.engagement_kind === 'relationship') return 'In discovery';
+
+  if (row.in_flight_count > 0) {
+    const n = row.in_flight_count;
+    return n === 1 ? '1 piece on the way' : `${n} pieces on the way`;
+  }
+
+  return null;
+}
+
+function needSortKey(folder: DeskFolder): [number, number, number] {
+  const { row, need } = folder;
+  const date =
+    need.kind === 'overdue_decision' && row.earliest_overdue_due
+      ? new Date(row.earliest_overdue_due).getTime()
+      : need.kind === 'new_lead' && row.lead_response_deadline
+        ? new Date(row.lead_response_deadline).getTime()
+        : need.kind === 'hesitating_proposal' && row.proposal_sent_at
+          ? new Date(row.proposal_sent_at).getTime()
+          : new Date(row.updated_at).getTime();
+  return [need.urgent ? 0 : 1, NEED_RANK[need.kind], date];
+}
+
+/** Split rows into the needs-your-hand stack and the in-motion chips. */
+export function partitionDesk(
+  rows: DocumentStateRow[],
+  now: Date,
+): { folders: DeskFolder[]; chips: MotionChip[] } {
+  const folders: DeskFolder[] = [];
+  const chips: MotionChip[] = [];
+
+  for (const row of rows) {
+    if (row.is_archived) continue;
+    const need = deriveNeed(row, now);
+    if (need) {
+      folders.push({ row, need });
+      continue;
+    }
+    const motion = deriveMotion(row, now);
+    if (motion) chips.push({ row, text: motion });
+  }
+
+  folders.sort((a, b) => {
+    const ka = needSortKey(a);
+    const kb = needSortKey(b);
+    return ka[0] - kb[0] || ka[1] - kb[1] || ka[2] - kb[2];
+  });
+
+  return { folders, chips: chips.slice(0, MAX_MOTION_CHIPS) };
+}
