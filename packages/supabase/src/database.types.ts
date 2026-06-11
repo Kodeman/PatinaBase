@@ -3442,6 +3442,7 @@ export type Database = {
           amount_cents: number
           created_at: string
           description: string
+          ffe_item_id: string | null
           id: string
           invoice_id: string
           kind: string
@@ -3455,6 +3456,7 @@ export type Database = {
           amount_cents?: number
           created_at?: string
           description: string
+          ffe_item_id?: string | null
           id?: string
           invoice_id: string
           kind?: string
@@ -3468,6 +3470,7 @@ export type Database = {
           amount_cents?: number
           created_at?: string
           description?: string
+          ffe_item_id?: string | null
           id?: string
           invoice_id?: string
           kind?: string
@@ -3478,6 +3481,13 @@ export type Database = {
           unit_amount_cents?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "invoice_line_items_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "invoice_line_items_invoice_id_fkey"
             columns: ["invoice_id"]
@@ -12059,6 +12069,17 @@ export type Database = {
           styles_with_embedding: number
           total_products: number
           total_styles: number
+        }[]
+      }
+      get_ffe_invoice_coverage: {
+        Args: { p_project_id: string }
+        Returns: {
+          billed_cents: number
+          coverage: string
+          ffe_item_id: string
+          invoice_id: string
+          invoice_number: string
+          invoice_status: string
         }[]
       }
       get_or_create_conversation: {

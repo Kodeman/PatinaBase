@@ -1044,6 +1044,7 @@ export {
   useStartCheckout,
   useVoidInvoice,
   useArAging,
+  useFfeInvoiceCoverage,
   computeArAging,
   invoiceDaysOverdue,
   AR_BUCKET_LABELS,
@@ -1063,4 +1064,7 @@ export type {
   DraftLineInput,
   CreateDraftInvoiceInput,
   UpdateDraftInvoiceInput,
+  FfeCoverageState,
+  FfeItemCoverage,
+  FfeInvoiceCoverageMap,
 } from './use-invoices';

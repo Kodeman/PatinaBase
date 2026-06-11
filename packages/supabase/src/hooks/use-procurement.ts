@@ -455,6 +455,9 @@ export function useCreatePurchaseOrder() {
       // (aaa_ffe_ratchet_to_po_stage), so both FF&E cache namespaces must
       // refetch — not just the package-side ['project-ffe-items'] key.
       invalidateFfeCaches(queryClient, po.project_id);
+      // Ordering changes what the invoice soft-gate should surface next time
+      // (00187 — get_ffe_invoice_coverage read-model in use-invoices.ts).
+      queryClient.invalidateQueries({ queryKey: ['ffe-invoice-coverage', po.project_id] });
     },
   });
 }

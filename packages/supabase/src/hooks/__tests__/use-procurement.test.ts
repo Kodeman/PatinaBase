@@ -545,6 +545,8 @@ describe('useCreatePurchaseOrder', () => {
     expect(invalidatedKeys).toContainEqual(['project-ffe-items', 'proj-1']);
     expect(invalidatedKeys).toContainEqual(['projects', 'proj-1']);
     expect(invalidatedKeys).toContainEqual(['procurement-items']);
+    // W3-T2 (00187): ordering changes what the invoice soft-gate shows next.
+    expect(invalidatedKeys).toContainEqual(['ffe-invoice-coverage', 'proj-1']);
   });
 });
 

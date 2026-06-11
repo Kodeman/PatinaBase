@@ -19,7 +19,7 @@ const getSupabase = () => createBrowserClient();
 
 export type InvoiceStatus = 'draft' | 'sent' | 'partially_paid' | 'paid' | 'void';
 
-export type InvoiceLineKind = 'milestone' | 'time' | 'adhoc';
+export type InvoiceLineKind = 'milestone' | 'time' | 'adhoc' | 'ffe';
 
 export type InvoicePaymentMethod =
   | 'stripe'
@@ -36,6 +36,7 @@ export interface InvoiceLineItem {
   invoice_id: string;
   kind: InvoiceLineKind;
   milestone_id: string | null;
+  ffe_item_id: string | null;
   description: string;
   quantity: number;
   unit_amount_cents: number;
@@ -106,6 +107,8 @@ export interface InvoiceFilters {
 export interface DraftLineInput {
   kind?: InvoiceLineKind;
   milestoneId?: string;
+  /** Bills a specific project_ffe_items row (kind 'ffe', migration 00187). */
+  ffeItemId?: string;
   description: string;
   quantity: number;
   unitAmountCents: number;
@@ -146,11 +149,18 @@ function lineAmountCents(quantity: number, unitAmountCents: number): number {
   return Math.round((quantity || 0) * (unitAmountCents || 0));
 }
 
-function buildLineRow(invoiceId: string, line: DraftLineInput, index: number) {
+/**
+ * Kind inference: an explicit `kind` always wins; otherwise a linked
+ * milestone makes a 'milestone' line, a linked FF&E item makes an 'ffe'
+ * line (00187), and everything else is 'adhoc'. Exported for tests and for
+ * composers that want to preview the row before insert.
+ */
+export function buildLineRow(invoiceId: string, line: DraftLineInput, index: number) {
   return {
     invoice_id: invoiceId,
-    kind: line.kind ?? (line.milestoneId ? 'milestone' : 'adhoc'),
+    kind: line.kind ?? (line.milestoneId ? 'milestone' : line.ffeItemId ? 'ffe' : 'adhoc'),
     milestone_id: line.milestoneId ?? null,
+    ffe_item_id: line.ffeItemId ?? null,
     description: line.description,
     quantity: line.quantity,
     unit_amount_cents: line.unitAmountCents,
@@ -211,6 +221,13 @@ function invalidateInvoiceEffects(queryClient: QueryClient, projectId?: string |
     queryClient.invalidateQueries({ queryKey: ['project-payment-milestones', projectId] });
     queryClient.invalidateQueries({ queryKey: ['project-financials', projectId] });
     queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
+    // FF&E billing coverage (00187): create/issue/pay/void all move items
+    // between uninvoiced/invoiced/paid, so the soft-gate read-model refetches.
+    queryClient.invalidateQueries({ queryKey: ['ffe-invoice-coverage', projectId] });
+  } else {
+    // No projectId in hand (e.g. record-payment callers that only know the
+    // invoice id) — drop the whole coverage namespace rather than miss it.
+    queryClient.invalidateQueries({ queryKey: ['ffe-invoice-coverage'] });
   }
   queryClient.invalidateQueries({ queryKey: ['earnings'] });
   queryClient.invalidateQueries({ queryKey: ['earnings-stats'] });
@@ -307,6 +324,76 @@ export function useProjectInvoices(projectId: string | null | undefined) {
       return (data ?? []) as Invoice[];
     },
     enabled: !!projectId,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FF&E INVOICE COVERAGE (migration 00187 — the procurement soft-gate bridge)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type FfeCoverageState = 'uninvoiced' | 'invoiced' | 'paid';
+
+export interface FfeItemCoverage {
+  /** 'uninvoiced' | 'invoiced' (draft/sent/partially_paid) | 'paid'. */
+  coverage: FfeCoverageState;
+  invoiceId: string | null;
+  invoiceNumber: string | null;
+  invoiceStatus: InvoiceStatus | null;
+  billedCents: number | null;
+}
+
+/**
+ * Keyed object: project_ffe_items.id → its billing coverage. A plain object
+ * (not a Map) so React Query structural sharing / devtools serialization work
+ * and the Order Assistant can do `coverage[item.id]` per row in O(1). The RPC
+ * returns one row per item in the project, so a MISSING key means the item is
+ * not visible to the caller (not in the project, or RLS-hidden) — treat it as
+ * 'uninvoiced' for display but don't gate on it.
+ */
+export type FfeInvoiceCoverageMap = Record<string, FfeItemCoverage>;
+
+interface FfeCoverageRow {
+  ffe_item_id: string;
+  invoice_id: string | null;
+  invoice_number: string | null;
+  invoice_status: string | null;
+  billed_cents: number | null;
+  coverage: string;
+}
+
+/**
+ * Per-item invoice coverage for a project's FF&E schedule via the
+ * get_ffe_invoice_coverage RPC (00187, SECURITY INVOKER — RLS scopes the
+ * rows, non-owners get an empty map). Powers the Order Assistant's soft
+ * client-payment gate: "has the client been invoiced / paid for the items
+ * going on this PO?".
+ *
+ * Invalidated (key ['ffe-invoice-coverage', projectId]) by every invoice
+ * mutation that moves money or lines (create/issue/pay/void/line edits) and
+ * by useCreatePurchaseOrder (ordering changes what the gate shows next).
+ */
+export function useFfeInvoiceCoverage(projectId: string, opts?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['ffe-invoice-coverage', projectId],
+    queryFn: async (): Promise<FfeInvoiceCoverageMap> => {
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('get_ffe_invoice_coverage', {
+        p_project_id: projectId,
+      });
+      if (error) throw error;
+      const map: FfeInvoiceCoverageMap = {};
+      for (const row of (data ?? []) as FfeCoverageRow[]) {
+        map[row.ffe_item_id] = {
+          coverage: row.coverage as FfeCoverageState,
+          invoiceId: row.invoice_id,
+          invoiceNumber: row.invoice_number,
+          invoiceStatus: (row.invoice_status as InvoiceStatus | null) ?? null,
+          billedCents: row.billed_cents,
+        };
+      }
+      return map;
+    },
+    enabled: (opts?.enabled ?? true) && !!projectId,
   });
 }
 
@@ -527,8 +614,9 @@ export function useUpsertLineItems() {
         const { error } = await supabase
           .from('invoice_line_items')
           .update({
-            kind: line.kind ?? (line.milestoneId ? 'milestone' : 'adhoc'),
+            kind: line.kind ?? (line.milestoneId ? 'milestone' : line.ffeItemId ? 'ffe' : 'adhoc'),
             milestone_id: line.milestoneId ?? null,
+            ffe_item_id: line.ffeItemId ?? null,
             description: line.description,
             quantity: line.quantity,
             unit_amount_cents: line.unitAmountCents,
@@ -545,6 +633,9 @@ export function useUpsertLineItems() {
     },
     onSuccess: (_data, { invoiceId }) => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      // Line edits can attach/detach FF&E billing slots; only the invoiceId
+      // is in hand, so drop the whole coverage namespace (00187).
+      queryClient.invalidateQueries({ queryKey: ['ffe-invoice-coverage'] });
       void invoiceId;
     },
   });
@@ -574,6 +665,8 @@ export function useDeleteLineItem() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      // Deleting an ffe line frees the item's billing slot (00187).
+      queryClient.invalidateQueries({ queryKey: ['ffe-invoice-coverage'] });
     },
   });
 }
