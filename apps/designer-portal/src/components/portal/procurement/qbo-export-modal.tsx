@@ -294,10 +294,11 @@ export function QboExportModal({ open, onOpenChange }: QboExportModalProps) {
     </label>
   );
 
-  // Defense-in-depth: if roles have finished loading and the user is not a
-  // studio owner, render a short access-denied body instead of the export form.
-  // In practice this branch should not be reachable because the CTA that opens
-  // this modal is already hidden for non-studio-owners in by-vendor/page.tsx.
+  // Three-state render:
+  //   1. studioOwnerLoading && open  → neutral loading body (no form flash)
+  //   2. loaded && !isStudioOwner    → access-denied body + Close footer
+  //   3. loaded && isStudioOwner     → full export form + Cancel/Download footer
+  const rolesLoading = studioOwnerLoading && open;
   const accessDenied = !studioOwnerLoading && !isStudioOwner;
 
   return (
@@ -308,10 +309,25 @@ export function QboExportModal({ open, onOpenChange }: QboExportModalProps) {
           <DialogDescription>Build the reconciliation pack</DialogDescription>
         </DialogHeader>
 
-        {accessDenied ? (
+        {rolesLoading ? (
           <p className="py-4 text-center text-[0.85rem] text-[var(--text-muted)]">
-            Studio owner access required to export billing data.
+            Loading…
           </p>
+        ) : accessDenied ? (
+          <>
+            <p className="py-4 text-center text-[0.85rem] text-[var(--text-muted)]">
+              Studio owner access required to export billing data.
+            </p>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => onOpenChange(false)}
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </>
         ) : (
         <>
         <div className="space-y-5 pt-2">
