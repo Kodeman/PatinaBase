@@ -295,8 +295,9 @@ NEXT_PUBLIC_FLAG_OVERRIDES='procurement-workspace-pilot:true,some-other-flag:fal
   `webServer.env`, so the flag is on for the suite automatically.
 - Gotcha: `NEXT_PUBLIC_` vars are inlined when the dev server starts. With
   `reuseExistingServer` (the local default), an already-running `pnpm dev`
-  started **without** the var will not see the override — restart the dev
-  server with the var exported, or let Playwright start its own server.
+  started **without** the var will not see the override — stop the running dev
+  server, export the var, and restart — Playwright will start its own server
+  only if no server is already listening on port 3000.
 
 ## 🔍 Debugging Tips
 

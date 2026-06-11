@@ -44,6 +44,7 @@ BEGIN
   IF v_po_apparatus IS NULL THEN
     SELECT id INTO v_po_apparatus FROM purchase_orders
      WHERE designer_id = v_designer_id AND id != COALESCE(v_po_woodward, gen_random_uuid()) LIMIT 1;
+    RAISE NOTICE 'procurement_receiving_dev: Apparatus PO (AP-012) not found — substituting fallback PO id %', v_po_apparatus;
   END IF;
 
   IF v_designer_id IS NULL OR v_po_woodward IS NULL THEN

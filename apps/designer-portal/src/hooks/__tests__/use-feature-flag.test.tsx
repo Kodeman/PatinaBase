@@ -56,6 +56,17 @@ describe('parseFlagOverride', () => {
     expect(parseFlagOverride('flag-b')).toBe(false);
     expect(parseFlagOverride('flag-c')).toBe(false);
   });
+
+  it('preserves colons in the value for multi-colon entries (e.g. flag:true:extra → value "true:extra" → false)', () => {
+    process.env[ENV_KEY] = 'flag-a:true:extra';
+    // value is 'true:extra', which !== 'true', so resolves false
+    expect(parseFlagOverride('flag-a')).toBe(false);
+  });
+
+  it('skips bare entries without a colon and returns undefined (falls through to PostHog)', () => {
+    process.env[ENV_KEY] = 'flag-a';
+    expect(parseFlagOverride('flag-a')).toBeUndefined();
+  });
 });
 
 describe('useFeatureFlag', () => {
@@ -80,6 +91,8 @@ describe('useFeatureFlag', () => {
     const { result } = renderHook(() => useFeatureFlag('procurement-workspace-pilot'));
 
     expect(result.current).toEqual({ value: false, isLoading: false });
+    expect(mockIsAnalyticsEnabled).not.toHaveBeenCalled();
+    expect(mockIsFeatureEnabled).not.toHaveBeenCalled();
     expect(mockOnFeatureFlags).not.toHaveBeenCalled();
   });
 

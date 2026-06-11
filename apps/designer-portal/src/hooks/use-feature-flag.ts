@@ -48,7 +48,10 @@ export function parseFlagOverride(flagName: string): boolean | undefined {
   if (!raw) return undefined;
 
   for (const entry of raw.split(',')) {
-    const [name, value] = entry.split(':').map((part) => part.trim());
+    const colonIdx = entry.indexOf(':');
+    if (colonIdx === -1) continue;
+    const name = entry.slice(0, colonIdx).trim();
+    const value = entry.slice(colonIdx + 1).trim();
     if (name === flagName) return value === 'true';
   }
   return undefined;
