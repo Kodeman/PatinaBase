@@ -65,7 +65,9 @@ export type NeedKind =
 export interface NeedLine {
   kind: NeedKind;
   text: string;
-  stamp: { label: string; color: string };
+  /** `color` is the stamp border; `ink` (optional) darkens the text for
+   *  contrast on paper, per the prototype's stamp treatment. */
+  stamp: { label: string; color: string; ink?: string };
   urgent: boolean;
 }
 
@@ -95,12 +97,15 @@ const NEED_RANK: Record<NeedKind, number> = {
   awaiting_inspection: 5,
 };
 
-const STAMP_COLOR = {
-  goldenHour: 'var(--color-golden-hour)',
-  terracotta: 'var(--color-terracotta)',
-  clay: 'var(--color-clay)',
-  dustyBlue: 'var(--color-dusty-blue)',
-  sage: 'var(--color-sage)',
+/** Prototype stamp palette (v0.3 is the look authority): borders use brand
+ *  vars; warm-toned stamps darken their text ink for contrast on paper.
+ *  Golden Hour is reserved for the urgent folder outline, never stamp text. */
+const STAMP = {
+  due: { color: 'var(--color-terracotta)', ink: '#C4836F' },
+  terracotta: { color: 'var(--color-terracotta)', ink: '#C4836F' },
+  clay: { color: 'var(--color-clay)', ink: '#A8895E' },
+  dustyBlue: { color: 'var(--color-dusty-blue)' },
+  sage: { color: 'var(--color-sage)', ink: '#85947C' },
 } as const;
 
 const fmtDay = (iso: string) =>
@@ -119,7 +124,7 @@ export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
     return {
       kind: 'overdue_decision',
       text: n === 1 ? `1 decision overdue${oldest}` : `${n} decisions overdue${oldest}`,
-      stamp: { label: 'DECISION DUE', color: STAMP_COLOR.goldenHour },
+      stamp: { label: 'DECISION DUE', ...STAMP.due },
       urgent: true,
     };
   }
@@ -129,7 +134,7 @@ export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
       return {
         kind: 'proposal_declined',
         text: 'Proposal declined — follow up',
-        stamp: { label: 'DECLINED', color: STAMP_COLOR.terracotta },
+        stamp: { label: 'DECLINED', ...STAMP.terracotta },
         urgent: false,
       };
     }
@@ -137,7 +142,7 @@ export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
       return {
         kind: 'proposal_expired',
         text: 'Proposal expired — revise or follow up',
-        stamp: { label: 'EXPIRED', color: STAMP_COLOR.terracotta },
+        stamp: { label: 'EXPIRED', ...STAMP.terracotta },
         urgent: false,
       };
     }
@@ -147,7 +152,7 @@ export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
         return {
           kind: 'hesitating_proposal',
           text: `Sent ${fmtDay(row.proposal_sent_at)} — not yet opened`,
-          stamp: { label: 'SENT', color: STAMP_COLOR.dustyBlue },
+          stamp: { label: 'SENT', ...STAMP.dustyBlue },
           urgent: false,
         };
       }
@@ -158,7 +163,7 @@ export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
         return {
           kind: 'hesitating_proposal',
           text: `Opened ${fmtDay(row.proposal_viewed_at)} — no signature yet`,
-          stamp: { label: 'VIEWED', color: STAMP_COLOR.dustyBlue },
+          stamp: { label: 'VIEWED', ...STAMP.dustyBlue },
           urgent: false,
         };
       }
@@ -181,7 +186,7 @@ export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
     return {
       kind: 'new_lead',
       text,
-      stamp: { label: 'NEW LEAD', color: STAMP_COLOR.clay },
+      stamp: { label: 'NEW LEAD', ...STAMP.clay },
       urgent: closing,
     };
   }
@@ -194,7 +199,7 @@ export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
         n === 1
           ? '1 piece delivered — awaiting inspection'
           : `${n} pieces delivered — awaiting inspection`,
-      stamp: { label: 'DELIVERED', color: STAMP_COLOR.sage },
+      stamp: { label: 'DELIVERED', ...STAMP.sage },
       urgent: false,
     };
   }

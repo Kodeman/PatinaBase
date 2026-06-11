@@ -93,6 +93,19 @@
   --space-24: 6rem;
 }
 
+/* The Document motion (spec v1.1 §10): vertical settle only — paper never
+   slides in from screen edges. Used by Doc* overlay wrappers (R3). */
+@keyframes doc-sheet-up {
+  from {
+    transform: translateY(14px);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 /* Typography: now provided by @patina/design-system/styles/typography.css.
    Font variable mappings set on body below in @layer base. */
 

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { StudioDrawer } from '@/components/document/studio-drawer';
 import { DocumentGate } from './document-gate';
 
 export const metadata: Metadata = {
@@ -14,7 +15,10 @@ export const metadata: Metadata = {
 export default function DocumentLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-[var(--color-charcoal)]">
-      <DocumentGate>{children}</DocumentGate>
+      <DocumentGate>
+        {children}
+        <StudioDrawer />
+      </DocumentGate>
     </div>
   );
 }
