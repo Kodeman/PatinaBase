@@ -672,6 +672,7 @@ export {
   useProjectRooms,
   useProjectFFEItems,
   useUpdateFFEItemStatus,
+  useUpdateFFEItemPricing,
   useProjectPhases,
   useCreateProjectPhase,
   useUpdateProjectPhaseStatus,
@@ -684,6 +685,7 @@ export type {
   ProjectNarrativeSection,
   ProjectPalette,
   ProjectPaletteSwatch,
+  UpdateFFEItemPricingInput,
 } from './use-project-v2';
 export {
   // Proposal Activation

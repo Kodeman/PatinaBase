@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import type { Database } from '../database.types';
+import { invalidateFfeCaches } from './use-procurement';
 
 const getSupabase = () => createBrowserClient();
 
@@ -237,6 +239,106 @@ export function useUpdateFFEItemStatus() {
   });
 }
 
+export interface UpdateFFEItemPricingInput {
+  itemId: string;
+  projectId: string;
+  /** Vendor (trade) unit cost in cents (00185). `null` clears the value back to unknown. */
+  tradePriceCents?: number | null;
+  /** Advisory designer markup percent (00185). `null` clears the value. */
+  markupPercent?: number | null;
+  /**
+   * CLIENT unit price in cents. When provided, `line_total_cents` is
+   * recomputed as `unitPriceCents × <current row quantity>`.
+   */
+  unitPriceCents?: number;
+  /**
+   * Quantity is intentionally NOT accepted: the hook reads the row's current
+   * quantity itself (select-then-update), matching useUpdateFFEItemStatus.
+   * Quantity edits belong to the portal's useUpdateProjectFFEItem.
+   */
+  quantity?: never;
+}
+
+/**
+ * Updates the dual-pricing columns (00185) on a single FF&E item:
+ * `trade_price_cents`, `markup_percent`, and/or `unit_price_cents` (CLIENT
+ * price). Only the fields provided are written; explicit `null` clears
+ * trade/markup back to "unknown".
+ *
+ * line_total recompute: when `unitPriceCents` is provided we read the row's
+ * current `quantity` first and write `line_total_cents = unitPriceCents ×
+ * quantity` in the same UPDATE — the same select-then-update approach
+ * useUpdateFFEItemStatus uses, chosen so callers never have to thread
+ * quantity through (and can't pass a stale one; see `quantity?: never`).
+ * Unlike the sibling hook we THROW when that read fails rather than silently
+ * skipping the recompute — writing a new unit price while leaving a stale
+ * line total would corrupt client-facing money. Note the recompute is
+ * unconditional (mirrors useUpdateFFEItemStatus): allowance items' midpoint
+ * line totals are owned by the portal's useUpdateProjectFFEItem, so pass
+ * unitPriceCents only for fixed-price items.
+ *
+ * Invalidates both FF&E namespaces + the cross-project procurement view (via
+ * invalidateFfeCaches — same trio as useUpdateFFEItemStatus) plus this
+ * package's ['project-financials', projectId], whose margin rollup reads the
+ * pricing columns written here.
+ */
+export function useUpdateFFEItemPricing() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      projectId: _projectId,
+      tradePriceCents,
+      markupPercent,
+      unitPriceCents,
+    }: UpdateFFEItemPricingInput) => {
+      const supabase = getSupabase();
+
+      const updates: Database['public']['Tables']['project_ffe_items']['Update'] = {};
+      if (tradePriceCents !== undefined) updates.trade_price_cents = tradePriceCents;
+      if (markupPercent !== undefined) updates.markup_percent = markupPercent;
+      if (unitPriceCents !== undefined) {
+        updates.unit_price_cents = unitPriceCents;
+        // Recompute the client line total from the row's current quantity.
+        const { data: item, error: readError } = await supabase
+          .from('project_ffe_items')
+          .select('quantity')
+          .eq('id', itemId)
+          .single();
+        if (readError || !item) {
+          throw new Error(
+            `useUpdateFFEItemPricing: failed to read quantity for item ${itemId}: ${
+              readError?.message ?? 'row not found'
+            }`
+          );
+        }
+        updates.line_total_cents = unitPriceCents * item.quantity;
+      }
+
+      if (Object.keys(updates).length === 0) {
+        throw new Error('useUpdateFFEItemPricing: no pricing fields provided');
+      }
+
+      const { data, error } = await supabase
+        .from('project_ffe_items')
+        .update(updates)
+        .eq('id', itemId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, { projectId }) => {
+      // ['project-ffe-items', projectId] + ['projects', projectId] +
+      // ['procurement-items'] — the same trio useUpdateFFEItemStatus sweeps.
+      invalidateFfeCaches(queryClient, projectId);
+      // The package financials hook keys under its own namespace and its
+      // margin rollup reads trade_price_cents/line_total_cents.
+      queryClient.invalidateQueries({ queryKey: ['project-financials', projectId] });
+    },
+  });
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PROJECT PHASES
 // ═══════════════════════════════════════════════════════════════════════════
@@ -426,17 +528,33 @@ export function useUpdatePaymentMilestoneStatus() {
 // PROJECT FINANCIALS (computed)
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Computed project financial rollup.
+ *
+ * Margin semantics (00185 dual pricing — kept simple but honest):
+ *   - `trade_price_cents` is NULLABLE; user-created rows often have no trade
+ *     quote. Margin is therefore computed ONLY over items where trade is set:
+ *       marginCents = Σ (line_total_cents − trade_price_cents × quantity)
+ *                     over items WHERE trade_price_cents IS NOT NULL
+ *   - `tradeTotalCents` = Σ trade_price_cents × quantity over the same subset.
+ *   - Both are `null` (not 0) when NO item has trade data — "unknown", never
+ *     "zero margin".
+ *   - `itemsWithTradeCount` / `totalItemCount` let the UI qualify partial
+ *     coverage, e.g. "margin (4 of 6 items)".
+ *   - Per-category margin follows the same rule: `marginCents` is null for a
+ *     category with no trade-priced items; `itemsWithTradeCount` says how many
+ *     of the category's items contributed.
+ */
 export function useProjectFinancials(projectId: string) {
   return useQuery({
     queryKey: ['project-financials', projectId],
     queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = getSupabase() as any;
+      const supabase = getSupabase();
 
       const [projectRes, roomsRes, itemsRes] = await Promise.all([
         supabase.from('projects').select('budget_cents, total_amount_cents, committed_cents, actual_cents, design_fee_cents').eq('id', projectId).single(),
         supabase.from('project_rooms').select('id, name, budget_cents, committed_cents, actual_cents').eq('project_id', projectId),
-        supabase.from('project_ffe_items').select('ffe_category, line_total_cents, status').eq('project_id', projectId),
+        supabase.from('project_ffe_items').select('ffe_category, line_total_cents, status, trade_price_cents, quantity').eq('project_id', projectId),
       ]);
 
       const project = projectRes.data;
@@ -444,16 +562,33 @@ export function useProjectFinancials(projectId: string) {
       const items = itemsRes.data ?? [];
 
       // Aggregate by category
-      const categoryMap = new Map<string, { budget: number; committed: number; actual: number }>();
+      const categoryMap = new Map<
+        string,
+        { budget: number; committed: number; actual: number; margin: number; withTrade: number }
+      >();
+      let tradeTotalCents = 0;
+      let marginCents = 0;
+      let itemsWithTradeCount = 0;
       for (const item of items) {
         const cat = item.ffe_category || 'Uncategorized';
-        const existing = categoryMap.get(cat) || { budget: 0, committed: 0, actual: 0 };
+        const existing =
+          categoryMap.get(cat) || { budget: 0, committed: 0, actual: 0, margin: 0, withTrade: 0 };
         existing.budget += item.line_total_cents || 0;
         if (['ordered', 'production', 'shipped', 'delivered', 'installed'].includes(item.status)) {
           existing.committed += item.line_total_cents || 0;
         }
         if (['delivered', 'installed'].includes(item.status)) {
           existing.actual += item.line_total_cents || 0;
+        }
+        // Margin only over items with a known trade cost (00185 — see JSDoc).
+        if (item.trade_price_cents !== null && item.trade_price_cents !== undefined) {
+          const tradeLine = item.trade_price_cents * (item.quantity ?? 1);
+          const itemMargin = (item.line_total_cents || 0) - tradeLine;
+          tradeTotalCents += tradeLine;
+          marginCents += itemMargin;
+          itemsWithTradeCount += 1;
+          existing.margin += itemMargin;
+          existing.withTrade += 1;
         }
         categoryMap.set(cat, existing);
       }
@@ -465,7 +600,12 @@ export function useProjectFinancials(projectId: string) {
         actualCents: project?.actual_cents || 0,
         designFeeCents: project?.design_fee_cents || 0,
         varianceCents: (project?.budget_cents || 0) - (project?.actual_cents || 0),
-        byRoom: rooms.map((r: { id: string; name: string; budget_cents: number; committed_cents: number; actual_cents: number }) => ({
+        // 00185 dual pricing — null = "no trade data", never "zero margin".
+        tradeTotalCents: itemsWithTradeCount > 0 ? tradeTotalCents : null,
+        marginCents: itemsWithTradeCount > 0 ? marginCents : null,
+        itemsWithTradeCount,
+        totalItemCount: items.length,
+        byRoom: rooms.map((r) => ({
           roomId: r.id,
           roomName: r.name,
           budgetCents: r.budget_cents,
@@ -477,6 +617,8 @@ export function useProjectFinancials(projectId: string) {
           budgetCents: stats.budget,
           committedCents: stats.committed,
           actualCents: stats.actual,
+          marginCents: stats.withTrade > 0 ? stats.margin : null,
+          itemsWithTradeCount: stats.withTrade,
         })),
       };
     },

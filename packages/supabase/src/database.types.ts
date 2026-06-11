@@ -6096,6 +6096,7 @@ export type Database = {
           item_type: string
           last_status_change_at: string | null
           line_total_cents: number | null
+          markup_percent: number | null
           name: string
           notes: string | null
           po_number: string | null
@@ -6109,6 +6110,7 @@ export type Database = {
           source_decision_id: string | null
           source_proposal_item_id: string | null
           status: string
+          trade_price_cents: number | null
           unit_price_cents: number | null
           updated_at: string
           vendor_id: string | null
@@ -6127,6 +6129,7 @@ export type Database = {
           item_type?: string
           last_status_change_at?: string | null
           line_total_cents?: number | null
+          markup_percent?: number | null
           name: string
           notes?: string | null
           po_number?: string | null
@@ -6140,6 +6143,7 @@ export type Database = {
           source_decision_id?: string | null
           source_proposal_item_id?: string | null
           status?: string
+          trade_price_cents?: number | null
           unit_price_cents?: number | null
           updated_at?: string
           vendor_id?: string | null
@@ -6158,6 +6162,7 @@ export type Database = {
           item_type?: string
           last_status_change_at?: string | null
           line_total_cents?: number | null
+          markup_percent?: number | null
           name?: string
           notes?: string | null
           po_number?: string | null
@@ -6171,6 +6176,7 @@ export type Database = {
           source_decision_id?: string | null
           source_proposal_item_id?: string | null
           status?: string
+          trade_price_cents?: number | null
           unit_price_cents?: number | null
           updated_at?: string
           vendor_id?: string | null
@@ -11896,6 +11902,7 @@ export type Database = {
         Returns: Json
       }
       expire_room_scan_associations: { Args: never; Returns: number }
+      ffe_status_rank: { Args: { p_status: string }; Returns: number }
       find_products_for_style: {
         Args: { match_count?: number; style_id: string }
         Returns: {
@@ -11930,6 +11937,10 @@ export type Database = {
           price_retail: number
           similarity: number
         }[]
+      }
+      flip_pending_balance_to_due: {
+        Args: { p_purchase_order_id: string }
+        Returns: undefined
       }
       get_ab_variant_stats: {
         Args: { p_campaign_id: string }
@@ -12201,6 +12212,7 @@ export type Database = {
         Args: { p_decision_id: string }
         Returns: string
       }
+      po_status_to_ffe_stage: { Args: { p_po_status: string }; Returns: string }
       process_style_quiz: {
         Args: { quiz_answers: Json; timings?: Json }
         Returns: Json

@@ -782,6 +782,8 @@ export function useAddProjectFFEItem() {
       name,
       quantity = 1,
       unitPriceCents = 0,
+      tradePriceCents,
+      markupPercent,
       vendorName,
       vendorId,
       itemType = 'fixed',
@@ -797,6 +799,10 @@ export function useAddProjectFFEItem() {
       name: string;
       quantity?: number;
       unitPriceCents?: number;
+      /** Vendor (trade) unit cost in cents (00185). Omitted/null = unknown. */
+      tradePriceCents?: number | null;
+      /** Advisory designer markup percent (00185). Omitted/null = none recorded. */
+      markupPercent?: number | null;
       vendorName?: string | null;
       vendorId?: string | null;
       itemType?: ProjectFFEItemType;
@@ -837,6 +843,8 @@ export function useAddProjectFFEItem() {
           status: 'specified',
           quantity,
           unit_price_cents: unitPriceCents,
+          trade_price_cents: tradePriceCents ?? null,
+          markup_percent: markupPercent ?? null,
           line_total_cents: lineTotal,
           budget_min_cents: budgetMinCents ?? null,
           budget_max_cents: budgetMaxCents ?? null,
