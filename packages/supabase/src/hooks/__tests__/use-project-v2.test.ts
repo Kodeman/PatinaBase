@@ -107,7 +107,7 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 // Import AFTER mocks.
-import { useUpdateFFEItemPricing, useProjectFinancials } from '../use-project-v2';
+import { useUpdateFFEItemPricing, useProjectFinancials, useUpdateFFEItemStatus } from '../use-project-v2';
 import type { UpdateFFEItemPricingInput } from '../use-project-v2';
 
 beforeEach(() => {
@@ -291,6 +291,13 @@ type FinancialsConfig = {
     marginCents: number | null;
     itemsWithTradeCount: number;
     totalItemCount: number;
+    byRoom: Array<{
+      roomId: string;
+      roomName: string;
+      budgetCents: number;
+      committedCents: number;
+      actualCents: number;
+    }>;
     byCategory: Array<{
       category: string;
       budgetCents: number;
@@ -479,5 +486,60 @@ describe('useProjectFinancials (margin math)', () => {
   it('is disabled for an empty projectId', () => {
     const config = useProjectFinancials('') as unknown as FinancialsConfig;
     expect(config.enabled).toBe(false);
+  });
+
+  it('byRoom coalesces null budget_cents to 0', async () => {
+    setTableDefault('projects', { data: PROJECT_ROW, error: null });
+    setTableDefault('project_rooms', {
+      data: [
+        { id: 'room-1', name: 'Living Room', budget_cents: null, committed_cents: null, actual_cents: null },
+        { id: 'room-2', name: 'Bedroom', budget_cents: 80000, committed_cents: 20000, actual_cents: 10000 },
+      ],
+      error: null,
+    });
+    setTableDefault('project_ffe_items', { data: [], error: null });
+
+    const config = useProjectFinancials('proj-1') as unknown as FinancialsConfig;
+    const result = await config.queryFn();
+
+    const living = result.byRoom.find((r) => r.roomId === 'room-1');
+    expect(living?.budgetCents).toBe(0);
+    expect(living?.committedCents).toBe(0);
+    expect(living?.actualCents).toBe(0);
+
+    const bedroom = result.byRoom.find((r) => r.roomId === 'room-2');
+    expect(bedroom?.budgetCents).toBe(80000);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useUpdateFFEItemStatus — onSuccess invalidation
+// ─────────────────────────────────────────────────────────────────────────────
+
+type StatusMutationConfig = {
+  mutationFn: (input: {
+    itemId: string;
+    projectId: string;
+    status: string;
+    unitPriceCents?: number;
+  }) => Promise<unknown>;
+  onSuccess: (
+    result: unknown,
+    variables: { itemId: string; projectId: string; status: string; unitPriceCents?: number },
+  ) => void;
+};
+
+describe('useUpdateFFEItemStatus', () => {
+  it('onSuccess invalidates the FF&E keys plus project-financials (price param may change line_total_cents)', () => {
+    const config = useUpdateFFEItemStatus() as unknown as StatusMutationConfig;
+
+    config.onSuccess({}, { itemId: 'ffe-1', projectId: 'proj-5', status: 'ordered' });
+
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['project-ffe-items', 'proj-5']);
+    expect(invalidatedKeys).toContainEqual(['project-v2', 'proj-5']);
+    expect(invalidatedKeys).toContainEqual(['projects', 'proj-5']);
+    expect(invalidatedKeys).toContainEqual(['procurement-items']);
+    expect(invalidatedKeys).toContainEqual(['project-financials', 'proj-5']);
   });
 });

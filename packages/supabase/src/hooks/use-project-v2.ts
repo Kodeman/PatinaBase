@@ -235,6 +235,9 @@ export function useUpdateFFEItemStatus() {
       // a manual stage change must reach it too or that view serves stale
       // stages until the next window focus.
       queryClient.invalidateQueries({ queryKey: ['procurement-items'] });
+      // unitPriceCents/line_total_cents may have changed (price param) — the
+      // package financials cache reads these columns for its rollup.
+      queryClient.invalidateQueries({ queryKey: ['project-financials', projectId] });
     },
   });
 }
@@ -331,6 +334,7 @@ export function useUpdateFFEItemPricing() {
     onSuccess: (_, { projectId }) => {
       // ['project-ffe-items', projectId] + ['projects', projectId] +
       // ['procurement-items'] — the same trio useUpdateFFEItemStatus sweeps.
+      // invalidateFfeCaches' ['projects', projectId] sweep also prefix-invalidates the portal's ['projects', id, 'financials'] key — do not add exact:true there.
       invalidateFfeCaches(queryClient, projectId);
       // The package financials hook keys under its own namespace and its
       // margin rollup reads trade_price_cents/line_total_cents.
@@ -608,7 +612,7 @@ export function useProjectFinancials(projectId: string) {
         byRoom: rooms.map((r) => ({
           roomId: r.id,
           roomName: r.name,
-          budgetCents: r.budget_cents,
+          budgetCents: r.budget_cents ?? 0,
           committedCents: r.committed_cents || 0,
           actualCents: r.actual_cents || 0,
         })),
