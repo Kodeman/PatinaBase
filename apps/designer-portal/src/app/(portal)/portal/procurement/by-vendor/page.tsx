@@ -431,7 +431,7 @@ export default function ProcurementByVendorPage() {
   // useSearchParams requires a Suspense boundary in Next 15 (same pattern as
   // the By Status page).
   return (
-    <Suspense fallback={<LoadingStrata />}>
+    <Suspense fallback={<div className="pt-8"><LoadingStrata /></div>}>
       <ByVendorContent />
     </Suspense>
   );

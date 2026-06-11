@@ -538,6 +538,7 @@ function ByStatusContent() {
 
   const activeBucket = stages.find((s) => s.stage === activeStage)!;
   const totalLive = stages.reduce((acc, s) => acc + s.itemCount, 0);
+  const activeProjectId = filters.project?.[0] ?? null;
 
   // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
   // singleton cache) render the same tree — prevents hydration mismatch.
@@ -599,14 +600,14 @@ function ByStatusContent() {
           </p>
           <Link
             href={
-              searchParams.get('projectId')
-                ? `/portal/projects/${searchParams.get('projectId')}/ffe?focus=approved`
+              activeProjectId
+                ? `/portal/projects/${activeProjectId}/ffe?focus=approved`
                 : '/portal/projects'
             }
             className="type-meta-small mt-3 inline-block text-[var(--accent-primary)] no-underline"
             style={{ letterSpacing: '0.04em' }}
           >
-            {searchParams.get('projectId') ? (
+            {activeProjectId ? (
               <>Open the FF&amp;E board &rarr;</>
             ) : (
               <>Browse projects &rarr;</>
