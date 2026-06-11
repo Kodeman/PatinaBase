@@ -52,7 +52,7 @@ let itemAId: string;
 let itemBId: string;
 let itemCId: string;
 let studioOwnerRoleId: string;
-let hadStudioOwnerBefore: boolean;
+let hadStudioOwnerBefore: boolean | undefined;
 
 // ─── Expected-value helpers ─────────────────────────────────────────────────
 // Replicas of the production formatters (ffe/page.tsx + financials-panel.tsx)
@@ -231,8 +231,10 @@ test.describe.serial('ffe dual pricing: card margins + drawer editor + financial
     }
     // Restore the role EXACTLY as snapshotted. Re-granting (not just deleting
     // when absent before) also repairs the state if test 4 failed between its
-    // revoke and re-grant.
-    if (designerId && studioOwnerRoleId) {
+    // revoke and re-grant. Skip entirely if the snapshot read itself failed
+    // (hadStudioOwnerBefore undefined) — revoking an un-snapshotted grant
+    // would destroy pre-existing manual role state.
+    if (designerId && studioOwnerRoleId && hadStudioOwnerBefore !== undefined) {
       if (hadStudioOwnerBefore) {
         await grantStudioOwner();
       } else {
