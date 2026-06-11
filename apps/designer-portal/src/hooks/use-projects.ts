@@ -385,7 +385,7 @@ export function useProjectFinancials(projectId: string | null) {
           .eq('project_id', projectId),
         supabase
           .from('project_ffe_items')
-          .select('ffe_category, line_total_cents, status')
+          .select('ffe_category, line_total_cents, status, trade_price_cents, quantity')
           .eq('project_id', projectId),
       ]);
 
@@ -394,16 +394,36 @@ export function useProjectFinancials(projectId: string | null) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const items = (itemsRes.data ?? []) as any[];
 
-      const categoryMap = new Map<string, { budget: number; committed: number; actual: number }>();
+      // Margin semantics mirror @patina/supabase's useProjectFinancials (00185
+      // dual pricing): trade_price_cents is NULLABLE, so margin is computed
+      // ONLY over the subset of items with a trade cost, and tradeTotalCents /
+      // marginCents are null (unknown) — never 0 — when no item has trade data.
+      const categoryMap = new Map<
+        string,
+        { budget: number; committed: number; actual: number; margin: number; withTrade: number }
+      >();
+      let tradeTotalCents = 0;
+      let marginCents = 0;
+      let itemsWithTradeCount = 0;
       for (const item of items) {
         const cat = item.ffe_category || 'Uncategorized';
-        const existing = categoryMap.get(cat) || { budget: 0, committed: 0, actual: 0 };
+        const existing =
+          categoryMap.get(cat) || { budget: 0, committed: 0, actual: 0, margin: 0, withTrade: 0 };
         existing.budget += item.line_total_cents || 0;
         if (['ordered', 'production', 'shipped', 'delivered', 'installed'].includes(item.status)) {
           existing.committed += item.line_total_cents || 0;
         }
         if (['delivered', 'installed'].includes(item.status)) {
           existing.actual += item.line_total_cents || 0;
+        }
+        if (item.trade_price_cents !== null && item.trade_price_cents !== undefined) {
+          const tradeLine = item.trade_price_cents * (item.quantity ?? 1);
+          const itemMargin = (item.line_total_cents || 0) - tradeLine;
+          tradeTotalCents += tradeLine;
+          marginCents += itemMargin;
+          itemsWithTradeCount += 1;
+          existing.margin += itemMargin;
+          existing.withTrade += 1;
         }
         categoryMap.set(cat, existing);
       }
@@ -414,6 +434,11 @@ export function useProjectFinancials(projectId: string | null) {
         actualCents: project?.actual_cents || 0,
         designFeeCents: project?.design_fee_cents || 0,
         varianceCents: (project?.budget_cents || 0) - (project?.actual_cents || 0),
+        // 00185 dual pricing — null = "no trade data", never "zero margin".
+        tradeTotalCents: itemsWithTradeCount > 0 ? tradeTotalCents : null,
+        marginCents: itemsWithTradeCount > 0 ? marginCents : null,
+        itemsWithTradeCount,
+        totalItemCount: items.length,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         byRoom: rooms.map((r: any) => ({
           roomId: r.id,
@@ -427,6 +452,8 @@ export function useProjectFinancials(projectId: string | null) {
           budgetCents: stats.budget,
           committedCents: stats.committed,
           actualCents: stats.actual,
+          marginCents: stats.withTrade > 0 ? stats.margin : null,
+          itemsWithTradeCount: stats.withTrade,
         })),
       };
     },

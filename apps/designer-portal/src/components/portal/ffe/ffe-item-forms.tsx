@@ -22,6 +22,14 @@ export interface AllowanceFormState {
   scopeRoomId: string;
   minDollars: string;
   maxDollars: string;
+  /**
+   * Optional vendor (trade) unit cost in dollars (00185 dual pricing). Empty =
+   * unknown. Independent of the budget range — the allowance has no single
+   * client price to derive from, so no trade↔client derivation happens here.
+   */
+  tradeDollars: string;
+  /** Optional advisory markup percent (00185). Empty = none recorded. */
+  markupPercent: string;
   notes: string;
 }
 
@@ -30,6 +38,8 @@ export const EMPTY_ALLOWANCE_FORM: AllowanceFormState = {
   scopeRoomId: '',
   minDollars: '',
   maxDollars: '',
+  tradeDollars: '',
+  markupPercent: '',
   notes: '',
 };
 
@@ -132,6 +142,40 @@ export function AllowanceForm({
         </label>
       </div>
 
+      {/* Optional dual-pricing fields (00185). Project-board saves pass these
+          through to useAddProjectFFEItem; surfaces whose write path has no
+          trade columns (proposal schedule builder) simply ignore them. */}
+      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <label className="block">
+          <span className="type-meta mb-1 block">Trade price (optional)</span>
+          <div className="relative">
+            <span
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-body text-[0.88rem]"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              $
+            </span>
+            <Input
+              type="number"
+              min="0"
+              value={form.tradeDollars}
+              onChange={(e) => update('tradeDollars', e.target.value)}
+              placeholder="Vendor cost"
+              className="pl-7"
+            />
+          </div>
+        </label>
+        <label className="block">
+          <span className="type-meta mb-1 block">Markup % (optional)</span>
+          <Input
+            type="number"
+            value={form.markupPercent}
+            onChange={(e) => update('markupPercent', e.target.value)}
+            placeholder="e.g. 30"
+          />
+        </label>
+      </div>
+
       <label className="block">
         <span className="type-meta mb-1 block">Notes (optional)</span>
         <Textarea
@@ -155,6 +199,10 @@ export function AllowanceForm({
 }
 
 // ─── TBD form (category required) ────────────────────────────────────────────
+// Deliberately NO trade-price/markup fields here (00185): a TBD line has no
+// client value yet (line_total 0), so recording a trade cost would feed a
+// misleading negative margin into the financials rollup. Trade pricing is
+// added once the item is specified (item drawer pricing editor).
 
 export interface TbdFormState {
   ffeCategory: string;

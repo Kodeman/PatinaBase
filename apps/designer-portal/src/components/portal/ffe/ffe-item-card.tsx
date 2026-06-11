@@ -24,6 +24,12 @@ export interface FFEItemCardProps {
   unitTotalLabel?: string | null;
   /** Pre-formatted ETA (project board only). */
   etaLabel?: string | null;
+  /**
+   * Pre-formatted margin meta, e.g. "Margin $1,140" (00185 dual pricing).
+   * Callers compute it ONLY for studio owners on items with a trade cost —
+   * omitted/null renders nothing (hidden, never disabled).
+   */
+  marginLabel?: string | null;
   itemType?: ItemType | null;
   blocked?: boolean;
   blockedReason?: string | null;
@@ -66,6 +72,7 @@ export function FFEItemCard({
   quantity,
   unitTotalLabel,
   etaLabel,
+  marginLabel,
   itemType,
   blocked,
   blockedReason,
@@ -195,6 +202,10 @@ export function FFEItemCard({
             <span className="type-meta-small text-[var(--text-muted)]">ETA {etaLabel}</span>
           )}
         </div>
+
+        {marginLabel && (
+          <div className="type-meta-small text-[var(--text-muted)]">{marginLabel}</div>
+        )}
 
         {stage && (
           <div className="pt-1">

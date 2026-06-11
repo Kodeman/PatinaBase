@@ -12,6 +12,20 @@ export interface MilestoneBillingInfo {
   invoiceStatus: InvoiceStatus;
 }
 
+/**
+ * Studio-owner margin rollup (00185 dual pricing), from useProjectFinancials.
+ * `marginCents`/`tradeTotalCents` are null when NO item has a trade cost —
+ * "unknown", never "zero margin". The caller gates this prop on
+ * useIsStudioOwner: pass it only for owners (the row is hidden, not disabled,
+ * for everyone else).
+ */
+export interface FinancialsMarginInfo {
+  marginCents: number | null;
+  tradeTotalCents: number | null;
+  itemsWithTradeCount: number;
+  totalItemCount: number;
+}
+
 interface FinancialsPanelProps {
   items: FinancialLineItem[];
   milestones: PaymentMilestone[];
@@ -23,10 +37,30 @@ interface FinancialsPanelProps {
   projectId?: string;
   /** milestone id → live invoice linkage; absent key = unbilled. */
   milestoneBilling?: Record<string, MilestoneBillingInfo>;
+  /** Studio-owner-only margin row; omit to hide entirely (non-owners, mock data). */
+  margin?: FinancialsMarginInfo;
 }
 
 function formatDollars(cents: number): string {
   return `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+
+/** "-$420" for negative cents (formatDollars alone renders "$-420"). */
+function formatSignedDollars(cents: number): string {
+  return cents < 0 ? `-${formatDollars(Math.abs(cents))}` : formatDollars(cents);
+}
+
+/**
+ * "$X (Y% of client total)". Client total = margin + trade over the
+ * trade-priced subset (the prices the client pays for those items). Percent is
+ * omitted when that total is 0 (can't divide).
+ */
+function marginValueLabel(margin: FinancialsMarginInfo): string {
+  const marginCents = margin.marginCents ?? 0;
+  const clientTotalCents = marginCents + (margin.tradeTotalCents ?? 0);
+  if (clientTotalCents <= 0) return formatSignedDollars(marginCents);
+  const pct = Math.round((marginCents / clientTotalCents) * 100);
+  return `${formatSignedDollars(marginCents)} (${pct}% of client total)`;
 }
 
 function varianceColor(variance: number, isPlaceholder: boolean): string {
@@ -63,6 +97,7 @@ export function FinancialsPanel({
   onMilestoneStatusChange,
   projectId,
   milestoneBilling,
+  margin,
 }: FinancialsPanelProps) {
   const totals = items.reduce(
     (acc, item) => ({
@@ -186,6 +221,51 @@ export function FinancialsPanel({
           {totalVariance <= 0 ? `Under by ${formatDollars(Math.abs(totalVariance))}` : `Over by ${formatDollars(totalVariance)}`}
         </div>
       </div>
+
+      {/* Margin row (00185 dual pricing) — rendered only when the caller passes
+          `margin` (studio owners on real projects). marginCents === null means
+          no item carries a trade cost yet → the panel's placeholder idiom ("—"),
+          never $0. The percent denominator is the CLIENT total of the trade-
+          priced subset (margin + trade), so partial coverage stays honest and
+          is qualified by the "(n of m items…)" note. */}
+      {margin && (
+        <div
+          className="grid items-baseline gap-2 border-b py-1.5"
+          style={{
+            gridTemplateColumns: '1fr auto',
+            borderColor: 'rgba(229, 226, 221, 0.4)',
+          }}
+        >
+          <div className="flex items-baseline gap-2">
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', fontWeight: 500 }}>
+              Margin
+            </span>
+            {margin.marginCents !== null &&
+              margin.itemsWithTradeCount < margin.totalItemCount && (
+                <span
+                  style={{
+                    fontFamily: 'var(--font-meta)',
+                    fontSize: '0.58rem',
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  ({margin.itemsWithTradeCount} of {margin.totalItemCount} items have trade cost)
+                </span>
+              )}
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-heading)',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              textAlign: 'right',
+              color: margin.marginCents === null ? 'var(--text-muted)' : undefined,
+            }}
+          >
+            {margin.marginCents === null ? '—' : marginValueLabel(margin)}
+          </div>
+        </div>
+      )}
 
       {/* Payment milestones + Earnings */}
       <div className="mt-5 grid gap-6" style={{ gridTemplateColumns: '1fr 1fr' }}>

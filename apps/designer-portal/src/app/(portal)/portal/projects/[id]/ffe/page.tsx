@@ -11,6 +11,8 @@ import {
 } from '@/hooks/use-projects';
 import {
   useUpdateFFEItemStatus,
+  useUpdateFFEItemPricing,
+  useIsStudioOwner,
   useVendors,
   useFFECategories,
   type PaymentPattern,
@@ -64,7 +66,7 @@ import {
   SurfaceKeys,
   useHelpContent,
 } from '@patina/help-system';
-import { Button, IconButton } from '@/components/ui/controls';
+import { Button, IconButton, Input } from '@/components/ui/controls';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyItem = any;
@@ -127,6 +129,37 @@ function formatDollars(cents: number): string {
   return `$${((cents || 0) / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }
 
+/** "-$420" for negative cents (formatDollars alone would render "$-420"). */
+function formatSignedDollars(cents: number): string {
+  return cents < 0 ? `-${formatDollars(Math.abs(cents))}` : formatDollars(cents);
+}
+
+// ── Dual-pricing input helpers (00185) ──────────────────────────────────────
+// UI works in dollars, the API in cents. Empty string ⇄ NULL ("unknown").
+
+/** Cents → dollars input string. null/undefined → '' (field empty when NULL). */
+function centsToInput(cents: number | null | undefined): string {
+  if (cents === null || cents === undefined) return '';
+  const dollars = cents / 100;
+  return Number.isInteger(dollars) ? String(dollars) : dollars.toFixed(2);
+}
+
+/** Dollars input → cents. Empty/invalid/negative → null. */
+function parseDollarsToCents(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null;
+}
+
+/** Percent input → number rounded to 2 decimals. Empty/invalid → null. */
+function parsePercentInput(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+}
+
 function formatDate(d?: string | null): string {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -147,6 +180,11 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
   const updateStatus = useUpdateFFEItemStatus();
   const addItem = useAddProjectFFEItem();
   const removeItem = useRemoveProjectFFEItem();
+
+  // Margin visibility (00185 dual pricing): trade cost + margin are studio-
+  // owner-only and HIDDEN (not disabled) for everyone else. While roles load
+  // this is false → labels simply absent.
+  const { isStudioOwner } = useIsStudioOwner();
 
   const items = useMemo(() => (Array.isArray(rawItems) ? rawItems : []) as AnyItem[], [rawItems]);
   const rooms = useMemo(() => (Array.isArray(rawRooms) ? rawRooms : []) as AnyItem[], [rawRooms]);
@@ -338,6 +376,9 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
       ffeCategory: form.ffeCategory,
       budgetMinCents: budgetMin,
       budgetMaxCents: budgetMax,
+      // Optional dual-pricing fields (00185) — empty stays NULL ("unknown").
+      tradePriceCents: parseDollarsToCents(form.tradeDollars),
+      markupPercent: parsePercentInput(form.markupPercent),
       notes: form.notes || undefined,
     });
   };
@@ -368,6 +409,16 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
   }, [items]);
 
   const drawerItem = drawerItemId ? items.find((it) => it.id === drawerItemId) : null;
+
+  // Card margin meta (00185): computed ONLY for studio owners on items with a
+  // trade cost — everyone/everything else gets null (label hidden). Short
+  // style, e.g. "Margin $1,140"; margin = line_total − trade × qty.
+  const cardMarginLabel = (it: AnyItem): string | null => {
+    if (!isStudioOwner) return null;
+    if (it.trade_price_cents === null || it.trade_price_cents === undefined) return null;
+    const margin = (it.line_total_cents || 0) - it.trade_price_cents * (it.quantity ?? 1);
+    return `Margin ${formatSignedDollars(margin)}`;
+  };
 
   const toggleSelect = (id: string) =>
     setSelected((prev) => {
@@ -679,6 +730,7 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
                       quantity={it.quantity}
                       unitTotalLabel={formatDollars(it.line_total_cents || 0)}
                       etaLabel={it.eta ? formatDate(it.eta) : null}
+                      marginLabel={cardMarginLabel(it)}
                       itemType={it.item_type}
                       blocked={it.blocked}
                       blockedReason={it.blocked_reason}
@@ -704,8 +756,11 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
       {drawerItem && (
         <ItemDrawer
           item={drawerItem}
+          projectId={projectId}
           rooms={rooms}
           vendors={vendorList}
+          isStudioOwner={isStudioOwner}
+          canEditPricing={isRealProject}
           onClose={() => router.push(`/portal/projects/${projectId}/ffe`)}
           onUpdateStatus={async (status) => {
             // Through handleStageChange so drawer picks fire the same
@@ -774,26 +829,147 @@ function ComingSoonButton({ children }: { children: ReactNode }) {
 
 function ItemDrawer({
   item,
+  projectId,
   rooms,
   vendors,
+  isStudioOwner,
+  canEditPricing,
   onClose,
   onUpdateStatus,
   onGeneratePO,
   onRemove,
 }: {
   item: AnyItem;
+  projectId: string;
   rooms: AnyItem[];
   vendors: AnyItem[];
+  /** Gates the margin readout — hidden (not disabled) for non-owners. */
+  isStudioOwner: boolean;
+  /** False for slug-fixture (mock) projects with no Supabase row to update. */
+  canEditPricing: boolean;
   onClose: () => void;
   onUpdateStatus: (status: string) => Promise<void>;
   onGeneratePO?: () => void;
   onRemove?: () => void | Promise<void>;
 }) {
   const room = rooms.find((r) => r.id === item.project_room_id);
+  const { toast } = useToast();
   // Decision-Framework integrity (PT-D-2-T3-1): an item held by a pending
   // blocks_procurement decision (blocked flag + a blocked_by_decision_id)
   // cannot be ordered until the client responds.
   const isOrderBlocked = Boolean(item.blocked) && Boolean(item.blocked_by_decision_id);
+
+  // ── Dual-pricing editor state (00185) ────────────────────────────────────
+  // Dollars in the UI, cents in the API. Empty field ⇄ NULL ("unknown").
+  // Derivation: editing trade or markup recomputes client (client = trade ×
+  // (1 + markup/100), rounded to the cent); editing client recomputes markup
+  // (when trade > 0). Save writes only the fields that changed.
+  const updatePricing = useUpdateFFEItemPricing();
+  const [tradeInput, setTradeInput] = useState(() => centsToInput(item.trade_price_cents));
+  const [markupInput, setMarkupInput] = useState(() =>
+    item.markup_percent !== null && item.markup_percent !== undefined
+      ? String(item.markup_percent)
+      : ''
+  );
+  const [clientInput, setClientInput] = useState(() => centsToInput(item.unit_price_cents));
+
+  // Re-seed when the drawer moves to a different item (same component instance,
+  // ?item= changes). Saves refetch the same id with the values just written, so
+  // in-flight edits are not clobbered by unrelated invalidations.
+  useEffect(() => {
+    setTradeInput(centsToInput(item.trade_price_cents));
+    setMarkupInput(
+      item.markup_percent !== null && item.markup_percent !== undefined
+        ? String(item.markup_percent)
+        : ''
+    );
+    setClientInput(centsToInput(item.unit_price_cents));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
+
+  const deriveClient = (trade: string, markup: string) => {
+    const t = parseDollarsToCents(trade);
+    const m = parsePercentInput(markup);
+    if (t !== null && m !== null) {
+      setClientInput(centsToInput(Math.round(t * (1 + m / 100))));
+    }
+  };
+  const handleTradeChange = (v: string) => {
+    setTradeInput(v);
+    deriveClient(v, markupInput);
+  };
+  const handleMarkupChange = (v: string) => {
+    setMarkupInput(v);
+    deriveClient(tradeInput, v);
+  };
+  const handleClientChange = (v: string) => {
+    setClientInput(v);
+    const t = parseDollarsToCents(tradeInput);
+    const c = parseDollarsToCents(v);
+    if (t !== null && t > 0 && c !== null) {
+      setMarkupInput(String(Math.round((c / t - 1) * 10000) / 100));
+    }
+  };
+
+  const tradeCents = parseDollarsToCents(tradeInput);
+  const markupPct = parsePercentInput(markupInput);
+  const clientCents = parseDollarsToCents(clientInput);
+  // Non-empty input that fails to parse must block Save — it must NOT be
+  // mistaken for an intentional clear-to-NULL.
+  const tradeInvalid = tradeInput.trim() !== '' && tradeCents === null;
+  const markupInvalid = markupInput.trim() !== '' && markupPct === null;
+  const clientInvalid = clientInput.trim() !== '' && clientCents === null;
+  const anyInvalid = tradeInvalid || markupInvalid || clientInvalid;
+
+  // Client price recompute (line_total = unit × qty) is only valid for fixed
+  // items — allowance line totals are the budget-range midpoint, owned by
+  // useUpdateProjectFFEItem (see useUpdateFFEItemPricing JSDoc).
+  const clientEditable = item.item_type === 'fixed';
+
+  // Save sends only changed fields; explicit null clears trade/markup. Client
+  // price is not nullable — an emptied client field means "unchanged".
+  const pricingPayload: {
+    tradePriceCents?: number | null;
+    markupPercent?: number | null;
+    unitPriceCents?: number;
+  } = {};
+  if (!tradeInvalid && tradeCents !== (item.trade_price_cents ?? null)) {
+    pricingPayload.tradePriceCents = tradeCents;
+  }
+  if (!markupInvalid && markupPct !== (item.markup_percent ?? null)) {
+    pricingPayload.markupPercent = markupPct;
+  }
+  if (
+    clientEditable &&
+    !clientInvalid &&
+    clientCents !== null &&
+    clientCents !== (item.unit_price_cents ?? null)
+  ) {
+    pricingPayload.unitPriceCents = clientCents;
+  }
+  const pricingDirty = Object.keys(pricingPayload).length > 0;
+
+  const handleSavePricing = async () => {
+    if (!pricingDirty || anyInvalid) return;
+    try {
+      await updatePricing.mutateAsync({ itemId: item.id, projectId, ...pricingPayload });
+      toast('Pricing updated', 'success');
+    } catch {
+      /* global mutation error toast already fired */
+    }
+  };
+
+  // Margin readout — studio owners only, and only when a trade cost is set
+  // against a real (>$0) client price. margin = (client − trade) × qty.
+  const quantity = item.quantity ?? 1;
+  const marginCents =
+    tradeCents !== null && clientCents !== null && clientCents > 0
+      ? (clientCents - tradeCents) * quantity
+      : null;
+  const marginPct =
+    tradeCents !== null && clientCents !== null && clientCents > 0
+      ? Math.round(((clientCents - tradeCents) / clientCents) * 100)
+      : null;
 
   return (
     <div className="fixed inset-y-0 right-0 z-40 w-[480px] max-w-[95vw] overflow-y-auto border-l bg-[var(--bg-surface)] shadow-xl"
@@ -827,7 +1003,10 @@ function ItemDrawer({
           surfaceKey={SurfaceKeys.DesignerPortal.Ffe.Detail.PoNumber}
         />
         <Field label="Quantity" value={String(item.quantity ?? 1)} />
-        <Field label="Unit Price" value={formatDollars(item.unit_price_cents || 0)} />
+        {/* Mock (slug) projects have no Supabase row — read-only price only. */}
+        {!canEditPricing && (
+          <Field label="Unit Price" value={formatDollars(item.unit_price_cents || 0)} />
+        )}
         <Field
           label="Line Total"
           value={formatDollars(item.line_total_cents || 0)}
@@ -871,6 +1050,100 @@ function ItemDrawer({
                 View the decision →
               </a>
             )}
+          </div>
+        )}
+
+        {/* Pricing editor (00185 dual pricing). Trade + markup are advisory
+            studio-side numbers; Client price is what flows into line_total.
+            Editing trade/markup derives client; editing client derives markup. */}
+        {canEditPricing && (
+          <div className="mt-5">
+            <span className="type-meta-small mb-2 block uppercase tracking-wider text-[var(--text-muted)]">
+              Pricing
+            </span>
+            <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+              <label className="block">
+                <span className="type-meta mb-1 block">Trade price</span>
+                <div className="relative">
+                  <span
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-body text-[0.88rem]"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    $
+                  </span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={tradeInput}
+                    invalid={tradeInvalid}
+                    onChange={(e) => handleTradeChange(e.target.value)}
+                    placeholder="—"
+                    className="pl-7"
+                    aria-label="Trade price"
+                  />
+                </div>
+              </label>
+              <label className="block">
+                <span className="type-meta mb-1 block">Markup %</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={markupInput}
+                  invalid={markupInvalid}
+                  onChange={(e) => handleMarkupChange(e.target.value)}
+                  placeholder="—"
+                  aria-label="Markup percent"
+                />
+              </label>
+              <label className="block">
+                <span className="type-meta mb-1 block">Client price</span>
+                <div className="relative">
+                  <span
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-body text-[0.88rem]"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    $
+                  </span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={clientInput}
+                    invalid={clientInvalid}
+                    onChange={(e) => handleClientChange(e.target.value)}
+                    placeholder="—"
+                    className="pl-7"
+                    aria-label="Client price"
+                    disabled={!clientEditable}
+                    title={
+                      clientEditable
+                        ? undefined
+                        : 'Allowance/TBD line totals come from the budget range, not a unit price'
+                    }
+                  />
+                </div>
+              </label>
+            </div>
+            {/* Margin readout — studio owners only (hidden, not disabled, for
+                everyone else), and only when trade is set. Live preview from
+                the current field values; (client − trade) × qty. */}
+            {isStudioOwner && marginCents !== null && (
+              <div className="mt-2 type-meta-small text-[var(--text-muted)]">
+                Margin: {formatSignedDollars(marginCents)}
+                {marginPct !== null ? ` · ${marginPct}%` : ''}
+              </div>
+            )}
+            <div className="mt-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void handleSavePricing()}
+                disabled={!pricingDirty || anyInvalid || updatePricing.isPending}
+              >
+                {updatePricing.isPending ? 'Saving…' : 'Save pricing'}
+              </Button>
+            </div>
           </div>
         )}
 

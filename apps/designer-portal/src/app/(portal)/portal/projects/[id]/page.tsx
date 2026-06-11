@@ -30,6 +30,7 @@ import {
   useProjectInvoices,
   useStartProjectThread,
   useSendMessage,
+  useIsStudioOwner,
 } from '@patina/supabase';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
@@ -132,6 +133,10 @@ export default function ProjectDetailPage({
   const { value: procurementPilotEnabled } = useFeatureFlag(
     'procurement-workspace-pilot',
   );
+
+  // Margin visibility (00185 dual pricing): trade cost + margin are studio-
+  // owner-only. While roles load this is false → margin row simply hidden.
+  const { isStudioOwner } = useIsStudioOwner();
 
   // Decisions count must match the DecisionsPanel list below (which treats
   // pending/draft as "Open"). useProjectKeyMetrics derives its own count from a
@@ -426,6 +431,19 @@ export default function ProjectDetailPage({
     commissionRate: 0.12,
     productTotal: productSpend,
   };
+  // Margin row (00185 dual pricing) — studio owners only; hidden (not
+  // disabled) for everyone else, and skipped for mock (array-shape) financials
+  // which carry no trade data. marginCents stays null (never 0-coalesced) when
+  // no item has a trade cost.
+  const financialsMargin =
+    isStudioOwner && !isFinArray && financialsObj
+      ? {
+          marginCents: financialsObj.marginCents ?? null,
+          tradeTotalCents: financialsObj.tradeTotalCents ?? null,
+          itemsWithTradeCount: financialsObj.itemsWithTradeCount ?? 0,
+          totalItemCount: financialsObj.totalItemCount ?? 0,
+        }
+      : undefined;
 
   return (
     <div>
@@ -560,6 +578,7 @@ export default function ProjectDetailPage({
               onMilestoneStatusChange={handleMilestoneStatusChange}
               projectId={UUID_PATTERN.test(id) ? id : undefined}
               milestoneBilling={milestoneBilling}
+              margin={financialsMargin}
             />
             <StrataMark variant="mini" />
           </>
