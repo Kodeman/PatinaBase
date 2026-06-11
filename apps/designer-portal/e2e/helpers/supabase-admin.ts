@@ -87,8 +87,9 @@ export async function deleteProposalCascade(proposalId: string): Promise<void> {
 }
 
 export async function getUserIdByEmail(email: string): Promise<string> {
-  // Service-role auth admin API: paginated list, filter by email.
-  const { data, error } = await adminDb.auth.admin.listUsers();
+  // Service-role auth admin API: fetch up to 1000 users so we don't silently
+  // miss the target account when the auth.users table exceeds the default 50-row page.
+  const { data, error } = await adminDb.auth.admin.listUsers({ page: 1, perPage: 1000 });
   if (error) throw error;
   const user = data.users.find((u) => u.email === email);
   if (!user) throw new Error(`Auth user not found for email: ${email}`);

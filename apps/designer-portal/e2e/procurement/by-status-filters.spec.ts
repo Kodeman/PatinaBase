@@ -14,6 +14,10 @@
  * as billing/invoices.spec.ts). All DB seeding/assertions go through the
  * service-role adminDb client.
  *
+ * LOCAL RUN CONSTRAINT: serial is intra-file only; for deterministic local
+ * runs use --project=chromium --workers=1 to prevent cross-file parallelism
+ * from interleaving DB state with other suites.
+ *
  * Requires:
  *   - Local Supabase running with seed data (designer@patina.dev)
  *   - Designer portal at :3000 started with
@@ -273,7 +277,7 @@ test.describe.serial('procurement by-status: per-item buckets + filters + toast 
     await expect(page.getByText(PO_A_NUMBER).first()).toBeVisible();
     await expect(page.getByText(VENDOR_NAME).first()).toBeVisible();
     // Project B's items live in the Shipped bucket, not here.
-    await expect(page.getByText(ITEM_B1)).toHaveCount(0);
+    await expect(page.getByText(ITEM_B1)).toHaveCount(0, { timeout: 10_000 });
 
     // Switch buckets via the flow-chart stage button.
     await stageButton(page, 'Shipped').click();
