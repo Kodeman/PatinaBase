@@ -311,6 +311,44 @@ BEGIN
 END
 $$;
 
+-- ─── case 4: negative markup/trade clamped to 0 on activation ───────────────
+--
+-- A proposal item with markup_percent = -10.00 (and unit_sell_price < unit_price,
+-- consistent with a negative-markup discount) must activate successfully — the
+-- GREATEST(COALESCE(...,0),0) clamp prevents a check_violation on the new >= 0
+-- CHECKs. The resulting FF&E row must have markup_percent = 0 and
+-- trade_price_cents = 0 (GREATEST(negative,0)), while unit_price_cents carries
+-- the raw unit_sell_price unclamped (no CHECK on that pre-existing column).
+
+INSERT INTO proposals (id, designer_id, client_id, title, status, total_amount)
+VALUES ('dddd0000-0000-4000-8000-000000000091', '88888888-8888-4888-8888-888888888801', '88888888-8888-4888-8888-888888888802', 'Negative Markup Proposal', 'accepted', 45000);
+
+-- Item with negative markup: trade 50000, markup -10.00, client 45000.
+INSERT INTO proposal_items (id, proposal_id, name, quantity, unit_price, markup_percent, unit_sell_price, line_total_cents, item_type, position)
+VALUES ('dddd0000-0000-4000-8000-000000000092', 'dddd0000-0000-4000-8000-000000000091', 'Discounted item', 1, 50000, -10.00, 45000, 45000, 'fixed', 0);
+
+SELECT activate_proposal_as_project('dddd0000-0000-4000-8000-000000000091'::uuid);
+
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  SELECT unit_price_cents, trade_price_cents, markup_percent INTO r
+    FROM project_ffe_items
+   WHERE source_proposal_item_id = 'dddd0000-0000-4000-8000-000000000092';
+  ASSERT FOUND,
+    'FAIL 4a: activation with negative markup should succeed and create the FF&E row';
+  ASSERT r.markup_percent = 0,
+    'FAIL 4b: negative markup_percent must be clamped to 0, got ' || COALESCE(r.markup_percent::text, 'NULL');
+  ASSERT r.trade_price_cents = 50000,
+    'FAIL 4c: trade_price_cents should be the raw (positive) unit_price 50000, got ' || COALESCE(r.trade_price_cents::text, 'NULL');
+  ASSERT r.unit_price_cents = 45000,
+    'FAIL 4d: unit_price_cents (client sell price) must pass through unclamped as 45000, got ' || COALESCE(r.unit_price_cents::text, 'NULL');
+
+  RAISE NOTICE 'Case 4 passed: negative markup/trade clamped on activation; client price unclamped.';
+END
+$$;
+
 DO $$ BEGIN RAISE NOTICE 'All dual-pricing assertions passed.'; END $$;
 
 -- ROLLBACK so the test is idempotent.

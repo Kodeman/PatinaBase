@@ -253,6 +253,11 @@ BEGIN
       -- 00185: unit_price_cents = CLIENT price (unit_sell_price); the trade
       -- price + markup carry alongside. line_total_cents was already the
       -- client total.
+      -- Clamp trade/markup to >= 0: mirrors the tier-a backfill GREATEST
+      -- guards; negative values (writable via direct PostgREST, propagated by
+      -- clone_proposal) would violate the new CHECKs and block activation of
+      -- an accepted proposal. Supporting negative markup requires deliberately
+      -- relaxing those CHECKs in a later migration.
       INSERT INTO project_ffe_items (
         project_id, project_room_id, source_proposal_item_id,
         product_id, name, ffe_category, item_type,
@@ -266,8 +271,8 @@ BEGIN
         'specified',
         v_item.quantity,
         v_item.unit_sell_price,
-        v_item.unit_price,
-        v_item.markup_percent,
+        GREATEST(COALESCE(v_item.unit_price, 0), 0),
+        GREATEST(COALESCE(v_item.markup_percent, 0), 0),
         v_item.line_total_cents,
         v_item.budget_min_cents, v_item.budget_max_cents,
         v_item.vendor_name, v_item_eta,
@@ -292,6 +297,11 @@ BEGIN
                        ELSE NULL END;
 
     -- 00185: same dual-pricing mapping as the room loop above.
+    -- Clamp trade/markup to >= 0: mirrors the tier-a backfill GREATEST
+    -- guards; negative values (writable via direct PostgREST, propagated by
+    -- clone_proposal) would violate the new CHECKs and block activation of
+    -- an accepted proposal. Supporting negative markup requires deliberately
+    -- relaxing those CHECKs in a later migration.
     INSERT INTO project_ffe_items (
       project_id, project_room_id, source_proposal_item_id,
       product_id, name, ffe_category, item_type,
@@ -305,8 +315,8 @@ BEGIN
       'specified',
       v_item.quantity,
       v_item.unit_sell_price,
-      v_item.unit_price,
-      v_item.markup_percent,
+      GREATEST(COALESCE(v_item.unit_price, 0), 0),
+      GREATEST(COALESCE(v_item.markup_percent, 0), 0),
       v_item.line_total_cents,
       v_item.budget_min_cents, v_item.budget_max_cents,
       v_item.vendor_name, v_item_eta,
