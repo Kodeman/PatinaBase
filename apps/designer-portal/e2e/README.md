@@ -275,6 +275,29 @@ test.describe('Product Editor', () => {
 });
 ```
 
+## 🚩 Feature-flag overrides
+
+Parts of the portal are gated by PostHog feature flags (e.g. the procurement
+workspace behind `procurement-workspace-pilot`). The flag hook is fail-closed
+and PostHog never resolves in e2e/CI, so gated UI would be invisible to tests.
+
+`src/hooks/use-feature-flag.ts` supports an env-based override that is checked
+before the PostHog path:
+
+```bash
+NEXT_PUBLIC_FLAG_OVERRIDES='procurement-workspace-pilot:true,some-other-flag:false'
+```
+
+- Format: comma-separated `flag-name:true|false` entries (whitespace trimmed).
+- Overridden flags resolve immediately (`isLoading: false`); PostHog is never
+  consulted for them. Flags not in the list behave as before.
+- `playwright.config.ts` sets `procurement-workspace-pilot:true` in its
+  `webServer.env`, so the flag is on for the suite automatically.
+- Gotcha: `NEXT_PUBLIC_` vars are inlined when the dev server starts. With
+  `reuseExistingServer` (the local default), an already-running `pnpm dev`
+  started **without** the var will not see the override — restart the dev
+  server with the var exported, or let Playwright start its own server.
+
 ## 🔍 Debugging Tips
 
 ### View Test Execution

@@ -30,9 +30,37 @@ export interface FeatureFlagState {
 }
 
 /**
+ * Parses `NEXT_PUBLIC_FLAG_OVERRIDES` (format: `flag-a:true,flag-b:false`,
+ * comma-separated, entries trimmed) and returns the override for `flagName`,
+ * or `undefined` when the flag is not present in the list.
+ *
+ * Used by e2e/CI runs where PostHog never resolves (no key / blocked
+ * network) and the suite needs gated UI deterministically on or off —
+ * playwright.config.ts sets `procurement-workspace-pilot:true` in its
+ * webServer env. NEXT_PUBLIC_ vars are inlined at build/dev start, so the
+ * override is identical on server and client (no hydration mismatch) but
+ * cannot change without restarting the dev server.
+ */
+export function parseFlagOverride(flagName: string): boolean | undefined {
+  // Must stay a static `process.env.NEXT_PUBLIC_*` member expression so
+  // Next.js can inline it into the client bundle.
+  const raw = process.env.NEXT_PUBLIC_FLAG_OVERRIDES;
+  if (!raw) return undefined;
+
+  for (const entry of raw.split(',')) {
+    const [name, value] = entry.split(':').map((part) => part.trim());
+    if (name === flagName) return value === 'true';
+  }
+  return undefined;
+}
+
+/**
  * Returns the resolved state of a PostHog feature flag.
  *
  * Behavior:
+ *   - If the flag is listed in `NEXT_PUBLIC_FLAG_OVERRIDES`, resolves
+ *     immediately with the override value (`isLoading: false`) and never
+ *     consults PostHog. E2E/CI escape hatch — see `parseFlagOverride`.
  *   - Subscribes to PostHog's `onFeatureFlags` event so `value` updates when
  *     flags resolve from the network. The first callback also flips
  *     `isLoading` to false.
@@ -55,10 +83,15 @@ export interface FeatureFlagState {
  * fail-closed flash for the 1% pilot cohort.
  */
 export function useFeatureFlag(flagName: string): FeatureFlagState {
-  const [value, setValue] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  // Env override resolves before (instead of) the PostHog path. The env var
+  // is build-time constant, so the initial state is stable across renders
+  // and identical between SSR and hydration.
+  const override = parseFlagOverride(flagName);
+  const [value, setValue] = useState<boolean>(override ?? false);
+  const [isLoading, setIsLoading] = useState<boolean>(override === undefined);
 
   useEffect(() => {
+    if (override !== undefined) return;
     if (typeof window === 'undefined') return;
 
     if (!isAnalyticsEnabled()) {
@@ -90,7 +123,7 @@ export function useFeatureFlag(flagName: string): FeatureFlagState {
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
     };
-  }, [flagName]);
+  }, [flagName, override]);
 
   return { value, isLoading };
 }

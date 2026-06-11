@@ -130,6 +130,18 @@ BEGIN
     RETURN;
   END IF;
 
+  -- Idempotency guard (added when this seed was wired into `db reset`): the
+  -- PO ids below are gen_random_uuid(), so re-running against a non-fresh DB
+  -- would duplicate all 8 POs. Skip the whole block if the first seeded PO
+  -- number already exists for this designer.
+  IF EXISTS (
+    SELECT 1 FROM purchase_orders
+     WHERE designer_id = v_designer_id AND vendor_po_number = 'NA-2026-041'
+  ) THEN
+    RAISE NOTICE 'Skipping procurement PO seed: seed POs already present.';
+    RETURN;
+  END IF;
+
   -- PO 1: Nordic Atelier / Chen Residence — 50/50, in production, deposit paid
   INSERT INTO purchase_orders (id, designer_id, project_id, vendor_id, vendor_po_number,
     confirmed_eta, payment_pattern, total_cents, status)
@@ -205,4 +217,42 @@ BEGIN
   VALUES (v_po8, 'milestone', 288000, '2026-03-15', '2026-03-15', 'paid', 'Deposit — 30%', 0),
          (v_po8, 'milestone', 384000, '2026-05-30', NULL, 'pending', 'Mid-production — 40%', 1),
          (v_po8, 'milestone', 288000, NULL, NULL, 'pending', 'Before ship — 30%', 2);
+
+  -- ─── Linked FF&E items ─────────────────────────────────────────────────────
+  -- A handful of project_ffe_items linked to the POs above so the FF&E and
+  -- procurement views both render with cross-referenced data. Statuses match
+  -- the owning PO's stage (the 00184 `aaa_ffe_ratchet_to_po_stage` BEFORE
+  -- INSERT trigger would ratchet lower statuses up to the same values anyway).
+  -- Idempotent via the PO guard above — these only insert alongside fresh POs.
+  --
+  -- NOTE: the receiving seed (procurement_receiving_dev.sql) later logs a
+  -- clean inspection on PO 2 (WS-188); the 00184 trigger chain advances that
+  -- PO — and the sectional below — to 'delivered' and sets
+  -- received_quantity = quantity. The 'production' status here is the
+  -- pre-delivery state.
+  INSERT INTO project_ffe_items (project_id, purchase_order_id, name, ffe_category,
+    status, quantity, unit_price_cents, line_total_cents, vendor_name)
+  VALUES
+    -- PO 1: Nordic Atelier / Chen — in production (totals sum to the PO's 762000)
+    (v_proj_chen, v_po1, 'Møbler Lounge Chair — Bouclé', 'seating',
+     'production', 2, 285000, 570000, 'Nordic Atelier'),
+    (v_proj_chen, v_po1, 'Oak Drum Side Table', 'tables',
+     'production', 1, 192000, 192000, 'Nordic Atelier'),
+    -- PO 2: Woodward & Sons / Chen — in production (delivered by receiving seed)
+    (v_proj_chen, v_po2, 'Custom Walnut Sectional — 3 pc', 'seating',
+     'production', 1, 680000, 680000, 'Woodward & Sons'),
+    -- PO 4: Apparatus / Olsen — shipped (damaged on arrival per receiving seed)
+    (COALESCE(v_proj_olsen, v_proj_chen), v_po4, 'Cloud Pendant Cluster 19', 'lighting',
+     'shipped', 1, 420000, 420000, 'Apparatus'),
+    -- PO 5: Ceramica / Olsen — shipped
+    (COALESCE(v_proj_olsen, v_proj_chen), v_po5, 'Glazed Stoneware Table Lamp', 'lighting',
+     'shipped', 2, 94500, 189000, 'Ceramica Studio');
+
+  -- PO 7: Woodward / Olsen — already delivered at seed time (no inspection row
+  -- exists for it, so set received_quantity explicitly for a coherent state).
+  INSERT INTO project_ffe_items (project_id, purchase_order_id, name, ffe_category,
+    status, quantity, received_quantity, unit_price_cents, line_total_cents, vendor_name)
+  VALUES
+    (COALESCE(v_proj_olsen, v_proj_chen), v_po7, 'Built-in Window Banquette', 'millwork',
+     'delivered', 1, 1, 510000, 510000, 'Woodward & Sons');
 END $$;

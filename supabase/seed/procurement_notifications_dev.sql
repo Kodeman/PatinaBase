@@ -21,6 +21,13 @@
 -- rather than triggering the rows via po_payments/damage_claims state mutations,
 -- because the seed pipeline is non-deterministic ordering-wise and we want a
 -- predictable seed state regardless of upstream seed-file order.
+--
+-- Trigger interaction: the receiving seed's damage_claims INSERT fires
+-- trg_notify_damage_claim_drafted (00151), which already creates the
+-- damage_claim_drafted notification for the damaged inspection. Notification 2
+-- below therefore typically no-ops via its NOT EXISTS guard — the trigger-made
+-- row (created_at = seed time, not -18h) is the one that survives. That is
+-- expected; do not "fix" the guard to force a duplicate.
 -- ============================================================================
 
 DO $$
