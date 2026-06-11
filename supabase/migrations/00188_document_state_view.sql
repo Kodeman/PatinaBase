@@ -85,8 +85,10 @@ union all
 
 -- ── Shape B: pre-signing proposal chains ────────────────────────────────────
 -- Live proposal = highest version in a chain that has not activated a project.
--- 'revised' siblings are superseded by definition; 'accepted' with a project
--- belongs to shape A via the project row.
+-- 'revised' siblings are superseded by definition; 'accepted' WITH a project
+-- belongs to shape A via the project row. 'accepted' WITHOUT a project is the
+-- signed-awaiting-activation moment — it stays here so the Desk can prompt
+-- the designer to open the project (DECISIONS.md I7).
 select
   'proposal'::text                         as engagement_kind,
   pr.chain_root_id                         as engagement_id,
@@ -122,7 +124,7 @@ from (
     p2.*
   from proposals p2
   where p2.project_id is null
-    and p2.status in ('draft', 'sent', 'viewed', 'declined', 'expired')
+    and p2.status in ('draft', 'sent', 'viewed', 'accepted', 'declined', 'expired')
   order by coalesce(p2.parent_proposal_id, p2.id),
            p2.version desc nulls last,
            p2.created_at desc
@@ -199,7 +201,7 @@ where dc.status = 'lead'
     select 1 from proposals pp
     where pp.designer_id = dc.designer_id
       and pp.client_id = dc.client_id
-      and pp.status in ('draft', 'sent', 'viewed', 'declined', 'expired', 'accepted')
+      and pp.status in ('draft', 'sent', 'viewed', 'accepted', 'declined', 'expired')
   )
   -- not already represented by an open lead (shape C)
   and not exists (

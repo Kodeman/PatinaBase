@@ -163,6 +163,21 @@ describe('deriveNeed', () => {
     expect(need!.stamp.label).toBe('VIEWED');
   });
 
+  it('accepted, unactivated proposal → SIGNED need (open the project)', () => {
+    const need = deriveNeed(
+      mkRow({
+        engagement_kind: 'proposal',
+        active_section: 'proposal',
+        project_id: null,
+        proposal_status: 'accepted',
+      }),
+      NOW,
+    );
+    expect(need!.kind).toBe('proposal_signed');
+    expect(need!.stamp.label).toBe('SIGNED');
+    expect(need!.text).toMatch(/open the project/i);
+  });
+
   it('declined proposal → need with DECLINED stamp', () => {
     const need = deriveNeed(
       mkRow({

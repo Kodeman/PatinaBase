@@ -56,6 +56,7 @@ export interface DocumentStateRow {
 
 export type NeedKind =
   | 'overdue_decision'
+  | 'proposal_signed'
   | 'proposal_declined'
   | 'proposal_expired'
   | 'new_lead'
@@ -90,11 +91,12 @@ const MAX_MOTION_CHIPS = 6;
 /** Severity rank — lower sorts first within the needs stack. */
 const NEED_RANK: Record<NeedKind, number> = {
   overdue_decision: 0,
-  proposal_declined: 1,
-  proposal_expired: 2,
-  new_lead: 3,
-  hesitating_proposal: 4,
-  awaiting_inspection: 5,
+  proposal_signed: 1,
+  proposal_declined: 2,
+  proposal_expired: 3,
+  new_lead: 4,
+  hesitating_proposal: 5,
+  awaiting_inspection: 6,
 };
 
 /** Prototype stamp palette (v0.3 is the look authority): borders use brand
@@ -130,6 +132,16 @@ export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
   }
 
   if (row.engagement_kind === 'proposal') {
+    // Signed but no project row yet (DECISIONS.md I7): the signing moment
+    // is waiting on the designer's hand — activation opens the project.
+    if (row.proposal_status === 'accepted') {
+      return {
+        kind: 'proposal_signed',
+        text: 'Signed — open the project',
+        stamp: { label: 'SIGNED', ...STAMP.sage },
+        urgent: false,
+      };
+    }
     if (row.proposal_status === 'declined') {
       return {
         kind: 'proposal_declined',
