@@ -20,7 +20,8 @@
 --   B. trg_po_status_cascade_to_items (AFTER UPDATE OF status ON
 --      purchase_orders) — PO status propagates to linked items (rank
 --      ratchet, manual advances never clobbered); cancellation unlinks
---      items; shipped + paid deposit flips the pending balance to due.
+--      items; shipped/delivered + paid deposit flips the pending balance
+--      to due.
 --   C. trg_receiving_inspection_side_effects (AFTER INSERT ON
 --      receiving_inspections) — stamps purchase_orders.delivered_date,
 --      advances the PO to 'delivered' on a CLEAN outcome only (deliberate
@@ -204,10 +205,13 @@ BEGIN
      WHERE purchase_order_id = NEW.id;
   END IF;
 
-  -- Deposit/balance inverse-order rule, PO-shipped-second path: if the
-  -- deposit was already paid before the PO shipped, flip the pending
-  -- balance to due now. (Deposit-paid-second path is Trigger D.)
-  IF NEW.status = 'shipped'
+  -- Deposit/balance inverse-order rule, PO-progressed-second path: if the
+  -- deposit was already paid before the PO shipped — or jumped straight to
+  -- 'delivered' without passing 'shipped' (e.g. a clean receiving
+  -- inspection on a confirmed PO) — flip the pending balance to due now.
+  -- Status set is symmetric with Trigger D. (Deposit-paid-second path is
+  -- Trigger D.)
+  IF NEW.status IN ('shipped', 'delivered')
      AND NEW.payment_pattern IN ('fifty_fifty', 'thirty_seventy')
      AND EXISTS (
        SELECT 1
@@ -228,8 +232,8 @@ COMMENT ON FUNCTION po_status_cascade_to_items() IS
   'Trigger function: propagates purchase_orders.status changes to linked '
   'project_ffe_items (rank ratchet forward; cancellation unlinks + rolls back '
   'in-flight items to ''approved'') and flips the pending balance payment to '
-  '''due'' when the PO ships with the deposit already paid. SECURITY DEFINER '
-  'so the cascading writes bypass RLS.';
+  '''due'' when the PO reaches ''shipped'' or ''delivered'' with the deposit '
+  'already paid. SECURITY DEFINER so the cascading writes bypass RLS.';
 
 DROP TRIGGER IF EXISTS trg_po_status_cascade_to_items ON purchase_orders;
 CREATE TRIGGER trg_po_status_cascade_to_items

@@ -21,6 +21,9 @@
 --      (+ balance_due procurement_notifications row from the 00151 trigger).
 --   9. Inverse order: deposit paid while PO 'confirmed' → balance stays
 --      'pending'; then PO → 'shipped' → balance flips to 'due'.
+--  10. fifty_fifty PO at 'confirmed' with deposit already paid → clean
+--      inspection jumps the PO straight to 'delivered' (never 'shipped') →
+--      balance still flips to 'due' (+ balance_due notification).
 --
 -- How to run:
 --   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
@@ -59,6 +62,7 @@ VALUES ('eeee0000-0000-4000-8000-000000000002', 'State Chain Test Vendor');
 --   PO4 shipped      net_30        — case 7 (net-30 due_date shift)
 --   PO5 shipped      fifty_fifty   — case 8 (deposit paid → balance due)
 --   PO6 confirmed    fifty_fifty   — case 9 (inverse order)
+--   PO7 confirmed    fifty_fifty   — case 10 (confirmed → delivered jump)
 INSERT INTO purchase_orders (id, designer_id, project_id, vendor_id, payment_pattern, total_cents, status)
 VALUES
   ('f0000000-0000-4000-8000-000000000001', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'full_upfront', 100000, 'draft'),
@@ -66,19 +70,27 @@ VALUES
   ('f0000000-0000-4000-8000-000000000003', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'full_upfront', 100000, 'confirmed'),
   ('f0000000-0000-4000-8000-000000000004', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'net_30',       100000, 'shipped'),
   ('f0000000-0000-4000-8000-000000000005', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'fifty_fifty',  100000, 'shipped'),
-  ('f0000000-0000-4000-8000-000000000006', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'fifty_fifty',  100000, 'confirmed');
+  ('f0000000-0000-4000-8000-000000000006', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'fifty_fifty',  100000, 'confirmed'),
+  ('f0000000-0000-4000-8000-000000000007', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'fifty_fifty',  100000, 'confirmed');
 
 -- Payments:
 --   bal4         — PO4 balance pending, no due_date     (case 7)
 --   dep5 / bal5  — PO5 deposit + balance, both pending  (case 8)
 --   dep6 / bal6  — PO6 deposit + balance, both pending  (case 9)
-INSERT INTO po_payments (id, purchase_order_id, kind, amount_cents, state)
+--   dep7 / bal7  — PO7 deposit already PAID + balance pending (case 10).
+--                  dep7 is INSERTed as 'paid' (Trigger D fires on UPDATE OF
+--                  state only, so nothing flips at fixture time — exactly
+--                  the "deposit paid earlier" precondition case 10 needs);
+--                  paid_date satisfies chk_paid_date_required_when_paid.
+INSERT INTO po_payments (id, purchase_order_id, kind, amount_cents, state, paid_date)
 VALUES
-  ('f2000000-0000-4000-8000-000000000004', 'f0000000-0000-4000-8000-000000000004', 'balance', 100000, 'pending'),
-  ('f2000000-0000-4000-8000-000000000051', 'f0000000-0000-4000-8000-000000000005', 'deposit',  50000, 'pending'),
-  ('f2000000-0000-4000-8000-000000000052', 'f0000000-0000-4000-8000-000000000005', 'balance',  50000, 'pending'),
-  ('f2000000-0000-4000-8000-000000000061', 'f0000000-0000-4000-8000-000000000006', 'deposit',  50000, 'pending'),
-  ('f2000000-0000-4000-8000-000000000062', 'f0000000-0000-4000-8000-000000000006', 'balance',  50000, 'pending');
+  ('f2000000-0000-4000-8000-000000000004', 'f0000000-0000-4000-8000-000000000004', 'balance', 100000, 'pending', NULL),
+  ('f2000000-0000-4000-8000-000000000051', 'f0000000-0000-4000-8000-000000000005', 'deposit',  50000, 'pending', NULL),
+  ('f2000000-0000-4000-8000-000000000052', 'f0000000-0000-4000-8000-000000000005', 'balance',  50000, 'pending', NULL),
+  ('f2000000-0000-4000-8000-000000000061', 'f0000000-0000-4000-8000-000000000006', 'deposit',  50000, 'pending', NULL),
+  ('f2000000-0000-4000-8000-000000000062', 'f0000000-0000-4000-8000-000000000006', 'balance',  50000, 'pending', NULL),
+  ('f2000000-0000-4000-8000-000000000071', 'f0000000-0000-4000-8000-000000000007', 'deposit',  50000, 'paid',    CURRENT_DATE),
+  ('f2000000-0000-4000-8000-000000000072', 'f0000000-0000-4000-8000-000000000007', 'balance',  50000, 'pending', NULL);
 
 -- ─── case 1: linking an approved item to a draft PO → 'ordered' ─────────────
 
@@ -375,6 +387,46 @@ BEGIN
     'FAIL 9d: 00151 notify trigger should have created exactly one balance_due notification, got ' || v_notif_count;
 
   RAISE NOTICE 'Case 9 passed: PO shipping after deposit payment flips balance to due + notifies.';
+END
+$$;
+
+-- ─── case 10: deposit already paid, PO jumps confirmed → delivered ──────────
+--
+-- A clean inspection on a confirmed PO advances it straight to 'delivered'
+-- (Trigger C) — the PO never passes through 'shipped'. Trigger B's
+-- balance-flip condition includes 'delivered', so the pending balance must
+-- still flip to 'due' (and the 00151 trigger must notify).
+
+INSERT INTO receiving_inspections (purchase_order_id, inspected_by, outcome)
+VALUES ('f0000000-0000-4000-8000-000000000007', '99999999-9999-4999-8999-999999999999', 'clean');
+
+DO $$
+DECLARE
+  v_po_status   TEXT;
+  v_state       po_payment_state;
+  v_due         DATE;
+  v_notif_count INTEGER;
+BEGIN
+  SELECT status INTO v_po_status
+    FROM purchase_orders WHERE id = 'f0000000-0000-4000-8000-000000000007';
+  ASSERT v_po_status = 'delivered',
+    'FAIL 10a: clean inspection should advance the confirmed PO to delivered, got ' || v_po_status;
+
+  SELECT state, due_date INTO v_state, v_due
+    FROM po_payments WHERE id = 'f2000000-0000-4000-8000-000000000072';
+  ASSERT v_state = 'due',
+    'FAIL 10b: balance should flip to due when the PO reaches delivered without passing shipped, got ' || v_state;
+  ASSERT v_due = CURRENT_DATE,
+    'FAIL 10c: flipped balance should get due_date = today (was NULL), got ' || COALESCE(v_due::text, 'NULL');
+
+  SELECT COUNT(*) INTO v_notif_count
+    FROM procurement_notifications
+   WHERE kind = 'balance_due'
+     AND subject_payment_id = 'f2000000-0000-4000-8000-000000000072';
+  ASSERT v_notif_count = 1,
+    'FAIL 10d: 00151 notify trigger should have created exactly one balance_due notification, got ' || v_notif_count;
+
+  RAISE NOTICE 'Case 10 passed: confirmed → delivered jump flips balance to due + notifies.';
 END
 $$;
 
