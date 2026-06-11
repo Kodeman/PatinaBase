@@ -230,29 +230,34 @@ BEGIN
   -- PO — and the sectional below — to 'delivered' and sets
   -- received_quantity = quantity. The 'production' status here is the
   -- pre-delivery state.
+  -- Dual pricing (00185): unit_price_cents is the CLIENT price; each line
+  -- also carries the vendor trade cost + advisory markup so dev renders
+  -- realistic margins (trade = client / (1 + markup)).
   INSERT INTO project_ffe_items (project_id, purchase_order_id, name, ffe_category,
-    status, quantity, unit_price_cents, line_total_cents, vendor_name)
+    status, quantity, unit_price_cents, trade_price_cents, markup_percent,
+    line_total_cents, vendor_name)
   VALUES
     -- PO 1: Nordic Atelier / Chen — in production (totals sum to the PO's 762000)
     (v_proj_chen, v_po1, 'Møbler Lounge Chair — Bouclé', 'seating',
-     'production', 2, 285000, 570000, 'Nordic Atelier'),
+     'production', 2, 285000, 228000, 25.00, 570000, 'Nordic Atelier'),
     (v_proj_chen, v_po1, 'Oak Drum Side Table', 'tables',
-     'production', 1, 192000, 192000, 'Nordic Atelier'),
+     'production', 1, 192000, 160000, 20.00, 192000, 'Nordic Atelier'),
     -- PO 2: Woodward & Sons / Chen — in production (delivered by receiving seed)
     (v_proj_chen, v_po2, 'Custom Walnut Sectional — 3 pc', 'seating',
-     'production', 1, 680000, 680000, 'Woodward & Sons'),
+     'production', 1, 680000, 544000, 25.00, 680000, 'Woodward & Sons'),
     -- PO 4: Apparatus / Olsen — shipped (damaged on arrival per receiving seed)
     (COALESCE(v_proj_olsen, v_proj_chen), v_po4, 'Cloud Pendant Cluster 19', 'lighting',
-     'shipped', 1, 420000, 420000, 'Apparatus'),
+     'shipped', 1, 420000, 350000, 20.00, 420000, 'Apparatus'),
     -- PO 5: Ceramica / Olsen — shipped
     (COALESCE(v_proj_olsen, v_proj_chen), v_po5, 'Glazed Stoneware Table Lamp', 'lighting',
-     'shipped', 2, 94500, 189000, 'Ceramica Studio');
+     'shipped', 2, 94500, 75600, 25.00, 189000, 'Ceramica Studio');
 
   -- PO 7: Woodward / Olsen — already delivered at seed time (no inspection row
   -- exists for it, so set received_quantity explicitly for a coherent state).
   INSERT INTO project_ffe_items (project_id, purchase_order_id, name, ffe_category,
-    status, quantity, received_quantity, unit_price_cents, line_total_cents, vendor_name)
+    status, quantity, received_quantity, unit_price_cents, trade_price_cents,
+    markup_percent, line_total_cents, vendor_name)
   VALUES
     (COALESCE(v_proj_olsen, v_proj_chen), v_po7, 'Built-in Window Banquette', 'millwork',
-     'delivered', 1, 1, 510000, 510000, 'Woodward & Sons');
+     'delivered', 1, 1, 510000, 425000, 20.00, 510000, 'Woodward & Sons');
 END $$;
