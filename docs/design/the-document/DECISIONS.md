@@ -70,3 +70,90 @@ Document surfaces use the CSS vars in `apps/designer-portal/src/app/globals.css`
 ### I3 · Repo-reality corrections to workstream docs — 2026-06-11
 
 The spec/CLAUDE.md reference a "strata monorepo", `@strata/*` packages, and React 18. Reality: patina-merged, `@patina/*`, React 19, Next.js 15. The workstream CLAUDE.md was placed at `apps/designer-portal/CLAUDE.md` with a dated correction note. Also: only prototype v0.3 (`patina-the-document-prototype-v3.html`) exists in `docs/design/the-document/` (no `prototypes/` subdir, no v0.1/v0.2, no concept deck) — references resolved to the file that exists.
+
+
+## Rulings — design session, 2026-06-11
+ 
+### R1 · Ruling on O1 — Document identity — 2026-06-11
+ 
+A document = one **engagement**: the project once one exists (`/doc/[projectId]`);
+pre-signing, the live proposal chain (keyed by chain root); pre-proposal, the
+lead/designer_client. The Desk unions all three shapes. A client with N projects
+gets N folders (tab = surname, title distinguishes); the client-level view is the
+People ledger — the ledger rule applied to relationships. Direction derives from
+latest-proposal-in-draft (accepted as approximate; the settled state means
+"direction work concluded," not "client reacted" — upgrade the derivation when a
+direction-share feature ships). Manual projects ghost Brief→Proposal and open at
+Project. Edge cases blessed as audited: `on_hold` = paused in-motion chip, never
+"needs your hand"; `archived` = ⌘K/People only; declined/expired proposals hold
+at Proposal-active with the state in the need line. Spec §1/§3/§4 updated to
+engagement language in v1.1.
+ 
+### R2 · Ruling on O2 — Stamp vocabulary — 2026-06-11
+ 
+Stamps render the codebase FF&E machine 1:1: SPECIFIED / QUOTED / APPROVED /
+ORDERED / PRODUCTION / SHIPPED / DELIVERED / INSTALLED, with
+`src/components/portal/ffe/stages.ts` STAGE_CONFIG as the canonical label/color
+source. RECEIVED is a derived ninth state: `status='delivered'` + clean
+receiving inspection logged — "delivered, awaiting inspection" is therefore a
+visible studio to-do and a valid need-line input. DAMAGED derives from
+inspection outcome / open damage claim, with claim state in the unfold.
+DECISION DUE derives from `blocked_by_decision_id` → pending blocking decision
+and always displays the *current* due date; extensions are narrated by the
+decision margin item, never a stamp. EXTENDED and RETURNED are dropped from v1
+(no data). Spec §6 vocabulary superseded.
+ 
+### R3 · Ruling on O4 — Shadow ban scope & defense — 2026-06-11
+ 
+CI-blocking lint scoped to Document directories (/desk, /doc, document/drawer/
+ledger component dirs) from the Slice 1 PR; widened app-wide at the dissolve
+step. Defense is two ESLint rules (flat config): (1) `no-restricted-syntax`
+catching `shadow-*` class strings and `box-shadow`/`drop-shadow` CSS within
+Document dirs; (2) `no-restricted-imports` banning direct design-system overlay
+primitives (Dialog/Popover/Command/Sheet/Tooltip) in Document dirs — overlays
+enter only through Document-local `Doc*` wrappers that bake in `shadow-none`
+plus the paper treatment (ink border, flat edges, spec §10 recipes). Wrappers
+are portal-local first, promoted per the catalog-ui precedent when the client
+portal mirrors need them. Old zones untouched until dissolve (D7 upheld).
+ 
+### R4 · Ruling on O3 — Time system unification — 2026-06-11
+ 
+Extend `project_time_entries` additively; never fork. `duration_minutes`
+remains canonical (invoice guard triggers, `project_unbilled_time` view, and
+shipped data untouched); add `raw_seconds` (pre-adjustment elapsed, audit
+trail), `idle_seconds` (annotation only — never subtracted, per D10), `source`
+('timer_auto' | 'timer_manual' | 'manual_entry'), and `activity`. Attribution
+is two-dimensional: `phase_key` auto-fills from the document's current phase at
+log time (the spine knows where the pen is — the designer is never asked), and
+the picker asks only `activity` (Design / Sourcing / Client / Site visit /
+Admin in v1); `task_id` stays optional. The sub-60s rule follows start mode:
+`timer_auto` discards silently, `timer_manual` keeps the shipped
+round-up-to-1-minute. Picking up a document chains out ANY running timer
+(header-started included) through the log-offer strip — one mechanic
+everywhere. The header TimerButton continues unchanged in old zones through the
+phase-in and dissolves with them. Granularity ruled at implementation level
+(designer-invisible): minutes canonical + raw_seconds additive. D10/D11
+otherwise stand; D11 auto-start remains provisional pending Leah's first
+session.
+ 
+### R5 · Ruling on O5 — Destinies for unmapped surfaces — 2026-06-11
+ 
+Four destinies exist: document section / ledger / margin / quiet exile
+(⌘K-reachable, no nav presence). Assignments:
+- **Reviews** → Care section + margin item on arrival; aggregate column in People.
+- **Nurture** → dissolves: due follow-ups rise on the Desk as need lines; the
+  cadence lives in Care; the queue becomes a People filter.
+- **Rooms directory** → dissolves into documents (project_rooms / proposal scope).
+- **Portfolio** → quiet exile; sources Install/Care photos; ⌘K-reachable.
+- **Resources** → quiet exile behind the help affordance.
+- **Team** → settings region; D6 presence covers in-document visibility.
+- **Inbox** → retire after Slice-6 verification that margins + Desk cover all
+  unique functions.
+- **Aesthete** folds, not shelves: teaching becomes a mode of the Library
+  ledger (classification lives with products); Engine stats and teaching
+  royalties move into Accounts — the 25% Pledge rendered as a line in the
+  studio's own account book.
+- **Insights** distributes as each ledger's front-matter summary page
+  (Accounts: revenue/AR · People: pipeline conversion · Orders: procurement
+  throughput · Hours: utilization). No dashboard book.
+- **Vendors** → Orders ledger directory pane; People stays clients-only.
