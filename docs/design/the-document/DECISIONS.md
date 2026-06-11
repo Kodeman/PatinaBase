@@ -157,3 +157,41 @@ Four destinies exist: document section / ledger / margin / quiet exile
   (Accounts: revenue/AR · People: pipeline conversion · Orders: procurement
   throughput · Hours: utilization). No dashboard book.
 - **Vendors** → Orders ledger directory pane; People stays clients-only.
+
+---
+
+## Implementation decisions — Slice 1 (2026-06-11)
+
+### I4 · Desk reads engagements from a `document_state` view — 2026-06-11
+
+Migration 00188 creates a SECURITY INVOKER view unioning the R1 shapes
+(project / live proposal chain / open lead / pre-proposal relationship) with
+derived `active_section` (§4) and need-input counts (§7), so Desk, the Slice 2
+spine, and ⌘K share one source (§11.6). Slice 1 renders pre-signing
+engagements as Desk folders only — no `/doc` route exists yet; the route
+scheme for proposal-chain/lead documents (spec §3 permits a canonicalizing
+resolver) will be decided and logged in Slice 2.
+
+### I5 · DocSheet built without design-system overlay primitives — 2026-06-11
+
+The first `Doc*` wrapper implements its own minimal dialog semantics (Esc,
+backdrop dismiss, focus in/restore) rather than wrapping a shadowed
+design-system primitive. The R3 `no-restricted-imports` ban is in place for
+Document dirs; when a future wrapper genuinely needs a primitive, that file
+gets an explicit exemption in `eslint.config.mjs` (documented inline there).
+
+### I6 · Desk heuristics v1 — 2026-06-11
+
+Hesitating proposal = sent >3 days unopened, or opened >5 days unsigned.
+Lead urgency = response deadline inside 48h (or passed). Motion chips capped
+at 6. All thresholds are constants in `desk-derivation.ts` — tune with Leah
+during phase-in step 2.
+
+### I7 · Signed-awaiting-activation proposals surface on the Desk — 2026-06-11
+
+An `accepted` proposal with no project row (signed, `activate_proposal_as_project`
+not yet run) was invisible in the original union — the Desk would silently
+omit the signing moment. Now surfaces as a needs-your-hand folder: need line
+"Signed — open the project", SIGNED stamp (sage), ranked directly under
+overdue decisions. §4 doesn't enumerate this sub-state; flagged for design
+review in the Slice 1 PR since the need line is designer-visible.
