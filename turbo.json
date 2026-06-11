@@ -1,6 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["**/.env.*local"],
+  "globalPassThroughEnv": ["NEXT_PUBLIC_FLAG_OVERRIDES"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
