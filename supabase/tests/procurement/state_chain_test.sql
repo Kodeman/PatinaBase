@@ -24,6 +24,12 @@
 --  10. fifty_fifty PO at 'confirmed' with deposit already paid → clean
 --      inspection jumps the PO straight to 'delivered' (never 'shipped') →
 --      balance still flips to 'due' (+ balance_due notification).
+--  11. Re-link: item on a draft PO ('ordered') re-linked to an
+--      'in_production' PO → 'production'; re-linked back to the draft PO →
+--      stays 'production' (ratchet no-op on lower target).
+--  12. Manual unlink: 'approved' item linked to a 'confirmed' PO
+--      (→ 'ordered'), then purchase_order_id set NULL → status stays
+--      'ordered' (untouched, no regression).
 --
 -- How to run:
 --   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
@@ -63,6 +69,10 @@ VALUES ('eeee0000-0000-4000-8000-000000000002', 'State Chain Test Vendor');
 --   PO5 shipped      fifty_fifty   — case 8 (deposit paid → balance due)
 --   PO6 confirmed    fifty_fifty   — case 9 (inverse order)
 --   PO7 confirmed    fifty_fifty   — case 10 (confirmed → delivered jump)
+--   PO8 draft        full_upfront  — case 11 (re-link source/return; PO1 is
+--                                    cancelled by case 4 so it can't be reused)
+--   PO9 in_production full_upfront — case 11 (re-link target)
+--   PO10 confirmed   full_upfront  — case 12 (manual unlink)
 INSERT INTO purchase_orders (id, designer_id, project_id, vendor_id, payment_pattern, total_cents, status)
 VALUES
   ('f0000000-0000-4000-8000-000000000001', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'full_upfront', 100000, 'draft'),
@@ -71,7 +81,10 @@ VALUES
   ('f0000000-0000-4000-8000-000000000004', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'net_30',       100000, 'shipped'),
   ('f0000000-0000-4000-8000-000000000005', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'fifty_fifty',  100000, 'shipped'),
   ('f0000000-0000-4000-8000-000000000006', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'fifty_fifty',  100000, 'confirmed'),
-  ('f0000000-0000-4000-8000-000000000007', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'fifty_fifty',  100000, 'confirmed');
+  ('f0000000-0000-4000-8000-000000000007', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'fifty_fifty',  100000, 'confirmed'),
+  ('f0000000-0000-4000-8000-000000000008', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'full_upfront', 100000, 'draft'),
+  ('f0000000-0000-4000-8000-000000000009', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'full_upfront', 100000, 'in_production'),
+  ('f0000000-0000-4000-8000-000000000010', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'full_upfront', 100000, 'confirmed');
 
 -- Payments:
 --   bal4         — PO4 balance pending, no due_date     (case 7)
@@ -427,6 +440,112 @@ BEGIN
     'FAIL 10d: 00151 notify trigger should have created exactly one balance_due notification, got ' || v_notif_count;
 
   RAISE NOTICE 'Case 10 passed: confirmed → delivered jump flips balance to due + notifies.';
+END
+$$;
+
+-- ─── case 11: re-link to a further-along PO ratchets; back-link is a no-op ───
+--
+-- Trigger A fires on UPDATE OF purchase_order_id whenever the link CHANGES,
+-- not just on first link. Re-linking to a PO at a higher stage ratchets the
+-- item up; re-linking back to a lower-stage PO must never move it backward.
+
+-- i7: approved item linked to PO8 (draft) at insert → 'ordered'.
+INSERT INTO project_ffe_items (id, project_id, name, status, purchase_order_id)
+VALUES ('f1000000-0000-4000-8000-000000000007', 'eeee0000-0000-4000-8000-000000000001', 'Item re-linked across POs', 'approved', 'f0000000-0000-4000-8000-000000000008');
+
+DO $$
+DECLARE
+  v_status TEXT;
+BEGIN
+  SELECT status INTO v_status
+    FROM project_ffe_items WHERE id = 'f1000000-0000-4000-8000-000000000007';
+  ASSERT v_status = 'ordered',
+    'FAIL 11a: item linked to draft PO should be ordered, got ' || v_status;
+
+  RAISE NOTICE 'Case 11a passed: initial link to draft PO → ordered.';
+END
+$$;
+
+-- Re-link to PO9 (in_production) → ratchets up to 'production'.
+UPDATE project_ffe_items
+   SET purchase_order_id = 'f0000000-0000-4000-8000-000000000009'
+ WHERE id = 'f1000000-0000-4000-8000-000000000007';
+
+DO $$
+DECLARE
+  v_status TEXT;
+BEGIN
+  SELECT status INTO v_status
+    FROM project_ffe_items WHERE id = 'f1000000-0000-4000-8000-000000000007';
+  ASSERT v_status = 'production',
+    'FAIL 11b: re-link to in_production PO should ratchet to production, got ' || v_status;
+
+  RAISE NOTICE 'Case 11b passed: re-link to in_production PO → production.';
+END
+$$;
+
+-- Re-link back to PO8 (draft, target 'ordered' = rank 3 < production = rank 4)
+-- → ratchet no-op, status preserved.
+UPDATE project_ffe_items
+   SET purchase_order_id = 'f0000000-0000-4000-8000-000000000008'
+ WHERE id = 'f1000000-0000-4000-8000-000000000007';
+
+DO $$
+DECLARE
+  v_status TEXT;
+  v_po_id  UUID;
+BEGIN
+  SELECT status, purchase_order_id INTO v_status, v_po_id
+    FROM project_ffe_items WHERE id = 'f1000000-0000-4000-8000-000000000007';
+  ASSERT v_status = 'production',
+    'FAIL 11c: re-link back to draft PO must not move the item backward, got ' || v_status;
+  ASSERT v_po_id = 'f0000000-0000-4000-8000-000000000008',
+    'FAIL 11d: item should now be linked to the draft PO again';
+
+  RAISE NOTICE 'Case 11 passed: re-link ratchets up; back-link to lower target is a no-op.';
+END
+$$;
+
+-- ─── case 12: manual unlink leaves status untouched ──────────────────────────
+--
+-- Setting purchase_order_id = NULL by hand (designer detaches an item) must
+-- not touch status: Trigger A early-returns on a NULL link, and Trigger B
+-- only reacts to PO status changes — not item-side unlinks.
+
+-- i8: approved item linked to PO10 (confirmed) at insert → 'ordered'.
+INSERT INTO project_ffe_items (id, project_id, name, status, purchase_order_id)
+VALUES ('f1000000-0000-4000-8000-000000000008', 'eeee0000-0000-4000-8000-000000000001', 'Item manually unlinked', 'approved', 'f0000000-0000-4000-8000-000000000010');
+
+DO $$
+DECLARE
+  v_status TEXT;
+BEGIN
+  SELECT status INTO v_status
+    FROM project_ffe_items WHERE id = 'f1000000-0000-4000-8000-000000000008';
+  ASSERT v_status = 'ordered',
+    'FAIL 12a: item linked to confirmed PO should be ordered, got ' || v_status;
+
+  RAISE NOTICE 'Case 12a passed: link to confirmed PO → ordered.';
+END
+$$;
+
+UPDATE project_ffe_items
+   SET purchase_order_id = NULL
+ WHERE id = 'f1000000-0000-4000-8000-000000000008';
+
+DO $$
+DECLARE
+  v_status TEXT;
+  v_po_id  UUID;
+BEGIN
+  SELECT status, purchase_order_id INTO v_status, v_po_id
+    FROM project_ffe_items WHERE id = 'f1000000-0000-4000-8000-000000000008';
+  ASSERT v_status = 'ordered',
+    'FAIL 12b: manual unlink must leave status untouched, got ' || v_status;
+  ASSERT v_po_id IS NULL,
+    'FAIL 12c: item should be unlinked';
+
+  RAISE NOTICE 'Case 12 passed: manual unlink leaves status untouched.';
 END
 $$;
 

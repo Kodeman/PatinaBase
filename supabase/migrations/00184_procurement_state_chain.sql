@@ -23,10 +23,11 @@
 --      items; shipped/delivered + paid deposit flips the pending balance
 --      to due.
 --   C. trg_receiving_inspection_side_effects (AFTER INSERT ON
---      receiving_inspections) — stamps purchase_orders.delivered_date,
---      advances the PO to 'delivered' on a CLEAN outcome only (deliberate
---      tightening vs the old hook, which advanced on every outcome),
---      shifts the net-30 balance due_date, and marks items received.
+--      receiving_inspections) — stamps purchase_orders.delivered_date (all
+--      outcomes), advances the PO to 'delivered' on a CLEAN outcome only
+--      (deliberate tightening vs the old hook, which advanced on every
+--      outcome), shifts the net-30 balance due_date, and marks items
+--      received.
 --   D. trg_deposit_paid_flips_balance (AFTER UPDATE OF state ON
 --      po_payments) — deposit paid while the PO is shipped/delivered flips
 --      the sibling pending balance to due (inverse order of Trigger B's
@@ -42,7 +43,10 @@ CREATE OR REPLACE FUNCTION ffe_status_rank(p_status TEXT) RETURNS INTEGER LANGUA
   SELECT CASE p_status
     WHEN 'specified' THEN 0 WHEN 'quoted' THEN 1 WHEN 'approved' THEN 2
     WHEN 'ordered' THEN 3 WHEN 'production' THEN 4 WHEN 'shipped' THEN 5
-    WHEN 'delivered' THEN 6 WHEN 'installed' THEN 7 ELSE 0 END
+    WHEN 'delivered' THEN 6 WHEN 'installed' THEN 7
+    -- unknown/future statuses rank below 'specified' so the ratchet always
+    -- advances them (safe direction); update this map when adding statuses
+    ELSE -1 END
 $$;
 
 COMMENT ON FUNCTION ffe_status_rank(TEXT) IS
@@ -120,9 +124,12 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  -- FOR KEY SHARE: blocks until a concurrent cancel commits, so the ratchet
+  -- sees the final status (closes the read-then-ratchet TOCTOU window).
   SELECT status INTO v_po_status
     FROM purchase_orders
-   WHERE id = NEW.purchase_order_id;
+   WHERE id = NEW.purchase_order_id
+     FOR KEY SHARE;
 
   IF v_po_status IS NULL THEN
     RETURN NEW;  -- Dangling link; FK will reject it anyway.
@@ -174,6 +181,9 @@ BEGIN
   -- Circuit breaker: the state chain is acyclic by construction (items- and
   -- payments-side triggers never write purchase_orders), but guard against
   -- future regressions introducing a cycle.
+  -- Max expected depth: 2 (PO update → item cascade) or 3 (PO update →
+  -- flip helper → Trigger D). 4+ indicates a cycle introduced by a future
+  -- regression.
   IF pg_trigger_depth() > 3 THEN
     RETURN NEW;
   END IF;
@@ -189,19 +199,15 @@ BEGIN
        AND ffe_status_rank(status) < ffe_status_rank(v_target);
 
   ELSIF NEW.status = 'cancelled' THEN
-    -- Items still in flight (ordered..shipped) roll back to 'approved' and
-    -- detach; items already delivered/installed detach without a status
-    -- change (the goods physically exist regardless of the PO's fate).
+    -- Single atomic detach of every linked item: rank 0-2 items
+    -- (specified/quoted/approved) detach keeping their status; in-flight
+    -- items (ordered..shipped, rank 3-5) roll back to 'approved';
+    -- delivered/installed items (rank 6-7) detach keeping their status
+    -- (the goods physically exist regardless of the PO's fate).
     UPDATE project_ffe_items
        SET purchase_order_id = NULL,
-           status            = 'approved',
-           updated_at        = NOW()
-     WHERE purchase_order_id = NEW.id
-       AND ffe_status_rank(status) BETWEEN 3 AND 5;
-
-    UPDATE project_ffe_items
-       SET purchase_order_id = NULL,
-           updated_at        = NOW()
+           status = CASE WHEN ffe_status_rank(status) BETWEEN 3 AND 5 THEN 'approved' ELSE status END,
+           updated_at = NOW()
      WHERE purchase_order_id = NEW.id;
   END IF;
 
