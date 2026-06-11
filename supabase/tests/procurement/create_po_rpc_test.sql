@@ -19,6 +19,9 @@
 --      items stay 'ordered' (Trigger B rank no-op).
 --   8. log_po_acknowledgment rejections: non-owner (request.jwt.claims
 --      switched to another user) and wrong status ('shipped').
+--   9. create_purchase_order rejection by a non-owner: rival user attempts to
+--      create a PO against the owner's project; RPC must raise 'not found or
+--      access denied' and leave the project untouched.
 --
 -- How to run:
 --   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
@@ -40,33 +43,35 @@ BEGIN;
 -- this agnostic).
 INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
 VALUES
-  ('77777777-7777-4777-8777-777777777701', 'create-po-designer@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
-  ('77777777-7777-4777-8777-777777777702', 'create-po-rival@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  ('77777777-7777-4777-8777-777777777701', 'create-po-designer@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'), -- u_owner
+  ('77777777-7777-4777-8777-777777777702', 'create-po-rival@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'); -- u_rival
 
 INSERT INTO profiles (id, email, full_name, created_at, updated_at)
 VALUES
-  ('77777777-7777-4777-8777-777777777701', 'create-po-designer@test.invalid', 'Create PO Designer', NOW(), NOW()),
-  ('77777777-7777-4777-8777-777777777702', 'create-po-rival@test.invalid',    'Create PO Rival',    NOW(), NOW())
+  ('77777777-7777-4777-8777-777777777701', 'create-po-designer@test.invalid', 'Create PO Designer', NOW(), NOW()), -- u_owner
+  ('77777777-7777-4777-8777-777777777702', 'create-po-rival@test.invalid',    'Create PO Rival',    NOW(), NOW())  -- u_rival
 ON CONFLICT (id) DO NOTHING;
 
 -- Designer's project + a rival-owned project (for the cross-project case).
 INSERT INTO projects (id, name, designer_id, created_by)
 VALUES
-  ('cc000000-0000-4000-8000-000000000001', 'Create PO Test Project',  '77777777-7777-4777-8777-777777777701', '77777777-7777-4777-8777-777777777701'),
-  ('cc000000-0000-4000-8000-000000000002', 'Create PO Rival Project', '77777777-7777-4777-8777-777777777702', '77777777-7777-4777-8777-777777777702');
+  ('cc000000-0000-4000-8000-000000000001', 'Create PO Test Project',  '77777777-7777-4777-8777-777777777701', '77777777-7777-4777-8777-777777777701'), -- p_owner
+  ('cc000000-0000-4000-8000-000000000002', 'Create PO Rival Project', '77777777-7777-4777-8777-777777777702', '77777777-7777-4777-8777-777777777702'); -- p_rival
 
 INSERT INTO vendors (id, name)
-VALUES ('cc000000-0000-4000-8000-000000000003', 'Create PO Test Vendor');
+VALUES ('cc000000-0000-4000-8000-000000000003', 'Create PO Test Vendor'); -- v1
 
 -- Pre-existing PO (for the already-linked rejection) and ack-fixture POs.
 --   po_linked   draft       — i_linked already belongs to it (case 2)
---   po_ack2     confirmed   — pre-acknowledged sentinel for idempotency (case 7b)
---   po_shipped  shipped     — wrong-status ack rejection (case 8)
+--   po_ack2     confirmed   — pre-acknowledged sentinel for idempotency (case 7e/7f/7g);
+--                             vendor_po_number starts 'KEEP-01', mutated to 'KEEP-02'
+--                             by sub-case 7h — subsequent sub-cases must not assume 'KEEP-01'
+--   po_shipped  shipped     — wrong-status ack rejection (case 8c)
 INSERT INTO purchase_orders (id, designer_id, project_id, vendor_id, payment_pattern, total_cents, status, vendor_po_number, acknowledged_at)
 VALUES
-  ('cc100000-0000-4000-8000-000000000001', '77777777-7777-4777-8777-777777777701', 'cc000000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000003', 'full_upfront', 50000, 'draft',     NULL,      NULL),
-  ('cc100000-0000-4000-8000-000000000002', '77777777-7777-4777-8777-777777777701', 'cc000000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000003', 'net_30',       70000, 'confirmed', 'KEEP-01', '2026-01-01T00:00:00Z'),
-  ('cc100000-0000-4000-8000-000000000003', '77777777-7777-4777-8777-777777777701', 'cc000000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000003', 'net_30',       90000, 'shipped',   NULL,      NULL);
+  ('cc100000-0000-4000-8000-000000000001', '77777777-7777-4777-8777-777777777701', 'cc000000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000003', 'full_upfront', 50000, 'draft',     NULL,      NULL),      -- po_linked
+  ('cc100000-0000-4000-8000-000000000002', '77777777-7777-4777-8777-777777777701', 'cc000000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000003', 'net_30',       70000, 'confirmed', 'KEEP-01', '2026-01-01T00:00:00Z'), -- po_ack2
+  ('cc100000-0000-4000-8000-000000000003', '77777777-7777-4777-8777-777777777701', 'cc000000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000003', 'net_30',       90000, 'shipped',   NULL,      NULL);      -- po_shipped
 
 -- FF&E items:
 --   i1        trade 80000 × qty 2 (trade wins over unit 100000)  → 160000
@@ -82,15 +87,16 @@ VALUES
 --   i6        trade 25000 × qty 1 (case 7 — acknowledgment fixture PO)
 INSERT INTO project_ffe_items (id, project_id, name, status, quantity, unit_price_cents, trade_price_cents, line_total_cents, blocked, purchase_order_id)
 VALUES
-  ('cc200000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000001', 'Trade-priced sofa',   'approved', 2, 100000, 80000, 200000, FALSE, NULL),
-  ('cc200000-0000-4000-8000-000000000002', 'cc000000-0000-4000-8000-000000000001', 'No-trade lamp',       'approved', 1,  50000,  NULL,  50000, FALSE, NULL),
-  ('cc200000-0000-4000-8000-000000000003', 'cc000000-0000-4000-8000-000000000001', 'Already-ordered rug', 'approved', 1,  30000, 20000,  30000, FALSE, 'cc100000-0000-4000-8000-000000000001'),
-  ('cc200000-0000-4000-8000-000000000004', 'cc000000-0000-4000-8000-000000000001', 'Blocked credenza',    'approved', 1,  60000, 45000,  60000, TRUE,  NULL),
-  ('cc200000-0000-4000-8000-000000000005', 'cc000000-0000-4000-8000-000000000002', 'Rival project chair', 'approved', 1,  40000, 30000,  40000, FALSE, NULL),
-  ('cc200000-0000-4000-8000-000000000006', 'cc000000-0000-4000-8000-000000000001', 'Milestone console',   'approved', 1,  55000, 40000,  55000, FALSE, NULL),
-  ('cc200000-0000-4000-8000-000000000007', 'cc000000-0000-4000-8000-000000000001', 'Unpriced ottoman',    'approved', 3,   NULL,  NULL,   NULL, FALSE, NULL),
-  ('cc200000-0000-4000-8000-000000000008', 'cc000000-0000-4000-8000-000000000001', 'Net-30 side table',   'approved', 1,  42000, 30000,  42000, FALSE, NULL),
-  ('cc200000-0000-4000-8000-000000000009', 'cc000000-0000-4000-8000-000000000001', 'Ack-fixture mirror',  'approved', 1,  32000, 25000,  32000, FALSE, NULL);
+  ('cc200000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000001', 'Trade-priced sofa',   'approved', 2, 100000, 80000, 200000, FALSE, NULL),                             -- i1
+  ('cc200000-0000-4000-8000-000000000002', 'cc000000-0000-4000-8000-000000000001', 'No-trade lamp',       'approved', 1,  50000,  NULL,  50000, FALSE, NULL),                             -- i2
+  ('cc200000-0000-4000-8000-000000000003', 'cc000000-0000-4000-8000-000000000001', 'Already-ordered rug', 'approved', 1,  30000, 20000,  30000, FALSE, 'cc100000-0000-4000-8000-000000000001'), -- i_linked
+  ('cc200000-0000-4000-8000-000000000004', 'cc000000-0000-4000-8000-000000000001', 'Blocked credenza',    'approved', 1,  60000, 45000,  60000, TRUE,  NULL),                             -- i_blocked
+  ('cc200000-0000-4000-8000-000000000005', 'cc000000-0000-4000-8000-000000000002', 'Rival project chair', 'approved', 1,  40000, 30000,  40000, FALSE, NULL),                             -- i_rival
+  ('cc200000-0000-4000-8000-000000000006', 'cc000000-0000-4000-8000-000000000001', 'Milestone console',   'approved', 1,  55000, 40000,  55000, FALSE, NULL),                             -- i3
+  ('cc200000-0000-4000-8000-000000000007', 'cc000000-0000-4000-8000-000000000001', 'Unpriced ottoman',    'approved', 3,   NULL,  NULL,   NULL, FALSE, NULL),                             -- i4
+  ('cc200000-0000-4000-8000-000000000008', 'cc000000-0000-4000-8000-000000000001', 'Net-30 side table',   'approved', 1,  42000, 30000,  42000, FALSE, NULL),                             -- i5
+  ('cc200000-0000-4000-8000-000000000009', 'cc000000-0000-4000-8000-000000000001', 'Ack-fixture mirror',  'approved', 1,  32000, 25000,  32000, FALSE, NULL),                             -- i6
+  ('cc200000-0000-4000-8000-000000000010', 'cc000000-0000-4000-8000-000000000001', 'Non-owner test lamp', 'approved', 1,  20000, 15000,  20000, FALSE, NULL);                             -- i7 (case 9 non-owner rejection)
 
 -- ─── helpers ───────────────────────────────────────────────────────────────
 --
@@ -456,6 +462,44 @@ BEGIN
     'FAIL 8c: shipped PO ack should raise, got ' || COALESCE(v_err, 'no error');
 
   RAISE NOTICE 'Case 8 passed: acknowledgment rejects non-owner and wrong status.';
+END
+$$;
+
+-- ─── case 9: create_purchase_order rejected for non-owner ───────────────────
+--
+-- The rival user (u_rival) attempts to create a PO against the owner's project
+-- (p_owner) using a valid unlinked item (i7) that belongs to that project.
+-- The RPC resolves ownership via auth.uid() and must refuse the call with
+-- 'not found or access denied', leaving i7 untouched.
+
+DO $$
+DECLARE
+  v_err TEXT;
+BEGIN
+  -- Switch auth context to the rival designer.
+  PERFORM pg_temp.assume_user('77777777-7777-4777-8777-777777777702');
+  v_err := NULL;
+  BEGIN
+    PERFORM create_purchase_order(
+      'cc000000-0000-4000-8000-000000000001',  -- p_owner's project
+      'cc000000-0000-4000-8000-000000000003',
+      'net_30',
+      ARRAY['cc200000-0000-4000-8000-000000000010']::uuid[]  -- i7
+    );
+  EXCEPTION WHEN OTHERS THEN
+    v_err := SQLERRM;
+  END;
+  ASSERT v_err LIKE '%not found or access denied%',
+    'FAIL 9a: rival create_purchase_order against owner project should raise, got ' || COALESCE(v_err, 'no error');
+
+  -- Restore owner context and verify i7 was NOT linked by the failed attempt.
+  PERFORM pg_temp.assume_user('77777777-7777-4777-8777-777777777701');
+  PERFORM 1 FROM project_ffe_items
+   WHERE id = 'cc200000-0000-4000-8000-000000000010'
+     AND purchase_order_id IS NULL AND status = 'approved';
+  ASSERT FOUND, 'FAIL 9b: non-owner create must not partially link/advance item i7';
+
+  RAISE NOTICE 'Case 9 passed: non-owner create_purchase_order rejected with not found or access denied.';
 END
 $$;
 

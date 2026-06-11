@@ -64,6 +64,7 @@ export interface OrderAssistantFFEItem {
   id: string;
   name: string;
   room?: string;
+  /** Display-only client-price total. Callers must NOT coerce null line totals to 0 silently — doing so masks missing pricing in the displayed subtotal; pass 0 explicitly only when the item is intentionally free/unpriced. */
   line_total_cents: number;
   /**
    * Dual-pricing fields (00185/00186). The PO total is the vendor TRADE

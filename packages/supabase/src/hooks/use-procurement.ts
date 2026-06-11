@@ -114,10 +114,20 @@ export interface CreatePurchaseOrderInput {
 
 export interface LogPOAcknowledgmentInput {
   purchaseOrderId: string;
-  /** When supplied, overwrites vendor_po_number; omitted/undefined preserves it. */
-  vendorPoNumber?: string;
-  /** When supplied, overwrites confirmed_eta; omitted/undefined preserves it. */
-  confirmedEta?: string;
+  /**
+   * When supplied as a non-null string, overwrites `vendor_po_number`.
+   * Omitted (`undefined`) **or explicit `null`** both preserve the existing
+   * value — they map to SQL NULL which the RPC treats as "no-op". Only a
+   * defined string actually overwrites.
+   */
+  vendorPoNumber?: string | null;
+  /**
+   * When supplied as a non-null string/date, overwrites `confirmed_eta`.
+   * Omitted (`undefined`) **or explicit `null`** both preserve the existing
+   * value — they map to SQL NULL which the RPC treats as "no-op". Only a
+   * defined value actually overwrites.
+   */
+  confirmedEta?: string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
