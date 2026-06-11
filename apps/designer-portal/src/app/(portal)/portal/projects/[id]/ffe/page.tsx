@@ -415,6 +415,10 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
   // style, e.g. "Margin $1,140"; margin = line_total − trade × qty.
   const cardMarginLabel = (it: AnyItem): string | null => {
     if (!isStudioOwner) return null;
+    // Allowance/TBD line totals are budget-range midpoints, not unit × qty, so
+    // the margin formula is meaningless for those item types. Guard here matches
+    // the drawer's clientEditable gate.
+    if (it.item_type !== 'fixed') return null;
     if (it.trade_price_cents === null || it.trade_price_cents === undefined) return null;
     const margin = (it.line_total_cents || 0) - it.trade_price_cents * (it.quantity ?? 1);
     return `Margin ${formatSignedDollars(margin)}`;
@@ -959,6 +963,33 @@ function ItemDrawer({
     try {
       await updatePricing.mutateAsync({ itemId: item.id, projectId, ...pricingPayload });
       toast('Pricing updated', 'success');
+      // Re-seed inputs from the just-submitted payload values (falling back to
+      // the item's existing values for fields not in the payload). This closes
+      // the window where a user clears a field right after Save and a subsequent
+      // Save would send a spurious null clear.
+      setTradeInput(
+        centsToInput(
+          'tradePriceCents' in pricingPayload
+            ? pricingPayload.tradePriceCents
+            : item.trade_price_cents
+        )
+      );
+      setMarkupInput(
+        'markupPercent' in pricingPayload
+          ? pricingPayload.markupPercent !== null && pricingPayload.markupPercent !== undefined
+            ? String(pricingPayload.markupPercent)
+            : ''
+          : item.markup_percent !== null && item.markup_percent !== undefined
+            ? String(item.markup_percent)
+            : ''
+      );
+      setClientInput(
+        centsToInput(
+          'unitPriceCents' in pricingPayload
+            ? pricingPayload.unitPriceCents
+            : item.unit_price_cents
+        )
+      );
     } catch {
       /* global mutation error toast already fired */
     }
@@ -1086,8 +1117,19 @@ function ItemDrawer({
                     placeholder="—"
                     className="pl-7"
                     aria-label="Trade price"
+                    aria-invalid={tradeInvalid || undefined}
+                    aria-describedby={tradeInvalid ? 'trade-price-error' : undefined}
                   />
                 </div>
+                {tradeInvalid && (
+                  <span
+                    id="trade-price-error"
+                    role="alert"
+                    className="sr-only"
+                  >
+                    Enter a valid amount
+                  </span>
+                )}
               </label>
               <label className="block">
                 <span className="type-meta mb-1 block">Markup %</span>
@@ -1099,7 +1141,18 @@ function ItemDrawer({
                   onChange={(e) => handleMarkupChange(e.target.value)}
                   placeholder="—"
                   aria-label="Markup percent"
+                  aria-invalid={markupInvalid || undefined}
+                  aria-describedby={markupInvalid ? 'markup-percent-error' : undefined}
                 />
+                {markupInvalid && (
+                  <span
+                    id="markup-percent-error"
+                    role="alert"
+                    className="sr-only"
+                  >
+                    Enter a valid percent
+                  </span>
+                )}
               </label>
               <label className="block">
                 <span className="type-meta mb-1 block">Client price</span>
@@ -1120,6 +1173,8 @@ function ItemDrawer({
                     placeholder="—"
                     className="pl-7"
                     aria-label="Client price"
+                    aria-invalid={clientInvalid || undefined}
+                    aria-describedby={clientInvalid ? 'client-price-error' : undefined}
                     disabled={!clientEditable}
                     title={
                       clientEditable
@@ -1128,6 +1183,15 @@ function ItemDrawer({
                     }
                   />
                 </div>
+                {clientInvalid && (
+                  <span
+                    id="client-price-error"
+                    role="alert"
+                    className="sr-only"
+                  >
+                    Enter a valid amount
+                  </span>
+                )}
               </label>
             </div>
             {/* Margin readout — studio owners only (hidden, not disabled, for
