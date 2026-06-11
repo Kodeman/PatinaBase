@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { type FFEStageKey } from '@patina/types';
-import { StageSelect } from './stage-select';
+import { StageSelect, type StageSyncInfo } from './stage-select';
 
 type ItemType = 'fixed' | 'allowance' | 'tbd';
 
@@ -10,6 +10,8 @@ export interface FFEItemCardStage {
   currentStatus: FFEStageKey | string;
   onChangeStatus: (next: FFEStageKey) => void | Promise<void>;
   disabled?: boolean;
+  /** PO-sync indicator (00184 stage ratchet) — passed through to StageSelect. */
+  sync?: StageSyncInfo;
 }
 
 export interface FFEItemCardProps {
@@ -200,6 +202,7 @@ export function FFEItemCard({
               currentStatus={stage.currentStatus}
               onChangeStatus={stage.onChangeStatus}
               disabled={stage.disabled}
+              sync={stage.sync}
               size="sm"
             />
           </div>

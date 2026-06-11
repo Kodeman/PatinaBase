@@ -341,7 +341,7 @@ export function useProjectRooms(projectId: string | null) {
 
 export function useProjectFFEItems(projectId: string | null) {
   return useQuery({
-    queryKey: projectId ? queryKeys.projects.ffeItems(projectId) : ['projects', 'ffe-items', 'null'],
+    queryKey: projectId ? queryKeys.projects.ffeItems(projectId) : ['project-ffe-items', 'null'],
     queryFn: async () => {
       if (!projectId) throw new Error('Project ID required');
 
@@ -722,11 +722,11 @@ export function useAddProjectRoom() {
 // ── Project FF&E item mutations (public.project_ffe_items, 00066) ──
 //
 // The per-project FF&E board reads items via useProjectFFEItems
-// (queryKeys.projects.ffeItems → ['projects', id, 'ffe-items']) but the package
-// hook useUpdateFFEItemStatus invalidates ['project-ffe-items', id]. These two
-// namespaces do NOT prefix-match, so every project FF&E write must invalidate
-// BOTH or the board won't refresh until a hard reload. These mutations live here
-// (next to the read hooks + queryKeys + isUuid) so that invalidation is explicit.
+// (queryKeys.projects.ffeItems → ['project-ffe-items', id]) — since the W1-T7
+// consolidation this is the SAME namespace the @patina/supabase hooks
+// invalidate (it was ['projects', id, 'ffe-items'] before, which package-side
+// invalidations didn't prefix-match). These mutations live here (next to the
+// read hooks + queryKeys + isUuid) so that invalidation stays explicit.
 
 type ProjectFFEItemType = 'fixed' | 'allowance' | 'tbd';
 
@@ -755,13 +755,15 @@ async function recomputeProjectBudget(
 }
 
 function invalidateProjectFFE(queryClient: QueryClient, projectId: string) {
-  // Portal read keys — the FF&E board, financials, key-metrics, detail tile.
+  // FF&E items — the shared portal+package namespace (['project-ffe-items',
+  // id]); as a prefix it also covers the package useProjectFFEItems(filters)
+  // variants.
   queryClient.invalidateQueries({ queryKey: queryKeys.projects.ffeItems(projectId) });
+  // Portal rollup keys — financials, key-metrics, detail tile.
   queryClient.invalidateQueries({ queryKey: queryKeys.projects.financials(projectId) });
   queryClient.invalidateQueries({ queryKey: queryKeys.projects.keyMetrics(projectId) });
   queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
   // Package read keys — project detail's useProjectV2 + package financials.
-  queryClient.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
   queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
   queryClient.invalidateQueries({ queryKey: ['project-financials', projectId] });
 }

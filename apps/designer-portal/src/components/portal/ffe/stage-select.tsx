@@ -1,8 +1,20 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { Zap } from 'lucide-react';
 import { type FFEStageKey } from '@patina/types';
 import { STAGES, stageColor, stageLabel } from './stages';
+
+/**
+ * PO-sync state for the item this select controls (migration 00184 stage
+ * ratchet). `systemSet` = the current stage was advanced server-side by the
+ * item's purchase order; a manual pick overrides the sync until the next PO
+ * transition re-ratchets it.
+ */
+export interface StageSyncInfo {
+  systemSet: boolean;
+  poNumber?: string | null;
+}
 
 interface StageSelectProps {
   currentStatus: FFEStageKey | string;
@@ -11,6 +23,8 @@ interface StageSelectProps {
   /** External disable (e.g. read-only contexts). */
   disabled?: boolean;
   size?: 'sm' | 'md';
+  /** When `sync.systemSet`, a Zap badge marks the stage as PO-driven. */
+  sync?: StageSyncInfo;
 }
 
 /**
@@ -24,6 +38,7 @@ export function StageSelect({
   onChangeStatus,
   disabled = false,
   size = 'sm',
+  sync,
 }: StageSelectProps) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -99,6 +114,14 @@ export function StageSelect({
   const triggerPad = size === 'sm' ? 'px-2 py-1' : 'px-3 py-1.5';
   const triggerText = size === 'sm' ? 'text-[0.72rem]' : 'text-[0.8rem]';
 
+  // PO-sync badge title — "Synced from PO {number}", number omitted when the
+  // item carries no PO label.
+  const syncTitle = sync?.systemSet
+    ? sync.poNumber
+      ? `Synced from PO ${sync.poNumber}`
+      : 'Synced from PO'
+    : null;
+
   return (
     <div
       className="relative"
@@ -114,7 +137,7 @@ export function StageSelect({
         onKeyDown={onTriggerKeyDown}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={`Stage: ${stageLabel(currentStatus)}. Change stage.`}
+        aria-label={`Stage: ${stageLabel(currentStatus)}.${syncTitle ? ` ${syncTitle}.` : ''} Change stage.`}
         className={`inline-flex w-full items-center justify-between gap-1.5 rounded-[3px] border transition-colors ${triggerPad} ${triggerText} ${
           isDisabled ? 'cursor-wait opacity-60' : 'cursor-pointer hover:border-[var(--text-primary)]'
         }`}
@@ -131,6 +154,15 @@ export function StageSelect({
             style={{ background: stageColor(currentStatus) }}
           />
           <span className="truncate">{stageLabel(currentStatus)}</span>
+          {syncTitle && (
+            <span
+              title={syncTitle}
+              className="inline-flex shrink-0 items-center"
+              style={{ color: 'var(--color-clay, #C4A57B)' }}
+            >
+              <Zap size={10} strokeWidth={2.5} aria-hidden />
+            </span>
+          )}
         </span>
         <svg
           width="10"
@@ -157,6 +189,21 @@ export function StageSelect({
           className="absolute left-0 z-40 mt-1 max-h-[280px] w-[180px] overflow-auto rounded-md border bg-[var(--bg-surface)] py-1 shadow-lg outline-none"
           style={{ borderColor: 'var(--border-default)' }}
         >
+          {/* PO-sync explainer — informational header, not an option. */}
+          {sync?.systemSet && (
+            <li
+              role="presentation"
+              className="border-b px-3 pb-1.5 pt-0.5 text-[0.68rem] italic leading-snug"
+              style={{
+                borderColor: 'var(--border-subtle)',
+                color: 'var(--text-muted)',
+                fontFamily: 'var(--font-body)',
+              }}
+            >
+              This item follows its purchase order. Picking a stage manually
+              overrides the sync until the next PO update.
+            </li>
+          )}
           {STAGES.map((stage, idx) => {
             const isCurrent = stage.key === currentStatus;
             const isActive = idx === activeIndex;

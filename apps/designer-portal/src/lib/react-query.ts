@@ -191,7 +191,12 @@ export const queryKeys = {
     activity: (projectId: string) => [...queryKeys.projects.all, projectId, 'activity'] as const,
     progress: (projectId: string) => [...queryKeys.projects.all, projectId, 'progress'] as const,
     rooms: (projectId: string) => [...queryKeys.projects.all, projectId, 'rooms'] as const,
-    ffeItems: (projectId: string) => [...queryKeys.projects.all, projectId, 'ffe-items'] as const,
+    // FF&E items deliberately live in the @patina/supabase package namespace
+    // (['project-ffe-items', id]) — NOT nested under ['projects'] — so the
+    // package-side invalidations (use-project-v2 useUpdateFFEItemStatus,
+    // use-procurement invalidateFfeCaches, use-decisions apply/feed-through)
+    // hit the portal board's read key directly (W1-T7 consolidation).
+    ffeItems: (projectId: string) => ['project-ffe-items', projectId] as const,
     financials: (projectId: string) => [...queryKeys.projects.all, projectId, 'financials'] as const,
     timeTracking: (projectId: string) => [...queryKeys.projects.all, projectId, 'time-tracking'] as const,
     timeEntries: (projectId: string, filters?: any) =>

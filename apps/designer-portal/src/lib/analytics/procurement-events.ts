@@ -83,10 +83,19 @@ export const procurementEvents = {
   byStatusFilterApplied: (properties: { facet: string }) =>
     track('procurement_by_status_filter_applied', properties),
 
+  /**
+   * Fired when a designer manually picks a stage on an FF&E item (board card
+   * dropdown or item drawer, W1-T7). `is_override` is true when the stage had
+   * been system-set by the 00184 PO-sync triggers (item linked to a PO,
+   * sitting in a PO-driven stage) and the designer picked a different stage —
+   * the manual pick holds until the next PO transition re-ratchets it.
+   */
+  statusAdvanced: (properties: { from: string; to: string; is_override: boolean }) =>
+    track('procurement_status_advanced', properties),
+
   // ────────────────────────────────────────────────────────────────────────
   // Future events (documented but not yet wired — see
   // docs/follow-ups/procurement-pilot-metrics.md):
-  //   - procurement_status_advanced
   //   - procurement_conflict_acknowledged
   // ────────────────────────────────────────────────────────────────────────
 };

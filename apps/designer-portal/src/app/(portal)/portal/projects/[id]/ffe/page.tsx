@@ -2,7 +2,6 @@
 
 import { use, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
 import {
   useProject,
   useProjectFFEItems,
@@ -18,7 +17,7 @@ import {
 } from '@patina/supabase';
 import { FFE_STAGE_KEYS, type FFEStageKey } from '@patina/types';
 import { STAGES, STAGE_CONFIG } from '@/components/portal/ffe/stages';
-import { StageSelect } from '@/components/portal/ffe/stage-select';
+import { StageSelect, type StageSyncInfo } from '@/components/portal/ffe/stage-select';
 import { FFEItemCard } from '@/components/portal/ffe/ffe-item-card';
 import {
   AddFFEItemControls,
@@ -34,7 +33,7 @@ import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { SearchInput } from '@/components/portal/search-input';
 import { useToast } from '@/components/portal/toast-provider';
-import { queryKeys } from '@/lib/react-query';
+import { procurementEvents } from '@/lib/analytics/procurement-events';
 import {
   OrderAssistant,
   type OrderAssistantFFEItem,
@@ -84,6 +83,21 @@ interface PendingOrder {
 // the Procurement By Status view stay in lockstep.
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Stages the 00184 PO-sync triggers can set. An item linked to a PO and
+// sitting in one of these stages is "system-set": the stage controls show a
+// sync badge, and a manual pick counts as an override (it sticks until the
+// next PO transition re-ratchets anything below the PO's stage).
+const PO_SYNCED_STAGES: readonly string[] = ['ordered', 'production', 'shipped', 'delivered'];
+
+function poSync(item: AnyItem): StageSyncInfo {
+  return {
+    systemSet: !!item.purchase_order_id && PO_SYNCED_STAGES.includes(item.status),
+    // The board's items query doesn't join purchase_orders — the legacy
+    // po_number column is the best label available (null → generic copy).
+    poNumber: item.po_number ?? null,
+  };
+}
 
 // CMS-probe-then-fallback wrapper for the page-level zero-state when a
 // project has no FF&E items at all. Mirrors the F1.6 Clients empty-state
@@ -280,12 +294,20 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
       return { ...prev, stage: isOnly ? [] : [key] };
     });
 
-  // Stage change from a card dropdown — any stage → any stage. Errors surface
-  // via the global mutation toast; we swallow the rejection so StageSelect's
-  // pending state resets cleanly.
+  // Stage change from a card dropdown or the item drawer — any stage → any
+  // stage. Errors surface via the global mutation toast; we swallow the
+  // rejection so StageSelect's pending state resets cleanly. `is_override`
+  // marks a manual pick on a PO-synced item (00184 ratchet) — the override
+  // holds until the next PO transition.
   const handleStageChange = async (item: AnyItem, next: FFEStageKey) => {
+    const from = item.status || 'specified';
     try {
       await updateStatus.mutateAsync({ itemId: item.id, projectId, status: next });
+      procurementEvents.statusAdvanced({
+        from,
+        to: next,
+        is_override: poSync(item).systemSet,
+      });
     } catch {
       /* global mutation error toast already fired */
     }
@@ -367,7 +389,6 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
   // Reuse the existing OrderAssistant (built for the By Vendor view) to turn
   // selected FF&E items into purchase orders. Items are grouped by vendor —
   // one PO per vendor — and the assistant walks the queue one vendor at a time.
-  const queryClient = useQueryClient();
   const { toast } = useToast();
   // Enriches the per-item vendor_id/vendor_name with payment terms + portal URL.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -457,17 +478,11 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
     setSelected(new Set());
   };
 
-  // After a PO is created, advance its items to "ordered" and refresh the board
-  // (useCreatePurchaseOrder only invalidates its own @patina/supabase keys, not
-  // the portal's project-scoped FF&E key).
-  const handleOrderCreated = async (order: PendingOrder) => {
-    await Promise.allSettled(
-      order.ffeItems.map((i) =>
-        updateStatus.mutateAsync({ itemId: i.id, projectId, status: 'ordered' }),
-      ),
-    );
-    queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-  };
+  // No post-creation work needed here (W1-T7): the 00184 DB triggers advance
+  // linked items to 'ordered' server-side, and useCreatePurchaseOrder's
+  // onSuccess invalidates both FF&E cache namespaces (invalidateFfeCaches →
+  // ['project-ffe-items', id] — the board's read key — plus the
+  // ['projects', id] rollups).
 
   // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
   // singleton cache) render the same tree — prevents hydration mismatch.
@@ -663,6 +678,7 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
                       stage={{
                         currentStatus: it.status || 'specified',
                         onChangeStatus: (next) => handleStageChange(it, next),
+                        sync: poSync(it),
                       }}
                     />
                   ))}
@@ -681,7 +697,9 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
           vendors={vendorList}
           onClose={() => router.push(`/portal/projects/${projectId}/ffe`)}
           onUpdateStatus={async (status) => {
-            await updateStatus.mutateAsync({ itemId: drawerItem.id, projectId, status });
+            // Through handleStageChange so drawer picks fire the same
+            // procurement_status_advanced event as the card dropdowns.
+            await handleStageChange(drawerItem, status as FFEStageKey);
           }}
           onGeneratePO={() => {
             router.push(`/portal/projects/${projectId}/ffe`);
@@ -726,9 +744,6 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
               ? `${poQueue.length} vendor orders queued — you'll confirm each in turn.`
               : undefined
           }
-          onCreated={() => {
-            void handleOrderCreated(activeOrder);
-          }}
         />
       )}
     </div>
@@ -857,6 +872,7 @@ function ItemDrawer({
             <StageSelect
               currentStatus={item.status || 'specified'}
               onChangeStatus={(next) => onUpdateStatus(next)}
+              sync={poSync(item)}
               size="md"
             />
           </div>
