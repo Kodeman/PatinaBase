@@ -75,6 +75,14 @@ export const procurementEvents = {
   damageClaimCreated: (properties: { outcome: string }) =>
     track('procurement_damage_claim_created', properties),
 
+  /**
+   * Fired when a designer applies a facet on Procurement → By Status (W1-T5).
+   * `facet` is the facet key ('project' | 'payment'). Fires on apply (an
+   * option toggled on), not on clear/reset.
+   */
+  byStatusFilterApplied: (properties: { facet: string }) =>
+    track('procurement_by_status_filter_applied', properties),
+
   // ────────────────────────────────────────────────────────────────────────
   // Future events (documented but not yet wired — see
   // docs/follow-ups/procurement-pilot-metrics.md):

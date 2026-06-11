@@ -124,6 +124,8 @@ vi.mock('@tanstack/react-query', () => ({
 // Import AFTER mocks.
 import {
   usePurchaseOrders,
+  // W1-T5 — cross-project FF&E items (rows-per-item By Status view)
+  useProcurementItems,
   usePOPayments,
   useCreatePurchaseOrder,
   useLogPaymentPaid,
@@ -154,6 +156,9 @@ beforeEach(() => {
   invalidateQueries.mockReset();
   supabaseClient.auth.getUser.mockReset();
   supabaseClient.auth.getSession.mockReset();
+  // Clear the table-call log so cross-table ordering assertions (which use
+  // indexOf over from.mock.calls) never see calls from earlier tests.
+  supabaseClient.from.mockClear();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -194,6 +199,121 @@ describe('usePurchaseOrders', () => {
   it('throws when supabase returns an error', async () => {
     setTableDefault('purchase_orders', { data: null, error: new Error('rls denied') });
     const config = usePurchaseOrders() as unknown as { queryFn: () => Promise<unknown> };
+    await expect(config.queryFn()).rejects.toThrow('rls denied');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useProcurementItems  (W1-T5 — rows-per-item By Status view)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useProcurementItems', () => {
+  it('uses the canonical query key (filters default to {}) and selects from project_ffe_items with the PO/project/room joins', async () => {
+    const builder = setTableDefault('project_ffe_items', { data: [], error: null });
+
+    const config = useProcurementItems() as unknown as {
+      queryKey: unknown[];
+      queryFn: () => Promise<unknown[]>;
+    };
+
+    expect(config.queryKey).toEqual(['procurement-items', {}]);
+
+    const rows = await config.queryFn();
+    expect(rows).toEqual([]);
+    expect(supabaseClient.from).toHaveBeenCalledWith('project_ffe_items');
+
+    // The select must embed the joined PO (with vendor + payments), project,
+    // and room so the By Status view can render per-item rows without N+1s.
+    const selectCalls = builder.__chain.filter((c) => c.method === 'select');
+    expect(selectCalls).toHaveLength(1);
+    const selectStr = String(selectCalls[0].args[0]);
+    expect(selectStr).toContain('purchase_order:purchase_orders');
+    expect(selectStr).toContain('vendor:vendors');
+    expect(selectStr).toContain('payments:po_payments(*)');
+    expect(selectStr).toContain('project:projects');
+    expect(selectStr).toContain('room:project_rooms');
+
+    // No filters supplied → no .eq calls.
+    expect(builder.__chain.filter((c) => c.method === 'eq')).toEqual([]);
+  });
+
+  it('orders by sort_order then created_at (both ascending), matching the FF&E board hooks', async () => {
+    const builder = setTableDefault('project_ffe_items', { data: [], error: null });
+
+    const config = useProcurementItems() as unknown as {
+      queryFn: () => Promise<unknown[]>;
+    };
+    await config.queryFn();
+
+    const orderArgs = builder.__chain.filter((c) => c.method === 'order').map((c) => c.args);
+    expect(orderArgs).toEqual([
+      ['sort_order', { ascending: true }],
+      ['created_at', { ascending: true }],
+    ]);
+  });
+
+  it('applies projectId/vendorId/purchaseOrderId filters server-side via .eq and embeds them in the queryKey', async () => {
+    const builder = setTableDefault('project_ffe_items', { data: [], error: null });
+    const filters = {
+      projectId: 'proj-1',
+      vendorId: 'vendor-1',
+      purchaseOrderId: 'po-1',
+    };
+
+    const config = useProcurementItems(filters) as unknown as {
+      queryKey: unknown[];
+      queryFn: () => Promise<unknown[]>;
+    };
+
+    expect(config.queryKey).toEqual(['procurement-items', filters]);
+    await config.queryFn();
+
+    const eqArgs = builder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
+    expect(eqArgs).toEqual([
+      ['project_id', 'proj-1'],
+      ['vendor_id', 'vendor-1'],
+      ['purchase_order_id', 'po-1'],
+    ]);
+  });
+
+  it('returns the joined rows as-is (no client-side reshaping)', async () => {
+    const row = {
+      id: 'ffe-1',
+      project_id: 'proj-1',
+      project_room_id: 'room-1',
+      purchase_order_id: 'po-1',
+      name: 'Cloud Pendant Cluster 19',
+      status: 'shipped',
+      line_total_cents: 420000,
+      sort_order: 0,
+      purchase_order: {
+        id: 'po-1',
+        status: 'shipped',
+        vendor_po_number: 'AP-012',
+        confirmed_eta: '2026-06-20',
+        total_cents: 420000,
+        payment_pattern: 'fifty_fifty',
+        is_patina_catalog: false,
+        vendor: { id: 'vendor-ap', name: 'Apparatus' },
+        payments: [
+          { id: 'pay-1', purchase_order_id: 'po-1', kind: 'deposit', state: 'paid', sort_order: 0 },
+        ],
+      },
+      project: { id: 'proj-1', name: 'Olsen Lake House' },
+      room: { id: 'room-1', name: 'Great Room' },
+    };
+    setTableDefault('project_ffe_items', { data: [row], error: null });
+
+    const config = useProcurementItems() as unknown as {
+      queryFn: () => Promise<unknown[]>;
+    };
+    const rows = await config.queryFn();
+    expect(rows).toEqual([row]);
+  });
+
+  it('throws when supabase returns an error', async () => {
+    setTableDefault('project_ffe_items', { data: null, error: new Error('rls denied') });
+    const config = useProcurementItems() as unknown as { queryFn: () => Promise<unknown> };
     await expect(config.queryFn()).rejects.toThrow('rls denied');
   });
 });

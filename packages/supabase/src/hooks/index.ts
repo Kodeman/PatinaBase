@@ -930,6 +930,8 @@ export type { PaintColor, PaintColorBrand } from './use-paint-colors';
 // ═══════════════════════════════════════════════════════════════════════════
 export {
   usePurchaseOrders,
+  // W1-T5 — cross-project FF&E items (rows-per-item By Status view)
+  useProcurementItems,
   usePOPayments,
   useVendorPaymentTerms,
   useUpdateVendorPaymentTerms,
@@ -966,6 +968,10 @@ export type {
   PurchaseOrder,
   POPayment,
   POFilters,
+  // W1-T5 — cross-project FF&E items (rows-per-item By Status view)
+  FFEItemStatus,
+  ProcurementItemRow,
+  ProcurementItemFilters,
   CreatePurchaseOrderInput,
   UpdatePurchaseOrderStatusInput,
   // Sprint 2 — Receiving, damage claims, calendar

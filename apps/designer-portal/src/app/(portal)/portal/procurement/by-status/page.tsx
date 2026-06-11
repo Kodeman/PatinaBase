@@ -6,32 +6,35 @@
  * Per PRD slide 07: "The 8 stages, now financial." Shows the 8-stage FF&E
  * pipeline horizontally across the top with item counts and totals per stage,
  * then a single expanded section for the active stage (default: Production)
- * with rows showing per-PO operational + payment state side-by-side.
+ * with rows showing per-item operational + payment state side-by-side.
  *
- * Sprint 1 scope decision (documented in handoff report):
- *   - The PRD shows rows-per-FFE-item. Wave 1.2 only ships PO-level hooks;
- *     there is no cross-project `useFFEItems()` yet. We ship **rows-per-PO**
- *     for now — one row per purchase order, mapped to a stage via po.status
- *     using a deterministic mapping (po.status → FFE stage). This is a
- *     known approximation; Wave 1.4 should add a cross-project items hook
- *     and switch this view to rows-per-item.
+ * W1-T5 (shipped): rows-per-FFE-item, replacing the Sprint 1 rows-per-PO
+ *   approximation. Each row is a `project_ffe_items` row (via
+ *   `useProcurementItems`) bucketed by its own 8-stage `status` column — the
+ *   00184 DB triggers keep item stages in sync with PO lifecycle, so the
+ *   per-item buckets are truthful. Payment + ETA columns read off the joined
+ *   purchase order; pre-PO items render quiet placeholders.
  *
- * What's intentionally stubbed (Wave 2 / later):
- *   - Project filter and Payment status filter (visible but inert)
+ * W1-T5 also ships the real Project / Payment filters (FacetedFilterPopover,
+ *   client-side over the single loaded cache entry) with a ?projectId= deep
+ *   link kept in sync with the Project facet.
+ *
+ * What's intentionally stubbed (later):
  *   - Calendar / Receiving cross-links
  *
  * Wave 2.4 (shipped): manual ETA quick-edit via the inline pencil icon on
- *   each PO row — opens EtaQuickEditDrawer for that PO.
+ *   each row with a linked PO — opens EtaQuickEditDrawer for that PO.
  */
 
 import { Suspense, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Pencil } from 'lucide-react';
 import {
-  usePurchaseOrders,
-  type POStatus,
-  type PurchaseOrder,
+  useProcurementItems,
+  type ProcurementItemRow,
 } from '@patina/supabase';
 import { FFE_STAGE_KEYS, type FFEStageKey } from '@patina/types';
+import { STAGE_CONFIG } from '@/components/portal/ffe/stages';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { IconButton } from '@/components/ui/controls';
 import { useHydrated } from '@/hooks/use-hydrated';
@@ -39,61 +42,26 @@ import {
   PaymentPill,
   type PaymentPillState,
 } from '@/components/portal/procurement/payment-pill';
-import { EtaQuickEditDrawer } from '@/components/portal/procurement/eta-quick-edit-drawer';
+import {
+  EtaQuickEditDrawer,
+  type EtaQuickEditPurchaseOrder,
+} from '@/components/portal/procurement/eta-quick-edit-drawer';
+import {
+  FacetedFilterPopover,
+  type Facet,
+  type FacetSelections,
+} from '@/components/portal/faceted-filter-popover';
+import { procurementEvents } from '@/lib/analytics/procurement-events';
 
-// ─── Stage display ──────────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────────────────────────
 
-/**
- * Per-stage visual + label config. Color tokens mirror the FF&E Kanban so
- * a designer sees the same colors across the per-project board and the
- * cross-project By Status view.
- */
-const STAGE_DISPLAY: Record<FFEStageKey, { label: string; color: string }> = {
-  specified: { label: 'Specified', color: 'var(--text-muted)' },
-  quoted: { label: 'Quoted', color: 'var(--color-dusty-blue, #8B9CAD)' },
-  approved: { label: 'Approved', color: 'var(--color-clay, #C4A57B)' },
-  ordered: { label: 'Ordered', color: 'var(--color-dusty-blue, #8B9CAD)' },
-  production: { label: 'Production', color: 'var(--color-golden-hour, #E8C547)' },
-  shipped: { label: 'Shipped', color: 'var(--color-golden-hour, #E8C547)' },
-  delivered: { label: 'Delivered', color: 'var(--color-sage, #A8B5A0)' },
-  installed: { label: 'Installed', color: 'var(--color-sage, #A8B5A0)' },
-};
-
-/**
- * Sprint 1 approximation: map PurchaseOrder.status → FFE stage so we can
- * group PO rows under the 8-stage flow chart. A PO doesn't have its own
- * FFE stage (items do), but for the rows-per-PO Sprint 1 simplification
- * this gives a deterministic, predictable bucket.
- *
- * `cancelled` POs are filtered out of stage buckets — the flow chart only
- * shows live procurement.
- */
-function poStatusToStage(status: POStatus): FFEStageKey | null {
-  switch (status) {
-    case 'draft':
-      return 'approved';
-    case 'confirmed':
-      return 'ordered';
-    case 'in_production':
-      return 'production';
-    case 'shipped':
-      return 'shipped';
-    case 'delivered':
-      return 'delivered';
-    case 'cancelled':
-      return null;
-  }
-}
+/** The joined purchase order off a ProcurementItemRow (non-null). */
+type ItemPurchaseOrder = NonNullable<ProcurementItemRow['purchase_order']>;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function formatDollars(cents: number): string {
   return `$${(cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
-}
-
-function formatDate(d: string | null | undefined): string {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 /**
@@ -136,8 +104,10 @@ function timeLeftBadge(eta: string | null | undefined): TimeLeftBadge | null {
 /**
  * Picks the most-actionable po_payments row for the pill column. Order of
  * preference: any `due`, else first `pending`, else first `paid`, else null.
+ * Sourced from the item's joined purchase order — pre-PO items have no
+ * payment state at all (callers render "—").
  */
-function pickHeadlinePayment(po: PurchaseOrder): {
+function pickHeadlinePayment(po: ItemPurchaseOrder): {
   state: PaymentPillState;
   amount: number | null;
   dueDate: string | null;
@@ -173,12 +143,17 @@ function pickHeadlinePayment(po: PurchaseOrder): {
   };
 }
 
+/** Resolves an item's status to a known stage key (defensive fallback). */
+function itemStage(item: ProcurementItemRow): FFEStageKey {
+  return STAGE_CONFIG[item.status as FFEStageKey] ? (item.status as FFEStageKey) : 'specified';
+}
+
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
 interface StageBucket {
   stage: FFEStageKey;
-  orders: PurchaseOrder[];
-  itemCount: number; // alias of orders.length in Sprint 1 (rows-per-PO)
+  items: ProcurementItemRow[];
+  itemCount: number;
   totalCents: number;
 }
 
@@ -194,7 +169,7 @@ function FlowChart({
   return (
     <div className="mb-6 flex flex-wrap items-stretch gap-1.5">
       {stages.map((bucket, idx) => {
-        const cfg = STAGE_DISPLAY[bucket.stage];
+        const cfg = STAGE_CONFIG[bucket.stage];
         const isActive = bucket.stage === activeStage;
         return (
           <div key={bucket.stage} className="flex items-stretch gap-1.5">
@@ -245,24 +220,22 @@ function FlowChart({
   );
 }
 
-function POStatusRow({
-  po,
+function ItemStatusRow({
+  item,
   onEditEta,
 }: {
-  po: PurchaseOrder;
-  onEditEta: (po: PurchaseOrder) => void;
+  item: ProcurementItemRow;
+  onEditEta: (po: EtaQuickEditPurchaseOrder) => void;
 }) {
-  const payment = pickHeadlinePayment(po);
-  const badge = timeLeftBadge(po.confirmed_eta);
+  const po = item.purchase_order ?? null;
+  const payment = po ? pickHeadlinePayment(po) : null;
+  const badge = timeLeftBadge(po?.confirmed_eta);
 
-  // Sprint 1 rows-per-PO simplification: PO doesn't carry an item name, so
-  // use the PO number (or vendor) as the primary label and the project as
-  // the sub-label. Wave 1.4 should swap this for the linked FFE item name +
-  // room when the cross-project items hook lands.
-  const primary = po.vendor_po_number
-    ? `PO ${po.vendor_po_number}`
-    : (po.vendor?.name ?? 'Purchase Order');
-  const sub = po.project?.name ?? 'Unknown Project';
+  // Sub-label: project (the view is cross-project) + room when assigned.
+  const sub = [item.project?.name, item.room?.name].filter(Boolean).join(' · ');
+  // Vendor: prefer the PO's vendor; pre-PO items fall back to the free-form
+  // vendor_name typed on the item itself.
+  const vendorName = po?.vendor?.name ?? item.vendor_name ?? '—';
 
   return (
     <div
@@ -272,22 +245,24 @@ function POStatusRow({
         borderColor: 'var(--border-subtle, rgba(229,226,221,0.6))',
       }}
     >
-      {/* Col 1 — name + room/project */}
+      {/* Col 1 — item name + project/room */}
       <div className="min-w-0">
         <div className="truncate text-[0.85rem] font-medium text-[var(--text-primary)]">
-          {primary}
+          {item.name}
         </div>
-        <div className="truncate text-[0.7rem] text-[var(--text-muted)]">
-          {sub}
-        </div>
+        {sub && (
+          <div className="truncate text-[0.7rem] text-[var(--text-muted)]">
+            {sub}
+          </div>
+        )}
       </div>
 
       {/* Col 2 — vendor + PO number */}
       <div className="min-w-0">
         <div className="truncate text-[0.78rem] text-[var(--text-body, var(--text-primary))]">
-          {po.vendor?.name ?? 'Unknown Vendor'}
+          {vendorName}
         </div>
-        {po.vendor_po_number && (
+        {po?.vendor_po_number && (
           <div
             className="truncate text-[0.62rem] text-[var(--text-muted)]"
             style={{ fontFamily: 'var(--font-meta)' }}
@@ -302,10 +277,10 @@ function POStatusRow({
         className="text-right font-heading text-[0.85rem] text-[var(--text-primary)]"
         style={{ fontWeight: 500 }}
       >
-        {formatDollars(po.total_cents)}
+        {formatDollars(item.line_total_cents ?? 0)}
       </div>
 
-      {/* Col 4 — payment pill */}
+      {/* Col 4 — payment pill (from the joined PO; "—" pre-PO) */}
       <div className="flex flex-col items-start gap-1">
         {payment ? (
           <PaymentPill
@@ -319,7 +294,7 @@ function POStatusRow({
         )}
       </div>
 
-      {/* Col 5 — time-left badge + ETA edit trigger */}
+      {/* Col 5 — time-left badge + ETA edit trigger (linked-PO rows only) */}
       <div className="flex items-center justify-end gap-1.5">
         {badge ? (
           <span
@@ -339,13 +314,23 @@ function POStatusRow({
         ) : (
           <span className="text-[0.6rem] text-[var(--text-muted)]">—</span>
         )}
-        <IconButton
-          size="sm"
-          onClick={() => onEditEta(po)}
-          label={`Update ETA for ${po.vendor_po_number ? `PO ${po.vendor_po_number}` : (po.vendor?.name ?? 'purchase order')}`}
-        >
-          <Pencil size={12} />
-        </IconButton>
+        {po && (
+          <IconButton
+            size="sm"
+            onClick={() =>
+              onEditEta({
+                id: po.id,
+                vendor_po_number: po.vendor_po_number,
+                confirmed_eta: po.confirmed_eta,
+                vendor: po.vendor ?? undefined,
+                project: item.project ?? undefined,
+              })
+            }
+            label={`Update ETA for ${po.vendor_po_number ? `PO ${po.vendor_po_number}` : (po.vendor?.name ?? 'purchase order')}`}
+          >
+            <Pencil size={12} />
+          </IconButton>
+        )}
       </div>
     </div>
   );
@@ -356,24 +341,28 @@ function StageSection({
   onEditEta,
 }: {
   bucket: StageBucket;
-  onEditEta: (po: PurchaseOrder) => void;
+  onEditEta: (po: EtaQuickEditPurchaseOrder) => void;
 }) {
-  const cfg = STAGE_DISPLAY[bucket.stage];
+  const cfg = STAGE_CONFIG[bucket.stage];
 
   // Money summary: total paid (sum of paid po_payments) vs coming-due
-  // (sum of due or pending), excluding patina_catalog rows.
+  // (sum of due or pending), excluding patina_catalog rows. Multiple items
+  // can share one PO, so dedupe by PO id to avoid double-counting payments.
   const { paidCents, dueComingCents } = useMemo(() => {
     let paid = 0;
     let due = 0;
-    for (const po of bucket.orders) {
-      if (po.is_patina_catalog) continue;
+    const seenPoIds = new Set<string>();
+    for (const item of bucket.items) {
+      const po = item.purchase_order;
+      if (!po || po.is_patina_catalog || seenPoIds.has(po.id)) continue;
+      seenPoIds.add(po.id);
       for (const p of po.payments ?? []) {
         if (p.state === 'paid') paid += p.amount_cents;
         else due += p.amount_cents; // pending + due
       }
     }
     return { paidCents: paid, dueComingCents: due };
-  }, [bucket.orders]);
+  }, [bucket.items]);
 
   return (
     <div
@@ -408,7 +397,7 @@ function StageSection({
               color: 'var(--text-muted)',
             }}
           >
-            · {bucket.itemCount} {bucket.itemCount === 1 ? 'PO' : 'POs'} ·{' '}
+            · {bucket.itemCount} {bucket.itemCount === 1 ? 'item' : 'items'} ·{' '}
             {formatDollars(bucket.totalCents)} total
             {paidCents > 0 && (
               <> · {formatDollars(paidCents)} paid</>
@@ -418,32 +407,17 @@ function StageSection({
             )}
           </span>
         </div>
-
-        {/* Stub filters — visible but inert per Sprint 1 scope */}
-        <div
-          className="flex items-center gap-3"
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: '0.65rem',
-            color: 'var(--text-muted)',
-          }}
-          aria-hidden
-        >
-          <span>Filter: Project</span>
-          <span>·</span>
-          <span>Filter: Payment status</span>
-        </div>
       </div>
 
       {/* Rows */}
       <div className="px-4">
-        {bucket.orders.length === 0 ? (
+        {bucket.items.length === 0 ? (
           <div className="py-8 text-center text-[0.78rem] italic text-[var(--text-muted)]">
-            No {cfg.label.toLowerCase()} purchase orders.
+            No {cfg.label.toLowerCase()} items.
           </div>
         ) : (
-          bucket.orders.map((po) => (
-            <POStatusRow key={po.id} po={po} onEditEta={onEditEta} />
+          bucket.items.map((item) => (
+            <ItemStatusRow key={item.id} item={item} onEditEta={onEditEta} />
           ))
         )}
       </div>
@@ -453,41 +427,116 @@ function StageSection({
 
 // ─── Main content ───────────────────────────────────────────────────────────
 
+/** Payment facet options — the PaymentPillState vocabulary used on rows. */
+const PAYMENT_FACET_OPTIONS: { value: PaymentPillState; label: string }[] = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'due', label: 'Due' },
+  { value: 'paid', label: 'Paid' },
+  { value: 'patina_handled', label: 'Patina handled' },
+];
+
 function ByStatusContent() {
   const hydrated = useHydrated();
-  const { data: orders, isLoading, isError, error } = usePurchaseOrders();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { data: items, isLoading, isError, error } = useProcurementItems();
   // Production is the default-open stage per PRD §7.
   const [activeStage, setActiveStage] = useState<FFEStageKey>('production');
   // W2.4 — selected PO for the ETA quick-edit drawer. The drawer is mounted
   // unconditionally below so its slide-in/out animation works smoothly; the
   // `open` prop is derived from this state.
-  const [etaEditPO, setEtaEditPO] = useState<PurchaseOrder | null>(null);
+  const [etaEditPO, setEtaEditPO] = useState<EtaQuickEditPurchaseOrder | null>(null);
 
-  const allOrders = (orders ?? []) as PurchaseOrder[];
+  // W1-T5 — real filters. ?projectId= deep link seeds the Project facet on
+  // mount; everything else is plain client-side state over the single
+  // loaded cache entry.
+  const [filters, setFilters] = useState<FacetSelections>(() => {
+    const projectId = searchParams.get('projectId');
+    const initial: FacetSelections = {};
+    if (projectId) initial.project = [projectId];
+    return initial;
+  });
+
+  const allItems = (items ?? []) as ProcurementItemRow[];
+
+  const facets = useMemo<Facet[]>(() => {
+    const projects = new Map<string, string>();
+    for (const item of allItems) {
+      if (item.project?.id) projects.set(item.project.id, item.project.name);
+    }
+    return [
+      {
+        key: 'project',
+        label: 'Project',
+        options: Array.from(projects.entries()).map(([value, label]) => ({ value, label })),
+      },
+      {
+        key: 'payment',
+        label: 'Payment',
+        options: PAYMENT_FACET_OPTIONS,
+      },
+    ];
+  }, [allItems]);
+
+  const handleFiltersChange = (next: FacetSelections) => {
+    // Fire analytics once per facet whose selection grew (an option applied);
+    // clears and resets stay quiet.
+    for (const facetKey of Object.keys(next)) {
+      const prevCount = (filters[facetKey] ?? []).length;
+      const nextCount = (next[facetKey] ?? []).length;
+      if (nextCount > prevCount) {
+        procurementEvents.byStatusFilterApplied({ facet: facetKey });
+      }
+    }
+    setFilters(next);
+
+    // Keep ?projectId= in sync with the Project facet so the filtered view is
+    // shareable/deep-linkable. The param carries exactly one project — a
+    // multi-project selection drops it. Other params are preserved.
+    const params = new URLSearchParams(searchParams.toString());
+    const projectSel = next.project ?? [];
+    if (projectSel.length === 1) params.set('projectId', projectSel[0]);
+    else params.delete('projectId');
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+
+  const filteredItems = useMemo(() => {
+    const projectSel = filters.project ?? [];
+    const paymentSel = filters.payment ?? [];
+    return allItems.filter((item) => {
+      if (projectSel.length > 0 && !projectSel.includes(item.project_id)) return false;
+      if (paymentSel.length > 0) {
+        const payment = item.purchase_order
+          ? pickHeadlinePayment(item.purchase_order)
+          : null;
+        if (!payment || !paymentSel.includes(payment.state)) return false;
+      }
+      return true;
+    });
+  }, [allItems, filters]);
 
   const stages: StageBucket[] = useMemo(() => {
     const buckets: Record<FFEStageKey, StageBucket> = Object.fromEntries(
       FFE_STAGE_KEYS.map((key) => [
         key,
-        { stage: key, orders: [], itemCount: 0, totalCents: 0 } as StageBucket,
+        { stage: key, items: [], itemCount: 0, totalCents: 0 } as StageBucket,
       ])
     ) as Record<FFEStageKey, StageBucket>;
 
-    for (const po of allOrders) {
-      const stage = poStatusToStage(po.status);
-      if (!stage) continue;
-      const bucket = buckets[stage];
-      bucket.orders.push(po);
+    for (const item of filteredItems) {
+      const bucket = buckets[itemStage(item)];
+      bucket.items.push(item);
       bucket.itemCount += 1;
-      bucket.totalCents += po.total_cents;
+      bucket.totalCents += item.line_total_cents ?? 0;
     }
 
     return FFE_STAGE_KEYS.map((key) => buckets[key]);
-  }, [allOrders]);
+  }, [filteredItems]);
 
   const activeBucket = stages.find((s) => s.stage === activeStage)!;
   const totalLive = stages.reduce((acc, s) => acc + s.itemCount, 0);
-  const cancelledCount = allOrders.filter((po) => po.status === 'cancelled').length;
 
   // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
   // singleton cache) render the same tree — prevents hydration mismatch.
@@ -503,7 +552,7 @@ function ByStatusContent() {
           className="rounded-lg border border-[var(--color-error,#C77B6E)] bg-[rgba(199,123,110,0.06)] px-4 py-6 text-[0.85rem] text-[var(--text-primary)]"
           role="alert"
         >
-          <div className="font-medium">Couldn&rsquo;t load purchase orders.</div>
+          <div className="font-medium">Couldn&rsquo;t load FF&amp;E items.</div>
           <div className="mt-1 text-[0.78rem] text-[var(--text-muted)]">
             {error instanceof Error ? error.message : 'Unknown error'}
           </div>
@@ -512,7 +561,7 @@ function ByStatusContent() {
     );
   }
 
-  const isEmpty = totalLive === 0 && cancelledCount === 0;
+  const isEmpty = allItems.length === 0;
 
   return (
     <div className="pt-8">
@@ -534,22 +583,31 @@ function ByStatusContent() {
             letterSpacing: '0.05em',
           }}
         >
-          {totalLive} live · {cancelledCount} cancelled
+          {totalLive} {totalLive === 1 ? 'item' : 'items'} in pipeline
         </span>
       </div>
 
       {isEmpty ? (
         <div className="rounded-lg border border-[var(--border-default)] px-6 py-12 text-center">
           <p className="text-sm font-medium text-[var(--text-primary)]">
-            No purchase orders yet
+            No FF&amp;E items yet
           </p>
           <p className="mt-1 text-[0.8rem] text-[var(--text-muted)]">
-            Create a purchase order from the FF&amp;E board to see it here.
+            Add items to a project&rsquo;s FF&amp;E board to see them here.
           </p>
           {/* TODO(help-system): wire CMS empty-state when Procurement surface keys are assigned */}
         </div>
       ) : (
         <>
+          {/* W1-T5 — filter row (Project + Payment facets) */}
+          <div className="mb-4 flex items-center justify-end">
+            <FacetedFilterPopover
+              facets={facets}
+              value={filters}
+              onChange={handleFiltersChange}
+            />
+          </div>
+
           {/* 8-stage flow chart */}
           <FlowChart
             stages={stages}

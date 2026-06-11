@@ -283,6 +283,119 @@ export function usePurchaseOrders(filters?: POFilters) {
   });
 }
 
+// ─── W1-T5: Cross-project FF&E items (rows-per-item By Status view) ─────────
+
+/**
+ * The 8-stage FF&E pipeline status — mirrors the CHECK constraint on
+ * `project_ffe_items.status` (migration 00066) and `FFE_STAGE_KEYS` in
+ * @patina/types.
+ */
+export type FFEItemStatus =
+  | 'specified'
+  | 'quoted'
+  | 'approved'
+  | 'ordered'
+  | 'production'
+  | 'shipped'
+  | 'delivered'
+  | 'installed';
+
+/**
+ * A project_ffe_items row joined with its purchase order (vendor + payments),
+ * project, and room — the row shape for the cross-project By Status view.
+ * Scalar columns mirror migration 00066 (+ purchase_order_id from 00148).
+ */
+export interface ProcurementItemRow {
+  id: string;
+  project_id: string;
+  project_room_id: string | null;
+  product_id: string | null;
+  purchase_order_id: string | null;
+  name: string;
+  ffe_category: string | null;
+  item_type: 'fixed' | 'allowance' | 'tbd';
+  status: FFEItemStatus;
+  quantity: number;
+  unit_price_cents: number | null;
+  line_total_cents: number | null;
+  vendor_name: string | null;
+  vendor_id: string | null;
+  po_number: string | null;
+  eta: string | null;
+  blocked: boolean | null;
+  blocked_reason: string | null;
+  notes: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  purchase_order?: {
+    id: string;
+    status: POStatus;
+    vendor_po_number: string | null;
+    confirmed_eta: string | null;
+    total_cents: number;
+    payment_pattern: PaymentPattern;
+    is_patina_catalog: boolean;
+    vendor?: { id: string; name: string } | null;
+    payments?: POPayment[];
+  } | null;
+  project?: { id: string; name: string } | null;
+  room?: { id: string; name: string } | null;
+}
+
+export interface ProcurementItemFilters {
+  projectId?: string;
+  vendorId?: string;
+  purchaseOrderId?: string;
+}
+
+/**
+ * Fetches FF&E items across every project the designer owns, joined with the
+ * linked purchase order (vendor + nested po_payments), project, and room —
+ * the rows-per-item source for Procurement → By Status (W1-T5).
+ *
+ * RLS ("Designers manage their project FFE items", migration 00066) scopes
+ * rows to the designer via project ownership — no extra .eq is needed,
+ * matching useProjectFFEItems.
+ *
+ * Query key: `['procurement-items', filters ?? {}]`.
+ */
+export function useProcurementItems(filters?: ProcurementItemFilters) {
+  return useQuery({
+    queryKey: ['procurement-items', filters ?? {}],
+    queryFn: async (): Promise<ProcurementItemRow[]> => {
+      const supabase = getSupabase() as any;
+      let query = supabase
+        .from('project_ffe_items')
+        .select(
+          `
+          *,
+          purchase_order:purchase_orders!purchase_order_id(
+            id, status, vendor_po_number, confirmed_eta, total_cents,
+            payment_pattern, is_patina_catalog,
+            vendor:vendors!purchase_orders_vendor_id_fkey(id, name),
+            payments:po_payments(*)
+          ),
+          project:projects!project_id(id, name),
+          room:project_rooms!project_room_id(id, name)
+        `
+        )
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (filters?.projectId) query = query.eq('project_id', filters.projectId);
+      if (filters?.vendorId) query = query.eq('vendor_id', filters.vendorId);
+      if (filters?.purchaseOrderId) {
+        query = query.eq('purchase_order_id', filters.purchaseOrderId);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []) as ProcurementItemRow[];
+    },
+  });
+}
+
 /**
  * Fetches all po_payments rows for a single purchase order, ordered by
  * sort_order ascending.
@@ -628,6 +741,9 @@ export function useUpdatePurchaseOrderETA() {
       // invalidate every cached range so the next render reflects the shift.
       queryClient.invalidateQueries({ queryKey: ['delivery-calendar'] });
       queryClient.invalidateQueries({ queryKey: ['today-procurement-counts'] });
+      // The By Status per-item rows (W1-T5) read confirmed_eta off the joined
+      // PO — refresh them so the ETA quick-edit drawer's save is visible.
+      queryClient.invalidateQueries({ queryKey: ['procurement-items'] });
     },
   });
 }
