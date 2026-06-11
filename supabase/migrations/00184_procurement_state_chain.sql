@@ -124,12 +124,15 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- FOR KEY SHARE: blocks until a concurrent cancel commits, so the ratchet
-  -- sees the final status (closes the read-then-ratchet TOCTOU window).
+  -- FOR SHARE: a status-only UPDATE takes FOR NO KEY UPDATE, which FOR KEY
+  -- SHARE would NOT conflict with — FOR SHARE does. This blocks until a
+  -- concurrent cancel commits, so the ratchet sees the final status (closes
+  -- the read-then-ratchet TOCTOU window). A rare simultaneous cancel+link can
+  -- deadlock; Postgres aborts one tx loudly, which beats a silent wrong link.
   SELECT status INTO v_po_status
     FROM purchase_orders
    WHERE id = NEW.purchase_order_id
-     FOR KEY SHARE;
+     FOR SHARE;
 
   IF v_po_status IS NULL THEN
     RETURN NEW;  -- Dangling link; FK will reject it anyway.
