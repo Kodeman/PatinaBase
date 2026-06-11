@@ -1623,7 +1623,10 @@ export function useQboExport() {
  * staleTime: 30 seconds — preview stats are cheap to recompute and the user
  * is likely to tweak filters in quick succession.
  */
-export function useQboExportPreview(input: QboExportInput) {
+export function useQboExportPreview(
+  input: QboExportInput,
+  opts?: { enabled?: boolean },
+) {
   const ready = isValidExportInput(input);
   return useQuery({
     queryKey: ['qbo-export-preview', input],
@@ -1631,7 +1634,7 @@ export function useQboExportPreview(input: QboExportInput) {
       const response = await callQboExport(input, true);
       return (await response.json()) as QboExportPreview;
     },
-    enabled: ready,
+    enabled: (opts?.enabled ?? true) && ready,
     staleTime: 30_000,
   });
 }

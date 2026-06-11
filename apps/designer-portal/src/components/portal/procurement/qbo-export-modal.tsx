@@ -55,6 +55,7 @@ import { Button } from '@/components/ui/controls';
 import {
   useQboExport as useQboExportShared,
   useQboExportPreview as useQboExportPreviewShared,
+  useIsStudioOwner,
   type QboExportInput as SharedQboExportInput,
 } from '@patina/supabase';
 
@@ -107,8 +108,11 @@ function toSharedInput(local: QboExportInput): SharedQboExportInput {
   };
 }
 
-function useQboExportPreview(input: QboExportInput): QboExportPreviewHookResult {
-  const shared = useQboExportPreviewShared(toSharedInput(input));
+function useQboExportPreview(
+  input: QboExportInput,
+  opts?: { enabled?: boolean },
+): QboExportPreviewHookResult {
+  const shared = useQboExportPreviewShared(toSharedInput(input), opts);
   const data = shared.data
     ? {
         ...shared.data,
@@ -183,6 +187,7 @@ export interface QboExportModalProps {
 
 export function QboExportModal({ open, onOpenChange }: QboExportModalProps) {
   const { toast } = useToast();
+  const { isStudioOwner, isLoading: studioOwnerLoading } = useIsStudioOwner();
   const exportMutation = useQboExport();
 
   // Default to the current calendar month. Recomputed each time the modal
@@ -226,7 +231,7 @@ export function QboExportModal({ open, onOpenChange }: QboExportModalProps) {
     ],
   );
 
-  const preview = useQboExportPreview(input);
+  const preview = useQboExportPreview(input, { enabled: open && isStudioOwner });
 
   const dateRangeInvalid = startDate > endDate;
   const noBucketsSelected =
@@ -289,6 +294,12 @@ export function QboExportModal({ open, onOpenChange }: QboExportModalProps) {
     </label>
   );
 
+  // Defense-in-depth: if roles have finished loading and the user is not a
+  // studio owner, render a short access-denied body instead of the export form.
+  // In practice this branch should not be reachable because the CTA that opens
+  // this modal is already hidden for non-studio-owners in by-vendor/page.tsx.
+  const accessDenied = !studioOwnerLoading && !isStudioOwner;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
@@ -297,6 +308,12 @@ export function QboExportModal({ open, onOpenChange }: QboExportModalProps) {
           <DialogDescription>Build the reconciliation pack</DialogDescription>
         </DialogHeader>
 
+        {accessDenied ? (
+          <p className="py-4 text-center text-[0.85rem] text-[var(--text-muted)]">
+            Studio owner access required to export billing data.
+          </p>
+        ) : (
+        <>
         <div className="space-y-5 pt-2">
           {/* Date range */}
           <section>
@@ -499,6 +516,8 @@ export function QboExportModal({ open, onOpenChange }: QboExportModalProps) {
             Download CSV
           </Button>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );

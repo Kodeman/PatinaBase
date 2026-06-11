@@ -1748,6 +1748,62 @@ describe('useQboExport', () => {
 
     expect(ready.enabled).toBe(true);
   });
+
+  it('preview hook is disabled when opts.enabled is false, even with fully valid input', () => {
+    // Simulates the modal mounted for a non-studio-owner (open=false or isStudioOwner=false).
+    // The shared hook must not fire so the global QueryCache onError never turns a 403
+    // into an error toast for designers who lack the studio_owner role.
+    const validInput: QboExportInput = {
+      dateStart: '2026-04-01',
+      dateEnd: '2026-04-30',
+      includePaid: true,
+      includeOutstanding: true,
+      includePatinaCatalog: false,
+    };
+
+    const disabled = useQboExportPreview(validInput, { enabled: false }) as unknown as {
+      enabled: boolean;
+      queryKey: unknown[];
+    };
+
+    expect(disabled.enabled).toBe(false);
+    // Query key is still set so React Query can identify/deduplicate the entry.
+    expect(disabled.queryKey[0]).toBe('qbo-export-preview');
+  });
+
+  it('preview hook is enabled when opts.enabled is true and input is valid', () => {
+    const validInput: QboExportInput = {
+      dateStart: '2026-04-01',
+      dateEnd: '2026-04-30',
+      includePaid: true,
+      includeOutstanding: false,
+      includePatinaCatalog: false,
+    };
+
+    const enabled = useQboExportPreview(validInput, { enabled: true }) as unknown as {
+      enabled: boolean;
+    };
+
+    expect(enabled.enabled).toBe(true);
+  });
+
+  it('preview hook is disabled when opts.enabled is true but input is invalid (gates AND together)', () => {
+    const invalidInput: QboExportInput = {
+      dateStart: '',
+      dateEnd: '2026-04-30',
+      includePaid: false,
+      includeOutstanding: false,
+      includePatinaCatalog: false,
+    };
+
+    const result = useQboExportPreview(invalidInput, { enabled: true }) as unknown as {
+      enabled: boolean;
+    };
+
+    // Both conditions must be true: opts.enabled=true AND isValidExportInput.
+    // Invalid input means the overall enabled must be false.
+    expect(result.enabled).toBe(false);
+  });
 });
 
 // useProcurementNotifications  (Sprint 3 / Wave 3.2 — migration 00151)
