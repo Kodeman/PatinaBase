@@ -16,6 +16,30 @@ export interface StageSyncInfo {
   poNumber?: string | null;
 }
 
+// Stages the 00184 PO-sync triggers can set. An item linked to a PO and
+// sitting in one of these stages is "system-set": the stage controls show a
+// sync badge, and a manual pick counts as an override (it sticks until the
+// next PO transition re-ratchets anything below the PO's stage).
+export const PO_SYNCED_STAGES: readonly string[] = ['ordered', 'production', 'shipped', 'delivered'];
+
+/**
+ * Derives the PO-sync state for an FF&E item row. Shared by the board page
+ * and the item drawer so card dropdowns and the drawer's stage picker agree
+ * on what counts as a system-set stage.
+ */
+export function poSync(item: {
+  purchase_order_id?: string | null;
+  status?: string | null;
+  po_number?: string | null;
+}): StageSyncInfo {
+  return {
+    systemSet: !!item.purchase_order_id && PO_SYNCED_STAGES.includes(item.status ?? ''),
+    // The board's items query doesn't join purchase_orders — the legacy
+    // po_number column is the best label available (null → generic copy).
+    poNumber: item.po_number ?? null,
+  };
+}
+
 interface StageSelectProps {
   currentStatus: FFEStageKey | string;
   /** Parent owns the mutation + toast; may return a promise we await for the pending state. */
