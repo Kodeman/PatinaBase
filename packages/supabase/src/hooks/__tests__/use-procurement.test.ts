@@ -736,9 +736,10 @@ describe('useCreatePurchaseOrder', () => {
     expect(invalidatedKeys).toContainEqual(['purchase-orders']);
     expect(invalidatedKeys).toContainEqual(['purchase-order', 'po-new']);
     expect(invalidatedKeys).toContainEqual(['po-payments', 'po-new']);
-    // invalidateFfeCaches: package namespace + portal namespace.
+    // invalidateFfeCaches: package namespace + portal namespace + cross-project view.
     expect(invalidatedKeys).toContainEqual(['project-ffe-items', 'proj-1']);
     expect(invalidatedKeys).toContainEqual(['projects', 'proj-1']);
+    expect(invalidatedKeys).toContainEqual(['procurement-items']);
   });
 });
 
@@ -1212,7 +1213,7 @@ describe('useUpdatePurchaseOrderStatus', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('invalidateFfeCaches', () => {
-  it('invalidates both the package and portal FF&E namespaces for the project', () => {
+  it('invalidates the package/portal FF&E namespaces and the cross-project view', () => {
     const queryClient = { invalidateQueries };
 
     invalidateFfeCaches(
@@ -1224,6 +1225,7 @@ describe('invalidateFfeCaches', () => {
     expect(invalidatedKeys).toEqual([
       ['project-ffe-items', 'proj-9'],
       ['projects', 'proj-9'],
+      ['procurement-items'],
     ]);
   });
 });

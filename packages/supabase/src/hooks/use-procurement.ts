@@ -127,6 +127,9 @@ function today(): string {
 export function invalidateFfeCaches(queryClient: QueryClient, projectId: string): void {
   queryClient.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
   queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
+  // Cross-project procurement views (By Status) read items under this
+  // prefix; the project-scoped keys above can't reach it, so sweep it whole.
+  queryClient.invalidateQueries({ queryKey: ['procurement-items'] });
 }
 
 /**

@@ -228,6 +228,11 @@ export function useUpdateFFEItemStatus() {
       // sweep here targets the rollup queries that live under
       // ['projects', id, 'financials'/'key-metrics'/detail].
       queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
+      // The cross-project By Status view (use-procurement.ts
+      // useProcurementItems) keys items under ['procurement-items', filters];
+      // a manual stage change must reach it too or that view serves stale
+      // stages until the next window focus.
+      queryClient.invalidateQueries({ queryKey: ['procurement-items'] });
     },
   });
 }
