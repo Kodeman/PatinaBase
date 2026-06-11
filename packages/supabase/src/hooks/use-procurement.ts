@@ -6,6 +6,7 @@
 // until `pnpm db:generate` is run.
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 
 // Lazy client getter to avoid module-level initialization during SSR
@@ -107,6 +108,24 @@ export interface CreatePurchaseOrderInput {
  */
 function today(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Invalidates both FF&E cache namespaces for a project.
+ *
+ * Dual-namespace bridge: the portal caches FF&E under
+ * `['projects', id, 'ffe-items']` while this package's hooks use
+ * `['project-ffe-items', id]`. Prefix-invalidating `['projects', projectId]`
+ * covers the portal namespace (plus the project financial rollups that the
+ * 00184 stage-ratchet triggers feed into).
+ *
+ * Call this from any mutation whose write can cause the DB triggers
+ * (migration 00184) to advance project_ffe_items rows server-side — the
+ * client never sees those writes, so both cache namespaces must refetch.
+ */
+export function invalidateFfeCaches(queryClient: QueryClient, projectId: string): void {
+  queryClient.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
+  queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
 }
 
 /**
@@ -466,31 +485,35 @@ export function useCreatePurchaseOrder() {
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
       queryClient.invalidateQueries({ queryKey: ['purchase-order', po.id] });
       queryClient.invalidateQueries({ queryKey: ['po-payments', po.id] });
-      queryClient.invalidateQueries({
-        queryKey: ['project-ffe-items', po.project_id],
-      });
+      // Linking items to the PO fires the 00184 stage-ratchet trigger
+      // (aaa_ffe_ratchet_to_po_stage), so both FF&E cache namespaces must
+      // refetch — not just the package-side ['project-ffe-items'] key.
+      invalidateFfeCaches(queryClient, po.project_id);
     },
   });
 }
 
 /**
  * Mutation: logs a payment as paid. Sets paid_date = today (or supplied date),
- * state = 'paid'. If the parent PO is on a `fifty_fifty` or `thirty_seventy`
- * pattern and the just-paid row was a deposit and the PO has already shipped
- * (status >= 'shipped'), the balance row is flipped to 'due' in the same call.
+ * state = 'paid'. Single UPDATE on the paid row — the deposit-paid →
+ * sibling-balance-due flip is owned by the DB (migration 00184, Trigger D
+ * `trg_deposit_paid_flips_balance`), which fires server-side on the
+ * pending→paid transition when the parent split-pattern PO has already
+ * shipped or delivered.
  *
- * Note for callers: the mutation's resolved value is only the updated deposit
- * row. When the sibling balance row flips to 'due', that change is visible
- * exclusively via the invalidated `po-payments` / `purchase-orders` caches —
- * UI code that needs the flipped balance state must read it from a query
- * subscription, not from the mutation's return value.
+ * Note for callers: the mutation's resolved value is only the updated payment
+ * row. When the trigger flips the sibling balance row to 'due', that change
+ * is visible exclusively via the invalidated `po-payments` /
+ * `purchase-orders` caches — UI code that needs the flipped balance state
+ * must read it from a query subscription, not from the mutation's return
+ * value.
  */
 export function useLogPaymentPaid() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({
       paymentId,
-      purchaseOrderId,
+      purchaseOrderId: _purchaseOrderId,
       paidDate,
       notes,
     }: {
@@ -515,52 +538,7 @@ export function useLogPaymentPaid() {
         .single();
       if (updateError) throw updateError;
 
-      const updatedRow = updated as POPayment;
-
-      // Check whether the parent PO + sibling-row state requires us to flip
-      // the balance row to 'due'. This mirrors the state-machine spec in
-      // dossier Section 2.
-      if (updatedRow.kind === 'deposit') {
-        const { data: po, error: poError } = await supabase
-          .from('purchase_orders')
-          .select('id, payment_pattern, status')
-          .eq('id', purchaseOrderId)
-          .single();
-        if (poError) throw poError;
-
-        const poRow = po as { id: string; payment_pattern: PaymentPattern; status: POStatus };
-        const shippedOrLater =
-          poRow.status === 'shipped' ||
-          poRow.status === 'delivered';
-
-        const isSplitPattern =
-          poRow.payment_pattern === 'fifty_fifty' ||
-          poRow.payment_pattern === 'thirty_seventy';
-
-        if (isSplitPattern && shippedOrLater) {
-          // Find the sibling balance row that is still pending and flip to due.
-          const { data: siblings, error: siblingsError } = await supabase
-            .from('po_payments')
-            .select('id, kind, state')
-            .eq('purchase_order_id', purchaseOrderId);
-          if (siblingsError) throw siblingsError;
-
-          const balancePending = (siblings ?? []).find(
-            (r: { kind: POPaymentKind; state: POPaymentState }) =>
-              r.kind === 'balance' && r.state === 'pending'
-          ) as { id: string } | undefined;
-
-          if (balancePending) {
-            const { error: flipError } = await supabase
-              .from('po_payments')
-              .update({ state: 'due' })
-              .eq('id', balancePending.id);
-            if (flipError) throw flipError;
-          }
-        }
-      }
-
-      return updatedRow;
+      return updated as POPayment;
     },
     onSuccess: (_, { purchaseOrderId }) => {
       queryClient.invalidateQueries({ queryKey: ['po-payments', purchaseOrderId] });
@@ -654,11 +632,79 @@ export function useUpdatePurchaseOrderETA() {
   });
 }
 
+export interface UpdatePurchaseOrderStatusInput {
+  purchaseOrderId: string;
+  /** Target lifecycle status. 'draft' is creation-only and not reachable here. */
+  status: Exclude<POStatus, 'draft'>;
+  /**
+   * When supplied, FF&E caches for the project are invalidated too — the
+   * 00184 cascade trigger advances (or, on cancel, detaches) linked
+   * project_ffe_items rows server-side, so stale FF&E caches are a real
+   * concern after any status change.
+   */
+  projectId?: string;
+}
+
 /**
- * Mutation: advances a po_payment row to 'due' state. Called externally when a
- * status change in project_ffe_items should bump a payment row (e.g. an
- * `ordered → shipped` transition flips the balance row to `due` on a
- * fifty_fifty PO).
+ * Mutation: updates purchase_orders.status. Plain single-row UPDATE — every
+ * downstream side effect is owned by the DB (migration 00184):
+ *   * Trigger B (`trg_po_status_cascade_to_items`) ratchets linked FF&E items
+ *     forward (or detaches them on 'cancelled'), and flips the pending
+ *     balance payment to 'due' when the PO reaches shipped/delivered with
+ *     the deposit already paid.
+ *
+ * RLS scopes the UPDATE to the owning designer.
+ *
+ * Invalidates: ['purchase-orders'], ['purchase-order', id],
+ *              ['po-payments', id] (the trigger may flip the balance row),
+ *              ['delivery-calendar'], ['today-procurement-counts'],
+ *              and — when projectId is provided — both FF&E namespaces via
+ *              invalidateFfeCaches().
+ */
+export function useUpdatePurchaseOrderStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      purchaseOrderId,
+      status,
+    }: UpdatePurchaseOrderStatusInput): Promise<PurchaseOrder> => {
+      const supabase = getSupabase() as any;
+
+      const { data, error } = await supabase
+        .from('purchase_orders')
+        .update({ status })
+        .eq('id', purchaseOrderId)
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(
+          `Failed to update purchase_order status for ${purchaseOrderId}: ${
+            error.message ?? String(error)
+          }`,
+        );
+      }
+      return data as PurchaseOrder;
+    },
+    onSuccess: (_, { purchaseOrderId, projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-order', purchaseOrderId] });
+      queryClient.invalidateQueries({ queryKey: ['po-payments', purchaseOrderId] });
+      queryClient.invalidateQueries({ queryKey: ['delivery-calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['today-procurement-counts'] });
+      if (projectId) {
+        invalidateFfeCaches(queryClient, projectId);
+      }
+    },
+  });
+}
+
+/**
+ * Mutation: manually advances a po_payment row to 'due' state (with an
+ * optional due_date). The automatic flips — deposit-paid and PO-shipped /
+ * delivered on split patterns — are owned by the 00184 DB triggers; this
+ * hook remains for explicit, designer-initiated advances outside those
+ * paths (e.g. a milestone the vendor invoiced early).
  */
 export function useAdvancePaymentToDue() {
   const queryClient = useQueryClient();
@@ -787,11 +833,13 @@ export interface CreateReceivingInspectionInput {
   outcome: ReceivingInspectionOutcome;
   notes?: string;
   photoAssetIds?: string[];
-  // NOTE: per-item `received_quantity` tracking is deferred to Sprint 3+.
-  // The previous shape took a single `receivedQuantity` and stamped it
-  // across every FFE item on the PO, which is wrong for multi-item POs.
-  // The column `project_ffe_items.received_quantity` remains in the schema
-  // for the future per-item write path.
+  /**
+   * When supplied, FF&E caches for the project are invalidated on success —
+   * the 00184 inspection trigger advances linked project_ffe_items rows
+   * (status + received_quantity) server-side on clean outcomes, so stale
+   * FF&E caches are a real concern.
+   */
+  projectId?: string;
 }
 
 export interface UpdateDamageClaimInput {
@@ -1111,35 +1159,34 @@ export interface CreateReceivingInspectionResult {
 }
 
 /**
- * Mutation: logs a physical receiving inspection. Side effects, sequential,
- * with compensating delete on critical-path failure (dossier Section 4):
- *   1. INSERT receiving_inspections (critical path).
- *   2. UPDATE purchase_orders.delivered_date = inspected_at::date IF NULL
- *      (fire-and-forget-with-warn).
- *   3. UPDATE purchase_orders.status = 'delivered' IF NOT IN
- *      (delivered, cancelled) (fire-and-forget-with-warn).
- *   4. IF outcome != 'clean': INSERT damage_claims drafted with auto-draft
- *      description (critical path — compensating DELETE on inspection if
- *      this fails).
- *   5. IF payment_pattern = 'net_30' AND delivered_date transitioned from
- *      NULL: UPDATE po_payments.due_date = delivered_date + 30 days WHERE
- *      kind = 'balance' AND state = 'pending'
- *      (fire-and-forget-with-warn — never touches paid/dated rows).
+ * Mutation: logs a physical receiving inspection. The client owns only the
+ * two writes that need client-side composition; everything else is owned by
+ * the DB (migration 00184, Trigger C `trg_receiving_inspection_side_effects`,
+ * AFTER INSERT ON receiving_inspections), which stamps
+ * purchase_orders.delivered_date, advances the PO to 'delivered' on a clean
+ * outcome, shifts the net-30 pending balance due_date, and marks linked
+ * project_ffe_items received.
  *
- * NOTE: A previous step that wrote `received_quantity` to every FFE item on
- * the PO was removed — it stamped the same value across all items, which is
- * wrong for multi-item POs. Per-item tracking deferred to Sprint 3+.
+ * Client-side steps, sequential, with compensating delete on critical-path
+ * failure:
+ *   1. INSERT receiving_inspections (critical path — fires Trigger C).
+ *   2. IF outcome != 'clean': INSERT damage_claims drafted with auto-draft
+ *      description (critical path — compensating DELETE on inspection if
+ *      this fails). Description composition stays client-side deliberately:
+ *      it folds the designer's inspection notes into editable copy.
  *
  * Returns `{ inspection, damageClaimCreated }`. Callers should use
  * `damageClaimCreated` (not `outcome !== 'clean'`) to gate analytics events
- * tied to the damage_claim row — when step 4 fails, the inspection is
+ * tied to the damage_claim row — when step 2 fails, the inspection is
  * compensated away and this mutation rejects, so any spurious event from a
  * caller previously triggered by outcome alone is now impossible
  * (W3.5.5 HIGH-1).
  *
  * Invalidates: ['receiving-inspections'], ['damage-claims'],
  *              ['purchase-orders'], ['purchase-order', poId],
- *              ['today-procurement-counts']
+ *              ['po-payments', poId] (trigger may shift/flip the balance row),
+ *              ['today-procurement-counts'], and — when projectId is
+ *              provided — both FF&E namespaces via invalidateFfeCaches().
  */
 export function useCreateReceivingInspection() {
   const queryClient = useQueryClient();
@@ -1154,7 +1201,9 @@ export function useCreateReceivingInspection() {
       } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Step 1: INSERT receiving_inspections. Critical path.
+      // Step 1: INSERT receiving_inspections. Critical path. Trigger C
+      // (00184) runs inside this statement and owns the PO/payment/item
+      // side effects.
       const { data: inspection, error: inspectionError } = await supabase
         .from('receiving_inspections')
         .insert({
@@ -1179,7 +1228,7 @@ export function useCreateReceivingInspection() {
       const inspectionId = inspectionRow.id;
 
       // Compensating-delete helper for the inspection row itself. Used only
-      // when step 4 (damage_claim INSERT) fails — that path is the only
+      // when step 2 (damage_claim INSERT) fails — that path is the only
       // critical-path side effect after step 1.
       const compensatingDeleteInspection = async (): Promise<string> => {
         try {
@@ -1198,82 +1247,47 @@ export function useCreateReceivingInspection() {
         }
       };
 
-      // Resolve the parent PO once — used by steps 2/3/6 (and to source the
-      // vendor name + PO number for the auto-draft description in step 4).
-      type ResolvedPoRow = {
-        id: string;
-        payment_pattern: PaymentPattern;
-        status: POStatus;
-        delivered_date: string | null;
-        vendor_po_number: string | null;
-        vendor?: { id: string; name: string } | null;
-      };
-      let poRow: ResolvedPoRow | null = null;
-
-      try {
-        const { data: po, error: poError } = await supabase
-          .from('purchase_orders')
-          .select(
-            `
-            id, payment_pattern, status, delivered_date, vendor_po_number,
-            vendor:vendors!purchase_orders_vendor_id_fkey(id, name)
-          `,
-          )
-          .eq('id', input.purchaseOrderId)
-          .single();
-        if (poError) {
-          console.warn(
-            `useCreateReceivingInspection: failed to load parent PO ${input.purchaseOrderId}`,
-            poError,
-          );
-        } else {
-          poRow = po as ResolvedPoRow;
-        }
-      } catch (e) {
-        console.warn(
-          `useCreateReceivingInspection: PO load threw for ${input.purchaseOrderId}`,
-          e,
-        );
-      }
-
-      const deliveredDateWasNull = poRow?.delivered_date == null;
-      const inspectedDate = (inspectionRow.inspected_at ?? nowIso()).slice(0, 10);
-
-      // Steps 2 + 3: UPDATE purchase_orders. Fire-and-forget-with-warn.
-      // Combine into one UPDATE so the round-trip is cheap.
-      try {
-        const poUpdates: Record<string, unknown> = {};
-        if (deliveredDateWasNull) {
-          poUpdates.delivered_date = inspectedDate;
-        }
-        if (poRow && poRow.status !== 'delivered' && poRow.status !== 'cancelled') {
-          poUpdates.status = 'delivered';
-        }
-        if (Object.keys(poUpdates).length > 0) {
-          const { error: poUpdateError } = await supabase
-            .from('purchase_orders')
-            .update(poUpdates)
-            .eq('id', input.purchaseOrderId);
-          if (poUpdateError) {
-            console.warn(
-              `useCreateReceivingInspection: PO delivered_date/status update failed for ${input.purchaseOrderId}`,
-              poUpdateError,
-            );
-          }
-        }
-      } catch (e) {
-        console.warn(
-          `useCreateReceivingInspection: PO delivered_date/status update threw for ${input.purchaseOrderId}`,
-          e,
-        );
-      }
-
-      // Step 4: IF outcome != 'clean', INSERT damage_claims (critical path).
+      // Step 2: IF outcome != 'clean', INSERT damage_claims (critical path).
+      // The parent PO is read only on this path — solely to source the
+      // vendor name + PO number for the auto-draft description.
       // Tracks whether the row was actually written so the resolved value
       // exposes ground truth to callers — analytics events keyed on
-      // damageClaimCreated stay accurate even if step 4 throws (W3.5.5 HIGH-1).
+      // damageClaimCreated stay accurate even if step 2 throws (W3.5.5 HIGH-1).
       let damageClaimCreated = false;
       if (input.outcome !== 'clean') {
+        type ResolvedPoRow = {
+          id: string;
+          vendor_po_number: string | null;
+          vendor?: { id: string; name: string } | null;
+        };
+        let poRow: ResolvedPoRow | null = null;
+
+        try {
+          const { data: po, error: poError } = await supabase
+            .from('purchase_orders')
+            .select(
+              `
+              id, vendor_po_number,
+              vendor:vendors!purchase_orders_vendor_id_fkey(id, name)
+            `,
+            )
+            .eq('id', input.purchaseOrderId)
+            .single();
+          if (poError) {
+            console.warn(
+              `useCreateReceivingInspection: failed to load parent PO ${input.purchaseOrderId}`,
+              poError,
+            );
+          } else {
+            poRow = po as ResolvedPoRow;
+          }
+        } catch (e) {
+          console.warn(
+            `useCreateReceivingInspection: PO load threw for ${input.purchaseOrderId}`,
+            e,
+          );
+        }
+
         const vendorName = poRow?.vendor?.name ?? 'vendor';
         const poNumber = poRow?.vendor_po_number ?? null;
         const description = autoDraftDamageClaimDescription(
@@ -1301,47 +1315,27 @@ export function useCreateReceivingInspection() {
         damageClaimCreated = true;
       }
 
-      // Step 5: IF net_30 + delivered_date just transitioned from NULL,
-      // shift the pending balance row's due_date to delivered_date + 30.
-      // Filter MUST include WHERE kind = 'balance' AND state = 'pending' so
-      // we never overwrite a paid or already-dated row.
-      // Fire-and-forget-with-warn.
-      if (poRow?.payment_pattern === 'net_30' && deliveredDateWasNull) {
-        try {
-          const due = new Date(inspectedDate);
-          due.setUTCDate(due.getUTCDate() + 30);
-          const dueDateIso = due.toISOString().slice(0, 10);
-
-          const { error: dueError } = await supabase
-            .from('po_payments')
-            .update({ due_date: dueDateIso })
-            .eq('purchase_order_id', input.purchaseOrderId)
-            .eq('kind', 'balance')
-            .eq('state', 'pending');
-          if (dueError) {
-            console.warn(
-              `useCreateReceivingInspection: net_30 due_date shift failed for PO ${input.purchaseOrderId}`,
-              dueError,
-            );
-          }
-        } catch (e) {
-          console.warn(
-            `useCreateReceivingInspection: net_30 due_date shift threw for PO ${input.purchaseOrderId}`,
-            e,
-          );
-        }
-      }
-
       return { inspection: inspectionRow, damageClaimCreated };
     },
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['receiving-inspections'] });
       queryClient.invalidateQueries({ queryKey: ['damage-claims'] });
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
       queryClient.invalidateQueries({
         queryKey: ['purchase-order', result.inspection.purchase_order_id],
       });
+      // Trigger C may shift the net-30 balance due_date, and the PO's
+      // delivered transition may flip the balance to 'due' (Trigger B).
+      queryClient.invalidateQueries({
+        queryKey: ['po-payments', result.inspection.purchase_order_id],
+      });
       queryClient.invalidateQueries({ queryKey: ['today-procurement-counts'] });
+      // Clean inspections advance linked FF&E rows server-side (status +
+      // received_quantity) — refresh both FF&E namespaces when the caller
+      // told us which project the PO belongs to.
+      if (variables.projectId) {
+        invalidateFfeCaches(queryClient, variables.projectId);
+      }
     },
   });
 }

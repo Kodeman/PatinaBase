@@ -249,6 +249,7 @@ function ReceivingDashboardContent() {
             if (!open) setLogTarget(null);
           }}
           purchaseOrderId={logTarget.id}
+          projectId={logTarget.project_id}
           poLabel={logTargetMeta.primary}
           vendorName={logTargetVendor}
           projectName={logTargetMeta.secondary}

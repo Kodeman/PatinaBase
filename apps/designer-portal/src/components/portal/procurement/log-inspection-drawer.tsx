@@ -11,10 +11,10 @@
  * upload with a placeholder.
  *
  * Submits via `useCreateReceivingInspection`, which:
- *   - inserts the inspection,
- *   - bumps the PO to `delivered` + sets `delivered_date`,
- *   - auto-drafts a `damage_claims` row when the outcome is not 'clean',
- *   - shifts NET-30 balance due_date when applicable.
+ *   - inserts the inspection (DB triggers from migration 00184 then stamp
+ *     `delivered_date`, advance the PO on clean outcomes, shift the NET-30
+ *     balance due_date, and mark linked FF&E items received),
+ *   - auto-drafts a `damage_claims` row when the outcome is not 'clean'.
  *
  * Mirrors the slide-from-right pattern used by the Sprint 1 OrderAssistant.
  */
@@ -37,6 +37,12 @@ export interface LogInspectionDrawerProps {
   onOpenChange: (open: boolean) => void;
   /** PO under inspection. */
   purchaseOrderId: string;
+  /**
+   * Project the PO belongs to. When provided, the FF&E caches for the
+   * project are invalidated after a logged inspection (the 00184 triggers
+   * advance linked FF&E items server-side on clean outcomes).
+   */
+  projectId?: string;
   /** Human-readable PO summary for the drawer header. */
   poLabel: string;
   /** Vendor name shown in the drawer header sub-line. */
@@ -74,7 +80,8 @@ const OUTCOME_OPTIONS: Array<{
 ];
 
 export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
-  const { open, onOpenChange, purchaseOrderId, poLabel, vendorName, projectName } = props;
+  const { open, onOpenChange, purchaseOrderId, projectId, poLabel, vendorName, projectName } =
+    props;
 
   const [outcome, setOutcome] = useState<ReceivingInspectionOutcome>('clean');
   const [notes, setNotes] = useState('');
@@ -97,6 +104,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
       const photoAssetIds: string[] = [];
       const result = await createInspection.mutateAsync({
         purchaseOrderId,
+        projectId,
         outcome,
         notes: notes.trim() ? notes.trim() : undefined,
         photoAssetIds,

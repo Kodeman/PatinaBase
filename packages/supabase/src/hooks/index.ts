@@ -937,6 +937,9 @@ export {
   useLogPaymentPaid,
   useAdvancePaymentToDue,
   useUpdatePurchaseOrderETA,
+  // Wave 1 procurement overhaul — DB triggers (00184) own state propagation
+  useUpdatePurchaseOrderStatus,
+  invalidateFfeCaches,
   // Sprint 2 — Receiving, damage claims, calendar
   useReceivingInspections,
   useDamageClaims,
@@ -964,6 +967,7 @@ export type {
   POPayment,
   POFilters,
   CreatePurchaseOrderInput,
+  UpdatePurchaseOrderStatusInput,
   // Sprint 2 — Receiving, damage claims, calendar
   ReceivingInspectionOutcome,
   DamageClaimState,

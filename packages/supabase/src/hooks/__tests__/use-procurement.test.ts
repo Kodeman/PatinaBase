@@ -133,6 +133,9 @@ import {
   useCreateReceivingInspection,
   useUpdateDamageClaim,
   useUpdatePurchaseOrderETA,
+  // Wave 1 procurement overhaul — DB triggers (00184) own state propagation
+  useUpdatePurchaseOrderStatus,
+  invalidateFfeCaches,
   // Sprint 3 — QBO export
   useQboExport,
   useQboExportPreview,
@@ -600,6 +603,22 @@ describe('useCreatePurchaseOrder', () => {
     expect(caughtError?.message).toMatch(/simulated payment insert failure/);
     expect(caughtError?.message).toMatch(/compensating delete succeeded/);
   });
+
+  it('onSuccess invalidates PO keys AND both FF&E namespaces (00184 ratchet trigger advances items)', () => {
+    const config = useCreatePurchaseOrder() as unknown as {
+      onSuccess: (po: { id: string; project_id: string }) => void;
+    };
+
+    config.onSuccess({ id: 'po-new', project_id: 'proj-1' });
+
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['purchase-orders']);
+    expect(invalidatedKeys).toContainEqual(['purchase-order', 'po-new']);
+    expect(invalidatedKeys).toContainEqual(['po-payments', 'po-new']);
+    // invalidateFfeCaches: package namespace + portal namespace.
+    expect(invalidatedKeys).toContainEqual(['project-ffe-items', 'proj-1']);
+    expect(invalidatedKeys).toContainEqual(['projects', 'proj-1']);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -656,39 +675,19 @@ describe('useLogPaymentPaid', () => {
     expect(payload.paid_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
-  it('flips the sibling balance row to "due" when a deposit is paid on a shipped fifty_fifty PO', async () => {
-    // The po_payments table-builder is hit three times in sequence:
-    //   1. UPDATE (paying the deposit)  → returns the updated deposit row
-    //   2. SELECT siblings              → returns [deposit, balance]
-    //   3. UPDATE (flipping balance)    → no data needed
-    queueTableResults(
-      'po_payments',
-      // 1. paid deposit row
-      {
-        data: {
-          id: 'pay-deposit',
-          purchase_order_id: 'po-1',
-          kind: 'deposit',
-          state: 'paid',
-          paid_date: '2026-05-01',
-        },
-        error: null,
+  it('performs exactly ONE update (the paid row) — the sibling balance flip is owned by DB trigger 00184', async () => {
+    // A deposit paid on a shipped split-pattern PO used to make the hook
+    // read the PO + siblings and flip the balance row client-side. Trigger D
+    // (trg_deposit_paid_flips_balance, migration 00184) owns that flip now —
+    // the hook must issue a single UPDATE and touch nothing else.
+    queueTableResults('po_payments', {
+      data: {
+        id: 'pay-deposit',
+        purchase_order_id: 'po-1',
+        kind: 'deposit',
+        state: 'paid',
+        paid_date: '2026-05-01',
       },
-      // 2. sibling rows
-      {
-        data: [
-          { id: 'pay-deposit', kind: 'deposit', state: 'paid' },
-          { id: 'pay-balance', kind: 'balance', state: 'pending' },
-        ],
-        error: null,
-      },
-      // 3. flip result
-      { data: null, error: null }
-    );
-
-    // PO header lookup happens between calls 1 and 2 on po_payments.
-    queueTableResults('purchase_orders', {
-      data: { id: 'po-1', payment_pattern: 'fifty_fifty', status: 'shipped' },
       error: null,
     });
 
@@ -702,19 +701,31 @@ describe('useLogPaymentPaid', () => {
       paidDate: '2026-05-01',
     });
 
+    // Exactly one UPDATE on po_payments, scoped to the paid row's id.
     const builder = builders.po_payments;
-    // First op: update to pay deposit.
-    // Final op: update to flip balance → 'due'.
     const updates = builder.__chain.filter((c) => c.method === 'update');
-    expect(updates).toHaveLength(2);
+    expect(updates).toHaveLength(1);
     expect(updates[0].args[0]).toEqual(
       expect.objectContaining({ state: 'paid', paid_date: '2026-05-01' })
     );
-    expect(updates[1].args[0]).toEqual({ state: 'due' });
-
-    // The flip targets the balance row's id.
     const eqArgs = builder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
-    expect(eqArgs).toContainEqual(['id', 'pay-balance']);
+    expect(eqArgs).toEqual([['id', 'pay-deposit']]);
+
+    // No PO read and no sibling read/flip — purchase_orders is never touched.
+    expect(builders.purchase_orders).toBeUndefined();
+  });
+
+  it('keeps the po-payments / purchase-orders invalidations on success', () => {
+    const config = useLogPaymentPaid() as unknown as {
+      onSuccess: (result: unknown, input: { purchaseOrderId: string }) => void;
+    };
+
+    config.onSuccess({}, { purchaseOrderId: 'po-1' });
+
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['po-payments', 'po-1']);
+    expect(invalidatedKeys).toContainEqual(['purchase-orders']);
+    expect(invalidatedKeys).toContainEqual(['purchase-order', 'po-1']);
   });
 });
 
@@ -727,7 +738,7 @@ describe('useLogPaymentPaid', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('useCreateReceivingInspection', () => {
-  it('clean outcome: INSERTs inspection, UPDATEs delivered_date + status, does NOT insert damage_claim', async () => {
+  it('clean outcome: INSERTs the inspection and NOTHING else — PO/payment/item side effects are owned by DB trigger 00184', async () => {
     supabaseClient.auth.getUser.mockResolvedValue({
       data: { user: { id: 'user-1' } },
     });
@@ -745,22 +756,6 @@ describe('useCreateReceivingInspection', () => {
       },
       error: null,
     });
-
-    // PO load (single() call).
-    queueTableResults('purchase_orders', {
-      data: {
-        id: 'po-1',
-        payment_pattern: 'fifty_fifty',
-        status: 'shipped',
-        delivered_date: null,
-        vendor_po_number: 'WS-188',
-        vendor: { id: 'vendor-1', name: 'Woodward Sectional Co.' },
-      },
-      error: null,
-    });
-
-    // PO UPDATE (steps 2/3) terminates via await — default suffices.
-    setTableDefault('purchase_orders', { data: null, error: null });
 
     const config = useCreateReceivingInspection() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
@@ -788,22 +783,18 @@ describe('useCreateReceivingInspection', () => {
       }),
     );
 
-    // 2/3. UPDATE on purchase_orders with both delivered_date and status.
-    const poBuilder = builders.purchase_orders;
-    const poUpdate = poBuilder.__chain.find((c) => c.method === 'update');
-    expect(poUpdate).toBeDefined();
-    expect(poUpdate?.args[0]).toEqual(
-      expect.objectContaining({
-        delivered_date: '2026-05-27',
-        status: 'delivered',
-      }),
-    );
+    // Trigger C (trg_receiving_inspection_side_effects) owns the
+    // delivered_date stamp, status advance, net-30 shift, and
+    // received_quantity stamping — the hook must never touch these tables.
+    expect(builders.purchase_orders).toBeUndefined();
+    expect(builders.po_payments).toBeUndefined();
+    expect(builders.project_ffe_items).toBeUndefined();
 
-    // 4. NO insert on damage_claims for a clean outcome.
+    // NO insert on damage_claims for a clean outcome.
     expect(builders.damage_claims).toBeUndefined();
   });
 
-  it('damaged outcome: INSERTs inspection, UPDATEs PO, INSERTs drafted damage_claim with auto-drafted description', async () => {
+  it('damaged outcome: INSERTs inspection, reads (never writes) the PO, INSERTs drafted damage_claim with auto-drafted description', async () => {
     supabaseClient.auth.getUser.mockResolvedValue({
       data: { user: { id: 'user-1' } },
     });
@@ -821,18 +812,15 @@ describe('useCreateReceivingInspection', () => {
       error: null,
     });
 
+    // PO read — only to source vendor name + PO number for the description.
     queueTableResults('purchase_orders', {
       data: {
         id: 'po-ap',
-        payment_pattern: 'fifty_fifty',
-        status: 'shipped',
-        delivered_date: null,
         vendor_po_number: 'AP-012',
         vendor: { id: 'vendor-ap', name: 'Apparatus Studio' },
       },
       error: null,
     });
-    setTableDefault('purchase_orders', { data: null, error: null });
     setTableDefault('damage_claims', { data: null, error: null });
 
     const config = useCreateReceivingInspection() as unknown as {
@@ -846,7 +834,7 @@ describe('useCreateReceivingInspection', () => {
     })) as { inspection: { id: string }; damageClaimCreated: boolean };
 
     // W3.5.5 HIGH-1: the resolved value must expose damageClaimCreated=true
-    // when step 4 succeeded, so callers can gate the
+    // when the claim INSERT succeeded, so callers can gate the
     // procurement_damage_claim_created analytics event accurately.
     expect(result.damageClaimCreated).toBe(true);
     expect(result.inspection.id).toBe('insp-damaged');
@@ -862,17 +850,13 @@ describe('useCreateReceivingInspection', () => {
       }),
     );
 
-    // 2/3. PO UPDATE.
+    // The PO is read (for the description) but never UPDATEd — the
+    // delivered_date stamp belongs to trigger 00184 now.
     const poBuilder = builders.purchase_orders;
-    const poUpdate = poBuilder.__chain.find((c) => c.method === 'update');
-    expect(poUpdate?.args[0]).toEqual(
-      expect.objectContaining({
-        delivered_date: '2026-05-26',
-        status: 'delivered',
-      }),
-    );
+    expect(poBuilder.__chain.find((c) => c.method === 'update')).toBeUndefined();
+    expect(poBuilder.__chain.find((c) => c.method === 'select')).toBeDefined();
 
-    // 4. damage_claims INSERT with state='drafted' and auto-drafted description.
+    // 2. damage_claims INSERT with state='drafted' and auto-drafted description.
     const claimBuilder = builders.damage_claims;
     expect(claimBuilder).toBeDefined();
     const claimInsert = claimBuilder.__chain.find((c) => c.method === 'insert');
@@ -889,7 +873,7 @@ describe('useCreateReceivingInspection', () => {
     );
   });
 
-  it('step 4 failure: compensating DELETE on receiving_inspections and combined error message', async () => {
+  it('damage-claim INSERT failure: compensating DELETE on receiving_inspections and combined error message', async () => {
     supabaseClient.auth.getUser.mockResolvedValue({
       data: { user: { id: 'user-1' } },
     });
@@ -914,20 +898,17 @@ describe('useCreateReceivingInspection', () => {
       { data: null, error: null },
     );
 
+    // PO read (description sourcing only).
     queueTableResults('purchase_orders', {
       data: {
         id: 'po-x',
-        payment_pattern: 'fifty_fifty',
-        status: 'shipped',
-        delivered_date: null,
         vendor_po_number: 'X-1',
         vendor: { id: 'vendor-x', name: 'Vendor X' },
       },
       error: null,
     });
-    setTableDefault('purchase_orders', { data: null, error: null });
 
-    // Step 4 (damage_claims INSERT) FAILS.
+    // Step 2 (damage_claims INSERT) FAILS.
     setTableDefault('damage_claims', {
       data: null,
       error: { message: 'simulated damage_claim insert failure' },
@@ -962,63 +943,167 @@ describe('useCreateReceivingInspection', () => {
     expect(afterDelete[0]).toEqual({ method: 'eq', args: ['id', 'insp-orphan'] });
   });
 
-  it('NET-30 step 6: UPDATEs po_payments due_date scoped to kind=balance AND state=pending', async () => {
-    supabaseClient.auth.getUser.mockResolvedValue({
-      data: { user: { id: 'user-1' } },
-    });
-
-    queueTableResults('receiving_inspections', {
-      data: {
-        id: 'insp-net30',
-        purchase_order_id: 'po-net',
-        inspected_at: '2026-05-27T10:30:00.000Z',
-        inspected_by: 'user-1',
-        outcome: 'clean',
-        notes: null,
-        photo_asset_ids: [],
-      },
-      error: null,
-    });
-
-    // PO row: net_30 + delivered_date IS NULL → triggers step 6.
-    queueTableResults('purchase_orders', {
-      data: {
-        id: 'po-net',
-        payment_pattern: 'net_30',
-        status: 'shipped',
-        delivered_date: null,
-        vendor_po_number: 'NET-1',
-        vendor: { id: 'vendor-net', name: 'NetVendor' },
-      },
-      error: null,
-    });
-    setTableDefault('purchase_orders', { data: null, error: null });
-    setTableDefault('po_payments', { data: null, error: null });
-
+  it('onSuccess invalidates the procurement keys plus FF&E namespaces when projectId is supplied', () => {
     const config = useCreateReceivingInspection() as unknown as {
+      onSuccess: (
+        result: { inspection: { purchase_order_id: string } },
+        variables: { purchaseOrderId: string; outcome: string; projectId?: string },
+      ) => void;
+    };
+
+    config.onSuccess(
+      { inspection: { purchase_order_id: 'po-1' } },
+      { purchaseOrderId: 'po-1', outcome: 'clean', projectId: 'proj-1' },
+    );
+
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['receiving-inspections']);
+    expect(invalidatedKeys).toContainEqual(['damage-claims']);
+    expect(invalidatedKeys).toContainEqual(['purchase-orders']);
+    expect(invalidatedKeys).toContainEqual(['purchase-order', 'po-1']);
+    // The 00184 triggers may shift/flip the balance payment row.
+    expect(invalidatedKeys).toContainEqual(['po-payments', 'po-1']);
+    expect(invalidatedKeys).toContainEqual(['today-procurement-counts']);
+    // FF&E dual-namespace bridge — the trigger advances item rows server-side.
+    expect(invalidatedKeys).toContainEqual(['project-ffe-items', 'proj-1']);
+    expect(invalidatedKeys).toContainEqual(['projects', 'proj-1']);
+  });
+
+  it('onSuccess skips the FF&E invalidations when projectId is absent', () => {
+    const config = useCreateReceivingInspection() as unknown as {
+      onSuccess: (
+        result: { inspection: { purchase_order_id: string } },
+        variables: { purchaseOrderId: string; outcome: string; projectId?: string },
+      ) => void;
+    };
+
+    config.onSuccess(
+      { inspection: { purchase_order_id: 'po-1' } },
+      { purchaseOrderId: 'po-1', outcome: 'clean' },
+    );
+
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['receiving-inspections']);
+    expect(
+      invalidatedKeys.filter(
+        (k) => (k as unknown[])[0] === 'project-ffe-items' || (k as unknown[])[0] === 'projects',
+      ),
+    ).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useUpdatePurchaseOrderStatus  (Wave 1 procurement overhaul — triggers 00184)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useUpdatePurchaseOrderStatus', () => {
+  it('issues a plain status UPDATE on purchase_orders scoped to id and returns the row', async () => {
+    queueTableResults('purchase_orders', {
+      data: { id: 'po-status-1', status: 'shipped', project_id: 'proj-1' },
+      error: null,
+    });
+
+    const config = useUpdatePurchaseOrderStatus() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
 
-    await config.mutationFn({
-      purchaseOrderId: 'po-net',
-      outcome: 'clean',
+    const result = await config.mutationFn({
+      purchaseOrderId: 'po-status-1',
+      status: 'shipped',
     });
 
-    const payBuilder = builders.po_payments;
-    expect(payBuilder).toBeDefined();
+    const builder = builders.purchase_orders;
+    const updates = builder.__chain.filter((c) => c.method === 'update');
+    expect(updates).toHaveLength(1);
+    // Exactly the status column — every side effect (item ratchet, balance
+    // flip, cancellation detach) is owned by trigger 00184.
+    expect(updates[0].args[0]).toEqual({ status: 'shipped' });
 
-    // The UPDATE must shift due_date to delivered_date + 30 days.
-    const update = payBuilder.__chain.find((c) => c.method === 'update');
-    expect(update).toBeDefined();
-    const updatePayload = update?.args[0] as { due_date: string };
-    // inspected_at 2026-05-27 + 30 = 2026-06-26.
-    expect(updatePayload.due_date).toBe('2026-06-26');
+    const eqArgs = builder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
+    expect(eqArgs).toEqual([['id', 'po-status-1']]);
 
-    // Filter scope must be kind = balance AND state = pending AND PO id.
-    const eqArgs = payBuilder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
-    expect(eqArgs).toContainEqual(['purchase_order_id', 'po-net']);
-    expect(eqArgs).toContainEqual(['kind', 'balance']);
-    expect(eqArgs).toContainEqual(['state', 'pending']);
+    // No other table is touched.
+    expect(builders.project_ffe_items).toBeUndefined();
+    expect(builders.po_payments).toBeUndefined();
+
+    expect((result as { id: string }).id).toBe('po-status-1');
+  });
+
+  it('throws when supabase returns an error', async () => {
+    queueTableResults('purchase_orders', {
+      data: null,
+      error: { message: 'rls denied' },
+    });
+
+    const config = useUpdatePurchaseOrderStatus() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await expect(
+      config.mutationFn({ purchaseOrderId: 'po-x', status: 'cancelled' }),
+    ).rejects.toThrow(/rls denied/);
+  });
+
+  it('onSuccess invalidates PO/payment/calendar/count keys, plus FF&E namespaces when projectId is supplied', () => {
+    const config = useUpdatePurchaseOrderStatus() as unknown as {
+      onSuccess: (
+        result: unknown,
+        variables: { purchaseOrderId: string; status: string; projectId?: string },
+      ) => void;
+    };
+
+    config.onSuccess({}, { purchaseOrderId: 'po-1', status: 'shipped', projectId: 'proj-1' });
+
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['purchase-orders']);
+    expect(invalidatedKeys).toContainEqual(['purchase-order', 'po-1']);
+    // The trigger may flip the pending balance to due.
+    expect(invalidatedKeys).toContainEqual(['po-payments', 'po-1']);
+    expect(invalidatedKeys).toContainEqual(['delivery-calendar']);
+    expect(invalidatedKeys).toContainEqual(['today-procurement-counts']);
+    // FF&E dual-namespace bridge.
+    expect(invalidatedKeys).toContainEqual(['project-ffe-items', 'proj-1']);
+    expect(invalidatedKeys).toContainEqual(['projects', 'proj-1']);
+  });
+
+  it('onSuccess skips the FF&E invalidations when projectId is absent', () => {
+    const config = useUpdatePurchaseOrderStatus() as unknown as {
+      onSuccess: (
+        result: unknown,
+        variables: { purchaseOrderId: string; status: string; projectId?: string },
+      ) => void;
+    };
+
+    config.onSuccess({}, { purchaseOrderId: 'po-1', status: 'confirmed' });
+
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['purchase-orders']);
+    expect(
+      invalidatedKeys.filter(
+        (k) => (k as unknown[])[0] === 'project-ffe-items' || (k as unknown[])[0] === 'projects',
+      ),
+    ).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// invalidateFfeCaches  (dual query-key namespace bridge)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('invalidateFfeCaches', () => {
+  it('invalidates both the package and portal FF&E namespaces for the project', () => {
+    const queryClient = { invalidateQueries };
+
+    invalidateFfeCaches(
+      queryClient as unknown as Parameters<typeof invalidateFfeCaches>[0],
+      'proj-9',
+    );
+
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toEqual([
+      ['project-ffe-items', 'proj-9'],
+      ['projects', 'proj-9'],
+    ]);
   });
 });
 
