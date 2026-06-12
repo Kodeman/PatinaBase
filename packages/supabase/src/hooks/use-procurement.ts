@@ -1805,8 +1805,12 @@ export function useSendPurchaseOrder() {
 //   * po_payments.state → due transition (deposit_due / balance_due / milestone_due)
 //   * damage_claims INSERT with state = 'drafted' (damage_claim_drafted)
 //
-// delivery_this_week is reserved in the enum but has no v1 trigger
-// (see dossier §7 risk 8 — pg_cron preload gotcha defers the weekly cron).
+// delivery_this_week is ARMED as of migration 00189 (Wave 5): a weekly
+// pg_cron job (Mondays 13:00 UTC) scans purchase_orders.confirmed_eta for
+// in-flight POs delivering within 7 days, deduped per PO over a rolling
+// 7 days. The UI may render it. (00151 had it RESERVED — dossier §7 risk 8.)
+// 00189 also adds a daily cron flipping pending payments to 'due' on
+// due_date, which fires the same 00151 notify trigger per row.
 // ═══════════════════════════════════════════════════════════════════════════
 
 export type ProcurementNotificationKind =
