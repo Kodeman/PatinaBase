@@ -36,12 +36,19 @@
  * (out of scope per dispatch).
  */
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   useDeliveryCalendar,
+  usePurchaseOrders,
   type DeliveryEvent,
+  type PurchaseOrder,
 } from '@patina/supabase';
 import { LoadingStrata } from '@/components/portal/loading-strata';
+import { Button } from '@/components/ui/controls';
+import {
+  EtaQuickEditDrawer,
+  type EtaQuickEditPurchaseOrder,
+} from '@/components/portal/procurement/eta-quick-edit-drawer';
 import {
   detectDeliveryConflicts,
   type ConflictType,
@@ -294,6 +301,19 @@ function CalendarContent() {
     rangeEndIso,
   );
 
+  // W5-T2 — shipped POs with no confirmed_eta never make it into the
+  // delivery_events grid above (event_date derives from confirmed_eta), so
+  // they'd silently fall off the designer's radar exactly when tracking
+  // matters most. Surface them in a banner with a Set ETA shortcut. The
+  // status filter is applied server-side by the hook; the eta-null cut is
+  // client-side (no .is filter support in POFilters).
+  const shippedPOsQuery = usePurchaseOrders({ status: 'shipped' });
+  const unscheduledShipped = useMemo<PurchaseOrder[]>(
+    () => ((shippedPOsQuery.data ?? []) as PurchaseOrder[]).filter((po) => !po.confirmed_eta),
+    [shippedPOsQuery.data],
+  );
+  const [etaTarget, setEtaTarget] = useState<EtaQuickEditPurchaseOrder | null>(null);
+
   // Cast through the hook's return-type narrowing: useQuery returns
   // DeliveryEvent[] | undefined here.
   const events = useMemo<DeliveryEvent[]>(
@@ -384,6 +404,14 @@ function CalendarContent() {
         </span>
       </div>
 
+      {/* W5-T2 — unscheduled-but-shipped banner */}
+      {unscheduledShipped.length > 0 && (
+        <UnscheduledShippedBanner
+          purchaseOrders={unscheduledShipped}
+          onSetEta={setEtaTarget}
+        />
+      )}
+
       {/* Empty state */}
       {!hasAny && (
         <div className="rounded-lg border border-[var(--border-default)] px-6 py-12 text-center">
@@ -409,7 +437,105 @@ function CalendarContent() {
 
       {/* Legend */}
       {hasAny && <Legend />}
+
+      {/* W5-T2 — ETA quick-edit drawer for the banner's Set ETA shortcut.
+          The useUpdatePurchaseOrderETA mutation invalidates both
+          ['purchase-orders'] and ['delivery-calendar'], so a saved date
+          clears the PO from the banner AND drops it into the grid. */}
+      {etaTarget && (
+        <EtaQuickEditDrawer
+          open={!!etaTarget}
+          onOpenChange={(o) => {
+            if (!o) setEtaTarget(null);
+          }}
+          purchaseOrder={etaTarget}
+        />
+      )}
     </div>
+  );
+}
+
+// ─── Unscheduled-but-shipped banner (W5-T2) ────────────────────────────────
+
+interface UnscheduledShippedBannerProps {
+  purchaseOrders: PurchaseOrder[];
+  onSetEta: (po: EtaQuickEditPurchaseOrder) => void;
+}
+
+/** Short display ref for a PO: our outbound number, else the vendor's. */
+function poRef(po: PurchaseOrder): string | null {
+  return po.po_number ?? po.vendor_po_number ?? null;
+}
+
+function UnscheduledShippedBanner({
+  purchaseOrders,
+  onSetEta,
+}: UnscheduledShippedBannerProps) {
+  const n = purchaseOrders.length;
+  return (
+    <section
+      aria-labelledby="calendar-unscheduled-heading"
+      className="mb-6 rounded-[4px] border px-4 py-3"
+      style={{
+        borderColor: 'var(--color-golden-hour, #E8C547)',
+        background: 'rgba(232,197,71,0.10)',
+      }}
+    >
+      <h2
+        id="calendar-unscheduled-heading"
+        className="font-mono text-[0.68rem] font-semibold uppercase tracking-[0.06em]"
+        style={{ color: 'var(--color-golden-hour, #E8C547)' }}
+      >
+        {n} shipped order{n === 1 ? ' has' : 's have'} no delivery date
+      </h2>
+      <p className="mt-1 text-[0.74rem] leading-[1.5] text-[var(--text-muted)]">
+        These shipments are in transit but absent from the grid above —
+        without a confirmed ETA they can&rsquo;t be scheduled around.
+      </p>
+      <ul className="mt-3 flex flex-col gap-2">
+        {purchaseOrders.map((po) => {
+          const ref = poRef(po);
+          return (
+            <li
+              key={po.id}
+              className="flex flex-wrap items-center justify-between gap-2 border-t pt-2"
+              style={{ borderColor: 'rgba(232,197,71,0.35)' }}
+            >
+              <div className="min-w-0">
+                <span className="text-[0.78rem] font-medium text-[var(--text-primary)]">
+                  {po.vendor?.name ?? 'Unknown vendor'}
+                </span>
+                {ref && (
+                  <span className="ml-2 font-mono text-[0.62rem] text-[var(--text-muted)]">
+                    {ref}
+                  </span>
+                )}
+                {po.project?.name && (
+                  <span className="ml-2 text-[0.7rem] text-[var(--text-muted)]">
+                    · {po.project.name}
+                  </span>
+                )}
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  onSetEta({
+                    id: po.id,
+                    vendor_po_number: po.vendor_po_number,
+                    confirmed_eta: po.confirmed_eta,
+                    vendor: po.vendor ? { name: po.vendor.name } : undefined,
+                    project: po.project ? { name: po.project.name } : undefined,
+                  })
+                }
+              >
+                Set ETA
+              </Button>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

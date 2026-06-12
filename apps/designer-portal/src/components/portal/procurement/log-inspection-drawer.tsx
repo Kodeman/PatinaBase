@@ -14,21 +14,30 @@
  *   - inserts the inspection (DB triggers from migration 00184 then stamp
  *     `delivered_date`, advance the PO on clean outcomes, shift the NET-30
  *     balance due_date, and mark linked FF&E items received),
- *   - auto-drafts a `damage_claims` row when the outcome is not 'clean'.
+ *   - auto-drafts a `damage_claims` row when the outcome is not 'clean',
+ *   - (W5-T2) writes per-item received_quantity for the counts entered in
+ *     the "Items received" section below — the 00184 trigger only stamps
+ *     full quantities on clean outcomes, so short/partial counts are owned
+ *     by this client path.
+ *
+ * W5-T2 also auto-suggests the 'partial' outcome while the designer hasn't
+ * explicitly picked one: any received count below the ordered quantity
+ * preselects Partial; restoring full counts reverts to Clean.
  *
  * Mirrors the slide-from-right pattern used by the Sprint 1 OrderAssistant.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import {
   useCreateReceivingInspection,
+  useProcurementItems,
   type ReceivingInspectionOutcome,
 } from '@patina/supabase';
 import { useToast } from '@/components/portal/toast-provider';
 import { procurementEvents } from '@/lib/analytics/procurement-events';
-import { Button, IconButton, Textarea } from '@/components/ui/controls';
+import { Button, IconButton, Input, Textarea } from '@/components/ui/controls';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -84,19 +93,48 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
     props;
 
   const [outcome, setOutcome] = useState<ReceivingInspectionOutcome>('clean');
+  // W5-T2 — once the designer explicitly picks an outcome, the per-item
+  // auto-suggest below stops overriding it.
+  const [outcomeTouched, setOutcomeTouched] = useState(false);
   const [notes, setNotes] = useState('');
+  // W5-T2 — per-item received counts, keyed by project_ffe_items.id. Sparse:
+  // untouched rows fall back to the full ordered quantity.
+  const [received, setReceived] = useState<Record<string, number>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const createInspection = useCreateReceivingInspection();
   const { toast } = useToast();
 
+  // W5-T2 — the PO's linked FF&E lines for the per-item receipt section.
+  const itemsQuery = useProcurementItems({ purchaseOrderId });
+  const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
+
   // Reset form whenever the drawer reopens for a new PO.
   useEffect(() => {
     if (!open) return;
     setOutcome('clean');
+    setOutcomeTouched(false);
     setNotes('');
+    setReceived({});
     setSubmitError(null);
   }, [open, purchaseOrderId]);
+
+  const receivedFor = (itemId: string, ordered: number): number =>
+    received[itemId] ?? ordered;
+
+  const anyShort = useMemo(
+    () => items.some((it) => receivedFor(it.id, it.quantity) < it.quantity),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [items, received],
+  );
+
+  // Auto-suggest 'partial' while the designer hasn't explicitly chosen an
+  // outcome: any short count preselects Partial, restoring full counts
+  // reverts to Clean. An explicit click (outcomeTouched) always wins.
+  useEffect(() => {
+    if (!open || outcomeTouched) return;
+    setOutcome(anyShort ? 'partial' : 'clean');
+  }, [open, outcomeTouched, anyShort]);
 
   const handleSubmit = async () => {
     setSubmitError(null);
@@ -108,6 +146,16 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
         outcome,
         notes: notes.trim() ? notes.trim() : undefined,
         photoAssetIds,
+        // W5-T2 — per-item received counts. The hook skips clean-outcome
+        // rows at full quantity (the 00184 trigger already stamped those).
+        items:
+          items.length > 0
+            ? items.map((it) => ({
+                ffeItemId: it.id,
+                receivedQuantity: receivedFor(it.id, it.quantity),
+                orderedQuantity: it.quantity,
+              }))
+            : undefined,
       });
 
       procurementEvents.inspectionLogged({
@@ -131,7 +179,18 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
           : outcome === 'damaged'
             ? `Inspection logged — damage claim drafted for ${vendorName}.`
             : `Inspection logged — partial delivery noted for ${vendorName}.`;
-      toast(successMsg, outcome === 'clean' ? 'success' : 'warning');
+      // W5-T2 — per-item count writes are non-critical in the hook; surface
+      // any failures so the designer can re-enter them from the item list.
+      if (result.itemUpdateFailures.length > 0) {
+        toast(
+          `Inspection logged, but ${result.itemUpdateFailures.length} received ${
+            result.itemUpdateFailures.length === 1 ? 'count' : 'counts'
+          } failed to save — re-check the items.`,
+          'warning',
+        );
+      } else {
+        toast(successMsg, outcome === 'clean' ? 'success' : 'warning');
+      }
       onOpenChange(false);
     } catch (e) {
       setSubmitError((e as Error)?.message ?? 'Failed to log inspection.');
@@ -206,7 +265,10 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                       <button
                         key={opt.value}
                         type="button"
-                        onClick={() => setOutcome(opt.value)}
+                        onClick={() => {
+                          setOutcome(opt.value);
+                          setOutcomeTouched(true);
+                        }}
                         className="flex items-start gap-3 rounded-md border px-3 py-2.5 text-left transition-colors"
                         style={{
                           borderColor: isActive ? opt.accent : 'var(--border-default)',
@@ -236,6 +298,86 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                   })}
                 </div>
               </div>
+
+              {/* W5-T2 — per-item received counts. Defaults to the full
+                  ordered quantity; lowering any count auto-suggests the
+                  Partial outcome above (until the designer picks one). */}
+              {itemsQuery.isLoading ? (
+                <div className="mb-5 text-[0.72rem] italic text-[var(--text-muted)]">
+                  Loading linked items…
+                </div>
+              ) : items.length > 0 ? (
+                <div className="mb-5">
+                  <div
+                    className="mb-2"
+                    style={{
+                      fontFamily: 'var(--font-meta)',
+                      fontSize: '0.6rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      color: 'var(--text-muted)',
+                    }}
+                  >
+                    Items received
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {items.map((it) => {
+                      const value = receivedFor(it.id, it.quantity);
+                      const missing = it.quantity - value;
+                      return (
+                        <div
+                          key={it.id}
+                          className="flex items-center gap-3 rounded-md border px-3 py-2"
+                          style={{
+                            borderColor:
+                              missing > 0
+                                ? 'var(--color-golden-hour)'
+                                : 'var(--border-default)',
+                          }}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-[0.8rem] text-[var(--text-primary)]">
+                              {it.name}
+                            </div>
+                            <div className="text-[0.65rem] text-[var(--text-muted)]">
+                              {it.quantity} ordered
+                              {missing > 0 && (
+                                <span style={{ color: 'var(--color-golden-hour)' }}>
+                                  {' '}
+                                  · {missing} missing
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <Input
+                            id={`received-qty-${it.id}`}
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            max={it.quantity}
+                            value={value}
+                            disabled={createInspection.isPending}
+                            aria-label={`Received quantity for ${it.name}`}
+                            title={`Received quantity (0–${it.quantity})`}
+                            onChange={(e) => {
+                              const raw = Number.parseInt(e.target.value, 10);
+                              const next = Number.isNaN(raw)
+                                ? 0
+                                : Math.max(0, Math.min(it.quantity, raw));
+                              setReceived((prev) => ({ ...prev, [it.id]: next }));
+                            }}
+                            className="w-[76px] text-right"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-[0.68rem] text-[var(--text-muted)]">
+                    Counts below the ordered quantity suggest a partial
+                    delivery.
+                  </p>
+                </div>
+              ) : null}
 
               <div className="mb-5">
                 <label

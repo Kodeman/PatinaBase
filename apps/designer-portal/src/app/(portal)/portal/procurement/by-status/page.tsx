@@ -24,6 +24,13 @@
  *
  * Wave 2.4 (shipped): manual ETA quick-edit via the inline pencil icon on
  *   each row with a linked PO — opens EtaQuickEditDrawer for that PO.
+ *
+ * W5-T2 (expediting polish): md+ rows gain Ordered (po.created_at), Ack
+ *   (po.acknowledged_at), and Delivered (item.last_status_change_at for
+ *   delivered/installed rows) date columns — hidden below md to keep the
+ *   dense grid readable — plus two flags in the ETA cell: terracotta
+ *   "overdue" (confirmed_eta past, item not delivered) and golden-hour
+ *   "no ack" (sent >48h ago, never acknowledged).
  */
 
 import { Suspense, useMemo, useState } from 'react';
@@ -32,6 +39,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Pencil } from 'lucide-react';
 import {
   useProcurementItems,
+  type FFEItemStatus,
   type ProcurementItemRow,
 } from '@patina/supabase';
 import { FFE_STAGE_KEYS, type FFEStageKey } from '@patina/types';
@@ -65,6 +73,25 @@ function formatDollars(cents: number): string {
   return `$${(cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }
 
+/** "Jun 12" for the W5-T2 date columns; em-dash when absent/unparseable. */
+function formatShortDate(d: string | null | undefined): string {
+  if (!d) return '—';
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return '—';
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/** Today's local date as ISO YYYY-MM-DD, for date-string comparisons. */
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Item statuses past the point where delivery flags are meaningful. */
+const DELIVERED_STATUSES = new Set<FFEItemStatus>(['delivered', 'installed']);
+
+/** "no ack" threshold — a sent PO unacknowledged this long gets flagged. */
+const NO_ACK_THRESHOLD_MS = 48 * 60 * 60 * 1000;
+
 /**
  * Weeks-until-ETA for the time-left badge. Returns null when no ETA is set.
  */
@@ -86,10 +113,12 @@ function timeLeftBadge(eta: string | null | undefined): TimeLeftBadge | null {
   const wk = weeksUntil(eta);
   if (wk === null) return null;
 
-  // Red-band: less than 2 weeks → terracotta "risk"
+  // Red-band: less than 2 weeks → terracotta "risk". The truly-past-ETA
+  // case is owned by the W5-T2 "overdue" flag in ItemStatusRow (which
+  // suppresses this badge), so wk<=0 here only means "due within days".
   if (wk < 2) {
     return {
-      text: wk <= 0 ? 'overdue' : `${wk} wk · risk`,
+      text: wk <= 0 ? 'this wk · risk' : `${wk} wk · risk`,
       bg: 'rgba(212,160,144,0.18)',
       color: 'var(--color-terracotta)',
     };
@@ -221,6 +250,36 @@ function FlowChart({
   );
 }
 
+/** Micro label + value cell for the md+ date columns (W5-T2). */
+function DateCell({
+  label,
+  value,
+  title,
+}: {
+  label: string;
+  value: string;
+  title?: string;
+}) {
+  return (
+    <div className="hidden text-right md:block" title={title}>
+      <div
+        style={{
+          fontFamily: 'var(--font-meta)',
+          fontSize: '0.52rem',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          color: 'var(--text-muted)',
+        }}
+      >
+        {label}
+      </div>
+      <div className="text-[0.7rem] text-[var(--text-body, var(--text-primary))]">
+        {value}
+      </div>
+    </div>
+  );
+}
+
 function ItemStatusRow({
   item,
   onEditEta,
@@ -230,7 +289,21 @@ function ItemStatusRow({
 }) {
   const po = item.purchase_order ?? null;
   const payment = po ? pickHeadlinePayment(po) : null;
-  const badge = timeLeftBadge(po?.confirmed_eta);
+
+  // W5-T2 — expediting derivations. A delivered/installed item is past the
+  // point where the ETA countdown or the overdue flag mean anything.
+  const itemDelivered = DELIVERED_STATUSES.has(item.status);
+  const etaDate = po?.confirmed_eta ? po.confirmed_eta.slice(0, 10) : null;
+  const overdue = !!etaDate && etaDate < todayIso() && !itemDelivered;
+  const noAck =
+    !!po?.sent_at &&
+    !po.acknowledged_at &&
+    Date.now() - Date.parse(po.sent_at) > NO_ACK_THRESHOLD_MS;
+  // The countdown badge yields to the overdue flag (it would just repeat
+  // "overdue") and disappears entirely once delivered.
+  const badge =
+    itemDelivered || overdue ? null : timeLeftBadge(po?.confirmed_eta);
+  const deliveredDate = itemDelivered ? item.last_status_change_at : null;
 
   // Sub-label: project (the view is cross-project) + room when assigned.
   const sub = [item.project?.name, item.room?.name].filter(Boolean).join(' · ');
@@ -240,9 +313,8 @@ function ItemStatusRow({
 
   return (
     <div
-      className="grid items-center gap-3 border-b py-3 last:border-b-0"
+      className="grid grid-cols-[2fr_1.2fr_90px_1fr_96px] items-center gap-3 border-b py-3 last:border-b-0 md:grid-cols-[2fr_1.2fr_90px_64px_64px_64px_1fr_116px]"
       style={{
-        gridTemplateColumns: '2fr 1.2fr 90px 1fr 96px',
         borderColor: 'var(--border-subtle, rgba(229,226,221,0.6))',
       }}
     >
@@ -281,7 +353,38 @@ function ItemStatusRow({
         {formatDollars(item.line_total_cents ?? 0)}
       </div>
 
-      {/* Col 4 — payment pill (from the joined PO; "—" pre-PO) */}
+      {/* Cols 4–6 (md+ only, W5-T2) — Ordered / Ack / Delivered dates */}
+      <DateCell
+        label="Ordered"
+        value={formatShortDate(po?.created_at)}
+        title={
+          po?.created_at
+            ? `Purchase order created ${formatShortDate(po.created_at)}`
+            : 'No purchase order yet'
+        }
+      />
+      <DateCell
+        label="Ack"
+        value={formatShortDate(po?.acknowledged_at)}
+        title={
+          po?.acknowledged_at
+            ? `Vendor acknowledged ${formatShortDate(po.acknowledged_at)}`
+            : po?.sent_at
+              ? 'Vendor has not acknowledged this order yet'
+              : 'Not sent to the vendor yet'
+        }
+      />
+      <DateCell
+        label="Delivered"
+        value={formatShortDate(deliveredDate)}
+        title={
+          deliveredDate
+            ? `Marked ${item.status} ${formatShortDate(deliveredDate)}`
+            : 'Not delivered yet'
+        }
+      />
+
+      {/* Col 7 — payment pill (from the joined PO; "—" pre-PO) */}
       <div className="flex flex-col items-start gap-1">
         {payment ? (
           <PaymentPill
@@ -295,9 +398,28 @@ function ItemStatusRow({
         )}
       </div>
 
-      {/* Col 5 — time-left badge + ETA edit trigger (linked-PO rows only) */}
-      <div className="flex items-center justify-end gap-1.5">
-        {badge ? (
+      {/* Col 8 — ETA/flags + ETA edit trigger (linked-PO rows only).
+          W5-T2: the terracotta "overdue" flag absorbs the countdown badge
+          when the confirmed ETA is past and the item isn't delivered; the
+          golden-hour "no ack" flag stacks alongside whichever renders. */}
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
+        {overdue ? (
+          <span
+            className="inline-flex items-center rounded-[3px] px-2 py-0.5"
+            style={{
+              backgroundColor: 'rgba(212,160,144,0.18)',
+              color: 'var(--color-terracotta)',
+              fontFamily: 'var(--font-meta)',
+              fontSize: '0.58rem',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              fontWeight: 600,
+            }}
+            title={`Confirmed ETA ${formatShortDate(etaDate)} has passed and this item is not delivered — chase the vendor.`}
+          >
+            overdue
+          </span>
+        ) : badge ? (
           <span
             className="inline-flex items-center rounded-[3px] px-2 py-0.5"
             style={{
@@ -309,11 +431,31 @@ function ItemStatusRow({
               letterSpacing: '0.05em',
               fontWeight: 600,
             }}
+            title={
+              etaDate ? `Confirmed ETA ${formatShortDate(etaDate)}` : undefined
+            }
           >
             {badge.text}
           </span>
         ) : (
           <span className="text-[0.6rem] text-[var(--text-muted)]">—</span>
+        )}
+        {noAck && (
+          <span
+            className="inline-flex items-center rounded-[3px] px-2 py-0.5"
+            style={{
+              backgroundColor: 'rgba(232,197,71,0.18)',
+              color: 'var(--color-golden-hour)',
+              fontFamily: 'var(--font-meta)',
+              fontSize: '0.58rem',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              fontWeight: 600,
+            }}
+            title={`Sent ${formatShortDate(po?.sent_at)} — no vendor acknowledgment after 48 hours. Consider following up.`}
+          >
+            no ack
+          </span>
         )}
         {po && (
           <IconButton
