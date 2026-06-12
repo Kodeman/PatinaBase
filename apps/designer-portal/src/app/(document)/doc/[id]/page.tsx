@@ -253,13 +253,16 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         </div>
       </main>
 
-      {/* Margin rail — present per D12, fills in Slice 3 (DECISIONS I10). */}
+      {/* Margin rail — present per D12 with the R8 placeholder; fills in Slice 3. */}
       <aside
         aria-label="Margin"
         className="z-[1] hidden border-l border-dashed border-[var(--color-pearl)] bg-[rgba(250,247,242,0.55)] px-4 pb-24 pt-6 min-[980px]:sticky min-[980px]:top-0 min-[980px]:block min-[980px]:h-screen min-[980px]:overflow-y-auto"
       >
         <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
           In the margin
+        </p>
+        <p className="mt-3 text-[11px] italic leading-relaxed text-[var(--text-muted)]">
+          The margin — decisions, messages, and money gather here
         </p>
       </aside>
     </div>

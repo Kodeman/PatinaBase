@@ -246,3 +246,64 @@ the Proposal settled bar unfolds (Brief/Discovery/Direction bars are inert
 until their unfolds are designed); Discovery and Care active bodies are one
 quiet line each (Care grows its Guide/reviews/cadence at R5 in Slice 6).
 Spine sub-labels only claim dates the data actually carries.
+
+## Rulings — design session, 2026-06-11 (Slice 2 review)
+
+### R6 · Ruling on I8 — Resolver redirects activated proposal ids — 2026-06-11
+
+I8 blessed with one amendment: the stated limit (an activated proposal's id no
+longer resolves) is a dead link across the signing moment — the document grew,
+the URL must agree. The resolver catches ids of proposals that have a project
+row and redirects to `/doc/[projectId]` (one extra lookup on the miss path;
+`router.replace`, no history pollution). Bookmarked or shared pre-signing
+links survive activation. No URL rewriting otherwise; I8 stands as logged.
+
+### R7 · Ruling on I9 — DAMAGED stamp deferred to per-item attribution — 2026-06-11
+
+The over-attributing stamp does not ship. Stamps are the document's truth
+device (R2: pure renderings of real state); PO-level claim data stamping every
+line on a multi-item PO lies at the item grain and teaches the designer to
+discount stamps. Until per-item attribution exists, claims surface where they
+are true: the line unfold's PO detail, the Orders ledger, and a Desk need line
+("PO-0214 has an open damage claim"). In Slice 4, add the additive
+`ffe_item_id` FK to damage_claims/receiving_inspections and ship DAMAGED as a
+truthful per-item stamp. Spec §6 DAMAGED row amended accordingly at next
+revision.
+
+### R8 · Ruling on I10 — Slice 2 seams — 2026-06-11
+
+Margin rail ships present with one quiet placeholder line in muted italic
+("The margin — decisions, messages, and money gather here") — honest
+scaffolding that keeps the D12 full-bleed geometry stable when Slice 3 fills
+it. Inert settled bars (Brief/Discovery/Direction pre-unfold) must NOT render
+the "unfold ↓" hint — affordances that do nothing teach the document to lie;
+hint copy appears only when a bar's unfold ships. Spine sub-labels claiming
+only real dates: blessed as logged. Timer box absent until Slice 5: blessed.
+
+### R9 · Pilot checkpoint — Leah's first structured session — 2026-06-11
+
+Informal peeks anytime; the first structured first-Tuesday session happens
+after Slice 3, when the margin loop (decision → stamp + margin + Desk in one
+act) works against Middlewest's real data. Rationale: first impressions don't
+repeat, and the margin is the concept's heart — a shell with a placeholder
+margin risks anchoring on "pretty but hollow." The D11 auto-start gut-check
+and idle-threshold calibration still occur at Slice 5.
+
+---
+
+## Implementation decisions — Slice 2 amendments (2026-06-11)
+
+### I11 · R6–R8 implementation notes — 2026-06-11
+
+R6: implemented as one extra `proposals.project_id` lookup on the resolver's
+miss path; `router.replace`, loading state holds until the redirect lands.
+R7: migration 00189 appends `open_claim_count` / `open_claim_po`
+(vendor_po_number, falling back to sidemark) to `document_state`; the line
+stamp and its PO→inspections→claims select are removed. The Desk need line
+reads "AP-012 has an open damage claim" (pluralizes without a PO identifier)
+and ranks below overdue decisions and the signing moment, above everything
+else. Its stamp label is **CLAIM OPEN** — not DAMAGED, which R7 reserves for
+the truthful per-item stamp in Slice 4 — designer-visible word choice,
+flagged for review. R8: placeholder line rendered verbatim in muted italic;
+inert settled bars were already affordance-free (hint shows only the settled
+date; "unfold ↓" appears solely on bars whose unfold exists).
