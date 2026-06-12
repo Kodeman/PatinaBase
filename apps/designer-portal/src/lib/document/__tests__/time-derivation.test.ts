@@ -1,6 +1,8 @@
 import {
   activityLabel,
   closeOutTimer,
+  idleAnnotation,
+  idleSecondsFromPings,
   fmtElapsed,
   fmtMinutes,
   inHandTodayMinutes,
@@ -65,5 +67,37 @@ describe('activityLabel', () => {
   it('maps keys to the v1 vocabulary', () => {
     expect(activityLabel('site_visit')).toBe('Site visit');
     expect(activityLabel(null)).toBe('—');
+  });
+});
+
+describe('idle annotation (D10, provisional 8-min)', () => {
+  const T = (mins) => mins * 60_000;
+  const base = 1_000_000_000_000;
+
+  it('no idle when pings are dense', () => {
+    const pings = [0, 1, 2, 3, 4].map((m) => base + T(m));
+    expect(idleSecondsFromPings(pings)).toBe(0);
+  });
+
+  it('sums gaps longer than the threshold', () => {
+    // 0 → 20m gap (idle) → +1m → 2m gap (not idle)
+    const pings = [base, base + T(20), base + T(21), base + T(23)];
+    expect(idleSecondsFromPings(pings)).toBe(20 * 60);
+  });
+
+  it('a gap exactly at the threshold is not idle', () => {
+    expect(idleSecondsFromPings([base, base + T(8)])).toBe(0);
+  });
+
+  it('annotation reads in whole minutes, or null under threshold', () => {
+    expect(idleAnnotation(0)).toBeNull();
+    expect(idleAnnotation(7 * 60)).toBeNull();
+    expect(idleAnnotation(8 * 60)).toBe('includes ~8 quiet minutes');
+    expect(idleAnnotation(60 * 60)).toBe('includes ~60 quiet minutes');
+  });
+
+  it('never affects the logged number — annotation is a separate field', () => {
+    // closeOutTimer ignores idle entirely; this is a guard against regression.
+    expect(closeOutTimer('timer_auto', 2820)).toEqual({ action: 'offer', durationMinutes: 47 });
   });
 });

@@ -16,6 +16,7 @@ import { useDocumentTime } from '@/hooks/document-time-provider';
 import {
   ACTIVITIES,
   fmtMinutes,
+  idleAnnotation,
   isAdjusted,
 } from '@/lib/document/time-derivation';
 
@@ -99,6 +100,13 @@ export function LogStrip() {
       {adjusted && (
         <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.45)]">
           adjusted from {fmtMinutes(offer.suggestedMinutes)}
+        </span>
+      )}
+      {/* D10: idle is annotated, never trimmed — the designer decides if the
+          quiet minutes were work. */}
+      {idleAnnotation(offer.idleSeconds) && (
+        <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.45)]">
+          {idleAnnotation(offer.idleSeconds)}
         </span>
       )}
       <button

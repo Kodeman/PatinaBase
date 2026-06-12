@@ -9,6 +9,7 @@
  */
 
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
+import { openCommandBar } from '@/components/document/command-bar';
 import { FolderCard } from '@/components/document/folder-card';
 import { InMotionChip } from '@/components/document/in-motion-chip';
 import { StrataMark } from '@/components/document/strata-mark';
@@ -35,12 +36,16 @@ export default function DeskPage() {
     <main className="mx-auto w-full max-w-3xl px-6 pb-28 pt-14">
       <header className="mb-12 flex items-baseline justify-between gap-4">
         <h1 className="font-heading text-[1.65rem] italic text-[var(--color-pearl)]">{today}</h1>
-        <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--doc-desk-ink)]">
+        <button
+          type="button"
+          onClick={openCommandBar}
+          className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--doc-desk-ink)] hover:text-[var(--color-clay)]"
+        >
           Find anything{' '}
           <kbd className="rounded-[3px] border border-[var(--doc-desk-ink)] px-1 py-px font-mono">
             ⌘K
           </kbd>
-        </p>
+        </button>
       </header>
 
       <section aria-labelledby="needs-your-hand">

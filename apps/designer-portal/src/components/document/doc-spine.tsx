@@ -32,7 +32,8 @@ export function DocSpine({ sections, others }: { sections: SpineSection[]; other
             className="flex shrink-0 items-start gap-2.5 py-1 min-[980px]:py-[0.45rem]"
           >
             <span className="mt-[5px]">
-              <StrataMark state={s.state} size="sm" />
+              {/* R15: only the active marker breathes — "alive" is literally true here. */}
+              <StrataMark state={s.state} size="sm" breathing={s.state === 'active'} />
             </span>
             <span className={s.state === 'future' ? 'opacity-45' : ''}>
               <span

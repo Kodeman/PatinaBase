@@ -8,7 +8,7 @@
  * not a notification.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DocSheet } from './overlays/doc-sheet';
 import { OrdersLedger } from './orders-ledger';
 import { HoursLedger } from './hours-ledger';
@@ -29,6 +29,17 @@ export function StudioDrawer() {
   const [openLedger, setOpenLedger] = useState<LedgerKey | null>(null);
   const open = LEDGERS.find((l) => l.key === openLedger) ?? null;
   const { inHandToday } = useDocumentTime();
+
+  // ⌘K and other surfaces open a ledger by name through this event.
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const name = (e as CustomEvent<string>).detail;
+      const match = LEDGERS.find((l) => l.key === name);
+      if (match) setOpenLedger(match.key);
+    };
+    window.addEventListener('document:open-ledger', onOpen);
+    return () => window.removeEventListener('document:open-ledger', onOpen);
+  }, []);
 
   return (
     <>

@@ -447,6 +447,8 @@ export interface StopTimerInput {
    *  All optional — the header stop dialog keeps its shipped behavior. */
   durationMinutesOverride?: number;
   rawSeconds?: number | null;
+  /** D10 idle annotation (00198) — never subtracted from duration. */
+  idleSeconds?: number | null;
   activity?: string | null;
 }
 
@@ -506,6 +508,7 @@ export function useStopTimer() {
       if (input.phaseKey !== undefined) updates.phase_key = input.phaseKey;
       if (input.billable !== undefined) updates.billable = input.billable;
       if (input.rawSeconds !== undefined) updates.raw_seconds = input.rawSeconds;
+      if (input.idleSeconds !== undefined) updates.idle_seconds = input.idleSeconds;
       if (input.activity !== undefined) updates.activity = input.activity;
 
       const { data, error } = await supabase

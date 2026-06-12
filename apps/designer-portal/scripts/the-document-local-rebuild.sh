@@ -18,7 +18,8 @@ for f in 00191_document_state_view 00192_document_state_open_claims \
          00195_document_state_pulse_and_send_rpc \
          00196_per_item_claims_and_margin_notes 00197_margin_items_note_branch \
          00198_time_entry_source_activity \
-         00200_document_state_send_and_money; do
+         00200_document_state_send_and_money \
+         00201_designer_interruption_rules; do
   echo "── applying $f"
   "${PSQL[@]}" < "supabase/migrations/$f.sql"
 done

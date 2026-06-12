@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { StudioDrawer } from '@/components/document/studio-drawer';
 import { LogStrip } from '@/components/document/log-strip';
+import { CommandBar } from '@/components/document/command-bar';
+import { InterruptionSettings } from '@/components/document/interruption-settings';
 import { DocumentTimeProvider } from '@/hooks/document-time-provider';
 import { DocumentGate } from './document-gate';
 
@@ -24,6 +26,10 @@ export default function DocumentLayout({ children }: { children: React.ReactNode
           {children}
           <LogStrip />
           <StudioDrawer />
+          {/* ⌘K from anywhere in the document model (spec §3). */}
+          <CommandBar />
+          {/* D2 break-through rules — opened from ⌘K, ships all-off. */}
+          <InterruptionSettings />
         </DocumentTimeProvider>
       </DocumentGate>
     </div>

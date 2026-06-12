@@ -62,11 +62,41 @@ export interface LogOffer {
   /** Auto-filled from the document's current phase at stop (R4). */
   phaseKey: string | null;
   source: TimeSource;
+  /** D10 idle annotation: quiet seconds inside the entry — annotation only,
+   *  NEVER subtracted from the logged number. 0 when nothing was idle. */
+  idleSeconds: number;
 }
 
 /** D10: a visible note when the logged number left the raw truth behind. */
 export function isAdjusted(offer: Pick<LogOffer, 'rawSeconds'>, loggedMinutes: number): boolean {
   return Math.abs(loggedMinutes * 60 - offer.rawSeconds) >= 60;
+}
+
+/**
+ * D10 idle detection — provisional threshold (Session-02 async Q11). A gap
+ * between activity pings longer than the threshold counts as idle; idle is
+ * ANNOTATED on the offer, never trimmed from the number. The designer
+ * decides whether the quiet minutes were work (sketching, a call) or not.
+ */
+export const IDLE_THRESHOLD_SECONDS = 8 * 60;
+
+/** Sum the idle gaps in a sorted list of activity-ping timestamps (ms). */
+export function idleSecondsFromPings(pingsMs: number[], thresholdSeconds = IDLE_THRESHOLD_SECONDS): number {
+  if (pingsMs.length < 2) return 0;
+  const sorted = [...pingsMs].sort((a, b) => a - b);
+  let idle = 0;
+  for (let i = 1; i < sorted.length; i++) {
+    const gap = (sorted[i] - sorted[i - 1]) / 1000;
+    if (gap > thresholdSeconds) idle += gap;
+  }
+  return Math.round(idle);
+}
+
+/** The offer's idle annotation line, or null when nothing was idle. */
+export function idleAnnotation(idleSeconds: number): string | null {
+  if (idleSeconds < IDLE_THRESHOLD_SECONDS) return null;
+  const mins = Math.round(idleSeconds / 60);
+  return `includes ~${mins} quiet ${mins === 1 ? 'minute' : 'minutes'}`;
 }
 
 /** "In hand today" — completed minutes today plus the live timer's elapsed. */

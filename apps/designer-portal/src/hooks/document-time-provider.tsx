@@ -40,6 +40,7 @@ import {
 } from '@/hooks/use-time-tracking';
 import {
   closeOutTimer,
+  idleSecondsFromPings,
   inHandTodayMinutes,
   todayStartISO,
   type LogOffer,
@@ -98,6 +99,22 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
   const [offer, setOffer] = useState<LogOffer | null>(null);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
 
+  // D10 idle detection: activity pings while a timer runs. A gap between
+  // pings longer than the threshold is annotated as quiet time — never
+  // subtracted. Reset when a new timer starts.
+  const pingsRef = useRef<number[]>([]);
+  useEffect(() => {
+    const ping = () => {
+      const arr = pingsRef.current;
+      const t = Date.now();
+      // Coalesce bursts: one ping per ~20s keeps the array small.
+      if (arr.length === 0 || t - arr[arr.length - 1] > 20_000) arr.push(t);
+    };
+    const events = ['pointermove', 'keydown', 'pointerdown', 'wheel', 'visibilitychange'];
+    events.forEach((e) => window.addEventListener(e, ping, { passive: true }));
+    return () => events.forEach((e) => window.removeEventListener(e, ping));
+  }, []);
+
   // useMutation results change identity every render — pin them behind a
   // ref so hold/release stay referentially stable (the page effect depends
   // on them; unstable callbacks would re-hold on every render).
@@ -143,6 +160,13 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
       const source = ((timer as { source?: string }).source ?? 'timer_manual') as TimeSource;
       const ruling = closeOutTimer(source, elapsed);
 
+      // D10: idle gaps inside THIS entry's window, annotation only.
+      const startMs = new Date(timer.started_at).getTime();
+      const idleSeconds = idleSecondsFromPings(
+        [startMs, ...pingsRef.current.filter((t) => t >= startMs), Date.now()],
+      );
+      pingsRef.current = [];
+
       if (ruling.action === 'discard_silently') {
         await api.current.discardTimer.mutateAsync({ entryId: timer.id });
         invalidateTimeSurfaces();
@@ -159,6 +183,7 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
         entryId: timer.id,
         durationMinutesOverride: ruling.durationMinutes,
         rawSeconds: Math.round(elapsed),
+        idleSeconds,
         ...(autoPhase !== undefined ? { phaseKey: autoPhase } : {}),
       });
       invalidateTimeSurfaces();
@@ -172,6 +197,7 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
           suggestedMinutes: ruling.durationMinutes,
           phaseKey: timer.phase_key ?? autoPhase ?? null,
           source,
+          idleSeconds,
         });
       }
     },

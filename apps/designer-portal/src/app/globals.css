@@ -126,6 +126,27 @@
   }
 }
 
+/* The breath (R15): the ONLY ambient motion in the system — a slow opacity
+   swell on the active spine marker, where "alive" is literally true.
+   Nothing on the Desk ever moves; prefers-reduced-motion stills it. */
+@keyframes doc-breath {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.62;
+  }
+}
+.doc-breath {
+  animation: doc-breath 3s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .doc-breath {
+    animation: none;
+  }
+}
+
 /* Typography: now provided by @patina/design-system/styles/typography.css.
    Font variable mappings set on body below in @layer base. */
 
