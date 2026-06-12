@@ -7,7 +7,7 @@
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '@patina/supabase';
-import { orderMarginItems, type MarginItemRow } from '@/lib/document/margin-derivation';
+import type { MarginItemRow } from '@/lib/document/margin-derivation';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getSupabase = () => createBrowserClient() as any;
@@ -27,7 +27,8 @@ export function useMarginItems(projectId: string | null, proposalId: string | nu
         .join(',');
       const { data, error } = await getSupabase().from('margin_items').select('*').or(clauses);
       if (error) throw error;
-      return orderMarginItems((data ?? []) as MarginItemRow[], new Date());
+      // Unordered — the rail applies R12 ordering (it knows line positions).
+      return (data ?? []) as MarginItemRow[];
     },
   });
 }

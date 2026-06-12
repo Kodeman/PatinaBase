@@ -2,7 +2,7 @@ import {
   deriveKindLine,
   isResolved,
   marginAccent,
-  orderMarginItems,
+  partitionMargin,
   type MarginItemRow,
 } from '../margin-derivation';
 
@@ -99,10 +99,78 @@ describe('isResolved', () => {
   });
 });
 
-describe('orderMarginItems', () => {
-  it('pins overdue decisions, sorts active by ts desc, sinks resolved', () => {
+describe('partitionMargin (R12)', () => {
+  it('floats needs-action, folds resolved into settled', () => {
     const overdue = mkItem({ item_id: 'a', state: 'overdue', ts: '2026-06-01T00:00:00Z' });
-    const newest = mkItem({
+    const activeMsg = mkItem({
+      item_id: 'b',
+      kind: 'message',
+      state: 'unread',
+      ts: '2026-06-11T09:00:00Z',
+    });
+    const resolved = mkItem({ item_id: 'd', state: 'responded', ts: '2026-06-11T11:00:00Z' });
+
+    const { raised, settled } = partitionMargin([resolved, activeMsg, overdue], NOW);
+    expect(raised.map((i) => i.item_id)).toEqual(['a', 'b']);
+    expect(settled.map((i) => i.item_id)).toEqual(['d']);
+  });
+
+  it('ranks needs-action like the Desk: overdue decision → dued note, most overdue first', () => {
+    const duedNote = mkItem({
+      item_id: 'n1',
+      kind: 'note',
+      state: 'due',
+      ts: '2026-06-02T00:00:00Z',
+    });
+    const overdueOld = mkItem({ item_id: 'a1', state: 'overdue', ts: '2026-06-01T00:00:00Z' });
+    const overdueNew = mkItem({ item_id: 'a2', state: 'overdue', ts: '2026-06-08T00:00:00Z' });
+
+    const { raised } = partitionMargin([duedNote, overdueNew, overdueOld], NOW);
+    expect(raised.map((i) => i.item_id)).toEqual(['a1', 'a2', 'n1']);
+  });
+
+  it('orders active items by anchor position down the paper: letterhead → section → lines in rendered order', () => {
+    const onLine2 = mkItem({
+      item_id: 'l2',
+      state: 'pending',
+      anchor_kind: 'line',
+      anchor_id: 'ffe-2',
+      ts: '2026-06-11T09:00:00Z',
+    });
+    const onLine0 = mkItem({
+      item_id: 'l0',
+      state: 'pending',
+      anchor_kind: 'line',
+      anchor_id: 'ffe-0',
+      ts: '2026-06-01T09:00:00Z',
+    });
+    const onSection = mkItem({
+      item_id: 's',
+      kind: 'pulse',
+      state: 'draft',
+      anchor_kind: 'section',
+      ts: '2026-06-10T09:00:00Z',
+    });
+    const onLetterhead = mkItem({
+      item_id: 'h',
+      kind: 'message',
+      state: 'unread',
+      anchor_kind: 'letterhead',
+      ts: '2026-06-02T09:00:00Z',
+    });
+
+    const lineRank = new Map([
+      ['ffe-0', 0],
+      ['ffe-2', 2],
+    ]);
+    const { raised } = partitionMargin([onLine2, onLetterhead, onLine0, onSection], NOW, {
+      lineRank,
+    });
+    expect(raised.map((i) => i.item_id)).toEqual(['h', 's', 'l0', 'l2']);
+  });
+
+  it('within one anchor, newest first; unknown line anchors sink in the line band', () => {
+    const newer = mkItem({
       item_id: 'b',
       kind: 'message',
       state: 'unread',
@@ -114,26 +182,61 @@ describe('orderMarginItems', () => {
       state: 'draft',
       ts: '2026-06-09T09:00:00Z',
     });
-    const resolved = mkItem({ item_id: 'd', state: 'responded', ts: '2026-06-11T11:00:00Z' });
+    const unknownLine = mkItem({
+      item_id: 'x',
+      state: 'pending',
+      anchor_kind: 'line',
+      anchor_id: 'ffe-missing',
+      ts: '2026-06-11T10:00:00Z',
+    });
+    const knownLine = mkItem({
+      item_id: 'k',
+      state: 'pending',
+      anchor_kind: 'line',
+      anchor_id: 'ffe-0',
+      ts: '2026-06-01T10:00:00Z',
+    });
 
-    const ordered = orderMarginItems([resolved, older, newest, overdue], NOW);
-    expect(ordered.map((i) => i.item_id)).toEqual(['a', 'b', 'c', 'd']);
+    const { raised } = partitionMargin([unknownLine, older, newer, knownLine], NOW, {
+      lineRank: new Map([['ffe-0', 0]]),
+    });
+    expect(raised.map((i) => i.item_id)).toEqual(['b', 'c', 'k', 'x']);
   });
 
-  it('dued notes join the needs-action group (provisional pending R12)', () => {
-    const duedNote = mkItem({
-      item_id: 'n1',
-      kind: 'note',
+  it('the Pulse floats only Friday onward, like the Desk (D5)', () => {
+    // NOW is Thursday 2026-06-11; week_of Monday 2026-06-08 → Friday Jun 12.
+    const pulse = mkItem({
+      item_id: 'p',
+      kind: 'pulse',
       state: 'due',
-      ts: '2026-06-02T00:00:00Z',
+      anchor_kind: 'section',
+      ts: '2026-06-08T00:00:00Z',
+      payload: { week_of: '2026-06-08' },
     });
-    const activeMsg = mkItem({
+    const letterheadMsg = mkItem({
       item_id: 'b',
       kind: 'message',
       state: 'unread',
+      anchor_kind: 'letterhead',
       ts: '2026-06-11T09:00:00Z',
     });
-    const ordered = orderMarginItems([activeMsg, duedNote], NOW);
-    expect(ordered.map((i) => i.item_id)).toEqual(['n1', 'b']);
+
+    const thursday = partitionMargin([pulse, letterheadMsg], NOW);
+    expect(thursday.raised.map((i) => i.item_id)).toEqual(['b', 'p']);
+
+    const friday = partitionMargin([pulse, letterheadMsg], new Date('2026-06-12T14:00:00Z'));
+    expect(friday.raised.map((i) => i.item_id)).toEqual(['p', 'b']);
+  });
+
+  it('settled orders newest first', () => {
+    const oldResolved = mkItem({ item_id: 'r1', state: 'responded', ts: '2026-06-01T00:00:00Z' });
+    const newResolved = mkItem({
+      item_id: 'r2',
+      kind: 'note',
+      state: 'escalated',
+      ts: '2026-06-10T00:00:00Z',
+    });
+    const { settled } = partitionMargin([oldResolved, newResolved], NOW);
+    expect(settled.map((i) => i.item_id)).toEqual(['r2', 'r1']);
   });
 });

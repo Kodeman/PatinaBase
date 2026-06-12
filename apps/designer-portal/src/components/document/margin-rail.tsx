@@ -7,10 +7,11 @@
  * the R8 placeholder so the full-bleed geometry holds.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useProjectFFEItems } from '@patina/supabase';
 import { useMarginItems } from '@/hooks/use-margin-items';
 import { useCreateMarginNote } from '@/hooks/use-margin-notes';
-import type { MarginItemRow } from '@/lib/document/margin-derivation';
+import { partitionMargin, type MarginItemRow } from '@/lib/document/margin-derivation';
 import { MarginItem } from './margin-item';
 import { DecisionBody, InvoiceBody, MessageBody, NoteBody, PulseBody } from './margin-bodies';
 
@@ -32,6 +33,19 @@ export function MarginRail({
 }) {
   const { data: items, isLoading } = useMarginItems(projectId, proposalId);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [settledOpen, setSettledOpen] = useState(false);
+
+  // R12 ordering: needs-action floats → anchor order → "Settled · N" fold.
+  // Line anchors rank by the document's rendered FF&E order (shared cache
+  // with FFESection — same query key).
+  const { data: ffeItems } = useProjectFFEItems(projectId ?? '') as {
+    data: Array<{ id: string }> | undefined;
+  };
+  const { raised, settled } = useMemo(() => {
+    const lineRank = new Map<string, number>();
+    (ffeItems ?? []).forEach((it, i) => lineRank.set(it.id, i));
+    return partitionMargin(items ?? [], new Date(), { lineRank });
+  }, [items, ffeItems]);
 
   // ── Note capture (R14: ≤5 seconds — one tap, type, save) ──
   const createNote = useCreateMarginNote();
@@ -74,7 +88,7 @@ export function MarginRail({
   const bodyFor = (row: MarginItemRow) => {
     switch (row.kind) {
       case 'decision':
-        return <DecisionBody row={row} projectId={projectId} />;
+        return <DecisionBody row={row} projectId={projectId} clientName={clientName} />;
       case 'message':
         return <MessageBody row={row} projectId={projectId} />;
       case 'invoice':
@@ -93,6 +107,23 @@ export function MarginRail({
       case 'note':
         return <NoteBody row={row} projectId={projectId} />;
     }
+  };
+
+  const renderItem = (row: MarginItemRow) => {
+    const expandable = row.kind !== 'time';
+    return (
+      <MarginItem
+        key={`${row.kind}-${row.item_id}`}
+        row={row}
+        open={openId === row.item_id}
+        onToggle={
+          expandable ? () => setOpenId((v) => (v === row.item_id ? null : row.item_id)) : undefined
+        }
+        onHoverAnchor={onHoverLine}
+      >
+        {bodyFor(row)}
+      </MarginItem>
+    );
   };
 
   return (
@@ -163,24 +194,23 @@ export function MarginRail({
         </p>
       )}
 
-      {(items ?? []).map((row) => {
-        const expandable = row.kind !== 'time';
-        return (
-          <MarginItem
-            key={`${row.kind}-${row.item_id}`}
-            row={row}
-            open={openId === row.item_id}
-            onToggle={
-              expandable
-                ? () => setOpenId((v) => (v === row.item_id ? null : row.item_id))
-                : undefined
-            }
-            onHoverAnchor={onHoverLine}
+      {raised.map(renderItem)}
+
+      {/* R12: resolved items fold away — the fold label is the only number
+          anywhere in the margin. */}
+      {settled.length > 0 && (
+        <div className="mt-3 border-t border-dashed border-[var(--color-pearl)] pt-2">
+          <button
+            type="button"
+            aria-expanded={settledOpen}
+            onClick={() => setSettledOpen((v) => !v)}
+            className="mb-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
           >
-            {bodyFor(row)}
-          </MarginItem>
-        );
-      })}
+            Settled · {settled.length} {settledOpen ? '↑' : '↓'}
+          </button>
+          {settledOpen && settled.map(renderItem)}
+        </div>
+      )}
     </>
   );
 }

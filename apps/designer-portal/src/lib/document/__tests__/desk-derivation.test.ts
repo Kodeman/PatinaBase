@@ -156,20 +156,34 @@ describe('deriveNeed', () => {
     expect(need!.stamp.label).toBe('NEW LEAD');
   });
 
-  it('lead deadline inside 48h → urgent', () => {
+  it('lead deadline inside 24h → urgent (R10)', () => {
     const need = deriveNeed(
       mkRow({
         engagement_kind: 'lead',
         active_section: 'brief',
         project_id: null,
-        lead_response_deadline: daysAhead(1),
+        lead_response_deadline: daysAhead(0.5),
       }),
       NOW,
     );
     expect(need!.urgent).toBe(true);
   });
 
-  it('proposal sent >3d, never viewed → hesitating ("not yet opened")', () => {
+  it('lead deadline beyond 24h → need, not urgent (R10 boundary)', () => {
+    const need = deriveNeed(
+      mkRow({
+        engagement_kind: 'lead',
+        active_section: 'brief',
+        project_id: null,
+        lead_response_deadline: daysAhead(1.5),
+      }),
+      NOW,
+    );
+    expect(need!.kind).toBe('new_lead');
+    expect(need!.urgent).toBe(false);
+  });
+
+  it('proposal sent 1 day ago, never viewed → hesitating ("not yet opened") (R10)', () => {
     const need = deriveNeed(
       mkRow({
         engagement_kind: 'proposal',
@@ -177,7 +191,7 @@ describe('deriveNeed', () => {
         project_id: null,
         proposal_id: 'pr1',
         proposal_status: 'sent',
-        proposal_sent_at: daysAgo(4),
+        proposal_sent_at: daysAgo(1),
       }),
       NOW,
     );
@@ -186,35 +200,50 @@ describe('deriveNeed', () => {
     expect(need!.stamp.label).toBe('SENT');
   });
 
-  it('proposal sent yesterday → no need yet', () => {
+  it('proposal sent hours ago → no need yet (R10 boundary)', () => {
     const need = deriveNeed(
       mkRow({
         engagement_kind: 'proposal',
         active_section: 'proposal',
         project_id: null,
         proposal_status: 'sent',
-        proposal_sent_at: daysAgo(1),
+        proposal_sent_at: daysAgo(0.5),
       }),
       NOW,
     );
     expect(need).toBeNull();
   });
 
-  it('proposal viewed >5d, unsigned → hesitating ("no signature")', () => {
+  it('proposal viewed 2 days ago, unsigned → hesitating ("no signature") (R10)', () => {
     const need = deriveNeed(
       mkRow({
         engagement_kind: 'proposal',
         active_section: 'proposal',
         project_id: null,
         proposal_status: 'viewed',
-        proposal_sent_at: daysAgo(8),
-        proposal_viewed_at: daysAgo(6),
+        proposal_sent_at: daysAgo(4),
+        proposal_viewed_at: daysAgo(2),
       }),
       NOW,
     );
     expect(need!.kind).toBe('hesitating_proposal');
     expect(need!.text).toMatch(/no signature/i);
     expect(need!.stamp.label).toBe('VIEWED');
+  });
+
+  it('proposal viewed yesterday → no need yet (R10 boundary)', () => {
+    const need = deriveNeed(
+      mkRow({
+        engagement_kind: 'proposal',
+        active_section: 'proposal',
+        project_id: null,
+        proposal_status: 'viewed',
+        proposal_sent_at: daysAgo(3),
+        proposal_viewed_at: daysAgo(1),
+      }),
+      NOW,
+    );
+    expect(need).toBeNull();
   });
 
   it('accepted, unactivated proposal → SIGNED need (open the project)', () => {
@@ -286,7 +315,7 @@ describe('deriveMotion', () => {
           active_section: 'proposal',
           project_id: null,
           proposal_status: 'sent',
-          proposal_sent_at: daysAgo(1),
+          proposal_sent_at: daysAgo(0.5),
         }),
         NOW,
       ),

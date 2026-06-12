@@ -49,12 +49,23 @@ function Quiet({ children }: { children: React.ReactNode }) {
 
 // ── decision ────────────────────────────────────────────────────────────────
 
-export function DecisionBody({ row, projectId }: { row: MarginItemRow; projectId: string | null }) {
+export function DecisionBody({
+  row,
+  projectId,
+  clientName,
+}: {
+  row: MarginItemRow;
+  projectId: string | null;
+  clientName?: string;
+}) {
   const qc = useQueryClient();
   const { data: decision } = useDecision(row.item_id) as { data: AnyRecord };
   const reminder = useSendDecisionReminder();
   const update = useUpdateDecision();
   const override = useApplyDecisionOverride();
+
+  // R11: the override action is personal — "Record Sarah's pick".
+  const clientFirstName = (clientName ?? '').trim().split(/\s+/)[0];
 
   const [extendTo, setExtendTo] = useState('');
   const [pickId, setPickId] = useState('');
@@ -176,7 +187,7 @@ export function DecisionBody({ row, projectId }: { row: MarginItemRow; projectId
                 )
               }
             >
-              Record the pick
+              {clientFirstName ? `Record ${clientFirstName}'s pick` : 'Record the pick'}
             </button>
           </div>
         </div>

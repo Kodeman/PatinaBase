@@ -1,8 +1,8 @@
 /**
- * Margin derivation — spec v1.1 §5, prototype v0.4 .m-item anatomy.
+ * Margin derivation — spec v1.2 §5, prototype v0.4 .m-item anatomy.
  *
- * Pure presentation logic over `margin_items` view rows (00191): kind
- * accents, the mono kind-line, resolved sinking, and rail ordering.
+ * Pure presentation logic over `margin_items` view rows (00191/00194): kind
+ * accents, the mono kind-line, resolved sinking, and R12 rail ordering.
  * Dependency-free (no stages.ts / design-system — the Jest ESM trap).
  */
 
@@ -82,21 +82,74 @@ export function isResolved(row: MarginItemRow): boolean {
   );
 }
 
-function sortKey(row: MarginItemRow): [number, number] {
-  // Dued notes join needs-action ordering PROVISIONALLY (R14 cites R12,
-  // whose text is missing from the log — DECISIONS O6).
-  const needsAction =
-    (row.kind === 'decision' && row.state === 'overdue') ||
-    (row.kind === 'note' && row.state === 'due');
-  const group = isResolved(row) ? 2 : needsAction ? 0 : 1;
-  return [group, -new Date(row.ts).getTime()];
+const DAY_MS = 86_400_000;
+
+/** R12 needs-action membership, urgency-ranked like the Desk. The Pulse
+ *  follows the Desk's D5 gate — it floats Friday onward, never earlier. */
+function needsActionRank(row: MarginItemRow, now: Date): number | null {
+  if (row.kind === 'decision' && row.state === 'overdue') return 0;
+  if (row.kind === 'note' && row.state === 'due') return 1;
+  if (row.kind === 'pulse' && row.state === 'due') {
+    const weekOf = row.payload.week_of as string | null | undefined;
+    if (weekOf && now.getTime() >= new Date(`${weekOf}T00:00:00`).getTime() + 4 * DAY_MS) {
+      return 2;
+    }
+  }
+  return null;
 }
 
-/** Rail order: overdue decisions pinned, then active newest-first, then resolved. */
-export function orderMarginItems(rows: MarginItemRow[], _now: Date): MarginItemRow[] {
-  return [...rows].sort((a, b) => {
-    const ka = sortKey(a);
-    const kb = sortKey(b);
-    return ka[0] - kb[0] || ka[1] - kb[1];
+export interface MarginAnchorRanks {
+  /** project_ffe_items.id → rendered line index (the rail supplies it). */
+  lineRank?: ReadonlyMap<string, number>;
+}
+
+/** Anchor position down the paper: letterhead band, then section anchors,
+ *  then line anchors in rendered order. Unknown lines sink in their band. */
+function anchorKey(row: MarginItemRow, ranks?: MarginAnchorRanks): [number, number] {
+  if (row.anchor_kind === 'line') {
+    const idx = row.anchor_id ? ranks?.lineRank?.get(row.anchor_id) : undefined;
+    return [2, idx ?? Number.MAX_SAFE_INTEGER];
+  }
+  return [row.anchor_kind === 'section' ? 1 : 0, 0];
+}
+
+export interface MarginPartition {
+  /** Needs-action float + active items in anchor order. */
+  raised: MarginItemRow[];
+  /** Resolved items — the rail folds these into "Settled · N" (R12). */
+  settled: MarginItemRow[];
+}
+
+/** R12 — ordering under load: needs-action floats to the top (urgency-ranked,
+ *  most overdue first) → everything else in anchor order (the margin reads
+ *  top-to-bottom beside the paper it annotates; newest first within one
+ *  anchor) → resolved items fold into the collapsed "Settled · N" group. */
+export function partitionMargin(
+  rows: MarginItemRow[],
+  now: Date,
+  ranks?: MarginAnchorRanks,
+): MarginPartition {
+  const needs: MarginItemRow[] = [];
+  const active: MarginItemRow[] = [];
+  const settled: MarginItemRow[] = [];
+
+  for (const row of rows) {
+    if (isResolved(row)) settled.push(row);
+    else if (needsActionRank(row, now) !== null) needs.push(row);
+    else active.push(row);
+  }
+
+  needs.sort(
+    (a, b) =>
+      needsActionRank(a, now)! - needsActionRank(b, now)! ||
+      new Date(a.ts).getTime() - new Date(b.ts).getTime(),
+  );
+  active.sort((a, b) => {
+    const ka = anchorKey(a, ranks);
+    const kb = anchorKey(b, ranks);
+    return ka[0] - kb[0] || ka[1] - kb[1] || new Date(b.ts).getTime() - new Date(a.ts).getTime();
   });
+  settled.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+
+  return { raised: [...needs, ...active], settled };
 }

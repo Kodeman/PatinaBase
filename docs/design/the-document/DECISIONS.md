@@ -419,3 +419,43 @@ flagged for design review. R15 fill-state fractions: settled sections count
 1, the active section ½, per movement group; the Desk folder-tab mark uses a
 lineage-blind approximation (manual projects overstate SHAPING there) —
 flagged. The breath waits for the Slice 6 motion pass per R15.
+
+---
+
+## Rulings ratified via spec v1.2 — 2026-06-12
+
+### R10–R12 confirmed — resolves O6 — 2026-06-12
+
+Spec v1.2 (supersedes v1.1; §-numbering unchanged) landed in-repo with the §2
+one-line ruling table and the R10 constants in §7; R12's full text is now in
+the design-session log. O6 is RESOLVED: R10 = I6 retune to Leah's numbers
+(hesitating = sent **1 day** unopened OR opened **2 days** unsigned · lead
+urgency = deadline inside **24h**; precision watch at Session 02; per-studio
+settings when studio #2 onboards) · R11 = CLAIM OPEN blessed + the
+decision-override action personalized ("Record Sarah's pick") · R12 = margin
+ordering under load (needs-action floats, urgency-ranked like the Desk →
+anchor order → resolved items fold into a collapsed "Settled · N" group; the
+fold label is the only number anywhere in the margin). R10/R11 full session
+text remains absent from this log — spec v1.2 §2/§7 taken as authoritative.
+
+### I15 · R10/R11/R12 landed — Slice 4 amendments — 2026-06-12
+
+R10: `desk-derivation.ts` constants retuned 3d/5d/48h → **1d/2d/24h**, with
+≥ boundary semantics ("sent 1 day unopened" rises ON day one); landed
+immediately per §13, not gated on the slice. R11: the override button
+personalizes from `document_state.client_name` first name; falls back to
+"Record the pick" when no name. R12 mechanics (implementation-level):
+needs-action = overdue decisions (0) → dued notes (1) → the week's unsent
+pulse (2 — Friday-gated like the Desk, per D5), ordered most-overdue-first;
+anchor order = letterhead band → section band → line band, lines ranked by
+the document's rendered FF&E order (the rail supplies the rank map; unknown
+anchors sink within their band); within one anchor, newest first; "Settled ·
+N" is collapsed by default, newest-first when expanded. ⌘K fill-state rows
+(R15) ride the Slice 6 ⌘K extension per §13. Ops notes: a `supabase db
+reset` from main wiped the transient demo engagements + unmerged document
+migrations locally — rebuilt via the new idempotent
+`scripts/the-document-local-seed.sql` (resolves the Whitfield id through the
+R6 redirect; activation ids are random — supersedes the slice-3 seed's
+pinned ids). Migration-number collision: main now carries
+`00188_po_send_columns` (procurement); this stack's 00188–00194 renumber to
+00189–00195 at rebase.

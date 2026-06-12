@@ -9,8 +9,10 @@
  * @patina/help-system, the Jest ESM trap), no design-system imports. Stamp
  * colors are CSS-var strings resolved by the portal's globals.css tokens.
  *
- * Hesitation thresholds (DECISIONS.md I6, tune with Leah):
- *   sent & unopened > 3 days · opened & unsigned > 5 days.
+ * Thresholds (R10 — Leah-calibrated, Middlewest-authoritative; spec v1.2 §7):
+ *   hesitating = sent ≥1 day unopened OR opened ≥2 days unsigned;
+ *   lead urgency = deadline inside 24h. Precision watch at Session 02;
+ *   per-studio settings when studio #2 onboards.
  */
 
 export type EngagementKind = 'project' | 'proposal' | 'lead' | 'relationship';
@@ -91,9 +93,9 @@ export interface MotionChip {
 }
 
 const DAY_MS = 86_400_000;
-const HESITATION_UNOPENED_DAYS = 3;
-const HESITATION_UNSIGNED_DAYS = 5;
-const LEAD_URGENT_WINDOW_MS = 48 * 3_600_000;
+const HESITATION_UNOPENED_DAYS = 1;
+const HESITATION_UNSIGNED_DAYS = 2;
+const LEAD_URGENT_WINDOW_MS = 24 * 3_600_000;
 const MAX_MOTION_CHIPS = 6;
 
 /** Severity rank — lower sorts first within the needs stack. */
@@ -170,7 +172,7 @@ export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
     }
     if (row.proposal_status === 'sent' && row.proposal_sent_at && !row.proposal_viewed_at) {
       const days = daysBetween(row.proposal_sent_at, now);
-      if (days > HESITATION_UNOPENED_DAYS) {
+      if (days >= HESITATION_UNOPENED_DAYS) {
         return {
           kind: 'hesitating_proposal',
           text: `Sent ${fmtDay(row.proposal_sent_at)} — not yet opened`,
@@ -181,7 +183,7 @@ export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
     }
     if (row.proposal_status === 'viewed' && row.proposal_viewed_at) {
       const days = daysBetween(row.proposal_viewed_at, now);
-      if (days > HESITATION_UNSIGNED_DAYS) {
+      if (days >= HESITATION_UNSIGNED_DAYS) {
         return {
           kind: 'hesitating_proposal',
           text: `Opened ${fmtDay(row.proposal_viewed_at)} — no signature yet`,
