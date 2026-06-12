@@ -93,14 +93,16 @@ export interface OrderAssistantProps {
  * The v2 Order Assistant walks discrete steps instead of one long scroll:
  *
  *   review   — items + vendor portal link + copy-details helper
+ *   coverage — client-payment soft gate (00187 invoice coverage; never
+ *              blocks — "Proceed anyway" is always available)
  *   details  — vendor PO# / ETA / payment terms (external vendors only)
  *   created  — post-create confirmation ("Done" closes / advances the queue)
  *
  * Patina-Catalog routing skips `details` entirely — the one-click submit
- * fires from the last pre-create step and payment terms don't apply
- * (Patina invoices net_30 internally).
+ * fires from the coverage step and payment terms don't apply (Patina
+ * invoices net_30 internally).
  */
-export type OrderAssistantStep = 'review' | 'details' | 'created';
+export type OrderAssistantStep = 'review' | 'coverage' | 'details' | 'created';
 
 export interface StepMachineOpts {
   /** True when the order routes through Patina as the merchant. */
@@ -117,6 +119,8 @@ export function nextStep(
 ): OrderAssistantStep | null {
   switch (step) {
     case 'review':
+      return 'coverage';
+    case 'coverage':
       return opts.isCatalog ? null : 'details';
     case 'details':
     case 'created':
@@ -136,21 +140,29 @@ export function prevStep(
     case 'review':
     case 'created':
       return null;
-    case 'details':
+    case 'coverage':
       return 'review';
+    case 'details':
+      return 'coverage';
   }
 }
 
 /** Ordered list of pre-create steps for the header progress indicator. */
 export function stepSequence(opts: StepMachineOpts): OrderAssistantStep[] {
-  return opts.isCatalog ? ['review'] : ['review', 'details'];
+  return opts.isCatalog
+    ? ['review', 'coverage']
+    : ['review', 'coverage', 'details'];
 }
 
 export const STEP_LABELS: Record<OrderAssistantStep, string> = {
   review: 'Review items',
+  coverage: 'Client invoice coverage',
   details: 'Order details',
   created: 'Order created',
 };
+
+/** Max length accepted for the sidemark input (purchase_orders.sidemark, 00186). */
+export const SIDEMARK_MAX_LENGTH = 40;
 
 // ─── Formatting helpers ────────────────────────────────────────────────────
 

@@ -30,14 +30,62 @@ export const procurementEvents = {
   zoneVisited: (properties: { sub_view?: string; conflicts_shown?: number }) =>
     track('procurement_zone_visited', properties),
 
-  /** Fired when useCreatePurchaseOrder's mutation succeeds. */
+  /**
+   * Fired when useCreatePurchaseOrder's mutation succeeds.
+   * `coverage_overridden` / `sidemark_edited` (W3-T3b) come from the Order
+   * Assistant only — true when the designer proceeded past the client-payment
+   * soft gate with uncovered items / hand-edited the prefilled sidemark.
+   * OrderViaPatina (the standalone catalog dialog) omits them.
+   */
   poCreated: (properties: {
     payment_pattern: string;
     total_cents: number;
     is_patina_catalog: boolean;
+    coverage_overridden?: boolean;
+    sidemark_edited?: boolean;
     vendor_id?: string;
     project_id?: string;
   }) => track('procurement_po_created', properties),
+
+  /**
+   * Fired once per Order Assistant session when the client-payment soft gate
+   * renders with uncovered items (W3-T3b — 00187 invoice coverage).
+   * `uncovered_cents` is the vendor TRADE total of the uncovered items: the
+   * studio money ordering-now would front ahead of client payment.
+   */
+  coverageGateShown: (properties: {
+    uncovered_count: number;
+    uncovered_cents: number;
+    total_count: number;
+  }) => track('procurement_coverage_gate_shown', properties),
+
+  /**
+   * Fired when the designer proceeds past the soft gate anyway ("Proceed
+   * anyway" / catalog one-click from the coverage step with uncovered items).
+   */
+  coverageOverridden: (properties: {
+    uncovered_count: number;
+    uncovered_cents: number;
+    vendor_id?: string;
+    project_id?: string;
+  }) => track('procurement_coverage_overridden', properties),
+
+  /**
+   * Fired when a launching surface opens the Order Assistant queue (W3-T3b).
+   * `item_count` is the total orderable items queued across sessions;
+   * `vendor_id`/`project_id` only when the queue is single-vendor /
+   * single-project respectively.
+   */
+  orderAssistantOpened: (properties: {
+    source: 'ffe_board' | 'by_vendor';
+    item_count: number;
+    vendor_id?: string;
+    project_id?: string;
+  }) => track('procurement_order_assistant_opened', properties),
+
+  /** Fired on every Order Assistant step transition (W3-T3b step machine). */
+  orderAssistantStep: (properties: { step: string }) =>
+    track('procurement_order_assistant_step', properties),
 
   /**
    * Fired when a designer attempts to order FF&E items that are blocked by a

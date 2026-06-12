@@ -3,12 +3,13 @@
 /**
  * Order Assistant v2 — Details step.
  *
- * The capture half of the old single-scroll flow (PRD §6 steps 3–4): vendor
- * PO# + confirmed ETA, then payment terms (pattern + deposit/milestone data).
- * Field state lives in the panel shell (index.tsx) so the per-(vendor,
- * project) context reset clears everything; this module owns the rendering
- * and the submit-time validation (`validateDetails` — moved verbatim from the
- * v1 component).
+ * The capture half of the old single-scroll flow (PRD §6 steps 3–4) plus the
+ * new sidemark field (W3-T3b): sidemark + vendor PO# + confirmed ETA, then
+ * payment terms (pattern + deposit/milestone data). Field state lives in the
+ * panel shell (index.tsx) so the per-(vendor, project) context reset clears
+ * everything; this module owns the rendering and the submit-time validation
+ * (`validateDetails` — moved verbatim from the v1 component, with the
+ * sidemark length check appended).
  */
 
 import { Plus, Trash2 } from 'lucide-react';
@@ -18,6 +19,7 @@ import {
   centsToDollarString,
   formatDollars,
   parseDollarsToCents,
+  SIDEMARK_MAX_LENGTH,
   type OrderAssistantVendor,
 } from './types';
 
@@ -72,6 +74,7 @@ export interface DetailsValidationInput {
   depositAmountInput: string;
   milestones: MilestoneRow[];
   totalCents: number;
+  sidemark: string;
 }
 
 export function validateDetails({
@@ -79,7 +82,12 @@ export function validateDetails({
   depositAmountInput,
   milestones,
   totalCents,
+  sidemark,
 }: DetailsValidationInput): string | null {
+  if (sidemark.trim().length > SIDEMARK_MAX_LENGTH) {
+    return `Sidemark must be ${SIDEMARK_MAX_LENGTH} characters or fewer.`;
+  }
+
   if (!paymentPattern) return 'Payment pattern is required.';
 
   if (paymentPattern === 'fifty_fifty' || paymentPattern === 'thirty_seventy') {
@@ -118,6 +126,10 @@ export interface StepDetailsProps {
   vendor: OrderAssistantVendor;
   totalCents: number;
 
+  /** Shipment sidemark (00186) — prefilled by the shell, freely editable. */
+  sidemark: string;
+  onSidemarkChange: (v: string) => void;
+
   vendorPoNumber: string;
   onVendorPoNumberChange: (v: string) => void;
   confirmedEta: string;
@@ -140,6 +152,8 @@ export function StepDetails(props: StepDetailsProps) {
   const {
     vendor,
     totalCents,
+    sidemark,
+    onSidemarkChange,
     vendorPoNumber,
     onVendorPoNumberChange,
     confirmedEta,
@@ -167,8 +181,48 @@ export function StepDetails(props: StepDetailsProps) {
     ? Math.max(totalCents - parseDollarsToCents(depositAmountInput), 0)
     : 0;
 
+  const sidemarkTooLong = sidemark.trim().length > SIDEMARK_MAX_LENGTH;
+
   return (
     <>
+      {/* Sidemark (00186) — the carton marking vendors print for receiving
+          warehouses. Prefilled {STUDIO}-{CLIENT/PROJECT}-{ROOM}; editable. */}
+      <section className="mb-3 rounded-[5px] border border-[var(--border-default)] px-3 py-3">
+        <div className="mb-2 type-meta-small text-[var(--text-primary)]">
+          Sidemark
+        </div>
+        <label className="block">
+          <span className="block text-[0.6rem] uppercase tracking-wider text-[var(--text-muted)]">
+            Shipment sidemark
+          </span>
+          <input
+            type="text"
+            value={sidemark}
+            onChange={(e) => onSidemarkChange(e.target.value)}
+            placeholder="MWS-WALKER-LR"
+            aria-invalid={sidemarkTooLong || undefined}
+            className="mt-1 w-full rounded-[3px] border bg-transparent px-2 py-1.5 font-mono text-[0.7rem] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-primary)] focus:outline-none"
+            style={{
+              borderColor: sidemarkTooLong
+                ? 'var(--color-terracotta, #D4A090)'
+                : 'var(--border-default)',
+            }}
+          />
+        </label>
+        <p
+          className="mt-1.5 text-[0.62rem] italic"
+          style={{
+            color: sidemarkTooLong
+              ? 'var(--color-terracotta, #D4A090)'
+              : 'var(--color-aged-oak, #867257)',
+          }}
+        >
+          {sidemarkTooLong
+            ? `Sidemark must be ${SIDEMARK_MAX_LENGTH} characters or fewer (${sidemark.trim().length}).`
+            : 'Printed on cartons so receiving can route the shipment. Edit freely.'}
+        </p>
+      </section>
+
       {/* Confirm order placed */}
       <section className="mb-3 rounded-[5px] border border-[var(--border-default)] px-3 py-3">
         <div className="mb-2 type-meta-small text-[var(--text-primary)]">

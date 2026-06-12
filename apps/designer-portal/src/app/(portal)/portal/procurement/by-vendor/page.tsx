@@ -14,6 +14,7 @@ import {
 } from '@patina/supabase';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { SearchInput } from '@/components/portal/search-input';
+import { procurementEvents } from '@/lib/analytics/procurement-events';
 import { Button, FilterPill } from '@/components/ui/controls';
 import { QboExportModal } from '@/components/portal/procurement/qbo-export-modal';
 import {
@@ -213,6 +214,21 @@ function ByVendorContent() {
       const arr = map.get(it.vendor_id as string) ?? [];
       arr.push(it);
       map.set(it.vendor_id as string, arr);
+    }
+    return map;
+  }, [procurementItems]);
+
+  // Approved-but-decision-blocked counts per vendor — cheap second pass so
+  // the disabled "Order all" tooltip can say WHY nothing is orderable when
+  // the real reason is pending client decisions (not missing approvals).
+  const blockedAwaitingByVendor = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const it of (procurementItems ?? []) as OrderableItem[]) {
+      if (!it.vendor_id) continue;
+      if (it.status !== 'approved' || it.purchase_order_id) continue;
+      if (it.blocked && it.blocked_by_decision_id) {
+        map.set(it.vendor_id as string, (map.get(it.vendor_id as string) ?? 0) + 1);
+      }
     }
     return map;
   }, [procurementItems]);
@@ -426,6 +442,12 @@ function ByVendorContent() {
                     id: it.id,
                     name: it.name,
                     room: it.room?.name,
+                    // ⚠ `?? 0` is a display-only fallback for the rare NULL
+                    // line_total — it can mask missing client pricing in the
+                    // assistant's fallback subtotal (see the
+                    // OrderAssistantFFEItem.line_total_cents doc). The PO
+                    // total itself is unaffected when trade/unit pricing
+                    // exists: COALESCE(trade, unit) × qty wins below.
                     line_total_cents: it.line_total_cents ?? 0,
                     // Dual pricing (00185/00186): the assistant totals
                     // COALESCE(trade, unit) × qty — the vendor TRADE total
@@ -440,6 +462,16 @@ function ByVendorContent() {
                 }),
               );
               setOrderQueue(sessions);
+
+              // W3-T3b — assistant-opened exposure event. One event per
+              // queue launch; project_id only when single-project.
+              procurementEvents.orderAssistantOpened({
+                source: 'by_vendor',
+                item_count: orderable.length,
+                vendor_id: group.vendorId,
+                project_id:
+                  sessions.length === 1 ? sessions[0].project.id : undefined,
+              });
             };
 
             return (
@@ -458,7 +490,9 @@ function ByVendorContent() {
                 }
                 orderAllDisabledReason={
                   showOrderAll && orderable.length === 0
-                    ? 'No approved, unordered items for this vendor.'
+                    ? (blockedAwaitingByVendor.get(group.vendorId) ?? 0) > 0
+                      ? 'No approved, unordered items for this vendor — some items are awaiting client decisions.'
+                      : 'No approved, unordered items for this vendor.'
                     : undefined
                 }
                 // W1.5.5: `onOrderViaPatina` is intentionally not passed.

@@ -525,6 +525,37 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
 
     setPoQueue(orders);
     setSelected(new Set());
+
+    // W3-T3b — assistant-opened exposure event. One event per queue launch;
+    // vendor_id only when the whole queue is a single vendor.
+    procurementEvents.orderAssistantOpened({
+      source: 'ffe_board',
+      item_count: withVendor.length,
+      vendor_id: orders.length === 1 ? orders[0].vendor.id : undefined,
+      project_id: projectId,
+    });
+  };
+
+  // Persistent "Create PO" entry (W3-T3b): always visible in the page action
+  // bar. With a selection it behaves exactly like the bulk-bar action; with
+  // nothing selected it auto-targets every approved, unordered, unblocked
+  // item (the same eligibility the ?focus=approved deep link pre-selects,
+  // minus already-ordered/blocked rows the queue would drop anyway).
+  const handleHeaderCreatePo = () => {
+    const source =
+      selected.size > 0
+        ? items.filter((it) => selected.has(it.id))
+        : items.filter(
+            (it) =>
+              (it.status || 'specified') === 'approved' &&
+              !it.purchase_order_id &&
+              !(it.blocked && it.blocked_by_decision_id),
+          );
+    if (source.length === 0) {
+      toast('No approved, unordered items to order — approve items first.', 'warning');
+      return;
+    }
+    startGeneratePOs(source);
   };
 
   // No post-creation work needed here (W1-T7): the 00184 DB triggers advance
@@ -572,6 +603,12 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
             <div className="type-meta-small text-[var(--text-muted)]">
               {filtered.length} of {items.length} items
             </div>
+            {/* Persistent ordering entry (W3-T3b). Acts on the selection when
+                one exists; otherwise auto-targets every approved, unordered,
+                unblocked item and opens the per-vendor queue. */}
+            <Button variant="primary" size="sm" onClick={handleHeaderCreatePo}>
+              Create PO
+            </Button>
           </>
         }
       />
@@ -771,7 +808,7 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
         />
       )}
 
-      {/* Bulk action bar. Generate POs launches the Order Assistant (P1.1).
+      {/* Bulk action bar. Create PO launches the Order Assistant (P1.1).
           Reassign Vendor is not built yet — disabled with a tooltip (B-07). */}
       <BulkActionBar count={selected.size} onClear={() => setSelected(new Set())}>
         <BulkActionButton onClick={() => bulkAdvance('approved')}>Mark Approved</BulkActionButton>
@@ -779,7 +816,7 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
         <BulkActionButton
           onClick={() => startGeneratePOs(items.filter((it) => selected.has(it.id)))}
         >
-          Generate POs
+          Create PO
         </BulkActionButton>
         <ComingSoonButton>Reassign Vendor</ComingSoonButton>
       </BulkActionBar>

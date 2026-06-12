@@ -57,6 +57,37 @@ describe('error-handler — session expiry detection (PT-D-2-T6-1)', () => {
     });
   });
 
+  describe('handleApiError maps the 00187 invoice-guard CHECK violation (W3-T3b)', () => {
+    it('translates 23514/chk_line_items_ffe_kind into the friendly billed-item message', () => {
+      // Shape Postgres/PostgREST surfaces when deleting a project_ffe_items
+      // row that a live invoice line bills (FK ON DELETE SET NULL violates
+      // the invoice guard).
+      const appError = handleApiError({
+        code: '23514',
+        message:
+          'update or delete on table "project_ffe_items" violates check constraint "chk_line_items_ffe_kind" on table "invoice_line_items"',
+      });
+      expect(appError).toBeInstanceOf(AppError);
+      expect(appError.code).toBe('FFE_ITEM_BILLED');
+      expect(appError.statusCode).toBe(409);
+      expect(appError.message).toBe(
+        'This item is on an invoice — void the invoice before removing it.'
+      );
+    });
+
+    it('leaves other 23514 CHECK violations on the generic path', () => {
+      const appError = handleApiError({
+        code: '23514',
+        message: 'new row violates check constraint "some_other_check"',
+      });
+      expect(appError).toBeInstanceOf(AppError);
+      expect(appError.code).not.toBe('FFE_ITEM_BILLED');
+      expect(appError.message).toBe(
+        'new row violates check constraint "some_other_check"'
+      );
+    });
+  });
+
   describe('isAuthError now recognizes Supabase-shaped expiry', () => {
     it('returns true for a raw Supabase JWT-expired error', () => {
       expect(isAuthError({ code: 'PGRST301', message: 'JWT expired' })).toBe(true);

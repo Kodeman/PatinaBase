@@ -28,11 +28,13 @@
  * side surfaces.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import {
   useCreatePurchaseOrder,
+  useFfeInvoiceCoverage,
+  useOrganizations,
   type CreatePurchaseOrderInput,
   type PaymentPattern,
   type PurchaseOrder,
@@ -57,6 +59,7 @@ import {
   type OrderAssistantVendor,
 } from './types';
 import { StepReview, formatItemDetailsForClipboard } from './step-review';
+import { StepCoverage, uncoveredItems } from './step-coverage';
 import {
   StepDetails,
   depositDefaultForPattern,
@@ -64,6 +67,7 @@ import {
   validateDetails,
   type MilestoneRow,
 } from './step-details';
+import { generateSidemark } from './sidemark';
 
 // Barrel: both call sites + OrderViaPatina import from
 // '@/components/portal/procurement/order-assistant' — keep the public
@@ -128,6 +132,84 @@ export function OrderAssistant(props: OrderAssistantProps) {
   const goToStep = (next: OrderAssistantStep) => {
     setStep(next);
     setSubmitError(null);
+    procurementEvents.orderAssistantStep({ step: next });
+  };
+
+  // Client-payment soft gate (00187) -----------------------------------------
+  // Fetch while the panel is open so the coverage step renders instantly.
+  // Mock/slug projects (and any RPC failure) land in isError — the step shows
+  // a neutral "couldn't verify" note and NEVER blocks.
+  const coverageQuery = useFfeInvoiceCoverage(project.id, { enabled: open });
+  const uncovered = useMemo(
+    () =>
+      coverageQuery.isError || coverageQuery.isLoading
+        ? []
+        : uncoveredItems(ffeItems, coverageQuery.data),
+    [ffeItems, coverageQuery.data, coverageQuery.isError, coverageQuery.isLoading]
+  );
+  // Fronted vendor cost for analytics — the TRADE total of uncovered items
+  // (what ordering now pulls from studio funds ahead of client payment).
+  const uncoveredCents = useMemo(
+    () => uncovered.reduce((sum, u) => sum + itemTradeCents(u.item), 0),
+    [uncovered]
+  );
+  // True once the designer proceeded past the gate with uncovered items —
+  // stamped onto poCreated as `coverage_overridden`.
+  const [coverageOverridden, setCoverageOverridden] = useState(false);
+  // coverageGateShown fires once per (vendor, project) session.
+  const gateShownRef = useRef(false);
+
+  useEffect(() => {
+    if (step !== 'coverage') return;
+    if (coverageQuery.isLoading || coverageQuery.isError) return;
+    if (uncovered.length === 0 || gateShownRef.current) return;
+    gateShownRef.current = true;
+    procurementEvents.coverageGateShown({
+      uncovered_count: uncovered.length,
+      uncovered_cents: uncoveredCents,
+      total_count: ffeItems.length,
+    });
+  }, [
+    step,
+    coverageQuery.isLoading,
+    coverageQuery.isError,
+    uncovered,
+    uncoveredCents,
+    ffeItems.length,
+  ]);
+
+  // Sidemark (00186 wire, W3-T3b UI) -----------------------------------------
+  // Prefill {STUDIO≤3}-{CLIENT-or-PROJECT≤8}-{ROOM≤3} from what the assistant
+  // can see: the studio/organization name (useOrganizations — cached, already
+  // used across the portal), the project name (no client name is in the
+  // assistant's props), and the room when every item shares one.
+  const { data: orgs } = useOrganizations();
+  const studioName = (orgs?.[0] as { name?: string } | undefined)?.name;
+  const sharedRoomName = useMemo(() => {
+    const rooms = new Set(ffeItems.map((i) => i.room).filter(Boolean));
+    return rooms.size === 1 ? (Array.from(rooms)[0] as string) : undefined;
+  }, [ffeItems]);
+  const generatedSidemark = useMemo(
+    () =>
+      generateSidemark({
+        studioName,
+        projectName: project.name,
+        roomName: sharedRoomName,
+      }),
+    [studioName, project.name, sharedRoomName]
+  );
+  const [sidemark, setSidemark] = useState('');
+  const [sidemarkEdited, setSidemarkEdited] = useState(false);
+  // Keep the prefill live (the org name loads async) until the designer
+  // touches the field; the context-reset effect clears the edited flag.
+  useEffect(() => {
+    if (!open || sidemarkEdited) return;
+    setSidemark(generatedSidemark);
+  }, [open, sidemarkEdited, generatedSidemark]);
+
+  const handleSidemarkChange = (value: string) => {
+    setSidemarkEdited(true);
+    setSidemark(value);
   };
 
   // Details fields ----------------------------------------------------------
@@ -179,15 +261,18 @@ export function OrderAssistant(props: OrderAssistantProps) {
         paymentPattern: 'net_30',
         isPatinaCatalog: true,
         ffeItemIds: submittableFfeItemIds,
-        // The sidemark input ships with the v2 Order Assistant UI — the
-        // wire is ready, the field just isn't rendered yet.
-        sidemark: undefined,
+        // Catalog routing skips the details step, so the designer never sees
+        // the sidemark input — ship the generated default (never an edited
+        // value; sidemarkEdited stays false on this path).
+        sidemark: sidemark.trim() || undefined,
       });
       procurementEvents.poCreated({
         payment_pattern: 'net_30',
         // Server-computed TRADE total (00186) — authoritative.
         total_cents: po.total_cents,
         is_patina_catalog: true,
+        coverage_overridden: coverageOverridden,
+        sidemark_edited: sidemarkEdited,
         vendor_id: vendor.id,
         project_id: project.id,
       });
@@ -218,6 +303,13 @@ export function OrderAssistant(props: OrderAssistantProps) {
     setMilestones([freshMilestone(), freshMilestone()]);
     setSubmitError(null);
     setCopyState('idle');
+    // Soft-gate + sidemark session state (W3-T3b). The sidemark VALUE is not
+    // cleared here — the prefill effect above owns it and re-generates as
+    // soon as the edited flag drops (clearing it here would clobber the
+    // same-pass prefill when the queue advances to the next project).
+    setCoverageOverridden(false);
+    gateShownRef.current = false;
+    setSidemarkEdited(false);
   }, [open, vendor.id, vendor.default_payment_terms, project.id]);
 
   // When the user switches pattern, pre-fill the deposit amount input from
@@ -281,6 +373,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
       depositAmountInput,
       milestones,
       totalCents,
+      sidemark,
     });
     if (validationError) {
       setSubmitError(validationError);
@@ -295,9 +388,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
       paymentPattern,
       isPatinaCatalog: false,
       ffeItemIds: submittableFfeItemIds,
-      // The sidemark input ships with the v2 Order Assistant UI — the wire
-      // is ready, the field just isn't rendered yet.
-      sidemark: undefined,
+      sidemark: sidemark.trim() || undefined,
     };
 
     if (paymentPattern === 'fifty_fifty' || paymentPattern === 'thirty_seventy') {
@@ -325,6 +416,8 @@ export function OrderAssistant(props: OrderAssistantProps) {
         // Server-computed TRADE total (00186) — authoritative.
         total_cents: po.total_cents,
         is_patina_catalog: false,
+        coverage_overridden: coverageOverridden,
+        sidemark_edited: sidemarkEdited,
         vendor_id: vendor.id,
         project_id: project.id,
       });
@@ -359,7 +452,26 @@ export function OrderAssistant(props: OrderAssistantProps) {
 
   // ─── Footer wiring ──────────────────────────────────────────────────────
 
+  // The gate is "uncovered" only when we have a definitive answer — loading
+  // and infra errors never count as uncovered (and never block).
+  const gateIsUncovered =
+    step === 'coverage' &&
+    !coverageQuery.isLoading &&
+    !coverageQuery.isError &&
+    uncovered.length > 0;
+
   const handleContinue = () => {
+    // Leaving the coverage step with uncovered items is an explicit override
+    // (whether continuing to details or one-click submitting a catalog order).
+    if (gateIsUncovered) {
+      setCoverageOverridden(true);
+      procurementEvents.coverageOverridden({
+        uncovered_count: uncovered.length,
+        uncovered_cents: uncoveredCents,
+        vendor_id: vendor.id,
+        project_id: project.id,
+      });
+    }
     const next = nextStep(step, machineOpts);
     if (next) {
       goToStep(next);
@@ -380,13 +492,18 @@ export function OrderAssistant(props: OrderAssistantProps) {
   const sequence = stepSequence(machineOpts);
   const stepIndex = sequence.indexOf(step);
 
-  const primaryLabel = !isSubmitStep
-    ? 'Continue'
-    : hasBlockedItems
+  const primaryLabel =
+    isSubmitStep && hasBlockedItems
       ? 'Blocked — decision pending'
-      : isCatalog
-        ? `One-click order via Patina · ${formatDollars(totalCents)}`
-        : `Confirm ${ffeItems.length} ordered`;
+      : isSubmitStep && isCatalog
+        ? gateIsUncovered
+          ? 'Proceed anyway — order via Patina'
+          : `One-click order via Patina · ${formatDollars(totalCents)}`
+        : isSubmitStep
+          ? `Confirm ${ffeItems.length} ordered`
+          : gateIsUncovered
+            ? 'Proceed anyway'
+            : 'Continue';
 
   const primaryDisabled =
     createPO.isPending || (isSubmitStep && hasBlockedItems);
@@ -465,10 +582,24 @@ export function OrderAssistant(props: OrderAssistantProps) {
                 />
               )}
 
+              {step === 'coverage' && (
+                <StepCoverage
+                  projectId={project.id}
+                  ffeItems={ffeItems}
+                  coverage={coverageQuery.data}
+                  isLoading={coverageQuery.isLoading}
+                  isError={coverageQuery.isError}
+                  uncovered={uncovered}
+                  onCreateInvoice={() => onOpenChange(false)}
+                />
+              )}
+
               {step === 'details' && (
                 <StepDetails
                   vendor={vendor}
                   totalCents={totalCents}
+                  sidemark={sidemark}
+                  onSidemarkChange={handleSidemarkChange}
                   vendorPoNumber={vendorPoNumber}
                   onVendorPoNumberChange={setVendorPoNumber}
                   confirmedEta={confirmedEta}
