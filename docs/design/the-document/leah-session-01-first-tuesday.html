@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The First Tuesday — Leah Session 01 · The Document Pilot</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--paper:#FCFAF6;--ink:rgba(44,41,38,0.18);--fd:'Playfair Display',Georgia,serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace}
+body{font-family:var(--fb);background:var(--paper);color:var(--mo);line-height:1.65;-webkit-font-smoothing:antialiased}
+
+/* NO SHADOWS. Paper document. */
+
+.cover{background:var(--ch);color:var(--ow);padding:clamp(2.5rem,6vw,4.5rem) clamp(1.5rem,6vw,4rem)}
+.cover-in{max-width:880px;margin:0 auto}
+.strata{display:flex;flex-direction:column;gap:4px;margin-bottom:1.5rem}
+.strata div{height:2px;border-radius:1px}
+.strata div:nth-child(1){width:48px;background:var(--cl)}
+.strata div:nth-child(2){width:34px;background:var(--cl);opacity:0.55}
+.strata div:nth-child(3){width:22px;background:var(--cl);opacity:0.28}
+.cover-kicker{font-family:var(--fm);font-size:0.58rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--cl);font-weight:500;margin-bottom:0.9rem}
+.cover h1{font-family:var(--fd);font-weight:400;font-size:clamp(2rem,5vw,3.1rem);line-height:1.12;letter-spacing:-0.01em;color:var(--ow)}
+.cover h1 em{font-style:italic;color:var(--cl)}
+.cover-sub{font-size:0.92rem;color:rgba(250,247,242,0.6);max-width:600px;margin-top:1.1rem;font-weight:300}
+.cover-meta{display:flex;gap:2.5rem;flex-wrap:wrap;margin-top:2rem;padding-top:1.5rem;border-top:1px solid rgba(250,247,242,0.12)}
+.cm-item .cm-l{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase;color:rgba(250,247,242,0.4);margin-bottom:0.2rem}
+.cm-item .cm-v{font-family:var(--fd);font-size:0.95rem;color:var(--ow)}
+.cm-item .cm-v em{font-style:italic;color:var(--cl)}
+
+.wrap{max-width:880px;margin:0 auto;padding:clamp(2rem,5vw,3.5rem) clamp(1.5rem,6vw,2rem) 5rem}
+
+.sec{margin-top:3rem}
+.sec-rule{display:flex;flex-direction:column;gap:3px;margin-bottom:0.9rem}
+.sec-rule div{height:1.5px;border-radius:1px}
+.sec-rule div:nth-child(1){width:34px;background:var(--cl)}
+.sec-rule div:nth-child(2){width:24px;background:var(--cl);opacity:0.5}
+.sec-rule div:nth-child(3){width:15px;background:var(--cl);opacity:0.25}
+.sec-kicker{font-family:var(--fm);font-size:0.52rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--ao);font-weight:600;margin-bottom:0.35rem}
+.sec h2{font-family:var(--fd);font-weight:500;font-size:1.55rem;color:var(--ch);letter-spacing:-0.01em;margin-bottom:0.7rem}
+.sec h2 em{font-style:italic;color:var(--cl)}
+.sec p{font-size:0.85rem;margin-bottom:0.8rem;max-width:64ch}
+.sec p strong{color:var(--ch);font-weight:600}
+
+.rules{display:grid;gap:0.6rem;margin-top:1rem}
+.rule{display:flex;gap:0.9rem;align-items:flex-start;padding:0.9rem 1.05rem;background:#fff;border:1px solid var(--pe);border-radius:6px}
+.rule-num{font-family:var(--fd);font-style:italic;font-size:1.3rem;color:var(--cl);line-height:1;flex-shrink:0;width:1.4rem;text-align:center}
+.rule-t{font-family:var(--fb);font-weight:600;font-size:0.82rem;color:var(--ch);margin-bottom:0.15rem}
+.rule-d{font-size:0.76rem;color:var(--mo);line-height:1.55}
+
+.check{display:flex;gap:0.7rem;align-items:flex-start;padding:0.55rem 0.2rem;border-bottom:1px solid var(--pe);font-size:0.8rem}
+.check input{margin-top:0.3rem;accent-color:var(--cl);width:14px;height:14px;flex-shrink:0}
+.check strong{color:var(--ch);font-weight:600}
+.check .why{display:block;font-size:0.7rem;color:var(--ao);margin-top:0.1rem}
+
+.phase{margin-top:1.4rem;border:1px solid var(--pe);border-radius:7px;overflow:hidden;background:#fff}
+.phase-head{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;padding:0.85rem 1.15rem;background:rgba(229,226,221,0.35);border-bottom:1px solid var(--pe);flex-wrap:wrap}
+.phase-name{font-family:var(--fd);font-weight:500;font-size:1.05rem;color:var(--ch)}
+.phase-time{font-family:var(--fm);font-size:0.55rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--cl);font-weight:600}
+.phase-body{padding:1rem 1.15rem 1.15rem}
+.say{padding:0.75rem 0.95rem;background:rgba(196,165,123,0.06);border-left:3px solid var(--cl);border-radius:0 5px 5px 0;font-family:var(--fd);font-style:italic;font-size:0.92rem;color:var(--ch);line-height:1.6;margin:0.6rem 0}
+.say-l{font-family:var(--fm);font-style:normal;font-size:0.46rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--ao);display:block;margin-bottom:0.3rem;font-weight:600}
+.watch{margin:0.55rem 0 0;padding-left:0}
+.watch li{list-style:none;display:flex;gap:0.55rem;font-size:0.76rem;padding:0.28rem 0;color:var(--mo);line-height:1.5}
+.watch li::before{content:'—';color:var(--cl);flex-shrink:0}
+.watch li strong{color:var(--ch);font-weight:600}
+.phase-note{font-size:0.72rem;color:var(--ao);font-style:italic;margin-top:0.6rem;padding-top:0.6rem;border-top:1px dashed var(--pe)}
+
+.tag{display:inline-block;padding:2px 8px;border:1.5px solid;border-radius:3px;font-family:var(--fm);font-size:0.44rem;letter-spacing:0.1em;text-transform:uppercase;font-weight:600;transform:rotate(-1.5deg);white-space:nowrap;margin-right:0.4rem}
+.tag.observe{color:var(--db);border-color:var(--db)}
+.tag.ask{color:#b89a2e;border-color:#cfae34}
+.tag.never{color:#c4836f;border-color:var(--te)}
+.tag.green{color:var(--sa);border-color:var(--sa)}
+
+.qa{margin-top:0.9rem}
+.q-item{padding:0.8rem 0;border-bottom:1px solid var(--pe)}
+.q-text{font-family:var(--fd);font-size:0.98rem;color:var(--ch);font-style:italic;line-height:1.5}
+.q-cal{font-family:var(--fm);font-size:0.52rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao);margin-top:0.3rem}
+.q-cal b{color:var(--cl);font-weight:600}
+
+.seam{display:grid;grid-template-columns:1fr 1.4fr;gap:1rem;padding:0.7rem 0;border-bottom:1px solid var(--pe);font-size:0.78rem;align-items:start}
+@media(max-width:640px){.seam{grid-template-columns:1fr}}
+.seam-trigger{color:var(--ch);font-weight:600}
+.seam-say{font-family:var(--fd);font-style:italic;color:var(--mo)}
+.seam-dont{font-size:0.66rem;color:#c4836f;display:block;margin-top:0.2rem;font-family:var(--fb);font-style:normal}
+
+.signals{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:1rem}
+@media(max-width:760px){.signals{grid-template-columns:1fr}}
+.signal{padding:1rem 1.05rem;background:#fff;border:1px solid var(--pe);border-radius:7px}
+.signal.green{border-top:3px solid var(--sa)}
+.signal.yellow{border-top:3px solid var(--gh)}
+.signal.red{border-top:3px solid var(--te)}
+.signal-t{font-family:var(--fm);font-size:0.55rem;letter-spacing:0.12em;text-transform:uppercase;font-weight:600;margin-bottom:0.5rem}
+.signal.green .signal-t{color:#7a8a72}
+.signal.yellow .signal-t{color:#b89a2e}
+.signal.red .signal-t{color:#c4836f}
+.signal li{list-style:none;font-size:0.74rem;padding:0.22rem 0;line-height:1.5;display:flex;gap:0.5rem}
+.signal li::before{content:'·';color:var(--cl)}
+
+.sheet-grid{border:1px solid var(--pe);border-radius:7px;overflow:hidden;margin-top:1rem;background:#fff}
+.sheet-row{display:grid;grid-template-columns:1.1fr 2fr;border-bottom:1px solid var(--pe)}
+.sheet-row:last-child{border-bottom:none}
+.sheet-row .k{padding:0.6rem 0.9rem;font-family:var(--fm);font-size:0.55rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--ao);font-weight:600;background:rgba(229,226,221,0.3);border-right:1px solid var(--pe);display:flex;align-items:center}
+.sheet-row .v{padding:0.6rem 0.9rem;font-size:0.76rem;color:var(--mo)}
+.fill{display:inline-block;min-width:120px;border-bottom:1px dashed var(--ao);height:1em}
+
+pre.md{background:var(--ch);color:rgba(250,247,242,0.85);font-family:var(--fm);font-size:0.66rem;line-height:1.7;padding:1.1rem 1.25rem;border-radius:7px;overflow-x:auto;margin-top:0.8rem;white-space:pre-wrap}
+pre.md .c{color:var(--cl)}
+
+.callout{margin-top:1rem;padding:1rem 1.15rem;background:rgba(168,181,160,0.08);border-left:3px solid var(--sa);border-radius:0 6px 6px 0;font-size:0.8rem}
+.callout strong{color:var(--ch)}
+.callout.amber{background:rgba(232,197,71,0.07);border-left-color:var(--gh)}
+
+footer{background:var(--ch);padding:2rem;margin-top:3rem}
+footer .f-in{max-width:880px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap}
+footer .f-mark{display:flex;flex-direction:column;gap:3px}
+footer .f-mark div{height:1.5px;border-radius:1px}
+footer .f-mark div:nth-child(1){width:28px;background:var(--cl)}
+footer .f-mark div:nth-child(2){width:20px;background:var(--cl);opacity:0.5}
+footer .f-mark div:nth-child(3){width:13px;background:var(--cl);opacity:0.25}
+footer p{font-family:var(--fm);font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:rgba(250,247,242,0.4)}
+
+@media print{
+  .cover{padding:2rem}
+  body{font-size:11px}
+  .phase,.signal,.rule{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="cover-in">
+    <div class="strata"><div></div><div></div><div></div></div>
+    <div class="cover-kicker">The Document Pilot · Session Script 01 · per ruling R9</div>
+    <h1>The First Tuesday<br><em>Leah takes the chair.</em></h1>
+    <p class="cover-sub">A working script for the first structured session — run after Slice 3 is blessed, against Middlewest's real data, on a real workday morning. This is not a demo and not QA. It is watching a working designer work, and it happens exactly once.</p>
+    <div class="cover-meta">
+      <div class="cm-item"><div class="cm-l">Gate</div><div class="cm-v">Slice 3 <em>blessed</em></div></div>
+      <div class="cm-item"><div class="cm-l">Duration</div><div class="cm-v">~60 minutes</div></div>
+      <div class="cm-item"><div class="cm-l">Setting</div><div class="cm-v">Her studio · her machine · her data</div></div>
+      <div class="cm-item"><div class="cm-l">Out of scope</div><div class="cm-v">Timer & D11 <em>(Session 02)</em></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- ============ FRAMING ============ -->
+  <div class="sec">
+    <div class="sec-rule"><div></div><div></div><div></div></div>
+    <div class="sec-kicker">Why this session is different</div>
+    <h2>She is the authority, <em>not the subject.</em></h2>
+    <p>Leah is the design authority of record — her workflow trained this system and her judgment is the validation gate (D7 step 2). This session is how she takes that chair. But authority needs clean evidence, and the cleanest evidence she can give is <strong>what her hands do before anyone explains anything</strong>. For the first thirty minutes, her behavior is the data and her words are commentary. After that, the chair is hers and the questions begin.</p>
+    <p>One more thing, said plainly because it's true: <strong>Leah will be kind.</strong> She's your partner and she wants this to work. Kindness is not data. The script is built to route around it — silence first, behavior over opinion, and one debrief question designed to cut through courtesy entirely.</p>
+  </div>
+
+  <!-- ============ CARDINAL RULES ============ -->
+  <div class="sec">
+    <div class="sec-rule"><div></div><div></div><div></div></div>
+    <div class="sec-kicker">The discipline</div>
+    <h2>Five rules for the <em>observer.</em></h2>
+    <div class="rules">
+      <div class="rule"><div class="rule-num">1</div><div><div class="rule-t">Observe before explain.</div><div class="rule-d">For the first thirty minutes, silence is the method. Every hesitation you rescue with a pointing finger is a finding you destroyed. If she's stuck for sixty seconds, that's not a failure of the session — that <em>is</em> the session.</div></div></div>
+      <div class="rule"><div class="rule-num">2</div><div><div class="rule-t">Real work only. Nothing performed.</div><div class="rule-d">The session rides her actual Tuesday. She resolves real decisions, replies to real clients — only the things she'd do today anyway. If her desk happens to be quiet, the session is still valid as a Desk-truth and document-read session. Do not seed fake data into the studio's production records, and do not invent tasks.</div></div></div>
+      <div class="rule"><div class="rule-num">3</div><div><div class="rule-t">Behavior over opinion.</div><div class="rule-d">Where she looks, what she clicks unaided, when she reaches for her phone, when she flees to the old portal — these outrank anything she says, especially because what she says will be generous.</div></div></div>
+      <div class="rule"><div class="rule-num">4</div><div><div class="rule-t">Never defend.</div><div class="rule-d">Every "this is weird" is a gift. The only permitted reply is <em>"say more"</em> — never "well, the reason is…". You can explain the design next week. You can never re-run her first read.</div></div></div>
+      <div class="rule"><div class="rule-num">5</div><div><div class="rule-t">Do not prime the timer.</div><div class="rule-d">D11 (auto-start) gets its gut-check in Session 02 with Slice 5 live. If she asks where time tracking went, use the scripted seam answer and move on. No previews, no "wait till you see" — her first reaction to a running clock must be unrehearsed.</div></div></div>
+    </div>
+  </div>
+
+  <!-- ============ PRE-FLIGHT ============ -->
+  <div class="sec">
+    <div class="sec-rule"><div></div><div></div><div></div></div>
+    <div class="sec-kicker">The night before</div>
+    <h2>Pre-flight <em>checklist.</em></h2>
+    <div>
+      <label class="check"><input type="checkbox"><span><strong>Slice 3 acceptance is green</strong> — the full margin loop (decision resolve → stamp + margin + Desk in one act; message reply; invoice review; Pulse) works against real data. <span class="why">If any acceptance box is honestly unchecked, the session moves. A broken loop teaches her the document lies, and that lesson sticks.</span></span></label>
+      <label class="check"><input type="checkbox"><span><strong>Flag on for Leah's account only</strong> (PostHog `the-document-pilot`, per I1). Verify it resolves on her actual machine, not just yours.</span></label>
+      <label class="check"><input type="checkbox"><span><strong>Dry-run HER desk yourself</strong> — render integrity only. Fix crashes, placeholder bugs (no USER-tab-class errors), broken images. <strong>Do not correct derivations.</strong> If the Desk surfaces the wrong folders, that's finding #1, not a bug to hide. <span class="why">Write down everything you see that's wrong-but-honest, so tomorrow you can tell discoveries from things you already knew.</span></span></label>
+      <label class="check"><input type="checkbox"><span><strong>R8 seams confirmed in place</strong> — margin placeholder line where empty, no "unfold ↓" hint on inert bars, spine sub-labels claiming only real dates.</span></label>
+      <label class="check"><input type="checkbox"><span><strong>Decide the live-action line.</strong> Nudges and replies she'd send today: live. Invoices: review in full, send only if she states she'd have sent it today regardless. <span class="why">Real clients receive real messages during this session. The rule that keeps it safe is Rule 2 — nothing performed.</span></span></label>
+      <label class="check"><input type="checkbox"><span><strong>Old portal NOT pre-opened.</strong> No tab waiting. If she wants it, she finds her way — and that act, its timing, and its trigger go in the notes. <span class="why">The path back is one click by design (D7). Whether she takes it is one of the session's most honest measurements.</span></span></label>
+      <label class="check"><input type="checkbox"><span><strong>Her phone stays within reach; yours goes away.</strong> If she instinctively reaches for mobile, that's the D3 pattern's importance measured live — note it, and gently keep her on desktop (the interim mobile layout isn't what we're testing).</span></label>
+      <label class="check"><input type="checkbox"><span><strong>Capture kit ready</strong> — this script printed, the observation sheet (below), timestamps from a visible clock. Screen recording only if she consents at the top.</span></label>
+      <label class="check"><input type="checkbox"><span><strong>Session metadata filled in</strong> — date <span class="fill"></span> · build/commit <span class="fill"></span> · her desk's folder count at start <span class="fill"></span></span></label>
+    </div>
+  </div>
+
+  <!-- ============ THE SCRIPT ============ -->
+  <div class="sec">
+    <div class="sec-rule"><div></div><div></div><div></div></div>
+    <div class="sec-kicker">The session</div>
+    <h2>Six phases, <em>sixty minutes.</em></h2>
+
+    <div class="phase">
+      <div class="phase-head"><span class="phase-name">0 · The open</span><span class="phase-time">0:00 – 0:02</span></div>
+      <div class="phase-body">
+        <p style="font-size:0.78rem">Sit beside her, not behind. Say the lines below and then stop talking. Do not tour the screen. Do not name a single feature.</p>
+        <div class="say"><span class="say-l">Say exactly this</span>"This is a different view of your same work — same clients, same projects, nothing copied or moved. Do your Tuesday in it. Think out loud when you can. I'm going to be quiet and take notes; if you get stuck, stay stuck for a minute before I say anything — the stuck part is what I need to see. Nothing you do here is fake: if you send something, it really sends, so only do what today actually needs."</div>
+        <ul class="watch">
+          <li><span class="tag observe">Observe</span> Her first three seconds — where do the eyes land? Date, folders, drawer, or hunting for nav chrome?</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-head"><span class="phase-name">1 · The cold read of the Desk</span><span class="phase-time">0:02 – 0:10 · silent</span></div>
+      <div class="phase-body">
+        <div class="say"><span class="say-l">One prompt, then silence</span>"Before you touch anything — talk me through what today needs, just from this screen."</div>
+        <ul class="watch">
+          <li><span class="tag observe">Observe</span> <strong>Time-to-true-read:</strong> how long until she narrates her day accurately? Note the timestamp — this number is the Desk's whole thesis.</li>
+          <li><span class="tag observe">Observe</span> Does she <strong>trust the need lines</strong>, or does she say "let me check" — distrust means the Desk hasn't earned its claim yet, and that's a finding, not a flaw in her.</li>
+          <li><span class="tag observe">Observe</span> Does she question why something <strong>is</strong> there ("why is Olsen up?") or why something <strong>isn't</strong> ("where's Chen?")? Both go verbatim into the notes — they are I6's calibration data arriving for free.</li>
+          <li><span class="tag observe">Observe</span> Does she read "In motion" as reassurance or as a second to-do list? If she tries to act on a motion chip, note it.</li>
+          <li><span class="tag never">Never</span> Don't confirm or correct her read. "Mm" is a complete sentence.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-head"><span class="phase-name">2 · First pick-up</span><span class="phase-time">0:10 – 0:20 · silent</span></div>
+      <div class="phase-body">
+        <p style="font-size:0.78rem">She chooses which folder. Her choice is itself data — does she go where the Desk says the heat is?</p>
+        <ul class="watch">
+          <li><span class="tag observe">Observe</span> The <strong>full-bleed moment</strong> (D12): any reaction to the paper taking the whole screen — lean in, comment, nothing?</li>
+          <li><span class="tag observe">Observe</span> Orientation order: letterhead → margin → spine? Or hunting for tabs that don't exist?</li>
+          <li><span class="tag observe">Observe</span> Does the <strong>margin read as work or as decoration</strong>? The tell: does she move her cursor toward a margin item within the first minute, unprompted?</li>
+          <li><span class="tag observe">Observe</span> <strong>Anchor discovery:</strong> does she notice the hover highlight tying margin items to their lines? Unaided discovery = the anchoring language works.</li>
+          <li><span class="tag observe">Observe</span> Does she find <strong>Put down / Esc</strong> on her own when she wants out? Time it.</li>
+          <li><span class="tag observe">Observe</span> Settled sections: does she unfold the Proposal? Does she try to unfold an inert bar (R8 says no hint shows — if she tries anyway, the bars are over-promising; note it).</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-head"><span class="phase-name">3 · The real work</span><span class="phase-time">0:20 – 0:40</span></div>
+      <div class="phase-body">
+        <p style="font-size:0.78rem">Let her run. This is her Tuesday now, not your session. Resolve, reply, review — whatever the margin actually holds. Your entire vocabulary in this phase:</p>
+        <div class="say"><span class="say-l">Permitted probes only</span>"What are you thinking?" · "What did you expect to happen there?" · "Say more."</div>
+        <ul class="watch">
+          <li><span class="tag observe">Observe</span> <strong>Unaided margin acts:</strong> count every action she completes without coaching. This count is Slice 3's grade.</li>
+          <li><span class="tag observe">Observe</span> When she resolves a decision, does she <strong>notice the one-act ripple</strong> — stamp, margin, Desk updating together? If she comments on it, capture the words exactly. That sentence belongs in the Founding Circle pitch someday.</li>
+          <li><span class="tag observe">Observe</span> <strong>Old-portal flights:</strong> timestamp, trigger, and what she went to do. Each flight is a gap with a name.</li>
+          <li><span class="tag observe">Observe</span> Anything she reaches for that has <strong>no home yet</strong> (timer, Orders detail, library) — note the reach and use the seam answers below. Reaches are the roadmap voting.</li>
+          <li><span class="tag never">Never</span> If something errors, fix nothing live. "Noted — keep going as if it worked" and move on.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-head"><span class="phase-name">4 · The guided sweep</span><span class="phase-time">0:40 – 0:47</span></div>
+      <div class="phase-body">
+        <p style="font-size:0.78rem">Now — and only now — you may point. Sweep anything she didn't touch on her own:</p>
+        <div class="say"><span class="say-l">Say</span>"Three things you haven't tried. Open the drawer and tell me what you think those are. Hit Escape from inside a document. And hit ⌘K and look for anything — a client, an order, whatever comes to mind."</div>
+        <ul class="watch">
+          <li><span class="tag observe">Observe</span> Does she predict what the ledger books are <strong>before</strong> opening one? Her guesses test the names (Library, Orders, Accounts, People, Hours).</li>
+          <li><span class="tag observe">Observe</span> Esc-as-put-down: does it match her instinct, or does she expect Esc to close something smaller first?</li>
+          <li><span class="tag observe">Observe</span> What does she search for in ⌘K? Her first query reveals her mental model of what this system contains.</li>
+        </ul>
+        <p class="phase-note">If she already found all of this in phases 2–3, skip the sweep and bank the seven minutes for the debrief. Unaided discovery of everything is itself a headline finding.</p>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-head"><span class="phase-name">5 · The debrief</span><span class="phase-time">0:47 – 1:00</span></div>
+      <div class="phase-body">
+        <p style="font-size:0.78rem">Close the laptop lid halfway — physically signal that the watching part is over and the chair is hers. Then run the question list below, in order, capturing answers verbatim where you can.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DEBRIEF QUESTIONS ============ -->
+  <div class="sec">
+    <div class="sec-rule"><div></div><div></div><div></div></div>
+    <div class="sec-kicker">Phase 5 · ask in this order</div>
+    <h2>The debrief — <em>nine questions.</em></h2>
+    <p>Each question is tagged with what it calibrates. Questions 1–2 are the most important nine words of the session; do not paraphrase them.</p>
+    <div class="qa">
+      <div class="q-item"><div class="q-text">1 · "Was anything on the desk that didn't need you today?"</div><div class="q-cal"><span class="tag ask">Ask</span> Calibrates <b>Desk precision</b> — false positives in the needs-your-hand derivation + I6 thresholds</div></div>
+      <div class="q-item"><div class="q-text">2 · "Was anything missing that did need you?"</div><div class="q-cal"><span class="tag ask">Ask</span> Calibrates <b>Desk recall</b> — the derivation's blind spots; the more dangerous failure of the two</div></div>
+      <div class="q-item"><div class="q-text">3 · "The [client] folder said '[read the need line aloud]' — is that how you'd say it to yourself?"</div><div class="q-cal"><span class="tag ask">Ask</span> Calibrates <b>need-line voice</b> — studio language vs software language; collect her rephrasings word for word</div></div>
+      <div class="q-item"><div class="q-text">4 · "We call a proposal 'hesitating' after three days unopened, or five days opened-but-unsigned. What are your real numbers?"</div><div class="q-cal"><span class="tag ask">Ask</span> Calibrates <b>I6 constants</b> directly — also ask her lead-response urgency window (currently 48h)</div></div>
+      <div class="q-item"><div class="q-text">5 · "When you opened [the document she picked first], where did your eyes want to go, and what wasn't there?"</div><div class="q-cal"><span class="tag ask">Ask</span> Calibrates <b>letterhead vitals + full-bleed layout</b> (D12) — what belongs above the fold of a job folder</div></div>
+      <div class="q-item"><div class="q-text">6 · "Did the margin feel like your work, or like notifications?"</div><div class="q-cal"><span class="tag ask">Ask</span> Calibrates <b>the concept's heart</b> — if the answer is "notifications," probe which item kind broke the spell</div></div>
+      <div class="q-item"><div class="q-text">7 · "Is there anything in your week that happened on a project and has no place in that margin?"</div><div class="q-cal"><span class="tag ask">Ask</span> Calibrates <b>margin-kind completeness</b> — candidates become new kinds or unfold content, logged as O items</div></div>
+      <div class="q-item"><div class="q-text">8 · "What did you reach for from the old portal and not find — and what would break in your week if this replaced it Monday?"</div><div class="q-cal"><span class="tag ask">Ask</span> Calibrates <b>flip readiness + R5 destinies</b> — every named gap maps to a slice, a destiny, or a new ruling</div></div>
+      <div class="q-item"><div class="q-text">9 · "Last one. If Havenly shipped this exact screen tomorrow, what would you mock?"</div><div class="q-cal"><span class="tag ask">Ask</span> The <b>courtesy-cutter</b> — inviting her to critique a competitor's version of it licenses the honesty that partnership suppresses. Whatever she mocks, we own.</div></div>
+    </div>
+    <div class="callout amber"><strong>Off-limits in this session:</strong> the timer and anything that primes D11 (Session 02) · billable defaults and job-costing (§14.5, travels with the time session) · the mobile pattern beyond noting her phone-reach instinct (D3 gets its own design pass first).</div>
+  </div>
+
+  <!-- ============ SEAM ANSWERS ============ -->
+  <div class="sec">
+    <div class="sec-rule"><div></div><div></div><div></div></div>
+    <div class="sec-kicker">Known seams · scripted replies</div>
+    <h2>When she hits an edge, <em>say this and stop.</em></h2>
+    <p>These exist so you don't improvise into over-explaining or over-promising. One sentence each, then back to silence.</p>
+    <div>
+      <div class="seam"><div class="seam-trigger">"Where's my timer?" / any time-tracking reach</div><div class="seam-say">"Two slices out — it'll live right there in the spine."<span class="seam-dont">Don't describe how it starts. D11 stays unprimed.</span></div></div>
+      <div class="seam"><div class="seam-trigger">Taps Library / Orders / Accounts / People and gets a stub</div><div class="seam-say">"That book gets bound in the next slice — tell me what you expected inside it."<span class="seam-dont">The expectation question turns a dead-end into ledger requirements.</span></div></div>
+      <div class="seam"><div class="seam-trigger">Comments on a quiet document's placeholder margin</div><div class="seam-say">"That's the margin waiting for that project to have a week."<span class="seam-dont">Don't apologize for it. R8 made it honest scaffolding on purpose.</span></div></div>
+      <div class="seam"><div class="seam-trigger">Asks why a damaged piece shows no DAMAGED stamp</div><div class="seam-say">"Claims sit in the PO detail until we can pin them to the exact item — stamps only say true things."<span class="seam-dont">This is R7 working as designed; if she pushes back, that's debrief material, not a live debate.</span></div></div>
+      <div class="seam"><div class="seam-trigger">Tries to open two documents at once / asks for tabs</div><div class="seam-say">"One at a time is on purpose — tell me about the moment you wanted two."<span class="seam-dont">D1's strict focus is a hypothesis this session tests. Capture the trigger; don't defend the rule (Rule 4).</span></div></div>
+      <div class="seam"><div class="seam-trigger">Anything crashes or renders wrong</div><div class="seam-say">"Noted — keep going as if it worked."<span class="seam-dont">No live debugging. Ever.</span></div></div>
+    </div>
+  </div>
+
+  <!-- ============ SIGNALS ============ -->
+  <div class="sec">
+    <div class="sec-rule"><div></div><div></div><div></div></div>
+    <div class="sec-kicker">Reading the session</div>
+    <h2>What green, yellow, and red <em>look like.</em></h2>
+    <div class="signals">
+      <div class="signal green">
+        <div class="signal-t">Green · concept lands</div>
+        <li>Narrates her day from the Desk inside two minutes, without verifying</li>
+        <li>Acts on a margin item unaided</li>
+        <li>Notices the one-act ripple and says something about it</li>
+        <li>Zero or one old-portal flight, with a named reason</li>
+        <li>Asks some version of "when can I live in this?"</li>
+      </div>
+      <div class="signal yellow">
+        <div class="signal-t">Yellow · concept needs tuning</div>
+        <li>Reads the Desk but opens documents to verify the need lines</li>
+        <li>Finds margins only after exploration or the sweep</li>
+        <li>Two or three portal flights for findable things (⌘K gap or naming gap)</li>
+        <li>I6 numbers meaningfully different from her stated instincts</li>
+        <li>Need-line voice gets rephrased more than twice</li>
+      </div>
+      <div class="signal red">
+        <div class="signal-t">Red · stop and redesign</div>
+        <li>Flees to the old portal to do the real work and stays there</li>
+        <li>The Desk showed wrong things and she caught it — trust broken on contact</li>
+        <li>The margin reads as notification noise even after she understands it</li>
+        <li>D1's single-document rule fights her actual workflow more than once</li>
+        <li>She's polite about everything — which means the session failed to get the truth, and question 9 is all you have</li>
+      </div>
+    </div>
+    <div class="callout"><strong>Yellow is the expected outcome</strong> for a first session and is good news — it produces calibration values, copy edits, and named gaps, which is exactly what the session exists to harvest. Green is a gift. Red means the next stop is this design session, not Slice 4.</div>
+  </div>
+
+  <!-- ============ CAPTURE SHEET ============ -->
+  <div class="sec">
+    <div class="sec-rule"><div></div><div></div><div></div></div>
+    <div class="sec-kicker">During · the observation sheet</div>
+    <h2>Capture <em>these numbers.</em></h2>
+    <div class="sheet-grid">
+      <div class="sheet-row"><div class="k">Time-to-true-read</div><div class="v">Minutes until she narrates the day accurately from the Desk: <span class="fill"></span></div></div>
+      <div class="sheet-row"><div class="k">Desk precision / recall</div><div class="v">Folders she challenged as unnecessary: <span class="fill"></span> · Work she named as missing: <span class="fill"></span></div></div>
+      <div class="sheet-row"><div class="k">Unaided margin acts</div><div class="v">Count: <span class="fill"></span> · Which kinds (decision / message / invoice / pulse): <span class="fill"></span></div></div>
+      <div class="sheet-row"><div class="k">Anchor discovery</div><div class="v">Hover highlight noticed unaided? Y / N · at minute: <span class="fill"></span></div></div>
+      <div class="sheet-row"><div class="k">Put down / Esc</div><div class="v">Found unaided? Y / N · first exit at minute: <span class="fill"></span></div></div>
+      <div class="sheet-row"><div class="k">Old-portal flights</div><div class="v">Count: <span class="fill"></span> · Triggers: <span class="fill"></span></div></div>
+      <div class="sheet-row"><div class="k">Phone reach</div><div class="v">Y / N · doing what: <span class="fill"></span></div></div>
+      <div class="sheet-row"><div class="k">Reaches with no home</div><div class="v">Everything she looked for that isn't built yet: <span class="fill"></span></div></div>
+      <div class="sheet-row"><div class="k">Verbatim quotes</div><div class="v">Especially the one-act ripple reaction and anything she mocks in question 9</div></div>
+    </div>
+  </div>
+
+  <!-- ============ OUTPUTS ============ -->
+  <div class="sec">
+    <div class="sec-rule"><div></div><div></div><div></div></div>
+    <div class="sec-kicker">Within 24 hours</div>
+    <h2>What the session <em>produces.</em></h2>
+    <p>The session isn't done until its findings are in the log. Append one entry using this template, then bring the filled version back to the design session — copy edits and any new O items get rulings there, I6 constants go straight to Claude Code.</p>
+    <pre class="md"><span class="c">### L1 · Leah Session 01 — findings — [date]</span>
+
+**Build:** [commit] · **Desk at start:** [N folders / M chips] · **Signal: GREEN / YELLOW / RED**
+
+**Numbers.** Time-to-true-read: __ min · Unaided margin acts: __ ·
+Old-portal flights: __ ([triggers]) · Anchor discovery: [unaided/swept/missed]
+
+**I6 calibration (→ Claude Code, desk-derivation.ts).**
+hesitating unopened: 3d → __ · hesitating unsigned: 5d → __ · lead urgency: 48h → __
+
+**Desk truth.** False positives: [...] · Misses: [...]
+
+**Voice.** Need lines she rephrased, verbatim: [...]
+
+**Reaches with no home.** [...] — mapped to: [slice N / R5 destiny / new O item]
+
+**The margin verdict.** [her words]
+
+**Question 9.** [what she mocked — owned, with disposition]
+
+**D1 friction events.** [moments she wanted two documents, with triggers]
+
+**Disposition.** [proceed to Slice 4 as planned / proceed with amendments / return to design]</pre>
+    <div class="callout"><strong>And the one that matters most:</strong> if the session goes green or strong yellow, ask her at the very end — off the record, lid closed — whether she'd show this to a Founding Circle designer yet. Her answer is the real gate for everything that comes after the flip.</div>
+  </div>
+
+</div>
+
+<footer>
+  <div class="f-in">
+    <div class="f-mark"><div></div><div></div><div></div></div>
+    <p>Patina · The Document Pilot · Session Script 01 · Confidential — Middlewest Studio</p>
+  </div>
+</footer>
+
+</body>
+</html>
