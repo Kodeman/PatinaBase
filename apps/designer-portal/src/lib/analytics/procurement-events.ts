@@ -165,6 +165,19 @@ export const procurementEvents = {
   poAcknowledgmentLogged: (properties: { days_since_sent: number | null }) =>
     track('procurement_po_acknowledgment_logged', properties),
 
+  /**
+   * Fired per successful po-send action (W4-T4 — PoSendActions in the Order
+   * Assistant created step + the By Vendor row popover):
+   *   'preview' — rendered + stored the PDF and opened the signed URL,
+   *   'email'   — emailed the vendor (PDF attached) and stamped sent_at,
+   *   'manual'  — mark_sent for orders placed outside Patina (vendor portal,
+   *               phone, showroom); stamps sent_at without an email.
+   */
+  poSent: (properties: {
+    method: 'email' | 'manual' | 'preview';
+    vendor_id?: string;
+  }) => track('procurement_po_sent', properties),
+
   // ────────────────────────────────────────────────────────────────────────
   // Future events (documented but not yet wired — see
   // docs/follow-ups/procurement-pilot-metrics.md):

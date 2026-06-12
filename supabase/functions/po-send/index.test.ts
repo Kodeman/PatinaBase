@@ -8,6 +8,8 @@
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
   buildFallbackSidemark,
+  checkPoTotalsCoherence,
+  PO_OUT_OF_SYNC_DETAIL,
   parsePoSendBody,
   paymentPatternLabel,
   paymentRowLabel,
@@ -175,6 +177,102 @@ Deno.test("paymentRowLabel prefers the explicit label, else capitalizes kind", (
   assertEquals(paymentRowLabel({ kind: "milestone", label: "On ship" }), "On ship");
   assertEquals(paymentRowLabel({ kind: "deposit", label: null }), "Deposit");
   assertEquals(paymentRowLabel({ kind: "balance", label: "  " }), "Balance");
+});
+
+// ─── checkPoTotalsCoherence — the W4-T4 send guard ───────────────────────────
+
+Deno.test("checkPoTotalsCoherence passes a post-00186 PO (trade == total == schedule)", () => {
+  // fifty_fifty over a 120_000 trade total: floor + remainder sums exactly.
+  const result = checkPoTotalsCoherence(
+    120_000,
+    [{ amount_cents: 60_000 }, { amount_cents: 60_000 }],
+    [
+      { trade_price_cents: 40_000, unit_price_cents: 50_000, quantity: 1 },
+      { trade_price_cents: 40_000, unit_price_cents: 50_000, quantity: 1 },
+      { trade_price_cents: 40_000, unit_price_cents: 50_000, quantity: 1 },
+    ],
+  );
+  assertEquals(result, {
+    poTotalCents: 120_000,
+    tradeTotalCents: 120_000,
+    paymentsTotalCents: 120_000,
+    coherent: true,
+  });
+});
+
+Deno.test("checkPoTotalsCoherence flags a pre-00186 client-price PO", () => {
+  // Legacy PO: total_cents AND the schedule were derived from the CLIENT
+  // total (3 × 50_000) while the trade line table sums to 3 × 40_000 —
+  // sending would print an incoherent schedule AND disclose the markup.
+  // mode 'send' must 422 po_out_of_sync.
+  const result = checkPoTotalsCoherence(
+    150_000,
+    [{ amount_cents: 75_000 }, { amount_cents: 75_000 }],
+    [
+      { trade_price_cents: 40_000, unit_price_cents: 50_000, quantity: 1 },
+      { trade_price_cents: 40_000, unit_price_cents: 50_000, quantity: 1 },
+      { trade_price_cents: 40_000, unit_price_cents: 50_000, quantity: 1 },
+    ],
+  );
+  assertEquals(result.poTotalCents, 150_000);
+  assertEquals(result.paymentsTotalCents, 150_000);
+  assertEquals(result.tradeTotalCents, 120_000);
+  assertEquals(result.coherent, false);
+});
+
+Deno.test("checkPoTotalsCoherence flags post-creation item re-pricing drift", () => {
+  // The PO was coherent at creation (100_000), then a linked item's trade
+  // price changed — the PDF would print 90_000 of lines under a 100_000
+  // schedule. Both sums are compared against total_cents, so this trips
+  // even though the schedule still matches the stored total.
+  const result = checkPoTotalsCoherence(
+    100_000,
+    [{ amount_cents: 50_000 }, { amount_cents: 50_000 }],
+    [{ trade_price_cents: 45_000, unit_price_cents: 55_000, quantity: 2 }], // 90_000
+  );
+  assertEquals(result.tradeTotalCents, 90_000);
+  assertEquals(result.paymentsTotalCents, 100_000);
+  assertEquals(result.coherent, false);
+});
+
+Deno.test("checkPoTotalsCoherence flags a schedule that drifted from total_cents", () => {
+  // Lines still sum to total_cents but a payment row went missing — the
+  // printed schedule wouldn't add up to the document total.
+  const result = checkPoTotalsCoherence(
+    120_000,
+    [{ amount_cents: 60_000 }],
+    [{ trade_price_cents: 40_000, unit_price_cents: 50_000, quantity: 3 }],
+  );
+  assertEquals(result.tradeTotalCents, 120_000);
+  assertEquals(result.paymentsTotalCents, 60_000);
+  assertEquals(result.coherent, false);
+});
+
+Deno.test("checkPoTotalsCoherence uses the COALESCE(trade, unit, 0) × qty line math", () => {
+  // No trade price → unit price wins; null both → 0; quantity defaults to 1.
+  const result = checkPoTotalsCoherence(
+    110_000,
+    [{ amount_cents: 110_000 }],
+    [
+      { trade_price_cents: null, unit_price_cents: 50_000, quantity: 2 }, // 100_000
+      { trade_price_cents: 10_000, unit_price_cents: 99_999 },            // 10_000 (qty 1)
+      { trade_price_cents: null, unit_price_cents: null, quantity: 5 },   // 0
+    ],
+  );
+  assertEquals(result.tradeTotalCents, 110_000);
+  assertEquals(result.coherent, true);
+});
+
+Deno.test("PO_OUT_OF_SYNC_DETAIL is the designer-facing recreate-or-mark-sent message", () => {
+  // The portal renders this verbatim (poSendErrorMessage in
+  // po-send-actions.tsx duplicates the string) — pin the copy so a
+  // server-side edit can't silently desync the two.
+  assertEquals(
+    PO_OUT_OF_SYNC_DETAIL,
+    "This PO's payment schedule no longer matches its item pricing — item prices " +
+      "may have changed since creation, or the PO predates trade-cost totals. " +
+      "Recreate the PO or mark it sent manually.",
+  );
 });
 
 // ─── vendorSafeSpecNotes ─────────────────────────────────────────────────────

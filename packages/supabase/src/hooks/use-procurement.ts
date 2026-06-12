@@ -76,6 +76,14 @@ export interface PurchaseOrder {
     name: string;
     default_payment_terms: PaymentPattern | null;
     is_patina_catalog?: boolean;
+    /**
+     * Outbound PO recipient fields (W4-T4). The po-send edge function
+     * resolves the recipient authoritatively server-side (orders_email →
+     * contact_info->>'email'); these only drive the client-side
+     * disabled-state heuristic + label hint on "Email to vendor".
+     */
+    orders_email?: string | null;
+    contact_info?: Record<string, unknown> | null;
   };
   project?: { id: string; name: string };
   payments?: POPayment[];
@@ -193,7 +201,7 @@ export function usePurchaseOrders(filters?: POFilters) {
         .select(
           `
           *,
-          vendor:vendors!purchase_orders_vendor_id_fkey(id, name, default_payment_terms, is_patina_catalog),
+          vendor:vendors!purchase_orders_vendor_id_fkey(id, name, default_payment_terms, is_patina_catalog, orders_email, contact_info),
           project:projects!purchase_orders_project_id_fkey(id, name),
           payments:po_payments(*)
         `
@@ -1707,6 +1715,13 @@ export interface SendPurchaseOrderResult {
   emailSent: boolean;
   /** Short-lived (600 s) signed URL for the rendered PDF, when signing worked. */
   signedUrl?: string | null;
+  /**
+   * Non-blocking flags (mode 'preview' only, W4-T4): 'po_out_of_sync' when
+   * the PO's stored total no longer matches its line-derived trade total or
+   * its payment schedule — mode 'send' refuses such POs with a 422 of the
+   * same code, preview just warns.
+   */
+  warnings?: string[];
 }
 
 /**

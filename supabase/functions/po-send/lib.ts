@@ -147,6 +147,70 @@ export function buildFallbackSidemark(parts: FallbackSidemarkParts): string {
   return [studio, middle].filter(Boolean).join('-');
 }
 
+// ─── Send-time consistency guard (W4-T4) ─────────────────────────────────────
+//
+// Pre-00186 purchase orders were created with CLIENT-price total_cents, and
+// their po_payments schedule was derived from that number. The PO document's
+// line table prints TRADE prices, so emailing such a PO would pair a payment
+// schedule with a line total it doesn't sum to — an incoherent vendor document
+// that indirectly discloses the designer's markup (deposit amounts leak client
+// pricing). Item re-pricing after creation drifts the same way. The index
+// handler refuses mode 'send' when the sums disagree (422 po_out_of_sync);
+// 'preview' (flagged via `warnings`) and 'mark_sent' stay allowed so the
+// designer can still inspect the document / record an outside-Patina order.
+
+export interface PoTotalsCoherence {
+  poTotalCents: number;
+  tradeTotalCents: number;
+  paymentsTotalCents: number;
+  coherent: boolean;
+}
+
+/**
+ * Verify the three totals a sendable PO must agree on:
+ *
+ *   Σ line trade totals (COALESCE(trade, unit, 0) × qty — the sum the PDF
+ *   prints)  ===  purchase_orders.total_cents  ===  Σ po_payments.amount_cents
+ *
+ * Post-00186 POs always cohere (the create RPC derives total_cents and the
+ * payment schedule from the trade total). Incoherence flags a pre-00186
+ * client-price PO, or one whose linked items were re-priced after creation —
+ * equally incoherent to send.
+ */
+export function checkPoTotalsCoherence(
+  poTotalCents: number,
+  payments: Array<{ amount_cents: number }>,
+  items: Array<{
+    trade_price_cents?: number | null;
+    unit_price_cents?: number | null;
+    quantity?: number | null;
+  }>,
+): PoTotalsCoherence {
+  const paymentsTotalCents = payments.reduce((sum, p) => sum + p.amount_cents, 0);
+  const tradeTotalCents = items.reduce(
+    (sum, item) =>
+      sum +
+      (item.trade_price_cents ?? item.unit_price_cents ?? 0) * (item.quantity ?? 1),
+    0,
+  );
+  return {
+    poTotalCents,
+    tradeTotalCents,
+    paymentsTotalCents,
+    coherent: tradeTotalCents === poTotalCents && paymentsTotalCents === poTotalCents,
+  };
+}
+
+/**
+ * Human message for the po_out_of_sync 422 — rendered VERBATIM by the portal
+ * (poSendErrorMessage in po-send-actions.tsx duplicates this string; keep
+ * them in lockstep).
+ */
+export const PO_OUT_OF_SYNC_DETAIL =
+  "This PO's payment schedule no longer matches its item pricing — item prices " +
+  'may have changed since creation, or the PO predates trade-cost totals. ' +
+  'Recreate the PO or mark it sent manually.';
+
 // ─── Display labels ──────────────────────────────────────────────────────────
 
 /** Human label for a purchase_orders.payment_pattern value. */

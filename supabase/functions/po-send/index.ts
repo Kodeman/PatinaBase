@@ -23,8 +23,14 @@
 //      to project-documents/{project_id}/po-{po_number}.pdf (upsert);
 //      persist po_document_path; sign a short-lived (600 s) URL.
 //   6. Mode:
-//        'preview'   → return without emailing or stamping sent_at.
-//        'send'      → email the vendor (recipientEmail → orders_email →
+//        'preview'   → return without emailing or stamping sent_at; an
+//                      out-of-sync PO previews fine but the response carries
+//                      warnings: ['po_out_of_sync'].
+//        'send'      → guarded (W4-T4): line-derived trade total and
+//                      Σ po_payments must BOTH equal total_cents, else 422
+//                      po_out_of_sync (pre-00186 client-price POs / item
+//                      re-pricing drift) — then email the vendor
+//                      (recipientEmail → orders_email →
 //                      contact_info->>'email'; 422 no_recipient) through
 //                      sendCompliantEmail with the PDF attached, cc the
 //                      designer when ccDesigner; stamp sent_at if null,
@@ -47,6 +53,8 @@ import { buildPoPdf, type PoPdfData } from '../_shared/po-pdf.ts';
 import { buildPoSentEmail } from '../_shared/po-emails.ts';
 import {
   buildFallbackSidemark,
+  checkPoTotalsCoherence,
+  PO_OUT_OF_SYNC_DETAIL,
   parsePoSendBody,
   paymentPatternLabel,
   paymentRowLabel,
@@ -263,6 +271,29 @@ Deno.serve(async (req: Request) => {
   }
   const payments = (paymentsData ?? []) as PoPaymentRow[];
 
+  // ── Send-time consistency guard (W4-T4) ─────────────────────────────────
+  // The document is only coherent when the line-derived trade total (the sum
+  // the PDF prints), purchase_orders.total_cents, and Σ po_payments all
+  // agree. Pre-00186 POs carry CLIENT-price total_cents and a schedule
+  // derived from it — emailing one would pair a payment schedule with a line
+  // total it doesn't sum to AND leak client pricing via deposit amounts.
+  // Refuse 'send' BEFORE numbering / rendering / any side effect; 'preview'
+  // stays unguarded (the response carries warnings instead) and 'mark_sent'
+  // is the escape hatch for orders the designer placed outside Patina.
+  const totals = checkPoTotalsCoherence(po.total_cents, payments, items);
+  if (mode === 'send' && !totals.coherent) {
+    return json(
+      {
+        error: 'po_out_of_sync',
+        detail: PO_OUT_OF_SYNC_DETAIL,
+        poTotalCents: totals.poTotalCents,
+        tradeTotalCents: totals.tradeTotalCents,
+        paymentsTotalCents: totals.paymentsTotalCents,
+      },
+      422,
+    );
+  }
+
   // ── Designer + client profiles ──────────────────────────────────────────
   // purchase_orders.designer_id references auth.users (00148), so there is
   // no PostgREST FK join to profiles — load it directly.
@@ -422,6 +453,9 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── Mode: preview — document only, no email, no sent_at ─────────────────
+  // Preview is never blocked by the consistency guard (the designer can
+  // always look), but an incoherent PO is flagged so the UI can warn before
+  // a send is even attempted.
   if (mode === 'preview') {
     return json({
       ok: true,
@@ -430,6 +464,7 @@ Deno.serve(async (req: Request) => {
       documentPath,
       emailSent: false,
       signedUrl,
+      ...(totals.coherent ? {} : { warnings: ['po_out_of_sync'] }),
     });
   }
 

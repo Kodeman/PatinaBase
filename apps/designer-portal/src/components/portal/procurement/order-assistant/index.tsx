@@ -45,6 +45,10 @@ import {
   BlockedByDecisionInline,
   getBlockedItems,
 } from '@/components/portal/procurement/blocked-by-decision-notice';
+import {
+  PoSendActions,
+  clientVendorEmailHint,
+} from '@/components/portal/procurement/po-send-actions';
 import { Button, IconButton } from '@/components/ui/controls';
 import {
   formatDollars,
@@ -738,13 +742,15 @@ export function OrderAssistant(props: OrderAssistantProps) {
   );
 }
 
-// ─── Created confirmation ──────────────────────────────────────────────────
+// ─── Created confirmation + send step (W4-T4) ──────────────────────────────
 
 /**
- * Post-create confirmation panel. The real "send to vendor" step ships with
- * Wave 4 — until then this confirms what was logged and hands control back
- * (Done closes the panel, which advances the caller's queue when more
- * vendor/project orders are pending).
+ * Post-create confirmation panel. External-vendor orders gain the Wave 4
+ * send actions (Preview PDF / Email to vendor / Mark as sent manually —
+ * shared PoSendActions, also used by the By Vendor row popover); Patina
+ * Catalog orders skip them — Patina is the merchant, there is no outbound
+ * vendor document to send. Done closes the panel, which advances the
+ * caller's queue when more vendor/project orders are pending.
  */
 function CreatedConfirmation({
   po,
@@ -758,34 +764,53 @@ function CreatedConfirmation({
   isCatalog: boolean;
 }) {
   return (
-    <section
-      className="rounded-[5px] border px-4 py-4"
-      style={{
-        borderColor: 'var(--color-sage, #A8B5A0)',
-        background: 'rgba(168, 181, 160, 0.10)',
-      }}
-    >
-      <div
-        className="type-meta-small"
-        style={{ color: 'var(--color-sage, #A8B5A0)', textTransform: 'uppercase', letterSpacing: '0.06em' }}
+    <>
+      <section
+        className="rounded-[5px] border px-4 py-4"
+        style={{
+          borderColor: 'var(--color-sage, #A8B5A0)',
+          background: 'rgba(168, 181, 160, 0.10)',
+        }}
       >
-        Purchase order created
-      </div>
-      <div className="mt-1.5 font-heading text-[0.95rem] font-medium text-[var(--text-primary)]">
-        {itemCount} item{itemCount !== 1 ? 's' : ''} · {formatDollars(po.total_cents)} ·{' '}
-        {vendor.name}
-      </div>
-      {po.vendor_po_number && (
-        <div className="mt-1 font-mono text-[0.62rem] text-[var(--text-muted)]">
-          Vendor PO {po.vendor_po_number}
+        <div
+          className="type-meta-small"
+          style={{ color: 'var(--color-sage, #A8B5A0)', textTransform: 'uppercase', letterSpacing: '0.06em' }}
+        >
+          Purchase order created
         </div>
+        <div className="mt-1.5 font-heading text-[0.95rem] font-medium text-[var(--text-primary)]">
+          {itemCount} item{itemCount !== 1 ? 's' : ''} · {formatDollars(po.total_cents)} ·{' '}
+          {vendor.name}
+        </div>
+        {po.vendor_po_number && (
+          <div className="mt-1 font-mono text-[0.62rem] text-[var(--text-muted)]">
+            Vendor PO {po.vendor_po_number}
+          </div>
+        )}
+        <p className="mt-2 text-[0.7rem] leading-relaxed text-[var(--text-muted)]">
+          {isCatalog
+            ? 'Patina handles the deposit and balance internally — track progress from Procurement → By Vendor.'
+            : 'Track payments and vendor acknowledgment from Procurement → By Vendor.'}
+        </p>
+      </section>
+
+      {!isCatalog && (
+        <section className="mt-4">
+          <div className="type-label mb-1">Send to vendor</div>
+          <p className="mb-3 text-[0.7rem] leading-relaxed text-[var(--text-muted)]">
+            Preview assigns the PO number and renders the document; emailing
+            or marking sent stamps the sent date. You can also do this later
+            from Procurement → By Vendor.
+          </p>
+          <PoSendActions
+            purchaseOrderId={po.id}
+            vendorId={vendor.id}
+            vendorEmailHint={clientVendorEmailHint(vendor)}
+            sentAt={po.sent_at}
+          />
+        </section>
       )}
-      <p className="mt-2 text-[0.7rem] leading-relaxed text-[var(--text-muted)]">
-        {isCatalog
-          ? 'Patina handles the deposit and balance internally — track progress from Procurement → By Vendor.'
-          : 'Track payments and vendor acknowledgment from Procurement → By Vendor. Sending the PO to the vendor from Patina ships in a follow-up.'}
-      </p>
-    </section>
+    </>
   );
 }
 

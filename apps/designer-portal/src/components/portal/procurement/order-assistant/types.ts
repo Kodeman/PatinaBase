@@ -23,6 +23,16 @@ export interface OrderAssistantVendor {
    * for now; one-click Catalog ordering ships in S3.10 (Sprint 3).
    */
   is_patina_catalog?: boolean;
+  /**
+   * Outbound PO recipient fields (W4-T4) — mirror `vendors.orders_email` /
+   * `vendors.contact_info`. The po-send edge function resolves the recipient
+   * authoritatively server-side; the created step only uses these for the
+   * "Email to {recipient}" hint + disabled state. Optional — callers without
+   * the vendor directory loaded leave them undefined and the email action
+   * renders disabled.
+   */
+  orders_email?: string | null;
+  contact_info?: Record<string, unknown> | null;
 }
 
 export interface OrderAssistantProject {

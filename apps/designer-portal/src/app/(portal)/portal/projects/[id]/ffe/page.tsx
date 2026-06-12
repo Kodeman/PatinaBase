@@ -140,7 +140,10 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
   const { data: project } = useProject(projectId);
   const { data: rawItems } = useProjectFFEItems(projectId);
   const { data: rawRooms } = useProjectRooms(projectId);
-  const { data: vendors } = useVendors();
+  // Full directory page — the default pageSize (20) silently truncated the
+  // vendorById lookup map, dropping payment terms / portal URLs / the W4-T4
+  // orders_email hint for any vendor past the first alphabetical page.
+  const { data: vendors } = useVendors(undefined, { page: 1, pageSize: 500 });
   const { data: rawCategories } = useFFECategories();
   const updateStatus = useUpdateFFEItemStatus();
   const addItem = useAddProjectFFEItem();
@@ -500,6 +503,10 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
           trade_portal_url: rec?.trade_portal_url ?? undefined,
           trade_account_email: rec?.trade_account_email ?? undefined,
           is_patina_catalog: rec?.is_patina_catalog ?? undefined,
+          // W4-T4 — outbound PO recipient hint for the created step's
+          // "Email to {vendor}" action (server resolves authoritatively).
+          orders_email: rec?.orders_email ?? null,
+          contact_info: rec?.contact_info ?? null,
         },
         project: { id: projectId, name: project?.name ?? 'Project' },
         ffeItems: groupItems.map((it) => ({

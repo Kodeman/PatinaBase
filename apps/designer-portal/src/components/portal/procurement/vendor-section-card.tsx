@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { POPayment, PurchaseOrder } from '@patina/supabase';
 import { PaymentPill } from './payment-pill';
 import { LogAcknowledgmentPopover } from './log-acknowledgment-popover';
+import { PoSendPopover, clientVendorEmailHint } from './po-send-actions';
 import { Button } from '@/components/ui/controls';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
@@ -327,6 +328,22 @@ export function VendorSectionCard({
                       purchaseOrderId={po.id}
                       vendorPoNumber={po.vendor_po_number}
                       confirmedEta={po.confirmed_eta}
+                    />
+                  ) : null}
+                  {/* Outbound PO document (W4-T4): sent POs show a muted
+                      "Sent {date}" meta; unsent external-vendor POs get the
+                      send popover (Preview PDF / Email / Mark as sent).
+                      Patina Catalog orders have no outbound vendor doc, and
+                      cancelled POs can't be sent (server 409s). */}
+                  {po.sent_at ? (
+                    <span className="font-mono text-[0.58rem] text-[var(--text-muted)]">
+                      Sent {formatDate(po.sent_at)}
+                    </span>
+                  ) : !po.is_patina_catalog && po.status !== 'cancelled' ? (
+                    <PoSendPopover
+                      purchaseOrderId={po.id}
+                      vendorId={po.vendor_id}
+                      vendorEmailHint={clientVendorEmailHint(po.vendor)}
                     />
                   ) : null}
                 </div>

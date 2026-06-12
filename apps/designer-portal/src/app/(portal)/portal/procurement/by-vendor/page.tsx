@@ -194,9 +194,11 @@ function ByVendorContent() {
   );
 
   // Vendor directory — enriches the assistant's vendor context (payment
-  // terms, trade portal URL/email) beyond the slim join usePurchaseOrders
-  // carries. Mirrors the FF&E board's vendorById map.
-  const { data: vendorsResult } = useVendors();
+  // terms, trade portal URL/email, W4-T4 orders_email hint) beyond the slim
+  // join usePurchaseOrders carries. Mirrors the FF&E board's vendorById map.
+  // Full directory page — the default pageSize (20) silently truncated the
+  // map for any vendor past the first alphabetical page.
+  const { data: vendorsResult } = useVendors(undefined, { page: 1, pageSize: 500 });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const vendorById = useMemo(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -425,6 +427,10 @@ function ByVendorContent() {
                 trade_portal_url: rec?.trade_portal_url ?? undefined,
                 trade_account_email: rec?.trade_account_email ?? undefined,
                 is_patina_catalog: rec?.is_patina_catalog ?? group.isPatinaCatalog,
+                // W4-T4 — outbound PO recipient hint for the created step's
+                // "Email to {vendor}" action (server resolves authoritatively).
+                orders_email: rec?.orders_email ?? null,
+                contact_info: rec?.contact_info ?? null,
               };
               // One PO covers one project — group per project and enqueue one
               // assistant session per (vendor, project) pair.

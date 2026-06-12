@@ -1,6 +1,15 @@
 /**
  * End-to-end spec: Order Assistant full order flow + acknowledgment +
- * blocked-by-decision guards (W3-T5).
+ * blocked-by-decision guards (W3-T5) + send-to-vendor (W4-T4).
+ *
+ * Wave 4 additions: test 1 exercises the created step's send actions —
+ * Preview PDF (window.open intercepted; po_number + po_document_path
+ * persisted, sent_at untouched) then "Email to {orders_email}" (po-send
+ * mode 'send'; EMAIL_DEV_MODE=dry_run locally so nothing leaves the
+ * machine) → toast + muted "Sent {date}" + sent_at stamped. Test 4 seeds a
+ * second PO as the designer and drives the By Vendor row's "Send to
+ * vendor" popover through "Mark as sent manually" (mode 'mark_sent').
+ * Requires `supabase functions serve` running locally (po-send).
  *
  *   seed one project + one external vendor + three approved trade-priced
  *   FF&E items (+ one decision-blocked fourth item, NO invoices) → the
@@ -53,9 +62,13 @@ const ITEM_1 = 'E2E OF Credenza 1';
 const ITEM_2 = 'E2E OF Armchair 2';
 const ITEM_3 = 'E2E OF Sconce 3';
 const BLOCKED_ITEM = 'E2E OF Blocked Console 4';
+const ITEM_5 = 'E2E OF Bench 5'; // seeded inside test 4 (second PO for the row send action)
 const DECISION_TITLE = 'E2E OF Blocked Decision';
 const EDITED_SIDEMARK = 'E2E-OF-SM';
 const VENDOR_PO_NUMBER = 'E2E-OF-001';
+// Recipient for the W4-T4 email path — resolves via vendors.orders_email
+// (dry_run locally; the address never receives anything).
+const VENDOR_ORDERS_EMAIL = 'orders@e2e-of-vendor.test';
 
 // Trade 40000 / client 50000, qty 1 each → server TRADE total 3 × 40000.
 const TRADE_CENTS = 40_000;
@@ -155,10 +168,15 @@ test.describe.serial('procurement order flow: create PO + acknowledgment + block
     projectId = proj.id as string;
 
     // ── Vendor (external — NOT Patina catalog; fifty_fifty default terms
-    //    drive the assistant's payment-pattern prefill) ─────────────────────
+    //    drive the assistant's payment-pattern prefill; orders_email feeds
+    //    the W4-T4 send path's recipient resolution) ─────────────────────────
     const { data: vendor, error: vendorErr } = await adminDb
       .from('vendors')
-      .insert({ name: VENDOR_NAME, default_payment_terms: 'fifty_fifty' })
+      .insert({
+        name: VENDOR_NAME,
+        default_payment_terms: 'fifty_fifty',
+        orders_email: VENDOR_ORDERS_EMAIL,
+      })
       .select('id')
       .single();
     if (vendorErr) throw new Error(`seed vendor failed: ${vendorErr.message}`);
@@ -242,9 +260,17 @@ test.describe.serial('procurement order flow: create PO + acknowledgment + block
       await adminDb.from('project_ffe_items').delete().eq('project_id', projectId);
       const { data: pos } = await adminDb
         .from('purchase_orders')
-        .select('id')
+        .select('id, po_document_path')
         .eq('project_id', projectId);
       const poIds = (pos ?? []).map((p) => p.id as string);
+      // Rendered PO PDFs (W4-T4) live in project-documents — remove the
+      // storage objects before the rows referencing them go away.
+      const docPaths = (pos ?? [])
+        .map((p) => p.po_document_path as string | null)
+        .filter((p): p is string => !!p);
+      if (docPaths.length > 0) {
+        await adminDb.storage.from('project-documents').remove(docPaths);
+      }
       if (poIds.length > 0) {
         await adminDb.from('po_payments').delete().in('purchase_order_id', poIds);
         await adminDb.from('purchase_orders').delete().in('id', poIds);
@@ -320,11 +346,79 @@ test.describe.serial('procurement order flow: create PO + acknowledgment + block
 
     await dialog.getByRole('button', { name: 'Confirm 3 ordered', exact: true }).click();
 
-    // ── Created confirmation, then Done closes the panel.
+    // ── Created confirmation with the W4-T4 send step.
     await expect(dialog.getByText('Purchase order created')).toBeVisible({
       timeout: 15_000,
     });
     await expect(dialog.getByText(`Vendor PO ${VENDOR_PO_NUMBER}`)).toBeVisible();
+
+    // ── Preview PDF (mode 'preview'). window.open is intercepted instead of
+    // asserting a real popup — headless PDF navigation can flake into a
+    // download, while the captured URL is deterministic.
+    await page.evaluate(() => {
+      const w = window as unknown as { __poPreviewUrls: string[] };
+      w.__poPreviewUrls = [];
+      window.open = ((url?: string | URL) => {
+        w.__poPreviewUrls.push(String(url));
+        return null;
+      }) as typeof window.open;
+    });
+    await dialog.getByRole('button', { name: 'Preview PDF', exact: true }).click();
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            () => (window as unknown as { __poPreviewUrls: string[] }).__poPreviewUrls,
+          ),
+        { timeout: 30_000 },
+      )
+      .toHaveLength(1);
+    const previewUrl = (
+      await page.evaluate(
+        () => (window as unknown as { __poPreviewUrls: string[] }).__poPreviewUrls,
+      )
+    )[0];
+    expect(previewUrl).toContain('/storage/v1/object/sign/');
+
+    // DB after preview: OUR number assigned + document stored; sent_at stays
+    // NULL (preview never stamps).
+    const { data: previewed, error: previewErr } = await adminDb
+      .from('purchase_orders')
+      .select('po_number, po_document_path, sent_at')
+      .eq('project_id', projectId)
+      .eq('vendor_po_number', VENDOR_PO_NUMBER)
+      .single();
+    if (previewErr) throw previewErr;
+    expect(previewed.po_number).toMatch(/^PO-\d{4,}$/);
+    expect(previewed.po_document_path).toBe(
+      `${projectId}/po-${previewed.po_number}.pdf`,
+    );
+    expect(previewed.sent_at).toBeNull();
+
+    // ── Email to the vendor (mode 'send' — dry_run locally, nothing leaves
+    // the machine). Toast carries the assigned number + resolved recipient;
+    // the send actions collapse into the muted "Sent {date}".
+    await dialog
+      .getByRole('button', { name: `Email to ${VENDOR_ORDERS_EMAIL}` })
+      .click();
+    await expect(
+      page.getByText(`PO ${previewed.po_number} sent to ${VENDOR_ORDERS_EMAIL}`),
+    ).toBeVisible({ timeout: 30_000 });
+
+    const { data: sentPo, error: sentErr } = await adminDb
+      .from('purchase_orders')
+      .select('sent_at')
+      .eq('project_id', projectId)
+      .eq('vendor_po_number', VENDOR_PO_NUMBER)
+      .single();
+    if (sentErr) throw sentErr;
+    expect(sentPo.sent_at).not.toBeNull();
+    await expect(dialog.getByText(`Sent ${shortDate(sentPo.sent_at as string)}`)).toBeVisible();
+    await expect(
+      dialog.getByRole('button', { name: `Email to ${VENDOR_ORDERS_EMAIL}` }),
+    ).toHaveCount(0);
+
+    // ── Done closes the panel.
     await dialog.getByRole('button', { name: 'Done', exact: true }).click();
     await expect(page.getByRole('dialog', { name: /Order Assistant/ })).toHaveCount(0);
 
@@ -429,6 +523,17 @@ test.describe.serial('procurement order flow: create PO + acknowledgment + block
       timeout: 10_000,
     });
     await expect(card.getByRole('button', { name: 'Log acknowledgment' })).toHaveCount(0);
+
+    // W4-T4: the row also carries the muted "Sent {date}" meta from test 1's
+    // email send — and therefore no "Send to vendor" trigger.
+    const { data: sentRow, error: sentRowErr } = await adminDb
+      .from('purchase_orders')
+      .select('sent_at')
+      .eq('id', poId)
+      .single();
+    if (sentRowErr) throw sentRowErr;
+    await expect(card.getByText(`Sent ${shortDate(sentRow.sent_at as string)}`)).toBeVisible();
+    await expect(card.getByRole('button', { name: 'Send to vendor' })).toHaveCount(0);
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -513,5 +618,103 @@ test.describe.serial('procurement order flow: create PO + acknowledgment + block
       .eq('project_id', projectId);
     if (countErr) throw countErr;
     expect(count).toBe(1);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Test 4: By Vendor row "Send to vendor" popover → mark as sent manually
+  // ──────────────────────────────────────────────────────────────────────────
+  // The W4-T4 PO-row send action, exercised through mode 'mark_sent' (orders
+  // placed through vendor portals / phone — stamps sent_at without emailing).
+  // Runs AFTER test 3 because its second PO would break test 3's
+  // nothing-orderable and exactly-one-PO assertions. The PO is created AS THE
+  // DESIGNER via the 00186 RPC (adminDb has no auth.uid()) on a freshly
+  // seeded item.
+  test('row "Send to vendor" popover marks a PO sent manually', async ({
+    authenticatedPage: page,
+  }) => {
+    // Seed one more approved, vendor-linked, trade-priced item.
+    const { data: item5, error: itemErr } = await adminDb
+      .from('project_ffe_items')
+      .insert({
+        project_id: projectId,
+        status: 'approved',
+        quantity: 1,
+        unit_price_cents: CLIENT_CENTS,
+        line_total_cents: CLIENT_CENTS,
+        trade_price_cents: TRADE_CENTS,
+        vendor_id: vendorId,
+        vendor_name: VENDOR_NAME,
+        item_type: 'fixed',
+        name: ITEM_5,
+        sort_order: 4,
+      })
+      .select('id')
+      .single();
+    if (itemErr) throw new Error(`seed ${ITEM_5} failed: ${itemErr.message}`);
+
+    // Create PO #2 as the real designer (password-grant session, test-3 idiom).
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321';
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!anonKey) throw new Error('NEXT_PUBLIC_SUPABASE_ANON_KEY missing from .env.local');
+    const designerDb = createClient(url, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { error: signInErr } = await designerDb.auth.signInWithPassword({
+      email: process.env.DESIGNER_E2E_EMAIL ?? 'designer@patina.dev',
+      password: process.env.DESIGNER_E2E_PASSWORD ?? 'password123',
+    });
+    if (signInErr) throw new Error(`designer sign-in failed: ${signInErr.message}`);
+    let po2Id: string;
+    try {
+      const { data: po2, error: rpcErr } = await designerDb.rpc('create_purchase_order', {
+        p_project_id: projectId,
+        p_vendor_id: vendorId,
+        p_payment_pattern: 'net_30',
+        p_ffe_item_ids: [item5.id as string],
+      });
+      if (rpcErr) throw new Error(`create_purchase_order failed: ${rpcErr.message}`);
+      po2Id = (po2 as { id: string }).id;
+    } finally {
+      await designerDb.auth.signOut({ scope: 'local' });
+    }
+
+    await page.goto('/portal/procurement/by-vendor', { waitUntil: 'networkidle' });
+    const card = page.locator('section').filter({ hasText: VENDOR_NAME });
+    await expect(card).toBeVisible({ timeout: 20_000 });
+
+    // Exactly one unsent row → exactly one "Send to vendor" trigger (PO 1
+    // was emailed in test 1 and shows the muted Sent meta instead).
+    const sendTrigger = card.getByRole('button', { name: 'Send to vendor' });
+    await expect(sendTrigger).toHaveCount(1);
+    await sendTrigger.click();
+
+    const popover = page.getByRole('dialog', { name: 'Send purchase order to vendor' });
+    await expect(popover).toBeVisible({ timeout: 10_000 });
+    // Seeded orders_email → the email action is enabled with the recipient
+    // hint (we don't click it — this PO exercises the manual path).
+    await expect(
+      popover.getByRole('button', { name: `Email to ${VENDOR_ORDERS_EMAIL}` }),
+    ).toBeEnabled();
+
+    await popover.getByRole('button', { name: 'Mark as sent manually' }).click();
+    await expect(page.getByText(/PO PO-\d+ marked as sent\./)).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // DB: number assigned, document rendered + stored, sent_at stamped — all
+    // without an email (mode 'mark_sent').
+    const { data: po2Row, error: po2Err } = await adminDb
+      .from('purchase_orders')
+      .select('po_number, po_document_path, sent_at')
+      .eq('id', po2Id)
+      .single();
+    if (po2Err) throw po2Err;
+    expect(po2Row.po_number).toMatch(/^PO-\d{4,}$/);
+    expect(po2Row.po_document_path).toBe(`${projectId}/po-${po2Row.po_number}.pdf`);
+    expect(po2Row.sent_at).not.toBeNull();
+
+    // Both rows now show the muted "Sent {date}" meta; no trigger remains.
+    await expect(card.getByText(/^Sent /)).toHaveCount(2, { timeout: 10_000 });
+    await expect(card.getByRole('button', { name: 'Send to vendor' })).toHaveCount(0);
   });
 });
