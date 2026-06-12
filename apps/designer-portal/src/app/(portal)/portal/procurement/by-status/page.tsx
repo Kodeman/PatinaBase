@@ -83,7 +83,8 @@ function formatShortDate(d: string | null | undefined): string {
 
 /** Today's local date as ISO YYYY-MM-DD, for date-string comparisons. */
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** Item statuses past the point where delivery flags are meaningful. */
