@@ -976,6 +976,185 @@ await those ledgers being built; the Aesthete-fold Accounts rendering stays
 the design-session deliverable. 392/392 jest; lint/tsc clean.
 
 
+## Rulings — design session, 2026-06-12 (the Dissolve design package)
+
+> Source for all entries below: the live old-portal walk (the-document-parity-map.md)
+> and the approved design package (patina-dissolve-eleven-surfaces-v1.html), which is
+> the canonical look/feel reference for everything in this block.
+
+### D14 · Sheets & Rooms — the drawer's two weights — 2026-06-12
+
+Drawer objects declare a weight. **Sheets** (existing): charcoal overlays for
+quick reference — pull, glance, put back; the document stays mounted beneath.
+Orders, Hours, Accounts, People remain sheets. **Rooms** (new): full-screen,
+paper-material workplaces you walk into. Entering a Room puts the current
+document down through the normal put-down flow — D1 holds, a Room IS the
+thing in hand; the timer chains out through the log offer. The drawer bar
+persists inside Rooms (D8), Rooms render full-bleed paper (D12), no shadows
+(D4). The drawer renders room-weight objects with a doorway affordance
+(spine tick + "↗") so the hand learns which pull opens which physics.
+**The Library is the first Room.** Leaving a Room returns to wherever you
+were.
+
+### R23 · The Work — tasks, deliverables, and gates-are-decisions — 2026-06-12
+
+Resolves C-4, the philosophy ruling: the document absorbs the work and
+refuses the task manager. Each active section carries a quiet block, "The
+work": deliverables/tasks as checkable lines in the paper's grammar (square
+tick that fills sage — a stamp, not a SaaS checkbox), ≤5-second capture
+("+ Task", the Note's contract), optional due dates. **A dued task passes
+the R22 action test and may rise to the Desk; undated tasks never nag.**
+Hour estimates live in the work-head meta ("est. 2–4 wks · 9h of 14h est.")
+and give Hours its "of N est." readout. **The gate ruling: an approval gate
+IS a client decision** — `client_decisions` with kind 'approval', anchored
+to the section, requested from the gate line, mirrored to the client portal,
+overdue on the Desk, resolvable from the margin. Client approval SETTLES the
+section (stamp + date — the settled stamp becomes something the client
+grants). Declined approval holds the section active with the gate narrating
+why. Declined from scope: kanban, assignees, priority flags, "+ Add Phase"
+(custom sections deferred; six phases cover Middlewest).
+
+### R24 · The Folio — files clipped to the paper — 2026-06-12
+
+Resolves C-5. Files are material, not conversation — NOT a seventh margin
+kind. They clip where they belong: a thin folio strip under any section head,
+and on FF&E line unfolds (cut sheets, spec PDFs). Drag-anywhere-on-a-section
+= the folio catches it (dashed clay dropzone on drag-over). **Versioning
+renders literally: a re-uploaded file stacks behind its predecessor using
+the Desk's stacked-edge recipe** — one click slides older versions out.
+Letterhead unfold "The folio · N files" lists all, grouped by section.
+Files open in a full-screen paper viewer (Doc* wrapper), never a new tab.
+Per-file client_visible flag, DEFAULT STUDIO-ONLY — the folio respects the
+same private layer as Notes; the client mirror renders only flagged files.
+
+### R25 · Rooms on the schedule — 2026-06-12
+
+Resolves C-3. Rooms are how a real FF&E schedule is written: room headings
+as Playfair-italic sub-heads in the Project section (name + allocation +
+progress meta), Strata mini-rules as dividers, lines beneath keeping every
+existing behavior (stamps, unfolds, chips, anchors). "+ Room" adds inline
+(name + optional budget allocation); lines assign by drag or from the
+unfold; unassigned lines fall under "Throughout · unassigned". Room headings
+join the mobile spine sheet as jump rows. Allocations feed the Account
+Page's by-room variance — one source. The old Pipeline "Rooms" tab
+dissolves: rooms are paper structure, not a directory.
+
+### R26 · The Account Page — engagement financials in the document — 2026-06-12
+
+Resolves C-2, the biggest in-document parity gap, under the ledger rule:
+engagement-scoped money lives IN the document. A settled-bar band at the top
+of the Project section — "The accounts · this project" — collapsed to one
+honest line (budget · committed · margin %), unfolding in place to: the
+variance table by room × category (DM Mono numerals; SAGE under, TERRACOTTA
+over — never red/green), the margin line (trade vs client, with coverage
+note), the designer-earnings block (design fee + est. commissions, linking
+→ Accounts), and payment milestones with INLINE TRIGGER CONFIG (on signing ·
+on production start · when [section] settles · on date) — R23's gates make
+"when a section settles" a real client-granted trigger. Actions: Generate
+invoice (drafts into the Money margin, review-then-send) and Export (QBO,
+reusing the procurement exporter). **Marked "Studio eyes only" and excluded
+from the client mirror — enforce with a CI test, not a convention.**
+
+### R27 · The letterhead instruments — 2026-06-12
+
+Resolves C-6 as one quiet DM-mono row under the letterhead subtitle.
+**View as the [clients]** renders the real client mirror full-screen under a
+thin charcoal banner ("You're seeing what they see · ← back to your copy") —
+read-only preview session. **Send a note** is the Pulse's ad-hoc sibling
+("the Pulse handles Fridays; this is for now"): compose sheet → comms post →
+letterhead-anchored message item; no new schema. **The scan** is a Discovery
+artifact card (floor-plan thumbnail from iOS RoomPlan, full-screen viewer);
+scan dimensions become available to R25 room headings — the first physical
+iOS↔portal handshake (advances §14.8).
+
+### R28 · The Orders book grows pages — 2026-06-12
+
+Resolves C-7, C-8, C-9 in one structure. The Orders book gains DM-mono page
+links — LEDGER · THE WEEK · RECEIVING · VENDORS — never tabs.
+**Vendors (C-7):** each vendor page carries terms, open POs, and the thread —
+vendor comms in the margin's message grammar, PO-anchored chips deep-linking
+into documents; "+ Brief vendor" (R29 colophon) opens it pre-addressed.
+**The Week (C-8):** the old calendar in book material (weeks across,
+projects down; expected / received / conflict events). The intelligence gets
+promoted, not just preserved: **conflicts rise on the Desk as need lines**
+("Two installs collide — week of Jul 13") because a calendar you must
+remember to check fails the action test; R22 tier rules apply (collision =
+folder; drift with no act = in-motion chip).
+**Receiving (C-9):** front-matter stat line (arriving · awaiting log ·
+claims · 30-day pass rate) + the warehouse-day queue; every Inspect mounts
+the SAME inspection drawer the unfolds use — one component, two doors;
+cleared items use the Settled fold.
+
+### R29 · The Colophon — 2026-06-12
+
+Resolves C-11. The paper's last line states its own facts: a quiet DM-mono
+row at the document's foot — studio · hands on the work · Brief a vendor ·
+Hold · Archive · Team… Click → small paper popover. Hold → the Desk's paused
+in-motion chip. Archive → "the document goes to the cabinet — find it any
+time in ⌘K" (confirm copy as written). Team… → invite designer / add
+bookkeeper / reassign lead — **and the §14.6 studio-membership RLS widening
+rides this exact popover.** Brief a vendor deep-links the R28 vendor pane
+with PO context.
+
+### R30 · Via Patina — the marketplace rail — 2026-06-12
+
+Resolves C-10. Catalog vendors carry the Via-Patina mark (Strata micro-mark
++ "PATINA CATALOG" chip) on unfold PO cells and vendor pages. Ordering via
+Patina = the same Order Assistant with a fulfillment branch (Patina handles
+production/freight/claims) and the same review-then-send: the preview shows
+what Patina receives. The PO cell narrates PATINA HANDLED thereafter — a
+PO-cell state, never a line stamp. Vendor-pane "Order all via Patina"
+batches through the same preview-as-confirm. **The brand moment ships with
+v1: at the instant of ordering, one quiet line shows the commission flowing
+to her own book and the Pledge's share of it** ("Commission to your
+Accounts: ~$336 · the Pledge returns $84 as teaching royalty"). Ledger rows
+land in the Accounts book (stub the destination until B-2 builds; never
+stub the line itself).
+
+### R31 · The Engine — a presence, not a place — 2026-06-12
+
+Resolves C-1. The Engine gets NO standalone surface, no chat thread, no
+history, no avatar. It answers in exactly two places where asking already
+happens: **(1) ⌘K speaks** — the intent splits jump-vs-ask; asks return
+Engine results as paper result-lines with one act, "Place → [document]";
+ask-and-place, no conversation. One honest footer line: "The Engine · every
+ask teaches your profile · deeper: open the Library ↗". **(2) the Library's
+librarian** — the standing input at the top of the Library Room for style
+recs, market trends, longer work. All Engine output renders in document
+grammar (lines, cards, stamps). /portal/companion retires at dissolve with
+its capability fully absorbed; its backend API is reused, re-skinned.
+
+### R32 · The Library — the first Room — 2026-06-12
+
+Builds B-1 under D14. Full-screen paper Room at /library: three layers as
+SHELVES separated by Strata rules — My Library (raw captures: Chrome
+extension, photos, URL paste) · Studio Library (proven) · Patina Catalog
+(the marketplace, with Via-Patina marks and maker nomination) — with
+capture → promote → nominate as the movement between shelves. The Engine
+stands at the top as the librarian (R31). **Teaching happens while
+browsing:** needs-teaching cards carry a Golden-Hour tag; tap = Quick Tags
+inline on the card; Deep Analysis opens as a paper sheet over the Room for
+15-minute sittings. Teaching stats (today's progress · accuracy · impact)
+compress to one quiet line in the Room's foot — present, never gamified.
+The old Teaching Queue page and Products zone dissolve into this Room.
+
 ---
 
-*Entries: D1–D13 · O1–O7 (resolved) · I1–I23 · R1–R22 · L1–L3 · THE GO · FLIP CONFIRMED · last id = I23*
+## Implementation decisions — the Dissolve (2026-06-12)
+
+### I24 · Dissolve package logged — two referenced artifacts absent — 2026-06-12
+
+The R23–R32/D14 block above is appended verbatim as received. Two artifacts
+it references did NOT arrive in the repo or any local path (searched):
+the canonical design package `patina-dissolve-eleven-surfaces-v1.html`
+(named the look/feel authority for this block) and the companion walk
+evidence `the-document-parity-map.md`. Same gap class as the D13 prototype
+(I19) — which later landed. The Track 1 build proceeds on the rulings'
+written detail plus the shipped document grammar (prototype v0.4 +
+mobile-d3 recipes); designer-visible calls return with screenshots per the
+standing protocol, and the package file gets committed the moment it
+arrives. Track 1 build entries follow below.
+
+---
+
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I24 · R1–R32 · L1–L3 · THE GO · FLIP CONFIRMED · last id = I24*
