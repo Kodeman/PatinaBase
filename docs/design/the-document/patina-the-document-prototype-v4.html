@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina · The Document · Working Prototype v0.4 — Full-bleed</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--paper:#FCFAF6;--sheet2:#EFE9DD;--sheet3:#E2DACA;--body:#5C4A3C;--muted:#8B7355;--ink:rgba(44,41,38,0.18);--fd:'Playfair Display',Georgia,serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace;--drawer-h:54px}
+html{background:var(--ch)}
+body{font-family:var(--fb);color:var(--ch);line-height:1.6;-webkit-font-smoothing:antialiased;background:var(--ch);min-height:100vh}
+
+/* ===== NO SHADOWS ANYWHERE. D12: in hand, the paper IS the screen. ===== */
+
+.screen{display:none}
+.screen.on{display:block;animation:pickup .26s ease-out}
+.screen.doc.on{animation:raise .27s ease-out}
+@keyframes pickup{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes raise{from{opacity:0;transform:scale(0.986)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.screen.on,.screen.doc.on{animation:none}.sheet,.uf-body,.m-body{transition:none!important}}
+
+/* ===== THE DESK ===== */
+.desk-wrap{max-width:1180px;margin:0 auto;padding:clamp(1.5rem,4vw,3.5rem) clamp(1.5rem,4vw,3.5rem) calc(var(--drawer-h) + 3rem)}
+.desk-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2.25rem;flex-wrap:wrap;gap:1rem}
+.desk-date{font-family:var(--fd);font-style:italic;font-weight:400;font-size:clamp(1.8rem,4vw,2.6rem);color:var(--ow);letter-spacing:0.01em;line-height:1.15}
+.desk-find{font-family:var(--fm);font-size:0.55rem;color:rgba(250,247,242,0.4);letter-spacing:0.08em;text-transform:uppercase;border:1px solid rgba(250,247,242,0.12);padding:0.45rem 0.85rem;border-radius:4px;cursor:default;margin-top:0.6rem}
+.desk-find kbd{font-family:var(--fm);border:1px solid rgba(250,247,242,0.2);border-radius:3px;padding:0 4px;margin-left:4px}
+
+.desk-sub-l{display:flex;align-items:center;gap:0.5rem;font-family:var(--fm);font-size:0.5rem;letter-spacing:0.1em;text-transform:uppercase;color:rgba(250,247,242,0.35);font-weight:600;margin-bottom:0.9rem}
+.mini-strata{display:inline-flex;flex-direction:column;gap:2px}
+.mini-strata i{display:block;height:1.5px;border-radius:1px;background:var(--cl)}
+.mini-strata i:nth-child(1){width:14px}
+.mini-strata i:nth-child(2){width:10px;opacity:0.55}
+.mini-strata i:nth-child(3){width:6px;opacity:0.3}
+
+.folders{display:grid;grid-template-columns:repeat(3,1fr);gap:1.75rem;margin-bottom:2.75rem}
+@media(max-width:880px){.folders{grid-template-columns:1fr}}
+
+.folder{position:relative;margin-top:14px;cursor:pointer}
+.folder::before{content:'';position:absolute;left:5px;right:-5px;top:5px;bottom:-5px;background:var(--sheet3);border-radius:4px 7px 7px 7px;border:1px solid var(--ink);z-index:0}
+.folder::after{content:'';position:absolute;left:2.5px;right:-2.5px;top:2.5px;bottom:-2.5px;background:var(--sheet2);border-radius:4px 7px 7px 7px;border:1px solid var(--ink);z-index:0}
+.folder-tab{position:absolute;top:-14px;left:18px;padding:4px 14px 3px;background:var(--paper);border:1px solid var(--ink);border-bottom:none;border-radius:5px 5px 0 0;font-family:var(--fm);font-size:0.5rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao);font-weight:600;z-index:2}
+.folder-doc{position:relative;z-index:1;background:var(--paper);border:1px solid var(--ink);border-radius:3px 6px 6px 6px;padding:1.15rem 1.25rem;overflow:hidden;transition:transform .18s ease}
+.folder-doc::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(139,115,85,0.012) 3px,rgba(139,115,85,0.012) 4px);pointer-events:none}
+.folder:hover .folder-doc{transform:translateY(-3px)}
+.folder.urgent .folder-doc{outline:1.5px solid rgba(232,197,71,0.55);outline-offset:-1.5px}
+.folder-name{font-family:var(--fd);font-weight:500;font-size:1.05rem;color:var(--ch);margin-bottom:0.1rem}
+.folder-stage{font-family:var(--fb);font-size:0.68rem;color:var(--muted);margin-bottom:0.6rem}
+.folder-need{display:flex;align-items:flex-start;gap:0.5rem;padding-top:0.6rem;border-top:1px solid var(--pe)}
+.folder-need-text{font-family:var(--fb);font-size:0.7rem;color:var(--body);line-height:1.5;flex:1}
+.folder-need-text strong{color:var(--ch);font-weight:500}
+
+.motion-chip{display:inline-block;padding:0.45rem 0.8rem;background:rgba(250,247,242,0.05);border:1px solid rgba(250,247,242,0.1);border-radius:4px;font-family:var(--fb);font-size:0.66rem;color:rgba(250,247,242,0.6);margin:0 0.35rem 0.35rem 0}
+
+/* ===== PERSISTENT STUDIO DRAWER — the only thing above the paper (D12) ===== */
+.drawerbar{position:fixed;left:0;right:0;bottom:0;height:var(--drawer-h);background:var(--ch);border-top:1px solid rgba(250,247,242,0.16);z-index:40;padding:0 clamp(0.85rem,3vw,1.5rem);display:flex;align-items:center;gap:0.5rem;overflow-x:auto}
+.drawer-lab{font-family:var(--fm);font-size:0.42rem;letter-spacing:0.1em;text-transform:uppercase;color:rgba(250,247,242,0.3);font-weight:600;white-space:nowrap;margin-right:0.35rem}
+.ledger{display:inline-flex;padding:0.4rem 0.75rem;background:rgba(250,247,242,0.06);border:1px solid rgba(250,247,242,0.12);border-radius:4px;align-items:center;gap:0.45rem;cursor:pointer;transition:border-color .15s;white-space:nowrap;flex-shrink:0}
+.ledger:hover{border-color:rgba(196,165,123,0.45)}
+.ledger-spine{width:3px;height:15px;border-radius:1px}
+.ledger-name{font-family:var(--fd);font-weight:500;font-size:0.68rem;color:rgba(250,247,242,0.85)}
+.ledger-count{font-family:var(--fm);font-size:0.42rem;color:rgba(250,247,242,0.4);letter-spacing:0.04em}
+.bar-today{margin-left:auto;display:inline-flex;align-items:center;gap:0.45rem;cursor:pointer;padding:0.4rem 0.75rem;border:1px solid transparent;border-radius:4px;white-space:nowrap;flex-shrink:0}
+.bar-today:hover{border-color:rgba(196,165,123,0.35)}
+.bar-today-l{font-family:var(--fm);font-size:0.42rem;letter-spacing:0.08em;text-transform:uppercase;color:rgba(250,247,242,0.35);font-weight:600}
+.bar-today-v{font-family:var(--fd);font-style:italic;font-size:0.78rem;color:var(--cl)}
+.drawer-help{flex-shrink:0;width:24px;height:24px;border:1px solid rgba(250,247,242,0.15);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:var(--fm);font-size:0.55rem;color:rgba(250,247,242,0.45);cursor:pointer}
+.drawer-help:hover{color:var(--cl);border-color:rgba(196,165,123,0.4)}
+
+/* ===== STAMPS ===== */
+.stamp{display:inline-block;padding:3px 9px;border:1.5px solid;border-radius:3px;font-family:var(--fm);font-size:0.46rem;letter-spacing:0.1em;text-transform:uppercase;font-weight:600;transform:rotate(-1.5deg);white-space:nowrap;background:transparent}
+.stamp.signed,.stamp.received,.stamp.paid,.stamp.accepted{color:var(--sa);border-color:var(--sa)}
+.stamp.ordered{color:var(--db);border-color:var(--db)}
+.stamp.production{color:#b89a2e;border-color:#cfae34}
+.stamp.shipped{color:var(--cl);border-color:var(--cl)}
+.stamp.draft{color:var(--muted);border-color:#cfc8bb}
+.stamp.due{color:#c4836f;border-color:var(--te)}
+.stamp.extended{color:var(--db);border-color:var(--db)}
+
+/* ===== THE OPEN DOCUMENT — FULL BLEED (D12) ===== */
+/* No surround, no border, no radius, no stacked edge. The paper is the screen.
+   Spine + margin are sticky full-height rails; main scrolls. */
+.page{display:grid;grid-template-columns:200px 1fr 232px;background:var(--paper);min-height:100vh;position:relative}
+.page::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(139,115,85,0.01) 3px,rgba(139,115,85,0.01) 4px);pointer-events:none;z-index:0}
+
+.doc-spine{position:sticky;top:0;height:100vh;overflow-y:auto;padding:1.5rem 1rem calc(var(--drawer-h) + 2rem) 1.3rem;border-right:1px solid var(--pe);background:rgba(229,226,221,0.28);z-index:1}
+.putdown{font-family:var(--fm);font-size:0.46rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);cursor:pointer;margin-bottom:1.1rem;display:inline-block;border:1px solid transparent;padding:0.25rem 0.4rem;border-radius:3px}
+.putdown:hover{color:var(--cl);border-color:rgba(196,165,123,0.35)}
+.spine-item{padding:0.45rem 0;display:flex;gap:0.6rem;align-items:flex-start;cursor:pointer;border-radius:3px}
+.spine-item:hover .spine-label{color:var(--ch)}
+.spine-marker{display:flex;flex-direction:column;gap:2px;width:18px;flex-shrink:0;margin-top:0.32rem}
+.spine-marker div{height:1.5px;border-radius:1px;background:var(--pe)}
+.spine-marker div:nth-child(1){width:18px}
+.spine-marker div:nth-child(2){width:13px}
+.spine-marker div:nth-child(3){width:8px}
+.spine-item.settled .spine-marker div{background:var(--sa);opacity:0.8}
+.spine-item.active .spine-marker div{background:var(--cl)}
+.spine-label{font-family:var(--fb);font-size:0.68rem;color:var(--muted);line-height:1.25;display:block}
+.spine-item.settled .spine-label{color:var(--ao)}
+.spine-item.active .spine-label{color:var(--ch);font-weight:600}
+.spine-sub{font-family:var(--fm);font-size:0.4rem;letter-spacing:0.05em;text-transform:uppercase;color:var(--muted);display:block;margin-top:1px}
+.spine-item.active .spine-sub{color:var(--cl)}
+.spine-item.ghost{opacity:0.45}
+.presence{margin-top:1.1rem;padding-top:0.8rem;border-top:1px solid var(--pe)}
+.presence-l{font-family:var(--fm);font-size:0.4rem;letter-spacing:0.07em;text-transform:uppercase;color:var(--muted);margin-bottom:0.3rem}
+.presence-v{font-family:var(--fb);font-size:0.6rem;color:var(--ao);line-height:1.4}
+
+/* ===== TIMER ===== */
+.timerbox{margin-top:1.1rem;padding:0.7rem 0.75rem;border:1px solid var(--pe);border-radius:5px;background:rgba(252,250,246,0.85)}
+.timer-l{font-family:var(--fm);font-size:0.4rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--cl);font-weight:600;display:flex;align-items:center;gap:0.35rem}
+.timer-dot{width:6px;height:6px;border-radius:50%;background:var(--sa);display:inline-block}
+.timer-dot.paused{background:var(--pe)}
+.timer-time{font-family:var(--fm);font-size:1.05rem;color:var(--ch);letter-spacing:0.04em;margin:0.25rem 0 0.45rem}
+.timer-btns{display:flex;gap:0.3rem;flex-wrap:wrap}
+.t-btn{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.06em;text-transform:uppercase;padding:0.28rem 0.5rem;border:1px solid var(--pe);border-radius:3px;color:var(--ao);cursor:pointer;background:transparent;font-weight:600}
+.t-btn:hover{border-color:var(--cl);color:var(--cl)}
+.timer-form{margin-top:0.5rem;display:none}
+.timer-form.open{display:block}
+.timer-form input,.timer-form select{width:100%;padding:0.35rem 0.45rem;border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.62rem;color:var(--ch);background:var(--paper);margin-bottom:0.3rem}
+.timer-form input:focus,.timer-form select:focus{outline:none;border-color:var(--cl)}
+
+/* ===== DOCUMENT MAIN ===== */
+.doc-main{padding:2.1rem clamp(1.75rem,3.5vw,3.25rem) calc(var(--drawer-h) + 4rem);position:relative;z-index:1;max-width:1040px}
+.doc-letterhead{padding-bottom:1.05rem;border-bottom:1px solid var(--pe);margin-bottom:1.1rem}
+.lh-strata{display:flex;flex-direction:column;gap:3px;margin-bottom:0.55rem}
+.lh-strata div{height:1.5px;border-radius:1px}
+.lh-strata div:nth-child(1){width:32px;background:var(--cl)}
+.lh-strata div:nth-child(2){width:24px;background:var(--cl);opacity:0.55}
+.lh-strata div:nth-child(3){width:16px;background:var(--cl);opacity:0.28}
+.doc-title{font-family:var(--fd);font-weight:500;font-size:1.55rem;letter-spacing:-0.01em;color:var(--ch);line-height:1.15}
+.doc-subtitle{font-family:var(--fb);font-size:0.68rem;color:var(--muted);margin-top:0.2rem}
+
+.settled-bar{padding:0.7rem 0.95rem;background:rgba(229,226,221,0.32);border:1px solid var(--pe);border-radius:5px;margin-bottom:0.5rem;display:flex;justify-content:space-between;align-items:center;gap:0.75rem;cursor:pointer}
+.settled-bar:hover{border-color:#cfc8bb}
+.settled-l{display:flex;align-items:baseline;gap:0.6rem;flex-wrap:wrap}
+.settled-name{font-family:var(--fd);font-weight:500;font-size:0.85rem;color:var(--ao)}
+.settled-hint{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.05em;text-transform:uppercase;color:var(--muted)}
+
+.uf-body{max-height:0;overflow:hidden;transition:max-height .3s ease}
+.uf-body.open{max-height:600px}
+.uf-inner{padding:0.9rem 1rem;border:1px solid var(--pe);border-top:none;border-radius:0 0 5px 5px;background:rgba(252,250,246,0.7);margin-top:-0.5rem;margin-bottom:0.6rem}
+
+.sec-head{display:flex;justify-content:space-between;align-items:baseline;margin:1.2rem 0 0.4rem}
+.sec-title{font-family:var(--fd);font-weight:500;font-size:1.02rem;color:var(--ch)}
+.sec-meta{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.05em;text-transform:uppercase;color:var(--muted)}
+
+.ffe-line{display:grid;grid-template-columns:1fr auto auto;gap:0.8rem;padding:0.65rem 0.5rem;border-bottom:1px solid var(--pe);align-items:center;cursor:pointer;border-radius:4px;transition:background .15s}
+.ffe-line:hover{background:rgba(196,165,123,0.04)}
+.ffe-line.hl{background:rgba(196,165,123,0.08)}
+.ffe-line.attn{background:rgba(232,197,71,0.05)}
+.ffe-name{font-family:var(--fb);font-weight:500;font-size:0.76rem;color:var(--ch);line-height:1.3}
+.ffe-vendor{font-family:var(--fb);font-size:0.6rem;color:var(--muted);margin-top:1px}
+.ffe-price{font-family:var(--fd);font-weight:500;font-size:0.78rem;color:var(--ch);white-space:nowrap}
+
+.line-detail{padding:0.95rem 1.05rem;background:rgba(196,165,123,0.05);border-left:3px solid var(--cl);border-radius:0 5px 5px 0;margin:0.25rem 0 0.5rem}
+.ld-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.85rem;margin-bottom:0.75rem}
+@media(max-width:700px){.ld-grid{grid-template-columns:1fr}}
+.ld-l{font-family:var(--fm);font-size:0.4rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);margin-bottom:0.15rem}
+.ld-v{font-family:var(--fb);font-size:0.7rem;color:var(--ch);font-weight:500}
+.ld-s{font-family:var(--fb);font-size:0.58rem;color:var(--muted)}
+.mini-btn{display:inline-block;padding:0.38rem 0.7rem;border-radius:4px;font-family:var(--fb);font-weight:500;font-size:0.62rem;cursor:pointer;margin-right:0.3rem;border:1px solid var(--pe);color:var(--ch);background:transparent}
+.mini-btn.primary{background:var(--ch);color:var(--ow);border-color:var(--ch)}
+.mini-btn.clay{background:var(--cl);color:#fff;border-color:var(--cl)}
+.mini-btn:hover{border-color:var(--cl)}
+.mini-btn.primary:hover,.mini-btn.clay:hover{opacity:0.9}
+
+/* ===== MARGIN RAIL — sticky full height (D12) ===== */
+.doc-margin{position:sticky;top:0;height:100vh;overflow-y:auto;padding:1.5rem 1.05rem calc(var(--drawer-h) + 2rem);border-left:1px dashed var(--pe);background:rgba(250,247,242,0.55);z-index:1}
+.margin-label{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:0.7rem;font-weight:600}
+.m-item{padding:0.65rem 0.75rem;background:var(--paper);border:1px solid var(--pe);border-radius:5px;margin-bottom:0.55rem;cursor:pointer;transition:border-color .15s}
+.m-item:hover{border-color:#cfc8bb}
+.m-item.decision{border-left:2.5px solid var(--gh)}
+.m-item.message{border-left:2.5px solid var(--db)}
+.m-item.invoice{border-left:2.5px solid var(--cl)}
+.m-item.pulse{border-left:2.5px solid var(--sa)}
+.m-item.time{border-left:2.5px solid var(--mo)}
+.m-item.resolved{opacity:0.65}
+.m-kind{font-family:var(--fm);font-size:0.38rem;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;display:block;margin-bottom:0.18rem}
+.m-item.decision .m-kind{color:#b89a2e}
+.m-item.message .m-kind{color:var(--db)}
+.m-item.invoice .m-kind{color:var(--cl)}
+.m-item.pulse .m-kind{color:var(--sa)}
+.m-item.time .m-kind{color:var(--mo)}
+.m-t{font-family:var(--fb);font-weight:500;font-size:0.63rem;color:var(--ch);line-height:1.35;margin-bottom:0.12rem}
+.m-d{font-family:var(--fb);font-size:0.55rem;color:var(--muted);line-height:1.45}
+.m-actions{margin-top:0.5rem;display:flex;gap:0.3rem;flex-wrap:wrap}
+.m-body{max-height:0;overflow:hidden;transition:max-height .25s ease}
+.m-body.open{max-height:400px}
+.m-thread{margin-top:0.5rem;padding-top:0.5rem;border-top:1px solid var(--pe)}
+.m-msg{font-family:var(--fb);font-size:0.58rem;color:var(--body);line-height:1.5;margin-bottom:0.4rem}
+.m-msg strong{color:var(--ch);font-weight:600}
+.m-input{width:100%;padding:0.45rem 0.55rem;border:1px solid var(--pe);border-radius:4px;font-family:var(--fb);font-size:0.6rem;color:var(--ch);background:var(--paper);resize:none;margin-bottom:0.35rem}
+.m-input:focus{outline:none;border-color:var(--cl)}
+
+/* Mobile: interim collapse — spine becomes a sticky paper strip; margin flows after main (D3 dedicated pattern still pending) */
+@media(max-width:980px){
+  .page{grid-template-columns:1fr}
+  .doc-spine{position:sticky;top:0;height:auto;display:flex;overflow-x:auto;overflow-y:hidden;border-right:none;border-bottom:1px solid var(--pe);gap:1rem;padding:0.85rem 1.25rem;align-items:flex-start;background:var(--paper);z-index:6}
+  .spine-item{flex-shrink:0}
+  .timerbox{min-width:200px;margin-top:0;flex-shrink:0}
+  .presence{display:none}
+  .doc-margin{position:static;height:auto;border-left:none;border-top:1px dashed var(--pe)}
+}
+
+.lead-quote{font-family:var(--fd);font-style:italic;font-size:0.95rem;color:var(--ch);line-height:1.55;padding:0.85rem 1rem;background:rgba(196,165,123,0.05);border-left:3px solid var(--cl);border-radius:0 5px 5px 0;margin:0.85rem 0}
+.lead-tags{display:flex;flex-wrap:wrap;gap:0.35rem;margin:0.6rem 0}
+.lead-tag{padding:0.28rem 0.6rem;background:var(--paper);border:1px solid var(--pe);border-radius:3px;font-family:var(--fb);font-size:0.62rem;color:var(--ch)}
+.lead-tag.match{background:rgba(196,165,123,0.07);border-color:rgba(196,165,123,0.35);color:var(--ao);font-weight:500}
+.lead-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:0.65rem;margin:0.85rem 0}
+@media(max-width:700px){.lead-stats{grid-template-columns:1fr}}
+.lead-stat{padding:0.6rem 0.75rem;background:rgba(229,226,221,0.3);border:1px solid var(--pe);border-radius:4px}
+
+.sheet{position:fixed;left:0;right:0;bottom:0;background:var(--ch);border-top:1px solid rgba(250,247,242,0.18);transform:translateY(100%);transition:transform .3s ease;z-index:50;max-height:72vh;overflow-y:auto}
+.sheet.open{transform:none}
+.sheet-in{max-width:1080px;margin:0 auto;padding:1.5rem clamp(1.25rem,4vw,2.5rem) 2rem}
+.sheet-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1rem;gap:1rem;flex-wrap:wrap}
+.sheet-title{font-family:var(--fd);font-weight:500;font-size:1.15rem;color:var(--ow)}
+.sheet-title em{font-style:italic;color:var(--cl)}
+.sheet-close{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.07em;text-transform:uppercase;color:rgba(250,247,242,0.45);cursor:pointer;border:1px solid rgba(250,247,242,0.15);padding:0.3rem 0.65rem;border-radius:3px;white-space:nowrap}
+.sheet-close:hover{color:var(--cl)}
+.ledger-row{display:grid;grid-template-columns:1fr auto auto auto;gap:0.85rem;padding:0.7rem 0.5rem;border-bottom:1px solid rgba(250,247,242,0.08);align-items:center}
+.lr-name{font-family:var(--fb);font-weight:500;font-size:0.74rem;color:var(--ow)}
+.lr-doc{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.05em;text-transform:uppercase;color:rgba(250,247,242,0.4)}
+.lr-open{font-family:var(--fb);font-size:0.6rem;color:var(--cl);cursor:pointer;white-space:nowrap}
+.lr-open:hover{text-decoration:underline}
+.lr-time{font-family:var(--fd);font-size:0.8rem;color:var(--ow);white-space:nowrap;cursor:pointer;border-bottom:1px dashed rgba(250,247,242,0.25)}
+@media(max-width:700px){.ledger-row{grid-template-columns:1fr auto}}
+.hours-add{display:grid;grid-template-columns:1.2fr 0.7fr 1fr auto;gap:0.5rem;margin-top:1rem;align-items:center}
+@media(max-width:700px){.hours-add{grid-template-columns:1fr 1fr}}
+.hours-add select,.hours-add input{padding:0.45rem 0.55rem;border:1px solid rgba(250,247,242,0.18);border-radius:4px;font-family:var(--fb);font-size:0.66rem;color:var(--ow);background:rgba(250,247,242,0.05)}
+.hours-add select:focus,.hours-add input:focus{outline:none;border-color:var(--cl)}
+.hours-add option{background:var(--ch)}
+
+.logstrip{position:fixed;left:0;right:0;bottom:var(--drawer-h);background:var(--paper);border-top:1px solid var(--ink);z-index:45;display:none}
+.logstrip.show{display:block;animation:pickup .22s ease-out}
+.logstrip-in{max-width:1080px;margin:0 auto;padding:0.7rem clamp(1rem,3vw,1.5rem)}
+.logstrip-row{display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap}
+.logstrip-t{font-family:var(--fb);font-size:0.74rem;color:var(--ch);min-width:180px}
+.logstrip-t strong{font-weight:600}
+.logstrip select{padding:0.35rem 0.5rem;border:1px solid var(--pe);border-radius:4px;font-family:var(--fb);font-size:0.64rem;color:var(--ch);background:var(--paper)}
+.logstrip-min{width:64px;padding:0.35rem 0.5rem;border:1px solid var(--cl);border-radius:4px;font-family:var(--fm);font-size:0.72rem;color:var(--ch);background:var(--paper);text-align:center}
+.logstrip-min:focus{outline:none;border-color:var(--ao)}
+.logstrip-hint{font-family:var(--fb);font-size:0.58rem;color:var(--muted);font-style:italic;margin-top:0.3rem}
+
+.overlay{position:fixed;inset:0;background:rgba(44,41,38,0.93);z-index:100;display:none;overflow-y:auto}
+.overlay.open{display:block}
+.overlay-in{max-width:760px;margin:0 auto;padding:3rem clamp(1.25rem,4vw,2.5rem) 5rem}
+.overlay h2{font-family:var(--fd);font-weight:400;font-size:1.5rem;color:var(--ow);margin-bottom:0.4rem}
+.overlay h2 em{font-style:italic;color:var(--cl)}
+.overlay p,.overlay li{font-family:var(--fb);font-size:0.8rem;color:rgba(250,247,242,0.65);line-height:1.7}
+.overlay ul{list-style:none;margin:0.85rem 0}
+.overlay li{padding:0.3rem 0;border-bottom:1px solid rgba(250,247,242,0.07)}
+.overlay li strong{color:var(--ow);font-weight:500}
+.ov-section{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--cl);font-weight:600;margin:1.5rem 0 0.4rem}
+.toast{position:fixed;bottom:calc(var(--drawer-h) + 12px);right:1.25rem;background:var(--paper);border:1px solid var(--ink);border-left:3px solid var(--sa);padding:0.75rem 1rem;border-radius:5px;font-family:var(--fb);font-size:0.7rem;color:var(--ch);z-index:200;display:none;max-width:300px}
+.toast.show{display:block;animation:pickup .25s ease-out}
+</style>
+</head>
+<body>
+
+<!-- ============ THE DESK ============ -->
+<div class="screen on" id="desk">
+  <div class="desk-wrap">
+    <div class="desk-head">
+      <div class="desk-date">Thursday, June 11</div>
+      <div class="desk-find">Find anything <kbd>⌘K</kbd></div>
+    </div>
+
+    <div class="desk-sub-l"><span class="mini-strata"><i></i><i></i><i></i></span> Needs your hand · three</div>
+    <div class="folders">
+      <div class="folder urgent" id="folder-whitfield" onclick="openDoc('whitfield')">
+        <div class="folder-tab">Whitfield</div>
+        <div class="folder-doc">
+          <div class="folder-name">Whitfield Residence</div>
+          <div class="folder-stage">Project · Procurement · Week 11 of 22</div>
+          <div class="folder-need">
+            <span class="stamp due" id="fw-stamp">Decision due</span>
+            <span class="folder-need-text" id="fw-text"><strong>Sarah's rug decision</strong> passed its Sunday deadline. Nudge or call?</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="folder" id="folder-olsen" onclick="openDoc('olsen')">
+        <div class="folder-tab">Olsen</div>
+        <div class="folder-doc">
+          <div class="folder-name">Olsen Lake House</div>
+          <div class="folder-stage">Proposal · Sent 5 days ago</div>
+          <div class="folder-need">
+            <span class="stamp draft" id="fo-stamp">Reviewed 3×</span>
+            <span class="folder-need-text" id="fo-text"><strong>Opened three times, no comment.</strong> Lingering on the payment schedule.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="folder" id="folder-morrison" onclick="openDoc('morrison')">
+        <div class="folder-tab">Morrison</div>
+        <div class="folder-doc">
+          <div class="folder-name">Morrison · New Lead</div>
+          <div class="folder-stage" id="fm-stage">Brief · Arrived 2 hours ago · 88 match</div>
+          <div class="folder-need">
+            <span class="stamp draft" id="fm-stamp">Unread</span>
+            <span class="folder-need-text" id="fm-text"><strong>Dining + study, $30–40K.</strong> Decide by Thursday.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="desk-sub-l"><span class="mini-strata"><i></i><i></i><i></i></span> In motion · progressing without you · 4</div>
+    <div>
+      <span class="motion-chip"><strong style="color:rgba(250,247,242,0.85)">Chen</strong> — install in 9 days</span>
+      <span class="motion-chip"><strong style="color:rgba(250,247,242,0.85)">Brandt</strong> — 6 items in production</span>
+      <span class="motion-chip"><strong style="color:rgba(250,247,242,0.85)">Keller</strong> — awaiting signature</span>
+      <span class="motion-chip">+1 more</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============ WHITFIELD — FULL BLEED ============ -->
+<div class="screen doc" id="doc-whitfield">
+  <div class="page">
+    <div class="doc-spine">
+      <span class="putdown" onclick="putDown()">← Put down</span>
+      <div class="spine-item settled" onclick="toast('Brief unfolds in place — out of v0.4 scope')"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Brief</span><span class="spine-sub">Settled · Mar 2</span></div></div>
+      <div class="spine-item settled" onclick="toast('Discovery unfolds in place — out of v0.4 scope')"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Discovery</span><span class="spine-sub">Settled · Mar 9</span></div></div>
+      <div class="spine-item settled" onclick="toast('Direction unfolds in place — out of v0.4 scope')"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Direction</span><span class="spine-sub">Settled · Mar 21</span></div></div>
+      <div class="spine-item settled" onclick="toggleUnfold('w-proposal')"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Proposal</span><span class="spine-sub">Signed · Apr 1</span></div></div>
+      <div class="spine-item active"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Project</span><span class="spine-sub">Active · Week 11</span></div></div>
+      <div class="spine-item ghost"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Install</span><span class="spine-sub">Sept 2</span></div></div>
+      <div class="spine-item ghost"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Care</span><span class="spine-sub">—</span></div></div>
+
+      <div class="timerbox">
+        <div class="timer-l"><span class="timer-dot" id="t-dot-whitfield"></span> In hand</div>
+        <div class="timer-time" id="t-time-whitfield">00:00</div>
+        <div class="timer-btns">
+          <span class="t-btn" id="t-pause-whitfield" onclick="pauseResume()">Pause</span>
+          <span class="t-btn" onclick="toggleTimerForm('whitfield')">+ Log</span>
+        </div>
+        <div class="timer-form" id="t-form-whitfield">
+          <input type="number" id="t-min-whitfield" placeholder="Minutes" min="1">
+          <select id="t-act-whitfield"><option>Design</option><option>Sourcing</option><option>Client</option><option>Site visit</option><option>Admin</option></select>
+          <span class="mini-btn clay" style="font-size:0.56rem;padding:0.3rem 0.6rem" onclick="manualLog('whitfield','Whitfield')">Add entry</span>
+        </div>
+      </div>
+
+      <div class="presence">
+        <div class="presence-l">In this document</div>
+        <div class="presence-v">Just you · visible to all of Middlewest</div>
+      </div>
+    </div>
+
+    <div class="doc-main">
+      <div class="doc-letterhead">
+        <div class="lh-strata"><div></div><div></div><div></div></div>
+        <div class="doc-title">Whitfield Residence</div>
+        <div class="doc-subtitle">Sarah & James Whitfield · Living + Dining · Move-in September 2026 · $58,400</div>
+      </div>
+
+      <div class="settled-bar" onclick="toggleUnfold('w-proposal')">
+        <div class="settled-l"><span class="settled-name">Proposal · v2</span><span class="settled-hint">18 items · $58,400 · unfold ↓</span></div>
+        <span class="stamp signed">Signed · Apr 1</span>
+      </div>
+      <div class="uf-body" id="w-proposal">
+        <div class="uf-inner">
+          <p style="font-family:var(--fb);font-size:0.72rem;color:var(--body);line-height:1.65;margin-bottom:0.75rem"><strong style="color:var(--ch)">Scope.</strong> Full design and furnishing of the living and dining zones (480 sq ft): space plan, FF&E specification and procurement of 18 pieces, styling and install. Two revisions included; scope changes by written authorization.</p>
+          <div style="font-family:var(--fm);font-size:0.42rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);margin-bottom:0.4rem;font-weight:600">Payment schedule</div>
+          <div style="display:grid;gap:0.3rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;font-family:var(--fb);font-size:0.68rem;color:var(--body)"><span>M1 · Signing · $14,600</span><span class="stamp paid">Paid · Apr 1</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;font-family:var(--fb);font-size:0.68rem;color:var(--body)"><span>M2 · Production start · $14,600</span><span class="stamp due" id="w-m2-stamp">Drafted</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;font-family:var(--fb);font-size:0.68rem;color:var(--body)"><span>M3 · Pre-install · $14,600</span><span class="stamp draft">Scheduled</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;font-family:var(--fb);font-size:0.68rem;color:var(--body)"><span>M4 · Completion · $14,600</span><span class="stamp draft">Scheduled</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-title">Project · FF&E in motion</span>
+        <span class="sec-meta">11 of 18 underway · tap a line to unfold</span>
+      </div>
+
+      <div class="ffe-line" onclick="toast('Nordic Atelier order detail — see Shaker chairs for the unfold pattern')">
+        <div><div class="ffe-name">Heirloom Oak Dining Table</div><div class="ffe-vendor">Nordic Atelier · arrives late July</div></div>
+        <span class="stamp production">Production</span>
+        <span class="ffe-price">$4,200</span>
+      </div>
+
+      <div class="ffe-line" onclick="toggleUnfold('w-chairs')">
+        <div><div class="ffe-name">Shaker Dining Chairs · ×8</div><div class="ffe-vendor">Sawkille Co · 2 of 8 at studio</div></div>
+        <span class="stamp shipped">Shipped</span>
+        <span class="ffe-price">$3,200</span>
+      </div>
+      <div class="uf-body" id="w-chairs">
+        <div class="line-detail">
+          <div class="ld-grid">
+            <div><div class="ld-l">Purchase order</div><div class="ld-v">PO-0214 · placed Mar 12</div><div class="ld-s">50% deposit paid · balance on ship</div></div>
+            <div><div class="ld-l">Movement</div><div class="ld-v">2 of 8 at studio · 6 in transit</div><div class="ld-s">balance arrives ~Apr 22</div></div>
+            <div><div class="ld-l">Receiving</div><div class="ld-v">2 inspected · 0 damage</div><div class="ld-s">photos on file</div></div>
+          </div>
+          <span class="mini-btn primary" onclick="event.stopPropagation();toast('Vendor thread opens in the margin, anchored to this line')">Message Sawkille</span>
+          <span class="mini-btn" onclick="event.stopPropagation();toast('PO document unfolds — out of v0.4 scope')">View PO</span>
+          <span class="mini-btn" onclick="event.stopPropagation();toggleUnfold('w-chairs')">Fold ↑</span>
+        </div>
+      </div>
+
+      <div class="ffe-line attn" id="w-line-rug">
+        <div><div class="ffe-name">Living Room Rug · 9×12</div><div class="ffe-vendor" id="w-rug-vendor">Awaiting Sarah's pick · 3 options</div></div>
+        <span class="stamp due" id="w-rug-stamp">Decision due · Sun</span>
+        <span class="ffe-price">~$3,200</span>
+      </div>
+
+      <div class="ffe-line" onclick="toast('Woodward order detail — out of v0.4 scope')">
+        <div><div class="ffe-name">Meadow Linen Sectional</div><div class="ffe-vendor">Woodward & Sons · swatch confirmed</div></div>
+        <span class="stamp ordered">Ordered</span>
+        <span class="ffe-price">$6,800</span>
+      </div>
+      <div class="ffe-line" onclick="toast('Apparatus detail — DELIVERED awaiting inspection would show here per R2')">
+        <div><div class="ffe-name">Brass Pendant Cluster</div><div class="ffe-vendor">Apparatus Studio · at studio, inspected clean</div></div>
+        <span class="stamp received">Received</span>
+        <span class="ffe-price">$3,800</span>
+      </div>
+    </div>
+
+    <div class="doc-margin">
+      <div class="margin-label">In the margin</div>
+
+      <div class="m-item decision" id="w-decision" onmouseenter="hl('w-line-rug',true)" onmouseleave="hl('w-line-rug',false)" onclick="toggleM('w-decision-body')">
+        <span class="m-kind" id="w-decision-kind">Decision · overdue</span>
+        <div class="m-t" id="w-decision-t">Rug · 3 options with Sarah</div>
+        <div class="m-d" id="w-decision-d">Due Sunday · opened twice, no pick.</div>
+        <div class="m-body" id="w-decision-body">
+          <div class="m-actions" id="w-decision-actions">
+            <span class="mini-btn clay" onclick="event.stopPropagation();resolveDecision('extend')">Extend to Wed (call booked)</span>
+            <span class="mini-btn" onclick="event.stopPropagation();resolveDecision('nudge')">Send a nudge</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="m-item message" id="w-msg" onmouseenter="hl('w-line-rug',true)" onmouseleave="hl('w-line-rug',false)" onclick="toggleM('w-msg-body')">
+        <span class="m-kind">Message · Sarah · 2h · anchored to Rug</span>
+        <div class="m-t">"Can we talk Wednesday about the rug? Torn between two."</div>
+        <div class="m-body" id="w-msg-body">
+          <div class="m-thread" id="w-thread">
+            <div class="m-msg"><strong>Sarah · 7:14 AM</strong><br>Can we talk Wednesday about the rug? Torn between the Persian and the kilim.</div>
+          </div>
+          <textarea class="m-input" id="w-reply" rows="2" placeholder="Reply to Sarah…" onclick="event.stopPropagation()"></textarea>
+          <span class="mini-btn primary" onclick="event.stopPropagation();sendReply()">Send</span>
+        </div>
+      </div>
+
+      <div class="m-item invoice" id="w-inv" onclick="toggleM('w-inv-body')">
+        <span class="m-kind">Money · milestone 2</span>
+        <div class="m-t" id="w-inv-t">$14,600 · production start</div>
+        <div class="m-d" id="w-inv-d">Drafted automatically when the table hit production.</div>
+        <div class="m-body" id="w-inv-body">
+          <div class="m-actions" id="w-inv-actions">
+            <span class="mini-btn clay" onclick="event.stopPropagation();sendInvoice()">Review & send invoice</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="m-item pulse" id="w-pulse" onclick="toggleM('w-pulse-body')">
+        <span class="m-kind">Friday Pulse · draft ready</span>
+        <div class="m-t" id="w-pulse-t">This week: production started, rug pending</div>
+        <div class="m-d" id="w-pulse-d">Auto-drafted from this week's stamps. Review & send.</div>
+        <div class="m-body" id="w-pulse-body">
+          <div class="m-thread">
+            <div class="m-msg" style="font-style:italic">"Hi Sarah and James — your dining table entered production Wednesday; timeline holds for late July. Two chairs arrived at our studio. The rug decision is queued for our Wednesday call…"</div>
+          </div>
+          <div class="m-actions" id="w-pulse-actions">
+            <span class="mini-btn clay" onclick="event.stopPropagation();sendPulse()">Send Pulse</span>
+            <span class="mini-btn" onclick="event.stopPropagation();toast('Full editor opens over the margin — out of v0.4 scope')">Edit first</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="m-item time" id="w-time-rec" style="display:none" onclick="openSheet('hours')">
+        <span class="m-kind">Time · today</span>
+        <div class="m-t" id="w-time-t">0:00 in hand</div>
+        <div class="m-d">Logged to Whitfield · adjust or review in the Hours ledger</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ OLSEN — FULL BLEED ============ -->
+<div class="screen doc" id="doc-olsen">
+  <div class="page">
+    <div class="doc-spine">
+      <span class="putdown" onclick="putDown()">← Put down</span>
+      <div class="spine-item settled"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Brief</span><span class="spine-sub">Settled · Mar 18</span></div></div>
+      <div class="spine-item settled"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Discovery</span><span class="spine-sub">Settled · Mar 24</span></div></div>
+      <div class="spine-item settled"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Direction</span><span class="spine-sub">Settled · Mar 30</span></div></div>
+      <div class="spine-item active"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Proposal</span><span class="spine-sub">Awaiting signature</span></div></div>
+      <div class="spine-item ghost"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Project</span><span class="spine-sub">—</span></div></div>
+      <div class="spine-item ghost"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Install</span><span class="spine-sub">—</span></div></div>
+      <div class="spine-item ghost"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Care</span><span class="spine-sub">—</span></div></div>
+
+      <div class="timerbox">
+        <div class="timer-l"><span class="timer-dot" id="t-dot-olsen"></span> In hand</div>
+        <div class="timer-time" id="t-time-olsen">00:00</div>
+        <div class="timer-btns">
+          <span class="t-btn" id="t-pause-olsen" onclick="pauseResume()">Pause</span>
+          <span class="t-btn" onclick="toggleTimerForm('olsen')">+ Log</span>
+        </div>
+        <div class="timer-form" id="t-form-olsen">
+          <input type="number" id="t-min-olsen" placeholder="Minutes" min="1">
+          <select id="t-act-olsen"><option>Design</option><option>Sourcing</option><option>Client</option><option>Site visit</option><option>Admin</option></select>
+          <span class="mini-btn clay" style="font-size:0.56rem;padding:0.3rem 0.6rem" onclick="manualLog('olsen','Olsen')">Add entry</span>
+        </div>
+      </div>
+
+      <div class="presence">
+        <div class="presence-l">In this document</div>
+        <div class="presence-v">Just you · visible to all of Middlewest</div>
+      </div>
+    </div>
+
+    <div class="doc-main">
+      <div class="doc-letterhead">
+        <div class="lh-strata"><div></div><div></div><div></div></div>
+        <div class="doc-title">Olsen Lake House</div>
+        <div class="doc-subtitle">Mark & Petra Olsen · Great room + screened porch · $41,200 proposed</div>
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-title">Proposal · v1</span>
+        <span class="sec-meta">Sent Apr 3 · awaiting signature</span>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:0.65rem 0.5rem;border-bottom:1px solid var(--pe)">
+        <span style="font-family:var(--fb);font-size:0.76rem;color:var(--ch);font-weight:500">Scope of work</span>
+        <span style="font-family:var(--fm);font-size:0.46rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Read 3× · 4 min avg</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:0.65rem 0.5rem;border-bottom:1px solid var(--pe)">
+        <span style="font-family:var(--fb);font-size:0.76rem;color:var(--ch);font-weight:500">FF&E schedule · 14 items</span>
+        <span style="font-family:var(--fm);font-size:0.46rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Read 2×</span>
+      </div>
+      <div class="ffe-line attn" id="o-line-pay">
+        <div><div class="ffe-name">Payment schedule · 4 milestones</div><div class="ffe-vendor">First: $10,300 on signing</div></div>
+        <span class="stamp due">Lingered 11 min</span>
+        <span></span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:0.65rem 0.5rem;border-bottom:1px solid var(--pe)">
+        <span style="font-family:var(--fb);font-size:0.76rem;color:var(--ch);font-weight:500">Terms · revisions, exclusions</span>
+        <span style="font-family:var(--fm);font-size:0.46rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Read 1×</span>
+      </div>
+    </div>
+
+    <div class="doc-margin">
+      <div class="margin-label">In the margin</div>
+      <div class="m-item decision" onmouseenter="hl('o-line-pay',true)" onmouseleave="hl('o-line-pay',false)">
+        <span class="m-kind">Reading insight</span>
+        <div class="m-t">Hesitation reads as financial, not aesthetic</div>
+        <div class="m-d">3 opens, zero comments, 11 minutes on the payment schedule. A restructure note could unlock it.</div>
+      </div>
+      <div class="m-item message" id="o-note" onmouseenter="hl('o-line-pay',true)" onmouseleave="hl('o-line-pay',false)" onclick="toggleM('o-note-body')">
+        <span class="m-kind">Note to Olsens · anchored to Payment schedule</span>
+        <div class="m-t" id="o-note-t">Draft a note offering to restructure</div>
+        <div class="m-body" id="o-note-body">
+          <textarea class="m-input" id="o-note-input" rows="3" onclick="event.stopPropagation()">Mark, Petra — noticed you've had a careful look. If the milestone sizing is the sticking point, I can restructure to five smaller payments with no change to the total. Want me to send that version?</textarea>
+          <div class="m-actions" id="o-note-actions">
+            <span class="mini-btn clay" onclick="event.stopPropagation();sendOlsenNote()">Send note</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MORRISON — FULL BLEED ============ -->
+<div class="screen doc" id="doc-morrison">
+  <div class="page">
+    <div class="doc-spine">
+      <span class="putdown" onclick="putDown()">← Put down</span>
+      <div class="spine-item active" id="m-spine-brief"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Brief</span><span class="spine-sub" id="m-spine-brief-sub">New · today</span></div></div>
+      <div class="spine-item ghost" id="m-spine-disc"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Discovery</span><span class="spine-sub" id="m-spine-disc-sub">—</span></div></div>
+      <div class="spine-item ghost"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Direction</span><span class="spine-sub">—</span></div></div>
+      <div class="spine-item ghost"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Proposal</span><span class="spine-sub">—</span></div></div>
+      <div class="spine-item ghost"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Project</span><span class="spine-sub">—</span></div></div>
+      <div class="spine-item ghost"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Install</span><span class="spine-sub">—</span></div></div>
+      <div class="spine-item ghost"><div class="spine-marker"><div></div><div></div><div></div></div><div><span class="spine-label">Care</span><span class="spine-sub">—</span></div></div>
+
+      <div class="timerbox">
+        <div class="timer-l"><span class="timer-dot" id="t-dot-morrison"></span> In hand</div>
+        <div class="timer-time" id="t-time-morrison">00:00</div>
+        <div class="timer-btns">
+          <span class="t-btn" id="t-pause-morrison" onclick="pauseResume()">Pause</span>
+          <span class="t-btn" onclick="toggleTimerForm('morrison')">+ Log</span>
+        </div>
+        <div class="timer-form" id="t-form-morrison">
+          <input type="number" id="t-min-morrison" placeholder="Minutes" min="1">
+          <select id="t-act-morrison"><option>Client</option><option>Design</option><option>Admin</option></select>
+          <span class="mini-btn clay" style="font-size:0.56rem;padding:0.3rem 0.6rem" onclick="manualLog('morrison','Morrison')">Add entry</span>
+        </div>
+      </div>
+
+      <div class="presence">
+        <div class="presence-l">A document is born small</div>
+        <div class="presence-v">One section today. Seven by September.</div>
+      </div>
+    </div>
+
+    <div class="doc-main">
+      <div class="doc-letterhead">
+        <div class="lh-strata"><div></div><div></div><div></div></div>
+        <div class="doc-title" id="m-title">Morrison · Lead</div>
+        <div class="doc-subtitle">Dining + study · Arrived 9:41 AM via Patina iOS · anonymous until accepted</div>
+      </div>
+
+      <div class="lead-stats">
+        <div class="lead-stat"><div class="ld-l">Match</div><div class="ld-v">88 · Transitional-warm</div></div>
+        <div class="lead-stat"><div class="ld-l">Budget</div><div class="ld-v">$30–40K furniture</div></div>
+        <div class="lead-stat"><div class="ld-l">Timeline</div><div class="ld-v">Holidays 2026</div></div>
+      </div>
+
+      <div class="lead-quote">"We host both sets of parents every other Sunday. The dining room has to seat ten without feeling like a conference room — and I work from the study every day, so it can't be an afterthought."</div>
+
+      <div class="lead-tags">
+        <span class="lead-tag match">Transitional · 84%</span>
+        <span class="lead-tag match">Quiet Traditional · 66%</span>
+        <span class="lead-tag">Walnut tones</span>
+        <span class="lead-tag">Bookshelf wall</span>
+        <span class="lead-tag">Hosts 10+</span>
+        <span class="lead-tag">WFH daily</span>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:0.5rem;padding:0.7rem 0.5rem;border-top:1px solid var(--pe);border-bottom:1px solid var(--pe);margin:0.85rem 0">
+        <span style="font-family:var(--fd);color:var(--cl);font-size:1rem">◈</span>
+        <span style="font-family:var(--fb);font-size:0.7rem;color:var(--body)">3D room scan attached · LiDAR · dining 16'×13', study 11'×10' · unfolds in place</span>
+      </div>
+
+      <div id="m-actions" style="display:flex;gap:0.5rem;margin-top:1.1rem">
+        <span class="mini-btn clay" style="padding:0.55rem 1.1rem;font-size:0.72rem" onclick="acceptLead()">Accept — begin the document</span>
+        <span class="mini-btn" style="padding:0.55rem 1.1rem;font-size:0.72rem" onclick="toast('Pass routes the lead back with a referral — out of v0.4 scope')">Pass</span>
+      </div>
+
+      <div id="m-grown" style="display:none;margin-top:1.25rem">
+        <div class="settled-bar" style="cursor:default">
+          <div class="settled-l"><span class="settled-name">Brief</span><span class="settled-hint">Read & accepted</span></div>
+          <span class="stamp accepted">Accepted · 9:52 AM</span>
+        </div>
+        <div class="sec-head">
+          <span class="sec-title">Discovery</span>
+          <span class="sec-meta" style="color:var(--cl)">New section · unfurled just now</span>
+        </div>
+        <div style="padding:0.9rem 1rem;background:rgba(168,181,160,0.06);border-left:3px solid var(--sa);border-radius:0 5px 5px 0">
+          <div style="font-family:var(--fb);font-size:0.74rem;color:var(--body);line-height:1.65">
+            <strong style="color:var(--ch)">The document grew.</strong> Client identity unlocked — <strong style="color:var(--ch)">Dana & Chris Morrison, Middleton</strong>. Your introduction email is on its way with a Discovery Call scheduler. This section will hold the call notes, must-haves, and hard nos.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="doc-margin">
+      <div class="margin-label">In the margin</div>
+      <div class="m-item decision" id="m-margin-decide">
+        <span class="m-kind">Decision · yours</span>
+        <div class="m-t">Accept or pass by Thursday</div>
+        <div class="m-d">Holds your sub-4-hour response streak. The system suggested you: 88 style match, 6 miles out.</div>
+      </div>
+      <div class="m-item message" id="m-margin-grown" style="display:none">
+        <span class="m-kind">Sent · just now</span>
+        <div class="m-t">Introduction email → Dana Morrison</div>
+        <div class="m-d">With your personal note and the call scheduler. Replies will thread here.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ PERSISTENT STUDIO DRAWER — the only layer above the paper ============ -->
+<div class="drawerbar">
+  <span class="drawer-lab">The drawer</span>
+  <span class="ledger" onclick="toast('The Library opens as a full reference book — out of v0.4 scope')"><span class="ledger-spine" style="background:var(--cl)"></span><span class="ledger-name">Library</span><span class="ledger-count">336</span></span>
+  <span class="ledger" onclick="openSheet('orders')"><span class="ledger-spine" style="background:var(--db)"></span><span class="ledger-name">Orders</span><span class="ledger-count">23 open</span></span>
+  <span class="ledger" onclick="toast('Accounts ledger — out of v0.4 scope')"><span class="ledger-spine" style="background:var(--sa)"></span><span class="ledger-name">Accounts</span><span class="ledger-count">$31K due</span></span>
+  <span class="ledger" onclick="toast('People index — out of v0.4 scope')"><span class="ledger-spine" style="background:var(--te)"></span><span class="ledger-name">People</span><span class="ledger-count">41</span></span>
+  <span class="ledger" onclick="openSheet('hours')"><span class="ledger-spine" style="background:var(--mo)"></span><span class="ledger-name">Hours</span><span class="ledger-count" id="hours-week-count">6.2h wk</span></span>
+  <span class="bar-today" onclick="openSheet('hours')">
+    <span class="bar-today-l">In hand today</span>
+    <span class="bar-today-v" id="bar-today-v">1h 45m</span>
+  </span>
+  <span class="drawer-help" onclick="toggleOverlay()">?</span>
+</div>
+
+<!-- ============ ORDERS SHEET ============ -->
+<div class="sheet" id="sheet-orders">
+  <div class="sheet-in">
+    <div class="sheet-head">
+      <div>
+        <div class="sheet-title">Orders <em>· the studio ledger</em></div>
+        <div style="font-family:var(--fb);font-size:0.66rem;color:rgba(250,247,242,0.45);margin-top:0.15rem">A lens over every document — pulled over whatever you're holding, put back when done.</div>
+      </div>
+      <span class="sheet-close" onclick="closeSheets()">Close · put back</span>
+    </div>
+    <div style="font-family:var(--fm);font-size:0.46rem;letter-spacing:0.07em;text-transform:uppercase;color:var(--cl);font-weight:600;margin-bottom:0.4rem">Arriving this week</div>
+    <div class="ledger-row">
+      <div><div class="lr-name">Shaker Dining Chairs · 6 of 8 balance</div><div class="lr-doc">Whitfield · PO-0214 · Sawkille</div></div>
+      <span class="stamp shipped">Shipped</span>
+      <span style="font-family:var(--fd);font-size:0.8rem;color:var(--ow)">~Apr 22</span>
+      <span class="lr-open" onclick="closeSheets();openDoc('whitfield')">open document →</span>
+    </div>
+    <div class="ledger-row">
+      <div><div class="lr-name">Reading Chair · pair</div><div class="lr-doc">Brandt · PO-0219 · Woodward</div></div>
+      <span class="stamp shipped">Shipped</span>
+      <span style="font-family:var(--fd);font-size:0.8rem;color:var(--ow)">~Apr 24</span>
+      <span class="lr-open" onclick="toast('Brandt document — out of v0.4 scope')">open document →</span>
+    </div>
+    <div style="font-family:var(--fm);font-size:0.46rem;letter-spacing:0.07em;text-transform:uppercase;color:var(--cl);font-weight:600;margin:1.1rem 0 0.4rem">Batch opportunity</div>
+    <div class="ledger-row" style="border:1px solid rgba(196,165,123,0.3);border-radius:5px;background:rgba(196,165,123,0.05)">
+      <div><div class="lr-name">Two Sawkille POs could ship together</div><div class="lr-doc">Whitfield + Chen · saves ~$180 freight</div></div>
+      <span></span>
+      <span class="mini-btn clay" style="margin:0" onclick="toast('Batch flow writes the change back into both documents — out of v0.4 scope')">Combine</span>
+      <span></span>
+    </div>
+  </div>
+</div>
+
+<!-- ============ HOURS SHEET ============ -->
+<div class="sheet" id="sheet-hours">
+  <div class="sheet-in">
+    <div class="sheet-head">
+      <div>
+        <div class="sheet-title">Hours <em>· the time ledger</em></div>
+        <div style="font-family:var(--fb);font-size:0.66rem;color:rgba(250,247,242,0.45);margin-top:0.15rem">Capture happens in the documents. Review, adjust, and export happen here. Tap any duration to edit.</div>
+      </div>
+      <div style="display:flex;gap:0.85rem;align-items:center">
+        <span style="font-family:var(--fd);font-style:italic;font-size:1rem;color:var(--cl)" id="hours-week-total">6h 12m this week</span>
+        <span class="sheet-close" onclick="closeSheets()">Close · put back</span>
+      </div>
+    </div>
+
+    <div style="font-family:var(--fm);font-size:0.46rem;letter-spacing:0.07em;text-transform:uppercase;color:var(--cl);font-weight:600;margin-bottom:0.4rem">Entries</div>
+    <div id="hours-rows">
+      <div class="ledger-row">
+        <div><div class="lr-name">Direction refinement · Design</div><div class="lr-doc">Olsen · yesterday · timer</div></div>
+        <span class="lr-time" onclick="toast('Inline duration edit — specced for build, out of prototype scope')">1h 10m</span>
+        <span class="stamp draft">Unbilled</span>
+        <span class="lr-open" onclick="closeSheets();openDoc('olsen')">open document →</span>
+      </div>
+      <div class="ledger-row">
+        <div><div class="lr-name">Vendor call · Sourcing</div><div class="lr-doc">Chen · yesterday · manual</div></div>
+        <span class="lr-time" onclick="toast('Inline duration edit — specced for build, out of prototype scope')">0h 35m</span>
+        <span class="stamp draft">Unbilled</span>
+        <span class="lr-open" onclick="toast('Chen document — out of v0.4 scope')">open document →</span>
+      </div>
+      <div class="ledger-row">
+        <div><div class="lr-name">Margin work · Client</div><div class="lr-doc">Whitfield · this morning · timer</div></div>
+        <span class="lr-time" onclick="toast('Inline duration edit — specced for build, out of prototype scope')">1h 45m</span>
+        <span class="stamp draft">Unbilled</span>
+        <span class="lr-open" onclick="closeSheets();openDoc('whitfield')">open document →</span>
+      </div>
+    </div>
+
+    <div style="font-family:var(--fm);font-size:0.46rem;letter-spacing:0.07em;text-transform:uppercase;color:var(--cl);font-weight:600;margin:1.25rem 0 0.4rem">Add an entry · after-the-fact</div>
+    <div class="hours-add">
+      <select id="ha-doc"><option>Whitfield</option><option>Olsen</option><option>Morrison</option><option>Chen</option><option>Brandt</option></select>
+      <input type="number" id="ha-min" placeholder="Minutes" min="1">
+      <select id="ha-act"><option>Design</option><option>Sourcing</option><option>Client</option><option>Site visit</option><option>Admin</option></select>
+      <span class="mini-btn clay" style="margin:0" onclick="ledgerAdd()">Add</span>
+    </div>
+    <div style="margin-top:1.25rem;display:flex;gap:0.5rem">
+      <span class="mini-btn" style="border-color:rgba(250,247,242,0.2);color:rgba(250,247,242,0.7)" onclick="toast('Weekly export flows to Accounts and QBO — out of v0.4 scope')">Export week → Accounts</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============ LOG CONFIRM STRIP ============ -->
+<div class="logstrip" id="logstrip">
+  <div class="logstrip-in">
+    <div class="logstrip-row">
+      <span class="logstrip-t" id="logstrip-t"><strong>Whitfield</strong> was in hand for <strong>47m</strong> — log</span>
+      <input type="number" class="logstrip-min" id="logstrip-min" min="1">
+      <span style="font-family:var(--fb);font-size:0.7rem;color:var(--body)">min as</span>
+      <select id="logstrip-act"><option>Client</option><option>Design</option><option>Sourcing</option><option>Site visit</option><option>Admin</option></select>
+      <span class="mini-btn clay" style="margin:0" onclick="confirmLog(true)">Log it</span>
+      <span class="mini-btn" style="margin:0" onclick="confirmLog(false)">Discard</span>
+    </div>
+    <div class="logstrip-hint">Adjust either way — trim a break the timer counted, or add the sketching, calls, and tear-sheet reading it couldn't see.</div>
+  </div>
+</div>
+
+<!-- ============ HELP OVERLAY ============ -->
+<div class="overlay" id="overlay">
+  <div class="overlay-in">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1rem">
+      <h2>v0.4 — in hand, the paper <em>is the screen.</em></h2>
+      <span class="sheet-close" onclick="toggleOverlay()">Close · Esc</span>
+    </div>
+    <p>Everything from v0.1–v0.3 still works. New in v0.4 (ruling D12):</p>
+
+    <div class="ov-section">Full-bleed document</div>
+    <ul>
+      <li><strong>A document in hand fills the entire viewport.</strong> No charcoal surround, no page border or radius, no stacked edge — those are Desk-state devices, for objects ON the desk. In hand, you're IN the paper. Strict focus (D1), expressed spatially.</li>
+      <li><strong>The drawer is the only persistent layer above the paper</strong> — the desk edge still showing under your work. Sheets, the log strip, popovers, and ⌘K are the only other overlays.</li>
+      <li><strong>The spine and margin are sticky full-height rails.</strong> Put down, the timer, presence, and the margin items stay in reach no matter how long the FF&E table scrolls. Main content scrolls between them.</li>
+      <li><strong>Pick up = raise to fill</strong> (scale-grow, ~270ms; reduced-motion: crossfade). Put down recedes to the Desk.</li>
+    </ul>
+
+    <div class="ov-section">Also aligned with the Slice 1 build</div>
+    <ul>
+      <li><strong>The Desk headline is the date</strong> in Playfair italic, as shipped. Section labels carry the mini Strata Mark.</li>
+      <li><strong>Stamps use R2 vocabulary</strong> (PRODUCTION / SHIPPED / RECEIVED…), STAGE_CONFIG canonical.</li>
+    </ul>
+
+    <div class="ov-section">The rule</div>
+    <ul>
+      <li><strong>On the Desk: objects on a surface.</strong> Contrast, stacked edges, tabs.</li>
+      <li><strong>In hand: the paper is your whole field of vision.</strong> Drawer below, overlays above, nothing else.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let current='desk';
+const docNames={whitfield:'Whitfield',olsen:'Olsen',morrison:'Morrison'};
+
+let timer={doc:null,startTs:null,acc:0,running:false,intv:null};
+let todaySec=6300;
+let pendingLog=null;
+
+function fmt(s){const m=Math.floor(s/60),ss=s%60;return String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0');}
+function fmtLong(s){const h=Math.floor(s/3600),m=Math.round((s%3600)/60);return h>0?h+'h '+String(m).padStart(2,'0')+'m':m+'m';}
+function elapsed(){return timer.acc+(timer.running&&timer.startTs?Math.floor((Date.now()-timer.startTs)/1000):0);}
+function tick(){if(timer.doc){const el=document.getElementById('t-time-'+timer.doc);if(el)el.textContent=fmt(elapsed());}}
+function startTimer(doc){
+  timer={doc:doc,startTs:Date.now(),acc:0,running:true,intv:setInterval(tick,1000)};
+  const d=document.getElementById('t-dot-'+doc);if(d)d.classList.remove('paused');
+  const p=document.getElementById('t-pause-'+doc);if(p)p.textContent='Pause';
+  tick();
+}
+function stopTimerForLeave(){
+  if(!timer.doc)return null;
+  clearInterval(timer.intv);
+  const sec=elapsed();const doc=timer.doc;
+  timer={doc:null,startTs:null,acc:0,running:false,intv:null};
+  return {doc:doc,sec:sec};
+}
+function pauseResume(){
+  if(!timer.doc)return;
+  const p=document.getElementById('t-pause-'+timer.doc);
+  const d=document.getElementById('t-dot-'+timer.doc);
+  if(timer.running){
+    timer.acc=elapsed();timer.running=false;timer.startTs=null;clearInterval(timer.intv);
+    p.textContent='Resume';d.classList.add('paused');
+    toast('Timer paused — the document is still in hand');
+  }else{
+    timer.running=true;timer.startTs=Date.now();timer.intv=setInterval(tick,1000);
+    p.textContent='Pause';d.classList.remove('paused');
+  }
+}
+function toggleTimerForm(doc){document.getElementById('t-form-'+doc).classList.toggle('open');}
+function manualLog(doc,name){
+  const m=parseInt(document.getElementById('t-min-'+doc).value);
+  if(!m||m<1){toast('Enter minutes first');return;}
+  const act=document.getElementById('t-act-'+doc).value;
+  addEntry(name,m*60,act,'manual');
+  document.getElementById('t-min-'+doc).value='';
+  document.getElementById('t-form-'+doc).classList.remove('open');
+  toast(m+'m · '+act+' logged to '+name+' — adjust any time in the Hours ledger');
+}
+function addEntry(name,sec,act,source){
+  todaySec+=sec;
+  document.getElementById('bar-today-v').textContent=fmtLong(todaySec);
+  const rows=document.getElementById('hours-rows');
+  const div=document.createElement('div');
+  div.className='ledger-row';
+  div.innerHTML='<div><div class="lr-name">'+act+'</div><div class="lr-doc">'+name+' · just now · '+source+'</div></div><span class="lr-time" onclick="toast(\'Inline duration edit — specced for build, out of prototype scope\')">'+fmtLong(sec)+'</span><span class="stamp draft">Unbilled</span><span class="lr-open">open document →</span>';
+  rows.insertBefore(div,rows.firstChild);
+  if(name==='Whitfield'){
+    const rec=document.getElementById('w-time-rec');
+    rec.style.display='block';
+    const prev=rec.dataset.sec?parseInt(rec.dataset.sec):0;
+    rec.dataset.sec=prev+sec;
+    document.getElementById('w-time-t').textContent=fmtLong(prev+sec)+' in hand today';
+  }
+}
+function offerLog(leave){
+  if(!leave||leave.sec<60)return;
+  pendingLog=leave;
+  document.getElementById('logstrip-t').innerHTML='<strong>'+docNames[leave.doc]+'</strong> was in hand for <strong>'+fmtLong(leave.sec)+'</strong> — log';
+  document.getElementById('logstrip-min').value=Math.max(1,Math.round(leave.sec/60));
+  document.getElementById('logstrip').classList.add('show');
+}
+function confirmLog(yes){
+  document.getElementById('logstrip').classList.remove('show');
+  if(yes&&pendingLog){
+    const m=parseInt(document.getElementById('logstrip-min').value);
+    if(!m||m<1){toast('Discarded — no valid duration');pendingLog=null;return;}
+    const act=document.getElementById('logstrip-act').value;
+    addEntry(docNames[pendingLog.doc],m*60,act,'timer');
+    const adjusted=Math.abs(m*60-pendingLog.sec)>=60;
+    toast(fmtLong(m*60)+' · '+act+' logged to '+docNames[pendingLog.doc]+(adjusted?' — adjusted from '+fmtLong(pendingLog.sec):''));
+  }
+  pendingLog=null;
+}
+
+function openDoc(id){
+  offerLog(stopTimerForLeave());
+  document.getElementById(current==='desk'?'desk':'doc-'+current).classList.remove('on');
+  document.getElementById('doc-'+id).classList.add('on');
+  current=id;
+  startTimer(id);
+  window.scrollTo({top:0});
+}
+function putDown(){
+  offerLog(stopTimerForLeave());
+  document.getElementById('doc-'+current).classList.remove('on');
+  document.getElementById('desk').classList.add('on');
+  current='desk';
+  window.scrollTo({top:0});
+}
+function toggleUnfold(id){document.getElementById(id).classList.toggle('open');}
+function toggleM(id){document.getElementById(id).classList.toggle('open');}
+function hl(id,on){const el=document.getElementById(id);if(el)el.classList.toggle('hl',on);}
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(t._tm);
+  t._tm=setTimeout(()=>t.classList.remove('show'),3200);
+}
+
+function resolveDecision(mode){
+  const stamp=document.getElementById('w-rug-stamp');
+  const line=document.getElementById('w-line-rug');
+  const kind=document.getElementById('w-decision-kind');
+  const t=document.getElementById('w-decision-t');
+  const d=document.getElementById('w-decision-d');
+  const item=document.getElementById('w-decision');
+  document.getElementById('w-decision-actions').innerHTML='';
+  if(mode==='extend'){
+    stamp.textContent='Decision due · Wed';stamp.className='stamp extended';
+    line.classList.remove('attn');
+    document.getElementById('w-rug-vendor').textContent='Decision extended · call booked Wednesday 10 AM';
+    kind.textContent='Decision · extended';
+    t.textContent='Rug · extended to Wednesday ✓';
+    d.textContent='Call booked Wed 10 AM. Sarah notified in her portal + email.';
+    item.classList.add('resolved');
+    document.getElementById('fw-stamp').textContent='Call Wed 10 AM';
+    document.getElementById('fw-stamp').className='stamp extended';
+    document.getElementById('fw-text').innerHTML='<strong>Rug decision extended.</strong> Call booked with Sarah for Wednesday.';
+    document.getElementById('folder-whitfield').classList.remove('urgent');
+    toast('One act, three surfaces: line stamp, margin, and Desk all updated');
+  }else{
+    kind.textContent='Decision · nudged';
+    d.textContent='Nudge sent 9:02 AM · deadline holds at today EOD.';
+    document.getElementById('fw-text').innerHTML='<strong>Nudge sent to Sarah</strong> this morning. Deadline holds.';
+    toast('Nudge sent — anchored to the rug line, mirrored in Sarah\u2019s portal');
+  }
+}
+function sendReply(){
+  const input=document.getElementById('w-reply');
+  const v=input.value.trim();
+  if(!v){toast('Type a reply first');return;}
+  const thread=document.getElementById('w-thread');
+  const div=document.createElement('div');
+  div.className='m-msg';
+  div.innerHTML='<strong>You · just now</strong><br>'+v.replace(/</g,'&lt;');
+  thread.appendChild(div);
+  input.value='';
+  toast('Reply sent — Sarah sees it in her portal, anchored to the same rug line');
+}
+function sendInvoice(){
+  document.getElementById('w-inv-actions').innerHTML='<span class="stamp paid" style="transform:none">Sent · awaiting payment</span>';
+  document.getElementById('w-inv-d').textContent='Sent just now. The Paid stamp will land here and on the payment schedule.';
+  const m2=document.getElementById('w-m2-stamp');
+  m2.textContent='Invoiced';m2.className='stamp shipped';
+  toast('Invoice sent. Margin and payment schedule updated together');
+}
+function sendPulse(){
+  document.getElementById('w-pulse-actions').innerHTML='<span class="stamp paid" style="transform:none">Sent · Fri 4:02 PM</span>';
+  document.getElementById('w-pulse-d').textContent='Sarah gets it in her inbox; it archives into this margin.';
+  document.getElementById('w-pulse-t').textContent='Friday Pulse · sent ✓';
+  toast('Pulse sent from the margin — where it lives (Q5/D5)');
+}
+function sendOlsenNote(){
+  document.getElementById('o-note-actions').innerHTML='<span class="stamp paid" style="transform:none">Sent · anchored</span>';
+  document.getElementById('o-note-t').textContent='Restructure note sent ✓';
+  document.getElementById('fo-stamp').textContent='Note sent';
+  document.getElementById('fo-text').innerHTML='<strong>Restructure offer sent.</strong> Awaiting the Olsens\u2019 reply.';
+  toast('Note sent, anchored to the payment schedule. Their reply threads right here.');
+}
+function acceptLead(){
+  document.getElementById('m-actions').style.display='none';
+  document.getElementById('m-grown').style.display='block';
+  document.getElementById('m-title').textContent='Morrison Residence';
+  const brief=document.getElementById('m-spine-brief');
+  brief.classList.remove('active');brief.classList.add('settled');
+  document.getElementById('m-spine-brief-sub').textContent='Settled · today';
+  const disc=document.getElementById('m-spine-disc');
+  disc.classList.remove('ghost');disc.classList.add('active');
+  document.getElementById('m-spine-disc-sub').textContent='Unfurled · today';
+  document.getElementById('m-margin-decide').classList.add('resolved');
+  document.getElementById('m-margin-grown').style.display='block';
+  document.getElementById('fm-stamp').textContent='Accepted';
+  document.getElementById('fm-stamp').className='stamp accepted';
+  document.getElementById('fm-stage').textContent='Discovery · call to schedule';
+  document.getElementById('fm-text').innerHTML='<strong>Dana & Chris Morrison.</strong> Intro sent — awaiting their call slot.';
+  toast('The document grew. No conversion, no navigation — a new section, in place.');
+}
+
+function openSheet(which){
+  closeSheets();
+  document.getElementById('sheet-'+which).classList.add('open');
+}
+function closeSheets(){
+  document.getElementById('sheet-orders').classList.remove('open');
+  document.getElementById('sheet-hours').classList.remove('open');
+}
+function ledgerAdd(){
+  const docSel=document.getElementById('ha-doc').value;
+  const m=parseInt(document.getElementById('ha-min').value);
+  if(!m||m<1){toast('Enter minutes first');return;}
+  const act=document.getElementById('ha-act').value;
+  addEntry(docSel,m*60,act,'manual');
+  document.getElementById('ha-min').value='';
+  toast(m+'m · '+act+' logged to '+docSel);
+}
+function toggleOverlay(){document.getElementById('overlay').classList.toggle('open');}
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    const ov=document.getElementById('overlay');
+    const ls=document.getElementById('logstrip');
+    if(ov.classList.contains('open')){ov.classList.remove('open');return;}
+    if(ls.classList.contains('show')){confirmLog(false);return;}
+    const so=document.getElementById('sheet-orders'),sh=document.getElementById('sheet-hours');
+    if(so.classList.contains('open')||sh.classList.contains('open')){closeSheets();return;}
+    if(current!=='desk')putDown();
+  }
+});
+</script>
+</body>
+</html>

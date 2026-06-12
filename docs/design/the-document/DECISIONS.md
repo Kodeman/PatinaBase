@@ -195,3 +195,20 @@ omit the signing moment. Now surfaces as a needs-your-hand folder: need line
 "Signed — open the project", SIGNED stamp (sage), ranked directly under
 overdue decisions. §4 doesn't enumerate this sub-state; flagged for design
 review in the Slice 1 PR since the need line is designer-visible.
+
+### D12 · Full-bleed document — 2026-06-11
+
+A document in hand fills the entire viewport. No charcoal surround, no page
+border or radius, no stacked edge — those are Desk-state devices, for objects
+ON the desk; in hand, the paper IS the screen (D1 expressed spatially). The
+Studio Drawer is the only persistent layer above the paper — the desk edge
+still showing beneath the work. Ledger sheets, the log strip, Doc* popovers,
+and ⌘K are the only other overlays; nothing else coexists with an open
+document. The spine and margin become sticky full-height rails (Put down,
+timer, presence, and margin items always reachable); main content scrolls
+between them, padded clear of the drawer. Pick up = raise-to-fill scale
+(~270ms; reduced-motion: crossfade); put down recedes to the Desk. The Desk
+itself is unchanged. Prototype v0.4 is the canonical reference; spec §3/§10
+amended at next revision. Mobile interim: spine = sticky horizontal paper
+strip at top, margin flows after main — the dedicated D3 pattern still gates
+the flip.
