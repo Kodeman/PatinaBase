@@ -756,6 +756,42 @@ build (missing prototype) · Leah device validation · Desk precision at R10
 (async Q1/Q2). Prod needs `RESEND_API_KEY` (already true for all email).
 
 
+
+### I21 · Slice 6 increment 3 — the D13 mobile build — 2026-06-12
+
+The canonical mobile prototype `patina-the-document-mobile-d3-v1.html`
+landed in-repo (design session) and is committed alongside (full CSS — the
+look/feel/motion authority; demo body elided as scaffolding). The React
+shell ports its INTENT (never markup), active only below the 980px
+breakpoint; the desktop spine rail, margin rail, and Studio Drawer nav all
+hide there. The three rulings, built:
+  • **D3-1 unified bar** (`mobile-bar.tsx`): one bar owns the thumb edge —
+    Desk = drawer handle + "in hand today"; document = section handle
+    (→ spine sheet, labelled with the active section) + timer glance
+    (→ timer sheet, live from the time provider) + drawer book.
+  • **D3-2 anchored chips** (`mobile-margin-chips.tsx`): margin items render
+    as chips beneath their FF&E line (line anchor) and the letterhead
+    (letterhead/section anchors); a tap raises the full item as a paper
+    sheet with its actions — the SAME body as the desktop rail, via the
+    extracted `MarginItemBody`.
+  • **D3-3 the spine sheet doubles** (`mobile-sheets.tsx`): a paper sheet
+    with Put-down + the seven sections on top, "In the margin · N" beneath,
+    each summary row jumping to its margin item.
+Materials honored: paper sheets for document parts (spine, item, timer),
+charcoal sheets for desk books (the drawer's five books open the existing
+DocSheet ledgers via the `open-ledger` event). Scrim dimming, no shadows
+(D4). State: a `MobileShellProvider` holds the active doc (published by the
+page via `useMobileActiveDoc`, lifted above the early returns so the hook
+is unconditional) + the open sheet. The log strip's bottom offset is now
+responsive (56px mobile bar / 42px desktop strip). 6/6 scripted acceptance
+(`the-document-mobile-shots.mjs`, 390px) + 384/384 jest; lint/tsc clean.
+**Flip-gate status: D13 pattern BUILT — the gate is closed for the build;
+Leah's on-device validation (the gate's other half) remains hers.**
+Remaining flip gates are now only the two externally-held: Leah device
+validation + Desk precision at R10 (async Q1/Q2). Migrations unchanged
+(00191–00201; this increment is presentation-only).
+
+
 ---
 
-*Log integrity: 48 entries · last appended I20 · 2026-06-12 (footer per spec v1.3 §0.4 — updated on every append)*
+*Log integrity: 49 entries · last appended I21 · 2026-06-12 (footer per spec v1.3 §0.4 — updated on every append)*

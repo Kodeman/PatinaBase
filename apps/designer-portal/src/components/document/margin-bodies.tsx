@@ -476,3 +476,43 @@ export function NoteBody({ row, projectId }: { row: MarginItemRow; projectId: st
     </div>
   );
 }
+
+// ── shared body switch ──────────────────────────────────────────────────────
+// One mapping from a margin row to its body, used by both the desktop rail
+// and the D13 mobile margin-item sheet so they never drift.
+export function MarginItemBody({
+  row,
+  projectId,
+  clientName,
+  decisionRows = [],
+}: {
+  row: MarginItemRow;
+  projectId: string | null;
+  clientName: string;
+  decisionRows?: MarginItemRow[];
+}) {
+  switch (row.kind) {
+    case 'decision':
+      return <DecisionBody row={row} projectId={projectId} clientName={clientName} />;
+    case 'message':
+      return <MessageBody row={row} projectId={projectId} />;
+    case 'invoice':
+      if (row.payload.po_payment) return <PoPaymentBody row={row} />;
+      return <InvoiceBody row={row} projectId={projectId} />;
+    case 'pulse':
+      return (
+        <PulseBody
+          row={row}
+          projectId={projectId}
+          clientName={clientName}
+          decisionRows={decisionRows}
+        />
+      );
+    case 'time':
+      return null;
+    case 'note':
+      return <NoteBody row={row} projectId={projectId} />;
+    default:
+      return null;
+  }
+}

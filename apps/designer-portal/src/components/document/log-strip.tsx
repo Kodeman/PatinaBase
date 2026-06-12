@@ -64,7 +64,7 @@ export function LogStrip() {
     <div
       role="status"
       aria-label="Log time offer"
-      className="fixed inset-x-0 bottom-[42px] z-50 flex flex-wrap items-center justify-center gap-2.5 border-t border-[rgba(196,165,123,0.4)] bg-[#332e29] px-4 py-2"
+      className="fixed inset-x-0 bottom-[56px] z-50 flex flex-wrap items-center justify-center gap-2.5 border-t border-[rgba(196,165,123,0.4)] bg-[#332e29] px-4 py-2 min-[980px]:bottom-[42px]"
     >
       <p className="text-[12px] text-[rgba(250,247,242,0.8)]">
         <strong className="font-medium text-[var(--color-pearl)]">{offer.projectName}</strong> was

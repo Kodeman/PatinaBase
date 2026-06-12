@@ -15,6 +15,8 @@ import { useRouter } from 'next/navigation';
 import { useProjectV2, useProjectPhases } from '@patina/supabase';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { useHoldDocument } from '@/hooks/document-time-provider';
+import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
+import { MobileMarginChips } from '@/components/document/mobile/mobile-margin-chips';
 import { useDocumentPresence } from '@/hooks/use-document-presence';
 import { useProposal } from '@/hooks/use-proposals';
 import { deriveSections, type SectionLineage } from '@/lib/document/section-derivation';
@@ -140,6 +142,35 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     };
   }, [row?.engagement_kind, project?.proposal, liveProposal]);
 
+  // Sections are derived above the early returns so the mobile shell hook
+  // (D13) can publish them unconditionally (rules of hooks). Guarded for the
+  // pre-resolution null row.
+  const installPhase = (phases ?? []).find((p) => p.phase_key === 'installation');
+  const sections = row
+    ? deriveSections(
+        {
+          row,
+          lineage,
+          projectStartDate: project?.start_date ?? null,
+          installStartDate: installPhase?.start_date ?? null,
+        },
+        new Date(),
+      )
+    : [];
+
+  // D13: publish the held document to the mobile shell (bar + spine sheet).
+  useMobileActiveDoc(
+    row
+      ? {
+          projectId: row.project_id,
+          proposalId: row.proposal_id,
+          clientName: row.client_name,
+          title: row.title,
+          sections,
+        }
+      : null,
+  );
+
   if (isLoading || resolution?.kind === 'redirect') {
     return (
       <div className="min-h-screen bg-[var(--doc-paper)]" aria-busy>
@@ -165,17 +196,6 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       </div>
     );
   }
-
-  const installPhase = (phases ?? []).find((p) => p.phase_key === 'installation');
-  const sections = deriveSections(
-    {
-      row,
-      lineage,
-      projectStartDate: project?.start_date ?? null,
-      installStartDate: installPhase?.start_date ?? null,
-    },
-    new Date(),
-  );
 
   const settled = sections.filter((s) => s.state === 'settled');
   const unfoldProposalId =
@@ -213,6 +233,14 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           title={row.title}
           vitals={vitalsFor(row, project, liveProposal)}
           fill={deriveFillState(sections)}
+        />
+
+        {/* D13: letterhead-anchored margin items (Pulse, section items) as
+            chips beneath the title — the desktop margin rail hides on mobile. */}
+        <MobileMarginChips
+          projectId={row.project_id}
+          proposalId={row.proposal_id}
+          anchorKind="letterhead"
         />
 
         {/* Settled bars — letterhead bar + stamp; Proposal unfolds in place. */}
@@ -293,11 +321,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         </div>
       </main>
 
-      {/* Margin rail (D12; D2: the margin IS the notification model). On
-          mobile it flows after main per the D12 interim pattern. */}
+      {/* Margin rail (D12; D2: the margin IS the notification model).
+          D13: below 980px the margin lives as anchored chips + the spine
+          sheet's summary, so the rail hides. */}
       <aside
         aria-label="Margin"
-        className="z-[1] border-t border-dashed border-[var(--color-pearl)] bg-[rgba(250,247,242,0.55)] px-4 pb-24 pt-6 min-[980px]:sticky min-[980px]:top-0 min-[980px]:h-screen min-[980px]:overflow-y-auto min-[980px]:border-l min-[980px]:border-t-0"
+        className="z-[1] hidden border-t border-dashed border-[var(--color-pearl)] bg-[rgba(250,247,242,0.55)] px-4 pb-24 pt-6 min-[980px]:sticky min-[980px]:top-0 min-[980px]:block min-[980px]:h-screen min-[980px]:overflow-y-auto min-[980px]:border-l min-[980px]:border-t-0"
       >
         <MarginRail
           projectId={row.project_id}

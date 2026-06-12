@@ -8,6 +8,7 @@
  */
 
 import { useProjectFFEItems } from '@patina/supabase';
+import { MobileMarginChips } from './mobile/mobile-margin-chips';
 import { STAGE_CONFIG } from '@/components/portal/ffe/stages';
 import type { FFEStageKey } from '@patina/types';
 import { useState } from 'react';
@@ -157,6 +158,13 @@ export function FFESection({
                   {item.line_total_cents != null ? fmtUsd(item.line_total_cents) : '—'}
                 </span>
               </button>
+              {/* D13: this line's margin items as chips beneath it (mobile). */}
+              <MobileMarginChips
+                projectId={projectId}
+                proposalId={null}
+                anchorKind="line"
+                anchorId={item.id}
+              />
               {unfolded && (
                 <LineUnfold
                   item={item}

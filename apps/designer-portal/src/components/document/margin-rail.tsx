@@ -14,7 +14,7 @@ import { useCreateMarginNote } from '@/hooks/use-margin-notes';
 import { partitionMargin, type MarginItemRow } from '@/lib/document/margin-derivation';
 import { todayYmd } from '@/lib/document/format';
 import { MarginItem } from './margin-item';
-import { DecisionBody, InvoiceBody, MessageBody, NoteBody, PoPaymentBody, PulseBody } from './margin-bodies';
+import { MarginItemBody } from './margin-bodies';
 
 export function MarginRail({
   projectId,
@@ -88,32 +88,14 @@ export function MarginRail({
 
   const decisionRows = (items ?? []).filter((i) => i.kind === 'decision');
 
-  const bodyFor = (row: MarginItemRow) => {
-    switch (row.kind) {
-      case 'decision':
-        return <DecisionBody row={row} projectId={projectId} clientName={clientName} />;
-      case 'message':
-        return <MessageBody row={row} projectId={projectId} />;
-      case 'invoice':
-        // R18: vendor payment-due items are read-only narration — the
-        // invoice body's issue/send acts belong to client invoices only.
-        if (row.payload.po_payment) return <PoPaymentBody row={row} />;
-        return <InvoiceBody row={row} projectId={projectId} />;
-      case 'pulse':
-        return (
-          <PulseBody
-            row={row}
-            projectId={projectId}
-            clientName={clientName}
-            decisionRows={decisionRows}
-          />
-        );
-      case 'time':
-        return null; // review/edit lives in the Hours ledger (Slice 5)
-      case 'note':
-        return <NoteBody row={row} projectId={projectId} />;
-    }
-  };
+  const bodyFor = (row: MarginItemRow) => (
+    <MarginItemBody
+      row={row}
+      projectId={projectId}
+      clientName={clientName}
+      decisionRows={decisionRows}
+    />
+  );
 
   const renderItem = (row: MarginItemRow) => {
     const expandable = row.kind !== 'time';

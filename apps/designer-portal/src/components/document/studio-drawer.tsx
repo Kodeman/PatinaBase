@@ -43,9 +43,10 @@ export function StudioDrawer() {
 
   return (
     <>
+      {/* The unified mobile bar (D13) replaces this nav below 980px. */}
       <nav
         aria-label="Studio drawer"
-        className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-2 overflow-x-auto border-t border-[rgba(250,247,242,0.14)] bg-[var(--color-charcoal)] px-4 py-[0.55rem] sm:px-6"
+        className="fixed inset-x-0 bottom-0 z-40 hidden items-center gap-2 overflow-x-auto border-t border-[rgba(250,247,242,0.14)] bg-[var(--color-charcoal)] px-4 py-[0.55rem] min-[980px]:flex sm:px-6"
       >
         <span className="mr-1.5 whitespace-nowrap font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[rgba(250,247,242,0.3)]">
           Studio

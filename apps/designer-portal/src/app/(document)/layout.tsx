@@ -3,6 +3,9 @@ import { StudioDrawer } from '@/components/document/studio-drawer';
 import { LogStrip } from '@/components/document/log-strip';
 import { CommandBar } from '@/components/document/command-bar';
 import { InterruptionSettings } from '@/components/document/interruption-settings';
+import { MobileShellProvider } from '@/components/document/mobile/mobile-shell';
+import { MobileBar } from '@/components/document/mobile/mobile-bar';
+import { MobileSheets } from '@/components/document/mobile/mobile-sheets';
 import { DocumentTimeProvider } from '@/hooks/document-time-provider';
 import { DocumentGate } from './document-gate';
 
@@ -23,13 +26,18 @@ export default function DocumentLayout({ children }: { children: React.ReactNode
         {/* One time system above the Desk and every document (R4): the
             log-offer strip rides across navigation inside the provider. */}
         <DocumentTimeProvider>
-          {children}
-          <LogStrip />
-          <StudioDrawer />
-          {/* ⌘K from anywhere in the document model (spec §3). */}
-          <CommandBar />
-          {/* D2 break-through rules — opened from ⌘K, ships all-off. */}
-          <InterruptionSettings />
+          {/* D13: the phone's physics live in the shell (below 980px). */}
+          <MobileShellProvider>
+            {children}
+            <LogStrip />
+            <StudioDrawer />
+            {/* ⌘K from anywhere in the document model (spec §3). */}
+            <CommandBar />
+            {/* D2 break-through rules — opened from ⌘K, ships all-off. */}
+            <InterruptionSettings />
+            <MobileBar />
+            <MobileSheets />
+          </MobileShellProvider>
         </DocumentTimeProvider>
       </DocumentGate>
     </div>

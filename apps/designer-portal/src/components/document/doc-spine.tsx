@@ -16,7 +16,9 @@ export function DocSpine({ sections, others }: { sections: SpineSection[]; other
   return (
     <aside
       aria-label="Document spine"
-      className="sticky top-0 z-[2] flex items-start gap-5 overflow-x-auto border-b border-[var(--color-pearl)] bg-[var(--doc-paper)] px-5 py-3 min-[980px]:block min-[980px]:h-screen min-[980px]:overflow-y-auto min-[980px]:border-b-0 min-[980px]:border-r min-[980px]:bg-[rgba(229,226,221,0.28)] min-[980px]:px-4 min-[980px]:pb-24 min-[980px]:pt-6"
+      // D13: below 980px the unified bar's section handle replaces the rail
+      // (the spine doubles as a bottom sheet, D3-3).
+      className="sticky top-0 z-[2] hidden items-start gap-5 overflow-x-auto border-b border-[var(--color-pearl)] bg-[var(--doc-paper)] px-5 py-3 min-[980px]:block min-[980px]:h-screen min-[980px]:overflow-y-auto min-[980px]:border-b-0 min-[980px]:border-r min-[980px]:bg-[rgba(229,226,221,0.28)] min-[980px]:px-4 min-[980px]:pb-24 min-[980px]:pt-6"
     >
       <Link
         href="/desk"
