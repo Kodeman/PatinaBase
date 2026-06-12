@@ -190,7 +190,11 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
 
       <DocSpine sections={sections} others={others} />
 
-      <main ref={mainRef} className="z-[1] max-w-[1040px] px-7 pb-32 pt-8 min-[980px]:px-12">
+      {/* No z-index here: a stacking context on main would trap the fixed
+          procurement panels (inspection drawer, Order Assistant) mounted in
+          line unfolds beneath the aside rail and the drawer strip. The z-0
+          grain painting over content is imperceptible at 1% alpha. */}
+      <main ref={mainRef} className="max-w-[1040px] px-7 pb-32 pt-8 min-[980px]:px-12">
         <DocLetterhead
           title={row.title}
           vitals={vitalsFor(row, project, liveProposal)}

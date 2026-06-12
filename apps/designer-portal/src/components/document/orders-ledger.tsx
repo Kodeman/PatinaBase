@@ -14,7 +14,7 @@ import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient, usePurchaseOrders, useVendors } from '@patina/supabase';
 import { Stamp } from './stamp';
-import { fmtDay, fmtUsd } from '@/lib/document/format';
+import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecord = any;
@@ -44,7 +44,7 @@ export function OrdersLedger({ onClose }: { onClose: () => void }) {
 
   const [showVendors, setShowVendors] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
-  const [truckEta, setTruckEta] = useState('');
+  const [truckEta, setTruckEta] = useState(todayYmd());
   const [batchBusy, setBatchBusy] = useState(false);
 
   const vendorById = useMemo(() => {
@@ -97,7 +97,7 @@ export function OrdersLedger({ onClose }: { onClose: () => void }) {
         if (error) throw error;
       }
       setSelected([]);
-      setTruckEta('');
+      setTruckEta(todayYmd());
       void qc.invalidateQueries({ queryKey: ['purchase-orders'] });
       void qc.invalidateQueries({ queryKey: ['project-ffe-items'] });
       void qc.invalidateQueries({ queryKey: ['document-state'] });

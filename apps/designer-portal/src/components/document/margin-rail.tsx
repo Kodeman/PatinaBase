@@ -12,6 +12,7 @@ import { useProjectFFEItems } from '@patina/supabase';
 import { useMarginItems } from '@/hooks/use-margin-items';
 import { useCreateMarginNote } from '@/hooks/use-margin-notes';
 import { partitionMargin, type MarginItemRow } from '@/lib/document/margin-derivation';
+import { todayYmd } from '@/lib/document/format';
 import { MarginItem } from './margin-item';
 import { DecisionBody, InvoiceBody, MessageBody, NoteBody, PulseBody } from './margin-bodies';
 
@@ -51,7 +52,9 @@ export function MarginRail({
   const createNote = useCreateMarginNote();
   const [composing, setComposing] = useState(false);
   const [noteBody, setNoteBody] = useState('');
-  const [noteDue, setNoteDue] = useState('');
+  // Dates default to today (Kody, 2026-06-12). A kept default makes the
+  // note dued-today — it joins needs-action at 5pm (R12/R14 interplay).
+  const [noteDue, setNoteDue] = useState(todayYmd());
   const [noteAnchorLine, setNoteAnchorLine] = useState<string | null>(null);
 
   useEffect(() => {
@@ -76,7 +79,7 @@ export function MarginRail({
         onSuccess: () => {
           setComposing(false);
           setNoteBody('');
-          setNoteDue('');
+          setNoteDue(todayYmd());
           setNoteAnchorLine(null);
         },
       },

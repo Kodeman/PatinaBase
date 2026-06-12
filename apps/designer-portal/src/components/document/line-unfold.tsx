@@ -121,26 +121,30 @@ export function LineUnfold({
         </button>
       </div>
 
-      {vendor && (
-        <OrderAssistant
-          open={assistantOpen}
-          onOpenChange={setAssistantOpen}
-          vendor={vendor}
-          project={{ id: projectId, name: projectName }}
-          ffeItems={[item]}
-        />
-      )}
-      {po && (
-        <LogInspectionDrawer
-          open={inspectionOpen}
-          onOpenChange={setInspectionOpen}
-          purchaseOrderId={po.id}
-          projectId={projectId}
-          poLabel={po.vendor_po_number ?? po.sidemark ?? 'PO'}
-          vendorName={item.vendor_name ?? vendor?.name ?? 'Vendor'}
-          projectName={projectName}
-        />
-      )}
+      {/* D4 inside the paper: the shared procurement panels carry shadow-xl
+          in the old zones — strip it here without touching them (R3). */}
+      <div className="contents [&_.shadow-xl]:shadow-none">
+        {vendor && (
+          <OrderAssistant
+            open={assistantOpen}
+            onOpenChange={setAssistantOpen}
+            vendor={vendor}
+            project={{ id: projectId, name: projectName }}
+            ffeItems={[item]}
+          />
+        )}
+        {po && (
+          <LogInspectionDrawer
+            open={inspectionOpen}
+            onOpenChange={setInspectionOpen}
+            purchaseOrderId={po.id}
+            projectId={projectId}
+            poLabel={po.vendor_po_number ?? po.sidemark ?? 'PO'}
+            vendorName={item.vendor_name ?? vendor?.name ?? 'Vendor'}
+            projectName={projectName}
+          />
+        )}
+      </div>
     </div>
   );
 }

@@ -31,7 +31,7 @@ import {
 } from '@/hooks/use-margin-notes';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
 import { composePulseDraft } from '@/lib/document/compose-pulse-draft';
-import { fmtDay, fmtUsd } from '@/lib/document/format';
+import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecord = any;
@@ -67,7 +67,7 @@ export function DecisionBody({
   // R11: the override action is personal — "Record Sarah's pick".
   const clientFirstName = (clientName ?? '').trim().split(/\s+/)[0];
 
-  const [extendTo, setExtendTo] = useState('');
+  const [extendTo, setExtendTo] = useState(todayYmd());
   const [pickId, setPickId] = useState('');
   const [consent, setConsent] = useState<ConsentMethod>('verbal');
   const [evidence, setEvidence] = useState('');
