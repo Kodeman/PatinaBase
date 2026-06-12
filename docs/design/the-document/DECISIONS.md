@@ -633,6 +633,58 @@ lands on Middlewest's REAL activated projects — Leah cannot mount the Order
 Assistant on un-ordered lines. Fix + backfill land BEFORE Session 02, or the
 session script gains a seam answer for it.
 
+
+## Pilot record
+
+### L2 · Leah Session 02 — findings — 2026-06-12
+
+**Build:** Slice 5 (rebased, d249b49a) · **Desk at start:** 4–6 folders
+(R10 heat — real conditions) · **Signal: GREEN, with two capture debts**
+**Numbers.** Time-to-true-read: <1 min at 4–6 folders (clean read-back —
+a materially stronger result than L1's one-folder minute) · Unaided margin
+acts: 1–2 · Old-portal flights: **2+ — triggers NOT captured, second
+session running** · R17 seam answer armed (vendor_id fix had not landed).
+**The Note (R14).** Reached for **unaided** — her own Session 01 finding,
+shipped in Slice 4, used without prompting. The teaching loop closed on
+itself; strongest qualitative signal of the pilot to date.
+**D11 verdict.** Timer never mentioned unprompted during the work block;
+on direct ask (Q10): "punch card — comfortable." → R19.
+**Write-first close-out (R16) in the wild.** She missed the log strip at
+put-down entirely, moved to the next task, noticed later, adjusted her
+minutes. Under confirm-first the time would have been lost; under
+write-first her inattention cost nothing. → R20. (Adjustment venue —
+strip vs Hours — not captured.)
+**Margin read-back (R12).** Mostly matched her triage order; quibbled an
+item or two — specifics not captured.
+**NOT captured (debts):** Q1/Q2 precision-recall (MISSED A SECOND TIME —
+now owed async, see constants watch) · Q11 idle number · Q12 R18 threshold
+numbers · Q14 flight triggers · margin quibble specifics · Q9 verbatim ·
+D13 phone hand-off result (flip gate remains unsatisfied).
+**Disposition.** Proceed to Slice 5.5. Capture debts collected async —
+they are questions, not sessions.
+
+## Rulings — design session, 2026-06-12 (Session 02)
+
+### R19 · D11 RESOLVED — auto-start ratified — 2026-06-12
+
+The two-part evidence is exactly what D11 asked for: the timer went
+unnoticed through a full real-work block (unnoticed = punch card, not
+camera), and on direct ask Leah's verdict was "punch card — comfortable."
+Auto-start on pick-up is no longer provisional. Implementation
+consequence: retire any one-tap-start fallback path scaffolding; manual
+start remains only as the spine/bar control for documents picked up
+without intent to work. The D-table's D11 entry stands with this ruling
+as its resolution. Spec §14.1 CLOSED.
+
+### R20 · Write-first close-out vindicated; strip persistence — 2026-06-12
+
+R16's bless now has field evidence: a missed strip cost nothing because
+the truth was already logged. No design change. One verification rides
+the slice: confirm the log strip has NO timeout — if unengaged it
+persists quietly until acted upon or the next pick-up chains it out. If
+any auto-dismiss exists, remove it. The strip's quietness is correct;
+its patience must match.
+
 ---
 
-*Log integrity: 43 entries · last appended R17 (full text) · 2026-06-12 (footer per spec v1.3 §0.4 — updated on every append)*
+*Log integrity: 46 entries · last appended R20 · 2026-06-12 (footer per spec v1.3 §0.4 — updated on every append)*
