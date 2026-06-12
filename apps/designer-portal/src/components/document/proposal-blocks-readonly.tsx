@@ -115,8 +115,8 @@ export function ProposalBlocksReadOnly({ proposalId }: { proposalId: string }) {
         </div>
       )}
 
+      {/* PaymentScheduleBlock renders its own heading — no BlockLabel here. */}
       <div>
-        <BlockLabel>Payment schedule</BlockLabel>
         <PaymentScheduleBlock
           milestones={(milestones ?? []).map((m) => ({
             label: m.label,
