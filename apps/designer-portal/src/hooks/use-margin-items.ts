@@ -41,7 +41,9 @@ export function invalidateMarginSurfaces(qc: QueryClient, projectId: string | nu
 }
 
 /** The one-act Pulse send (00195): pulse → sent + client-thread mirror in one
- *  transaction. */
+ *  transaction. THEN the full-body Friday email leg (R13) — decoupled and
+ *  non-fatal (I12): the in-transaction mirror already reached the client, so
+ *  an email failure must never surface as a send failure. */
 export function useSendWeeklyPulse(projectId: string | null) {
   const qc = useQueryClient();
   return useMutation({
@@ -60,6 +62,18 @@ export function useSendWeeklyPulse(projectId: string | null) {
         p_subject: subject ?? null,
       });
       if (error) throw error;
+
+      // The email leg (R13). Fire-and-forget after the transactional send;
+      // a non-2xx or a network failure here is logged, never thrown.
+      try {
+        await fetch('/api/pulse/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pulseId }),
+        });
+      } catch {
+        // The portal mirror landed; the inbox touch can be retried later.
+      }
       return data;
     },
     onSuccess: () => {

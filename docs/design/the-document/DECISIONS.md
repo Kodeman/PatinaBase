@@ -725,6 +725,37 @@ authority); Leah device validation + Desk precision at R10 (async Q1/Q2,
 missed twice) are externally gated. Migrations now 00191–00201.
 
 
+
+### I20 · Slice 6 increment 2 — the Pulse email leg (R13) — 2026-06-12
+
+R13's flip gate built. The Friday email arrives where the client lives:
+a new journey-set template `WeeklyPulse` (`@patina/email`) wraps the
+designer's composed/edited Pulse prose; a Node-runtime route
+`/api/pulse/send-email` authenticates the designer (`createServerClient`
+from `@patina/supabase/server` — the working route pattern; the po/generate
+copy authenticated as nobody, fixed), loads the sent pulse + project +
+client, resolves the recipient, renders the template, and sends via Resend
+(`sendEmail`). **Decoupled + non-fatal (I12):** `useSendWeeklyPulse` calls
+the route AFTER the `send_weekly_pulse` RPC commits; a non-2xx or network
+failure is swallowed — the in-transaction portal mirror already reached the
+client, so the inbox touch is best-effort. No schema change (I12). Verified
+end-to-end: the Pulse sends (status→sent + mirror posted) AND the email
+renders + Resend accepts it (`emailSent:true` + message id) to the test
+recipient; template render asserted by 2 vitest cases (50/50 email pkg).
+**`@patina/email` added to the app's `transpilePackages`** (it ships raw
+TS from `src/`, was absent — the import would not have transpiled).
+⚠ **Faithful template:** the design session's referenced "already-designed
+Pulse template from the journey set" was NOT in the repo; `WeeklyPulse` is
+built to the package's conventions (eyebrow · project heading · prose
+paragraphs · See-the-project CTA · designer reply line). If a designed
+template lands, swap the chrome — the props contract (clientName /
+designerName / projectName / body / weekOf / portalUrl) is stable.
+**Flip-gate status: the Pulse email leg gate is now CLOSED (R13
+satisfied).** Remaining gates are the externally-blocked three: D13 mobile
+build (missing prototype) · Leah device validation · Desk precision at R10
+(async Q1/Q2). Prod needs `RESEND_API_KEY` (already true for all email).
+
+
 ---
 
-*Log integrity: 47 entries · last appended I19 · 2026-06-12 (footer per spec v1.3 §0.4 — updated on every append)*
+*Log integrity: 48 entries · last appended I20 · 2026-06-12 (footer per spec v1.3 §0.4 — updated on every append)*

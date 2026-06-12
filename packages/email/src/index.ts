@@ -35,6 +35,8 @@ export { BackInStock } from './templates/back-in-stock';
 export type { BackInStockProps } from './templates/back-in-stock';
 export { WeeklyInspiration } from './templates/weekly-inspiration';
 export type { WeeklyInspirationProps, InspirationProduct } from './templates/weekly-inspiration';
+export { WeeklyPulse } from './templates/weekly-pulse';
+export type { WeeklyPulseProps } from './templates/weekly-pulse';
 export { FoundingCircleUpdate } from './templates/founding-circle-update';
 export type { FoundingCircleUpdateProps } from './templates/founding-circle-update';
 export { ManufacturerOutreach } from './templates/manufacturer-outreach';
