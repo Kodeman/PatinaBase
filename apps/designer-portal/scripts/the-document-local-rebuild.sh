@@ -16,7 +16,8 @@ PSQL=(docker exec -i supabase_db_supabase psql -U postgres -d postgres -v ON_ERR
 for f in 00188_document_state_view 00189_document_state_open_claims \
          00190_margin_anchors_and_pulses 00191_margin_items_view \
          00192_document_state_pulse_and_send_rpc \
-         00193_per_item_claims_and_margin_notes 00194_margin_items_note_branch; do
+         00193_per_item_claims_and_margin_notes 00194_margin_items_note_branch \
+         00195_time_entry_source_activity; do
   echo "── applying $f"
   "${PSQL[@]}" < "supabase/migrations/$f.sql"
 done

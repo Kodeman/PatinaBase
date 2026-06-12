@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useProjectV2, useProjectPhases } from '@patina/supabase';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
+import { useHoldDocument } from '@/hooks/document-time-provider';
 import { useDocumentPresence } from '@/hooks/use-document-presence';
 import { useProposal } from '@/hooks/use-proposals';
 import { deriveSections, type SectionLineage } from '@/lib/document/section-derivation';
@@ -79,6 +80,19 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: liveProposal } = useProposal(proposalId) as { data: any };
   const others = useDocumentPresence(row?.engagement_id ?? null);
+
+  // D11: picking up the document starts the timer (chaining out any running
+  // one); putting down releases it through the log strip. Projects only —
+  // time attaches to project rows (00177 FK).
+  useHoldDocument(
+    row?.project_id
+      ? {
+          projectId: row.project_id,
+          projectName: row.title,
+          phaseKey: row.current_phase ?? null,
+        }
+      : null,
+  );
 
   const [proposalOpen, setProposalOpen] = useState(false);
   const [highlightLineId, setHighlightLineId] = useState<string | null>(null);

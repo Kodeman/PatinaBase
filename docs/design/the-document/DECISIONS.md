@@ -459,3 +459,35 @@ R6 redirect; activation ids are random — supersedes the slice-3 seed's
 pinned ids). Migration-number collision: main now carries
 `00188_po_send_columns` (procurement); this stack's 00188–00194 renumber to
 00189–00195 at rebase.
+
+---
+
+## Implementation decisions — Slice 5 (2026-06-12)
+
+### I16 · Slice 5 implementation notes — 2026-06-12
+
+Time (R4): migration 00195 extends `project_time_entries` additively —
+`raw_seconds` / `idle_seconds` / `source` (default `'timer_manual'`, so the
+header TimerButton keeps writing honestly with ZERO old-zone edits) /
+`activity`. One `DocumentTimeProvider` above the Desk and every document
+owns the mechanics; hold/release/chain-out operations run through a
+serialized promise queue (an unmounting document and a mounting one must
+never race over the single running-row). Close-out WRITES the entry first,
+then offers adjustment in the strip — a dismissed strip still leaves the
+truth logged; Discard deletes. The chained-out row's phase auto-fills from
+its own project's `current_phase` when the row carries none (header starts).
+Pause logs the segment quietly (no strip; adjust later in Hours) — the
+schema has no paused state, so pause = close-out + local resume latch.
+Designer-noticeable defaults flagged for the session: the strip's activity
+select defaults to Design (prototype parity); the spine "+ Log" form
+likewise. Timer attaches to PROJECT documents only in v1
+(`project_time_entries` FK — proposal/lead documents carry no spine timer).
+The spine timer is hidden in the <980px interim pattern; the D13 bar timer
+glance arrives with the Slice 6 mobile build (the timer/strip components
+take state via the provider, unforked per surface, per §13). Hours ledger:
+this week, day-grouped, inline activity/duration edits disabled once an
+invoice claims the entry (00177 guard); "Export week → Accounts" is a
+disabled stub until the Accounts book exists (Slice 6). The "in hand today"
+readout sums the designer's own day (completed + live elapsed) — it is a
+readout, not a badge (D8 discipline upheld). Esc priority per §3: the strip
+listens on capture (Esc = discard) ahead of sheets and put-down.

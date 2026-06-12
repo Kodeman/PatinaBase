@@ -1,14 +1,15 @@
 'use client';
 
 /**
- * The document spine (spec §3, D12): Put down, seven section markers,
- * presence line. A sticky full-height rail on desktop; the D12 interim
- * mobile pattern is a sticky horizontal paper strip (the dedicated D3
- * pattern still gates the flip). Timer arrives in Slice 5.
+ * The document spine (spec §3, D12): Put down, seven section markers, the
+ * timer (D9 — capture in the document), presence line. A sticky full-height
+ * rail on desktop; the D12 interim mobile pattern is a sticky horizontal
+ * paper strip (the dedicated D13 pattern still gates the flip).
  */
 
 import Link from 'next/link';
 import { StrataMark } from './strata-mark';
+import { SpineTimer } from './spine-timer';
 import type { SpineSection } from '@/lib/document/section-derivation';
 
 export function DocSpine({ sections, others }: { sections: SpineSection[]; others: string[] }) {
@@ -56,6 +57,8 @@ export function DocSpine({ sections, others }: { sections: SpineSection[]; other
           </li>
         ))}
       </ul>
+
+      <SpineTimer />
 
       <div className="hidden border-t border-[var(--color-pearl)] pt-3 min-[980px]:mt-4 min-[980px]:block">
         <p className="mb-1 font-mono text-[8.5px] uppercase tracking-[0.07em] text-[var(--text-muted)]">

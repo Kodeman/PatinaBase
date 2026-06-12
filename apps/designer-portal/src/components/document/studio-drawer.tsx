@@ -1,16 +1,19 @@
 'use client';
 
 /**
- * The Studio Drawer (D8, spec v1.1 §8): a quiet fixed strip at the bottom
+ * The Studio Drawer (D8, spec v1.2 §8): a quiet fixed strip at the bottom
  * edge — part of the desk, never the paper. Five ledger books + the
- * right-aligned "In hand today" readout (static until Slice 5). Discipline:
- * no badges, no unread counts, no pulsing. Sheets are stubbed in Slice 1;
- * the real ledgers arrive in Slices 4–5.
+ * right-aligned "In hand today" readout (live, D9). Discipline: no badges,
+ * no unread counts, no pulsing — the readout is the designer's own day,
+ * not a notification.
  */
 
 import { useState } from 'react';
 import { DocSheet } from './overlays/doc-sheet';
 import { OrdersLedger } from './orders-ledger';
+import { HoursLedger } from './hours-ledger';
+import { useDocumentTime } from '@/hooks/document-time-provider';
+import { fmtMinutes } from '@/lib/document/time-derivation';
 
 const LEDGERS = [
   { key: 'library', name: 'Library', spine: 'var(--color-clay)' },
@@ -25,6 +28,7 @@ type LedgerKey = (typeof LEDGERS)[number]['key'];
 export function StudioDrawer() {
   const [openLedger, setOpenLedger] = useState<LedgerKey | null>(null);
   const open = LEDGERS.find((l) => l.key === openLedger) ?? null;
+  const { inHandToday } = useDocumentTime();
 
   return (
     <>
@@ -60,13 +64,16 @@ export function StudioDrawer() {
           <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[rgba(250,247,242,0.35)]">
             In hand today
           </span>
-          <span className="font-heading text-[13px] italic text-[var(--color-clay)]">—</span>
+          <span className="font-heading text-[13px] italic text-[var(--color-clay)]">
+            {inHandToday > 0 ? fmtMinutes(inHandToday) : '—'}
+          </span>
         </button>
       </nav>
 
       <DocSheet open={open !== null} onClose={() => setOpenLedger(null)} title={open?.name ?? ''}>
         {open?.key === 'orders' && <OrdersLedger onClose={() => setOpenLedger(null)} />}
-        {open && open.key !== 'orders' && (
+        {open?.key === 'hours' && <HoursLedger />}
+        {open && open.key !== 'orders' && open.key !== 'hours' && (
           <div className="mx-auto max-w-2xl">
             <div className="mb-2 flex items-center gap-3">
               <span
