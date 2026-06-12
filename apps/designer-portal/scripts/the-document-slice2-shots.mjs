@@ -18,6 +18,7 @@ mkdirSync(OUT, { recursive: true });
 const SIGNED_PROJECT = '66a6b38e-2128-4a39-b598-01af0a54ea04'; // Whitfield — full lineage
 const MANUAL_PROJECT = '05364074-614a-443c-90fb-173f4b259f58'; // Olsen — ghost sections
 const SENT_PROPOSAL = 'b0000000-0000-0000-0000-000000000002'; // pre-signing chain
+const ACTIVATED_PROPOSAL = 'b0000000-0000-0000-0000-000000000001'; // R6: redirects to Whitfield
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1380, height: 900 } });
@@ -65,6 +66,11 @@ if (!page.url().includes('/doc/')) throw new Error('Esc with sheet open must NOT
 await page.keyboard.press('Escape'); // puts down
 await page.waitForURL('**/desk', { timeout: 10_000 });
 console.log('✓ Esc priority: sheet first, then put down');
+
+// ── R6: activated proposal id redirects to the project document ──
+await page.goto(`http://localhost:3000/doc/${ACTIVATED_PROPOSAL}`);
+await page.waitForURL(`**/doc/${SIGNED_PROJECT}`, { timeout: 15_000 });
+console.log('✓ R6: activated proposal id redirected to /doc/[projectId]');
 
 // ── Manual project (Olsen): Brief→Proposal ghost ──
 await page.goto(`http://localhost:3000/doc/${MANUAL_PROJECT}`);
