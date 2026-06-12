@@ -990,6 +990,9 @@ export type {
   ReceivingInspectionFilters,
   DamageClaimFilters,
   CreateReceivingInspectionInput,
+  // W5-T2 — partial receiving (per-item received quantities)
+  ReceivingInspectionItemInput,
+  CreateReceivingInspectionResult,
   UpdateDamageClaimInput,
   TodayProcurementCounts,
   // Sprint 3 / Wave 3.2 — QBO Bookkeeper Export

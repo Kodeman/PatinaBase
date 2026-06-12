@@ -241,6 +241,12 @@ describe('useProcurementItems', () => {
     expect(selectStr).toContain('payments:po_payments(*)');
     expect(selectStr).toContain('project:projects');
     expect(selectStr).toContain('room:project_rooms');
+    // W5-T2 — expediting columns: the By Status view reads our outbound PO
+    // number plus the Ordered / Ack / no-ack-flag timestamps off the join.
+    expect(selectStr).toContain('po_number');
+    expect(selectStr).toContain('sent_at');
+    expect(selectStr).toContain('acknowledged_at');
+    expect(selectStr).toContain('created_at');
 
     // No filters supplied → no .eq calls.
     expect(builder.__chain.filter((c) => c.method === 'eq')).toEqual([]);
@@ -1017,6 +1023,215 @@ describe('useCreateReceivingInspection', () => {
         (k) => (k as unknown[])[0] === 'project-ffe-items' || (k as unknown[])[0] === 'projects',
       ),
     ).toEqual([]);
+  });
+
+  // ─── W5-T2 — per-item received quantities (partial receiving) ─────────────
+
+  it('partial outcome with items[]: UPDATEs project_ffe_items.received_quantity per row, scoped by id', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+
+    queueTableResults('receiving_inspections', {
+      data: {
+        id: 'insp-partial',
+        purchase_order_id: 'po-1',
+        inspected_at: '2026-06-12T10:00:00.000Z',
+        inspected_by: 'user-1',
+        outcome: 'partial',
+        notes: null,
+        photo_asset_ids: [],
+      },
+      error: null,
+    });
+    // PO read for the damage-claim description (partial != clean → claim).
+    queueTableResults('purchase_orders', {
+      data: {
+        id: 'po-1',
+        vendor_po_number: 'AP-012',
+        vendor: { id: 'vendor-ap', name: 'Apparatus' },
+      },
+      error: null,
+    });
+    setTableDefault('damage_claims', { data: null, error: null });
+    setTableDefault('project_ffe_items', { data: null, error: null });
+
+    const config = useCreateReceivingInspection() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    const result = (await config.mutationFn({
+      purchaseOrderId: 'po-1',
+      outcome: 'partial',
+      items: [
+        { ffeItemId: 'ffe-1', receivedQuantity: 2, orderedQuantity: 3 },
+        { ffeItemId: 'ffe-2', receivedQuantity: 1, orderedQuantity: 1 },
+      ],
+    })) as { itemUpdateFailures: string[] };
+
+    // Non-clean outcome → Trigger C does nothing → EVERY supplied row is
+    // written client-side, including the at-full-quantity one.
+    const itemBuilder = builders.project_ffe_items;
+    const updates = itemBuilder.__chain.filter((c) => c.method === 'update');
+    expect(updates.map((c) => c.args[0])).toEqual([
+      { received_quantity: 2 },
+      { received_quantity: 1 },
+    ]);
+    const eqArgs = itemBuilder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
+    expect(eqArgs).toContainEqual(['id', 'ffe-1']);
+    expect(eqArgs).toContainEqual(['id', 'ffe-2']);
+    expect(result.itemUpdateFailures).toEqual([]);
+  });
+
+  it('clean outcome with all items at full quantity: skips the redundant updates (Trigger C already stamped them)', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+
+    queueTableResults('receiving_inspections', {
+      data: {
+        id: 'insp-clean-full',
+        purchase_order_id: 'po-1',
+        inspected_at: '2026-06-12T10:00:00.000Z',
+        inspected_by: 'user-1',
+        outcome: 'clean',
+        notes: null,
+        photo_asset_ids: [],
+      },
+      error: null,
+    });
+
+    const config = useCreateReceivingInspection() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    const result = (await config.mutationFn({
+      purchaseOrderId: 'po-1',
+      outcome: 'clean',
+      items: [
+        { ffeItemId: 'ffe-1', receivedQuantity: 3, orderedQuantity: 3 },
+        { ffeItemId: 'ffe-2', receivedQuantity: 1, orderedQuantity: 1 },
+      ],
+    })) as { itemUpdateFailures: string[] };
+
+    // No project_ffe_items writes at all — 00184 Trigger C set
+    // received_quantity = quantity for clean outcomes inside step 1.
+    expect(builders.project_ffe_items).toBeUndefined();
+    expect(result.itemUpdateFailures).toEqual([]);
+  });
+
+  it('clean outcome with a short row: writes ONLY the short row (client count wins over the trigger stamp)', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+
+    queueTableResults('receiving_inspections', {
+      data: {
+        id: 'insp-clean-short',
+        purchase_order_id: 'po-1',
+        inspected_at: '2026-06-12T10:00:00.000Z',
+        inspected_by: 'user-1',
+        outcome: 'clean',
+        notes: null,
+        photo_asset_ids: [],
+      },
+      error: null,
+    });
+    setTableDefault('project_ffe_items', { data: null, error: null });
+
+    const config = useCreateReceivingInspection() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await config.mutationFn({
+      purchaseOrderId: 'po-1',
+      outcome: 'clean',
+      items: [
+        { ffeItemId: 'ffe-1', receivedQuantity: 2, orderedQuantity: 3 },
+        { ffeItemId: 'ffe-2', receivedQuantity: 1, orderedQuantity: 1 },
+      ],
+    });
+
+    const itemBuilder = builders.project_ffe_items;
+    const updates = itemBuilder.__chain.filter((c) => c.method === 'update');
+    expect(updates.map((c) => c.args[0])).toEqual([{ received_quantity: 2 }]);
+    const eqArgs = itemBuilder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
+    expect(eqArgs).toEqual([['id', 'ffe-1']]);
+  });
+
+  it('item-update failure is NON-critical: resolves with the failed id in itemUpdateFailures, no compensating delete', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    });
+
+    queueTableResults('receiving_inspections', {
+      data: {
+        id: 'insp-itemfail',
+        purchase_order_id: 'po-1',
+        inspected_at: '2026-06-12T10:00:00.000Z',
+        inspected_by: 'user-1',
+        outcome: 'partial',
+        notes: null,
+        photo_asset_ids: [],
+      },
+      error: null,
+    });
+    queueTableResults('purchase_orders', {
+      data: {
+        id: 'po-1',
+        vendor_po_number: 'AP-012',
+        vendor: { id: 'vendor-ap', name: 'Apparatus' },
+      },
+      error: null,
+    });
+    setTableDefault('damage_claims', { data: null, error: null });
+    setTableDefault('project_ffe_items', {
+      data: null,
+      error: { message: 'simulated item update failure' },
+    });
+
+    const config = useCreateReceivingInspection() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    const result = (await config.mutationFn({
+      purchaseOrderId: 'po-1',
+      outcome: 'partial',
+      items: [{ ffeItemId: 'ffe-1', receivedQuantity: 1, orderedQuantity: 2 }],
+    })) as { inspection: { id: string }; itemUpdateFailures: string[] };
+
+    // Mutation still resolves — the inspection + claim are committed.
+    expect(result.inspection.id).toBe('insp-itemfail');
+    expect(result.itemUpdateFailures).toEqual(['ffe-1']);
+    // No compensating DELETE on the inspection for this path.
+    const inspBuilder = builders.receiving_inspections;
+    expect(inspBuilder.__chain.find((c) => c.method === 'delete')).toBeUndefined();
+  });
+
+  it('onSuccess sweeps the procurement-items cache when items[] were written without a projectId', () => {
+    const config = useCreateReceivingInspection() as unknown as {
+      onSuccess: (
+        result: { inspection: { purchase_order_id: string } },
+        variables: {
+          purchaseOrderId: string;
+          outcome: string;
+          projectId?: string;
+          items?: Array<{ ffeItemId: string; receivedQuantity: number }>;
+        },
+      ) => void;
+    };
+
+    config.onSuccess(
+      { inspection: { purchase_order_id: 'po-1' } },
+      {
+        purchaseOrderId: 'po-1',
+        outcome: 'partial',
+        items: [{ ffeItemId: 'ffe-1', receivedQuantity: 1 }],
+      },
+    );
+
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['procurement-items']);
   });
 });
 

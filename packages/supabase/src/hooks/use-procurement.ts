@@ -274,16 +274,34 @@ export interface ProcurementItemRow {
   blocked_reason: string | null;
   notes: string | null;
   sort_order: number;
+  /**
+   * Units physically received against `quantity` (00150; stamped to full
+   * quantity by 00184 Trigger C on clean inspections, or set per-item by
+   * useCreateReceivingInspection's partial-receipt path, W5-T2).
+   */
+  received_quantity: number | null;
+  /** Stamped by the 00084 trigger whenever `status` changes — the By Status
+   *  "Delivered" column reads this for delivered/installed rows. */
+  last_status_change_at: string | null;
   created_at: string;
   updated_at: string;
   purchase_order?: {
     id: string;
     status: POStatus;
     vendor_po_number: string | null;
+    /** OUR outbound number (PO-0001 …), assigned on first send (00188). */
+    po_number: string | null;
     confirmed_eta: string | null;
     total_cents: number;
     payment_pattern: PaymentPattern;
     is_patina_catalog: boolean;
+    /** When the PO was first sent to the vendor (00188) — drives the
+     *  By Status "no ack" expediting flag (W5-T2). */
+    sent_at: string | null;
+    /** When the vendor confirmed receipt (00186) — the "Ack" column. */
+    acknowledged_at: string | null;
+    /** PO creation timestamp — the "Ordered" column. */
+    created_at: string;
     vendor?: { id: string; name: string } | null;
     payments?: POPayment[];
   } | null;
@@ -319,8 +337,9 @@ export function useProcurementItems(filters?: ProcurementItemFilters) {
           `
           *,
           purchase_order:purchase_orders!purchase_order_id(
-            id, status, vendor_po_number, confirmed_eta, total_cents,
+            id, status, vendor_po_number, po_number, confirmed_eta, total_cents,
             payment_pattern, is_patina_catalog,
+            sent_at, acknowledged_at, created_at,
             vendor:vendors!purchase_orders_vendor_id_fkey(id, name),
             payments:po_payments(*)
           ),
@@ -863,6 +882,18 @@ export interface DamageClaimFilters {
   sinceDate?: string;
 }
 
+/**
+ * Per-item received quantity for the partial-receipt path (W5-T2).
+ * `orderedQuantity` is the line's `project_ffe_items.quantity` — supplying it
+ * lets the hook skip updates the 00184 Trigger C already made (clean outcome
+ * stamps received_quantity = quantity server-side).
+ */
+export interface ReceivingInspectionItemInput {
+  ffeItemId: string;
+  receivedQuantity: number;
+  orderedQuantity?: number;
+}
+
 export interface CreateReceivingInspectionInput {
   purchaseOrderId: string;
   outcome: ReceivingInspectionOutcome;
@@ -875,6 +906,12 @@ export interface CreateReceivingInspectionInput {
    * FF&E caches are a real concern.
    */
   projectId?: string;
+  /**
+   * Per-item received quantities (W5-T2 partial receiving). See the
+   * Trigger-C interplay note inside the mutation — clean-outcome rows at
+   * full quantity are skipped as redundant.
+   */
+  items?: ReceivingInspectionItemInput[];
 }
 
 export interface UpdateDamageClaimInput {
@@ -1191,6 +1228,15 @@ export function useTodayProcurementCounts() {
 export interface CreateReceivingInspectionResult {
   inspection: ReceivingInspection;
   damageClaimCreated: boolean;
+  /**
+   * project_ffe_items ids whose received_quantity UPDATE failed (W5-T2).
+   * Always present; empty on the happy path. These failures are
+   * NON-critical — the inspection (and any damage claim) are already
+   * committed and the 00184 trigger side effects have run, so the mutation
+   * still resolves. Callers should surface a warning so the designer can
+   * re-enter the counts.
+   */
+  itemUpdateFailures: string[];
 }
 
 /**
@@ -1350,7 +1396,52 @@ export function useCreateReceivingInspection() {
         damageClaimCreated = true;
       }
 
-      return { inspection: inspectionRow, damageClaimCreated };
+      // Step 3 (W5-T2): per-item received quantities. Runs AFTER the
+      // critical path (steps 1–2) so the compensating-delete branch above
+      // never leaves stray item writes behind.
+      //
+      // Interplay with 00184 Trigger C: on CLEAN outcomes the trigger
+      // already stamps received_quantity = quantity on every linked item
+      // inside step 1's INSERT statement. So:
+      //   * non-clean outcomes — the trigger never touches
+      //     received_quantity; every supplied row is written here;
+      //   * clean outcome — rows at full ordered quantity are skipped as
+      //     redundant (the trigger's stamp already matches); short rows
+      //     still write, and because this runs after the trigger, the
+      //     client's (lower) count wins.
+      // Failures are non-critical (the inspection is committed); failed ids
+      // are surfaced via itemUpdateFailures instead of rejecting.
+      let itemUpdateFailures: string[] = [];
+      const itemInputs = input.items ?? [];
+      const updatable = itemInputs.filter((it) => {
+        if (input.outcome !== 'clean') return true;
+        if (it.orderedQuantity === undefined) return true;
+        return it.receivedQuantity < it.orderedQuantity;
+      });
+      if (updatable.length > 0) {
+        const outcomes = await Promise.all(
+          updatable.map(async (it): Promise<string | null> => {
+            try {
+              const { error: itemError } = await supabase
+                .from('project_ffe_items')
+                .update({ received_quantity: it.receivedQuantity })
+                .eq('id', it.ffeItemId);
+              return itemError ? it.ffeItemId : null;
+            } catch {
+              return it.ffeItemId;
+            }
+          }),
+        );
+        itemUpdateFailures = outcomes.filter((id): id is string => id !== null);
+        if (itemUpdateFailures.length > 0) {
+          console.warn(
+            'useCreateReceivingInspection: received_quantity update failed for',
+            itemUpdateFailures,
+          );
+        }
+      }
+
+      return { inspection: inspectionRow, damageClaimCreated, itemUpdateFailures };
     },
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['receiving-inspections'] });
@@ -1370,6 +1461,11 @@ export function useCreateReceivingInspection() {
       // told us which project the PO belongs to.
       if (variables.projectId) {
         invalidateFfeCaches(queryClient, variables.projectId);
+      } else if ((variables.items ?? []).length > 0) {
+        // Per-item received_quantity writes (W5-T2) without a projectId:
+        // still sweep the cross-project items cache so By Status / Receiving
+        // views refresh.
+        queryClient.invalidateQueries({ queryKey: ['procurement-items'] });
       }
     },
   });
