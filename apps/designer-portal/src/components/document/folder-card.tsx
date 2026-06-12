@@ -5,7 +5,7 @@
  */
 
 import Link from 'next/link';
-import type { DeskFolder } from '@/lib/document/desk-derivation';
+import { folderTab, type DeskFolder } from '@/lib/document/desk-derivation';
 import { fillStateForDesk } from '@/lib/document/fill-state';
 import { Stamp } from './stamp';
 import { StrataMark } from './strata-mark';
@@ -28,11 +28,6 @@ function prettyPhase(phase: string | null): string | null {
     .join(' ');
 }
 
-/** Tab text = client surname (R1: tab carries the family name). */
-function surname(clientName: string): string {
-  const parts = clientName.trim().split(/\s+/);
-  return parts[parts.length - 1] || clientName;
-}
 
 export function FolderCard({ folder }: { folder: DeskFolder }) {
   const { row, need } = folder;
@@ -60,7 +55,7 @@ export function FolderCard({ folder }: { folder: DeskFolder }) {
       {/* Folder tab — the mark answers "how far" (R15 fill-state) */}
       <div className="absolute -top-[14px] left-[18px] z-[2] flex items-center gap-1.5 rounded-t-[5px] border border-b-0 border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-3.5 pb-[3px] pt-[4px] font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
         <StrataMark size="sm" fill={fillStateForDesk(row)} />
-        {surname(row.client_name)}
+        {folderTab(row)}
       </div>
 
       {/* Paper face */}

@@ -128,6 +128,20 @@ const fmtDay = (iso: string) =>
 const daysBetween = (earlierIso: string, now: Date) =>
   Math.floor((now.getTime() - new Date(earlierIso).getTime()) / DAY_MS);
 
+/** Words that mean "we don't actually know the client" — the view's
+ *  fallbacks and seed-account role nouns. The tab never wears them (R16). */
+const ROLE_NOUNS = new Set(['client', 'user']);
+
+/** Folder-tab text (R1: the family name; R16 fallback: when no surname
+ *  resolves, the first word of the document title — never a role noun). */
+export function folderTab(row: Pick<DocumentStateRow, 'client_name' | 'title'>): string {
+  const parts = (row.client_name ?? '').trim().split(/\s+/).filter(Boolean);
+  const last = parts[parts.length - 1] ?? '';
+  if (last && !ROLE_NOUNS.has(last.toLowerCase())) return last;
+  const firstOfTitle = (row.title ?? '').trim().split(/\s+/)[0];
+  return firstOfTitle || last || '—';
+}
+
 /** The ONE thing this engagement needs from the designer today, or null. */
 export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
   if (row.is_archived || row.is_paused) return null;

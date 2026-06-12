@@ -597,6 +597,42 @@ not received — see R16 note).*
 procurement session owns) — fix + backfill land **before Session 02**, or
 the session script gains a seam answer.
 
+
+### R16 (full text) · Slice 4/5 review — blesses and small rulings — 2026-06-12
+
+*Correcting entry: the session's long-form text, superseding the §2-quoted
+placeholder above (which noted it had not arrived).*
+
+**Write-first close-out (I16): blessed as a D10 refinement.** Capture remains
+suggestive because the designer retains full edit/delete (Hours inline edits);
+the system errs toward preserving truth — losing time silently is the worse
+failure. Esc = discard stands. **Pause-as-segment**: blessed; revisit only if
+Session 02 shows pause-noise in Hours. **Activity default = Design**: blessed
+provisionally; Session 02 entry data decides whether a per-document sticky
+default earns its complexity. **IN HAND / TYPED source labels**: blessed.
+**"Same truck"**: the wording is blessed — exactly Midwest-plain — but the
+history narration must say "ETA aligned across POs," never "acknowledged";
+a batch ETA is not a vendor act and the log may not claim it is.
+**Fill-state tab fix**: a project's existence IS commitment — manual projects
+render line 2 filled at Project-active regardless of proposal lineage; this
+replaces the lineage-blind approximation that overstated SHAPING.
+**Tab fallback rule**: when no surname resolves, the tab shows the first word
+of the document title — never "CLIENT"/"USER"/any role noun. Fix the Olsen
+Lake House tab. **AP-012**: verify claim need lines are engagement-scoped;
+one claim must never produce two folders.
+
+### R17 (full text) · vendor_id activation gap — priority — 2026-06-12
+
+*Correcting entry: the session's long-form text, superseding the §2-quoted
+placeholder above. Status: LANDED on main as `00199_activation_carry_vendor_id`
+(`83a2171c`) — function fix + backfill, applied and verified locally.*
+
+The `activate_proposal_as_project` vendor_id drop is a main-lineage bug
+(procurement session owns the RPC fix + backfill migration), but its symptom
+lands on Middlewest's REAL activated projects — Leah cannot mount the Order
+Assistant on un-ordered lines. Fix + backfill land BEFORE Session 02, or the
+session script gains a seam answer for it.
+
 ---
 
-*Log integrity: 41 entries · last appended R17 · 2026-06-12 (footer per spec v1.3 §0.4 — updated on every append)*
+*Log integrity: 43 entries · last appended R17 (full text) · 2026-06-12 (footer per spec v1.3 §0.4 — updated on every append)*

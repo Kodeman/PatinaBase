@@ -5,6 +5,7 @@
  */
 import {
   deriveNeed,
+  folderTab,
   deriveMotion,
   partitionDesk,
   type DocumentStateRow,
@@ -366,5 +367,25 @@ describe('partitionDesk', () => {
     );
     const { chips } = partitionDesk(rows, NOW);
     expect(chips).toHaveLength(6);
+  });
+});
+
+describe('folderTab (R16)', () => {
+  const tab = (client_name: string, title: string) => folderTab({ client_name, title });
+
+  it('carries the family name when a surname resolves (R1)', () => {
+    expect(tab('Sarah Whitfield', 'Whitfield Living & Dining')).toBe('Whitfield');
+    expect(tab('Margaret Olsen', 'Olsen Penthouse — Furnishing')).toBe('Olsen');
+  });
+
+  it('falls back to the first word of the title when the name is a role noun', () => {
+    expect(tab('Client', 'Olsen Lake House')).toBe('Olsen');
+    expect(tab('Client User', 'Chen Residence')).toBe('Chen');
+    expect(tab('New client', 'Aspen Loft Refresh')).toBe('Aspen');
+  });
+
+  it('falls back to the title when no name resolves at all', () => {
+    expect(tab('', 'Harbor House')).toBe('Harbor');
+    expect(tab('   ', 'Harbor House')).toBe('Harbor');
   });
 });
