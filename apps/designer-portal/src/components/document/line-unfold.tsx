@@ -7,8 +7,8 @@
  * v0.4 .line-detail recipe: clay left border, three-column grid.
  */
 
-import { useMemo, useState } from 'react';
-import { useVendors } from '@patina/supabase';
+import { useState } from 'react';
+import { useVendor } from '@patina/supabase';
 import { OrderAssistant } from '@/components/portal/procurement/order-assistant';
 import { LogInspectionDrawer } from '@/components/portal/procurement/log-inspection-drawer';
 import { deriveLineStamp } from '@/lib/document/stamp-derivation';
@@ -49,11 +49,8 @@ export function LineUnfold({
 }) {
   const stamp = deriveLineStamp(item);
   const po = item.purchase_order ?? null;
-  const { data: vendors } = useVendors() as { data: FFERow[] | undefined };
-  const vendor = useMemo(
-    () => (vendors ?? []).find((v) => v.id === (item.vendor_id ?? po?.vendor_id)) ?? null,
-    [vendors, item.vendor_id, po?.vendor_id],
-  );
+  const vendorId: string = item.vendor_id ?? po?.vendor_id ?? '';
+  const { data: vendor } = useVendor(vendorId) as { data: FFERow | undefined };
 
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [inspectionOpen, setInspectionOpen] = useState(false);

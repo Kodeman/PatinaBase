@@ -35,7 +35,12 @@ export function OrdersLedger({ onClose }: { onClose: () => void }) {
     data: AnyRecord[] | undefined;
     isLoading: boolean;
   };
-  const { data: vendors } = useVendors() as { data: AnyRecord[] | undefined };
+  // useVendors returns { data, pagination } — unwrap, and ask for the
+  // whole directory (the vendor pane is a book, not a feed).
+  const { data: vendorsPage } = useVendors(undefined, { page: 1, pageSize: 200 }) as {
+    data: { data: AnyRecord[] } | undefined;
+  };
+  const vendors = vendorsPage?.data;
 
   const [showVendors, setShowVendors] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
