@@ -212,3 +212,37 @@ itself is unchanged. Prototype v0.4 is the canonical reference; spec §3/§10
 amended at next revision. Mobile interim: spine = sticky horizontal paper
 strip at top, margin flows after main — the dedicated D3 pattern still gates
 the flip.
+
+---
+
+## Implementation decisions — Slice 2 (2026-06-11)
+
+### I8 · Document route: one `/doc/[id]` + canonicalizing resolver — 2026-06-11
+
+All three engagement shapes share a single route. The id accepts ANY of the
+engagement's keys — engagement_id (canonical: project id / proposal-chain
+root / lead id / relationship id), or the live proposal id — resolved by one
+`document_state` lookup (`.or()` across the key columns); the URL is not
+rewritten. Per spec §3's "canonicalizing resolver is acceptable." Limit: an
+ACTIVATED proposal's id no longer resolves (shape B excludes proposals with
+a project row) — those engagements are addressed by project id, which is how
+the Desk and ⌘K link them anyway.
+
+### I9 · DAMAGED stamp attribution is PO-level — 2026-06-11
+
+`receiving_inspections` / `damage_claims` hang off `purchase_orders` (00150)
+with no FF&E-item FK, so every line on a PO with an open claim (drafted /
+vendor_notified) stamps DAMAGED until the claim resolves. Per-item
+attribution would need additive schema; deferred until the Slice 4 unfold
+shows claim detail. Designer-visible over-attribution on multi-item POs —
+flagged for design review.
+
+### I10 · Slice 2 presentation seams — 2026-06-11
+
+Sequencing artifacts a designer will notice, all per the §13 build order,
+flagged for review in the slice PR: the margin rail ships present but empty
+(fills in Slice 3); the spine ships without the timer box (Slice 5); only
+the Proposal settled bar unfolds (Brief/Discovery/Direction bars are inert
+until their unfolds are designed); Discovery and Care active bodies are one
+quiet line each (Care grows its Guide/reviews/cadence at R5 in Slice 6).
+Spine sub-labels only claim dates the data actually carries.
