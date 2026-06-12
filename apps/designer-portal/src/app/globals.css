@@ -20,6 +20,14 @@
   --color-terracotta: #D4A090;
   --color-golden-hour: #E8C547;
 
+  /* — The Document (spec v1.1 §10) — paper-object surfaces. D4: depth comes
+     from these values + flat stacked edges, never from shadows. */
+  --doc-paper: #FCFAF6;
+  --doc-sheet-2: #EFE9DD;
+  --doc-sheet-3: #E2DACA;
+  --doc-ink-border: rgba(44, 41, 38, 0.18);
+  --doc-desk-ink: rgba(250, 247, 242, 0.45);
+
   /* — Semantic Assignments — */
   --bg-primary: var(--color-off-white);
   --bg-surface: #FFFFFF;
@@ -83,6 +91,60 @@
   --space-16: 4rem;
   --space-20: 5rem;
   --space-24: 6rem;
+}
+
+/* The Document motion (spec v1.1 §10): vertical settle only — paper never
+   slides in from screen edges. Used by Doc* overlay wrappers (R3). */
+@keyframes doc-sheet-up {
+  from {
+    transform: translateY(14px);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* D12 pick-up: raise-to-fill (~270ms); reduced-motion gets the crossfade. */
+@keyframes doc-raise {
+  from {
+    opacity: 0;
+    transform: scale(0.986);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes doc-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* The breath (R15): the ONLY ambient motion in the system — a slow opacity
+   swell on the active spine marker, where "alive" is literally true.
+   Nothing on the Desk ever moves; prefers-reduced-motion stills it. */
+@keyframes doc-breath {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.62;
+  }
+}
+.doc-breath {
+  animation: doc-breath 3s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .doc-breath {
+    animation: none;
+  }
 }
 
 /* Typography: now provided by @patina/design-system/styles/typography.css.

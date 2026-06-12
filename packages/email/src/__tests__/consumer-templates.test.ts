@@ -4,6 +4,7 @@ import { PriceDrop } from '../templates/price-drop';
 import { BackInStock } from '../templates/back-in-stock';
 import { WeeklyInspiration } from '../templates/weekly-inspiration';
 import { FoundingCircleUpdate } from '../templates/founding-circle-update';
+import { WeeklyPulse } from '../templates/weekly-pulse';
 
 // React Email uses react-dom@18 internally which conflicts with React 19.
 // These tests verify template structure and props without full HTML rendering.
@@ -189,5 +190,35 @@ describe('FoundingCircleUpdate template', () => {
     expect((element.props as any).whatsNew).toBeUndefined();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((element.props as any).communityVoice).toBeUndefined();
+  });
+});
+
+describe('WeeklyPulse template (The Document, R13)', () => {
+  it('creates a valid element with the composed Pulse body', () => {
+    const element = React.createElement(WeeklyPulse, {
+      clientName: 'Sarah Whitfield',
+      designerName: 'Leah',
+      projectName: 'Whitfield Living & Dining',
+      body: 'This week: the Brass Pendant Cluster shipped.\n\nSettled together: the rug finish.',
+      weekOf: '2026-06-08',
+      portalUrl: 'https://client.patina.cloud/projects/abc',
+    });
+    expect(React.isValidElement(element)).toBe(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((element.props as any).projectName).toBe('Whitfield Living & Dining');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((element.props as any).body).toContain('shipped');
+  });
+
+  it('works with only the required props (a quiet-week body)', () => {
+    const element = React.createElement(WeeklyPulse, {
+      clientName: 'Margaret Olsen',
+      designerName: 'Leah',
+      projectName: 'Olsen Penthouse',
+      body: 'A quiet week on the project — everything is moving as planned.',
+    });
+    expect(React.isValidElement(element)).toBe(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((element.props as any).weekOf).toBeUndefined();
   });
 });

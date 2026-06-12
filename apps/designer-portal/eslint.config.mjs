@@ -52,4 +52,80 @@ export default [
       'react-hooks/exhaustive-deps': 'warn',
     },
   },
+
+  // ── The Document: D4 shadow ban (CI-blocking), scoped per ruling R3 ──
+  // Zero shadows on Document surfaces — depth comes from value contrast and
+  // flat stacked edges (spec v1.1 §10). Scope widens app-wide at the
+  // dissolve step (D7); old zones are untouched until then.
+  {
+    files: [
+      'src/app/(document)/**/*.{ts,tsx}',
+      'src/components/document/**/*.{ts,tsx}',
+      'src/lib/document/**/*.{ts,tsx}',
+      'src/hooks/use-desk-engagements.ts',
+      'src/hooks/use-document-state.ts',
+      'src/hooks/use-document-presence.ts',
+      'src/hooks/use-margin-items.ts',
+      'src/hooks/use-margin-notes.ts',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: String.raw`Literal[value=/(^|[\s'":])(drop-)?shadow-(?!none)/]`,
+          message:
+            'D4/R3: no shadow-* utilities on Document surfaces. Depth = value contrast + flat stacked edges (spec v1.1 §10). shadow-none is allowed to neutralize primitives.',
+        },
+        {
+          selector: String.raw`TemplateElement[value.raw=/(^|[\s'":])(drop-)?shadow-(?!none)/]`,
+          message:
+            'D4/R3: no shadow-* utilities on Document surfaces (template literal). Depth = value contrast + flat stacked edges (spec v1.1 §10).',
+        },
+        {
+          selector: String.raw`Literal[value=/box-shadow|drop-shadow\(/]`,
+          message: 'D4/R3: no box-shadow/drop-shadow CSS on Document surfaces (spec v1.1 §10).',
+        },
+        {
+          selector: String.raw`TemplateElement[value.raw=/box-shadow|drop-shadow\(/]`,
+          message: 'D4/R3: no box-shadow/drop-shadow CSS on Document surfaces (spec v1.1 §10).',
+        },
+        {
+          selector: "Property[key.name='boxShadow'], Property[key.name='WebkitBoxShadow']",
+          message:
+            'D4/R3: no boxShadow in inline styles on Document surfaces (spec v1.1 §10).',
+        },
+      ],
+      // Overlay primitives ship shadows; they enter Document surfaces only
+      // through Doc* wrappers (components/document/overlays). When a wrapper
+      // legitimately needs one of these, exempt that file here explicitly.
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@patina/design-system',
+              importNames: [
+                'Dialog',
+                'DialogContent',
+                'Popover',
+                'PopoverContent',
+                'Command',
+                'CommandDialog',
+                'Tooltip',
+                'TooltipContent',
+                'Sheet',
+                'SheetContent',
+                'Drawer',
+                'DrawerContent',
+                'DropdownMenu',
+                'DropdownMenuContent',
+              ],
+              message:
+                'R3: design-system overlay primitives carry shadows — mount them only via Doc* wrappers in components/document/overlays/.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];

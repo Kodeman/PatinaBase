@@ -21,7 +21,7 @@ export function useProjectV2(projectId: string) {
           *,
           designer:profiles!projects_designer_id_fkey(id, full_name, email),
           client:profiles!projects_client_id_fkey(id, full_name, email),
-          proposal:proposals!projects_proposal_id_fkey(id, title, signed_at)
+          proposal:proposals!projects_proposal_id_fkey(id, title, status, version, signed_at, signed_by_name, sent_at, created_at, total_amount)
         `)
         .eq('id', projectId)
         .single();
@@ -144,6 +144,7 @@ export interface FFEItemFilters {
   roomId?: string;
   status?: string;
   itemType?: string;
+  purchaseOrderId?: string;
 }
 
 export function useProjectFFEItems(projectId: string, filters?: FFEItemFilters) {
@@ -157,7 +158,10 @@ export function useProjectFFEItems(projectId: string, filters?: FFEItemFilters) 
         .select(`
           *,
           room:project_rooms!project_room_id(id, name),
-          product:products!product_id(id, name, images, brand)
+          product:products!product_id(id, name, images, brand),
+          blocking_decision:client_decisions!blocked_by_decision_id(id, status, due_date),
+          item_claims:damage_claims!ffe_item_id(id, state),
+          purchase_order:purchase_orders!purchase_order_id(id, status, vendor_id, vendor_po_number, sidemark, confirmed_eta, acknowledged_at, payment_pattern, created_at, po_number, sent_at)
         `)
         .eq('project_id', projectId)
         .order('sort_order', { ascending: true });
@@ -165,6 +169,7 @@ export function useProjectFFEItems(projectId: string, filters?: FFEItemFilters) 
       if (filters?.roomId) query = query.eq('project_room_id', filters.roomId);
       if (filters?.status) query = query.eq('status', filters.status);
       if (filters?.itemType) query = query.eq('item_type', filters.itemType);
+      if (filters?.purchaseOrderId) query = query.eq('purchase_order_id', filters.purchaseOrderId);
 
       const { data, error } = await query;
       if (error) throw error;

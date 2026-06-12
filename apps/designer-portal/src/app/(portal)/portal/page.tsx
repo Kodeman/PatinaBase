@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { useLeads, useLeadStats, useAllDecisions } from '@patina/supabase';
 import { useProjects } from '@/hooks/use-projects';
@@ -68,6 +70,19 @@ function formatPhase(phase: string): string {
 export default function DashboardPage() {
   const hydrated = useHydrated();
   const { user } = useAuth();
+
+  // THE FLIP (R21): once The Document has graduated (the-document-pilot on),
+  // the portal root resolves to the Desk. Other /portal/* zone routes stay
+  // URL-reachable; only the bare landing flips. Rollback = flag off — this
+  // redirect is the toggle, instant and data-free. (The early return lives
+  // below, after every hook, to keep hook order stable.)
+  const { value: documentDefault, isLoading: flipLoading } =
+    useFeatureFlag('the-document-pilot');
+  const router = useRouter();
+  const flipped = !flipLoading && documentDefault;
+  useEffect(() => {
+    if (flipped) router.replace('/desk');
+  }, [flipped, router]);
   const { data: leads, isLoading: leadsLoading } = useLeads({ status: 'new' });
   const { data: leadStats } = useLeadStats();
   const { data: rawProjects, isLoading: projectsLoading } = useProjects({
@@ -88,6 +103,10 @@ export default function DashboardPage() {
   );
 
   const firstName = user?.name?.split(' ')[0] || 'Designer';
+
+  // THE FLIP: hold the skeleton while the redirect to /desk takes effect
+  // (all hooks above run first — this return is below them).
+  if (flipped) return <LoadingStrata />;
 
   // Render the skeleton until hydrated so SSR (empty query cache) and the first
   // client paint (possibly warm singleton cache) agree — prevents hydration mismatch.

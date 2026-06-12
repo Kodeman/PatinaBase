@@ -12,6 +12,7 @@ import { CommandPalette } from '@/components/portal/command-palette';
 import { FirstSigninTour } from '@/components/help/first-signin-tour';
 import { CommandPaletteProvider } from '@/contexts/command-palette-context';
 import { MessagesPanelProvider } from '@/contexts/messages-panel-context';
+import { ZoneFlightTelemetry } from '@/components/document/zone-flight-telemetry';
 
 export default function PortalLayout({
   children,
@@ -44,6 +45,8 @@ export default function PortalLayout({
                 coachmark tour. Mounted once at the portal layout level so it
                 follows the user across navigation while the tour is active. */}
             <FirstSigninTour />
+            {/* R21: name the post-flip flights as data. */}
+            <ZoneFlightTelemetry />
           </div>
         </ToastProvider>
       </MessagesPanelProvider>

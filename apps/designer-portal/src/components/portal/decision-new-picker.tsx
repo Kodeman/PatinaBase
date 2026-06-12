@@ -80,7 +80,7 @@ export function DecisionNewPicker({ onClose }: DecisionNewPickerProps) {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search clients..."
           className="mb-3"
-          // eslint-disable-next-line jsx-a11y/no-autofocus
+          // intentional autofocus: search field in a just-opened picker modal
           autoFocus
         />
 

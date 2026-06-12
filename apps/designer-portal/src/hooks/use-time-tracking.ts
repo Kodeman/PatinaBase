@@ -248,6 +248,10 @@ export interface CreateTimeEntryInput {
   notes?: string | null;
   billable?: boolean;
   hourlyRateCents?: number | null;
+  /** R4 (00198): activity attribution + entry provenance. Optional — old
+   *  callers keep the DB defaults ('timer_manual', activity NULL). */
+  activity?: string | null;
+  source?: 'timer_auto' | 'timer_manual' | 'manual_entry';
 }
 
 export function useCreateTimeEntry() {
@@ -260,19 +264,22 @@ export function useCreateTimeEntry() {
       const userId = userData?.user?.id;
       if (!userId) throw new Error('Not signed in');
 
+      const row: Record<string, unknown> = {
+        project_id: input.projectId,
+        user_id: userId,
+        duration_minutes: input.durationMinutes,
+        started_at: input.startedAt ?? new Date().toISOString(),
+        phase_key: input.phaseKey ?? null,
+        task_id: input.taskId ?? null,
+        notes: input.notes ?? null,
+        billable: input.billable ?? true,
+        hourly_rate_cents: input.hourlyRateCents ?? null,
+      };
+      if (input.activity !== undefined) row.activity = input.activity;
+      if (input.source !== undefined) row.source = input.source;
       const { data, error } = await supabase
         .from('project_time_entries')
-        .insert({
-          project_id: input.projectId,
-          user_id: userId,
-          duration_minutes: input.durationMinutes,
-          started_at: input.startedAt ?? new Date().toISOString(),
-          phase_key: input.phaseKey ?? null,
-          task_id: input.taskId ?? null,
-          notes: input.notes ?? null,
-          billable: input.billable ?? true,
-          hourly_rate_cents: input.hourlyRateCents ?? null,
-        })
+        .insert(row)
         .select()
         .single();
       if (error) throw error;
@@ -293,6 +300,8 @@ export interface UpdateTimeEntryInput {
     notes: string | null;
     billable: boolean;
     hourly_rate_cents: number | null;
+    /** R4 (00198) */
+    activity: string | null;
   }>;
 }
 
@@ -371,6 +380,12 @@ export interface StartTimerInput {
   projectId: string;
   phaseKey?: string | null;
   taskId?: string | null;
+  /** R4 (00198): 'timer_auto' = the document spine's pick-up timer (D11).
+   *  Omitted = the DB default 'timer_manual' (header TimerButton unchanged). */
+  source?: 'timer_auto' | 'timer_manual';
+  /** Suppress the conflict/error toasts — the document auto-start resolves
+   *  23505 races by adopting the existing timer, not by nagging. */
+  quiet?: boolean;
 }
 
 /**
@@ -389,16 +404,18 @@ export function useStartTimer() {
       const userId = userData?.user?.id;
       if (!userId) throw new Error('Not signed in');
 
+      const row: Record<string, unknown> = {
+        project_id: input.projectId,
+        user_id: userId,
+        duration_minutes: null, // running
+        started_at: new Date().toISOString(),
+        phase_key: input.phaseKey ?? null,
+        task_id: input.taskId ?? null,
+      };
+      if (input.source !== undefined) row.source = input.source;
       const { data, error } = await supabase
         .from('project_time_entries')
-        .insert({
-          project_id: input.projectId,
-          user_id: userId,
-          duration_minutes: null, // running
-          started_at: new Date().toISOString(),
-          phase_key: input.phaseKey ?? null,
-          task_id: input.taskId ?? null,
-        })
+        .insert(row)
         .select()
         .single();
       if (error) throw error;
@@ -407,12 +424,12 @@ export function useStartTimer() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
     },
-    onError: (error: unknown) => {
+    onError: (error: unknown, input) => {
       if ((error as { code?: string } | null)?.code === '23505') {
-        toast('You already have a timer running', 'warning');
+        if (!input.quiet) toast('You already have a timer running', 'warning');
         // Another tab/device may have started it — make the chip catch up.
         queryClient.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
-      } else {
+      } else if (!input.quiet) {
         toast('Could not start the timer. Please try again.', 'error');
       }
     },
@@ -424,6 +441,15 @@ export interface StopTimerInput {
   notes?: string | null;
   phaseKey?: string | null;
   billable?: boolean;
+  /** R4 (00198) — the document close-out: an explicit duration (the
+   *  source-following rule computes it; D10 lets the designer adjust it
+   *  afterwards), the raw elapsed truth, and the activity attribution.
+   *  All optional — the header stop dialog keeps its shipped behavior. */
+  durationMinutesOverride?: number;
+  rawSeconds?: number | null;
+  /** D10 idle annotation (00198) — never subtracted from duration. */
+  idleSeconds?: number | null;
+  activity?: string | null;
 }
 
 /**
@@ -471,7 +497,8 @@ export function useStopTimer() {
       const hourlyRateCents = projectRate ?? profileRes.data?.default_hourly_rate_cents ?? null;
 
       const elapsedSeconds = Math.max(0, (Date.now() - new Date(entry.started_at).getTime()) / 1000);
-      const durationMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
+      const durationMinutes =
+        input.durationMinutesOverride ?? Math.max(1, Math.round(elapsedSeconds / 60));
 
       const updates: Record<string, unknown> = {
         duration_minutes: durationMinutes,
@@ -480,6 +507,9 @@ export function useStopTimer() {
       if (input.notes !== undefined) updates.notes = input.notes;
       if (input.phaseKey !== undefined) updates.phase_key = input.phaseKey;
       if (input.billable !== undefined) updates.billable = input.billable;
+      if (input.rawSeconds !== undefined) updates.raw_seconds = input.rawSeconds;
+      if (input.idleSeconds !== undefined) updates.idle_seconds = input.idleSeconds;
+      if (input.activity !== undefined) updates.activity = input.activity;
 
       const { data, error } = await supabase
         .from('project_time_entries')

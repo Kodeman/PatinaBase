@@ -1,0 +1,84 @@
+/**
+ * Line stamp derivation — spec v1.1 §6, ruling R2.
+ *
+ * Pure function from a project_ffe_items row (with its blocking-decision and
+ * PO→receiving joins) to the stamp identity on a document line. Stamps are a
+ * PURE RENDERING of the DB-enforced FF&E machine (00184) — no parallel store.
+ *
+ * Deliberately free of stages.ts (it pulls @patina/help-system — the Jest ESM
+ * trap): this module returns semantic keys; components resolve label/color
+ * through STAGE_CONFIG (R2: the canonical source) at render time.
+ *
+ * DAMAGED is item-grain only (R7 → 00196): it stamps when an OPEN claim is
+ * attributed to THIS item via damage_claims.ffe_item_id. PO-grain claims
+ * (ffe_item_id NULL) never stamp a line — they surface on the Desk need
+ * line and in the unfold's receiving column.
+ */
+
+const MACHINE = new Set([
+  'specified',
+  'quoted',
+  'approved',
+  'ordered',
+  'production',
+  'shipped',
+  'delivered',
+  'installed',
+]);
+
+export type LineStampKind =
+  | 'specified'
+  | 'quoted'
+  | 'approved'
+  | 'ordered'
+  | 'production'
+  | 'shipped'
+  | 'delivered' // status delivered, no inspection yet — a visible to-do (R2)
+  | 'installed'
+  | 'received' // derived: delivered + inspection logged at full count
+  | 'partial' // derived: delivered + inspected short (R18/W5-T2 — surfaced, not invented)
+  | 'damaged' // derived: OPEN claim attributed to this item (00196)
+  | 'decision_due'; // derived: blocked by a pending blocking decision
+
+export interface LineStampInput {
+  status: string;
+  blocked: boolean | null;
+  received_quantity: number | null;
+  /** Ordered count — lets PARTIAL surface when the inspected count ran short. */
+  quantity?: number | null;
+  blocking_decision?: { status: string; due_date: string | null } | null;
+  /** damage_claims rows FK'd to this item (damage_claims!ffe_item_id embed). */
+  item_claims?: { state: string }[] | null;
+}
+
+export interface LineStamp {
+  kind: LineStampKind;
+  /** Always the CURRENT due date (R2): extensions narrate in the margin, never the stamp. */
+  dueDate: string | null;
+}
+
+const OPEN_CLAIM_STATES = new Set(['drafted', 'vendor_notified']);
+
+export function deriveLineStamp(item: LineStampInput): LineStamp {
+  if (item.blocked && item.blocking_decision?.status === 'pending') {
+    return { kind: 'decision_due', dueDate: item.blocking_decision.due_date ?? null };
+  }
+
+  if ((item.item_claims ?? []).some((c) => OPEN_CLAIM_STATES.has(c.state))) {
+    return { kind: 'damaged', dueDate: null };
+  }
+
+  if (item.status === 'delivered') {
+    if (item.received_quantity == null) return { kind: 'delivered', dueDate: null };
+    // R18: the W5-T2 per-item counts make short receipts visible — PARTIAL
+    // when the inspection logged fewer than ordered (truth surfaced, never
+    // invented; quantity unknown ⇒ fall back to RECEIVED).
+    const short = item.quantity != null && item.received_quantity < item.quantity;
+    return { kind: short ? 'partial' : 'received', dueDate: null };
+  }
+
+  return {
+    kind: MACHINE.has(item.status) ? (item.status as LineStampKind) : 'specified',
+    dueDate: null,
+  };
+}
