@@ -15,6 +15,7 @@ const STATE_COLOR: Record<StrataMarkState, string> = {
 const SIZES = {
   sm: { widths: [14, 10, 6], bar: 2, gap: 2 },
   md: { widths: [22, 15, 9], bar: 2, gap: 3 },
+  lg: { widths: [32, 24, 16], bar: 2, gap: 3 },
 } as const;
 
 export function StrataMark({
