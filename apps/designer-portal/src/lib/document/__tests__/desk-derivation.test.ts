@@ -46,6 +46,8 @@ function mkRow(partial: Partial<DocumentStateRow>): DocumentStateRow {
     updated_at: daysAgo(1),
     open_claim_count: 0,
     open_claim_po: null,
+    unsent_pulse_count: 0,
+    pulse_week_of: null,
     ...partial,
   };
 }
@@ -92,6 +94,25 @@ describe('deriveNeed', () => {
     const need = deriveNeed(mkRow({ open_claim_count: 2, open_claim_po: null }), NOW);
     expect(need!.kind).toBe('damage_claim');
     expect(need!.text).toBe('2 open damage claims — review receiving');
+  });
+
+  it('unsent pulse stays quiet before Friday (D5)', () => {
+    // NOW is Thursday 2026-06-11; week_of Monday 2026-06-08 → Friday Jun 12.
+    expect(
+      deriveNeed(mkRow({ unsent_pulse_count: 1, pulse_week_of: '2026-06-08' }), NOW),
+    ).toBeNull();
+  });
+
+  it('unsent pulse rises on Friday with a sage PULSE stamp (D5)', () => {
+    const friday = new Date('2026-06-12T14:00:00Z');
+    const need = deriveNeed(
+      mkRow({ unsent_pulse_count: 1, pulse_week_of: '2026-06-08' }),
+      friday,
+    );
+    expect(need).not.toBeNull();
+    expect(need!.kind).toBe('pulse_due');
+    expect(need!.stamp.label).toBe('PULSE');
+    expect(need!.urgent).toBe(false);
   });
 
   it('open damage claim outranks awaiting inspection but not overdue decisions', () => {

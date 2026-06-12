@@ -55,6 +55,9 @@ export interface DocumentStateRow {
   /** R7 (00189): open damage claims on this project's POs. */
   open_claim_count: number;
   open_claim_po: string | null;
+  /** D5 (00192): current-week draft pulses (rise on the Desk Friday). */
+  unsent_pulse_count: number;
+  pulse_week_of: string | null;
 }
 
 export type NeedKind =
@@ -65,7 +68,8 @@ export type NeedKind =
   | 'proposal_expired'
   | 'new_lead'
   | 'hesitating_proposal'
-  | 'awaiting_inspection';
+  | 'awaiting_inspection'
+  | 'pulse_due';
 
 export interface NeedLine {
   kind: NeedKind;
@@ -102,6 +106,7 @@ const NEED_RANK: Record<NeedKind, number> = {
   new_lead: 5,
   hesitating_proposal: 6,
   awaiting_inspection: 7,
+  pulse_due: 8,
 };
 
 /** Prototype stamp palette (v0.3 is the look authority): borders use brand
@@ -234,6 +239,20 @@ export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
       stamp: { label: 'DELIVERED', ...STAMP.sage },
       urgent: false,
     };
+  }
+
+  // D5: Friday unsent Pulses rise on the Desk — never earlier in the week.
+  if (row.unsent_pulse_count > 0 && row.pulse_week_of) {
+    const monday = new Date(`${row.pulse_week_of}T00:00:00`);
+    const friday = monday.getTime() + 4 * DAY_MS;
+    if (now.getTime() >= friday) {
+      return {
+        kind: 'pulse_due',
+        text: 'Friday Pulse drafted — review & send',
+        stamp: { label: 'PULSE', ...STAMP.sage },
+        urgent: false,
+      };
+    }
   }
 
   return null;
