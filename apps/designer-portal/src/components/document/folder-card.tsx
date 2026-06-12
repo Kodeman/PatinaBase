@@ -1,10 +1,10 @@
 /**
  * Desk folder card (spec v1.1 §7, §10; prototype v0.3 .folder recipe).
  * Depth = flat stacked sheets + value contrast — never shadows (D4).
- * Read-only in Slice 1: renders as an <article>, no navigation yet
- * (the document route is Slice 2).
+ * Picking up = following the link to /doc/[engagement_id] (Slice 2).
  */
 
+import Link from 'next/link';
 import type { DeskFolder } from '@/lib/document/desk-derivation';
 import { Stamp } from './stamp';
 
@@ -40,7 +40,11 @@ export function FolderCard({ folder }: { folder: DeskFolder }) {
     : SECTION_LABEL[row.active_section];
 
   return (
-    <article className="group relative mt-[14px]" aria-label={`${row.title} — ${need.text}`}>
+    <Link
+      href={`/doc/${row.engagement_id}`}
+      className="group relative mt-[14px] block rounded-[3px_6px_6px_6px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+      aria-label={`${row.title} — ${need.text}`}
+    >
       {/* Flat stacked edges (D4): two offset solid sheets, no blur, ever. */}
       <div
         aria-hidden
@@ -82,6 +86,6 @@ export function FolderCard({ folder }: { folder: DeskFolder }) {
           <Stamp label={need.stamp.label} color={need.stamp.color} ink={need.stamp.ink} />
         </div>
       </div>
-    </article>
+    </Link>
   );
 }
