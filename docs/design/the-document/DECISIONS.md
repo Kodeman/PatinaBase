@@ -687,6 +687,44 @@ its patience must match.
 
 
 
+
+## Implementation decisions — Slice 6 (2026-06-12)
+
+### I19 · Slice 6 increment 1 — motion, capture, command, interruptions — 2026-06-12
+
+Slice 6 is the flip-gate omnibus; built as increments. **Increment 1**
+(this entry): **The breath (R15)** — a single `doc-breath` keyframe (~3s
+opacity swell, prefers-reduced-motion stills it), opt-in via a `breathing`
+prop, applied to EXACTLY the active spine marker; the script asserts 1
+breathing element in the spine and 0 on the Desk (nothing on the Desk ever
+moves). **Idle annotation (D10)** — the time provider listens for activity
+pings (pointer/key/wheel/visibility, coalesced to ~20s) while a timer runs;
+at close-out `idleSecondsFromPings` sums gaps over the PROVISIONAL 8-min
+threshold (Session-02 async Q11) and writes `idle_seconds` (00198); the
+strip annotates "~N quiet minutes" beside the number, NEVER subtracting it
+(verified: 40 min logged unchanged with idle recorded). **The ⌘K command
+bar** — a Document-local paper surface (R3-clean: no design-system Command
+import), every row a document (with its fill-state Strata Mark, R15) or a
+ledger or an action; documents navigate to `/doc/[id]`, ledgers open the
+Studio Drawer sheet via a `document:open-ledger` CustomEvent, the Desk's
+"Find anything" affordance opens it via `document:open-command-bar`.
+**Interruption settings (D2)** — migration 00201
+`designer_interruption_rules` (author-scoped RLS, SHIPS EMPTY = the D2
+zero-interruptions default); a sheet opened from ⌘K lists the six margin
+kinds all-OFF; a toggle upserts a row (the louder channel that reads these
+is later — this is storage + surface). **Friday Pulse desk-rise** confirmed
+already shipped (the Friday-gated `pulse_due` need line, Slice 3/5). 5/5
+scripted acceptance (`the-document-slice6-shots.mjs`); 384/384 jest.
+**Flip-gate status:** the idle-annotation gate is now CLOSED. Remaining
+Slice 6 work + gates: Pulse email leg (R13, buildable — increment 2) ·
+ledger front-matter (Hours/Orders exist; Accounts/People still stubs) ·
+Aesthete fold (large, touches old zone) · R5 exiles staged · ⚠ **D13
+mobile build BLOCKED** — the canonical mobile prototype
+`patina-the-document-mobile-d3-v1.html` is NOT in the repo (design
+authority); Leah device validation + Desk precision at R10 (async Q1/Q2,
+missed twice) are externally gated. Migrations now 00191–00201.
+
+
 ---
 
-*Log integrity: 46 entries · last appended I18 · 2026-06-12 (footer per spec v1.3 §0.4 — updated on every append)*
+*Log integrity: 47 entries · last appended I19 · 2026-06-12 (footer per spec v1.3 §0.4 — updated on every append)*
