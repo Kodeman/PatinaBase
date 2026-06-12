@@ -492,7 +492,8 @@ test.describe.serial('procurement order flow: create PO + acknowledgment + block
       expect(rpcErr, 'RPC must refuse decision-blocked items').not.toBeNull();
       expect(rpcErr!.message).toMatch(/blocked pending a client decision/);
     } finally {
-      await designerDb.auth.signOut();
+      // local scope: don't revoke the auth fixture's refresh tokens globally.
+      await designerDb.auth.signOut({ scope: 'local' });
     }
 
     // DB: the refusal left no trace — the blocked item is still unordered
