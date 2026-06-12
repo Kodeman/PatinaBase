@@ -62,9 +62,12 @@ function vendorLine(item: FFERow, stamp: LineStamp): string {
 export function FFESection({
   projectId,
   mode,
+  highlightId = null,
 }: {
   projectId: string;
   mode: 'project' | 'install';
+  /** Line hovered in the margin (§13 Slice 3 anchored highlight). */
+  highlightId?: string | null;
 }) {
   const { data: items, isLoading } = useProjectFFEItems(projectId) as {
     data: FFERow[] | undefined;
@@ -115,8 +118,12 @@ export function FFESection({
           return (
             <li
               key={item.id}
-              className={`grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[var(--color-pearl)] px-2 py-2.5 ${
-                stamp.kind === 'decision_due' ? 'bg-[rgba(232,197,71,0.05)]' : ''
+              className={`grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[var(--color-pearl)] px-2 py-2.5 transition-colors duration-150 ${
+                item.id === highlightId
+                  ? 'bg-[rgba(196,165,123,0.08)]'
+                  : stamp.kind === 'decision_due'
+                    ? 'bg-[rgba(232,197,71,0.05)]'
+                    : ''
               }`}
             >
               <div>

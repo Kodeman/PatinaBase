@@ -65,6 +65,7 @@ export default [
       'src/hooks/use-desk-engagements.ts',
       'src/hooks/use-document-state.ts',
       'src/hooks/use-document-presence.ts',
+      'src/hooks/use-margin-items.ts',
     ],
     rules: {
       'no-restricted-syntax': [
