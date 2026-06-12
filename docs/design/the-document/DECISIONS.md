@@ -394,3 +394,28 @@ true; `prefers-reduced-motion` disables it; nothing on the Desk ever moves.
 discipline exists to prevent. Sequencing: fill-state is static rendering and
 ships with Slice 4 (Leah gets her brand moment next session); the breath
 joins the Slice 6 motion pass.
+
+---
+
+## Implementation decisions — Slice 4 (2026-06-12)
+
+### I14 · Slice 4 implementation notes — 2026-06-12
+
+Per-item DAMAGED (R7 follow-through): `damage_claims.ffe_item_id` (00193);
+the inspection flow drafts ONE claim PER attributed item when the designer
+picks pieces in LogInspectionDrawer (additive prop — old-zone callers
+unchanged); unattributed claims stay PO-grain and never stamp a line. Note
+(R14): `margin_notes` table; capture is one tap from the rail header or a
+line unfold (pre-anchored); escalation paths are BOTH real — a draft
+client_decision, or a draft scope_change_request (audit found the artifact
+R14 thought might be missing: `scope_change_requests` + create/send/approve
+flows, 00066/00084/00114) — no stub needed. RLS is author-scoped (the 00150
+single-lead-designer limitation; widen with studio membership). Dued-note
+ordering is PROVISIONAL (groups with overdue decisions) pending the missing
+R12 (O6). Orders ledger batch action: "same truck" — a shared confirmed_eta
+across selected same-vendor POs via repeated `log_po_acknowledgment`
+(coalesce semantics; vendor_po_number untouched) — wording + semantics
+flagged for design review. R15 fill-state fractions: settled sections count
+1, the active section ½, per movement group; the Desk folder-tab mark uses a
+lineage-blind approximation (manual projects overstate SHAPING there) —
+flagged. The breath waits for the Slice 6 motion pass per R15.
