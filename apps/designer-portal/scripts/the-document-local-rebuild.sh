@@ -13,11 +13,12 @@ cd "$(dirname "$0")/../../.."
 
 PSQL=(docker exec -i supabase_db_supabase psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q)
 
-for f in 00188_document_state_view 00189_document_state_open_claims \
-         00190_margin_anchors_and_pulses 00191_margin_items_view \
-         00192_document_state_pulse_and_send_rpc \
-         00193_per_item_claims_and_margin_notes 00194_margin_items_note_branch \
-         00195_time_entry_source_activity; do
+for f in 00191_document_state_view 00192_document_state_open_claims \
+         00193_margin_anchors_and_pulses 00194_margin_items_view \
+         00195_document_state_pulse_and_send_rpc \
+         00196_per_item_claims_and_margin_notes 00197_margin_items_note_branch \
+         00198_time_entry_source_activity \
+         00200_document_state_send_and_money; do
   echo "── applying $f"
   "${PSQL[@]}" < "supabase/migrations/$f.sql"
 done
