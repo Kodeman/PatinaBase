@@ -337,3 +337,48 @@ included; UI wording "Record the pick" — **flagged for design review**.
 Decision due-date extension is a plain `due_date` patch; the margin item
 narrates it (R2: the stamp shows only the current date). Invoice send =
 `issue_invoice` RPC + the existing `invoice-send` edge function.
+
+### R13 · Pulse email leg — v1 as built; email gates the flip — 2026-06-12
+Slice 3's Pulse ships as logged (portal message + existing comms
+notification): for the pilot, Leah's clients get a Friday inbox touch via the
+comms-notification email, which is acceptable scaffolding. The full-body
+Friday email (Resend leg, using the already-designed Pulse template from the
+journey email set) is added to the DEFAULT-FLIP GATES — the Pulse's product
+truth is reassurance arriving where the client lives, and that is the inbox.
+No schema change required per I12. Flip gates now: D3/D13 mobile validation ·
+Pulse email leg · idle annotation (D10) · R5 destinies staged.
+
+### R14 · The Note — sixth margin kind — 2026-06-12
+Ratifying Leah's Session 01 finding: designer-authored marginalia, the most
+literal margin item of all. Spec: kind `note`, Mocha-adjacent accent (distinct
+from time; suggest Aged Oak), authored by any studio member, anchored like all
+margin items (line / section / letterhead; default letterhead). CAPTURE MUST
+BE ≤5 SECONDS — one tap from the margin rail header ("+ Note") on desktop and
+from the spine sheet's margin section on mobile; from a line unfold, the note
+pre-anchors to that line. Optional due date; a dued note joins needs-action
+ordering (R12), otherwise notes sit in anchor order. ESCALATION is what makes
+it structural: a note converts in place to (a) a client decision via the
+shipped decisions machinery, or (b) a Scope Change Authorization when the
+call was a change request — if no SCA artifact exists in the codebase yet,
+Claude Code stubs the action and flags it (audit-first; do not invent the
+artifact). Notes are studio-visible (D6), never client-visible — the margin's
+private layer. Sequencing: rides Slice 4 as an add-on while the margin
+machinery is fresh; storage is additive (margin_notes or equivalent — naming
+to repo conventions).
+
+### R15 · Strata Mark fill-state + the breath — 2026-06-12
+Ratifying Leah's Question 9, moderated. The mark becomes a progress device:
+its three lines render as fill-state mapped to the engagement's three
+movements — line 1 fills through SHAPING (Brief→Direction), line 2 at
+COMMITMENT (proposal signed), line 3 through DELIVERY (Install→Care).
+Unfilled lines render at the ghost opacity already in the recipe. Surfaces:
+folder tabs' mark, the letterhead mark, ⌘K result rows — anywhere the mark
+stands for a document. Spine section markers keep their per-section state
+colors (settled/active/ghost) — they answer "which section," the fill-state
+answers "how far." MOTION: exactly one — a slow breath (~3s ease, subtle
+opacity swell) on the ACTIVE spine marker only, where "alive" is literally
+true; `prefers-reduced-motion` disables it; nothing on the Desk ever moves.
+"Pulsing" beyond this is declined — ambient motion is what the no-badge
+discipline exists to prevent. Sequencing: fill-state is static rendering and
+ships with Slice 4 (Leah gets her brand moment next session); the breath
+joins the Slice 6 motion pass.
