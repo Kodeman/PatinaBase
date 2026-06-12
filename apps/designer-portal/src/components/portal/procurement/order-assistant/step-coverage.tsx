@@ -200,9 +200,11 @@ export function StepCoverage({
         borderColor: 'var(--color-golden-hour, #E8C547)',
         background: 'rgba(232, 197, 71, 0.06)',
       }}
-      role="status"
+      role="region"
+      aria-labelledby="coverage-warning-heading"
     >
       <div
+        id="coverage-warning-heading"
         className="type-meta-small"
         style={{
           color: 'var(--color-golden-hour, #E8C547)',

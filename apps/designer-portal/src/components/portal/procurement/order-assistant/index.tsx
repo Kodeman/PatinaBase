@@ -115,6 +115,11 @@ export function OrderAssistant(props: OrderAssistantProps) {
   // pre-layer-aware flow.
   const dominantLayer: 'personal' | 'studio' | 'catalog' = useMemo(() => {
     if (vendor.is_patina_catalog) return 'catalog';
+    // NOTE: `project_ffe_items` has no `layer` column — neither the FF&E board
+    // (ffe/page.tsx) nor the By Vendor view (by-vendor/page.tsx) passes `layer`
+    // in the ffeItems map. This branch currently never fires from those callers.
+    // When layer data becomes available (e.g. via a product join or a future
+    // migration), callers should pass it through and this will activate.
     if (ffeItems.length > 0 && ffeItems.every((i) => i.layer === 'catalog'))
       return 'catalog';
     if (ffeItems.some((i) => i.layer === 'studio')) return 'studio';
@@ -287,6 +292,22 @@ export function OrderAssistant(props: OrderAssistantProps) {
       setSubmitError(err instanceof Error ? err.message : 'Failed to place order');
     }
   };
+
+  // Focus management: save the triggering element on open and restore it on
+  // close so keyboard users land back where they started. The Close button
+  // (or first focusable step content) picks up autoFocus inside the panel.
+  const triggerRef = useRef<Element | null>(null);
+  useEffect(() => {
+    if (open) {
+      triggerRef.current = document.activeElement;
+    } else {
+      const el = triggerRef.current;
+      triggerRef.current = null;
+      if (el && 'focus' in el) {
+        window.requestAnimationFrame(() => (el as HTMLElement).focus());
+      }
+    }
+  }, [open]);
 
   // Reset all fields when the panel opens with a fresh context. Keying off
   // `open` plus `vendor.id`/`project.id` means re-opening (or the queue
@@ -463,7 +484,10 @@ export function OrderAssistant(props: OrderAssistantProps) {
   const handleContinue = () => {
     // Leaving the coverage step with uncovered items is an explicit override
     // (whether continuing to details or one-click submitting a catalog order).
-    if (gateIsUncovered) {
+    // Guard: fire coverageOverridden only on the FIRST override — if the
+    // designer hits Continue → Back → Continue the flag is already set, so
+    // we skip the analytics emission to prevent double-counting.
+    if (gateIsUncovered && !coverageOverridden) {
       setCoverageOverridden(true);
       procurementEvents.coverageOverridden({
         uncovered_count: uncovered.length,
@@ -530,7 +554,11 @@ export function OrderAssistant(props: OrderAssistantProps) {
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             role="dialog"
             aria-modal="true"
-            aria-label={`Order Assistant for ${vendor.name}`}
+            aria-label={
+              step !== 'created' && sequence.length > 1
+                ? `Order Assistant for ${vendor.name} — Step ${stepIndex + 1} of ${sequence.length}: ${STEP_LABELS[step]}`
+                : `Order Assistant for ${vendor.name}`
+            }
             className="fixed bottom-0 right-0 top-0 z-50 flex w-[440px] max-w-[92vw] flex-col border-l border-[var(--border-default)] bg-[var(--bg-surface)] shadow-xl"
           >
             {/* Header */}
@@ -559,6 +587,9 @@ export function OrderAssistant(props: OrderAssistantProps) {
                   onClick={handleSkip}
                   disabled={createPO.isPending}
                   size="sm"
+                  // autoFocus lands here so screen readers announce the dialog
+                  // label immediately; restored to the trigger on close.
+                  autoFocus
                 >
                   <X className="h-4 w-4" />
                 </IconButton>
