@@ -67,7 +67,8 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const { id } = use(params);
   const router = useRouter();
 
-  const { data: row, isLoading } = useDocumentEngagement(id);
+  const { data: resolution, isLoading } = useDocumentEngagement(id);
+  const row = resolution?.kind === 'engagement' ? resolution.row : null;
   const projectId = row?.project_id ?? '';
   const proposalId = row?.proposal_id ?? '';
 
@@ -79,6 +80,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
 
   const [proposalOpen, setProposalOpen] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
+
+  // R6: an activated proposal's id redirects to its project document —
+  // pre-signing links survive the signing moment. replace(), not push.
+  useEffect(() => {
+    if (resolution?.kind === 'redirect') router.replace(`/doc/${resolution.projectId}`);
+  }, [resolution, router]);
 
   // Esc puts down (D1) — unless an overlay owns it (ledger sheet first, §3).
   useEffect(() => {
@@ -115,7 +122,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     };
   }, [row?.engagement_kind, project?.proposal, liveProposal]);
 
-  if (isLoading) {
+  if (isLoading || resolution?.kind === 'redirect') {
     return (
       <div className="min-h-screen bg-[var(--doc-paper)]" aria-busy>
         <p className="px-10 py-12 font-heading text-[14px] italic text-[var(--text-muted)]">
