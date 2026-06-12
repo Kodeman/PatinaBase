@@ -957,6 +957,8 @@ export {
   // Sprint 3 / Wave 3.2 — QBO Bookkeeper Export
   useQboExport,
   useQboExportPreview,
+  // Wave 4 / W4-T3 — po-send edge function (PO PDFs + vendor email)
+  useSendPurchaseOrder,
   // Sprint 3 / Wave 3.2 — Procurement notifications (migration 00151)
   useProcurementNotifications,
   useProcurementUnreadCount,
@@ -993,6 +995,10 @@ export type {
   // Sprint 3 / Wave 3.2 — QBO Bookkeeper Export
   QboExportInput,
   QboExportPreview,
+  // Wave 4 / W4-T3 — po-send edge function (PO PDFs + vendor email)
+  PurchaseOrderSendMode,
+  SendPurchaseOrderInput,
+  SendPurchaseOrderResult,
   // Sprint 3 / Wave 3.2 — Procurement notifications (migration 00151)
   ProcurementNotificationKind,
   ProcurementNotification,

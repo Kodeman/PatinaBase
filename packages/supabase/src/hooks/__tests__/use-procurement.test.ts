@@ -148,6 +148,8 @@ import {
   // Sprint 3 — QBO export
   useQboExport,
   useQboExportPreview,
+  // Wave 4 / W4-T3 — po-send edge function
+  useSendPurchaseOrder,
   // Sprint 3 / Wave 3.2 — Procurement notifications
   useProcurementNotifications,
   useProcurementUnreadCount,
@@ -155,7 +157,7 @@ import {
   // Sprint 3 / Wave 3.3 — Capture-to-slot integration
   useAssignProductToFfeSlot,
 } from '../use-procurement';
-import type { QboExportInput } from '../use-procurement';
+import type { QboExportInput, SendPurchaseOrderInput } from '../use-procurement';
 
 beforeEach(() => {
   Object.keys(builders).forEach((k) => delete builders[k]);
@@ -1829,6 +1831,184 @@ describe('useQboExport', () => {
     // Both conditions must be true: opts.enabled=true AND isValidExportInput.
     // Invalid input means the overall enabled must be false.
     expect(result.enabled).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wave 4 / W4-T3 — useSendPurchaseOrder (po-send edge function)
+//
+// Same rig as useQboExport: stub global fetch + supabase.auth.getSession and
+// verify the POST shape, response handling, invalidations, and error path.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useSendPurchaseOrder', () => {
+  const ORIGINAL_FETCH = globalThis.fetch;
+  const ORIGINAL_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://localhost:54321';
+  });
+
+  afterEach(() => {
+    globalThis.fetch = ORIGINAL_FETCH;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = ORIGINAL_SUPABASE_URL;
+  });
+
+  const successBody = {
+    ok: true,
+    poId: 'po-1',
+    poNumber: 'PO-0001',
+    recipient: 'orders@vendor.test',
+    documentPath: 'project-1/po-PO-0001.pdf',
+    emailSent: true,
+    signedUrl: 'http://localhost:54321/storage/v1/object/sign/abc',
+  };
+
+  it('POSTs to /functions/v1/po-send with bearer JWT + full payload and returns the response json', async () => {
+    supabaseClient.auth.getSession.mockResolvedValue({
+      data: { session: { access_token: 'jwt-token-abc' } },
+      error: null,
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(successBody), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const config = useSendPurchaseOrder() as unknown as {
+      mutationFn: (input: SendPurchaseOrderInput) => Promise<unknown>;
+    };
+
+    const result = await config.mutationFn({
+      purchaseOrderId: 'po-1',
+      mode: 'send',
+      recipientEmail: 'override@vendor.test',
+      message: 'Please rush this one.',
+      ccDesigner: true,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [calledUrl, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toBe('http://localhost:54321/functions/v1/po-send');
+    expect(init.method).toBe('POST');
+
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer jwt-token-abc');
+    expect(headers['Content-Type']).toBe('application/json');
+
+    const sentBody = JSON.parse(init.body as string);
+    expect(sentBody).toEqual({
+      purchaseOrderId: 'po-1',
+      mode: 'send',
+      recipientEmail: 'override@vendor.test',
+      message: 'Please rush this one.',
+      ccDesigner: true,
+    });
+
+    expect(result).toEqual(successBody);
+  });
+
+  it('defaults ccDesigner to false and omits optional fields from the payload values', async () => {
+    supabaseClient.auth.getSession.mockResolvedValue({
+      data: { session: { access_token: 'jwt-token-abc' } },
+      error: null,
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ...successBody, emailSent: false }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const config = useSendPurchaseOrder() as unknown as {
+      mutationFn: (input: SendPurchaseOrderInput) => Promise<unknown>;
+    };
+    await config.mutationFn({ purchaseOrderId: 'po-1', mode: 'preview' });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const sentBody = JSON.parse(init.body as string);
+    expect(sentBody).toEqual({
+      purchaseOrderId: 'po-1',
+      mode: 'preview',
+      ccDesigner: false,
+      // recipientEmail / message are undefined → dropped by JSON.stringify.
+    });
+    expect('recipientEmail' in sentBody).toBe(false);
+    expect('message' in sentBody).toBe(false);
+  });
+
+  it('invalidates purchase-orders, the single PO, and procurement-items on success', () => {
+    const config = useSendPurchaseOrder() as unknown as {
+      onSuccess: (data: unknown, vars: SendPurchaseOrderInput) => void;
+    };
+
+    config.onSuccess(successBody, { purchaseOrderId: 'po-1', mode: 'send' });
+
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['purchase-orders'] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['purchase-order', 'po-1'] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['procurement-items'] });
+  });
+
+  it('throws when the user is not authenticated (no session)', async () => {
+    supabaseClient.auth.getSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const config = useSendPurchaseOrder() as unknown as {
+      mutationFn: (input: SendPurchaseOrderInput) => Promise<unknown>;
+    };
+
+    await expect(
+      config.mutationFn({ purchaseOrderId: 'po-1', mode: 'send' }),
+    ).rejects.toThrow(/not authenticated/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects with the edge function error code on non-2xx responses', async () => {
+    supabaseClient.auth.getSession.mockResolvedValue({
+      data: { session: { access_token: 'jwt-token-abc' } },
+      error: null,
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: 'no_recipient' }), {
+        status: 422,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const config = useSendPurchaseOrder() as unknown as {
+      mutationFn: (input: SendPurchaseOrderInput) => Promise<unknown>;
+    };
+
+    await expect(
+      config.mutationFn({ purchaseOrderId: 'po-1', mode: 'send' }),
+    ).rejects.toThrow('no_recipient');
+  });
+
+  it('falls back to a status-based message when the error body is not JSON', async () => {
+    supabaseClient.auth.getSession.mockResolvedValue({
+      data: { session: { access_token: 'jwt-token-abc' } },
+      error: null,
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('Bad Gateway', { status: 502, statusText: 'Bad Gateway' })
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const config = useSendPurchaseOrder() as unknown as {
+      mutationFn: (input: SendPurchaseOrderInput) => Promise<unknown>;
+    };
+
+    await expect(
+      config.mutationFn({ purchaseOrderId: 'po-1', mode: 'mark_sent' }),
+    ).rejects.toThrow(/PO send failed: 502/);
   });
 });
 

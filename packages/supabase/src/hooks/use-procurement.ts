@@ -41,6 +41,18 @@ export interface PurchaseOrder {
   vendor_id: string;
   vendor_po_number: string | null;
   confirmed_eta: string | null;
+  /**
+   * OUR outbound number (PO-0001 …), a per-designer sequence assigned by
+   * assign_po_number (00188) on first send. Distinct from vendor_po_number
+   * (the VENDOR's confirmation number). NULL until first sent.
+   */
+  po_number: string | null;
+  /** Free-text ship-to block printed on the outbound PO document (00188). */
+  ship_to: string | null;
+  /** Storage path of the rendered PO PDF in project-documents (00188). */
+  po_document_path: string | null;
+  /** When the PO was first sent to the vendor by po-send (00188). */
+  sent_at: string | null;
   payment_pattern: PaymentPattern;
   /**
    * Vendor-facing TRADE total (00186): server-computed by the
@@ -1651,6 +1663,122 @@ export function useQboExportPreview(
     },
     enabled: (opts?.enabled ?? true) && ready,
     staleTime: 30_000,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WAVE 4 / W4-T3 — SEND PURCHASE ORDER (po-send edge function)
+//
+// Hooks for `supabase/functions/po-send/index.ts`: assigns OUR PO number
+// (assign_po_number, 00188), renders the PO PDF into project-documents, and
+// — mode 'send' — emails the vendor with the PDF attached.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type PurchaseOrderSendMode = 'preview' | 'send' | 'mark_sent';
+
+export interface SendPurchaseOrderInput {
+  purchaseOrderId: string;
+  /**
+   * 'preview'   → number + render + store the PDF, return a signed URL;
+   *               no email, no sent_at.
+   * 'send'      → all of the above + email the vendor (PDF attached) and
+   *               stamp sent_at (first send) / append a resend audit note.
+   * 'mark_sent' → number + render + store + stamp sent_at, no email — for
+   *               orders placed outside Patina (phone, showroom).
+   */
+  mode: PurchaseOrderSendMode;
+  /** Overrides the vendor recipient chain (orders_email → contact_info). */
+  recipientEmail?: string;
+  /** Optional personal note rendered into the vendor email body. */
+  message?: string;
+  /** CC the designer's own email on the vendor send. */
+  ccDesigner?: boolean;
+}
+
+export interface SendPurchaseOrderResult {
+  ok: boolean;
+  poId: string;
+  /** OUR outbound number (PO-0001 …) — assigned on first send, then stable. */
+  poNumber: string;
+  /** Resolved vendor recipient (mode 'send' only). */
+  recipient?: string;
+  /** Storage path of the rendered PDF inside project-documents. */
+  documentPath: string;
+  emailSent: boolean;
+  /** Short-lived (600 s) signed URL for the rendered PDF, when signing worked. */
+  signedUrl?: string | null;
+}
+
+/**
+ * Resolve the po-send edge function URL from the configured Supabase URL
+ * (same scheme as qboExportUrl: Kong on :54321 locally, api.patina.cloud
+ * in prod).
+ */
+function poSendUrl(): string {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set');
+  }
+  return `${base.replace(/\/$/, '')}/functions/v1/po-send`;
+}
+
+/**
+ * Mutation: POST to the po-send edge function with the caller's access_token
+ * bearer (callQboExport fetch shape). Resolves with the function's JSON
+ * response; rejects with the response's `error` code on non-2xx.
+ *
+ * Invalidates: ['purchase-orders'], ['purchase-order', id],
+ *              ['procurement-items'] (the By Status rows surface
+ *              po_number / sent_at off the joined PO).
+ */
+export function useSendPurchaseOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      input: SendPurchaseOrderInput
+    ): Promise<SendPurchaseOrderResult> => {
+      const supabase = getSupabase();
+      const { data: sessionResult, error: sessionError } =
+        await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      const accessToken = sessionResult?.session?.access_token;
+      if (!accessToken) {
+        throw new Error('Not authenticated — sign in to send purchase orders');
+      }
+
+      const response = await fetch(poSendUrl(), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          purchaseOrderId: input.purchaseOrderId,
+          mode: input.mode,
+          recipientEmail: input.recipientEmail,
+          message: input.message,
+          ccDesigner: input.ccDesigner ?? false,
+        }),
+      });
+
+      if (!response.ok) {
+        let message = `PO send failed: ${response.status} ${response.statusText}`;
+        try {
+          const errBody = await response.json();
+          if (errBody?.error) message = errBody.error;
+        } catch {
+          /* response was not JSON — keep status-based message */
+        }
+        throw new Error(message);
+      }
+
+      return (await response.json()) as SendPurchaseOrderResult;
+    },
+    onSuccess: (_, { purchaseOrderId }) => {
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-order', purchaseOrderId] });
+      queryClient.invalidateQueries({ queryKey: ['procurement-items'] });
+    },
   });
 }
 

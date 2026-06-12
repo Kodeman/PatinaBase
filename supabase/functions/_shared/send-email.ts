@@ -19,6 +19,13 @@ export type SendCategory =
   | "engagement"      // price drops, leads, weekly digest — gets unsubscribe
   | "marketing";      // campaigns — gets unsubscribe
 
+export interface EmailAttachment {
+  /** Attachment filename as the recipient sees it, e.g. "po-0001.pdf". */
+  filename: string;
+  /** Base64-encoded file content (the Resend JSON API attachment shape). */
+  content: string;
+}
+
 export interface ComplianceSendOptions {
   to: string;
   subject: string;
@@ -27,6 +34,11 @@ export interface ComplianceSendOptions {
   cc?: string | string[];
   replyTo?: string;
   from?: string;
+  /**
+   * Optional file attachments, passed through to Resend's
+   * `attachments[]` payload field ({ filename, content<base64> }).
+   */
+  attachments?: EmailAttachment[];
 
   /** User receiving the email — enables suppression check + unsubscribe token. */
   userId?: string;
@@ -166,6 +178,7 @@ export async function sendCompliantEmail(
         category: options.category,
         userId: options.userId,
         templateId: options.templateId,
+        attachments: options.attachments?.map((a) => a.filename),
       }),
     );
     return { success: true, id: `dryrun_${Date.now()}` };
@@ -282,6 +295,7 @@ export async function sendCompliantEmail(
   if (options.cc) payload.cc = Array.isArray(options.cc) ? options.cc : [options.cc];
   if (options.replyTo) payload.reply_to = options.replyTo;
   if (options.tags) payload.tags = options.tags;
+  if (options.attachments?.length) payload.attachments = options.attachments;
 
   let providerId: string | undefined;
   let sendError: string | undefined;
