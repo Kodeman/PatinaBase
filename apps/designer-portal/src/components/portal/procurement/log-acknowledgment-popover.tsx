@@ -12,8 +12,10 @@
  *   - Vendor PO #   (prefilled from the row; blank preserves the stored value)
  *   - Confirmed ETA (date; blank preserves the stored value)
  *
- * On success the RPC also advances the PO draft → confirmed; the hook's
- * invalidations refresh the By Vendor and By Status caches.
+ * On success the RPC also advances a draft PO to confirmed; any later
+ * non-cancelled status keeps its status (00190 — acknowledging late never
+ * moves the lifecycle). The hook's invalidations refresh the By Vendor and
+ * By Status caches.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -70,7 +72,9 @@ export function LogAcknowledgmentPopover({
       // sent_at doesn't exist on purchase_orders until Wave 4 — pass null so
       // the dashboard's days-to-ack metric stays honest about missing data.
       procurementEvents.poAcknowledgmentLogged({ days_since_sent: null });
-      toast('Acknowledgment logged — PO confirmed.', 'success');
+      // Status-agnostic on purpose: only a draft PO advances to confirmed —
+      // a late ack on an in-flight PO keeps its status (00190).
+      toast('Acknowledgment logged.', 'success');
       setOpen(false);
     } catch {
       /* global mutation error toast already fired */

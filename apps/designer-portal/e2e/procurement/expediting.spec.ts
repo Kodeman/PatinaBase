@@ -23,19 +23,22 @@
  *     column must tolerate a PO with zero payment rows (pickHeadlinePayment
  *     returns null → the row renders the quiet "—" placeholder, asserted in
  *     test 1). If these rows ever crash instead, that's a real regression.
- *   - PO-A is seeded as status 'draft', NOT 'in_production'. The flag
- *     derivations don't read po.status (overdue ⇐ confirmed_eta + item not
- *     delivered; no-ack ⇐ sent_at/acknowledged_at), so the flag matrix is
- *     identical — but the ONLY acknowledgment affordance in the product is
- *     the By Vendor popover, which renders for draft POs only, backed by
- *     log_po_acknowledgment (00186) which hard-refuses any status outside
- *     draft/confirmed. A PO advanced past 'confirmed' without an ack would
- *     show a no-ack flag that no UI can clear — product gap noted in the
- *     W5-T3 wrap report. Test 2 needs the clearable path, hence draft.
+ *   - PO-A is seeded as status 'in_production' — the brief's original
+ *     intent. This spec originally had to seed it 'draft' because the ONLY
+ *     acknowledgment affordance (the By Vendor popover) rendered for draft
+ *     POs only, backed by log_po_acknowledgment (00186) which hard-refused
+ *     any status outside draft/confirmed — a PO advanced past 'confirmed'
+ *     without an ack showed a no-ack flag no UI could clear. That gap is
+ *     CLOSED: 00190 accepts any non-cancelled status (stamping
+ *     acknowledged_at WITHOUT moving the status — only draft → confirmed
+ *     ever transitions) and the popover now renders for any unacknowledged,
+ *     non-cancelled, non-Patina-Catalog PO. Test 2 exercises exactly this
+ *     late-ack path end-to-end.
  *   - PO-A's item is seeded directly at 'production': the 00184 Trigger A
- *     ratchet only ever advances (draft maps to 'ordered', rank 3 < 4), so
- *     the seeded status survives the link. PO-C's item is seeded 'approved'
- *     and ratcheted to 'production' by the trigger (asserted in test 1).
+ *     ratchet only ever advances (in_production maps to 'production',
+ *     rank 4 — an equal-rank no-op), so the seeded status survives the
+ *     link. PO-C's item is seeded 'approved' and ratcheted to 'production'
+ *     by the trigger (asserted in test 1).
  *   - All POs carry sent_at so the By Vendor card renders no send popovers
  *     (no po-send / functions-serve dependency anywhere in this spec).
  *
@@ -167,9 +170,9 @@ test.describe.serial('procurement expediting: flags + ack-clear + unscheduled ba
     // ── POs (inserted with final status — no UPDATE, so 00184 Trigger B
     //    never fires during seeding) ────────────────────────────────────────
 
-    // PO-A: ETA 5 days past, sent 3 days ago, never acknowledged → BOTH
-    // flags. Status 'draft' so the By Vendor ack popover is reachable in
-    // test 2 (see header — the flag math never reads po.status).
+    // PO-A: in production, ETA 5 days past, sent 3 days ago, never
+    // acknowledged → BOTH flags. Test 2 acks it in-flight via the By Vendor
+    // popover (reachable past draft since 00190 — see header).
     const { data: poA, error: poAErr } = await adminDb
       .from('purchase_orders')
       .insert({
@@ -179,7 +182,7 @@ test.describe.serial('procurement expediting: flags + ack-clear + unscheduled ba
         vendor_po_number: PO_A_NUMBER,
         payment_pattern: 'net_30',
         total_cents: 150_000,
-        status: 'draft',
+        status: 'in_production',
         confirmed_eta: etaPastIso,
         sent_at: poASentAt,
       })
@@ -233,8 +236,8 @@ test.describe.serial('procurement expediting: flags + ack-clear + unscheduled ba
 
     // ── Items. NO po_payments anywhere — test 1 asserts the payment column
     //    tolerates zero rows ("—"). A: seeded at 'production' directly (the
-    //    draft PO's Trigger-A target 'ordered' ranks BELOW it, so the
-    //    ratchet is a no-op and the status survives). C: seeded 'approved' —
+    //    in_production PO's Trigger-A target is also 'production' — an
+    //    equal-rank no-op, so the status survives). C: seeded 'approved' —
     //    Trigger A ratchets it to 'production' (asserted in test 1).
     const { error: itemsErr } = await adminDb.from('project_ffe_items').insert([
       {
@@ -292,7 +295,7 @@ test.describe.serial('procurement expediting: flags + ack-clear + unscheduled ba
     authenticatedPage: page,
   }) => {
     // DB preamble: Trigger A ratcheted C's item up to the PO stage, and left
-    // A's already-ahead status alone (draft maps to 'ordered', rank 3 < 4).
+    // A's status alone (in_production maps to 'production' — equal rank).
     const { data: seeded, error } = await adminDb
       .from('project_ffe_items')
       .select('name, status')
@@ -356,12 +359,19 @@ test.describe.serial('procurement expediting: flags + ack-clear + unscheduled ba
   }) => {
     await page.goto('/portal/procurement/by-vendor', { waitUntil: 'networkidle' });
 
-    // Our vendor's card. Exactly ONE acknowledgment trigger: PO-A (draft,
-    // unacked). PO-B already shows its "Ack {date}" meta; PO-C advanced past
-    // draft so the popover never renders for it.
+    // Our vendor's card. Since 00190 the popover renders for EVERY
+    // unacknowledged, non-cancelled PO — PO-A and PO-C (both in_production,
+    // unacked) each carry a trigger; PO-B already shows its "Ack {date}"
+    // meta. Scope the click to PO-A's row (the border-b row div is the
+    // only div in the card carrying the PO number — same class-coupled
+    // locator convention as itemRow above).
     const card = page.locator('section').filter({ hasText: VENDOR_NAME });
     await expect(card).toBeVisible({ timeout: 20_000 });
-    const ackTrigger = card.getByRole('button', { name: 'Log acknowledgment' });
+    await expect(card.getByRole('button', { name: 'Log acknowledgment' })).toHaveCount(2);
+    const poARow = card
+      .locator('div[class*="border-b"]')
+      .filter({ hasText: PO_A_NUMBER });
+    const ackTrigger = poARow.getByRole('button', { name: 'Log acknowledgment' });
     await expect(ackTrigger).toHaveCount(1);
     await ackTrigger.click();
 
@@ -371,20 +381,21 @@ test.describe.serial('procurement expediting: flags + ack-clear + unscheduled ba
     const popover = page.getByRole('dialog', { name: 'Log vendor acknowledgment' });
     await expect(popover).toBeVisible({ timeout: 10_000 });
     await popover.getByRole('button', { name: 'Confirm acknowledgment' }).click();
-    await expect(page.getByText('Acknowledgment logged — PO confirmed.')).toBeVisible({
+    await expect(page.getByText('Acknowledgment logged.')).toBeVisible({
       timeout: 10_000,
     });
 
-    // DB: ack stamped, draft → confirmed, ETA preserved; the 00184 Trigger B
-    // cascade ('confirmed' → 'ordered') must NOT clobber the item's
-    // already-ahead 'production' status (rank ratchet).
+    // DB: ack stamped, status UNMOVED (00190 — a late ack never advances or
+    // regresses the lifecycle; only draft → confirmed transitions), ETA
+    // preserved. The same-status UPDATE never fires the 00184 Trigger B
+    // cascade, so the item's 'production' status is untouched too.
     const { data: po, error: poErr } = await adminDb
       .from('purchase_orders')
       .select('status, acknowledged_at, confirmed_eta')
       .eq('id', poAId)
       .single();
     if (poErr) throw poErr;
-    expect(po.status).toBe('confirmed');
+    expect(po.status).toBe('in_production');
     expect(po.acknowledged_at).not.toBeNull();
     expect(po.confirmed_eta).toBe(etaPastIso);
     const { data: item, error: itemErr } = await adminDb

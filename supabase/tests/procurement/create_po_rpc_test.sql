@@ -1,5 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- create_purchase_order / log_po_acknowledgment RPC tests (migration 00186)
+-- create_purchase_order / log_po_acknowledgment RPC tests (migrations 00186 +
+-- 00190)
 --
 -- Exercises the atomic PO-create RPC and the vendor-acknowledgment RPC:
 --   1. Happy path fifty_fifty: header total = vendor TRADE total over items
@@ -18,10 +19,14 @@
 --      original acknowledged_at and preserves fields on NULL args; linked
 --      items stay 'ordered' (Trigger B rank no-op).
 --   8. log_po_acknowledgment rejections: non-owner (request.jwt.claims
---      switched to another user) and wrong status ('shipped').
+--      switched to another user) and 'cancelled' status (the ONLY status the
+--      00190 guard refuses).
 --   9. create_purchase_order rejection by a non-owner: rival user attempts to
 --      create a PO against the owner's project; RPC must raise 'not found or
 --      access denied' and leave the project untouched.
+--  10. late acknowledgment (00190): ack on an in_production PO stamps
+--      acknowledged_at while the status STAYS in_production; ack on a shipped
+--      PO likewise stays shipped (only draft → confirmed ever transitions).
 --
 -- How to run:
 --   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
@@ -62,16 +67,21 @@ INSERT INTO vendors (id, name)
 VALUES ('cc000000-0000-4000-8000-000000000003', 'Create PO Test Vendor'); -- v1
 
 -- Pre-existing PO (for the already-linked rejection) and ack-fixture POs.
---   po_linked   draft       — i_linked already belongs to it (case 2)
---   po_ack2     confirmed   — pre-acknowledged sentinel for idempotency (case 7e/7f/7g);
---                             vendor_po_number starts 'KEEP-01', mutated to 'KEEP-02'
---                             by sub-case 7h — subsequent sub-cases must not assume 'KEEP-01'
---   po_shipped  shipped     — wrong-status ack rejection (case 8c)
+--   po_linked    draft         — i_linked already belongs to it (case 2)
+--   po_ack2      confirmed     — pre-acknowledged sentinel for idempotency (case 7e/7f/7g);
+--                                vendor_po_number starts 'KEEP-01', mutated to 'KEEP-02'
+--                                by sub-case 7h — subsequent sub-cases must not assume 'KEEP-01'
+--   po_shipped   shipped       — late-ack happy path (case 10b: status stays shipped)
+--   po_inprod    in_production — late-ack happy path (case 10a: status stays in_production)
+--   po_cancelled cancelled     — wrong-status ack rejection (case 8c — the only
+--                                status the 00190 guard refuses)
 INSERT INTO purchase_orders (id, designer_id, project_id, vendor_id, payment_pattern, total_cents, status, vendor_po_number, acknowledged_at)
 VALUES
-  ('cc100000-0000-4000-8000-000000000001', '77777777-7777-4777-8777-777777777701', 'cc000000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000003', 'full_upfront', 50000, 'draft',     NULL,      NULL),      -- po_linked
-  ('cc100000-0000-4000-8000-000000000002', '77777777-7777-4777-8777-777777777701', 'cc000000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000003', 'net_30',       70000, 'confirmed', 'KEEP-01', '2026-01-01T00:00:00Z'), -- po_ack2
-  ('cc100000-0000-4000-8000-000000000003', '77777777-7777-4777-8777-777777777701', 'cc000000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000003', 'net_30',       90000, 'shipped',   NULL,      NULL);      -- po_shipped
+  ('cc100000-0000-4000-8000-000000000001', '77777777-7777-4777-8777-777777777701', 'cc000000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000003', 'full_upfront', 50000, 'draft',         NULL,      NULL),      -- po_linked
+  ('cc100000-0000-4000-8000-000000000002', '77777777-7777-4777-8777-777777777701', 'cc000000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000003', 'net_30',       70000, 'confirmed',     'KEEP-01', '2026-01-01T00:00:00Z'), -- po_ack2
+  ('cc100000-0000-4000-8000-000000000003', '77777777-7777-4777-8777-777777777701', 'cc000000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000003', 'net_30',       90000, 'shipped',       NULL,      NULL),      -- po_shipped
+  ('cc100000-0000-4000-8000-000000000004', '77777777-7777-4777-8777-777777777701', 'cc000000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000003', 'net_30',       60000, 'in_production', NULL,      NULL),      -- po_inprod
+  ('cc100000-0000-4000-8000-000000000005', '77777777-7777-4777-8777-777777777701', 'cc000000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000003', 'net_30',       40000, 'cancelled',     NULL,      NULL);      -- po_cancelled
 
 -- FF&E items:
 --   i1        trade 80000 × qty 2 (trade wins over unit 100000)  → 160000
@@ -450,18 +460,25 @@ BEGIN
    WHERE id = 'cc100000-0000-4000-8000-000000000002' AND vendor_po_number = 'KEEP-02';
   ASSERT FOUND, 'FAIL 8b: non-owner ack must not mutate the PO';
 
-  -- 8c: wrong status — owner acks a shipped PO.
+  -- 8c: wrong status — owner acks a CANCELLED PO (00190: the only refused
+  -- status; every other status late-acks via case 10).
   PERFORM pg_temp.assume_user('77777777-7777-4777-8777-777777777701');
   v_err := NULL;
   BEGIN
-    PERFORM log_po_acknowledgment('cc100000-0000-4000-8000-000000000003');
+    PERFORM log_po_acknowledgment('cc100000-0000-4000-8000-000000000005');
   EXCEPTION WHEN OTHERS THEN
     v_err := SQLERRM;
   END;
-  ASSERT v_err LIKE '%is shipped, expected draft or confirmed%',
-    'FAIL 8c: shipped PO ack should raise, got ' || COALESCE(v_err, 'no error');
+  ASSERT v_err LIKE '%is cancelled, cancelled orders cannot be acknowledged%',
+    'FAIL 8c: cancelled PO ack should raise, got ' || COALESCE(v_err, 'no error');
 
-  RAISE NOTICE 'Case 8 passed: acknowledgment rejects non-owner and wrong status.';
+  -- The refused ack must not have stamped anything.
+  PERFORM 1 FROM purchase_orders
+   WHERE id = 'cc100000-0000-4000-8000-000000000005'
+     AND acknowledged_at IS NULL AND status = 'cancelled';
+  ASSERT FOUND, 'FAIL 8d: refused cancelled ack must not mutate the PO';
+
+  RAISE NOTICE 'Case 8 passed: acknowledgment rejects non-owner and cancelled status.';
 END
 $$;
 
@@ -500,6 +517,43 @@ BEGIN
   ASSERT FOUND, 'FAIL 9b: non-owner create must not partially link/advance item i7';
 
   RAISE NOTICE 'Case 9 passed: non-owner create_purchase_order rejected with not found or access denied.';
+END
+$$;
+
+-- ─── case 10: late acknowledgment keeps the lifecycle (00190) ────────────────
+--
+-- 00186 hard-refused any status outside draft/confirmed, which made the
+-- W5-T2 "no ack" flag permanently un-clearable for POs advanced past
+-- 'confirmed' (found by the expediting e2e). 00190 accepts every
+-- non-cancelled status BUT only draft → confirmed ever transitions: a late
+-- acknowledgment stamps acknowledged_at and must neither regress nor advance
+-- the PO (a same-status UPDATE also never fires 00184 Trigger B, which is
+-- gated WHEN (OLD.status IS DISTINCT FROM NEW.status)).
+
+DO $$
+DECLARE
+  v_po purchase_orders;
+BEGIN
+  PERFORM pg_temp.assume_user('77777777-7777-4777-8777-777777777701');
+
+  -- 10a: in_production PO — ack stamps, status stays in_production, coalesce
+  -- args still apply.
+  v_po := log_po_acknowledgment('cc100000-0000-4000-8000-000000000004', 'LATE-04', '2026-09-01');
+  ASSERT v_po.acknowledged_at IS NOT NULL,
+    'FAIL 10a: late ack should stamp acknowledged_at on an in_production PO';
+  ASSERT v_po.status = 'in_production',
+    'FAIL 10b: late ack must keep status in_production, got ' || v_po.status;
+  ASSERT v_po.vendor_po_number = 'LATE-04' AND v_po.confirmed_eta = '2026-09-01',
+    'FAIL 10c: late ack should still coalesce-update vendor_po_number + confirmed_eta';
+
+  -- 10b: shipped PO likewise — stamps without touching the status.
+  v_po := log_po_acknowledgment('cc100000-0000-4000-8000-000000000003');
+  ASSERT v_po.acknowledged_at IS NOT NULL,
+    'FAIL 10d: late ack should stamp acknowledged_at on a shipped PO';
+  ASSERT v_po.status = 'shipped',
+    'FAIL 10e: late ack must keep status shipped, got ' || v_po.status;
+
+  RAISE NOTICE 'Case 10 passed: late acknowledgment stamps without moving the lifecycle.';
 END
 $$;
 

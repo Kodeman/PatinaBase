@@ -319,15 +319,20 @@ export function VendorSectionCard({
                       ETA {formatDate(po.confirmed_eta)}
                     </span>
                   )}
-                  {/* Vendor acknowledgment (W3-T3a): draft POs get the
-                      log-acknowledgment popover; acknowledged POs show a
-                      muted "Ack {date}" meta instead. POs advanced past
-                      draft without an acknowledgment show neither. */}
+                  {/* Vendor acknowledgment (W3-T3a, widened by 00190): any
+                      unacknowledged, non-cancelled, non-Patina-Catalog PO
+                      gets the log-acknowledgment popover — a vendor can
+                      acknowledge late, after the PO has advanced past draft
+                      (the RPC stamps acknowledged_at without moving the
+                      status; only draft → confirmed). Acknowledged POs show
+                      a muted "Ack {date}" meta instead. Patina Catalog
+                      orders have no vendor-ack loop, and cancelled POs are
+                      refused server-side. */}
                   {po.acknowledged_at ? (
                     <span className="font-mono text-[0.58rem] text-[var(--text-muted)]">
                       Ack {formatDate(po.acknowledged_at)}
                     </span>
-                  ) : po.status === 'draft' ? (
+                  ) : !po.is_patina_catalog && po.status !== 'cancelled' ? (
                     <LogAcknowledgmentPopover
                       purchaseOrderId={po.id}
                       vendorPoNumber={po.vendor_po_number}

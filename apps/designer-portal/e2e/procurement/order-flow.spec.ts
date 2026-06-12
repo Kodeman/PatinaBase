@@ -500,7 +500,7 @@ test.describe.serial('procurement order flow: create PO + acknowledgment + block
     await expect(popover).toBeVisible({ timeout: 10_000 });
     await popover.getByRole('button', { name: 'Confirm acknowledgment' }).click();
 
-    await expect(page.getByText('Acknowledgment logged — PO confirmed.')).toBeVisible({
+    await expect(page.getByText('Acknowledgment logged.')).toBeVisible({
       timeout: 10_000,
     });
 
@@ -518,7 +518,7 @@ test.describe.serial('procurement order flow: create PO + acknowledgment + block
 
     // Row meta now shows "Ack {date}" (computed from the DB stamp so a
     // midnight rollover can't make the expectation drift), and the
-    // log-acknowledgment trigger is gone (the PO is no longer draft).
+    // log-acknowledgment trigger is gone (the PO is acknowledged).
     await expect(card.getByText(`Ack ${shortDate(po.acknowledged_at as string)}`)).toBeVisible({
       timeout: 10_000,
     });
