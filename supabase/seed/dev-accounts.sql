@@ -149,13 +149,20 @@ BEGIN
   SELECT uid_studio_mgr, id FROM public.roles WHERE name = 'app_user'
   ON CONFLICT (user_id, role_id) DO NOTHING;
 
-  -- designer@patina.dev → independent_designer + app_user
+  -- designer@patina.dev → independent_designer + app_user + studio_owner
   INSERT INTO public.user_roles (user_id, role_id)
   SELECT uid_designer, id FROM public.roles WHERE name = 'independent_designer'
   ON CONFLICT (user_id, role_id) DO NOTHING;
 
   INSERT INTO public.user_roles (user_id, role_id)
   SELECT uid_designer, id FROM public.roles WHERE name = 'app_user'
+  ON CONFLICT (user_id, role_id) DO NOTHING;
+
+  -- studio_owner: needed so the dual-pricing margin surfaces (drawer/card/
+  -- financials, owner-gated since procurement Wave 2) are visible in dev
+  -- without a manual grant that every db reset wipes.
+  INSERT INTO public.user_roles (user_id, role_id)
+  SELECT uid_designer, id FROM public.roles WHERE name = 'studio_owner'
   ON CONFLICT (user_id, role_id) DO NOTHING;
 
   -- client@patina.dev → client + app_user
