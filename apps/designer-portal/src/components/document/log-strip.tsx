@@ -17,8 +17,10 @@ import {
   ACTIVITIES,
   fmtMinutes,
   idleAnnotation,
+  IDLE_THRESHOLD_SECONDS,
   isAdjusted,
 } from '@/lib/document/time-derivation';
+import { documentEvents } from '@/lib/analytics/document-events';
 
 export function LogStrip() {
   const { offer, logOffer, discardOffer } = useDocumentTime();
@@ -55,6 +57,12 @@ export function LogStrip() {
     setBusy(true);
     try {
       await logOffer(parsed, activity);
+      // R21 week-one watch: strip engagement (logged, adjusted?, idle?).
+      documentEvents.logStripActed({
+        action: 'log',
+        adjusted,
+        had_idle: offer.idleSeconds >= IDLE_THRESHOLD_SECONDS,
+      });
     } finally {
       setBusy(false);
     }
@@ -120,7 +128,14 @@ export function LogStrip() {
       <button
         type="button"
         disabled={busy}
-        onClick={() => void discardOffer()}
+        onClick={() => {
+          documentEvents.logStripActed({
+            action: 'discard',
+            adjusted: false,
+            had_idle: offer.idleSeconds >= IDLE_THRESHOLD_SECONDS,
+          });
+          void discardOffer();
+        }}
         className="rounded-[4px] border border-[rgba(250,247,242,0.25)] px-3 py-1 text-[12px] text-[rgba(250,247,242,0.75)] hover:border-[var(--color-clay)]"
       >
         Discard

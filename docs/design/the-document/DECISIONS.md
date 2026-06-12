@@ -791,7 +791,175 @@ Remaining flip gates are now only the two externally-held: Leah device
 validation + Desk precision at R10 (async Q1/Q2). Migrations unchanged
 (00191–00201; this increment is presentation-only).
 
+### Slice 6 review — blessed as logged, verification rides L3 — 2026-06-12
+
+The three increments (motion/capture/command/interruptions · Pulse email
+leg · D13 mobile) are blessed per report: prototype canonical in-repo,
+intent-ported shell below 980px, all three D3 rulings scripted-green,
+materials honored, the breath as the only ambient motion, margin item
+bodies shared with the desktop rail so the two surfaces cannot drift.
+No designer-visible items were flagged; accordingly the design review
+rides the L3 walk (the real device IS the review). Two confirmations
+owed in the log before flip: R17 vendor_id landed (was made in-slice at
+5.5 — confirm or name the blocker) and the AP-012 engagement-scoping
+verification result (§14.13). R20's strip-timeout check: log the finding.
+
+### R21 · The flip protocol — 2026-06-12
+
+**Gate satisfaction, defined.** (1) D13 gate = the L3 walk lands GREEN:
+Leah discovers the spine sheet and opens a chip unaided or with at most
+one hint, no material-confusion moments, and her verdict is usable
+("works on a job site" energy, not "where am I"). (2) Precision gate =
+Q1/Q2 finally CAPTURED at her real desk heat, with either ≤1 false
+positive and no high-cost miss, or thresholds retuned to her numbers
+and re-checked async. Captured-and-tolerable flips; captured-and-noisy
+retunes first.
+
+**Mechanics — stage now, toggle later.** The flip is prepared as ONE
+change: `/portal` root resolves to `/desk`; zone routes stay URL-reachable
+with no nav entry points (spec §12.5); her existing bookmarks keep
+working; the pilot flag graduates to default-on for the studio. Rollback
+is the same toggle in reverse — instant, no migration, no data effect.
+
+**Flight telemetry replaces the twice-missed Q14.** At flip, every
+old-zone route visit fires a lightweight event carrying from-route and
+last-document-in-hand. The triggers we failed to capture twice by
+observation will name themselves as data within the first week. This is
+the dissolve criterion's instrument as well.
+
+**Week-one watch:** daily zone-visit count and contexts · strip
+engagement rate · timer entries/day against her historical baseline.
+**Rollback criteria:** Leah asks, or >50% of her work sessions route
+through old zones in week one (voting with her feet), or any
+data-integrity issue. Un-flipping is cheap; pretending is not.
+
+**Dissolve staging (post-flip, telemetry-gated, each stage its own PR):**
+Stage 1 (flip +2 weeks, flat zone telemetry): R5 quiet exiles staged
+(Portfolio / Resources / Team) · Inbox verification (§14.10).
+Stage 2: ledger front-matter (Insights distribution) · the Aesthete fold —
+NOTE: the fold's Accounts rendering (teaching royalties, the 25% Pledge
+as lines in the studio's own book) is brand-critical and RETURNS TO THE
+DESIGN SESSION for a pass before build; it is the one remaining named
+design deliverable in the dissolve.
+Stage 3: old-URL redirects · zone removal · app-wide shadow ban (R3) ·
+Inbox retirement. Spec v1.4 cuts when the gates check — the flip-state
+consolidation, one cut, not three.
+
+## Pilot record
+
+### L3 · Leah validation walk — findings — 2026-06-12
+
+**Build:** Slice 6 / PR #9 (real build, her phone, <980px) · **Both gates: GREEN**
+**D13 gate.** Spine sheet: unaided · chip: tapped unaided · put-down: spine
+sheet handle · Hours + reply asks: both clean · one brief stall opening the
+drawer (first-run affordance — polish watch, not a build item) · first
+sentence, verbatim: **"Very slick."** · Q9, verbatim: **"It almost seems too
+easy."** GATE SATISFIED per R21.
+**Precision gate.** At 4–6-folder heat: **0 false positives, 0 misses** —
+and still "slightly noisy," located precisely: the day-one SENT need line
+("was there action needed?"). Noise without inaccuracy = a tier problem,
+not a threshold problem. → R22. GATE SATISFIED (captured-and-tolerable,
+with one nudge landing in the flip window).
+**Flights (Q14).** Completeness-seeking, not friction: "Loves where this is
+going but still needs the complete functionality available in the portal."
+No broken moments named. Post-flip flight telemetry ranks the dissolve.
+**Her numbers.** Idle: <1 min · PO drafted-unsent: 1 day · PO
+sent-unacknowledged: 1 day.
+
+### R22 · The action test — the awareness tier — 2026-06-12
+
+A Desk folder claims "needs your hand"; the claim is honest only if an act
+is AVAILABLE. New rule for every need-line input: **if the designer's only
+available act is waiting, it renders as an In-motion chip carrying its
+state — not a folder.** First application (Leah's finding): proposal sent,
+unopened day 1 → In-motion chip ("Aspen Loft — sent, unopened 1d");
+promotes to a needs-your-hand folder at 2 days unopened. Opened-2d-unsigned
+stays a folder (act: follow up). DELIVERED-awaiting-inspection stays (act:
+inspect). PO lines stay folders at her thresholds (acts: send / chase).
+The chip tier is the pressure valve for every future "hot threshold vs.
+noisy desk" tension — thresholds can run as hot as her instincts without
+the Desk ever nagging. Lands in the flip PR window; constant
+`SENT_UNOPENED_PROMOTE_DAYS = 2` beside the R10 set.
+
+### Constants — FINAL (I-entry on land) — 2026-06-12
+
+idle_annotation: 8 min → **1 min** (her number, honored literally; watch
+item: if week-one annotations exceed ~⅓ of entries or go ignored, revisit
+with data) · po_drafted_unsent: 2d → **1d** · po_sent_unacknowledged:
+3d → **1d** · R10 thresholds: **stand as-is** (zero-FP/zero-miss at heat) ·
+sent_unopened: 1d → chip tier; folder at **2d** (R22).
+
+### THE GO — 2026-06-12
+
+Both human gates satisfied. Sequence per the Flip Package §4: (1) R22 +
+final constants land (one PR window) · (2) pre-flip checklist confirmed in
+the log — R17, AP-012, R20 strip timeout, rollback tested both directions ·
+(3) toggle: /portal → /desk · (4) Kody's one line to Leah · (5) week-one
+watch runs with two added eyes: idle-annotation volume at 1 min, and
+sent-unacknowledged noise at 1d (the R22 chip tier is the remedy if either
+runs hot). Flight telemetry ranks the dissolve from day one. The Aesthete
+fold remains the one named design deliverable, post-flip. Spec v1.4 cuts
+at flip-state. — The Document workstream is feature-complete, validated,
+and cleared to become the default.
+
+### Pre-flip checklist — confirmed (B3) — 2026-06-12
+
+The three owed confirmations, verified before the toggle:
+- **R17 vendor_id — LANDED.** `00199_activation_carry_vendor_id` is on main
+  (`83a2171c`); `activate_proposal_as_project` carries `v_item.vendor_id`
+  onto FF&E lines (verified in `pg_proc.prosrc`) + backfill via
+  `source_proposal_item_id`. No blocker — the Order Assistant mounts on
+  activated un-ordered lines.
+- **AP-012 / §14.13 — engagement-scoped by construction.** A claim reaches
+  its project through the single-FK chain claim → receiving_inspection → PO
+  → project; max claim→project fanout across all data = **1**. One claim
+  can never produce two folders. §14.13 CLOSED.
+- **R20 strip timeout — none exists.** `log-strip.tsx` holds zero
+  `setTimeout`/`setInterval`; the strip persists until Logged, Discarded,
+  Esc, or the next pick-up chains it out. Confirmed.
+- **Rollback — tested both directions** (`the-document-flip-shots.mjs` +
+  the rollback walk): flag ON → `/portal` resolves to `/desk`, zone routes
+  stay URL-reachable; flag OFF → `/portal` stays on the old Today and
+  `/desk` fails closed to `/portal`. Instant, no migration, no data effect.
+
+### I22 · The flip mechanics — implementation (B1–B2) — 2026-06-12
+
+R22 awareness tier in `desk-derivation.ts`: a sent-unopened proposal is an
+In-motion chip carrying state ("sent, unopened 1d") via `deriveMotion`
+until `SENT_UNOPENED_PROMOTE_DAYS = 2`, where `deriveNeed` promotes it to a
+folder; the In-motion chip is now a tappable `Link` to `/doc/[engagement]`
+(opens the document, never urgency-outlined). Final constants landed:
+idle_annotation `IDLE_THRESHOLD_SECONDS` 8→**1 min**; `PO_DRAFT_UNSENT_DAYS`
+2→**1**; `PO_SENT_UNACKED_DAYS` 3→**1**; R10 set unchanged. The flip
+toggle: `/portal` (the old Today) redirects to `/desk` when
+`the-document-pilot` is on — the bare landing flips, `/portal/*` zone
+routes stay reachable; rollback = flag off. Flight telemetry
+(`document-events.ts` + `zone-flight-telemetry.tsx` in the portal layout):
+a post-flip old-zone visit fires `document_zone_flight` with from-route +
+`last_document_in_hand` (stashed in localStorage from `/doc/[id]`).
+Week-one watch events: `document_desk_rendered` (folder/chip counts +
+need-kind mix — reads sent-unack frequency) on every Desk load;
+`document_log_strip_acted` (log/discard, adjusted, had_idle) on strip
+action. 386/386 jest; tsc/lint clean.
+
+### FLIP CONFIRMED — 2026-06-12
+
+THE GO executed. (1) R22 + final constants landed (this PR window). (2)
+Pre-flip checklist confirmed in the log — R17 landed, AP-012 scoped (§14.13
+closed), R20 no strip timeout, rollback tested both directions. (3) Toggle:
+`the-document-pilot` graduated to default-on for the studio → `/portal`
+resolves to `/desk` (verified live: the portal root flips, zone routes stay
+URL-reachable, the R22 awareness chip renders correctly). (4) Kody sends
+Leah the one line. (5) Week-one watch is wired: `document_zone_flight`
+(from-route + last-document-in-hand) ranks the dissolve; `document_desk_
+rendered` carries the sent-unacknowledged frequency at 1d; `document_log_
+strip_acted` carries idle volume at the 1-min threshold. Rollback remains
+the same toggle in reverse — instant, no migration, no data effect. The
+Document is the default. Post-flip: the Aesthete fold returns to the design
+session before build; spec v1.4 cuts at flip-state; dissolve stages run
+telemetry-gated. — The workstream is flipped.
+
 
 ---
 
-*Log integrity: 49 entries · last appended I21 · 2026-06-12 (footer per spec v1.3 §0.4 — updated on every append)*
+*Entries: D1–D13 · O1–O7 (resolved) · I1–I22 · R1–R22 · L1–L3 · THE GO · FLIP CONFIRMED · last id = FLIP*

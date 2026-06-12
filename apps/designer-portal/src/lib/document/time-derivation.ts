@@ -78,7 +78,9 @@ export function isAdjusted(offer: Pick<LogOffer, 'rawSeconds'>, loggedMinutes: n
  * ANNOTATED on the offer, never trimmed from the number. The designer
  * decides whether the quiet minutes were work (sketching, a call) or not.
  */
-export const IDLE_THRESHOLD_SECONDS = 8 * 60;
+// FINAL (L3 — Leah's number, honored literally). Watch item: if week-one
+// annotations exceed ~⅓ of entries or go ignored, revisit with data.
+export const IDLE_THRESHOLD_SECONDS = 1 * 60;
 
 /** Sum the idle gaps in a sorted list of activity-ping timestamps (ms). */
 export function idleSecondsFromPings(pingsMs: number[], thresholdSeconds = IDLE_THRESHOLD_SECONDS): number {

@@ -17,6 +17,7 @@ import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { useHoldDocument } from '@/hooks/document-time-provider';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
 import { MobileMarginChips } from '@/components/document/mobile/mobile-margin-chips';
+import { rememberDocumentInHand } from '@/lib/analytics/document-events';
 import { useDocumentPresence } from '@/hooks/use-document-presence';
 import { useProposal } from '@/hooks/use-proposals';
 import { deriveSections, type SectionLineage } from '@/lib/document/section-derivation';
@@ -170,6 +171,13 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         }
       : null,
   );
+
+  // R21 flight telemetry: remember the last document in hand so a later
+  // old-zone visit can name where the designer left from.
+  const heldEngagementId = row?.engagement_id ?? null;
+  useEffect(() => {
+    rememberDocumentInHand(heldEngagementId);
+  }, [heldEngagementId]);
 
   if (isLoading || resolution?.kind === 'redirect') {
     return (

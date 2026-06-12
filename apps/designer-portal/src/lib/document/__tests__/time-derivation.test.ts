@@ -79,21 +79,27 @@ describe('idle annotation (D10, provisional 8-min)', () => {
     expect(idleSecondsFromPings(pings)).toBe(0);
   });
 
-  it('sums gaps longer than the threshold', () => {
-    // 0 → 20m gap (idle) → +1m → 2m gap (not idle)
+  it('sums gaps longer than an explicit threshold', () => {
+    // 0 → 20m gap (idle) → +1m → 2m gap (not idle at an 8m threshold)
     const pings = [base, base + T(20), base + T(21), base + T(23)];
-    expect(idleSecondsFromPings(pings)).toBe(20 * 60);
+    expect(idleSecondsFromPings(pings, 8 * 60)).toBe(20 * 60);
   });
 
   it('a gap exactly at the threshold is not idle', () => {
-    expect(idleSecondsFromPings([base, base + T(8)])).toBe(0);
+    expect(idleSecondsFromPings([base, base + T(8)], 8 * 60)).toBe(0);
   });
 
-  it('annotation reads in whole minutes, or null under threshold', () => {
+  it('uses the FINAL 1-min default threshold (L3)', () => {
+    // A 90s gap is idle at 1 min; a 45s gap is not.
+    expect(idleSecondsFromPings([base, base + 90_000])).toBe(90);
+    expect(idleSecondsFromPings([base, base + 45_000])).toBe(0);
+  });
+
+  it('annotation reads in whole minutes, or null under the 1-min threshold', () => {
     expect(idleAnnotation(0)).toBeNull();
-    expect(idleAnnotation(7 * 60)).toBeNull();
+    expect(idleAnnotation(45)).toBeNull();
+    expect(idleAnnotation(60)).toBe('includes ~1 quiet minute');
     expect(idleAnnotation(8 * 60)).toBe('includes ~8 quiet minutes');
-    expect(idleAnnotation(60 * 60)).toBe('includes ~60 quiet minutes');
   });
 
   it('never affects the logged number — annotation is a separate field', () => {

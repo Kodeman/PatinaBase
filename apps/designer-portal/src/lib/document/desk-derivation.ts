@@ -102,13 +102,20 @@ export interface MotionChip {
 }
 
 const DAY_MS = 86_400_000;
-const HESITATION_UNOPENED_DAYS = 1;
+// R10 thresholds — FINAL (Leah-calibrated; stand as-is, zero-FP/zero-miss at
+// heat, L3): opened ≥2 days unsigned → folder (act: follow up); lead ≤24h.
 const HESITATION_UNSIGNED_DAYS = 2;
 const LEAD_URGENT_WINDOW_MS = 24 * 3_600_000;
-// R18 send-weave thresholds — PROVISIONAL (Session-02 constants watch,
-// Q12a/Q12b): Leah's numbers replace these by I-entry when they arrive.
-const PO_DRAFT_UNSENT_DAYS = 2;
-const PO_SENT_UNACKED_DAYS = 3;
+// R22 — the awareness tier: a sent-unopened proposal's only act on day 1 is
+// waiting, so it renders as an In-motion chip carrying its state; it PROMOTES
+// to a needs-your-hand folder at 2 days unopened (act: follow up).
+const SENT_UNOPENED_CHIP_DAYS = 1;
+const SENT_UNOPENED_PROMOTE_DAYS = 2;
+// R18 send-weave thresholds — FINAL (Leah's numbers, L3 capture): a drafted
+// PO unsent / a sent PO unacknowledged is the designer's own pen / a chase
+// after one day.
+const PO_DRAFT_UNSENT_DAYS = 1;
+const PO_SENT_UNACKED_DAYS = 1;
 const MAX_MOTION_CHIPS = 6;
 
 /** Severity rank — lower sorts first within the needs stack. */
@@ -201,7 +208,9 @@ export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
     }
     if (row.proposal_status === 'sent' && row.proposal_sent_at && !row.proposal_viewed_at) {
       const days = daysBetween(row.proposal_sent_at, now);
-      if (days >= HESITATION_UNOPENED_DAYS) {
+      // R22: a folder only once waiting is no longer the only act (≥2 days
+      // unopened = follow up). Day 1 lives as an In-motion chip (deriveMotion).
+      if (days >= SENT_UNOPENED_PROMOTE_DAYS) {
         return {
           kind: 'hesitating_proposal',
           text: `Sent ${fmtDay(row.proposal_sent_at)} — not yet opened`,
@@ -331,6 +340,13 @@ export function deriveMotion(row: DocumentStateRow, now: Date): string | null {
 
   if (row.engagement_kind === 'proposal') {
     if (row.proposal_status === 'draft') return 'Proposal drafting';
+    if (row.proposal_status === 'sent' && row.proposal_sent_at && !row.proposal_viewed_at) {
+      const days = daysBetween(row.proposal_sent_at, now);
+      // R22: the awareness tier — state carried, never a nag. (Promotes to a
+      // folder at SENT_UNOPENED_PROMOTE_DAYS, where deriveNeed takes over.)
+      if (days >= SENT_UNOPENED_CHIP_DAYS) return `sent, unopened ${days}d`;
+      return `With client since ${fmtDay(row.proposal_sent_at)}`;
+    }
     if (row.proposal_status === 'sent' || row.proposal_status === 'viewed') {
       const since = row.proposal_sent_at ? ` since ${fmtDay(row.proposal_sent_at)}` : '';
       return `With client${since}`;

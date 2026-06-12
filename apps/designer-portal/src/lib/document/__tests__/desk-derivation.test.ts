@@ -190,7 +190,22 @@ describe('deriveNeed', () => {
     expect(need!.urgent).toBe(false);
   });
 
-  it('proposal sent 1 day ago, never viewed → hesitating ("not yet opened") (R10)', () => {
+  it('proposal sent 1 day ago, never viewed → NOT a folder (R22 chip tier)', () => {
+    // R22: day-1 sent-unopened is an In-motion chip (only act = wait), not a
+    // needs-your-hand folder. deriveNeed returns null; deriveMotion carries it.
+    const row = mkRow({
+      engagement_kind: 'proposal',
+      active_section: 'proposal',
+      project_id: null,
+      proposal_id: 'pr1',
+      proposal_status: 'sent',
+      proposal_sent_at: daysAgo(1),
+    });
+    expect(deriveNeed(row, NOW)).toBeNull();
+    expect(deriveMotion(row, NOW)).toBe('sent, unopened 1d');
+  });
+
+  it('proposal sent 2 days ago, never viewed → promotes to a folder (R22)', () => {
     const need = deriveNeed(
       mkRow({
         engagement_kind: 'proposal',
@@ -198,7 +213,7 @@ describe('deriveNeed', () => {
         project_id: null,
         proposal_id: 'pr1',
         proposal_status: 'sent',
-        proposal_sent_at: daysAgo(1),
+        proposal_sent_at: daysAgo(2),
       }),
       NOW,
     );
@@ -207,18 +222,16 @@ describe('deriveNeed', () => {
     expect(need!.stamp.label).toBe('SENT');
   });
 
-  it('proposal sent hours ago → no need yet (R10 boundary)', () => {
-    const need = deriveNeed(
-      mkRow({
-        engagement_kind: 'proposal',
-        active_section: 'proposal',
-        project_id: null,
-        proposal_status: 'sent',
-        proposal_sent_at: daysAgo(0.5),
-      }),
-      NOW,
-    );
-    expect(need).toBeNull();
+  it('proposal sent hours ago → no need, with-client chip (R22 boundary)', () => {
+    const row = mkRow({
+      engagement_kind: 'proposal',
+      active_section: 'proposal',
+      project_id: null,
+      proposal_status: 'sent',
+      proposal_sent_at: daysAgo(0.5),
+    });
+    expect(deriveNeed(row, NOW)).toBeNull();
+    expect(deriveMotion(row, NOW)).toMatch(/with client/i);
   });
 
   it('proposal viewed 2 days ago, unsigned → hesitating ("no signature") (R10)', () => {
@@ -291,10 +304,10 @@ describe('deriveNeed', () => {
   });
 });
 
-describe('R18 send-weave need lines (provisional thresholds)', () => {
-  it('drafted PO unsent ≥2d → UNSENT need with the PO label', () => {
+describe('R18 send-weave need lines (FINAL 1d thresholds, L3)', () => {
+  it('drafted PO unsent ≥1d → UNSENT need with the PO label', () => {
     const need = deriveNeed(
-      mkRow({ draft_unsent_po_count: 1, oldest_draft_po_created_at: daysAgo(2), draft_po_label: 'PO-0012' }),
+      mkRow({ draft_unsent_po_count: 1, oldest_draft_po_created_at: daysAgo(1), draft_po_label: 'PO-0012' }),
       NOW,
     );
     expect(need!.kind).toBe('po_unsent');
@@ -302,18 +315,18 @@ describe('R18 send-weave need lines (provisional thresholds)', () => {
     expect(need!.stamp.label).toBe('UNSENT');
   });
 
-  it('drafted PO under 2d → no need (boundary)', () => {
+  it('drafted PO under 1d → no need (boundary)', () => {
     expect(
       deriveNeed(
-        mkRow({ draft_unsent_po_count: 1, oldest_draft_po_created_at: daysAgo(1), draft_po_label: 'PO-0012' }),
+        mkRow({ draft_unsent_po_count: 1, oldest_draft_po_created_at: daysAgo(0.5), draft_po_label: 'PO-0012' }),
         NOW,
       ),
     ).toBeNull();
   });
 
-  it('sent PO unacknowledged ≥3d → NO ACK need', () => {
+  it('sent PO unacknowledged ≥1d → NO ACK need', () => {
     const need = deriveNeed(
-      mkRow({ unacked_po_count: 2, oldest_unacked_sent_at: daysAgo(3), unacked_po_label: 'PO-0007' }),
+      mkRow({ unacked_po_count: 2, oldest_unacked_sent_at: daysAgo(1), unacked_po_label: 'PO-0007' }),
       NOW,
     );
     expect(need!.kind).toBe('po_unacknowledged');
@@ -321,10 +334,10 @@ describe('R18 send-weave need lines (provisional thresholds)', () => {
     expect(need!.stamp.label).toBe('NO ACK');
   });
 
-  it('unacknowledged under 3d → no need (boundary)', () => {
+  it('unacknowledged under 1d → no need (boundary)', () => {
     expect(
       deriveNeed(
-        mkRow({ unacked_po_count: 1, oldest_unacked_sent_at: daysAgo(2.5) }),
+        mkRow({ unacked_po_count: 1, oldest_unacked_sent_at: daysAgo(0.5) }),
         NOW,
       ),
     ).toBeNull();

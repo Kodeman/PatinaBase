@@ -8,8 +8,10 @@
  * tiles, no badges, no dashboard furniture.
  */
 
+import { useEffect } from 'react';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import { openCommandBar } from '@/components/document/command-bar';
+import { documentEvents } from '@/lib/analytics/document-events';
 import { FolderCard } from '@/components/document/folder-card';
 import { InMotionChip } from '@/components/document/in-motion-chip';
 import { StrataMark } from '@/components/document/strata-mark';
@@ -25,6 +27,24 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export default function DeskPage() {
   const { data, isLoading, isError } = useDeskEngagements();
+
+  // R21 week-one watch: the Desk's composition on each load (folder/chip
+  // counts + need-line kinds) so noise — esp. sent-unacknowledged frequency
+  // at the 1d threshold — reads off telemetry, not observation.
+  const deskSig = data
+    ? `${data.folders.length}:${data.chips.length}:${data.folders.map((f) => f.need.kind).sort().join(',')}`
+    : null;
+  useEffect(() => {
+    if (!data) return;
+    const need_kinds: Record<string, number> = {};
+    for (const f of data.folders) need_kinds[f.need.kind] = (need_kinds[f.need.kind] ?? 0) + 1;
+    documentEvents.deskRendered({
+      folder_count: data.folders.length,
+      chip_count: data.chips.length,
+      need_kinds,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deskSig]);
 
   const today = new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
