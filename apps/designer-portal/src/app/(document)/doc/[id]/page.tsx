@@ -31,6 +31,12 @@ import { FFESection } from '@/components/document/ffe-section';
 import { BriefSection } from '@/components/document/brief-section';
 import { DiscoverySection, CareSection } from '@/components/document/quiet-sections';
 import { MarginRail } from '@/components/document/margin-rail';
+import { AccountBand } from '@/components/document/account-band';
+import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
+import { FolioLetterhead } from '@/components/document/folio-strip';
+import { DocColophon } from '@/components/document/doc-colophon';
+import { useDocumentRooms } from '@/hooks/use-document-rooms';
+import { gateState, useSectionGates } from '@/hooks/use-section-work';
 import { deriveFillState } from '@/lib/document/fill-state';
 
 const prettyPhase = (phase: string | null) =>
@@ -41,7 +47,6 @@ const prettyPhase = (phase: string | null) =>
         .join(' ')
     : null;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecord = any;
 
 function vitalsFor(row: DocumentStateRow, project: AnyRecord, proposal: AnyRecord): string {
@@ -80,7 +85,6 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
 
   const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
   const { data: phases } = useProjectPhases(projectId) as { data: AnyRecord[] | undefined };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: liveProposal } = useProposal(proposalId) as { data: any };
   const others = useDocumentPresence(row?.engagement_id ?? null);
 
@@ -100,7 +104,14 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const [proposalOpen, setProposalOpen] = useState(false);
   const [highlightLineId, setHighlightLineId] = useState<string | null>(null);
   const [pendingNoteAnchor, setPendingNoteAnchor] = useState<string | null>(null);
+  // R24: drags anywhere on the active section land in the folio.
+  const [sectionDrag, setSectionDrag] = useState(false);
+  const [folioDrop, setFolioDrop] = useState<File[] | null>(null);
   const mainRef = useRef<HTMLElement>(null);
+
+  // R25 rooms (spine-sheet jump rows + headings) · R23 gates (settled stamps).
+  const { data: docRooms } = useDocumentRooms(row?.project_id ?? null);
+  const { data: sectionGates } = useSectionGates(row?.project_id ?? null);
 
   // R6: an activated proposal's id redirects to its project document —
   // pre-signing links survive the signing moment. replace(), not push.
@@ -168,6 +179,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           clientName: row.client_name,
           title: row.title,
           sections,
+          rooms: (docRooms ?? []).map((r) => ({ id: r.id, name: r.name })),
         }
       : null,
   );
@@ -243,6 +255,19 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           fill={deriveFillState(sections)}
         />
 
+        {/* R27: the letterhead instruments — one quiet DM-mono row under the
+            subtitle. R24: the folio's letterhead unfold beneath it. */}
+        {row.engagement_kind === 'project' && row.project_id && (
+          <>
+            <LetterheadInstruments
+              projectId={row.project_id}
+              clientProfileId={row.client_profile_id}
+              clientName={row.client_name}
+            />
+            <FolioLetterhead projectId={row.project_id} />
+          </>
+        )}
+
         {/* D13: letterhead-anchored margin items (Pulse, section items) as
             chips beneath the title — the desktop margin rail hides on mobile. */}
         <MobileMarginChips
@@ -273,12 +298,54 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               )}
             </SettledBar>
           ) : (
-            <SettledBar key={s.key} name={s.label} hint={s.sub} />
+            (() => {
+              // R23: a gate-settled section wears the client's grant.
+              const approvedGate = (sectionGates ?? []).find(
+                (g) => g.section_key === s.key && gateState(g) === 'approved',
+              );
+              return (
+                <SettledBar
+                  key={s.key}
+                  name={s.label}
+                  hint={s.sub}
+                  stamp={
+                    approvedGate
+                      ? {
+                          label: `Approved${approvedGate.responded_at ? ` · ${fmtDay(approvedGate.responded_at)}` : ''}`,
+                          color: 'var(--color-sage)',
+                          ink: '#85947C',
+                        }
+                      : undefined
+                  }
+                />
+              );
+            })()
           ),
         )}
 
+        {/* R26: the Account Page — engagement money at the top of the
+            Project section. Studio eyes only; never mirrored. */}
+        {row.engagement_kind === 'project' && row.project_id && (
+          <AccountBand projectId={row.project_id} />
+        )}
+
         {/* The active section — exactly one (§4). */}
-        <div data-active-section>
+        <div
+          data-active-section
+          onDragOver={(e) => {
+            if (!row.project_id || !e.dataTransfer?.types?.includes('Files')) return;
+            e.preventDefault();
+            setSectionDrag(true);
+          }}
+          onDragLeave={() => setSectionDrag(false)}
+          onDrop={(e) => {
+            if (!row.project_id) return;
+            e.preventDefault();
+            setSectionDrag(false);
+            const files = Array.from(e.dataTransfer.files ?? []);
+            if (files.length) setFolioDrop(files);
+          }}
+        >
           {row.active_section === 'brief' && row.lead_id && <BriefSection leadId={row.lead_id} />}
           {row.active_section === 'discovery' && <DiscoverySection clientName={row.client_name} />}
           {(row.active_section === 'direction' || row.active_section === 'proposal') &&
@@ -303,6 +370,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               mode="project"
               highlightId={highlightLineId}
               onAddNote={setPendingNoteAnchor}
+              sectionKey="project"
+              clientUserId={row.client_profile_id}
+              clientName={row.client_name}
+              folioDrop={folioDrop}
+              onFolioDropConsumed={() => setFolioDrop(null)}
+              sectionDragOver={sectionDrag}
             />
           )}
           {row.active_section === 'install' && row.project_id && (
@@ -312,6 +385,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               mode="install"
               highlightId={highlightLineId}
               onAddNote={setPendingNoteAnchor}
+              sectionKey="install"
+              clientUserId={row.client_profile_id}
+              clientName={row.client_name}
+              folioDrop={folioDrop}
+              onFolioDropConsumed={() => setFolioDrop(null)}
+              sectionDragOver={sectionDrag}
             />
           )}
           {row.active_section === 'care' && (
@@ -322,11 +401,31 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                 }
               />
               {row.project_id && (
-                <FFESection projectId={row.project_id} mode="install" highlightId={highlightLineId} />
+                <FFESection
+                  projectId={row.project_id}
+                  mode="install"
+                  highlightId={highlightLineId}
+                  sectionKey="care"
+                  clientUserId={row.client_profile_id}
+                  clientName={row.client_name}
+                  folioDrop={folioDrop}
+                  onFolioDropConsumed={() => setFolioDrop(null)}
+                  sectionDragOver={sectionDrag}
+                />
               )}
             </>
           )}
         </div>
+
+        {/* R29: the colophon — the paper's last line states its own facts. */}
+        {row.engagement_kind === 'project' && row.project_id && (
+          <DocColophon
+            projectId={row.project_id}
+            designerId={row.designer_id}
+            isPaused={row.is_paused}
+            handsOnTheWork={others}
+          />
+        )}
       </main>
 
       {/* Margin rail (D12; D2: the margin IS the notification model).

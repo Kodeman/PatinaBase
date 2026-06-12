@@ -171,6 +171,33 @@ export function MobileSheets() {
           ))}
         </ul>
 
+        {/* R25: room headings as jump rows — tap lands on the heading. */}
+        {(activeDoc?.rooms ?? []).length > 0 && (
+          <>
+            <p className="mt-3 border-t border-[var(--color-pearl)] pt-2.5 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+              Rooms
+            </p>
+            <ul className="mt-1">
+              {(activeDoc?.rooms ?? []).map((r) => (
+                <li key={r.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeSheet();
+                      document
+                        .getElementById(`doc-room-${r.id}`)
+                        ?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                    }}
+                    className="block w-full py-1.5 text-left font-heading text-[13px] italic text-[var(--color-charcoal)]"
+                  >
+                    {r.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
         <p className="mt-3 border-t border-[var(--color-pearl)] pt-2.5 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           In the margin · {raised.length}
         </p>

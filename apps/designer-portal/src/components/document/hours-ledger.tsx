@@ -69,6 +69,24 @@ export function HoursLedger() {
     },
   });
 
+  // R23: open section-task estimates give Hours its "of N est." readout.
+  const { data: openEstimateMinutes } = useQuery({
+    queryKey: ['document-hours-estimates'],
+    queryFn: async () => {
+      const { data, error } = await getSupabase()
+        .from('project_tasks')
+        .select('estimate_minutes')
+        .eq('status', 'todo')
+        .not('estimate_minutes', 'is', null)
+        .not('section_key', 'is', null);
+      if (error) throw error;
+      return ((data ?? []) as AnyRecord[]).reduce(
+        (s, t) => s + (t.estimate_minutes ?? 0),
+        0,
+      ) as number;
+    },
+  });
+
   const [addProject, setAddProject] = useState('');
   const [addMinutes, setAddMinutes] = useState('');
   const [addActivity, setAddActivity] = useState('design');
@@ -145,6 +163,9 @@ export function HoursLedger() {
           { label: 'logged this week', value: fmtMinutes(util.totalMinutes) },
           ...(util.billablePct !== null
             ? [{ label: 'billable', value: `${util.billablePct}%` }]
+            : []),
+          ...((openEstimateMinutes ?? 0) > 0
+            ? [{ label: 'of open work est.', value: fmtMinutes(openEstimateMinutes ?? 0) }]
             : []),
         ]}
       />

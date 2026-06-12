@@ -4,7 +4,16 @@
  * Project / Install section (spec §6, §13 Slice 2): the FF&E table as
  * typographic lines with R2 stamps. Built from the ffe/* kit's canon —
  * useProjectFFEItems (unified query key) + STAGE_CONFIG (R2 label/color
- * source). Read-only; line unfolds arrive in Slice 4.
+ * source).
+ *
+ * R25 (Dissolve Track 1.3): rooms are how a real schedule is written —
+ * room headings as Playfair-italic sub-heads (name + live allocation +
+ * placed count), Strata mini-rules as dividers, lines beneath keeping every
+ * existing behavior; unassigned lines fall under "Throughout · unassigned";
+ * "+ Room" adds inline. Assignment happens from the line unfold (drag lands
+ * as polish later — DECISIONS I25).
+ *
+ * R23/R24: the section head carries The Work block and the folio strip.
  */
 
 import { useProjectFFEItems } from '@patina/supabase';
@@ -16,6 +25,11 @@ import { deriveLineStamp, type LineStamp } from '@/lib/document/stamp-derivation
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { Stamp } from './stamp';
 import { LineUnfold } from './line-unfold';
+import { StrataMark } from './strata-mark';
+import { WorkBlock } from './work-block';
+import { FolioStrip } from './folio-strip';
+import { useAddDocumentRoom, useDocumentRooms } from '@/hooks/use-document-rooms';
+import type { SectionKey } from '@/lib/document/desk-derivation';
 
 /** Warm borders need darker text ink on paper (prototype stamp treatment). */
 const STAGE_INK: Partial<Record<FFEStageKey, string>> = {
@@ -51,15 +65,15 @@ function stampProps(stamp: LineStamp): { label: string; color: string; ink?: str
 }
 
 const UNDERWAY = new Set(['ordered', 'production', 'shipped', 'delivered', 'received', 'partial', 'installed']);
+const COMMITTED = UNDERWAY;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type FFERow = any; // row from useProjectFFEItems (untyped hook, view-shaped)
 
-function vendorLine(item: FFERow, stamp: LineStamp): string {
+function vendorLine(item: FFERow, stamp: LineStamp, showRoom = false): string {
   const parts: string[] = [];
   const maker = item.vendor_name ?? item.product?.brand;
   if (maker) parts.push(maker);
-  if (item.room?.name) parts.push(item.room.name);
+  if (showRoom && item.room?.name) parts.push(item.room.name);
   if (stamp.kind === 'delivered') parts.push('awaiting inspection');
   else if (
     item.eta &&
@@ -69,12 +83,199 @@ function vendorLine(item: FFERow, stamp: LineStamp): string {
   return parts.join(' · ');
 }
 
+interface LineRow {
+  item: FFERow;
+  stamp: LineStamp;
+}
+
+function FFELine({
+  item,
+  stamp,
+  projectId,
+  projectName,
+  highlightId,
+  unfolded,
+  onToggle,
+  onAddNote,
+  showRoom = false,
+}: LineRow & {
+  projectId: string;
+  projectName: string;
+  highlightId: string | null;
+  unfolded: boolean;
+  onToggle: () => void;
+  onAddNote: (lineId: string) => void;
+  showRoom?: boolean;
+}) {
+  const sp = stampProps(stamp);
+  const line = vendorLine(item, stamp, showRoom);
+  return (
+    <li className="border-b border-[var(--color-pearl)]">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={unfolded}
+        className={`grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 px-2 py-2.5 text-left transition-colors duration-150 ${
+          item.id === highlightId
+            ? 'bg-[rgba(196,165,123,0.08)]'
+            : stamp.kind === 'decision_due'
+              ? 'bg-[rgba(232,197,71,0.05)]'
+              : 'hover:bg-[rgba(196,165,123,0.04)]'
+        }`}
+      >
+        <div>
+          <p className="text-[12.5px] font-medium leading-snug text-[var(--color-charcoal)]">
+            {item.name}
+            {item.quantity > 1 ? ` · ×${item.quantity}` : ''}
+          </p>
+          {line && <p className="mt-px text-[10.5px] text-[var(--text-muted)]">{line}</p>}
+        </div>
+        <Stamp label={sp.label} color={sp.color} ink={sp.ink} />
+        <span className="whitespace-nowrap text-right font-heading text-[13px] font-medium text-[var(--color-charcoal)]">
+          {item.line_total_cents != null ? fmtUsd(item.line_total_cents) : '—'}
+        </span>
+      </button>
+      {/* D13: this line's margin items as chips beneath it (mobile). */}
+      <MobileMarginChips
+        projectId={projectId}
+        proposalId={null}
+        anchorKind="line"
+        anchorId={item.id}
+      />
+      {unfolded && (
+        <LineUnfold
+          item={item}
+          projectId={projectId}
+          projectName={projectName}
+          onAddNote={onAddNote}
+          onFold={onToggle}
+        />
+      )}
+    </li>
+  );
+}
+
+/** R25 room heading: Playfair-italic name + allocation/progress, over a
+ *  Strata mini-rule. The mark's state is the room's truth: all placed =
+ *  settled, lines underway = active, empty = future. */
+function RoomHeading({
+  name,
+  roomId,
+  budgetCents,
+  rows,
+}: {
+  name: string;
+  roomId?: string;
+  budgetCents: number;
+  rows: LineRow[];
+}) {
+  const committed = rows
+    .filter((r) => COMMITTED.has(r.stamp.kind))
+    .reduce((s, r) => s + (r.item.line_total_cents ?? 0), 0);
+  const placed = rows.filter((r) => r.stamp.kind === 'installed').length;
+  const state: 'settled' | 'active' | 'future' =
+    rows.length > 0 && placed === rows.length ? 'settled' : rows.length > 0 ? 'active' : 'future';
+
+  const meta = [
+    budgetCents > 0 ? `${fmtUsd(committed)} of ${fmtUsd(budgetCents)}` : null,
+    rows.length > 0 ? `${placed} of ${rows.length} placed` : 'no lines yet',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <div
+      id={roomId ? `doc-room-${roomId}` : undefined}
+      className="mt-4 flex items-baseline gap-2.5 border-b border-[var(--color-charcoal)] pb-1 scroll-mt-16"
+    >
+      <StrataMark size="sm" state={state} />
+      <h3 className="font-heading text-[13.5px] font-medium italic text-[var(--color-charcoal)]">
+        {name}
+      </h3>
+      <span className="ml-auto font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        {meta}
+      </span>
+    </div>
+  );
+}
+
+function AddRoomInline({ projectId }: { projectId: string }) {
+  const addRoom = useAddDocumentRoom(projectId);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [budget, setBudget] = useState('');
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-3 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
+      >
+        + Room
+      </button>
+    );
+  }
+
+  const save = () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const cents = budget ? Math.round(parseFloat(budget.replace(/[^0-9.]/g, '')) * 100) : null;
+    addRoom.mutate({ name: trimmed, budgetCents: cents && cents > 0 ? cents : 0 });
+    setName('');
+    setBudget('');
+    setOpen(false);
+  };
+
+  return (
+    <div
+      className="mt-3 flex items-center gap-2 border-b border-dashed border-[var(--color-pearl)] pb-1.5"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          setOpen(false);
+        }
+        if (e.key === 'Enter') save();
+      }}
+    >
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Room name"
+        className="min-w-0 flex-1 bg-transparent font-heading text-[13px] italic text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-muted)]"
+      />
+      <input
+        value={budget}
+        onChange={(e) => setBudget(e.target.value)}
+        placeholder="allocation $"
+        aria-label="Budget allocation (dollars)"
+        className="w-24 bg-transparent text-right font-mono text-[9.5px] text-[var(--text-muted)] outline-none placeholder:text-[var(--text-muted)]"
+      />
+      <button
+        type="button"
+        onClick={save}
+        disabled={!name.trim()}
+        className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] disabled:opacity-40"
+      >
+        Add
+      </button>
+    </div>
+  );
+}
+
 export function FFESection({
   projectId,
   projectName = '',
   mode,
   highlightId = null,
   onAddNote = () => {},
+  sectionKey = null,
+  clientUserId = null,
+  clientName = '',
+  folioDrop = null,
+  onFolioDropConsumed = () => {},
+  sectionDragOver = false,
 }: {
   projectId: string;
   projectName?: string;
@@ -83,14 +284,24 @@ export function FFESection({
   highlightId?: string | null;
   /** Slice 4 (R14): open the margin note composer pre-anchored to a line. */
   onAddNote?: (lineId: string) => void;
+  /** R23/R24: which document section this table embodies — mounts The Work
+   *  block + the section folio strip under the head when present. */
+  sectionKey?: SectionKey | null;
+  clientUserId?: string | null;
+  clientName?: string;
+  /** R24: files dropped anywhere on the section, caught by the folio. */
+  folioDrop?: File[] | null;
+  onFolioDropConsumed?: () => void;
+  sectionDragOver?: boolean;
 }) {
   const [openLineId, setOpenLineId] = useState<string | null>(null);
   const { data: items, isLoading } = useProjectFFEItems(projectId) as {
     data: FFERow[] | undefined;
     isLoading: boolean;
   };
+  const { data: rooms } = useDocumentRooms(mode === 'project' ? projectId : null);
 
-  const rows = (items ?? []).map((item) => ({ item, stamp: deriveLineStamp(item) }));
+  const rows: LineRow[] = (items ?? []).map((item) => ({ item, stamp: deriveLineStamp(item) }));
   const total = rows.length;
   const underway = rows.filter((r) => UNDERWAY.has(r.stamp.kind)).length;
   const installed = rows.filter((r) => r.stamp.kind === 'installed').length;
@@ -103,6 +314,35 @@ export function FFESection({
       : total > 0
         ? `${underway} of ${total} underway`
         : '';
+
+  const sectionLabel = sectionKey
+    ? sectionKey.charAt(0).toUpperCase() + sectionKey.slice(1)
+    : mode === 'install'
+      ? 'Install'
+      : 'Project';
+
+  const lineProps = (row: LineRow) => ({
+    ...row,
+    projectId,
+    projectName,
+    highlightId,
+    unfolded: openLineId === row.item.id,
+    onToggle: () => setOpenLineId(openLineId === row.item.id ? null : row.item.id),
+    onAddNote,
+    showRoom: !groupByRoom,
+  });
+
+  // R25 grouping (project mode): rooms in sort order, then Throughout.
+  const groupByRoom = mode === 'project' && (rooms ?? []).length > 0;
+  const roomGroups = groupByRoom
+    ? (rooms ?? []).map((room) => ({
+        room,
+        rows: rows.filter((r) => r.item.project_room_id === room.id),
+      }))
+    : [];
+  const unassigned = groupByRoom
+    ? rows.filter((r) => !r.item.project_room_id || !(rooms ?? []).some((rm) => rm.id === r.item.project_room_id))
+    : rows;
 
   return (
     <section>
@@ -117,6 +357,28 @@ export function FFESection({
         )}
       </div>
 
+      {/* R23: the quiet work block under the section head. */}
+      {sectionKey && (
+        <WorkBlock
+          projectId={projectId}
+          sectionKey={sectionKey}
+          sectionLabel={sectionLabel}
+          clientUserId={clientUserId}
+          clientName={clientName}
+        />
+      )}
+
+      {/* R24: the section's folio strip — drops on the section land here. */}
+      {sectionKey && (
+        <FolioStrip
+          projectId={projectId}
+          anchor={{ kind: 'section', sectionKey }}
+          droppedFiles={folioDrop}
+          onDropConsumed={onFolioDropConsumed}
+          sectionDragOver={sectionDragOver}
+        />
+      )}
+
       {isLoading && (
         <p className="py-3 text-[11.5px] italic text-[var(--text-muted)]">Reading the schedule…</p>
       )}
@@ -127,57 +389,45 @@ export function FFESection({
         </p>
       )}
 
-      <ul>
-        {rows.map(({ item, stamp }) => {
-          const sp = stampProps(stamp);
-          const line = vendorLine(item, stamp);
-          const unfolded = openLineId === item.id;
-          return (
-            <li key={item.id} className="border-b border-[var(--color-pearl)]">
-              <button
-                type="button"
-                onClick={() => setOpenLineId(unfolded ? null : item.id)}
-                aria-expanded={unfolded}
-                className={`grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 px-2 py-2.5 text-left transition-colors duration-150 ${
-                  item.id === highlightId
-                    ? 'bg-[rgba(196,165,123,0.08)]'
-                    : stamp.kind === 'decision_due'
-                      ? 'bg-[rgba(232,197,71,0.05)]'
-                      : 'hover:bg-[rgba(196,165,123,0.04)]'
-                }`}
-              >
-                <div>
-                  <p className="text-[12.5px] font-medium leading-snug text-[var(--color-charcoal)]">
-                    {item.name}
-                    {item.quantity > 1 ? ` · ×${item.quantity}` : ''}
-                  </p>
-                  {line && <p className="mt-px text-[10.5px] text-[var(--text-muted)]">{line}</p>}
-                </div>
-                <Stamp label={sp.label} color={sp.color} ink={sp.ink} />
-                <span className="whitespace-nowrap text-right font-heading text-[13px] font-medium text-[var(--color-charcoal)]">
-                  {item.line_total_cents != null ? fmtUsd(item.line_total_cents) : '—'}
-                </span>
-              </button>
-              {/* D13: this line's margin items as chips beneath it (mobile). */}
-              <MobileMarginChips
-                projectId={projectId}
-                proposalId={null}
-                anchorKind="line"
-                anchorId={item.id}
+      {groupByRoom ? (
+        <>
+          {roomGroups.map(({ room, rows: roomRows }) => (
+            <div key={room.id}>
+              <RoomHeading
+                name={room.name}
+                roomId={room.id}
+                budgetCents={room.budget_cents}
+                rows={roomRows}
               />
-              {unfolded && (
-                <LineUnfold
-                  item={item}
-                  projectId={projectId}
-                  projectName={projectName}
-                  onAddNote={onAddNote}
-                  onFold={() => setOpenLineId(null)}
-                />
-              )}
-            </li>
-          );
-        })}
-      </ul>
+              <ul>
+                {roomRows.map((row) => (
+                  <FFELine key={row.item.id} {...lineProps(row)} />
+                ))}
+              </ul>
+            </div>
+          ))}
+          {unassigned.length > 0 && (
+            <div>
+              <RoomHeading name="Throughout · unassigned" budgetCents={0} rows={unassigned} />
+              <ul>
+                {unassigned.map((row) => (
+                  <FFELine key={row.item.id} {...lineProps(row)} />
+                ))}
+              </ul>
+            </div>
+          )}
+          {mode === 'project' && <AddRoomInline projectId={projectId} />}
+        </>
+      ) : (
+        <>
+          <ul>
+            {rows.map((row) => (
+              <FFELine key={row.item.id} {...lineProps(row)} />
+            ))}
+          </ul>
+          {mode === 'project' && <AddRoomInline projectId={projectId} />}
+        </>
+      )}
     </section>
   );
 }

@@ -29,6 +29,8 @@ export interface MobileActiveDoc {
   clientName: string;
   title: string;
   sections: SpineSection[];
+  /** R25: room headings join the spine sheet as jump rows. */
+  rooms?: { id: string; name: string }[];
 }
 
 type Sheet =
@@ -84,7 +86,10 @@ export function useMobileActiveDoc(doc: MobileActiveDoc | null) {
   const key = doc?.projectId ?? doc?.proposalId ?? null;
   // Re-publish when the engagement or its sections change (sections drive the
   // bar's section label + the spine sheet's section list).
-  const sectionsSig = doc?.sections.map((s) => `${s.key}:${s.state}`).join('|') ?? '';
+  const sectionsSig = [
+    doc?.sections.map((s) => `${s.key}:${s.state}`).join('|') ?? '',
+    doc?.rooms?.map((r) => r.id).join('|') ?? '',
+  ].join('//');
   useEffect(() => {
     setActiveDoc(doc);
     return () => setActiveDoc(null);

@@ -1155,6 +1155,109 @@ mobile-d3 recipes); designer-visible calls return with screenshots per the
 standing protocol, and the package file gets committed the moment it
 arrives. Track 1 build entries follow below.
 
+### I25 · Dissolve Track 1 — in-document parity (R23–R27, R29) — 2026-06-12
+
+Built on `the-document/dissolve-track-1` (stack tip); migrations
+**00202–00205** (00199 stays main's). All five SQL acceptance assertions +
+8 scripted browser checks + 404/404 jest green. Audit-first findings and
+implementation calls:
+
+**The Work (R23) · 00202.** The package's `section_tasks` table was
+pre-empted by the codebase: `project_tasks` (00169) already carries
+title/status/due_date/completed_at — extended additively with
+`section_key` / `estimate_minutes` / `created_by`. Gates ride
+`client_decisions` exactly as ruled: `decision_kind` ('choice' default ·
+'approval') + `section_key`; the approving option carries an explicit
+`approves` flag (a fact on the option, never a name match). The gate is
+created through the SAME machinery as any decision (options +
+`notify_decision_required`) so the client-portal mirror and notification
+came free. **Settlement is server-side and one-transaction** (00204
+SECURITY DEFINER trigger, §5): an approved gate advances the project's
+REAL vocabulary — section 'project' → `current_phase='installation'`,
+'install' → `status='completed'` — so spine, Desk, and old zones read one
+truth; the settled bar wears "Approved · date" from the gate. Dued tasks
+join `document_state` (due_task_count/title; due-today counts, R10
+boundary semantics) and rise as a TASK DUE folder ranked below
+awaiting-inspection, above the send-weave nudges — at Whitfield/Olsen demo
+heat the task is rightly shadowed by overdue-decision/claim needs (the
+one-thing discipline); derivation proven at unit + view layers. Tasks are
+project-scoped in v1 (the I16 timer precedent). Hours gains an "of open
+work est." front-matter stat; the work-head meta reads "Xh of Yh est."
+
+**The Folio (R24) · 00203.** The package's `engagement_files` was likewise
+pre-empted: `project_documents` (00169) + the `project-documents` bucket
+(00170) extended additively with margin-grammar anchors
+(anchor_kind/anchor_id/section_key), `version_of` (literal stacking — the
+Desk's stacked-edge recipe at chip scale, one click slides versions out),
+and `client_visible` DEFAULT FALSE. **Backfill: pre-folio rows →
+client_visible=true** (they were already client-readable; D7 — no live
+engagement loses anything). Client RLS narrowed to flagged rows on BOTH
+the table and the storage-objects read policy. Drag-anywhere-on-section is
+caught by the page and lands on the strip; per-file studio/shared toggle;
+full-screen paper viewer (shared with the scan). Drag-to-ASSIGN-rooms and
+cross-section drag are polish debt — assignment ships via the unfold.
+
+**Rooms (R25) · no migration.** The audit answered R25's question:
+`project_rooms` (00066) already carries name/budget_cents(allocation)/
+sort_order with activation lineage, and `project_ffe_items.project_room_id`
+exists. The paper just renders the truth: Playfair-italic headings with a
+Strata mini-mark (state = the room's own progress), live
+committed-of-allocation + placed counts, "Throughout · unassigned",
+"+ Room" inline; room jump rows join the mobile spine sheet. The Account
+Page variance reads the SAME rows (one source, as ruled).
+
+**The Account Page (R26) · 00204.** Settled-bar band; collapsed line =
+budget · committed · margin% from the same aggregates as the unfold.
+Variance by room (sage under / terracotta over) with a muted category line
+per room (full room × category matrix deferred until a real schedule needs
+it). Margin line carries the trade-coverage note; earnings block links to
+the Accounts ledger (stub destination per R30's rule). **Milestone
+triggers:** additive trigger_kind/trigger_section_key/invoice_id on
+project_payment_milestones; `draft_invoice_from_milestone` is the ONE
+drafting path (idempotent, drafts only — review-then-send via
+issue_invoice stands; designer door is the checked
+`generate_milestone_invoice` RPC). WIRED to auto-draft: on_section_settled
+(the gate trigger — "when Install settles" drafts Delivery, asserted in a
+rolled-back transaction) and on_production_start (first line into
+production). on_signing/on_date are stored config; their drafting stays
+with the designer's Generate-invoice act (activation already seeds the
+signing milestone outstanding) — flagged: if the session wants them
+auto-drafting, say so. Band placement: renders above the FF&E schedule in
+project/install/care states (the "top of the Project section" home, kept
+reachable through delivery) — designer-visible, flagged for review.
+
+**Instruments (R27).** One DM-mono row under the letterhead vitals: View
+as the [surname]s · Send a note · The scan (only when the client has a
+RoomPlan scan with imagery). The client mirror is a designer-portal
+projection component (NOT an iframe of the client app): full-screen under
+the charcoal banner, read-only by construction, querying ONLY
+client-visible material. **The R26 CI test is twofold:** a source-contract
+jest suite (client-mirror-contract.test.ts — the R3 shadow-lint precedent)
+asserts the flag filter, forbids account/task/note references and any
+mutation call; the browser script additionally asserts the accounts band,
+studio tasks, and unflagged files are absent from the rendered mirror.
+Send-a-note posts through rpc_start_project_thread + comms_messages (zero
+schema, as ruled) and lands letterhead-anchored in the margin.
+
+**The Colophon (R29) · 00205.** Foot row: studio (resolved from
+organization_members) · hands on the work (D6 presence) · Brief a vendor ·
+Hold/Resume · Archive (confirm copy verbatim) · Team…. Hold/archive ride
+project status (paused chip / cabinet; archived stays ⌘K-findable per R1).
+**§14.6 landed as 00205:** margin_notes gains studio READ (active org
+co-membership with the engagement's lead, or project-team membership);
+authoring stays author-scoped. The Team popover adds members by email
+(project_team_members). Brief-a-vendor opens the Orders book — it
+pre-addresses the vendor pane when Track 2.1 builds it.
+
+**Seed/scripts:** the-document-track1-seed.sql (idempotent addendum),
+the-document-track1-assertions.sql (5 SQL asserts incl. the rolled-back
+settlement chain + client-RLS folio check), the-document-track1-shots.mjs
+(8 checks + 8 screenshots → screenshots/track-1/), rebuild script now
+applies 00202–00205 + both seeds. Gotcha for posterity: client_decisions
+embeds of options must disambiguate
+`!client_decision_options_decision_id_fkey` (recommended_option_id is a
+second FK).
+
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I24 · R1–R32 · L1–L3 · THE GO · FLIP CONFIRMED · last id = I24*
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I25 · R1–R32 · L1–L3 · THE GO · FLIP CONFIRMED · last id = I25*

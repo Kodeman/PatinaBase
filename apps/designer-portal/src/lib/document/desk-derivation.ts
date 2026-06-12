@@ -67,6 +67,10 @@ export interface DocumentStateRow {
   unacked_po_count: number;
   oldest_unacked_sent_at: string | null;
   unacked_po_label: string | null;
+  /** R23 (00202): dued tasks pass the R22 action test (the act: do it). */
+  due_task_count: number;
+  earliest_task_due: string | null;
+  due_task_title: string | null;
 }
 
 export type NeedKind =
@@ -78,6 +82,7 @@ export type NeedKind =
   | 'new_lead'
   | 'hesitating_proposal'
   | 'awaiting_inspection'
+  | 'task_due'
   | 'po_unsent'
   | 'po_unacknowledged'
   | 'pulse_due';
@@ -128,9 +133,10 @@ const NEED_RANK: Record<NeedKind, number> = {
   new_lead: 5,
   hesitating_proposal: 6,
   awaiting_inspection: 7,
-  po_unsent: 8,
-  po_unacknowledged: 9,
-  pulse_due: 10,
+  task_due: 8,
+  po_unsent: 9,
+  po_unacknowledged: 10,
+  pulse_due: 11,
 };
 
 /** Prototype stamp palette (v0.3 is the look authority): borders use brand
@@ -281,6 +287,21 @@ export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
     };
   }
 
+  // R23: a dued task is the designer's own committed act — it rises (the
+  // R22 test passes: the act is doing it). Undated tasks never nag.
+  if (row.due_task_count > 0 && row.earliest_task_due) {
+    const n = row.due_task_count;
+    return {
+      kind: 'task_due',
+      text:
+        n === 1
+          ? `Task due — ${row.due_task_title ?? 'one line in the work'}`
+          : `${n} tasks due — oldest ${fmtDay(row.earliest_task_due)}`,
+      stamp: { label: 'TASK DUE', ...STAMP.clay },
+      urgent: false,
+    };
+  }
+
   // R18: the send weave. A drafted PO the studio never sent is the
   // designer's own pen (rises first); a sent PO the vendor hasn't
   // acknowledged is a nudge. Both thresholds provisional (constants watch).
@@ -377,7 +398,9 @@ function needSortKey(folder: DeskFolder): [number, number, number] {
             ? new Date(row.oldest_draft_po_created_at).getTime()
             : need.kind === 'po_unacknowledged' && row.oldest_unacked_sent_at
               ? new Date(row.oldest_unacked_sent_at).getTime()
-              : new Date(row.updated_at).getTime();
+              : need.kind === 'task_due' && row.earliest_task_due
+                ? new Date(row.earliest_task_due).getTime()
+                : new Date(row.updated_at).getTime();
   return [need.urgent ? 0 : 1, NEED_RANK[need.kind], date];
 }
 

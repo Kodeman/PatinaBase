@@ -19,13 +19,18 @@ for f in 00191_document_state_view 00192_document_state_open_claims \
          00196_per_item_claims_and_margin_notes 00197_margin_items_note_branch \
          00198_time_entry_source_activity \
          00200_document_state_send_and_money \
-         00201_designer_interruption_rules; do
+         00201_designer_interruption_rules \
+         00202_section_work_and_gates \
+         00203_folio_file_anchors \
+         00204_account_milestones_and_settlement \
+         00205_margin_notes_studio_rls; do
   echo "── applying $f"
   "${PSQL[@]}" < "supabase/migrations/$f.sql"
 done
 
 echo "── seeding demo engagements"
 "${PSQL[@]}" < apps/designer-portal/scripts/the-document-local-seed.sql
+"${PSQL[@]}" < apps/designer-portal/scripts/the-document-track1-seed.sql
 
 echo "── reloading PostgREST schema cache"
 "${PSQL[@]}" -c "notify pgrst, 'reload schema';"
