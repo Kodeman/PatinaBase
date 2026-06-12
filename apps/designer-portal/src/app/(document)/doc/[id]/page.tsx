@@ -26,6 +26,7 @@ import { ProposalBlocksReadOnly } from '@/components/document/proposal-blocks-re
 import { FFESection } from '@/components/document/ffe-section';
 import { BriefSection } from '@/components/document/brief-section';
 import { DiscoverySection, CareSection } from '@/components/document/quiet-sections';
+import { MarginRail } from '@/components/document/margin-rail';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -79,6 +80,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const others = useDocumentPresence(row?.engagement_id ?? null);
 
   const [proposalOpen, setProposalOpen] = useState(false);
+  const [highlightLineId, setHighlightLineId] = useState<string | null>(null);
   const mainRef = useRef<HTMLElement>(null);
 
   // R6: an activated proposal's id redirects to its project document —
@@ -235,10 +237,10 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               </section>
             )}
           {row.active_section === 'project' && row.project_id && (
-            <FFESection projectId={row.project_id} mode="project" />
+            <FFESection projectId={row.project_id} mode="project" highlightId={highlightLineId} />
           )}
           {row.active_section === 'install' && row.project_id && (
-            <FFESection projectId={row.project_id} mode="install" />
+            <FFESection projectId={row.project_id} mode="install" highlightId={highlightLineId} />
           )}
           {row.active_section === 'care' && (
             <>
@@ -247,23 +249,26 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                   project?.target_completion ? fmtMonthYear(project.target_completion) : null
                 }
               />
-              {row.project_id && <FFESection projectId={row.project_id} mode="install" />}
+              {row.project_id && (
+                <FFESection projectId={row.project_id} mode="install" highlightId={highlightLineId} />
+              )}
             </>
           )}
         </div>
       </main>
 
-      {/* Margin rail — present per D12 with the R8 placeholder; fills in Slice 3. */}
+      {/* Margin rail (D12; D2: the margin IS the notification model). On
+          mobile it flows after main per the D12 interim pattern. */}
       <aside
         aria-label="Margin"
-        className="z-[1] hidden border-l border-dashed border-[var(--color-pearl)] bg-[rgba(250,247,242,0.55)] px-4 pb-24 pt-6 min-[980px]:sticky min-[980px]:top-0 min-[980px]:block min-[980px]:h-screen min-[980px]:overflow-y-auto"
+        className="z-[1] border-t border-dashed border-[var(--color-pearl)] bg-[rgba(250,247,242,0.55)] px-4 pb-24 pt-6 min-[980px]:sticky min-[980px]:top-0 min-[980px]:h-screen min-[980px]:overflow-y-auto min-[980px]:border-l min-[980px]:border-t-0"
       >
-        <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
-          In the margin
-        </p>
-        <p className="mt-3 text-[11px] italic leading-relaxed text-[var(--text-muted)]">
-          The margin — decisions, messages, and money gather here
-        </p>
+        <MarginRail
+          projectId={row.project_id}
+          proposalId={row.proposal_id}
+          clientName={row.client_name}
+          onHoverLine={setHighlightLineId}
+        />
       </aside>
     </div>
   );
