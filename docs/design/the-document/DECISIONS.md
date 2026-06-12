@@ -546,3 +546,24 @@ dedicated slice before the mobile build. Designer-visible calls needed:
 send-action placement (unfold vs ledger vs both), need-line thresholds,
 and whether vendor email send requires a confirm step inside the paper.
 **Blocks:** nothing current — Slice 6 scoping only.
+
+### R18 · Ruling on O7 — the send weave — 2026-06-12
+
+**Sequencing:** a dedicated **Slice 5.5 — "Orders ledger v2 + the send
+weave"** lands after Session 02 and before Slice 6, keeping the flip's
+critical path (mobile build + gates) unburdened, and sequencing the weave's
+thresholds behind Leah's numbers. **Placement: both homes**, per the ledger
+rule — sending one PO while working its line is engagement work (the unfold's
+action row, drafted POs only); sending/resending across vendors and projects
+is cross-engagement work (Orders ledger row actions: send / resend / PDF
+preview). Same act, two honest homes. **Confirm: the PDF preview IS the
+confirm** — review-then-send per the R11 invoice precedent. The PO renders as
+paper over the document ("This is what Sawkille receives"), one action: Send
+to vendor. No "are you sure" dialogs; the confirm step is the document
+showing you the document. **Need lines:** "PO drafted — not yet sent" after
+**2 days** · "sent — unacknowledged" after **3 days** — both PROVISIONAL,
+Leah's numbers captured at Session 02 (R10 contract). **The rest as
+proposed:** payment-due flips arrive as Money margin items through existing
+narration; expediting flags render as quiet Movement sub-lines, never badges;
+unscheduled-shipment is a row mark, not a banner; spec §6 gains the PARTIAL
+receiving state. O7 RESOLVED.
