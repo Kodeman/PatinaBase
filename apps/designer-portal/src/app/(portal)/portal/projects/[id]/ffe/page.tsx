@@ -558,6 +558,68 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
     startGeneratePOs(source);
   };
 
+  // ── Invoice items (W3-T4) ─────────────────────────────────────────────
+  // Closes the FF&E→invoice loop from the board: selected items route to the
+  // invoice composer's ?ffeItemIds= prefill so the designer reviews the lines
+  // before a draft exists. Items already billed on a live invoice line (the
+  // 00187 partial-unique guard would reject them) and unpriced items (NULL
+  // client unit price) are dropped here with a toast — the composer re-checks
+  // coverage anyway, but the skips should be visible at the point of intent.
+  const handleInvoiceItems = () => {
+    const selectedItems = items.filter((it) => selected.has(it.id));
+    if (selectedItems.length === 0) {
+      toast('Select items to invoice first.', 'warning');
+      return;
+    }
+    const billable: AnyItem[] = [];
+    let skippedCovered = 0;
+    let skippedUnpriced = 0;
+    for (const it of selectedItems) {
+      const cov = invoiceCoverage?.[it.id];
+      if (cov && cov.coverage !== 'uninvoiced') {
+        skippedCovered += 1;
+        continue;
+      }
+      if (it.unit_price_cents === null || it.unit_price_cents === undefined) {
+        skippedUnpriced += 1;
+        continue;
+      }
+      billable.push(it);
+    }
+    if (skippedCovered > 0) {
+      toast(
+        `${skippedCovered} already invoiced item${skippedCovered === 1 ? '' : 's'} skipped.`,
+        'warning',
+      );
+    }
+    if (skippedUnpriced > 0) {
+      toast(
+        `${skippedUnpriced} unpriced item${skippedUnpriced === 1 ? '' : 's'} skipped — set a client price first.`,
+        'warning',
+      );
+    }
+    if (billable.length === 0) {
+      toast('Nothing left to invoice in this selection.', 'warning');
+      return;
+    }
+
+    procurementEvents.ffeItemsInvoiced({
+      item_count: billable.length,
+      total_cents: billable.reduce(
+        (sum, it) =>
+          sum + (it.line_total_cents ?? (it.unit_price_cents ?? 0) * (it.quantity ?? 1)),
+        0,
+      ),
+      skipped_covered: skippedCovered,
+    });
+    setSelected(new Set());
+    router.push(
+      `/portal/billing/invoices/new?projectId=${projectId}&ffeItemIds=${billable
+        .map((it) => it.id)
+        .join(',')}`,
+    );
+  };
+
   // No post-creation work needed here (W1-T7): the 00184 DB triggers advance
   // linked items to 'ordered' server-side, and useCreatePurchaseOrder's
   // onSuccess invalidates both FF&E cache namespaces (invalidateFfeCaches →
@@ -818,6 +880,9 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
         >
           Create PO
         </BulkActionButton>
+        {/* W3-T4 — route selected items to the invoice composer's
+            ?ffeItemIds= prefill (covered/unpriced items skipped with toasts). */}
+        <BulkActionButton onClick={handleInvoiceItems}>Invoice Items</BulkActionButton>
         <ComingSoonButton>Reassign Vendor</ComingSoonButton>
       </BulkActionBar>
 

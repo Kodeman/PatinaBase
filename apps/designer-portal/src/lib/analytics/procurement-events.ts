@@ -142,6 +142,19 @@ export const procurementEvents = {
     track('procurement_status_advanced', properties),
 
   /**
+   * Fired when the FF&E board's "Invoice Items" bulk action hands selected
+   * items to the invoice composer's ?ffeItemIds= prefill (W3-T4).
+   * `total_cents` is the CLIENT line total carried into the composer;
+   * `skipped_covered` counts selected items dropped because a live invoice
+   * already bills them (00187 one-live-line-per-item guard).
+   */
+  ffeItemsInvoiced: (properties: {
+    item_count: number;
+    total_cents: number;
+    skipped_covered: number;
+  }) => track('procurement_ffe_items_invoiced', properties),
+
+  /**
    * Fired when a designer logs a vendor acknowledgment on a purchase order
    * (W3-T3a popover → `log_po_acknowledgment` RPC). `days_since_sent` is
    * null until purchase_orders carries a sent_at timestamp (Wave 4) — pass

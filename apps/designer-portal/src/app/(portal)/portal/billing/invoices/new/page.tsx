@@ -8,6 +8,7 @@ import {
   useProjectInvoices,
   useCreateDraftInvoice,
   useDeleteDraftInvoice,
+  useFfeInvoiceCoverage,
   type DraftLineInput,
 } from '@patina/supabase';
 import { computeInvoiceTotals, formatCurrency } from '@patina/shared';
@@ -15,6 +16,7 @@ import { ListPageHeader } from '@/components/portal/list-page-header';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { Button, Input, Select, Textarea } from '@/components/ui/controls';
 import { useHydrated } from '@/hooks/use-hydrated';
+import { useProjectFFEItems } from '@/hooks/use-projects';
 import { useUnbilledTime, useClaimTimeEntries } from '@/hooks/use-time-tracking';
 import { buildTimeLineDraft, formatHoursLabel } from '@/lib/time-billing';
 
@@ -53,22 +55,46 @@ export default function NewInvoicePage() {
 
   const preselectProjectId = searchParams.get('projectId') ?? '';
   const preselectMilestoneId = searchParams.get('milestoneId');
+  // W3-T4 — FF&E deep link from the board's "Invoice Items" bulk action and
+  // the Order Assistant coverage step: ?ffeItemIds=a,b,c prefills one 'ffe'
+  // line per item (00187).
+  const preselectFfeItemIds = useMemo(() => {
+    const raw = searchParams.get('ffeItemIds');
+    return raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  }, [searchParams]);
 
   const [projectId, setProjectId] = useState(preselectProjectId);
   const [selectedMilestoneIds, setSelectedMilestoneIds] = useState<Set<string>>(
     () => new Set(preselectMilestoneId ? [preselectMilestoneId] : [])
   );
   const [selectedTimeIds, setSelectedTimeIds] = useState<Set<string>>(() => new Set());
+  // FF&E prefill rows start CHECKED; we track unchecks (not checks) so the
+  // default selection needs no seeding effect against late-arriving queries.
+  const [deselectedFfeIds, setDeselectedFfeIds] = useState<Set<string>>(() => new Set());
   const [adHocLines, setAdHocLines] = useState<AdHocLine[]>([{ ...EMPTY_ADHOC }]);
   const [taxRatePercent, setTaxRatePercent] = useState('0');
   const [termsDays, setTermsDays] = useState('15');
   const [memo, setMemo] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  // The FF&E prefill is only honored while the composer still points at the
+  // project the deep link came from — switching projects drops it (an FF&E
+  // line must bill an item belonging to the invoice's own project).
+  const ffeActive = preselectFfeItemIds.length > 0 && !!projectId && projectId === preselectProjectId;
+
   const { data: projects, isLoading: projectsLoading } = useProjects();
   const { data: milestones } = useProjectPaymentMilestones(projectId);
   const { data: projectInvoices } = useProjectInvoices(projectId || null);
   const { data: unbilledTime } = useUnbilledTime(projectId || null);
+  const { data: ffeItems, isLoading: ffeItemsLoading } = useProjectFFEItems(
+    ffeActive ? projectId : null
+  );
+  // Coverage (00187 get_ffe_invoice_coverage): the DB allows ONE live invoice
+  // line per FF&E item, so items already invoiced/paid must not be offered.
+  const { data: ffeCoverage, isLoading: ffeCoverageLoading } = useFfeInvoiceCoverage(
+    preselectProjectId,
+    { enabled: ffeActive }
+  );
   const createDraft = useCreateDraftInvoice();
   const deleteDraft = useDeleteDraftInvoice();
   const claimTime = useClaimTimeEntries();
@@ -134,6 +160,38 @@ export default function NewInvoicePage() {
     });
   }, [unbilledTime, unbilledEntries]);
 
+  // FF&E prefill partition (W3-T4). Requested ids resolve against the
+  // project's items, then split: already covered by a LIVE invoice line
+  // (coverage 'invoiced'/'paid' — the 00187 partial-unique guard would reject
+  // them) and unpriced (NULL client unit price — nothing to bill) are
+  // skipped with a notice; the rest prefill as billable rows. Held empty
+  // until both queries settle so a covered item never flashes in as billable.
+  const ffeSectionLoading = ffeActive && (ffeItemsLoading || ffeCoverageLoading);
+  const ffePrefill = useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const billable: any[] = [];
+    let skippedCovered = 0;
+    let skippedUnpriced = 0;
+    if (!ffeActive || ffeSectionLoading) return { billable, skippedCovered, skippedUnpriced };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const byId = new Map(((ffeItems ?? []) as any[]).map((it) => [it.id, it]));
+    for (const id of preselectFfeItemIds) {
+      const item = byId.get(id);
+      if (!item) continue; // not in this project / RLS-hidden — quietly drop
+      const cov = ffeCoverage?.[id];
+      if (cov && cov.coverage !== 'uninvoiced') {
+        skippedCovered += 1;
+        continue;
+      }
+      if (item.unit_price_cents === null || item.unit_price_cents === undefined) {
+        skippedUnpriced += 1;
+        continue;
+      }
+      billable.push(item);
+    }
+    return { billable, skippedCovered, skippedUnpriced };
+  }, [ffeActive, ffeSectionLoading, ffeItems, ffeCoverage, preselectFfeItemIds]);
+
   // ONE kind='time' line per invoice: qty 1, unit = amount = the sum of the
   // selected entries' view-resolved amounts; hours + entry ids ride in the
   // description/metadata (see lib/time-billing.ts for the rationale).
@@ -153,6 +211,17 @@ export default function NewInvoicePage() {
         unitAmountCents: m.amount_cents,
         sortOrder: i,
       }));
+    // FF&E lines (W3-T4): one per billable prefilled item still checked.
+    // `ffeItemId` makes buildLineRow write kind 'ffe' + ffe_item_id (00187).
+    const ffeLines: DraftLineInput[] = ffePrefill.billable
+      .filter((it) => !deselectedFfeIds.has(it.id))
+      .map((it, i) => ({
+        ffeItemId: it.id as string,
+        description: it.room?.name ? `${it.name} — ${it.room.name}` : it.name,
+        quantity: it.quantity ?? 1,
+        unitAmountCents: it.unit_price_cents,
+        sortOrder: milestoneLines.length + i,
+      }));
     const timeLines: DraftLineInput[] = timeLine
       ? [
           {
@@ -160,7 +229,7 @@ export default function NewInvoicePage() {
             description: timeLine.description,
             quantity: 1,
             unitAmountCents: timeLine.amountCents,
-            sortOrder: milestoneLines.length,
+            sortOrder: milestoneLines.length + ffeLines.length,
             metadata: {
               time_entry_ids: timeLine.entryIds,
               total_minutes: timeLine.totalMinutes,
@@ -175,10 +244,17 @@ export default function NewInvoicePage() {
         description: l.description.trim(),
         quantity: parseFloat(l.quantity) > 0 ? parseFloat(l.quantity) : 1,
         unitAmountCents: dollarsToCents(l.unitDollars),
-        sortOrder: milestoneLines.length + timeLines.length + i,
+        sortOrder: milestoneLines.length + ffeLines.length + timeLines.length + i,
       }));
-    return [...milestoneLines, ...timeLines, ...adhoc];
-  }, [unbilledMilestones, selectedMilestoneIds, timeLine, adHocLines]);
+    return [...milestoneLines, ...ffeLines, ...timeLines, ...adhoc];
+  }, [
+    unbilledMilestones,
+    selectedMilestoneIds,
+    ffePrefill,
+    deselectedFfeIds,
+    timeLine,
+    adHocLines,
+  ]);
 
   const taxRate = useMemo(() => {
     const parsed = parseFloat(taxRatePercent);
@@ -308,6 +384,84 @@ export default function NewInvoicePage() {
               <p className="type-body py-2 text-[0.82rem] italic text-[var(--text-muted)]">
                 No unbilled milestones on this project — add ad-hoc lines below.
               </p>
+            )}
+          </div>
+        )}
+
+        {/* FF&E items (W3-T4 deep link — board "Invoice Items" / Order
+            Assistant coverage step). Covered + unpriced requests are skipped
+            with a notice; the rest prefill as checked rows. */}
+        {ffeActive && (
+          <div className="mb-8">
+            <div className="mb-2" style={sectionLabelStyle}>
+              FF&amp;E Items
+            </div>
+            {ffeSectionLoading ? (
+              <p className="type-body py-2 text-[0.82rem] italic text-[var(--text-muted)]">
+                Loading FF&amp;E items…
+              </p>
+            ) : (
+              <>
+                {ffePrefill.billable.length > 0 ? (
+                  <div className="rounded-md border border-[var(--border-default)]">
+                    {ffePrefill.billable.map((it) => (
+                      <label
+                        key={it.id}
+                        className="flex cursor-pointer items-baseline gap-3 border-b border-[var(--border-subtle)] px-4 py-2.5 last:border-b-0 hover:bg-[var(--bg-hover)]"
+                      >
+                        <input
+                          type="checkbox"
+                          className="relative top-[1px] accent-[var(--accent-primary)]"
+                          checked={!deselectedFfeIds.has(it.id)}
+                          onChange={(e) => {
+                            setDeselectedFfeIds((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.delete(it.id);
+                              else next.add(it.id);
+                              return next;
+                            });
+                          }}
+                        />
+                        <span className="type-body min-w-0 flex-1 truncate text-[0.85rem]">
+                          {it.name}
+                          {it.room?.name && (
+                            <span className="ml-2 text-[var(--text-muted)]">{it.room.name}</span>
+                          )}
+                        </span>
+                        <span className="type-meta-small text-[var(--text-muted)]">
+                          ×{it.quantity ?? 1}
+                        </span>
+                        <span className="font-heading text-[0.85rem]">
+                          {formatCurrency((it.quantity ?? 1) * (it.unit_price_cents ?? 0))}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="type-body py-2 text-[0.82rem] italic text-[var(--text-muted)]">
+                    None of the requested FF&amp;E items can be invoiced.
+                  </p>
+                )}
+                {(ffePrefill.skippedCovered > 0 || ffePrefill.skippedUnpriced > 0) && (
+                  <p className="type-meta-small mt-2 text-[var(--text-muted)]">
+                    {[
+                      ffePrefill.skippedCovered > 0
+                        ? `${ffePrefill.skippedCovered} already-invoiced item${
+                            ffePrefill.skippedCovered === 1 ? '' : 's'
+                          } skipped`
+                        : null,
+                      ffePrefill.skippedUnpriced > 0
+                        ? `${ffePrefill.skippedUnpriced} unpriced item${
+                            ffePrefill.skippedUnpriced === 1 ? '' : 's'
+                          } skipped — set a client price first`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                    .
+                  </p>
+                )}
+              </>
             )}
           </div>
         )}
