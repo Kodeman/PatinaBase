@@ -56,6 +56,8 @@ export function deriveKindLine(row: MarginItemRow): string {
       return sender ? `Message · ${sender}` : 'Message';
     }
     case 'invoice':
+      // R18: the 00189 payment-due flips arrive as Money items.
+      if (row.payload.po_payment) return 'Money · vendor payment due';
       return `Money · ${row.state.replace(/_/g, ' ')}`;
     case 'pulse':
       if (row.state === 'due') return 'Friday Pulse · draft ready';

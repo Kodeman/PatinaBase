@@ -11,6 +11,8 @@ import { useState } from 'react';
 import { useVendor } from '@patina/supabase';
 import { OrderAssistant } from '@/components/portal/procurement/order-assistant';
 import { LogInspectionDrawer } from '@/components/portal/procurement/log-inspection-drawer';
+import { clientVendorEmailHint } from '@/components/portal/procurement/po-send-actions';
+import { PoPreview } from './po-preview';
 import { deriveLineStamp } from '@/lib/document/stamp-derivation';
 import { fmtDay } from '@/lib/document/format';
 
@@ -54,9 +56,13 @@ export function LineUnfold({
 
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [inspectionOpen, setInspectionOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const orderable = ORDERABLE.has(item.status) && !item.blocked;
   const inspectable = Boolean(po) && (item.status === 'shipped' || item.status === 'delivered');
+  // R18: sending one PO while working its line is engagement work — the
+  // unfold offers Send for drafted, never-sent POs only.
+  const sendable = Boolean(po) && po.status === 'draft' && !po.sent_at;
 
   const openClaims = (item.item_claims ?? []).filter(
     (c: { state: string }) => c.state === 'drafted' || c.state === 'vendor_notified',
@@ -75,13 +81,20 @@ export function LineUnfold({
       <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Cell
           label="Purchase order"
-          value={po ? (po.vendor_po_number ?? po.sidemark ?? 'PO drafted') : 'Not yet ordered'}
+          value={
+            po ? (po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'PO drafted') : 'Not yet ordered'
+          }
           sub={
             po
               ? [
-                  `placed ${fmtDay(po.created_at)}`,
+                  // R18: the cell narrates the send lifecycle.
+                  po.sent_at ? `sent to vendor ${fmtDay(po.sent_at)}` : 'not yet sent',
+                  po.sent_at
+                    ? po.acknowledged_at
+                      ? 'acknowledged'
+                      : 'awaiting acknowledgment'
+                    : null,
                   po.payment_pattern ? po.payment_pattern.replace(/_/g, ' ') : null,
-                  po.acknowledged_at ? 'acknowledged' : 'awaiting acknowledgment',
                 ]
                   .filter(Boolean)
                   .join(' · ')
@@ -91,7 +104,15 @@ export function LineUnfold({
         <Cell
           label="Movement"
           value={item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-          sub={po?.confirmed_eta ? `arrives ~${fmtDay(po.confirmed_eta)}` : item.eta ? `eta ~${fmtDay(item.eta)}` : undefined}
+          sub={
+            po?.confirmed_eta
+              ? `arrives ~${fmtDay(po.confirmed_eta)}`
+              : po?.status === 'shipped'
+                ? 'shipped — no scheduled arrival'
+                : item.eta
+                  ? `eta ~${fmtDay(item.eta)}`
+                  : undefined
+          }
         />
         <Cell label="Receiving" value={receivingValue} />
       </div>
@@ -106,6 +127,11 @@ export function LineUnfold({
             onClick={() => setAssistantOpen(true)}
           >
             Order with Assistant
+          </button>
+        )}
+        {sendable && (
+          <button type="button" className={ACTION_BTN} onClick={() => setPreviewOpen(true)}>
+            Send to vendor
           </button>
         )}
         {inspectable && (
@@ -131,6 +157,15 @@ export function LineUnfold({
             vendor={vendor}
             project={{ id: projectId, name: projectName }}
             ffeItems={[item]}
+          />
+        )}
+        {po && (
+          <PoPreview
+            open={previewOpen}
+            onOpenChange={setPreviewOpen}
+            purchaseOrderId={po.id}
+            vendorName={item.vendor_name ?? vendor?.name ?? 'the vendor'}
+            vendorEmailHint={vendor ? clientVendorEmailHint(vendor) : null}
           />
         )}
         {po && (

@@ -333,6 +333,25 @@ export function InvoiceBody({ row, projectId }: { row: MarginItemRow; projectId:
   );
 }
 
+// ── vendor payment (R18 — read-only Money narration) ────────────────────────
+
+export function PoPaymentBody({ row }: { row: MarginItemRow }) {
+  const amount = row.payload.amount_cents as number | undefined;
+  const vendor = row.payload.vendor_name as string | undefined;
+  const poLabel = row.payload.po_label as string | undefined;
+  const due = row.payload.due_date as string | undefined;
+  return (
+    <div className="border-t border-[var(--color-pearl)] pt-2.5">
+      <p className="text-[11.5px] text-[var(--text-body)]">
+        {amount != null ? fmtUsd(amount) : 'A payment'} to {vendor ?? 'the vendor'}
+        {poLabel ? ` on ${poLabel}` : ''}
+        {due ? ` — due ${fmtDay(due)}` : ''}.
+      </p>
+      <Quiet>Settle it from the Orders book; this line rests once paid.</Quiet>
+    </div>
+  );
+}
+
 // ── pulse ───────────────────────────────────────────────────────────────────
 
 export function PulseBody({

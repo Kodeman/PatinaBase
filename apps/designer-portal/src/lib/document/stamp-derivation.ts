@@ -35,7 +35,8 @@ export type LineStampKind =
   | 'shipped'
   | 'delivered' // status delivered, no inspection yet — a visible to-do (R2)
   | 'installed'
-  | 'received' // derived: delivered + inspection logged
+  | 'received' // derived: delivered + inspection logged at full count
+  | 'partial' // derived: delivered + inspected short (R18/W5-T2 — surfaced, not invented)
   | 'damaged' // derived: OPEN claim attributed to this item (00196)
   | 'decision_due'; // derived: blocked by a pending blocking decision
 
@@ -43,6 +44,8 @@ export interface LineStampInput {
   status: string;
   blocked: boolean | null;
   received_quantity: number | null;
+  /** Ordered count — lets PARTIAL surface when the inspected count ran short. */
+  quantity?: number | null;
   blocking_decision?: { status: string; due_date: string | null } | null;
   /** damage_claims rows FK'd to this item (damage_claims!ffe_item_id embed). */
   item_claims?: { state: string }[] | null;
@@ -66,7 +69,12 @@ export function deriveLineStamp(item: LineStampInput): LineStamp {
   }
 
   if (item.status === 'delivered') {
-    return { kind: item.received_quantity != null ? 'received' : 'delivered', dueDate: null };
+    if (item.received_quantity == null) return { kind: 'delivered', dueDate: null };
+    // R18: the W5-T2 per-item counts make short receipts visible — PARTIAL
+    // when the inspection logged fewer than ordered (truth surfaced, never
+    // invented; quantity unknown ⇒ fall back to RECEIVED).
+    const short = item.quantity != null && item.received_quantity < item.quantity;
+    return { kind: short ? 'partial' : 'received', dueDate: null };
   }
 
   return {

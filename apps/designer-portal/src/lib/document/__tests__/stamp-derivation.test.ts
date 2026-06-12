@@ -104,3 +104,35 @@ describe('deriveLineStamp (R2)', () => {
     expect(deriveLineStamp({ ...base, status: 'mystery' }).kind).toBe('specified');
   });
 });
+
+describe('PARTIAL (R18 — surfaced from W5-T2 per-item counts)', () => {
+  it('delivered + inspected short of ordered → partial', () => {
+    expect(
+      deriveLineStamp({ status: 'delivered', blocked: false, received_quantity: 1, quantity: 3 }).kind,
+    ).toBe('partial');
+  });
+
+  it('delivered + inspected at full count → received', () => {
+    expect(
+      deriveLineStamp({ status: 'delivered', blocked: false, received_quantity: 3, quantity: 3 }).kind,
+    ).toBe('received');
+  });
+
+  it('quantity unknown → falls back to received, never invents partial', () => {
+    expect(
+      deriveLineStamp({ status: 'delivered', blocked: false, received_quantity: 2 }).kind,
+    ).toBe('received');
+  });
+
+  it('an attributed open claim still outranks partial', () => {
+    expect(
+      deriveLineStamp({
+        status: 'delivered',
+        blocked: false,
+        received_quantity: 1,
+        quantity: 3,
+        item_claims: [{ state: 'drafted' }],
+      }).kind,
+    ).toBe('damaged');
+  });
+});

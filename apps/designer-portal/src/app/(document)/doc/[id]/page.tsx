@@ -81,7 +81,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const { data: liveProposal } = useProposal(proposalId) as { data: any };
   const others = useDocumentPresence(row?.engagement_id ?? null);
 
-  // D11: picking up the document starts the timer (chaining out any running
+  // D11 (ratified R19): picking up the document starts the timer (chaining out any running
   // one); putting down releases it through the log strip. Projects only —
   // time attaches to project rows (00177 FK).
   useHoldDocument(

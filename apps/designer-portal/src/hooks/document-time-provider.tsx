@@ -178,7 +178,8 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
     [invalidateTimeSurfaces],
   );
 
-  /** Pick up a document: chain out whatever runs, then start (D11). */
+  /** Pick up a document: chain out whatever runs, then start (D11,
+   *  ratified R19 — auto-start is no longer provisional). */
   const hold = useCallback(
     (doc: HeldDocument) => {
       heldRef.current = doc;

@@ -161,7 +161,7 @@ export function useProjectFFEItems(projectId: string, filters?: FFEItemFilters) 
           product:products!product_id(id, name, images, brand),
           blocking_decision:client_decisions!blocked_by_decision_id(id, status, due_date),
           item_claims:damage_claims!ffe_item_id(id, state),
-          purchase_order:purchase_orders!purchase_order_id(id, status, vendor_id, vendor_po_number, sidemark, confirmed_eta, acknowledged_at, payment_pattern, created_at)
+          purchase_order:purchase_orders!purchase_order_id(id, status, vendor_id, vendor_po_number, sidemark, confirmed_eta, acknowledged_at, payment_pattern, created_at, po_number, sent_at)
         `)
         .eq('project_id', projectId)
         .order('sort_order', { ascending: true });

@@ -35,6 +35,10 @@ function stampProps(stamp: LineStamp): { label: string; color: string; ink?: str
       };
     case 'received':
       return { label: 'Received', color: 'var(--color-sage)', ink: '#85947C' };
+    case 'partial':
+      // R18: the W5-T2 short receipt, surfaced — golden hour like the
+      // inspection outcome it derives from.
+      return { label: 'Partial', color: 'var(--color-golden-hour)', ink: '#B89A2E' };
     case 'damaged':
       // Item-grain truth only (00196): an open claim attributed to THIS line.
       return { label: 'Damaged', color: 'var(--color-terracotta)', ink: '#C4836F' };
@@ -45,7 +49,7 @@ function stampProps(stamp: LineStamp): { label: string; color: string; ink?: str
   }
 }
 
-const UNDERWAY = new Set(['ordered', 'production', 'shipped', 'delivered', 'received', 'installed']);
+const UNDERWAY = new Set(['ordered', 'production', 'shipped', 'delivered', 'received', 'partial', 'installed']);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type FFERow = any; // row from useProjectFFEItems (untyped hook, view-shaped)

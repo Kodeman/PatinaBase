@@ -15,6 +15,10 @@
 --   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
 --     -v ON_ERROR_STOP=1 < apps/designer-portal/scripts/the-document-local-seed.sql
 
+-- create_purchase_order() reads auth.uid(); seed runs as postgres, so
+-- impersonate the designer for the RPC's owner assert.
+set session "request.jwt.claim.sub" = 'a0000000-0000-0000-0000-000000000004';
+
 do $$
 declare
   v_designer     uuid := 'a0000000-0000-0000-0000-000000000004';
@@ -33,6 +37,11 @@ declare
   v_thread       uuid;
   v_invoice      uuid;
   v_po           uuid;
+  v_draft_po     uuid;
+  v_item_console uuid;
+  v_chen         uuid;
+  v_aspen        uuid;
+  v_tmp_po       uuid;
   v_olsen_item   uuid;
   v_olsen_po     uuid;
   v_olsen_insp   uuid;
@@ -192,6 +201,73 @@ begin
      set purchase_order_id = v_po,
          status = case when status in ('specified','quoted','approved') then 'ordered' else status end
    where id = v_item_chairs;
+
+  -- ── 3f · R18 send-weave fixtures ───────────────────────────────────────────
+  select id into v_item_console from project_ffe_items
+   where project_id = v_project and name = 'White Oak Console';
+
+  -- A drafted, never-sent PO on the console line — the unfold's Send target.
+  -- total_cents matches the line-derived trade total (po-send 'send' refuses
+  -- incoherent POs).
+  -- Build a COHERENT draft PO through the same RPC the Order Assistant uses
+  -- (00186) so po-send's coherence guard accepts it; then back-date it past
+  -- the 2-day unsent threshold.
+  select id into v_draft_po from purchase_orders
+   where project_id = v_project and status = 'draft' and sent_at is null;
+  if v_draft_po is null and v_item_console is not null
+     and (select status from project_ffe_items where id = v_item_console)
+         in ('specified', 'quoted', 'approved') then
+    v_draft_po := (create_purchase_order(
+      v_project, v_verellen, 'net_30'::purchase_order_payment_pattern,
+      array[v_item_console]
+    )).id;
+    update purchase_orders set created_at = now() - interval '3 days'
+     where id = v_draft_po;
+  end if;
+
+  -- A vendor payment flipped 'due' (00189 path) — the Money margin item.
+  if v_po is not null and not exists (
+    select 1 from po_payments where purchase_order_id = v_po and state = 'due'
+  ) then
+    insert into po_payments
+      (purchase_order_id, kind, amount_cents, due_date, state, label, sort_order)
+    values (v_po, 'balance', 956000, current_date, 'due', 'Balance · net 30', 0);
+  end if;
+
+  -- Desk need-line fixtures on quiet seeded projects:
+  --   Chen — drafted PO never sent, 3 days old   → "drafted — not yet sent"
+  --   Aspen Loft Refresh — sent 4 days, no ack   → "sent — no acknowledgment"
+  select id into v_chen from projects
+   where designer_id = v_designer and name ilike 'Chen Residence%' limit 1;
+  if v_chen is not null and not exists (
+    select 1 from purchase_orders where project_id = v_chen and status = 'draft' and sent_at is null
+  ) then
+    insert into project_ffe_items
+      (project_id, name, ffe_category, quantity, status, vendor_id, vendor_name,
+       unit_price_cents, line_total_cents, sort_order)
+    values (v_chen, 'Walnut Credenza', 'Casegoods', 1, 'specified', v_cisco,
+            'Cisco Brothers', 284000, 284000, 0)
+    returning id into v_item_console;  -- reuse temp var
+    v_tmp_po := (create_purchase_order(
+      v_chen, v_cisco, 'net_30'::purchase_order_payment_pattern,
+      array[v_item_console]
+    )).id;
+    update purchase_orders set sidemark = 'CH-104', created_at = now() - interval '3 days'
+     where id = v_tmp_po;
+  end if;
+
+  select id into v_aspen from projects
+   where designer_id = v_designer and name = 'Aspen Loft Refresh' limit 1;
+  if v_aspen is not null and not exists (
+    select 1 from purchase_orders
+     where project_id = v_aspen and sent_at is not null and acknowledged_at is null
+  ) then
+    insert into purchase_orders
+      (designer_id, project_id, vendor_id, payment_pattern, total_cents,
+       status, sidemark, sent_at, created_at)
+    values (v_designer, v_aspen, v_verellen, 'net_30', 250000, 'confirmed',
+            'AL-310', now() - interval '4 days', now() - interval '6 days');
+  end if;
 
   -- ── 4 · Olsen Penthouse: manual project, per-item attributed claim ────────
   if not exists (select 1 from auth.users where id = v_olsen_client) then

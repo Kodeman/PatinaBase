@@ -49,6 +49,12 @@ function mkRow(partial: Partial<DocumentStateRow>): DocumentStateRow {
     open_claim_po: null,
     unsent_pulse_count: 0,
     pulse_week_of: null,
+    draft_unsent_po_count: 0,
+    oldest_draft_po_created_at: null,
+    draft_po_label: null,
+    unacked_po_count: 0,
+    oldest_unacked_sent_at: null,
+    unacked_po_label: null,
     ...partial,
   };
 }
@@ -282,6 +288,60 @@ describe('deriveNeed', () => {
       NOW,
     );
     expect(need).toBeNull();
+  });
+});
+
+describe('R18 send-weave need lines (provisional thresholds)', () => {
+  it('drafted PO unsent ≥2d → UNSENT need with the PO label', () => {
+    const need = deriveNeed(
+      mkRow({ draft_unsent_po_count: 1, oldest_draft_po_created_at: daysAgo(2), draft_po_label: 'PO-0012' }),
+      NOW,
+    );
+    expect(need!.kind).toBe('po_unsent');
+    expect(need!.text).toBe('PO-0012 drafted — not yet sent');
+    expect(need!.stamp.label).toBe('UNSENT');
+  });
+
+  it('drafted PO under 2d → no need (boundary)', () => {
+    expect(
+      deriveNeed(
+        mkRow({ draft_unsent_po_count: 1, oldest_draft_po_created_at: daysAgo(1), draft_po_label: 'PO-0012' }),
+        NOW,
+      ),
+    ).toBeNull();
+  });
+
+  it('sent PO unacknowledged ≥3d → NO ACK need', () => {
+    const need = deriveNeed(
+      mkRow({ unacked_po_count: 2, oldest_unacked_sent_at: daysAgo(3), unacked_po_label: 'PO-0007' }),
+      NOW,
+    );
+    expect(need!.kind).toBe('po_unacknowledged');
+    expect(need!.text).toBe('2 POs sent — no acknowledgment');
+    expect(need!.stamp.label).toBe('NO ACK');
+  });
+
+  it('unacknowledged under 3d → no need (boundary)', () => {
+    expect(
+      deriveNeed(
+        mkRow({ unacked_po_count: 1, oldest_unacked_sent_at: daysAgo(2.5) }),
+        NOW,
+      ),
+    ).toBeNull();
+  });
+
+  it('the designer\'s own unsent pen outranks the vendor nudge', () => {
+    const need = deriveNeed(
+      mkRow({
+        draft_unsent_po_count: 1,
+        oldest_draft_po_created_at: daysAgo(3),
+        draft_po_label: 'PO-0012',
+        unacked_po_count: 1,
+        oldest_unacked_sent_at: daysAgo(5),
+      }),
+      NOW,
+    );
+    expect(need!.kind).toBe('po_unsent');
   });
 });
 

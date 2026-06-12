@@ -14,7 +14,7 @@ import { useCreateMarginNote } from '@/hooks/use-margin-notes';
 import { partitionMargin, type MarginItemRow } from '@/lib/document/margin-derivation';
 import { todayYmd } from '@/lib/document/format';
 import { MarginItem } from './margin-item';
-import { DecisionBody, InvoiceBody, MessageBody, NoteBody, PulseBody } from './margin-bodies';
+import { DecisionBody, InvoiceBody, MessageBody, NoteBody, PoPaymentBody, PulseBody } from './margin-bodies';
 
 export function MarginRail({
   projectId,
@@ -95,6 +95,9 @@ export function MarginRail({
       case 'message':
         return <MessageBody row={row} projectId={projectId} />;
       case 'invoice':
+        // R18: vendor payment-due items are read-only narration — the
+        // invoice body's issue/send acts belong to client invoices only.
+        if (row.payload.po_payment) return <PoPaymentBody row={row} />;
         return <InvoiceBody row={row} projectId={projectId} />;
       case 'pulse':
         return (

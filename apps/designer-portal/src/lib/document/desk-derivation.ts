@@ -60,6 +60,13 @@ export interface DocumentStateRow {
   /** D5 (00195): current-week draft pulses (rise on the Desk Friday). */
   unsent_pulse_count: number;
   pulse_week_of: string | null;
+  /** R18 (00200): the send weave's Desk inputs. */
+  draft_unsent_po_count: number;
+  oldest_draft_po_created_at: string | null;
+  draft_po_label: string | null;
+  unacked_po_count: number;
+  oldest_unacked_sent_at: string | null;
+  unacked_po_label: string | null;
 }
 
 export type NeedKind =
@@ -71,6 +78,8 @@ export type NeedKind =
   | 'new_lead'
   | 'hesitating_proposal'
   | 'awaiting_inspection'
+  | 'po_unsent'
+  | 'po_unacknowledged'
   | 'pulse_due';
 
 export interface NeedLine {
@@ -96,6 +105,10 @@ const DAY_MS = 86_400_000;
 const HESITATION_UNOPENED_DAYS = 1;
 const HESITATION_UNSIGNED_DAYS = 2;
 const LEAD_URGENT_WINDOW_MS = 24 * 3_600_000;
+// R18 send-weave thresholds — PROVISIONAL (Session-02 constants watch,
+// Q12a/Q12b): Leah's numbers replace these by I-entry when they arrive.
+const PO_DRAFT_UNSENT_DAYS = 2;
+const PO_SENT_UNACKED_DAYS = 3;
 const MAX_MOTION_CHIPS = 6;
 
 /** Severity rank — lower sorts first within the needs stack. */
@@ -108,7 +121,9 @@ const NEED_RANK: Record<NeedKind, number> = {
   new_lead: 5,
   hesitating_proposal: 6,
   awaiting_inspection: 7,
-  pulse_due: 8,
+  po_unsent: 8,
+  po_unacknowledged: 9,
+  pulse_due: 10,
 };
 
 /** Prototype stamp palette (v0.3 is the look authority): borders use brand
@@ -257,6 +272,41 @@ export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
     };
   }
 
+  // R18: the send weave. A drafted PO the studio never sent is the
+  // designer's own pen (rises first); a sent PO the vendor hasn't
+  // acknowledged is a nudge. Both thresholds provisional (constants watch).
+  if (row.draft_unsent_po_count > 0 && row.oldest_draft_po_created_at) {
+    const days = daysBetween(row.oldest_draft_po_created_at, now);
+    if (days >= PO_DRAFT_UNSENT_DAYS) {
+      const n = row.draft_unsent_po_count;
+      return {
+        kind: 'po_unsent',
+        text:
+          n === 1
+            ? `${row.draft_po_label ?? 'A purchase order'} drafted — not yet sent`
+            : `${n} POs drafted — not yet sent`,
+        stamp: { label: 'UNSENT', ...STAMP.clay },
+        urgent: false,
+      };
+    }
+  }
+
+  if (row.unacked_po_count > 0 && row.oldest_unacked_sent_at) {
+    const days = daysBetween(row.oldest_unacked_sent_at, now);
+    if (days >= PO_SENT_UNACKED_DAYS) {
+      const n = row.unacked_po_count;
+      return {
+        kind: 'po_unacknowledged',
+        text:
+          n === 1
+            ? `${row.unacked_po_label ?? 'A purchase order'} sent — no acknowledgment`
+            : `${n} POs sent — no acknowledgment`,
+        stamp: { label: 'NO ACK', ...STAMP.dustyBlue },
+        urgent: false,
+      };
+    }
+  }
+
   // D5: Friday unsent Pulses rise on the Desk — never earlier in the week.
   if (row.unsent_pulse_count > 0 && row.pulse_week_of) {
     const monday = new Date(`${row.pulse_week_of}T00:00:00`);
@@ -307,7 +357,11 @@ function needSortKey(folder: DeskFolder): [number, number, number] {
         ? new Date(row.lead_response_deadline).getTime()
         : need.kind === 'hesitating_proposal' && row.proposal_sent_at
           ? new Date(row.proposal_sent_at).getTime()
-          : new Date(row.updated_at).getTime();
+          : need.kind === 'po_unsent' && row.oldest_draft_po_created_at
+            ? new Date(row.oldest_draft_po_created_at).getTime()
+            : need.kind === 'po_unacknowledged' && row.oldest_unacked_sent_at
+              ? new Date(row.oldest_unacked_sent_at).getTime()
+              : new Date(row.updated_at).getTime();
   return [need.urgent ? 0 : 1, NEED_RANK[need.kind], date];
 }
 

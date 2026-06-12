@@ -1,19 +1,23 @@
 'use client';
 
 /**
- * The Orders ledger (D8/R5, §13 Slice 4): cross-engagement procurement as a
- * book pulled over whatever the designer is holding. Vendor-grouped PO rows
- * with open-document links, the R5 vendor directory pane, and ONE batch
- * action — "same truck": a shared confirmed ETA across selected POs of a
- * vendor, written back into each document through log_po_acknowledgment
- * (coalesce semantics: only the ETA changes). Semantics flagged in I14.
+ * The Orders ledger v2 (D8/R5/R18, spec v1.3 §8): cross-engagement
+ * procurement as a book pulled over whatever the designer is holding.
+ * Vendor-grouped PO rows narrating the send lifecycle, send/resend through
+ * the shared preview-confirm (the PDF IS the confirm — R18), the
+ * unscheduled-shipment condition as a quiet row mark (never a banner), the
+ * R5 vendor pane, and the "same truck" batch — a shared ETA written
+ * through the ETA-only path; history says "ETA aligned," never an
+ * acknowledgment claim (R16: a batch ETA is not a vendor act).
  */
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient, usePurchaseOrders, useVendors } from '@patina/supabase';
+import { usePurchaseOrders, useUpdatePurchaseOrderETA, useVendors } from '@patina/supabase';
+import { clientVendorEmailHint } from '@/components/portal/procurement/po-send-actions';
 import { Stamp } from './stamp';
+import { PoPreview } from './po-preview';
 import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,7 +46,10 @@ export function OrdersLedger({ onClose }: { onClose: () => void }) {
   };
   const vendors = vendorsPage?.data;
 
+  const updateEta = useUpdatePurchaseOrderETA();
   const [showVendors, setShowVendors] = useState(false);
+  // R18: send / resend through the shared preview-confirm.
+  const [previewPo, setPreviewPo] = useState<AnyRecord | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [truckEta, setTruckEta] = useState(todayYmd());
   const [batchBusy, setBatchBusy] = useState(false);
@@ -86,15 +93,14 @@ export function OrdersLedger({ onClose }: { onClose: () => void }) {
     if (!truckEta || selected.length < 2) return;
     setBatchBusy(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = createBrowserClient() as any;
+      // R16: a batch ETA is not a vendor act — write ONLY confirmed_eta and
+      // narrate "ETA aligned"; never touch acknowledgment.
       for (const poId of selected) {
-        const { error } = await supabase.rpc('log_po_acknowledgment', {
-          p_po_id: poId,
-          p_vendor_po_number: null,
-          p_confirmed_eta: truckEta,
+        await updateEta.mutateAsync({
+          purchaseOrderId: poId,
+          newEta: truckEta,
+          notes: `ETA aligned across ${selected.length} POs (same truck)`,
         });
-        if (error) throw error;
       }
       setSelected([]);
       setTruckEta(todayYmd());
@@ -172,7 +178,7 @@ export function OrdersLedger({ onClose }: { onClose: () => void }) {
                   return (
                     <li
                       key={po.id}
-                      className="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-3 border-b border-[rgba(250,247,242,0.08)] px-1 py-2.5"
+                      className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-3 border-b border-[rgba(250,247,242,0.08)] px-1 py-2.5"
                     >
                       <input
                         type="checkbox"
@@ -188,11 +194,17 @@ export function OrdersLedger({ onClose }: { onClose: () => void }) {
                       />
                       <div>
                         <p className="text-[12.5px] font-medium text-[var(--color-off-white)]">
-                          {po.vendor_po_number ?? po.sidemark ?? 'PO drafted'}
+                          {po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'PO drafted'}
                         </p>
                         <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
-                          {po.project?.name ?? 'Project'} ·{' '}
-                          {po.total_cents != null ? fmtUsd(po.total_cents) : '—'}
+                          {[
+                            po.project?.name ?? 'Project',
+                            po.total_cents != null ? fmtUsd(po.total_cents) : '—',
+                            // R18: the row narrates the send lifecycle.
+                            po.sent_at
+                              ? `sent ${fmtDay(po.sent_at)}${po.acknowledged_at ? ' · ack' : ' · no ack'}`
+                              : 'not sent',
+                          ].join(' · ')}
                         </p>
                       </div>
                       <Stamp
@@ -200,9 +212,28 @@ export function OrdersLedger({ onClose }: { onClose: () => void }) {
                         color={stamp.color}
                         ink={stamp.ink}
                       />
-                      <span className="whitespace-nowrap font-heading text-[12.5px] text-[var(--color-off-white)]">
-                        {po.confirmed_eta ? `~${fmtDay(po.confirmed_eta)}` : '—'}
+                      <span
+                        className="whitespace-nowrap font-heading text-[12.5px]"
+                        style={
+                          // R18: unscheduled shipment — a quiet row mark, never a banner.
+                          !po.confirmed_eta && po.status === 'shipped'
+                            ? { color: '#D8BE56', fontFamily: 'var(--font-mono, monospace)', fontSize: '10px', letterSpacing: '0.05em' }
+                            : { color: 'var(--color-off-white)' }
+                        }
+                      >
+                        {po.confirmed_eta
+                          ? `~${fmtDay(po.confirmed_eta)}`
+                          : po.status === 'shipped'
+                            ? 'NO DATE'
+                            : '—'}
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewPo(po)}
+                        className="whitespace-nowrap text-[10.5px] text-[var(--color-clay)] hover:underline"
+                      >
+                        {po.sent_at ? 'resend' : po.status === 'draft' ? 'send →' : 'pdf'}
+                      </button>
                       <button
                         type="button"
                         onClick={() => openDocument(po.project_id ?? po.project?.id ?? null)}
@@ -217,7 +248,21 @@ export function OrdersLedger({ onClose }: { onClose: () => void }) {
             </section>
           ))}
 
-          {selected.length >= 2 && (
+          {previewPo && (
+        <PoPreview
+          open
+          onOpenChange={(o: boolean) => {
+            if (!o) setPreviewPo(null);
+          }}
+          purchaseOrderId={previewPo.id}
+          vendorName={vendorById.get(previewPo.vendor_id)?.name ?? previewPo.vendor?.name ?? 'the vendor'}
+          vendorEmailHint={clientVendorEmailHint(vendorById.get(previewPo.vendor_id))}
+          mode={previewPo.sent_at ? 'resend' : 'send'}
+          onSent={() => setPreviewPo(null)}
+        />
+      )}
+
+      {selected.length >= 2 && (
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-[5px] border border-[rgba(196,165,123,0.3)] bg-[rgba(196,165,123,0.05)] px-3 py-2.5">
               <p className="text-[11.5px] text-[var(--color-off-white)]">
                 {selected.length} orders{' '}
@@ -238,7 +283,7 @@ export function OrdersLedger({ onClose }: { onClose: () => void }) {
                     onClick={sameTruck}
                     className="rounded-[4px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-50"
                   >
-                    {batchBusy ? 'Writing…' : 'Set shared ETA'}
+                    {batchBusy ? 'Aligning…' : 'Align ETA'}
                   </button>
                 </>
               )}
