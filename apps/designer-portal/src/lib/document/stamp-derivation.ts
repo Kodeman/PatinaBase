@@ -9,8 +9,10 @@
  * trap): this module returns semantic keys; components resolve label/color
  * through STAGE_CONFIG (R2: the canonical source) at render time.
  *
- * DAMAGED attribution is PO-level — inspections/claims hang off
- * purchase_orders (00150) with no item FK. See DECISIONS.md I9.
+ * No DAMAGED stamp at the line grain (R7): claims are PO-level data (00150,
+ * no item FK) and would over-attribute on multi-item POs. Claims surface via
+ * the line unfold (Slice 4), the Orders ledger, and a Desk need line; the
+ * per-item DAMAGED stamp returns in Slice 4 with an additive ffe_item_id FK.
  */
 
 const MACHINE = new Set([
@@ -34,7 +36,6 @@ export type LineStampKind =
   | 'delivered' // status delivered, no inspection yet — a visible to-do (R2)
   | 'installed'
   | 'received' // derived: delivered + inspection logged
-  | 'damaged' // derived: non-clean inspection with an open claim
   | 'decision_due'; // derived: blocked by a pending blocking decision
 
 export interface LineStampInput {
@@ -42,11 +43,6 @@ export interface LineStampInput {
   blocked: boolean | null;
   received_quantity: number | null;
   blocking_decision?: { status: string; due_date: string | null } | null;
-  purchase_order?: {
-    receiving_inspections?:
-      | { outcome: string; damage_claims?: { state: string }[] | null }[]
-      | null;
-  } | null;
 }
 
 export interface LineStamp {
@@ -55,20 +51,10 @@ export interface LineStamp {
   dueDate: string | null;
 }
 
-const OPEN_CLAIM_STATES = new Set(['drafted', 'vendor_notified']);
-
 export function deriveLineStamp(item: LineStampInput): LineStamp {
   if (item.blocked && item.blocking_decision?.status === 'pending') {
     return { kind: 'decision_due', dueDate: item.blocking_decision.due_date ?? null };
   }
-
-  const inspections = item.purchase_order?.receiving_inspections ?? [];
-  const hasOpenDamage = inspections.some(
-    (insp) =>
-      insp.outcome !== 'clean' &&
-      (insp.damage_claims ?? []).some((c) => OPEN_CLAIM_STATES.has(c.state)),
-  );
-  if (hasOpenDamage) return { kind: 'damaged', dueDate: null };
 
   if (item.status === 'delivered') {
     return { kind: item.received_quantity != null ? 'received' : 'delivered', dueDate: null };

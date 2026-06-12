@@ -158,8 +158,7 @@ export function useProjectFFEItems(projectId: string, filters?: FFEItemFilters) 
           *,
           room:project_rooms!project_room_id(id, name),
           product:products!product_id(id, name, images, brand),
-          blocking_decision:client_decisions!blocked_by_decision_id(id, status, due_date),
-          purchase_order:purchase_orders!purchase_order_id(id, status, receiving_inspections(id, outcome, damage_claims(id, state)))
+          blocking_decision:client_decisions!blocked_by_decision_id(id, status, due_date)
         `)
         .eq('project_id', projectId)
         .order('sort_order', { ascending: true });

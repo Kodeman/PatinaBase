@@ -31,8 +31,6 @@ function stampProps(stamp: LineStamp): { label: string; color: string; ink?: str
         color: 'var(--color-terracotta)',
         ink: '#C4836F',
       };
-    case 'damaged':
-      return { label: 'Damaged', color: 'var(--color-terracotta)', ink: '#C4836F' };
     case 'received':
       return { label: 'Received', color: 'var(--color-sage)', ink: '#85947C' };
     default: {

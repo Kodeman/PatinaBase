@@ -52,11 +52,15 @@ export interface DocumentStateRow {
   installed_count: number;
   item_count: number;
   updated_at: string;
+  /** R7 (00189): open damage claims on this project's POs. */
+  open_claim_count: number;
+  open_claim_po: string | null;
 }
 
 export type NeedKind =
   | 'overdue_decision'
   | 'proposal_signed'
+  | 'damage_claim'
   | 'proposal_declined'
   | 'proposal_expired'
   | 'new_lead'
@@ -92,11 +96,12 @@ const MAX_MOTION_CHIPS = 6;
 const NEED_RANK: Record<NeedKind, number> = {
   overdue_decision: 0,
   proposal_signed: 1,
-  proposal_declined: 2,
-  proposal_expired: 3,
-  new_lead: 4,
-  hesitating_proposal: 5,
-  awaiting_inspection: 6,
+  damage_claim: 2,
+  proposal_declined: 3,
+  proposal_expired: 4,
+  new_lead: 5,
+  hesitating_proposal: 6,
+  awaiting_inspection: 7,
 };
 
 /** Prototype stamp palette (v0.3 is the look authority): borders use brand
@@ -200,6 +205,21 @@ export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
       text,
       stamp: { label: 'NEW LEAD', ...STAMP.clay },
       urgent: closing,
+    };
+  }
+
+  // R7: claims surface at the grain where they are true — the PO. The line
+  // stamp stays suppressed until per-item attribution exists (Slice 4).
+  if (row.open_claim_count > 0) {
+    const n = row.open_claim_count;
+    return {
+      kind: 'damage_claim',
+      text:
+        n === 1
+          ? `${row.open_claim_po ?? 'A delivery'} has an open damage claim`
+          : `${n} open damage claims — review receiving`,
+      stamp: { label: 'CLAIM OPEN', ...STAMP.terracotta },
+      urgent: false,
     };
   }
 

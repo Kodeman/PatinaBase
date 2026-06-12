@@ -31,6 +31,8 @@ const baseRow: DocumentStateRow = {
   installed_count: 0,
   item_count: 0,
   updated_at: '2026-06-10T00:00:00Z',
+  open_claim_count: 0,
+  open_claim_po: null,
 };
 
 // Midday-UTC timestamps keep the rendered calendar day stable across US TZs.

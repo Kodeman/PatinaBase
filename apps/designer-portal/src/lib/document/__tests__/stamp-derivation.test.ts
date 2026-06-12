@@ -5,7 +5,6 @@ const base = {
   blocked: false,
   received_quantity: null as number | null,
   blocking_decision: null,
-  purchase_order: null,
 };
 
 describe('deriveLineStamp (R2)', () => {
@@ -62,55 +61,13 @@ describe('deriveLineStamp (R2)', () => {
     });
   });
 
-  it('DAMAGED when a non-clean inspection on the PO has an open claim', () => {
-    expect(
-      deriveLineStamp({
-        ...base,
-        status: 'delivered',
-        received_quantity: 2,
-        purchase_order: {
-          receiving_inspections: [
-            { outcome: 'damaged', damage_claims: [{ state: 'vendor_notified' }] },
-          ],
-        },
-      }),
-    ).toEqual({ kind: 'damaged', dueDate: null });
-  });
-
-  it('not DAMAGED once the claim is resolved', () => {
-    expect(
-      deriveLineStamp({
-        ...base,
-        status: 'delivered',
-        received_quantity: 2,
-        purchase_order: {
-          receiving_inspections: [{ outcome: 'damaged', damage_claims: [{ state: 'resolved' }] }],
-        },
-      }),
-    ).toEqual({ kind: 'received', dueDate: null });
-  });
-
-  it('clean inspections never stamp DAMAGED', () => {
-    expect(
-      deriveLineStamp({
-        ...base,
-        status: 'shipped',
-        purchase_order: { receiving_inspections: [{ outcome: 'clean', damage_claims: [] }] },
-      }),
-    ).toEqual({ kind: 'shipped', dueDate: null });
-  });
-
-  it('DECISION DUE outranks DAMAGED', () => {
-    expect(
-      deriveLineStamp({
-        ...base,
-        blocked: true,
-        blocking_decision: { status: 'pending', due_date: null },
-        purchase_order: {
-          receiving_inspections: [{ outcome: 'partial', damage_claims: [{ state: 'drafted' }] }],
-        },
-      }).kind,
-    ).toBe('decision_due');
+  it('no DAMAGED stamp exists at the line grain (R7 — claims surface via unfold + need line)', () => {
+    // A delivered+inspected line on a PO with an open claim still stamps its
+    // own truthful state; the claim belongs to the PO, not this line.
+    expect(deriveLineStamp({ ...base, status: 'delivered', received_quantity: 2 })).toEqual({
+      kind: 'received',
+      dueDate: null,
+    });
   });
 
   it('unknown status degrades to specified', () => {

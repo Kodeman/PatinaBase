@@ -44,6 +44,8 @@ function mkRow(partial: Partial<DocumentStateRow>): DocumentStateRow {
     installed_count: 0,
     item_count: 0,
     updated_at: daysAgo(1),
+    open_claim_count: 0,
+    open_claim_po: null,
     ...partial,
   };
 }
@@ -75,6 +77,37 @@ describe('deriveNeed', () => {
       NOW,
     );
     expect(need!.kind).toBe('overdue_decision');
+  });
+
+  it('open damage claim → need line naming the PO with a CLAIM OPEN stamp (R7)', () => {
+    const need = deriveNeed(mkRow({ open_claim_count: 1, open_claim_po: 'AP-012' }), NOW);
+    expect(need).not.toBeNull();
+    expect(need!.kind).toBe('damage_claim');
+    expect(need!.text).toBe('AP-012 has an open damage claim');
+    expect(need!.stamp.label).toBe('CLAIM OPEN');
+    expect(need!.urgent).toBe(false);
+  });
+
+  it('open damage claims without a PO identifier still surface, pluralized', () => {
+    const need = deriveNeed(mkRow({ open_claim_count: 2, open_claim_po: null }), NOW);
+    expect(need!.kind).toBe('damage_claim');
+    expect(need!.text).toBe('2 open damage claims — review receiving');
+  });
+
+  it('open damage claim outranks awaiting inspection but not overdue decisions', () => {
+    expect(
+      deriveNeed(mkRow({ open_claim_count: 1, awaiting_inspection_count: 2 }), NOW)!.kind,
+    ).toBe('damage_claim');
+    expect(
+      deriveNeed(
+        mkRow({
+          open_claim_count: 1,
+          overdue_decision_count: 1,
+          earliest_overdue_due: daysAgo(2),
+        }),
+        NOW,
+      )!.kind,
+    ).toBe('overdue_decision');
   });
 
   it('delivered-awaiting-inspection is a need with a DELIVERED stamp (R2)', () => {
