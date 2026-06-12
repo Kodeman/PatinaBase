@@ -567,3 +567,36 @@ proposed:** payment-due flips arrive as Money margin items through existing
 narration; expediting flags render as quiet Movement sub-lines, never badges;
 unscheduled-shipment is a row mark, not a banner; spec §6 gains the PARTIAL
 receiving state. O7 RESOLVED.
+
+### R16 · Slice 4/5 blessings + refinements — 2026-06-12
+
+*Provenance: ratified via spec v1.3 §2 (the table text below is quoted
+verbatim). The session's long-form text did not reach this log — only the
+§2 one-liner arrived (same gap as O6); a correcting entry can follow if
+longer text exists.*
+
+Slice 4/5 blesses: write-first close-out is a D10 refinement (truth logged,
+fully editable; Esc = discard stands) · pause-as-segment · activity default
+Design (provisional) · IN HAND / TYPED labels · "same truck" wording blessed
+but narration says "ETA aligned," never "acknowledged" · fill-state:
+project-exists ⇒ line 2 filled regardless of lineage · tab fallback = first
+word of document title, never a role noun · claim need lines must be
+engagement-scoped (AP-012 check).
+
+*Implementation note: the build-bearing items (fill-state line-2 rule, tab
+fallback, same-truck narration) are HELD until after Session 02 per the
+session's build-hold directive; they land with Slice 5.5 alongside the
+R18 weave.*
+
+### R17 · Activation vendor_id gap — fix before Session 02 — 2026-06-12
+
+*Provenance: ratified via spec v1.3 §2, quoted verbatim (long-form text
+not received — see R16 note).*
+
+`activate_proposal_as_project` drops `vendor_id` (main-lineage bug,
+procurement session owns) — fix + backfill land **before Session 02**, or
+the session script gains a seam answer.
+
+---
+
+*Log integrity: 41 entries · last appended R17 · 2026-06-12 (footer per spec v1.3 §0.4 — updated on every append)*
