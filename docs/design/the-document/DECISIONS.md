@@ -49,6 +49,18 @@
 **Proposed resolution:** PR 1 adds the CI-blocking lint scoped to Document surfaces (`/desk`, `/doc`, document/drawer/ledger components) + `shadow-none` overrides wherever design-system primitives are reused inside those surfaces; widen the ban app-wide at the dissolve step.
 **Blocks:** Slice 1 PR.
 
+### O6 · R10–R12 referenced but absent from this log — 2026-06-12
+
+**Gap:** Session 02 prep cited "R10–R15 appended," and R14 references R12's
+"needs-action ordering," but only R13–R15 are present in this file — the
+R10–R12 text appears to have been truncated in the paste. Blocked on the
+missing text: the I6 Desk-heuristics constants retune (R10's calibrated
+values exist nowhere in the repo) and dued-note ordering (R12). Slice 4
+proceeds on the fully-specified scope (unfolds, Orders ledger, per-item
+DAMAGED, R14 Note, R15 fill-state); notes with due dates provisionally rank
+with due decisions pending R12.
+**Blocks:** I6 retune; final dued-note ordering.
+
 ### O5 · Portal surfaces with no Document-model home — 2026-06-11
 
 **Conflict:** The portal has grown past the five zones the design sessions mapped (spec §3). Unmapped: **Aesthete** (Teaching + Aesthete Engine), Insights, Portfolio, Resources, Team, Reviews, Nurture queue, rooms directory, and the vendor directory (People vs Orders ledger?).
