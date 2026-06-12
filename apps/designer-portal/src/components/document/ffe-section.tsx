@@ -33,6 +33,9 @@ function stampProps(stamp: LineStamp): { label: string; color: string; ink?: str
       };
     case 'received':
       return { label: 'Received', color: 'var(--color-sage)', ink: '#85947C' };
+    case 'damaged':
+      // Item-grain truth only (00193): an open claim attributed to THIS line.
+      return { label: 'Damaged', color: 'var(--color-terracotta)', ink: '#C4836F' };
     default: {
       const cfg = STAGE_CONFIG[stamp.kind];
       return { label: cfg.label, color: cfg.color, ink: STAGE_INK[stamp.kind] };
