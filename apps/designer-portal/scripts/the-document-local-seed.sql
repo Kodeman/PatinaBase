@@ -88,6 +88,17 @@ begin
   end if;
   update projects set name = 'Whitfield Living & Dining' where id = v_project;
 
+  -- activate_proposal_as_project carries vendor_name but DROPS vendor_id
+  -- (pre-existing RPC gap, flagged in DECISIONS I17) — backfill it so the
+  -- Order Assistant can mount on un-ordered lines.
+  update project_ffe_items i
+     set vendor_id = pi.vendor_id
+    from proposal_items pi
+   where i.source_proposal_item_id = pi.id
+     and i.project_id = v_project
+     and i.vendor_id is null
+     and pi.vendor_id is not null;
+
   select id into v_item_pendant from project_ffe_items
    where project_id = v_project and name = 'Brass Pendant Cluster';
   select id into v_item_chairs from project_ffe_items
