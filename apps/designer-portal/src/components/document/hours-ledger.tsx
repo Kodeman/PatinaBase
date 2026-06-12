@@ -14,6 +14,8 @@ import { createBrowserClient } from '@patina/supabase';
 import { useCreateTimeEntry, useUpdateTimeEntry } from '@/hooks/use-time-tracking';
 import { ACTIVITIES, fmtMinutes } from '@/lib/document/time-derivation';
 import { fmtDay } from '@/lib/document/format';
+import { LedgerFrontMatter } from './ledger-front-matter';
+import { hoursUtilization } from '@/lib/document/ledger-summary';
 
 type AnyRecord = any;
 
@@ -86,6 +88,7 @@ export function HoursLedger() {
     .filter((e) => new Date(e.started_at).toDateString() === todayKey)
     .reduce((s, e) => s + (e.duration_minutes ?? 0), 0);
   const weekMin = (entries ?? []).reduce((s, e) => s + (e.duration_minutes ?? 0), 0);
+  const util = hoursUtilization(entries ?? []);
 
   const parsedAdd = parseInt(addMinutes, 10);
   const addValid = addProject && Number.isFinite(parsedAdd) && parsedAdd >= 1;
@@ -134,6 +137,17 @@ export function HoursLedger() {
           Export week → Accounts
         </button>
       </div>
+
+      {/* Front-matter (R5): utilization — the week's logged time + billable share. */}
+      <LedgerFrontMatter
+        caption="utilization"
+        stats={[
+          { label: 'logged this week', value: fmtMinutes(util.totalMinutes) },
+          ...(util.billablePct !== null
+            ? [{ label: 'billable', value: `${util.billablePct}%` }]
+            : []),
+        ]}
+      />
 
       {days.length === 0 && (
         <p className="py-3 text-[12px] italic text-[rgba(250,247,242,0.5)]">

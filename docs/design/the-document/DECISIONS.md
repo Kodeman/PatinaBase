@@ -959,7 +959,23 @@ Document is the default. Post-flip: the Aesthete fold returns to the design
 session before build; spec v1.4 cuts at flip-state; dissolve stages run
 telemetry-gated. — The workstream is flipped.
 
+### I23 · Ledger front-matter (R5 / Insights distribution) — 2026-06-12
+
+Post-flip feature build (production flagging deferred; building the model
+out). R5's "Insights distributes as each ledger's front-matter summary
+page — no dashboard book": the two ledgers that exist gain their opening
+summary. Pure aggregations in `ledger-summary.ts` (tested): `ordersThrough
+put` (Open · Arriving this week · Unsent · No ack — the last three only when
+present) and `hoursUtilization` (logged minutes + billable share). A shared
+`LedgerFrontMatter` band renders them at the top of the ledger sheet (Orders
+on the Orders view, not the Vendors pane; Hours always) — charcoal-sheet
+styling, a mono lens caption + stat pairs, no dashboard furniture. The
+mobile ledgers inherit it for free (same components via the drawer's
+DocSheet). Accounts/People front-matter (revenue/AR · pipeline conversion)
+await those ledgers being built; the Aesthete-fold Accounts rendering stays
+the design-session deliverable. 392/392 jest; lint/tsc clean.
+
 
 ---
 
-*Entries: D1–D13 · O1–O7 (resolved) · I1–I22 · R1–R22 · L1–L3 · THE GO · FLIP CONFIRMED · last id = FLIP*
+*Entries: D1–D13 · O1–O7 (resolved) · I1–I23 · R1–R22 · L1–L3 · THE GO · FLIP CONFIRMED · last id = I23*

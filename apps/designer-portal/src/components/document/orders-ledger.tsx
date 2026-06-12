@@ -18,7 +18,16 @@ import { usePurchaseOrders, useUpdatePurchaseOrderETA, useVendors } from '@patin
 import { clientVendorEmailHint } from '@/components/portal/procurement/po-send-actions';
 import { Stamp } from './stamp';
 import { PoPreview } from './po-preview';
+import { LedgerFrontMatter } from './ledger-front-matter';
+import { ordersThroughput } from '@/lib/document/ledger-summary';
 import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
+
+interface POForThroughput {
+  status: string;
+  confirmed_eta: string | null;
+  sent_at: string | null;
+  acknowledged_at: string | null;
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecord = any;
@@ -132,6 +141,11 @@ export function OrdersLedger({ onClose }: { onClose: () => void }) {
           {showVendors ? 'Orders' : 'Vendors'}
         </button>
       </div>
+
+      {/* Front-matter (R5): procurement throughput — the book's opening page. */}
+      {!showVendors && !isLoading && (
+        <LedgerFrontMatter caption="throughput" stats={ordersThroughput((orders ?? []) as POForThroughput[])} />
+      )}
 
       {showVendors ? (
         <ul>
