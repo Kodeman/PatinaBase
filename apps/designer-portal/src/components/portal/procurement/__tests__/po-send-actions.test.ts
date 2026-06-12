@@ -24,6 +24,8 @@ import {
   clientVendorEmailHint,
   poSendErrorMessage,
   PO_OUT_OF_SYNC_MESSAGE,
+  type PoSendActionsProps,
+  type PoSendPopoverProps,
 } from '../po-send-actions';
 
 describe('clientVendorEmailHint', () => {
@@ -65,6 +67,39 @@ describe('clientVendorEmailHint', () => {
     expect(
       clientVendorEmailHint({ contact_info: { email: '  ' } }),
     ).toBeNull();
+  });
+});
+
+describe('PoSendActions / PoSendPopover callback shape', () => {
+  it('PoSendActionsProps.onSent receives an ISO sentAtIso string', () => {
+    // Type-level contract: the callback is (sentAtIso: string) => void.
+    // This test exercises the type by constructing a valid prop bag; runtime
+    // behaviour is covered by the integration / e2e suite (no jsdom here).
+    const received: string[] = [];
+    const props: PoSendActionsProps = {
+      purchaseOrderId: 'po-1',
+      vendorEmailHint: 'vendor@example.test',
+      onSent: (sentAtIso) => {
+        // TypeScript enforces sentAtIso is a string, not void.
+        received.push(sentAtIso);
+      },
+    };
+    // Call onSent directly to confirm it accepts a string arg.
+    props.onSent?.('2026-06-12T10:00:00.000Z');
+    expect(received).toEqual(['2026-06-12T10:00:00.000Z']);
+  });
+
+  it('PoSendPopoverProps.onSent receives an ISO sentAtIso string', () => {
+    const received: string[] = [];
+    const props: PoSendPopoverProps = {
+      purchaseOrderId: 'po-2',
+      vendorEmailHint: null,
+      onSent: (sentAtIso) => {
+        received.push(sentAtIso);
+      },
+    };
+    props.onSent?.('2026-06-12T11:00:00.000Z');
+    expect(received).toEqual(['2026-06-12T11:00:00.000Z']);
   });
 });
 

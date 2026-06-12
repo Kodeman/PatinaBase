@@ -155,6 +155,10 @@ export function VendorSectionCard({
   orderAllDisabledReason,
 }: VendorSectionCardProps) {
   const [expanded, setExpanded] = useState(true);
+  // Optimistic sent-at stamps: keyed by PO id so the row immediately renders
+  // "Sent {date}" after the popover confirms send, without waiting for the
+  // ['purchase-orders'] cache invalidation to complete and re-render the list.
+  const [localSentByPoId, setLocalSentByPoId] = useState<Record<string, string>>({});
 
   const projectCount = group.projectIds.size;
 
@@ -334,16 +338,22 @@ export function VendorSectionCard({
                       "Sent {date}" meta; unsent external-vendor POs get the
                       send popover (Preview PDF / Email / Mark as sent).
                       Patina Catalog orders have no outbound vendor doc, and
-                      cancelled POs can't be sent (server 409s). */}
-                  {po.sent_at ? (
+                      cancelled POs can't be sent (server 409s).
+                      localSentByPoId provides an optimistic stamp so the row
+                      flips to "Sent" immediately after the popover confirms,
+                      without waiting for the purchase-orders cache refetch. */}
+                  {po.sent_at ?? localSentByPoId[po.id] ? (
                     <span className="font-mono text-[0.58rem] text-[var(--text-muted)]">
-                      Sent {formatDate(po.sent_at)}
+                      Sent {formatDate(po.sent_at ?? localSentByPoId[po.id])}
                     </span>
                   ) : !po.is_patina_catalog && po.status !== 'cancelled' ? (
                     <PoSendPopover
                       purchaseOrderId={po.id}
                       vendorId={po.vendor_id}
                       vendorEmailHint={clientVendorEmailHint(po.vendor)}
+                      onSent={(sentAtIso) =>
+                        setLocalSentByPoId((prev) => ({ ...prev, [po.id]: sentAtIso }))
+                      }
                     />
                   ) : null}
                 </div>

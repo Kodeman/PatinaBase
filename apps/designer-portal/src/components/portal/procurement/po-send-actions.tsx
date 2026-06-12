@@ -111,8 +111,12 @@ export interface PoSendActionsProps {
   vendorEmailHint: string | null;
   /** ISO sent_at when the PO was already sent — renders the muted state. */
   sentAt?: string | null;
-  /** Fires after a successful send / mark_sent (the popover closes itself). */
-  onSent?: () => void;
+  /**
+   * Fires after a successful send / mark_sent with the ISO timestamp that was
+   * stamped locally. The popover uses this to close itself and bubble the
+   * timestamp up so the parent row can flip to "Sent" immediately.
+   */
+  onSent?: (sentAtIso: string) => void;
 }
 
 export function PoSendActions({
@@ -158,14 +162,16 @@ export function PoSendActions({
         }
       } else if (mode === 'send') {
         procurementEvents.poSent({ method: 'email', vendor_id: vendorId });
-        setLocalSentAt(new Date().toISOString());
+        const sentAt = new Date().toISOString();
+        setLocalSentAt(sentAt);
         toast(`PO ${result.poNumber} sent to ${result.recipient}`, 'success');
-        onSent?.();
+        onSent?.(sentAt);
       } else {
         procurementEvents.poSent({ method: 'manual', vendor_id: vendorId });
-        setLocalSentAt(new Date().toISOString());
+        const sentAt = new Date().toISOString();
+        setLocalSentAt(sentAt);
         toast(`PO ${result.poNumber} marked as sent.`, 'success');
-        onSent?.();
+        onSent?.(sentAt);
       }
     } catch (e) {
       setError(poSendErrorMessage((e as Error)?.message ?? 'unknown error'));
@@ -258,6 +264,12 @@ export interface PoSendPopoverProps {
   purchaseOrderId: string;
   vendorId?: string;
   vendorEmailHint: string | null;
+  /**
+   * Fires after a successful send or mark_sent with the ISO timestamp that was
+   * stamped. Lets the parent row flip to "Sent {date}" immediately without
+   * waiting for the invalidated purchase-orders cache refetch to land.
+   */
+  onSent?: (sentAtIso: string) => void;
 }
 
 /**
@@ -271,6 +283,7 @@ export function PoSendPopover({
   purchaseOrderId,
   vendorId,
   vendorEmailHint,
+  onSent,
 }: PoSendPopoverProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -314,7 +327,10 @@ export function PoSendPopover({
             purchaseOrderId={purchaseOrderId}
             vendorId={vendorId}
             vendorEmailHint={vendorEmailHint}
-            onSent={() => setOpen(false)}
+            onSent={(sentAtIso) => {
+              setOpen(false);
+              onSent?.(sentAtIso);
+            }}
           />
         </div>
       )}
