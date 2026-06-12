@@ -8,7 +8,7 @@
 
 import { fmtDay } from './format';
 
-export type MarginKind = 'decision' | 'message' | 'invoice' | 'pulse' | 'time';
+export type MarginKind = 'decision' | 'message' | 'invoice' | 'pulse' | 'time' | 'note';
 export type MarginAnchorKind = 'line' | 'section' | 'letterhead';
 
 export interface MarginItemRow {
@@ -33,6 +33,8 @@ const ACCENT: Record<MarginKind, { border: string; label: string }> = {
   invoice: { border: 'var(--color-clay)', label: '#A8895E' },
   pulse: { border: 'var(--color-sage)', label: '#85947C' },
   time: { border: 'var(--color-mocha)', label: 'var(--color-mocha)' },
+  // R14: Mocha-adjacent, distinct from time — Aged Oak.
+  note: { border: 'var(--color-aged-oak)', label: 'var(--color-aged-oak)' },
 };
 
 export function marginAccent(kind: MarginKind): { border: string; label: string } {
@@ -61,6 +63,11 @@ export function deriveKindLine(row: MarginItemRow): string {
       return 'Friday Pulse · draft';
     case 'time':
       return row.title;
+    case 'note': {
+      if (row.state === 'escalated') return 'Note · escalated';
+      const due = row.payload.due_date as string | null | undefined;
+      return due ? `Note · due ${fmtDay(due)}` : 'Note';
+    }
   }
 }
 
@@ -70,16 +77,18 @@ export function deriveKindLine(row: MarginItemRow): string {
 export function isResolved(row: MarginItemRow): boolean {
   return (
     (row.kind === 'decision' && row.state === 'responded') ||
-    (row.kind === 'pulse' && row.state === 'sent')
+    (row.kind === 'pulse' && row.state === 'sent') ||
+    (row.kind === 'note' && row.state === 'escalated')
   );
 }
 
 function sortKey(row: MarginItemRow): [number, number] {
-  const group = isResolved(row)
-    ? 2
-    : row.kind === 'decision' && row.state === 'overdue'
-      ? 0
-      : 1;
+  // Dued notes join needs-action ordering PROVISIONALLY (R14 cites R12,
+  // whose text is missing from the log — DECISIONS O6).
+  const needsAction =
+    (row.kind === 'decision' && row.state === 'overdue') ||
+    (row.kind === 'note' && row.state === 'due');
+  const group = isResolved(row) ? 2 : needsAction ? 0 : 1;
   return [group, -new Date(row.ts).getTime()];
 }
 

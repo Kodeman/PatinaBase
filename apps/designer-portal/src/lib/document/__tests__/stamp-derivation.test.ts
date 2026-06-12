@@ -61,13 +61,43 @@ describe('deriveLineStamp (R2)', () => {
     });
   });
 
-  it('no DAMAGED stamp exists at the line grain (R7 — claims surface via unfold + need line)', () => {
-    // A delivered+inspected line on a PO with an open claim still stamps its
-    // own truthful state; the claim belongs to the PO, not this line.
-    expect(deriveLineStamp({ ...base, status: 'delivered', received_quantity: 2 })).toEqual({
-      kind: 'received',
-      dueDate: null,
-    });
+  it('DAMAGED when an OPEN claim is attributed to THIS item (00193)', () => {
+    expect(
+      deriveLineStamp({
+        ...base,
+        status: 'delivered',
+        received_quantity: 2,
+        item_claims: [{ state: 'drafted' }],
+      }),
+    ).toEqual({ kind: 'damaged', dueDate: null });
+  });
+
+  it('resolved item claims fall through to the truthful machine state', () => {
+    expect(
+      deriveLineStamp({
+        ...base,
+        status: 'delivered',
+        received_quantity: 2,
+        item_claims: [{ state: 'resolved' }],
+      }),
+    ).toEqual({ kind: 'received', dueDate: null });
+  });
+
+  it('PO-grain claims (no item attribution) never stamp a line — R7 holds', () => {
+    expect(
+      deriveLineStamp({ ...base, status: 'shipped', item_claims: [] }),
+    ).toEqual({ kind: 'shipped', dueDate: null });
+  });
+
+  it('DECISION DUE outranks DAMAGED', () => {
+    expect(
+      deriveLineStamp({
+        ...base,
+        blocked: true,
+        blocking_decision: { status: 'pending', due_date: null },
+        item_claims: [{ state: 'vendor_notified' }],
+      }).kind,
+    ).toBe('decision_due');
   });
 
   it('unknown status degrades to specified', () => {

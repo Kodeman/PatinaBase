@@ -32,6 +32,7 @@ describe('marginAccent', () => {
     expect(marginAccent('invoice').border).toBe('var(--color-clay)');
     expect(marginAccent('pulse').border).toBe('var(--color-sage)');
     expect(marginAccent('time').border).toBe('var(--color-mocha)');
+    expect(marginAccent('note').border).toBe('var(--color-aged-oak)');
   });
 });
 
@@ -71,6 +72,16 @@ describe('deriveKindLine', () => {
     expect(deriveKindLine(mkItem({ kind: 'pulse', state: 'draft' }))).toBe('Friday Pulse · draft');
   });
 
+  it('note states (R14)', () => {
+    expect(deriveKindLine(mkItem({ kind: 'note', state: 'open' }))).toBe('Note');
+    expect(
+      deriveKindLine(
+        mkItem({ kind: 'note', state: 'open', payload: { due_date: '2026-06-14T12:00:00Z' } }),
+      ),
+    ).toBe('Note · due Jun 14');
+    expect(deriveKindLine(mkItem({ kind: 'note', state: 'escalated' }))).toBe('Note · escalated');
+  });
+
   it('time uses its title verbatim', () => {
     expect(deriveKindLine(mkItem({ kind: 'time', title: 'Time · Jun 10' }))).toBe('Time · Jun 10');
   });
@@ -83,6 +94,8 @@ describe('isResolved', () => {
     expect(isResolved(mkItem({ kind: 'message', state: 'unread' }))).toBe(false);
     expect(isResolved(mkItem({ kind: 'invoice', state: 'sent' }))).toBe(false);
     expect(isResolved(mkItem({ state: 'expired' }))).toBe(false);
+    expect(isResolved(mkItem({ kind: 'note', state: 'escalated' }))).toBe(true);
+    expect(isResolved(mkItem({ kind: 'note', state: 'open' }))).toBe(false);
   });
 });
 
@@ -105,5 +118,22 @@ describe('orderMarginItems', () => {
 
     const ordered = orderMarginItems([resolved, older, newest, overdue], NOW);
     expect(ordered.map((i) => i.item_id)).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('dued notes join the needs-action group (provisional pending R12)', () => {
+    const duedNote = mkItem({
+      item_id: 'n1',
+      kind: 'note',
+      state: 'due',
+      ts: '2026-06-02T00:00:00Z',
+    });
+    const activeMsg = mkItem({
+      item_id: 'b',
+      kind: 'message',
+      state: 'unread',
+      ts: '2026-06-11T09:00:00Z',
+    });
+    const ordered = orderMarginItems([activeMsg, duedNote], NOW);
+    expect(ordered.map((i) => i.item_id)).toEqual(['n1', 'b']);
   });
 });
