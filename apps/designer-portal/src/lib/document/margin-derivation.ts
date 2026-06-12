@@ -1,7 +1,7 @@
 /**
  * Margin derivation — spec v1.2 §5, prototype v0.4 .m-item anatomy.
  *
- * Pure presentation logic over `margin_items` view rows (00191/00194): kind
+ * Pure presentation logic over `margin_items` view rows (00194/00197): kind
  * accents, the mono kind-line, resolved sinking, and R12 rail ordering.
  * Dependency-free (no stages.ts / design-system — the Jest ESM trap).
  */

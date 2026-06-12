@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00190 — Margin anchors + weekly pulses (spec v1.1 §5/§11, D5)
+-- 00193 — Margin anchors + weekly pulses (spec v1.1 §5/§11, D5)
 --
 -- The Document, Slice 3. Additive only (D7):
 --   1. Nullable anchor columns on comms_threads — NULL means the letterhead
@@ -37,7 +37,7 @@ create table weekly_pulses (
 );
 
 comment on table weekly_pulses is
-  'The Weekly Pulse (D5): one draft per active project per week, risen on the Desk Friday, sent from the margin into the project thread (send_weekly_pulse, 00192).';
+  'The Weekly Pulse (D5): one draft per active project per week, risen on the Desk Friday, sent from the margin into the project thread (send_weekly_pulse, 00195).';
 
 create index idx_weekly_pulses_project on weekly_pulses(project_id);
 create index idx_weekly_pulses_designer_status on weekly_pulses(designer_id, status);

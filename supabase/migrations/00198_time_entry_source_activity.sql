@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00195 — time-system extension (spec v1.2 §9, ruling R4): additive columns
+-- 00198 — time-system extension (spec v1.2 §9, ruling R4): additive columns
 -- on project_time_entries. NEVER fork the table — duration_minutes stays
 -- canonical; the invoice guard trigger (00177), project_unbilled_time view,
 -- and the one-running-timer-per-user partial index are all untouched.

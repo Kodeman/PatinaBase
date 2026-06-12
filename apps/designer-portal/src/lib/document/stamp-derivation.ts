@@ -9,7 +9,7 @@
  * trap): this module returns semantic keys; components resolve label/color
  * through STAGE_CONFIG (R2: the canonical source) at render time.
  *
- * DAMAGED is item-grain only (R7 → 00193): it stamps when an OPEN claim is
+ * DAMAGED is item-grain only (R7 → 00196): it stamps when an OPEN claim is
  * attributed to THIS item via damage_claims.ffe_item_id. PO-grain claims
  * (ffe_item_id NULL) never stamp a line — they surface on the Desk need
  * line and in the unfold's receiving column.
@@ -36,7 +36,7 @@ export type LineStampKind =
   | 'delivered' // status delivered, no inspection yet — a visible to-do (R2)
   | 'installed'
   | 'received' // derived: delivered + inspection logged
-  | 'damaged' // derived: OPEN claim attributed to this item (00193)
+  | 'damaged' // derived: OPEN claim attributed to this item (00196)
   | 'decision_due'; // derived: blocked by a pending blocking decision
 
 export interface LineStampInput {

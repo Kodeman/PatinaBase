@@ -8,7 +8,7 @@
  *
  *   node scripts/the-document-slice5-shots.mjs
  *
- * Requires: worktree dev server on :3100, migrations 00188–00195 applied,
+ * Requires: worktree dev server on :3100, migrations 00191–00198 applied,
  * `the-document-local-seed.sql` run.
  */
 import { chromium } from '@playwright/test';

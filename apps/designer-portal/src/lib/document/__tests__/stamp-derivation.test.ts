@@ -61,7 +61,7 @@ describe('deriveLineStamp (R2)', () => {
     });
   });
 
-  it('DAMAGED when an OPEN claim is attributed to THIS item (00193)', () => {
+  it('DAMAGED when an OPEN claim is attributed to THIS item (00196)', () => {
     expect(
       deriveLineStamp({
         ...base,

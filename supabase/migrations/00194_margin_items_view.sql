@@ -1,7 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00194 — margin_items v2 (spec v1.1 §5 + ruling R14): adds the `note`
--- branch — the sixth margin kind, the margin's private designer layer.
--- Everything else is byte-identical to 00191.
+-- 00194 — margin_items view (spec v1.1 §5/§11.5)
 --
 -- The unified margin read model: one row per margin item, normalized to
 --   { kind, item_id, project_id, proposal_id,
@@ -13,11 +11,11 @@
 --   decision — client_decisions; line anchor derived in reverse via
 --              project_ffe_items.blocked_by_decision_id / source_decision_id
 --              (no migration needed — §5)
---   message  — comms_threads (+ newest message snippet); anchors from 00190
+--   message  — comms_threads (+ newest message snippet); anchors from 00193
 --              columns, letterhead default; unread derived per-caller
 --   invoice  — invoices (draft/sent/partially_paid); line anchor from the
 --              first ffe line item (00187)
---   pulse    — weekly_pulses (00190)
+--   pulse    — weekly_pulses (00193)
 --   time     — daily summary QUERY over project_time_entries (last 7 days)
 --
 -- SECURITY INVOKER: base-table RLS scopes every branch to the caller.
@@ -189,37 +187,10 @@ from (
   where pte.duration_minutes is not null
     and pte.started_at > now() - interval '7 days'
   group by pte.project_id, date(pte.started_at)
-) te
-union all
-
--- ── note (R14 — designer-authored marginalia; studio-only via RLS) ──────────
-select
-  'note'::text                              as kind,
-  n.id                                      as item_id,
-  n.project_id                              as project_id,
-  n.proposal_id                             as proposal_id,
-  n.anchor_kind                             as anchor_kind,
-  n.anchor_id                               as anchor_id,
-  case
-    when n.escalated_to_decision_id is not null
-      or n.escalated_to_scope_change_id is not null      then 'escalated'
-    when n.due_date is not null and n.due_date <= now()  then 'due'
-    else 'open'
-  end                                       as state,
-  left(n.body, 80)                          as title,
-  ''::text                                  as detail,
-  coalesce(n.due_date, n.updated_at)        as ts,
-  jsonb_build_object(
-    'due_date', n.due_date,
-    'escalated_to_decision_id', n.escalated_to_decision_id,
-    'escalated_to_scope_change_id', n.escalated_to_scope_change_id,
-    'author_name', ap.full_name
-  )                                         as payload
-from margin_notes n
-left join profiles ap on ap.id = n.designer_id;
+) te;
 
 comment on view margin_items is
-  'The Document margins (spec §5 + R14): unified index of decision/message/invoice/pulse/time/note items with anchors and thin payloads. Content loads on expand via domain hooks. SECURITY INVOKER — base-table RLS applies.';
+  'The Document margins (spec §5): unified index of decision/message/invoice/pulse/time items with anchors and thin payloads. Content loads on expand via domain hooks. SECURITY INVOKER — base-table RLS applies.';
 
 grant select on margin_items to authenticated;
 grant select on margin_items to service_role;

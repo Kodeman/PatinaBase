@@ -1,7 +1,7 @@
 /**
  * Spine section derivation — spec v1.1 §4, rulings R1 + D12.
  *
- * Pure function from the engagement's document_state row (00188) + lineage
+ * Pure function from the engagement's document_state row (00191) + lineage
  * metadata to the seven spine sections, each with state and an honest
  * sub-label. Shared by the spine rail and the settled bars. Sub-labels only
  * claim dates the data actually carries; otherwise they say 'Settled' or '—'.

@@ -1,7 +1,7 @@
 /**
  * Desk derivation — spec v1.1 §7, rulings R1/R2.
  *
- * Pure functions from `document_state` rows (migration 00188) to the Desk's
+ * Pure functions from `document_state` rows (migration 00191) to the Desk's
  * two populations: needs-your-hand folders (each with exactly ONE need line —
  * "the one thing") and in-motion chips (never actionable).
  *
@@ -54,10 +54,10 @@ export interface DocumentStateRow {
   installed_count: number;
   item_count: number;
   updated_at: string;
-  /** R7 (00189): open damage claims on this project's POs. */
+  /** R7 (00192): open damage claims on this project's POs. */
   open_claim_count: number;
   open_claim_po: string | null;
-  /** D5 (00192): current-week draft pulses (rise on the Desk Friday). */
+  /** D5 (00195): current-week draft pulses (rise on the Desk Friday). */
   unsent_pulse_count: number;
   pulse_week_of: string | null;
 }

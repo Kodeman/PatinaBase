@@ -1,17 +1,17 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00189 — document_state v2: open damage-claim Desk inputs (ruling R7)
+-- 00192 — document_state v2: open damage-claim Desk inputs (ruling R7)
 --
 -- R7 suppressed the PO-level DAMAGED line stamp (it lies at the item grain).
 -- Claims surface where they are true instead — including a Desk need line
 -- ("AP-012 has an open damage claim"). This appends two columns to the
--- engagement union (00188):
+-- engagement union (00191):
 --   open_claim_count — open claims (drafted / vendor_notified) on POs of
 --                      this project
 --   open_claim_po    — one PO identifier for the need-line copy
 --                      (vendor_po_number, falling back to sidemark)
 --
 -- CREATE OR REPLACE VIEW appends columns at the end; everything before them
--- is byte-identical to 00188. Purely additive (D7).
+-- is byte-identical to 00191. Purely additive (D7).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 create or replace view document_state
@@ -232,7 +232,7 @@ where dc.status = 'lead'
   );
 
 comment on view document_state is
-  'The Document (spec v1.1): one row per engagement (R1 union of project / live proposal chain / lead / pre-proposal relationship) with derived active_section (§4), Desk need inputs (§7), and open damage-claim inputs (R7, 00189). SECURITY INVOKER — base-table RLS applies.';
+  'The Document (spec v1.1): one row per engagement (R1 union of project / live proposal chain / lead / pre-proposal relationship) with derived active_section (§4), Desk need inputs (§7), and open damage-claim inputs (R7, 00192). SECURITY INVOKER — base-table RLS applies.';
 
 grant select on document_state to authenticated;
 grant select on document_state to service_role;

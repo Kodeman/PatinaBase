@@ -248,7 +248,7 @@ export interface CreateTimeEntryInput {
   notes?: string | null;
   billable?: boolean;
   hourlyRateCents?: number | null;
-  /** R4 (00195): activity attribution + entry provenance. Optional — old
+  /** R4 (00198): activity attribution + entry provenance. Optional — old
    *  callers keep the DB defaults ('timer_manual', activity NULL). */
   activity?: string | null;
   source?: 'timer_auto' | 'timer_manual' | 'manual_entry';
@@ -300,7 +300,7 @@ export interface UpdateTimeEntryInput {
     notes: string | null;
     billable: boolean;
     hourly_rate_cents: number | null;
-    /** R4 (00195) */
+    /** R4 (00198) */
     activity: string | null;
   }>;
 }
@@ -380,7 +380,7 @@ export interface StartTimerInput {
   projectId: string;
   phaseKey?: string | null;
   taskId?: string | null;
-  /** R4 (00195): 'timer_auto' = the document spine's pick-up timer (D11).
+  /** R4 (00198): 'timer_auto' = the document spine's pick-up timer (D11).
    *  Omitted = the DB default 'timer_manual' (header TimerButton unchanged). */
   source?: 'timer_auto' | 'timer_manual';
   /** Suppress the conflict/error toasts — the document auto-start resolves
@@ -441,7 +441,7 @@ export interface StopTimerInput {
   notes?: string | null;
   phaseKey?: string | null;
   billable?: boolean;
-  /** R4 (00195) — the document close-out: an explicit duration (the
+  /** R4 (00198) — the document close-out: an explicit duration (the
    *  source-following rule computes it; D10 lets the designer adjust it
    *  afterwards), the raw elapsed truth, and the activity attribution.
    *  All optional — the header stop dialog keeps its shipped behavior. */

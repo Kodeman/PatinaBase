@@ -1,5 +1,5 @@
 /**
- * Margin data — reads the `margin_items` view (00191) for one engagement
+ * Margin data — reads the `margin_items` view (00194) for one engagement
  * and exposes the one-act invalidation helper (spec §5): after a margin
  * action, every surface the act touched re-reads — margin, Desk, document
  * FF&E. Domain caches are invalidated by the domain mutations themselves.
@@ -40,7 +40,7 @@ export function invalidateMarginSurfaces(qc: QueryClient, projectId: string | nu
   if (projectId) void qc.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
 }
 
-/** The one-act Pulse send (00192): pulse → sent + client-thread mirror in one
+/** The one-act Pulse send (00195): pulse → sent + client-thread mirror in one
  *  transaction. */
 export function useSendWeeklyPulse(projectId: string | null) {
   const qc = useQueryClient();

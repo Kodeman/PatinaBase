@@ -1,10 +1,10 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00193 — Per-item damage-claim attribution + margin notes
+-- 00196 — Per-item damage-claim attribution + margin notes
 --
 -- The Document, Slice 4. Additive only (D7):
 --   1. damage_claims.ffe_item_id — the FK ruled in R7: claims gain item-grain
 --      attribution so DAMAGED can return as a TRUTHFUL per-item stamp.
---      NULL = PO-grain claim (all pre-00193 rows): those keep surfacing only
+--      NULL = PO-grain claim (all pre-00196 rows): those keep surfacing only
 --      as the Desk need line, never as a line stamp.
 --   2. margin_notes — the sixth margin kind (R14): designer-authored
 --      marginalia. Studio-visible, never client-visible. Escalates in place
@@ -16,7 +16,7 @@ alter table damage_claims
     references project_ffe_items(id) on delete set null;
 
 comment on column damage_claims.ffe_item_id is
-  'Item-grain attribution (R7/R14 follow-through, 00193). NULL = PO-grain claim: surfaces on the Desk need line only — never as a line stamp (truth device, R2).';
+  'Item-grain attribution (R7/R14 follow-through, 00196). NULL = PO-grain claim: surfaces on the Desk need line only — never as a line stamp (truth device, R2).';
 
 create index idx_damage_claims_open_item
   on damage_claims(ffe_item_id)

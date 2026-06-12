@@ -9,9 +9,9 @@
 --      this week's draft pulse, and a Shaker-chairs PO for the unfold
 --   4. creates the manual "Olsen Penthouse" project (pinned id — manual
 --      inserts can pin) with the AP-012 damage claim attributed per-item
---      (R7 follow-through; needs 00193 applied)
+--      (R7 follow-through; needs 00196 applied)
 --
--- Run AFTER applying migrations 00188–00194 from this branch:
+-- Run AFTER applying migrations 00191–00197 from this branch:
 --   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
 --     -v ON_ERROR_STOP=1 < apps/designer-portal/scripts/the-document-local-seed.sql
 
@@ -248,7 +248,7 @@ begin
     returning id into v_olsen_insp;
   end if;
 
-  -- The attributed claim — DAMAGED stamps exactly this line (R7/00193).
+  -- The attributed claim — DAMAGED stamps exactly this line (R7/00196).
   if not exists (select 1 from damage_claims where receiving_inspection_id = v_olsen_insp) then
     insert into damage_claims (receiving_inspection_id, ffe_item_id, state, description)
     values (v_olsen_insp, v_olsen_item, 'drafted',

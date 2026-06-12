@@ -9,7 +9,7 @@
  *
  *   node scripts/the-document-slice4-shots.mjs
  *
- * Requires: worktree dev server on :3100, migrations 00188–00194 applied,
+ * Requires: worktree dev server on :3100, migrations 00191–00197 applied,
  * `the-document-local-seed.sql` run. The Whitfield project id is random
  * (activation) — the script resolves it through the R6 redirect.
  */

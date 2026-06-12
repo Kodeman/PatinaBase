@@ -1,22 +1,18 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00188 — document_state view
+-- 00195 — document_state v3 (Friday-pulse Desk input, D5) + send_weekly_pulse
 --
--- The Document workstream, Slice 1 (spec v1.1 §4 / §7 / §11.6, ruling R1).
--- One row per ENGAGEMENT, unioning the three addressable shapes:
---   A. 'project'      — signed work (one row per projects row)
---   B. 'proposal'     — pre-signing live proposal chain (one row per chain)
---   C. 'lead'         — open lead, designer has not accepted (Brief active)
---   D. 'relationship' — accepted relationship, no proposal yet (Discovery)
--- (C and D are the spec's single "lead/designer_client" shape, split because
---  Brief vs Discovery derive from different tables.)
+-- 1. Appends to document_state (after 00192's claim columns):
+--      unsent_pulse_count — current-week draft pulses for the project
+--      pulse_week_of      — that draft's week (Desk derivation gates the
+--                           need line to Friday-or-later, D5)
+--    Everything before the appended columns is byte-identical to 00192.
 --
--- active_section implements the §4 stage→section mapping so Desk, document
--- spine (Slice 2), and ⌘K share one source. Need-input counts (§7) ride along
--- so the Desk query is one SELECT. Purely additive (D7): no table changes.
---
--- SECURITY INVOKER: every branch reads base tables under the caller's RLS,
--- so rows are scoped exactly as the underlying policies dictate (D6:
--- studio-visible where the base tables say so).
+-- 2. send_weekly_pulse(p_pulse_id, p_body, p_subject) — the one-act send
+--    (§5 invariant): pulse → sent, the client mirror posted into the
+--    project's comms thread (existing bump/notification triggers fire),
+--    margin + Desk update via the same row, all in ONE transaction.
+--    SECURITY INVOKER: pulse RLS (designer-owned) + thread participation
+--    scope every step to the caller.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 create or replace view document_state
@@ -54,7 +50,11 @@ select
   coalesce(f.in_flight_count, 0)           as in_flight_count,
   coalesce(f.installed_count, 0)           as installed_count,
   coalesce(f.item_count, 0)                as item_count,
-  p.updated_at                             as updated_at
+  p.updated_at                             as updated_at,
+  coalesce(dmg.open_claim_count, 0)        as open_claim_count,
+  dmg.open_claim_po                        as open_claim_po,
+  coalesce(wp.unsent_pulse_count, 0)       as unsent_pulse_count,
+  wp.pulse_week_of                         as pulse_week_of
 from projects p
 left join profiles cp on cp.id = p.client_id
 left join lateral (
@@ -80,6 +80,26 @@ left join lateral (
   from project_ffe_items i
   where i.project_id = p.id
 ) f on true
+left join lateral (
+  select
+    count(distinct dc2.id)                              as open_claim_count,
+    min(coalesce(po.vendor_po_number, po.sidemark))     as open_claim_po
+  from purchase_orders po
+  join receiving_inspections ri on ri.purchase_order_id = po.id
+                               and ri.outcome <> 'clean'
+  join damage_claims dc2 on dc2.receiving_inspection_id = ri.id
+                        and dc2.state in ('drafted', 'vendor_notified')
+  where po.project_id = p.id
+) dmg on true
+left join lateral (
+  select
+    count(*)        as unsent_pulse_count,
+    min(w.week_of)  as pulse_week_of
+  from weekly_pulses w
+  where w.project_id = p.id
+    and w.status = 'draft'
+    and w.week_of = date_trunc('week', now())::date
+) wp on true
 
 union all
 
@@ -117,7 +137,11 @@ select
   0::bigint                                as in_flight_count,
   0::bigint                                as installed_count,
   0::bigint                                as item_count,
-  pr.updated_at                            as updated_at
+  pr.updated_at                            as updated_at,
+  0::bigint                                as open_claim_count,
+  null::text                               as open_claim_po,
+  0::bigint                                as unsent_pulse_count,
+  null::date                               as pulse_week_of
 from (
   select distinct on (coalesce(p2.parent_proposal_id, p2.id))
     coalesce(p2.parent_proposal_id, p2.id) as chain_root_id,
@@ -167,7 +191,11 @@ select
   l.response_deadline                      as lead_response_deadline,
   l.status                                 as lead_status,
   0::bigint, null::timestamptz, 0::bigint, 0::bigint, 0::bigint, 0::bigint, 0::bigint,
-  l.updated_at                             as updated_at
+  l.updated_at                             as updated_at,
+  0::bigint                                as open_claim_count,
+  null::text                               as open_claim_po,
+  0::bigint                                as unsent_pulse_count,
+  null::date                               as pulse_week_of
 from leads l
 left join profiles cp on cp.id = l.homeowner_id
 where l.designer_id is not null
@@ -192,7 +220,11 @@ select
   null::text, null::timestamptz, null::timestamptz,
   null::timestamptz, null::text,
   0::bigint, null::timestamptz, 0::bigint, 0::bigint, 0::bigint, 0::bigint, 0::bigint,
-  dc.updated_at                            as updated_at
+  dc.updated_at                            as updated_at,
+  0::bigint                                as open_claim_count,
+  null::text                               as open_claim_po,
+  0::bigint                                as unsent_pulse_count,
+  null::date                               as pulse_week_of
 from designer_clients dc
 left join profiles cp on cp.id = dc.client_id
 where dc.status = 'lead'
@@ -218,7 +250,70 @@ where dc.status = 'lead'
   );
 
 comment on view document_state is
-  'The Document (spec v1.1): one row per engagement (R1 union of project / live proposal chain / lead / pre-proposal relationship) with derived active_section (§4) and Desk need inputs (§7). SECURITY INVOKER — base-table RLS applies.';
+  'The Document (spec v1.1): one row per engagement (R1 union) with derived active_section (§4), Desk need inputs (§7), open damage-claim inputs (R7, 00192), and current-week unsent-pulse inputs (D5, 00195). SECURITY INVOKER — base-table RLS applies.';
 
 grant select on document_state to authenticated;
 grant select on document_state to service_role;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- send_weekly_pulse — the one-act Pulse send (spec §5 invariant)
+-- ═══════════════════════════════════════════════════════════════════════════
+
+create or replace function public.send_weekly_pulse(
+  p_pulse_id uuid,
+  p_body     text,
+  p_subject  text default null
+)
+returns weekly_pulses
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_pulse      weekly_pulses;
+  v_thread_id  uuid;
+  v_message_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'send_weekly_pulse requires an authenticated user'
+      using errcode = 'insufficient_privilege';
+  end if;
+  if p_body is null or btrim(p_body) = '' then
+    raise exception 'pulse body is required' using errcode = 'check_violation';
+  end if;
+
+  select * into v_pulse
+  from weekly_pulses
+  where id = p_pulse_id and designer_id = auth.uid()
+  for update;
+
+  if not found then
+    raise exception 'pulse % not found', p_pulse_id using errcode = 'no_data_found';
+  end if;
+  if v_pulse.status = 'sent' then
+    raise exception 'pulse % already sent', p_pulse_id using errcode = 'check_violation';
+  end if;
+
+  -- Client mirror: the project thread (idempotent find-or-create; existing
+  -- bump-activity + notification-dispatch triggers fire on the insert).
+  v_thread_id := public.rpc_start_project_thread(v_pulse.project_id);
+
+  insert into comms_messages (thread_id, sender_id, body)
+  values (v_thread_id, auth.uid(), p_body)
+  returning id into v_message_id;
+
+  update weekly_pulses
+     set status          = 'sent',
+         body            = p_body,
+         subject         = coalesce(p_subject, subject),
+         sent_at         = now(),
+         sent_message_id = v_message_id,
+         updated_at      = now()
+   where id = p_pulse_id
+   returning * into v_pulse;
+
+  return v_pulse;
+end;
+$$;
+
+grant execute on function public.send_weekly_pulse(uuid, text, text) to authenticated;

@@ -6,7 +6,7 @@
 #
 #   ./apps/designer-portal/scripts/the-document-local-rebuild.sh
 #
-# Idempotent: re-applies migrations 00188–00194 from this branch, re-runs
+# Idempotent: re-applies migrations 00191–00197 from this branch, re-runs
 # the demo seed, and pokes PostgREST to reload its schema cache.
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
