@@ -66,6 +66,7 @@ export default [
       'src/hooks/use-document-state.ts',
       'src/hooks/use-document-presence.ts',
       'src/hooks/use-margin-items.ts',
+      'src/hooks/use-margin-notes.ts',
     ],
     rules: {
       'no-restricted-syntax': [

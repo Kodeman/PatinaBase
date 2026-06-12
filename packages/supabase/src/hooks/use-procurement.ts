@@ -912,6 +912,14 @@ export interface CreateReceivingInspectionInput {
    * full quantity are skipped as redundant.
    */
   items?: ReceivingInspectionItemInput[];
+  /**
+   * Item-grain claim attribution (R7 follow-through, The Document). When
+   * provided with a non-clean outcome, ONE drafted damage_claim is inserted
+   * PER item (ffe_item_id set) instead of the single anonymous PO-grain
+   * claim — those items then carry the truthful DAMAGED stamp in The
+   * Document. Omitted/empty → one anonymous claim, as before.
+   */
+  damagedFfeItemIds?: string[];
 }
 
 export interface UpdateDamageClaimInput {
@@ -1378,11 +1386,18 @@ export function useCreateReceivingInspection() {
           poNumber,
         );
 
-        const { error: claimError } = await supabase.from('damage_claims').insert({
-          receiving_inspection_id: inspectionId,
-          state: 'drafted',
-          description,
-        });
+        const itemIds = (input.damagedFfeItemIds ?? []).filter(Boolean);
+        const claimRows =
+          itemIds.length > 0
+            ? itemIds.map((ffeItemId) => ({
+                receiving_inspection_id: inspectionId,
+                state: 'drafted',
+                description,
+                ffe_item_id: ffeItemId,
+              }))
+            : [{ receiving_inspection_id: inspectionId, state: 'drafted', description }];
+
+        const { error: claimError } = await supabase.from('damage_claims').insert(claimRows);
 
         if (claimError) {
           const cleanupStatus = await compensatingDeleteInspection();
