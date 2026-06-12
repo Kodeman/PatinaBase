@@ -21,7 +21,7 @@ export function useProjectV2(projectId: string) {
           *,
           designer:profiles!projects_designer_id_fkey(id, full_name, email),
           client:profiles!projects_client_id_fkey(id, full_name, email),
-          proposal:proposals!projects_proposal_id_fkey(id, title, signed_at)
+          proposal:proposals!projects_proposal_id_fkey(id, title, status, version, signed_at, signed_by_name, sent_at, created_at, total_amount)
         `)
         .eq('id', projectId)
         .single();
@@ -157,7 +157,9 @@ export function useProjectFFEItems(projectId: string, filters?: FFEItemFilters) 
         .select(`
           *,
           room:project_rooms!project_room_id(id, name),
-          product:products!product_id(id, name, images, brand)
+          product:products!product_id(id, name, images, brand),
+          blocking_decision:client_decisions!blocked_by_decision_id(id, status, due_date),
+          purchase_order:purchase_orders!purchase_order_id(id, status, receiving_inspections(id, outcome, damage_claims(id, state)))
         `)
         .eq('project_id', projectId)
         .order('sort_order', { ascending: true });

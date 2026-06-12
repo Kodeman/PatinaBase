@@ -63,6 +63,8 @@ export default [
       'src/components/document/**/*.{ts,tsx}',
       'src/lib/document/**/*.{ts,tsx}',
       'src/hooks/use-desk-engagements.ts',
+      'src/hooks/use-document-state.ts',
+      'src/hooks/use-document-presence.ts',
     ],
     rules: {
       'no-restricted-syntax': [
