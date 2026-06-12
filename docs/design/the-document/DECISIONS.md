@@ -491,3 +491,58 @@ disabled stub until the Accounts book exists (Slice 6). The "in hand today"
 readout sums the designer's own day (completed + live elapsed) — it is a
 readout, not a badge (D8 discipline upheld). Esc priority per §3: the strip
 listens on capture (Esc = discard) ahead of sheets and put-down.
+
+---
+
+## Rebase + procurement integration (2026-06-12, post-Slice-5)
+
+### I17 · Stack rebased onto procurement Waves 4–5 — 2026-06-12
+
+The five-slice stack (PRs #3–#7) was rebased onto main `d249b49a`
+(po-send, PO numbering, procurement crons, expediting, partial receiving).
+Conflicts in exactly two files, both resolved as compositions: the
+receiving-inspection hook carries BOTH per-item received quantities
+(their W5-T2 `items[]`) and per-item claim attribution (our
+`damagedFfeItemIds`); the inspection drawer keeps their self-fetched
+"Items received" counts section and our "Which pieces?" claims picker —
+now fed by the drawer's own PO-item query (the document's `ffeItems` prop
+was retired as redundant). The Order Assistant v2 step architecture kept
+the v1 core mount props — the line-unfold mount carries over unchanged
+(verified live from the unfold, step 1-of-3 rendering over the paper).
+Migrations renumbered at the stack tip: 00188–00195 → **00191–00198**
+(earlier slice trees keep old prefixes; lexical apply order stays correct).
+All 13 scripted acceptance assertions re-run green; 367/367 jest.
+⚠ Surfaced pre-existing gap: `activate_proposal_as_project` copies
+`vendor_name` but DROPS `vendor_id` on FF&E lines — the Order Assistant
+can't mount on activated un-ordered lines anywhere in the portal. Local
+seed backfills; the real fix belongs on main's activation lineage.
+
+### O7 · Weaving the PO send/expedite lifecycle into the Document — 2026-06-12
+
+**Context:** procurement now carries a full send lifecycle (po_number →
+PDF → vendor email → sent_at → acknowledgment → expediting flags →
+partial receiving) plus time-driven events (payment-due flips,
+delivery-week notifications). The document currently renders the PO cell
+(number/placed/ack), Movement, and Receiving — but the SEND act and the
+expediting signals have no document-model home.
+**Proposed resolution (CODEBASE-MAP §11):**
+1. **Unfold** — the Purchase order cell narrates the send lifecycle
+   ("PO-00012 · sent to vendor Jun 12 · acknowledged"); a **Send to
+   vendor** action (po-send: PDF + email) joins the action row for
+   drafted POs; expediting flags surface as quiet Movement sub-lines
+   (never badges).
+2. **Orders ledger** — adopts `po-send-actions` as row actions
+   (send / resend / PDF preview); the unscheduled-shipment condition
+   renders as a row mark, not a banner.
+3. **Desk need lines** — candidates: "PO drafted — not yet sent" and
+   "sent — unacknowledged N days" (thresholds need Leah's numbers, R10
+   style); the 00189 payment-due flips arrive as Money margin items via
+   the existing invoice/auto-draft narration.
+4. **Spec §6** gains the PARTIAL receiving state (already truthful in the
+   unfold's "N of M inspected" cell).
+**Sequencing proposal:** rides Slice 6 as "Orders ledger v2 + the send
+weave" (alongside ⌘K and front-matter), unless the session prefers a
+dedicated slice before the mobile build. Designer-visible calls needed:
+send-action placement (unfold vs ledger vs both), need-line thresholds,
+and whether vendor email send requires a confirm step inside the paper.
+**Blocks:** nothing current — Slice 6 scoping only.

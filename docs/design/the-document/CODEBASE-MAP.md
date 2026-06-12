@@ -200,3 +200,45 @@ Zero destructive changes; old zones keep functioning (D7). ✅
 - **Feature flag:** PostHog flag (proposed name `the-document-pilot`) via existing `useFeatureFlag` hook — fail-closed, with the existing `NEXT_PUBLIC_FLAG_OVERRIDES` env override satisfying the spec's "env override" requirement. Same pattern as `procurement-workspace-pilot`. (Local dev needs `NEXT_PUBLIC_POSTHOG_ENABLE_IN_DEV=true` or the env override.)
 - **D4 enforcement vehicle:** no stylelint exists in the repo; designer-portal uses ESLint v9 flat config. Plan: ESLint `no-restricted-syntax` rule matching `shadow-*` class strings + `box-shadow`/`drop-shadow` in any CSS under the Document directories, wired into `pnpm lint` (CI-blocking). Scope per ruling O4.
 - **Shared primitives placement:** Stamp/StrataMark/StackedPaper/MarginItem/LedgerSheet follow the catalog precedent — portal-local first, promote to a `@patina/*` package (catalog-ui pattern) when the client portal mirrors need them.
+
+---
+
+## 11. Addendum — procurement Waves 4–5 landed on main (2026-06-12, post-Slice-5 rebase)
+
+The original audit read the schema through 00187. Main has since shipped the
+procurement overhaul's send/expedite waves; the stack was rebased onto
+`d249b49a` and these are now "what exists" (build on them, don't parallel):
+
+### Schema & functions
+| Artifact | What it adds |
+|---|---|
+| `00188_po_send_columns` | `purchase_orders.po_number` (studio-facing numbering), `ship_to`, `po_document_path`, `sent_at` — the PO send lifecycle is now data, not narrative |
+| `po-send` edge function | Renders the PO **PDF** (Deno runtime; decision memo `66dae87c`) and emails it to the vendor; `sent_at` + document path written on success |
+| `00189_procurement_crons` | pg_cron: scheduled **payment-due flips** + **delivery-week notifications** — procurement now emits time-driven events on its own |
+| `00190_ack_any_active_status` | `log_po_acknowledgment` accepts any non-cancelled status (expediting gap) |
+| Wave 5 expediting | Expediting columns + flags on POs, **unscheduled-shipment banner**, overdue computed against local date |
+| W5-T2 partial receiving | `LogInspectionDrawer` self-fetches the PO's items and writes **per-item `received_quantity`**; inspection hook takes `items[]` — composes with the Document's per-item claim attribution (`damagedFfeItemIds`, our 00196) |
+
+### Components
+- **Order Assistant v2** — rebuilt as a step architecture
+  (`procurement/order-assistant/`, 3 steps: review items → order → **send**),
+  same core mount props (`open/onOpenChange/vendor/project/ffeItems`) — the
+  document's line-unfold mount carries over unchanged (verified live).
+  Includes "Skip — order externally", studio-library vendor context, and the
+  live send step (PDF preview + vendor email + sent tracking).
+- **`po-send-actions.tsx`** — send/resend/preview actions used by the
+  By Vendor view; the natural source for Orders-ledger row actions.
+- ⚠ **`activate_proposal_as_project` drops `vendor_id`** (copies
+  `vendor_name` only) — on activated projects the Order Assistant cannot
+  mount on un-ordered lines until a vendor is (re)attached. Pre-existing
+  RPC gap, surfaced by the document unfold; fix belongs to the activation
+  migration lineage.
+
+### Where this wants to live in the Document model (proposed → O7)
+| Procurement fact | Document surface |
+|---|---|
+| `po_number`, `sent_at`, ack state, expediting flags | Line unfold's **Purchase order / Movement** cells |
+| Send action (po-send: PDF + email) | Unfold action row + **Orders ledger** row actions |
+| Unsent draft POs · unacknowledged sent POs | **Desk need lines** (thresholds need a ruling) |
+| Payment-due flips (00189 crons) | **Money margin items** (auto-draft narration) |
+| Partial receiving | Already truthful: unfold Receiving cell ("N of M inspected"); spec §6 gains the partial state |
