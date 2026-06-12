@@ -10,6 +10,7 @@
 
 import { useState } from 'react';
 import { DocSheet } from './overlays/doc-sheet';
+import { OrdersLedger } from './orders-ledger';
 
 const LEDGERS = [
   { key: 'library', name: 'Library', spine: 'var(--color-clay)' },
@@ -64,7 +65,8 @@ export function StudioDrawer() {
       </nav>
 
       <DocSheet open={open !== null} onClose={() => setOpenLedger(null)} title={open?.name ?? ''}>
-        {open && (
+        {open?.key === 'orders' && <OrdersLedger onClose={() => setOpenLedger(null)} />}
+        {open && open.key !== 'orders' && (
           <div className="mx-auto max-w-2xl">
             <div className="mb-2 flex items-center gap-3">
               <span

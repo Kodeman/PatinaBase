@@ -4,12 +4,22 @@
  */
 
 import { StrataMark } from './strata-mark';
+import type { FillState } from '@/lib/document/fill-state';
 
-export function DocLetterhead({ title, vitals }: { title: string; vitals: string }) {
+export function DocLetterhead({
+  title,
+  vitals,
+  fill,
+}: {
+  title: string;
+  vitals: string;
+  /** R15: the mark as progress device — how far the engagement has come. */
+  fill?: FillState;
+}) {
   return (
     <header className="mb-4 border-b border-[var(--color-pearl)] pb-4">
       <div className="mb-2.5">
-        <StrataMark state="active" size="lg" />
+        <StrataMark state="active" size="lg" fill={fill} />
       </div>
       <h1 className="font-heading text-[1.55rem] font-medium leading-tight tracking-[-0.01em] text-[var(--color-charcoal)]">
         {title}

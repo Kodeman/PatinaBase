@@ -6,7 +6,9 @@
 
 import Link from 'next/link';
 import type { DeskFolder } from '@/lib/document/desk-derivation';
+import { fillStateForDesk } from '@/lib/document/fill-state';
 import { Stamp } from './stamp';
+import { StrataMark } from './strata-mark';
 
 const SECTION_LABEL: Record<string, string> = {
   brief: 'Brief',
@@ -55,8 +57,9 @@ export function FolderCard({ folder }: { folder: DeskFolder }) {
         className="absolute bottom-[-2.5px] left-[2.5px] right-[-2.5px] top-[2.5px] rounded-[4px_7px_7px_7px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)]"
       />
 
-      {/* Folder tab */}
-      <div className="absolute -top-[14px] left-[18px] z-[2] rounded-t-[5px] border border-b-0 border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-3.5 pb-[3px] pt-[4px] font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+      {/* Folder tab — the mark answers "how far" (R15 fill-state) */}
+      <div className="absolute -top-[14px] left-[18px] z-[2] flex items-center gap-1.5 rounded-t-[5px] border border-b-0 border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-3.5 pb-[3px] pt-[4px] font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+        <StrataMark size="sm" fill={fillStateForDesk(row)} />
         {surname(row.client_name)}
       </div>
 

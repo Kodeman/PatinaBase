@@ -25,6 +25,10 @@ import {
   type ConsentMethod,
 } from '@patina/supabase';
 import { invalidateMarginSurfaces, useSendWeeklyPulse } from '@/hooks/use-margin-items';
+import {
+  useEscalateNoteToDecision,
+  useEscalateNoteToScopeChange,
+} from '@/hooks/use-margin-notes';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
 import { composePulseDraft } from '@/lib/document/compose-pulse-draft';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
@@ -390,6 +394,54 @@ export function PulseBody({
         <p className="mt-1 text-[10px] text-[#C77B6E]">
           {sendPulse.error instanceof Error ? sendPulse.error.message : 'Send failed'}
         </p>
+      )}
+    </div>
+  );
+}
+
+// ── note (R14 — the margin's private layer) ─────────────────────────────────
+
+export function NoteBody({ row, projectId }: { row: MarginItemRow; projectId: string | null }) {
+  const toDecision = useEscalateNoteToDecision();
+  const toScopeChange = useEscalateNoteToScopeChange();
+  const busy = toDecision.isPending || toScopeChange.isPending;
+
+  if (row.state === 'escalated') {
+    const became = row.payload.escalated_to_decision_id ? 'a client decision' : 'a scope change request';
+    return <Quiet>Escalated — now {became}. The note rests here.</Quiet>;
+  }
+
+  return (
+    <div className="border-t border-[var(--color-pearl)] pt-2.5">
+      {row.payload.author_name ? (
+        <p className="mb-2 text-[10px] text-[var(--text-muted)]">{String(row.payload.author_name)}</p>
+      ) : null}
+      {projectId && (
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            className={BTN}
+            disabled={busy}
+            onClick={() =>
+              toDecision.mutate({ noteId: row.item_id, projectId, body: row.title })
+            }
+          >
+            → Client decision
+          </button>
+          <button
+            type="button"
+            className={BTN}
+            disabled={busy}
+            onClick={() =>
+              toScopeChange.mutate({ noteId: row.item_id, projectId, body: row.title })
+            }
+          >
+            → Scope change
+          </button>
+        </div>
+      )}
+      {(toDecision.isError || toScopeChange.isError) && (
+        <p className="mt-1 text-[10px] text-[#C77B6E]">Escalation failed — try again.</p>
       )}
     </div>
   );

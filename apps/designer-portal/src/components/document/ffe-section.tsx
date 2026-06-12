@@ -10,9 +10,11 @@
 import { useProjectFFEItems } from '@patina/supabase';
 import { STAGE_CONFIG } from '@/components/portal/ffe/stages';
 import type { FFEStageKey } from '@patina/types';
+import { useState } from 'react';
 import { deriveLineStamp, type LineStamp } from '@/lib/document/stamp-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { Stamp } from './stamp';
+import { LineUnfold } from './line-unfold';
 
 /** Warm borders need darker text ink on paper (prototype stamp treatment). */
 const STAGE_INK: Partial<Record<FFEStageKey, string>> = {
@@ -64,14 +66,20 @@ function vendorLine(item: FFERow, stamp: LineStamp): string {
 
 export function FFESection({
   projectId,
+  projectName = '',
   mode,
   highlightId = null,
+  onAddNote = () => {},
 }: {
   projectId: string;
+  projectName?: string;
   mode: 'project' | 'install';
   /** Line hovered in the margin (§13 Slice 3 anchored highlight). */
   highlightId?: string | null;
+  /** Slice 4 (R14): open the margin note composer pre-anchored to a line. */
+  onAddNote?: (lineId: string) => void;
 }) {
+  const [openLineId, setOpenLineId] = useState<string | null>(null);
   const { data: items, isLoading } = useProjectFFEItems(projectId) as {
     data: FFERow[] | undefined;
     isLoading: boolean;
@@ -118,28 +126,42 @@ export function FFESection({
         {rows.map(({ item, stamp }) => {
           const sp = stampProps(stamp);
           const line = vendorLine(item, stamp);
+          const unfolded = openLineId === item.id;
           return (
-            <li
-              key={item.id}
-              className={`grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[var(--color-pearl)] px-2 py-2.5 transition-colors duration-150 ${
-                item.id === highlightId
-                  ? 'bg-[rgba(196,165,123,0.08)]'
-                  : stamp.kind === 'decision_due'
-                    ? 'bg-[rgba(232,197,71,0.05)]'
-                    : ''
-              }`}
-            >
-              <div>
-                <p className="text-[12.5px] font-medium leading-snug text-[var(--color-charcoal)]">
-                  {item.name}
-                  {item.quantity > 1 ? ` · ×${item.quantity}` : ''}
-                </p>
-                {line && <p className="mt-px text-[10.5px] text-[var(--text-muted)]">{line}</p>}
-              </div>
-              <Stamp label={sp.label} color={sp.color} ink={sp.ink} />
-              <span className="whitespace-nowrap text-right font-heading text-[13px] font-medium text-[var(--color-charcoal)]">
-                {item.line_total_cents != null ? fmtUsd(item.line_total_cents) : '—'}
-              </span>
+            <li key={item.id} className="border-b border-[var(--color-pearl)]">
+              <button
+                type="button"
+                onClick={() => setOpenLineId(unfolded ? null : item.id)}
+                aria-expanded={unfolded}
+                className={`grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 px-2 py-2.5 text-left transition-colors duration-150 ${
+                  item.id === highlightId
+                    ? 'bg-[rgba(196,165,123,0.08)]'
+                    : stamp.kind === 'decision_due'
+                      ? 'bg-[rgba(232,197,71,0.05)]'
+                      : 'hover:bg-[rgba(196,165,123,0.04)]'
+                }`}
+              >
+                <div>
+                  <p className="text-[12.5px] font-medium leading-snug text-[var(--color-charcoal)]">
+                    {item.name}
+                    {item.quantity > 1 ? ` · ×${item.quantity}` : ''}
+                  </p>
+                  {line && <p className="mt-px text-[10.5px] text-[var(--text-muted)]">{line}</p>}
+                </div>
+                <Stamp label={sp.label} color={sp.color} ink={sp.ink} />
+                <span className="whitespace-nowrap text-right font-heading text-[13px] font-medium text-[var(--color-charcoal)]">
+                  {item.line_total_cents != null ? fmtUsd(item.line_total_cents) : '—'}
+                </span>
+              </button>
+              {unfolded && (
+                <LineUnfold
+                  item={item}
+                  projectId={projectId}
+                  projectName={projectName}
+                  onAddNote={onAddNote}
+                  onFold={() => setOpenLineId(null)}
+                />
+              )}
             </li>
           );
         })}

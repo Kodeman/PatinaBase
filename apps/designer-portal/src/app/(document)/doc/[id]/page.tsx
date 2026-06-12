@@ -27,6 +27,7 @@ import { FFESection } from '@/components/document/ffe-section';
 import { BriefSection } from '@/components/document/brief-section';
 import { DiscoverySection, CareSection } from '@/components/document/quiet-sections';
 import { MarginRail } from '@/components/document/margin-rail';
+import { deriveFillState } from '@/lib/document/fill-state';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -81,6 +82,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
 
   const [proposalOpen, setProposalOpen] = useState(false);
   const [highlightLineId, setHighlightLineId] = useState<string | null>(null);
+  const [pendingNoteAnchor, setPendingNoteAnchor] = useState<string | null>(null);
   const mainRef = useRef<HTMLElement>(null);
 
   // R6: an activated proposal's id redirects to its project document —
@@ -189,7 +191,11 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       <DocSpine sections={sections} others={others} />
 
       <main ref={mainRef} className="z-[1] max-w-[1040px] px-7 pb-32 pt-8 min-[980px]:px-12">
-        <DocLetterhead title={row.title} vitals={vitalsFor(row, project, liveProposal)} />
+        <DocLetterhead
+          title={row.title}
+          vitals={vitalsFor(row, project, liveProposal)}
+          fill={deriveFillState(sections)}
+        />
 
         {/* Settled bars — letterhead bar + stamp; Proposal unfolds in place. */}
         {settled.map((s) =>
@@ -237,10 +243,22 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               </section>
             )}
           {row.active_section === 'project' && row.project_id && (
-            <FFESection projectId={row.project_id} mode="project" highlightId={highlightLineId} />
+            <FFESection
+              projectId={row.project_id}
+              projectName={row.title}
+              mode="project"
+              highlightId={highlightLineId}
+              onAddNote={setPendingNoteAnchor}
+            />
           )}
           {row.active_section === 'install' && row.project_id && (
-            <FFESection projectId={row.project_id} mode="install" highlightId={highlightLineId} />
+            <FFESection
+              projectId={row.project_id}
+              projectName={row.title}
+              mode="install"
+              highlightId={highlightLineId}
+              onAddNote={setPendingNoteAnchor}
+            />
           )}
           {row.active_section === 'care' && (
             <>
@@ -268,6 +286,8 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           proposalId={row.proposal_id}
           clientName={row.client_name}
           onHoverLine={setHighlightLineId}
+          pendingNoteAnchor={pendingNoteAnchor}
+          onNoteAnchorConsumed={() => setPendingNoteAnchor(null)}
         />
       </aside>
     </div>

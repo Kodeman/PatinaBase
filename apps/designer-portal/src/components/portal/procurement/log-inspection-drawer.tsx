@@ -89,8 +89,15 @@ const OUTCOME_OPTIONS: Array<{
 ];
 
 export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
-  const { open, onOpenChange, purchaseOrderId, projectId, poLabel, vendorName, projectName } =
-    props;
+  const {
+    open,
+    onOpenChange,
+    purchaseOrderId,
+    projectId,
+    poLabel,
+    vendorName,
+    projectName,
+  } = props;
 
   const [outcome, setOutcome] = useState<ReceivingInspectionOutcome>('clean');
   // W5-T2 — once the designer explicitly picks an outcome, the per-item
@@ -101,6 +108,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
   // untouched rows fall back to the full ordered quantity.
   const [received, setReceived] = useState<Record<string, number>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [damagedItemIds, setDamagedItemIds] = useState<string[]>([]);
 
   const createInspection = useCreateReceivingInspection();
   const { toast } = useToast();
@@ -117,6 +125,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
     setNotes('');
     setReceived({});
     setSubmitError(null);
+    setDamagedItemIds([]);
   }, [open, purchaseOrderId]);
 
   const receivedFor = (itemId: string, ordered: number): number =>
@@ -156,6 +165,10 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                 orderedQuantity: it.quantity,
               }))
             : undefined,
+        // R7 (The Document) — item-grain claim attribution: one drafted
+        // claim per picked piece; those lines carry the DAMAGED stamp.
+        damagedFfeItemIds:
+          outcome !== 'clean' && damagedItemIds.length > 0 ? damagedItemIds : undefined,
       });
 
       procurementEvents.inspectionLogged({
@@ -378,6 +391,49 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                   </p>
                 </div>
               ) : null}
+
+              {/* R7 (The Document) — item-grain claim attribution: with a
+                  non-clean outcome the designer picks WHICH pieces; one
+                  drafted claim per pick, and exactly those lines carry the
+                  DAMAGED stamp in the document. */}
+              {outcome !== 'clean' && items.length > 0 && (
+                <div className="mb-5">
+                  <p
+                    className="mb-2"
+                    style={{
+                      fontFamily: 'var(--font-meta)',
+                      fontSize: '0.6rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      color: 'var(--text-muted)',
+                    }}
+                  >
+                    Which pieces? (claims attach per item)
+                  </p>
+                  <div className="space-y-1.5">
+                    {items.map((it) => (
+                      <label
+                        key={it.id}
+                        className="flex items-center gap-2 text-[0.74rem]"
+                        style={{ color: 'var(--text-primary)' }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={damagedItemIds.includes(it.id)}
+                          onChange={(e) =>
+                            setDamagedItemIds((prev) =>
+                              e.target.checked
+                                ? [...prev, it.id]
+                                : prev.filter((x) => x !== it.id),
+                            )
+                          }
+                        />
+                        {it.name}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="mb-5">
                 <label
