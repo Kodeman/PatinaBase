@@ -4658,6 +4658,36 @@ export type Database = {
         }
         Relationships: []
       }
+      po_counters: {
+        Row: {
+          designer_id: string
+          next_number: number
+        }
+        Insert: {
+          designer_id: string
+          next_number?: number
+        }
+        Update: {
+          designer_id?: string
+          next_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_counters_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_counters_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: true
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       po_payments: {
         Row: {
           amount_cents: number
@@ -8491,7 +8521,11 @@ export type Database = {
           is_patina_catalog: boolean
           notes: string | null
           payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
           project_id: string
+          sent_at: string | null
+          ship_to: string | null
           sidemark: string | null
           status: string
           total_cents: number
@@ -8509,7 +8543,11 @@ export type Database = {
           is_patina_catalog?: boolean
           notes?: string | null
           payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path?: string | null
+          po_number?: string | null
           project_id: string
+          sent_at?: string | null
+          ship_to?: string | null
           sidemark?: string | null
           status?: string
           total_cents?: number
@@ -8527,7 +8565,11 @@ export type Database = {
           is_patina_catalog?: boolean
           notes?: string | null
           payment_pattern?: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path?: string | null
+          po_number?: string | null
           project_id?: string
+          sent_at?: string | null
+          ship_to?: string | null
           sidemark?: string | null
           status?: string
           total_cents?: number
@@ -10969,6 +11011,7 @@ export type Database = {
           nominated_by: string | null
           nomination_status: string | null
           notes: string | null
+          orders_email: string | null
           ownership: Database["public"]["Enums"]["ownership_type"] | null
           parent_company_id: string | null
           preferred_contact: Json | null
@@ -11010,6 +11053,7 @@ export type Database = {
           nominated_by?: string | null
           nomination_status?: string | null
           notes?: string | null
+          orders_email?: string | null
           ownership?: Database["public"]["Enums"]["ownership_type"] | null
           parent_company_id?: string | null
           preferred_contact?: Json | null
@@ -11051,6 +11095,7 @@ export type Database = {
           nominated_by?: string | null
           nomination_status?: string | null
           notes?: string | null
+          orders_email?: string | null
           ownership?: Database["public"]["Enums"]["ownership_type"] | null
           parent_company_id?: string | null
           preferred_contact?: Json | null
@@ -11885,6 +11930,37 @@ export type Database = {
         Returns: string[]
       }
       apply_scope_change: { Args: { p_request_id: string }; Returns: undefined }
+      assign_po_number: {
+        Args: { p_po_id: string }
+        Returns: {
+          acknowledged_at: string | null
+          confirmed_eta: string | null
+          created_at: string
+          delivered_date: string | null
+          designer_id: string
+          id: string
+          is_patina_catalog: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
+          project_id: string
+          sent_at: string | null
+          ship_to: string | null
+          sidemark: string | null
+          status: string
+          total_cents: number
+          updated_at: string
+          vendor_id: string
+          vendor_po_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       calculate_engagement_score: {
         Args: { p_user_id: string }
         Returns: number
@@ -11933,7 +12009,11 @@ export type Database = {
           is_patina_catalog: boolean
           notes: string | null
           payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
           project_id: string
+          sent_at: string | null
+          ship_to: string | null
           sidemark: string | null
           status: string
           total_cents: number
@@ -12265,7 +12345,11 @@ export type Database = {
           is_patina_catalog: boolean
           notes: string | null
           payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
           project_id: string
+          sent_at: string | null
+          ship_to: string | null
           sidemark: string | null
           status: string
           total_cents: number

@@ -89,6 +89,20 @@ UPDATE vendors SET default_payment_terms = 'net_30'
 UPDATE vendors SET default_payment_terms = 'full_upfront'
   WHERE name ILIKE 'Ceramica%';
 
+-- ─── Order-routing inbox (post-00188 column) ────────────────────────────────
+-- Explicit orders_email for the PO send flow. Set on three vendors so the dev
+-- send flow has recipients; Sawkille and Apparatus stay NULL so the po-send
+-- fallback chain (orders_email → contact_info->>'email') is exercised too.
+-- Plain UPDATEs are idempotent — re-runs converge on the same values.
+UPDATE vendors SET orders_email = 'orders@nordicatelier.test'
+  WHERE name ILIKE 'Nordic Atelier';
+
+UPDATE vendors SET orders_email = 'orders@woodwardsons.test'
+  WHERE name ILIKE 'Woodward%Sons';
+
+UPDATE vendors SET orders_email = 'orders@ceramica.test'
+  WHERE name ILIKE 'Ceramica%';
+
 -- ─── Patina Catalog vendor flag (post-00149 column) ─────────────────────────
 -- Per PRD slide §5, Sawkille Co is the demo Patina Catalog vendor — Patina
 -- handles deposit + balance internally for orders against this vendor. Drives
