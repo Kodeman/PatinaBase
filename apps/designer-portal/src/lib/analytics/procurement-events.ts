@@ -152,6 +152,8 @@ export const procurementEvents = {
     item_count: number;
     total_cents: number;
     skipped_covered: number;
+    /** Items dropped for having no client price — the workflow-gap signal. */
+    skipped_unpriced: number;
   }) => track('procurement_ffe_items_invoiced', properties),
 
   /**

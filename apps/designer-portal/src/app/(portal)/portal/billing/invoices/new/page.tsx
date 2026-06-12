@@ -271,7 +271,10 @@ export default function NewInvoicePage() {
   );
 
   const creating = createDraft.isPending || claimTime.isPending || deleteDraft.isPending;
-  const canCreate = !!projectId && lines.length > 0 && !creating;
+  // Block create while the FF&E prefill is still resolving — otherwise a
+  // milestone/adhoc-only draft can be created moments before the ffe lines
+  // arrive, silently dropping them from the invoice.
+  const canCreate = !!projectId && lines.length > 0 && !creating && !(ffeActive && ffeSectionLoading);
 
   const handleCreate = async () => {
     setError(null);

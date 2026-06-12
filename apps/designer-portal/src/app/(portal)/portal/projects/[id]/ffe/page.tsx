@@ -611,6 +611,7 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
         0,
       ),
       skipped_covered: skippedCovered,
+      skipped_unpriced: skippedUnpriced,
     });
     setSelected(new Set());
     router.push(
