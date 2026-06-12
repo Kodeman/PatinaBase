@@ -307,3 +307,33 @@ the truthful per-item stamp in Slice 4 — designer-visible word choice,
 flagged for review. R8: placeholder line rendered verbatim in muted italic;
 inert settled bars were already affordance-free (hint shows only the settled
 date; "unfold ↓" appears solely on bars whose unfold exists).
+
+---
+
+## Implementation decisions — Slice 3 (2026-06-11)
+
+### I12 · Pulse v1 mechanics — 2026-06-11
+
+The Friday draft job is pure SQL (pg_cron, Fridays 13:00 UTC): one draft
+`weekly_pulses` row per active project per ISO week — no edge function, no
+email. The client mirror is the project comms thread: `send_weekly_pulse`
+(00192) flips the pulse and posts the message in ONE transaction, so the
+client sees it in their portal Messages and the existing comms notification
+machinery fires. An email leg (Resend) can ride later without schema change
+— **flagged for design**: is in-portal + comms-notification enough for v1?
+The default draft body composes from the week's REAL movement (FF&E stamp
+changes this week + decisions settled/pending), editable before send.
+
+### I13 · Margin mechanics — 2026-06-11
+
+The `margin_items` view (00191) is an INDEX (kind, anchor, state, thin
+payload); expanding an item fetches content through the existing domain
+hooks. Message `unread` derives from the caller's `last_read_at`; opening
+the item marks the thread read. Time rows are read-only daily summaries
+until Slice 5. Decision resolution from the margin uses the shipped
+override-with-consent path (`useApplyDecisionOverride` → `apply_decision`)
+— the designer records the client's pick with method + evidence, audit row
+included; UI wording "Record the pick" — **flagged for design review**.
+Decision due-date extension is a plain `due_date` patch; the margin item
+narrates it (R2: the stamp shows only the current date). Invoice send =
+`issue_invoice` RPC + the existing `invoice-send` edge function.

@@ -278,10 +278,13 @@ export function InvoiceBody({ row, projectId }: { row: MarginItemRow; projectId:
         await issue.mutateAsync({ invoiceId: row.item_id });
       }
       await send.mutateAsync({ invoiceId: row.item_id, type: 'sent' });
-      invalidateMarginSurfaces(qc, projectId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Send failed');
     } finally {
+      // issue_invoice may have landed even if the email leg failed —
+      // re-read every surface either way (§5).
+      invalidateMarginSurfaces(qc, projectId);
+      void qc.invalidateQueries({ queryKey: ['invoices'] });
       setSending(false);
     }
   };
