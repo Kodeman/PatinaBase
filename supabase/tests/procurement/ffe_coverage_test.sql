@@ -239,6 +239,56 @@ BEGIN
 END
 $$;
 
+-- ─── case 4f: stuck-slot hazard (direct-SQL bypass, documentation only) ──────
+--
+-- This state is UNREACHABLE through the managed RPCs (void_invoice always
+-- rewrites the line before setting status='void'). It exists solely to
+-- document the hazard for direct-SQL writers: if a row is updated to
+-- status='void' without first clearing the ffe_item_id on its lines, the
+-- unique slot index is not released and the item cannot be re-billed.
+--
+-- 4f assertions:
+--   (a) get_ffe_invoice_coverage still returns 'uninvoiced' for the item
+--       (void invoice is filtered from the coverage view — billed_cents NULL).
+--   (b) Attempting to INSERT a new kind='ffe' line for the same item raises
+--       unique_violation on uniq_invoice_line_items_ffe_item (slot is stuck).
+
+DO $$
+DECLARE
+  r        RECORD;
+  v_err    TEXT := NULL;
+  v_inv_id UUID := 'dd100000-0000-4000-8000-000000000003';
+  v_item_id UUID := 'dd200000-0000-4000-8000-000000000002';
+BEGIN
+  -- Precondition: i_b (credenza) was re-billed on inv3 at end of case 4e.
+  -- Directly void inv3 WITHOUT letting void_invoice run (bypasses the slot-
+  -- release trigger). This simulates a direct UPDATE by a DBA or a future
+  -- migration that forgets to call the managed RPC.
+  UPDATE invoices SET status = 'void' WHERE id = v_inv_id;
+
+  -- 4f-a: coverage sees the item as 'uninvoiced' (void is filtered).
+  PERFORM pg_temp.assume_user('99999999-9999-4999-8999-999999999901');
+  SELECT * INTO r FROM get_ffe_invoice_coverage('dd000000-0000-4000-8000-000000000001')
+   WHERE ffe_item_id = v_item_id;
+  ASSERT FOUND AND r.coverage = 'uninvoiced' AND r.billed_cents IS NULL,
+    'FAIL 4f-a: voided invoice should be filtered — item should appear uninvoiced with NULL billed_cents, got '
+    || COALESCE(r.coverage, 'NULL') || '/' || COALESCE(r.billed_cents::text, 'NULL');
+
+  -- 4f-b: the slot is stuck — a new line for the same item hits the unique index.
+  BEGIN
+    INSERT INTO invoice_line_items (invoice_id, kind, ffe_item_id, description, quantity, unit_amount_cents, amount_cents)
+    VALUES ('dd100000-0000-4000-8000-000000000000', 'ffe', v_item_id, 'Stuck-slot re-bill attempt', 1, 80000, 80000);
+  EXCEPTION WHEN unique_violation THEN
+    v_err := SQLERRM;
+  END;
+  ASSERT v_err LIKE '%uniq_invoice_line_items_ffe_item%',
+    'FAIL 4f-b: stuck slot should block new ffe line (uniq_invoice_line_items_ffe_item), got '
+    || COALESCE(v_err, 'no error');
+
+  RAISE NOTICE 'Case 4f passed (stuck-slot hazard documented): void without RPC leaves slot stuck — coverage uninvoiced but re-bill blocked.';
+END
+$$;
+
 -- ─── case 5: SECURITY INVOKER scoping ────────────────────────────────────────
 --
 -- The coverage function deliberately has no ownership check — RLS is the

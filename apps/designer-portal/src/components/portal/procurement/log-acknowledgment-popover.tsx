@@ -98,7 +98,7 @@ export function LogAcknowledgmentPopover({
         <div
           role="dialog"
           aria-label="Log vendor acknowledgment"
-          className="absolute left-0 top-full z-30 mt-2 w-[280px] rounded-md border bg-[var(--bg-surface)] p-4 shadow-lg"
+          className="absolute left-0 top-full z-30 mt-2 w-[280px] rounded-md border bg-[var(--bg-surface)] p-4"
           style={{ borderColor: 'var(--border-default)' }}
         >
           <div className="mb-2 flex items-baseline justify-between gap-2">
