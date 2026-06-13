@@ -59,3 +59,20 @@ export function fillStateForDesk(row: DocumentStateRow): FillState {
   }));
   return deriveFillState(sections);
 }
+
+/**
+ * R35 — the spine's per-marker fill: the engagement's fill AS OF a given
+ * section, so the seven markers read as a filling staircase (the HTML's
+ * "watch it fill"). Sections before `key` count settled, `key` active, after
+ * future; the caller breathes only the active marker.
+ */
+export function fillStateAtSection(key: SectionKey): FillState {
+  const idx = ORDER.indexOf(key);
+  const snapshot: SpineSection[] = ORDER.map((k, i) => ({
+    key: k,
+    label: k,
+    state: i < idx ? 'settled' : i === idx ? 'active' : 'future',
+    sub: '',
+  }));
+  return deriveFillState(snapshot);
+}

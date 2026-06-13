@@ -10,6 +10,7 @@
 import Link from 'next/link';
 import { StrataMark } from './strata-mark';
 import { SpineTimer } from './spine-timer';
+import { fillStateAtSection } from '@/lib/document/fill-state';
 import type { SpineSection } from '@/lib/document/section-derivation';
 
 export function DocSpine({ sections, others }: { sections: SpineSection[]; others: string[] }) {
@@ -34,8 +35,14 @@ export function DocSpine({ sections, others }: { sections: SpineSection[]; other
             className="flex shrink-0 items-start gap-2.5 py-1 min-[980px]:py-[0.45rem]"
           >
             <span className="mt-[5px]">
-              {/* R15: only the active marker breathes — "alive" is literally true here. */}
-              <StrataMark state={s.state} size="sm" breathing={s.state === 'active'} />
+              {/* R35: each marker carries the engagement's fill as of its
+                  section (the filling staircase); R15: only the active one
+                  breathes — "alive" is literally true here. */}
+              <StrataMark
+                fill={fillStateAtSection(s.key)}
+                size="sm"
+                breathing={s.state === 'active'}
+              />
             </span>
             <span className={s.state === 'future' ? 'opacity-45' : ''}>
               <span

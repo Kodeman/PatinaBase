@@ -2,6 +2,8 @@
 
 import { useViewerStore } from '@/stores/viewer-store';
 import { clsx } from 'clsx';
+import { StrataSweep } from '@/components/ui/strata-sweep';
+import { StrataMark } from '@/components/document/strata-mark';
 
 const loadingMessages: Record<string, string> = {
   idle: 'Initializing...',
@@ -34,20 +36,17 @@ export function LoadingOverlay() {
           </>
         ) : (
           <>
-            {/* Loading spinner */}
-            <div className="relative w-16 h-16 mx-auto mb-4">
-              <div className="absolute inset-0 rounded-full border-4 border-white/10" />
-              <div
-                className={clsx(
-                  'absolute inset-0 rounded-full border-4 border-t-blue-500 animate-spin',
-                  loadingState === 'complete' && 'border-t-green-500'
-                )}
-                style={{
-                  animationDuration: loadingState === 'complete' ? '0s' : '1s',
-                }}
-              />
+            {/* R35: the Strata sweep replaces the spinner — the scan
+                accumulating, line by line. On complete it settles to a full
+                static mark. The % rides beneath. */}
+            <div className="mb-4 flex flex-col items-center gap-2">
+              {loadingState === 'complete' ? (
+                <StrataMark size="md" fill={[1, 1, 1]} ground="dark" />
+              ) : (
+                <StrataSweep size="md" ground="dark" label={message} />
+              )}
               {loadingProgress > 0 && (
-                <div className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white">
+                <div className="font-mono text-xs font-medium text-white">
                   {Math.round(loadingProgress)}%
                 </div>
               )}
@@ -61,7 +60,7 @@ export function LoadingOverlay() {
             {loadingProgress > 0 && loadingState !== 'complete' && (
               <div className="w-48 h-1.5 bg-white/10 rounded-full overflow-hidden mx-auto mt-3">
                 <div
-                  className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                  className="h-full rounded-full bg-[var(--color-clay)] transition-all duration-300"
                   style={{ width: `${loadingProgress}%` }}
                 />
               </div>
@@ -80,7 +79,7 @@ export function LoadingOverlay() {
                     key={stage}
                     className={clsx(
                       'w-2 h-2 rounded-full transition-colors',
-                      isActive ? 'bg-blue-500' : 'bg-white/20',
+                      isActive ? 'bg-[var(--color-clay)]' : 'bg-white/20',
                       isCurrent && 'animate-pulse'
                     )}
                   />

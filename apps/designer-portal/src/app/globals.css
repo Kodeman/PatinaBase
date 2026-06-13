@@ -147,6 +147,50 @@
   }
 }
 
+/* The Strata sweep (R35): the system's indeterminate loader — the three lines
+   fill in sequence (Shaping → Commitment → Delivery), then the whole mark
+   fades and the cycle restarts. Time accumulating and beginning again. This
+   is the only sanctioned loading motion besides the breath; it replaces
+   spinners portal-wide. Fills are scaleX from the left, like the determinate
+   --f mark. prefers-reduced-motion stills it to a static partial. */
+@keyframes strata-sweep-1 {
+  0%, 8% { transform: scaleX(0); }
+  25%, 100% { transform: scaleX(1); }
+}
+@keyframes strata-sweep-2 {
+  0%, 25% { transform: scaleX(0); }
+  45%, 100% { transform: scaleX(1); }
+}
+@keyframes strata-sweep-3 {
+  0%, 45% { transform: scaleX(0); }
+  65%, 100% { transform: scaleX(1); }
+}
+@keyframes strata-sweep-fade {
+  0%, 70% { opacity: 1; }
+  85%, 100% { opacity: 0; }
+}
+.strata-sweep {
+  animation: strata-sweep-fade var(--strata-cycle, 2.2s) ease-in-out infinite;
+}
+.strata-sweep .strata-fill {
+  transform-origin: left center;
+  animation-duration: var(--strata-cycle, 2.2s);
+  animation-iteration-count: infinite;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+.strata-sweep .strata-line:nth-child(1) .strata-fill { animation-name: strata-sweep-1; }
+.strata-sweep .strata-line:nth-child(2) .strata-fill { animation-name: strata-sweep-2; }
+.strata-sweep .strata-line:nth-child(3) .strata-fill { animation-name: strata-sweep-3; }
+@media (prefers-reduced-motion: reduce) {
+  .strata-sweep,
+  .strata-sweep .strata-fill {
+    animation: none;
+  }
+  .strata-sweep .strata-fill {
+    transform: scaleX(0.6);
+  }
+}
+
 /* Typography: now provided by @patina/design-system/styles/typography.css.
    Font variable mappings set on body below in @layer base. */
 

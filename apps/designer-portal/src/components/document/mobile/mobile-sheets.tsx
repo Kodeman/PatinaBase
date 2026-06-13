@@ -20,6 +20,7 @@ import {
 import { ACTIVITIES, fmtElapsed } from '@/lib/document/time-derivation';
 import { MarginItemBody } from '../margin-bodies';
 import { StrataMark } from '../strata-mark';
+import { fillStateAtSection } from '@/lib/document/fill-state';
 import { openLedger } from '../command-bar';
 import { useMobileShell } from './mobile-shell';
 
@@ -150,7 +151,7 @@ export function MobileSheets() {
         <ul className="mt-1">
           {(activeDoc?.sections ?? []).map((s) => (
             <li key={s.key} className="flex items-center gap-2.5 py-2">
-              <StrataMark size="sm" state={s.state} />
+              <StrataMark size="sm" fill={fillStateAtSection(s.key)} breathing={s.state === 'active'} />
               <span className={s.state === 'future' ? 'opacity-45' : ''}>
                 <span
                   className={`block text-[13px] ${

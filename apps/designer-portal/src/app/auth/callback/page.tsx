@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@patina/supabase';
 import { Suspense } from 'react';
+import { StrataSweep } from '@/components/ui/strata-sweep';
 
 /**
  * OAuth callback page.
@@ -80,7 +81,7 @@ function CallbackContent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="text-center space-y-4">
-        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        <div className="mx-auto mb-1 flex justify-center"><StrataSweep size="sm" label="Completing sign in" /></div>
         <p className="text-sm text-muted-foreground">Completing sign in...</p>
       </div>
     </div>
@@ -93,7 +94,7 @@ export default function AuthCallbackPage() {
       fallback={
         <div className="flex min-h-screen items-center justify-center bg-background">
           <div className="text-center space-y-4">
-            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+            <div className="mx-auto mb-1 flex justify-center"><StrataSweep size="sm" label="Completing sign in" /></div>
             <p className="text-sm text-muted-foreground">Loading...</p>
           </div>
         </div>

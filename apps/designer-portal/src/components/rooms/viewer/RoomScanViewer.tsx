@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
-import { X, Maximize2, Minimize2, Check, Loader2 } from 'lucide-react';
+import { X, Maximize2, Minimize2, Check } from 'lucide-react';
+import { StrataSweep } from '@/components/ui/strata-sweep';
 import { useViewerStore } from '@/stores/viewer-store';
 import { IconButton } from '@/components/ui/controls';
 import { ViewerCanvas } from './ViewerCanvas';
@@ -191,7 +192,7 @@ export function RoomScanViewer({
           {/* Save indicator */}
           {saveData.isPending && (
             <div className="flex items-center gap-1.5 text-sm text-white/60">
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <StrataSweep size="xs" label="Saving" />
               <span>Saving...</span>
             </div>
           )}

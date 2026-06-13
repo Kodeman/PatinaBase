@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { StrataSweep } from '@/components/ui/strata-sweep';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { Box } from 'lucide-react';
@@ -18,7 +19,7 @@ function ViewerLoadingPlaceholder() {
   return (
     <div className="w-full h-full flex items-center justify-center bg-patina-charcoal">
       <div className="text-white/60 text-center">
-        <div className="animate-spin w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full mx-auto mb-2" />
+        <div className="mx-auto mb-2 flex justify-center"><StrataSweep size="sm" ground="dark" label="Loading scan" /></div>
         <p className="text-sm">Loading 3D viewer...</p>
       </div>
     </div>
