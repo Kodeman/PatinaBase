@@ -20,6 +20,7 @@ import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { DocSheet } from './overlays/doc-sheet';
 import { OrdersLedger } from './orders-ledger';
+import { AccountsBook } from './accounts/accounts-book';
 import { HoursLedger } from './hours-ledger';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import { fmtMinutes } from '@/lib/document/time-derivation';
@@ -53,7 +54,9 @@ export function StudioDrawer() {
   const router = useRouter();
   const pathname = usePathname();
   const [openLedger, setOpenLedger] = useState<LedgerKey | null>(null);
-  const [ordersContext, setOrdersContext] = useState<OpenLedgerContext | null>(null);
+  // Pre-addressing context for whichever sheet opens (Orders: vendor/page;
+  // Accounts: receivables page + invoiceId). Each book reads only its own keys.
+  const [sheetContext, setSheetContext] = useState<OpenLedgerContext | null>(null);
   const open = LEDGERS.find((l) => l.key === openLedger) ?? null;
   const { inHandToday } = useDocumentTime();
 
@@ -81,7 +84,7 @@ export function StudioDrawer() {
         enterRoom(match.href);
         return;
       }
-      setOrdersContext(match.key === 'orders' ? context : null);
+      setSheetContext(context);
       setOpenLedger(match.key);
     };
     window.addEventListener('document:open-ledger', onOpen);
@@ -108,7 +111,11 @@ export function StudioDrawer() {
               key={ledger.key}
               type="button"
               aria-current={here ? 'page' : undefined}
-              onClick={() => (isRoom ? enterRoom(ledger.href) : setOpenLedger(ledger.key))}
+              onClick={() =>
+                isRoom
+                  ? enterRoom(ledger.href)
+                  : (setSheetContext(null), setOpenLedger(ledger.key))
+              }
               className={`inline-flex items-center gap-[0.45rem] whitespace-nowrap rounded-[4px] border px-3 py-[0.4rem] transition-colors duration-150 ${
                 here
                   ? 'border-[rgba(196,165,123,0.45)] bg-[rgba(196,165,123,0.12)]'
@@ -146,7 +153,10 @@ export function StudioDrawer() {
         })}
         <button
           type="button"
-          onClick={() => setOpenLedger('hours')}
+          onClick={() => {
+            setSheetContext(null);
+            setOpenLedger('hours');
+          }}
           className="ml-auto inline-flex items-center gap-[0.45rem] whitespace-nowrap rounded-[4px] border border-transparent px-3 py-[0.4rem] hover:border-[rgba(196,165,123,0.35)]"
         >
           <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[rgba(250,247,242,0.35)]">
@@ -165,10 +175,17 @@ export function StudioDrawer() {
         title={open?.name ?? ''}
       >
         {open?.key === 'orders' && (
-          <OrdersLedger onClose={() => setOpenLedger(null)} initialContext={ordersContext} />
+          <OrdersLedger onClose={() => setOpenLedger(null)} initialContext={sheetContext} />
+        )}
+        {open?.key === 'accounts' && (
+          <AccountsBook onClose={() => setOpenLedger(null)} initialContext={sheetContext} />
         )}
         {open?.key === 'hours' && <HoursLedger />}
-        {open && open.key !== 'orders' && open.key !== 'hours' && open.weight === 'sheet' && (
+        {open &&
+          open.key !== 'orders' &&
+          open.key !== 'accounts' &&
+          open.key !== 'hours' &&
+          open.weight === 'sheet' && (
           <div className="mx-auto max-w-2xl">
             <div className="mb-2 flex items-center gap-3">
               <span

@@ -75,6 +75,7 @@ export interface DocumentStateRow {
 
 export type NeedKind =
   | 'overdue_decision'
+  | 'overdue_invoice'
   | 'proposal_signed'
   | 'damage_claim'
   | 'proposal_declined'
@@ -96,6 +97,22 @@ export interface DeskConflictInput {
   drift: string | null;
 }
 
+/** R36 receivables input (built client-side from invoices by
+ *  lib/document/desk-receivables.ts — the same Wave 2.1 precedent as conflicts).
+ *  An overdue + unchased receivable rises as the folder's need line; the act
+ *  (send the reminder / chase) lives on the Accounts book's Receivables page,
+ *  so one act clears both surfaces. Keyed by project_id. */
+export interface ReceivableSignal {
+  count: number;
+  /** Oldest due_date among the overdue + unchased invoices (ISO). */
+  oldestDue: string | null;
+  totalBalanceCents: number;
+  /** The invoice the Desk act addresses (the oldest overdue one). */
+  invoiceId: string;
+  /** Display label for that invoice (number, or "A draft invoice"). */
+  invoiceLabel: string;
+}
+
 export interface NeedLine {
   kind: NeedKind;
   text: string;
@@ -103,6 +120,11 @@ export interface NeedLine {
    *  contrast on paper, per the prototype's stamp treatment. */
   stamp: { label: string; color: string; ink?: string };
   urgent: boolean;
+  /** When set, the folder's act opens a Drawer ledger (R36: the overdue-invoice
+   *  need opens the Accounts book onto Receivables) rather than the document.
+   *  Typed structurally to keep this module dependency-free (no command-bar
+   *  import); folder-card maps it onto openLedger(). */
+  ledger?: { name: string; context?: { page?: string; invoiceId?: string; projectId?: string } };
 }
 
 export interface DeskFolder {
@@ -130,25 +152,34 @@ const SENT_UNOPENED_PROMOTE_DAYS = 2;
 // after one day.
 const PO_DRAFT_UNSENT_DAYS = 1;
 const PO_SENT_UNACKED_DAYS = 1;
+// R36 A/R aging — PROVISIONAL (constants watch, like the send weave): a
+// receivable past due rises on the Desk (act: send the reminder); once the
+// designer chases it, the only available act is over, so it drops for a
+// cooldown before it can rise again. Leah-calibrated when Accounts goes live.
+export const AR_OVERDUE_NEEDS_DAYS = 1;
+export const AR_CHASE_COOLDOWN_DAYS = 7;
 const MAX_MOTION_CHIPS = 6;
 
 /** Severity rank — lower sorts first within the needs stack. */
 const NEED_RANK: Record<NeedKind, number> = {
   overdue_decision: 0,
-  proposal_signed: 1,
-  damage_claim: 2,
-  proposal_declined: 3,
-  proposal_expired: 4,
-  new_lead: 5,
-  hesitating_proposal: 6,
-  awaiting_inspection: 7,
+  // R36: money owed past its terms is the studio's own exposure — it sorts
+  // just under a blocking client decision, above the proposal/lead moments.
+  overdue_invoice: 1,
+  proposal_signed: 2,
+  damage_claim: 3,
+  proposal_declined: 4,
+  proposal_expired: 5,
+  new_lead: 6,
+  hesitating_proposal: 7,
+  awaiting_inspection: 8,
   // R28: a schedule collision slots under awaiting-inspection; R33's blessed
   // ordering (TASK DUE below awaiting-inspection, above send-weave) holds.
-  schedule_conflict: 8,
-  task_due: 9,
-  po_unsent: 10,
-  po_unacknowledged: 11,
-  pulse_due: 12,
+  schedule_conflict: 9,
+  task_due: 10,
+  po_unsent: 11,
+  po_unacknowledged: 12,
+  pulse_due: 13,
 };
 
 /** Prototype stamp palette (v0.3 is the look authority): borders use brand
@@ -162,8 +193,13 @@ const STAMP = {
   sage: { color: 'var(--color-sage)', ink: '#85947C' },
 } as const;
 
+// Bare DATE columns (e.g. an invoice due_date 'YYYY-MM-DD') must parse as LOCAL
+// midnight, or `new Date()` reads them as UTC and the rendered day slips back a
+// day in negative-offset timezones. Timestamps (with a time part) are unaffected.
 const fmtDay = (iso: string) =>
-  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(iso));
+  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
+    new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso),
+  );
 
 const daysBetween = (earlierIso: string, now: Date) =>
   Math.floor((now.getTime() - new Date(earlierIso).getTime()) / DAY_MS);
@@ -187,6 +223,7 @@ export function deriveNeed(
   row: DocumentStateRow,
   now: Date,
   conflict?: DeskConflictInput | null,
+  receivable?: ReceivableSignal | null,
 ): NeedLine | null {
   if (row.is_archived || row.is_paused) return null;
 
@@ -198,6 +235,30 @@ export function deriveNeed(
       text: n === 1 ? `1 decision overdue${oldest}` : `${n} decisions overdue${oldest}`,
       stamp: { label: 'DECISION DUE', ...STAMP.due },
       urgent: true,
+    };
+  }
+
+  // R36: an overdue + unchased receivable rises here (just under a blocking
+  // decision). The act isn't "pick up the document" — it's "send the reminder",
+  // which lives on the Accounts book's Receivables page, so the folder opens
+  // that ledger (need.ledger) rather than the document. Chasing the invoice
+  // stamps ar_last_chased_at; on the next read this signal is gone and the
+  // folder clears — the same R22 awareness tier as the send weave.
+  if (receivable) {
+    const oldest = receivable.oldestDue ? ` — oldest due ${fmtDay(receivable.oldestDue)}` : '';
+    const n = receivable.count;
+    return {
+      kind: 'overdue_invoice',
+      text:
+        n === 1
+          ? `${receivable.invoiceLabel} overdue${oldest} — send a reminder`
+          : `${n} invoices overdue${oldest} — send a reminder`,
+      stamp: { label: 'PAST DUE', ...STAMP.terracotta },
+      urgent: false,
+      ledger: {
+        name: 'accounts',
+        context: { page: 'receivables', invoiceId: receivable.invoiceId },
+      },
     };
   }
 
@@ -445,6 +506,7 @@ export function partitionDesk(
   rows: DocumentStateRow[],
   now: Date,
   conflicts?: ReadonlyMap<string, DeskConflictInput>,
+  receivables?: ReadonlyMap<string, ReceivableSignal>,
 ): { folders: DeskFolder[]; chips: MotionChip[] } {
   const folders: DeskFolder[] = [];
   const chips: MotionChip[] = [];
@@ -452,7 +514,8 @@ export function partitionDesk(
   for (const row of rows) {
     if (row.is_archived) continue;
     const conflict = row.project_id ? (conflicts?.get(row.project_id) ?? null) : null;
-    const need = deriveNeed(row, now, conflict);
+    const receivable = row.project_id ? (receivables?.get(row.project_id) ?? null) : null;
+    const need = deriveNeed(row, now, conflict, receivable);
     if (need) {
       folders.push({ row, need });
       continue;

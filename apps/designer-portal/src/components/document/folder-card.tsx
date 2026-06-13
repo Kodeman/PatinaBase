@@ -1,7 +1,13 @@
+'use client';
+
 /**
  * Desk folder card (spec v1.1 §7, §10; prototype v0.3 .folder recipe).
  * Depth = flat stacked sheets + value contrast — never shadows (D4).
  * Picking up = following the link to /doc/[engagement_id] (Slice 2).
+ *
+ * R36: a need whose act isn't "pick up the document" (the overdue-invoice need,
+ * whose act is "send the reminder") carries `need.ledger` — the card opens that
+ * Drawer ledger (the Accounts book's Receivables page) instead of navigating.
  */
 
 import Link from 'next/link';
@@ -9,6 +15,7 @@ import { folderTab, type DeskFolder } from '@/lib/document/desk-derivation';
 import { fillStateForDesk } from '@/lib/document/fill-state';
 import { Stamp } from './stamp';
 import { StrataMark } from './strata-mark';
+import { openLedger } from './command-bar';
 
 const SECTION_LABEL: Record<string, string> = {
   brief: 'Brief',
@@ -36,12 +43,46 @@ export function FolderCard({ folder }: { folder: DeskFolder }) {
     ? `${SECTION_LABEL[row.active_section]} · ${phase}`
     : SECTION_LABEL[row.active_section];
 
+  // R36: the overdue-invoice need opens the Accounts book onto Receivables
+  // (where the dunning act lives), not the document. Same paper face either way.
+  const cardClassName =
+    'group relative mt-[14px] block w-full rounded-[3px_6px_6px_6px] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+  const inner = <FolderFace folder={folder} stageLine={stageLine} />;
+
+  if (need.ledger) {
+    return (
+      <button
+        type="button"
+        onClick={() => openLedger(need.ledger!.name, need.ledger!.context)}
+        className={cardClassName}
+        aria-label={`${row.title} — ${need.text}`}
+      >
+        {inner}
+      </button>
+    );
+  }
+
   return (
     <Link
       href={`/doc/${row.engagement_id}`}
-      className="group relative mt-[14px] block rounded-[3px_6px_6px_6px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+      className={cardClassName}
       aria-label={`${row.title} — ${need.text}`}
     >
+      {inner}
+    </Link>
+  );
+}
+
+function FolderFace({
+  folder,
+  stageLine,
+}: {
+  folder: DeskFolder;
+  stageLine: string;
+}) {
+  const { row, need } = folder;
+  return (
+    <>
       {/* Flat stacked edges (D4): two offset solid sheets, no blur, ever. */}
       <div
         aria-hidden
@@ -84,6 +125,6 @@ export function FolderCard({ folder }: { folder: DeskFolder }) {
           <Stamp label={need.stamp.label} color={need.stamp.color} ink={need.stamp.ink} />
         </div>
       </div>
-    </Link>
+    </>
   );
 }

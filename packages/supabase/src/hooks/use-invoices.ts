@@ -89,6 +89,10 @@ export interface Invoice {
   reminder_count: number;
   last_reminder_at: string | null;
   ar_flagged_at: string | null;
+  /** When the designer last MANUALLY chased this receivable (00209, R36). Distinct
+   *  from the automated cadence's last_reminder_at — a manual chase never perturbs
+   *  it. The Desk gates the overdue-invoice need on this. */
+  ar_last_chased_at: string | null;
   created_at: string;
   updated_at: string;
   // Joined data
@@ -816,6 +820,41 @@ export function useSendInvoice() {
       return data;
     },
     onSuccess: (_data, { projectId }) => {
+      invalidateInvoiceEffects(queryClient, projectId);
+    },
+  });
+}
+
+/**
+ * Marks an overdue receivable as manually chased (00209, R36 — the Accounts
+ * book Receivables page). Stamps `ar_last_chased_at = now()` via the
+ * chase_invoice RPC (SECURITY DEFINER + ownership guard, since sent invoices
+ * are otherwise update-locked). This is the bookkeeping half of the dunning
+ * act — the email goes through useSendInvoice({ type:'reminder' }); chasing
+ * leaves the timestamp the Desk reads so the overdue-invoice need clears.
+ * Returns the new timestamp (null when the invoice isn't the caller's).
+ */
+export function useChaseInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      invoiceId,
+    }: {
+      invoiceId: string;
+      projectId?: string;
+    }): Promise<string | null> => {
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('chase_invoice', { p_invoice_id: invoiceId });
+      if (error) throw error;
+      return (data as string | null) ?? null;
+    },
+    onSuccess: (_data, { projectId }) => {
+      // NOTE: this invalidates the ['invoices'] namespace (the Accounts book's
+      // Ledger/Receivables read here). It does NOT touch the Desk, which reads
+      // invoices under its OWN key (['document-state','desk'], see
+      // use-desk-engagements.ts). Callers that need the Desk's overdue-invoice
+      // need to clear immediately must ALSO invalidate ['document-state'] — the
+      // Receivables page's doChase does exactly that.
       invalidateInvoiceEffects(queryClient, projectId);
     },
   });

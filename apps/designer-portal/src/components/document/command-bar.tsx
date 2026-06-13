@@ -31,13 +31,17 @@ type Row =
 
 const LEDGERS = ['Library', 'Orders', 'Accounts', 'People', 'Hours'];
 
-/** R28/R29 pre-addressing: optional context rides the open-ledger event —
+/** R28/R29/R36 pre-addressing: optional context rides the open-ledger event —
  *  e.g. Brief-a-vendor opens the Orders book onto the Vendors page with the
- *  project in hand. */
+ *  project in hand; an overdue-invoice Desk need opens the Accounts book onto
+ *  Receivables with that invoice in hand. `page` is a free string so each book
+ *  validates its own page set (Orders: ledger/week/receiving/vendors; Accounts:
+ *  ledger/receivables/earnings). */
 export interface OpenLedgerContext {
-  page?: 'ledger' | 'week' | 'receiving' | 'vendors';
+  page?: string;
   vendorId?: string;
   projectId?: string;
+  invoiceId?: string;
 }
 
 /** Open a Studio Drawer ledger from anywhere (the drawer listens). */

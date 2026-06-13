@@ -1614,6 +1614,22 @@ Continues `the-document/track3-rooms-library`. Migration **00208** (additive: `p
 
 **Flags (none blocking):** the companion edge backend stays stubbed-for-products + persists, so the ask doesn't use it (above); R30's Via-Patina order-moment line into Accounts is slice 4–5; placed lines land `item_type='tbd'`, unassigned-room (designer assigns). **Next:** the Accounts book (R36, slice 4) + the Aesthete fold (R37, slice 5), then the Composing Page (R40, slice 6). The L4 device check (Rooms-shell physics, R39) is still pending.
 
+### I31 · Dissolve Track 3 — the Accounts book, a Drawer Sheet (R36, slice 4) — 2026-06-13
+
+Continues `the-document/track3-rooms-library`. Migration **00209** (additive: `invoices.ar_last_chased_at` + the `chase_invoice` RPC). type-check + lint + 36 desk-derivation tests green; **live-verified end-to-end on real data** (all three pages render; the overdue→Desk→chase→clear loop walked with INV-0001 temporarily backdated, then restored); adversarially reviewed (no critical bugs; 3 fixes applied).
+
+**The book reuses the Billing data layer wholesale — no rebuild.** The audit found everything already shipped: `useInvoices` (Ledger), `useArAging`/`computeArAging` + `useSendInvoice({type:'reminder'})` (Receivables + dunning), `useEarningsStats` (Earnings). The book is a re-housing in document grammar, not a new data layer. The `accounts` LEDGERS entry (weight `sheet`, spine sage) already existed with a stub — slice 4 fills it. Three pages in the R28 grammar (DM-mono links, never tabs): **Ledger · Receivables · Earnings**; the I23 front-matter states **Revenue · A/R · margin**. Studio-eyes-only.
+
+**No figure authored twice (R36).** Revenue (Σ `amount_paid_cents`) and A/R (`computeArAging` balance) come straight off invoice rows; the front-matter margin uses the SAME committed-line trade→client definition as the per-engagement Account Page (`useStudioMargin` mirrors `use-account-page.ts`, aggregated studio-wide, one query). The book is the sum; the R26 Account Page is the leaf (its `→ Accounts ↗` button already pointed here).
+
+**The overdue receivable rises on the Desk via the R28-conflict precedent — no `document_state` surgery.** `buildDeskReceivables` (mirroring `desk-conflicts.ts`) classifies invoices client-side in `use-desk-engagements` and injects a `ReceivableSignal` map into `partitionDesk` (4th arg, like `conflicts`). A new `overdue_invoice` NeedKind (rank 1 — money owed sorts just under a blocking decision) carries `need.ledger` so the folder **opens the Accounts book onto Receivables** (the act surface) rather than the document — `folder-card` renders a button for ledger-acted needs. AR thresholds (`AR_OVERDUE_NEEDS_DAYS=1`, `AR_CHASE_COOLDOWN_DAYS=7`, provisional like the send weave) sit beside the R10/R22 set.
+
+**One act clears both surfaces (R36 / R22).** The automated reminder cadence owns `last_reminder_at`/`ar_flagged_at` — a manual nudge must not perturb it — so the designer's chase gets its OWN stamp, `ar_last_chased_at` (00209, `chase_invoice` SECURITY DEFINER + ownership + status guard). The Receivables dunning act emails the reminder AND stamps the chase; the Desk need gates on overdue **AND** not-chased-within-cooldown, so chasing drops it (verified live: the PAST DUE folder cleared and Chen fell back to its next need). The Desk reads invoices under its OWN key (`['document-state','desk']`), so `doChase` invalidates `['document-state']` too — the Orders-book same-truck precedent.
+
+**Review fixes (3):** (1) server-side status guard on `chase_invoice` (a direct RPC call can't stamp a paid/void invoice); (2) corrected the `useChaseInvoice` comment (it does NOT clear the Desk — the Receivables page does, separately) to kill a maintenance trap; (3) Ledger "owed" tail now only reads for issued receivables (a draft isn't owed). Also fixed a bare-DATE timezone off-by-one in desk-derivation's `fmtDay` (the invoice due_date rendered a day early).
+
+**Open input carried forward (R37, §14.15):** the Earnings page builds the *What you earn* band on real earnings (design fees + Via-Patina commissions); the *What teaching returns* band + the twinned 25% Pledge are the Aesthete fold (slice 5). There is **no `teaching_royalty` earnings source_type and no stored commission/Pledge rate** in the schema yet — flagged here, to be wired from brand/marketplace config in slice 5 (render real-or-placeholder, never invent the rate).
+
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I30 · R1–R40 · L1–L3 · THE GO · FLIP CONFIRMED · last id = R40*
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I31 · R1–R40 · L1–L3 · THE GO · FLIP CONFIRMED · last id = R40*

@@ -1049,6 +1049,7 @@ export {
   useDeleteLineItem,
   useIssueInvoice,
   useSendInvoice,
+  useChaseInvoice,
   useRecordPayment,
   useStartCheckout,
   useVoidInvoice,
