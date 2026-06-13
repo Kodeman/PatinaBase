@@ -14,17 +14,24 @@
  * ONLY — this book never reaches the client mirror.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useArAging, useEarningsStats, useInvoices } from '@patina/supabase';
+import {
+  useArAging,
+  useEarnings,
+  useEarningsStats,
+  useInvoices,
+  useDesignerTeachingStats,
+} from '@patina/supabase';
 import { LedgerFrontMatter } from '../ledger-front-matter';
 import { useStudioMargin } from '@/hooks/use-studio-accounts';
 import { collectedCents } from '@/lib/document/account-summary';
+import { pledgeFromCommission, pledgeYtdReturned, type PledgeEvent } from '@/lib/document/pledge';
 import { fmtUsd } from '@/lib/document/format';
+import { openLedger, type OpenLedgerContext } from '../command-bar';
 import { AccountsLedgerPage } from './accounts-ledger-page';
 import { AccountsReceivablesPage } from './accounts-receivables-page';
 import { AccountsEarningsPage } from './accounts-earnings-page';
-import type { OpenLedgerContext } from '../command-bar';
 
 type BookPage = 'ledger' | 'receivables' | 'earnings';
 
@@ -46,6 +53,23 @@ export function AccountsBook({
   const { aging } = useArAging();
   const { data: earnings } = useEarningsStats();
   const margin = useStudioMargin();
+  // R37 — the Aesthete fold: the Pledge is computed from real Via-Patina
+  // commission events (25%, confirmed); teaching stats feed the front-matter lens.
+  const { data: commissionEarnings } = useEarnings({ sourceType: 'product_commission' });
+  const { data: teaching } = useDesignerTeachingStats();
+
+  const pledgeEvents = useMemo<PledgeEvent[]>(
+    () =>
+      (commissionEarnings ?? []).map((e) =>
+        pledgeFromCommission(e.net_amount ?? 0, e.earned_at ?? e.created_at ?? '', e.proposal?.title),
+      ),
+    [commissionEarnings],
+  );
+  const pledgeYtd = useMemo(
+    () => pledgeYtdReturned(pledgeEvents, new Date().getFullYear()),
+    [pledgeEvents],
+  );
+  const taughtCount = (teaching as { products_taught?: number } | null)?.products_taught ?? 0;
 
   // page is a free string on the shared context — narrow it to this book.
   const [page, setPage] = useState<BookPage>(
@@ -110,7 +134,22 @@ export function AccountsBook({
       {isLoading ? (
         <p className="py-3 text-[12px] italic text-[rgba(250,247,242,0.5)]">Opening the book…</p>
       ) : (
-        <LedgerFrontMatter caption="the studio" stats={stats} />
+        <>
+          <LedgerFrontMatter caption="the studio" stats={stats} />
+          {/* R37: the teaching lens — one quiet pair beside the money, linking
+              into the Library for the progress detail. Never a dashboard. */}
+          <button
+            type="button"
+            onClick={() => openLedger('Library')}
+            className="-mt-2 mb-4 flex items-baseline gap-2 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.45)] hover:text-[var(--color-clay)]"
+          >
+            <span className="text-[var(--color-clay)]">teaching</span>
+            <span className="text-[var(--color-off-white)]">{taughtCount} taught</span>
+            <span>·</span>
+            <span className="text-[var(--color-off-white)]">{fmtUsd(pledgeYtd)} returned</span>
+            <span className="text-[var(--color-clay)] opacity-70">→ Library ↗</span>
+          </button>
+        </>
       )}
 
       {page === 'ledger' && (
@@ -123,7 +162,9 @@ export function AccountsBook({
           onOpenDocument={openDocument}
         />
       )}
-      {page === 'earnings' && <AccountsEarningsPage stats={earnings} />}
+      {page === 'earnings' && (
+        <AccountsEarningsPage stats={earnings} pledgeEvents={pledgeEvents} pledgeYtd={pledgeYtd} />
+      )}
     </div>
   );
 }

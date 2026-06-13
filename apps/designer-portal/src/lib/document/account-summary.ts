@@ -25,11 +25,7 @@ export function invoiceBalanceCents(invoice: Pick<Invoice, 'total_cents' | 'amou
   return Math.max((invoice.total_cents || 0) - (invoice.amount_paid_cents || 0), 0);
 }
 
-/** Earnings money is stored in DOLLARS (floats), not cents — its own formatter
- *  so a cents helper is never mistakenly pointed at it. */
-export const fmtUsdFromDollars = (dollars: number) =>
-  (dollars || 0).toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  });
+// NOTE: designer_earnings money (net_amount, and the useEarningsStats sums over
+// it) is stored in CENTS — the live /portal/earnings page formats it as
+// cents/100. Format earnings with fmtUsd (cents) like everything else; there is
+// deliberately no dollars formatter here.

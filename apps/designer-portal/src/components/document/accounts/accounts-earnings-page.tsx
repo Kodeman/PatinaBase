@@ -1,18 +1,23 @@
 'use client';
 
 /**
- * The Accounts book · Earnings (R36 / R37). R36 puts design fees, Via-Patina
- * commissions and teaching royalties here; R37 reads it in two bands — *What you
- * earn* (client-work income) and *What teaching returns* (the Designer-Taught
- * loop's income + the two-sided 25% Pledge).
+ * The Accounts book · Earnings (R36 / R37) — the Aesthete fold. Two bands:
+ *   · What you earn — client-work income (design fees + Via-Patina commissions)
+ *   · What teaching returns — the Designer-Taught loop's income + the two-sided
+ *     25% Pledge
  *
- * THIS SLICE (4) builds the *What you earn* band on real earnings. The *What
- * teaching returns* band and the twinned Pledge are the Aesthete fold (R37,
- * slice 5) — they land here next, on this same page, without disturbing this
- * band. Earnings money is stored in DOLLARS (not cents) — fmtUsdFromDollars.
+ * The Pledge is twinned and the two directions never blur (R37): each event
+ * shows "returned to you" (a teaching royalty accruing to a YTD total) and
+ * "given to the commons". Per R30 the Pledge (25% of the commission) returns to
+ * her, so that figure is real; the commons share is OPEN brand config (§14.15)
+ * and renders pending — never invented (see pledge.ts).
+ *
+ * Earnings money is stored in CENTS (integer net_amount; the live earnings page
+ * divides by 100) — fmtUsd throughout.
  */
 
-import { fmtUsdFromDollars } from '@/lib/document/account-summary';
+import { fmtDay, fmtUsd } from '@/lib/document/format';
+import { commonsRateKnown, PLEDGE_RATE, type PledgeEvent } from '@/lib/document/pledge';
 
 interface EarningsStats {
   totalEarnings: number;
@@ -39,13 +44,22 @@ function EarnLine({ label, value, sub }: { label: string; value: number; sub?: s
         )}
       </span>
       <span className="font-mono text-[12px] text-[var(--color-off-white)]">
-        {fmtUsdFromDollars(value)}
+        {fmtUsd(value)}
       </span>
     </div>
   );
 }
 
-export function AccountsEarningsPage({ stats }: { stats?: EarningsStats }) {
+export function AccountsEarningsPage({
+  stats,
+  pledgeEvents,
+  pledgeYtd,
+}: {
+  stats?: EarningsStats;
+  pledgeEvents: PledgeEvent[];
+  /** YTD total of the royalty returned to the designer (the accruing crescendo). */
+  pledgeYtd: number;
+}) {
   if (!stats) {
     return (
       <p className="py-5 font-heading text-[13px] italic text-[rgba(250,247,242,0.5)]">
@@ -55,14 +69,12 @@ export function AccountsEarningsPage({ stats }: { stats?: EarningsStats }) {
   }
 
   const { bySource } = stats;
-  // *What you earn* — client-work income (R37 band one). Referral/bonus/
-  // adjustment are occasional; fold them into one honest "other" line rather
-  // than invent categories.
   const otherCents = bySource.referral + bySource.bonus + bySource.adjustment;
   const clientWork = bySource.design_fee + bySource.product_commission + otherCents;
 
   return (
     <div>
+      {/* ── Band one — What you earn (client-work income) ── */}
       <section>
         <h3 className="mb-1 font-heading text-[14px] italic text-[var(--color-pearl)]">
           What you earn
@@ -78,19 +90,82 @@ export function AccountsEarningsPage({ stats }: { stats?: EarningsStats }) {
             client work, all time
           </span>
           <span className="font-heading text-[16px] text-[var(--color-off-white)]">
-            {fmtUsdFromDollars(clientWork)}
+            {fmtUsd(clientWork)}
           </span>
         </div>
         <p className="mt-1 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
-          {fmtUsdFromDollars(stats.paidEarnings)} paid · {fmtUsdFromDollars(stats.pendingEarnings)} pending
+          {fmtUsd(stats.paidEarnings)} paid · {fmtUsd(stats.pendingEarnings)} pending
         </p>
       </section>
 
-      {/* R37 / slice 5 — the Aesthete fold (What teaching returns + the twinned
-          25% Pledge) lands here, on this page, beneath this band. */}
-      <p className="mt-5 border-t border-[rgba(250,247,242,0.1)] pt-3 font-heading text-[12px] italic text-[rgba(250,247,242,0.45)]">
-        What teaching returns — royalties &amp; the 25% Pledge — folds in next.
-      </p>
+      {/* ── Band two — What teaching returns (the Aesthete fold, R37) ── */}
+      <section className="mt-6 border-t border-[rgba(250,247,242,0.12)] pt-4">
+        <h3 className="mb-1 font-heading text-[14px] italic text-[var(--color-pearl)]">
+          What teaching returns
+        </h3>
+        <p className="mb-3 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.4)]">
+          taught-taste income · the {Math.round(PLEDGE_RATE * 100)}% Pledge
+        </p>
+
+        {/* The accruing crescendo: the Pledge, returned to you, YTD. */}
+        <div className="mb-3 flex items-baseline justify-between gap-3 border-b border-[rgba(250,247,242,0.1)] pb-2">
+          <span className="font-heading text-[12.5px] italic text-[var(--color-off-white)]">
+            The Pledge, returned to you{' '}
+            <span className="font-mono text-[8.5px] not-italic uppercase tracking-[0.06em] text-[rgba(250,247,242,0.4)]">
+              year to date
+            </span>
+          </span>
+          <span className="font-heading text-[16px] text-[var(--color-sage)]">
+            {fmtUsd(pledgeYtd)}
+          </span>
+        </div>
+
+        {pledgeEvents.length === 0 ? (
+          <p className="py-2 text-[12px] italic text-[rgba(250,247,242,0.5)]">
+            No Via-Patina orders yet — the Pledge begins with your first.
+          </p>
+        ) : (
+          <ul>
+            {pledgeEvents.map((ev, i) => (
+              <li
+                key={`${ev.earnedAt}-${i}`}
+                className="border-b border-dashed border-[rgba(250,247,242,0.1)] py-2"
+              >
+                <p className="mb-1 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.45)]">
+                  {ev.label ?? 'Via Patina'}
+                  {ev.earnedAt ? ` · ${fmtDay(ev.earnedAt)}` : ''} · {fmtUsd(ev.commission)} commission
+                </p>
+                {/* The twinned sub-lines — labelled on the face, never blurred. */}
+                <div className="grid grid-cols-2 gap-2">
+                  <span className="flex items-baseline justify-between gap-2 rounded-[3px] border border-[rgba(133,148,124,0.3)] px-2 py-1">
+                    <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-sage)]">
+                      returned to you
+                    </span>
+                    <span className="font-mono text-[11px] text-[var(--color-off-white)]">
+                      {fmtUsd(ev.returnedToYou)}
+                    </span>
+                  </span>
+                  <span className="flex items-baseline justify-between gap-2 rounded-[3px] border border-[rgba(196,165,123,0.3)] px-2 py-1">
+                    <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
+                      given to the commons
+                    </span>
+                    <span className="font-mono text-[11px] text-[var(--color-off-white)]">
+                      {ev.givenToCommons != null ? fmtUsd(ev.givenToCommons) : '—'}
+                    </span>
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Honest flag: the commons share is open brand config (§14.15). */}
+        {!commonsRateKnown && (
+          <p className="mt-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
+            the commons share awaits brand config (§14.15) — never invented
+          </p>
+        )}
+      </section>
     </div>
   );
 }
