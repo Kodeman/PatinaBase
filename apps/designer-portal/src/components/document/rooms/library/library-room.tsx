@@ -94,7 +94,11 @@ export function LibraryRoom() {
       }
     >
       <div className="mx-auto max-w-[1240px]">
-        <LibrarianBar />
+        <LibrarianBar
+          onPlaced={(pieceName, whereName) =>
+            setToast(`Placed “${pieceName}” into ${whereName} — via the Engine.`)
+          }
+        />
 
         <div className="px-6 sm:px-9">
           <LibraryShelf

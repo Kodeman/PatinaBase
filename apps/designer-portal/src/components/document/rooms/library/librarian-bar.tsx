@@ -2,29 +2,34 @@
 
 /**
  * The librarian (R31/R38) — the Engine's standing presence atop the Library
- * Room. It stands here as part of the Room's identity, but the Engine itself is
- * Slice 3: this slice renders the input and its prompts, and ASKING is honestly
- * deferred (no companion call, no invented results) until the Engine is built.
- * "Designer-Taught Intelligence," never "AI."
+ * Room, the second of its two homes (the first is ⌘K). Ask, and it answers in
+ * paper result-lines from your own shelves, each carrying one act: Place →. No
+ * thread, no history, no avatar — the ask leaves nothing behind; only the
+ * placement persists. "Designer-Taught Intelligence," never "AI."
  */
 
 import { useState } from 'react';
+import { EngineResults } from '@/components/document/engine/engine-results';
 
 const PROMPTS = [
-  'Walnut credenzas under $3K',
+  'Warm-grain credenzas',
   'What needs teaching?',
-  'Warm organic lighting',
+  'Organic lighting',
 ];
 
-export function LibrarianBar() {
+export function LibrarianBar({
+  onPlaced,
+}: {
+  onPlaced?: (pieceName: string, whereName: string) => void;
+}) {
   const [value, setValue] = useState('');
-  const [deferred, setDeferred] = useState(false);
+  const [asking, setAsking] = useState<string | null>(null);
 
-  const ask = () => {
-    if (!value.trim()) return;
-    // Slice 3 wires this to the companion API behind paper result-lines with
-    // a Place → [document] act. Until then, the ask is honestly deferred.
-    setDeferred(true);
+  const ask = (q?: string) => {
+    const next = (q ?? value).trim();
+    if (!next) return;
+    setValue(next);
+    setAsking(next);
   };
 
   return (
@@ -42,7 +47,7 @@ export function LibrarianBar() {
           value={value}
           onChange={(e) => {
             setValue(e.target.value);
-            setDeferred(false);
+            if (asking) setAsking(null);
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') ask();
@@ -53,7 +58,7 @@ export function LibrarianBar() {
         />
         <button
           type="button"
-          onClick={ask}
+          onClick={() => ask()}
           aria-label="Ask"
           className="absolute right-2 top-1/2 flex h-[30px] w-[30px] -translate-y-1/2 items-center justify-center rounded-[6px] bg-[var(--color-clay)] text-white transition-opacity hover:opacity-85"
         >
@@ -66,10 +71,7 @@ export function LibrarianBar() {
           <button
             key={p}
             type="button"
-            onClick={() => {
-              setValue(p);
-              setDeferred(true);
-            }}
+            onClick={() => ask(p)}
             className="rounded-[20px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-3 py-1.5 text-[0.68rem] text-[var(--text-body)] transition-colors hover:border-[var(--color-clay)] hover:text-[var(--color-charcoal)]"
           >
             {p}
@@ -77,11 +79,10 @@ export function LibrarianBar() {
         ))}
       </div>
 
-      {deferred && (
-        <p className="mx-auto mt-4 max-w-[46ch] font-mono text-[0.62rem] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
-          The librarian wakes in the next slice — the Engine answers here, in paper, with one act:
-          Place → the document.
-        </p>
+      {asking && (
+        <div className="mx-auto mt-5 max-w-[680px] text-left">
+          <EngineResults query={asking} inDocument={null} onPlaced={onPlaced} />
+        </div>
       )}
     </div>
   );

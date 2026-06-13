@@ -6,21 +6,28 @@
  * the mark answers "how far" right in the result row. Ledgers dispatch an
  * `open-ledger` event the Studio Drawer owns (the drawer holds sheet state).
  *
+ * R38 — the Engine speaks here, with no mode. The same box jumps to a
+ * destination OR, for the current query, offers "Ask the Engine" as the last
+ * row; choosing it answers inline in paper result-lines, each carrying one act:
+ * Place → [document]. The ask leaves no thread; only the placement persists.
+ *
  * R3-clean: this is a Document-local paper surface, NOT a design-system
  * Command/Dialog primitive — no shadows, ink border, flat edges.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import { fillStateForDesk } from '@/lib/document/fill-state';
 import { folderTab } from '@/lib/document/desk-derivation';
 import { StrataMark } from './strata-mark';
+import { EngineResults, type InDocument } from './engine/engine-results';
 
 type Row =
   | { kind: 'document'; id: string; label: string; sub: string; fill: [number, number, number] }
   | { kind: 'ledger'; ledger: string; label: string; sub: string }
-  | { kind: 'action'; label: string; sub: string; run: () => void };
+  | { kind: 'action'; label: string; sub: string; run: () => void }
+  | { kind: 'engine'; label: string; sub: string };
 
 const LEDGERS = ['Library', 'Orders', 'Accounts', 'People', 'Hours'];
 
@@ -49,10 +56,12 @@ export function openCommandBar() {
 
 export function CommandBar() {
   const router = useRouter();
+  const pathname = usePathname();
   const { data } = useDeskEngagements();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
+  const [asking, setAsking] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // ⌘K / Ctrl-K toggles; Esc closes (but yields to a deeper overlay first).
@@ -64,7 +73,8 @@ export function CommandBar() {
       } else if (e.key === 'Escape' && open) {
         e.preventDefault();
         e.stopPropagation();
-        setOpen(false);
+        if (asking) setAsking(null);
+        else setOpen(false);
       }
     };
     const onAffordance = () => setOpen(true);
@@ -74,15 +84,28 @@ export function CommandBar() {
       window.removeEventListener('keydown', onKey, { capture: true });
       window.removeEventListener('document:open-command-bar', onAffordance);
     };
-  }, [open]);
+  }, [open, asking]);
 
   useEffect(() => {
     if (open) {
       setQuery('');
       setActive(0);
+      setAsking(null);
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
+
+  // The document in hand (if any) — Place → targets it directly (R38).
+  const inDocument = useMemo<InDocument | null>(() => {
+    const m = pathname?.match(/^\/doc\/(.+)$/);
+    const docId = m?.[1] ?? null;
+    if (!docId || !data) return null;
+    const f = [...(data.folders ?? []), ...(data.chips ?? [])].find(
+      (x) => x.row.engagement_id === docId,
+    );
+    const pid = f?.row.project_id;
+    return pid ? { projectId: pid, projectName: folderTab(f!.row) } : null;
+  }, [pathname, data]);
 
   const rows = useMemo<Row[]>(() => {
     const docs: Row[] = [...(data?.folders ?? []), ...(data?.chips ?? [])].map((f) => ({
@@ -96,7 +119,6 @@ export function CommandBar() {
       kind: 'ledger' as const,
       ledger: l,
       label: l,
-      // D14: the Library is a Room you walk into, not a sheet you pull.
       sub: l === 'Library' ? 'room ↗' : 'ledger',
     }));
     const actions: Row[] = [
@@ -108,13 +130,27 @@ export function CommandBar() {
         run: () => window.dispatchEvent(new CustomEvent('document:open-interruptions')),
       },
     ];
-    const all = [...docs, ...ledgers, ...actions];
     const q = query.trim().toLowerCase();
-    if (!q) return all;
-    return all.filter((r) => `${r.label} ${r.sub}`.toLowerCase().includes(q));
+    const dest = [...docs, ...ledgers, ...actions];
+    const filtered = q ? dest.filter((r) => `${r.label} ${r.sub}`.toLowerCase().includes(q)) : dest;
+    // R38: the ask is always offered for a non-empty query — destinations jump,
+    // a question asks. No mode.
+    if (query.trim()) {
+      filtered.push({ kind: 'engine', label: 'Ask the Engine', sub: `“${query.trim()}” · ask & place` });
+    }
+    return filtered;
   }, [data, query, router]);
 
+  // Keep the active row in range as the list changes.
+  useEffect(() => {
+    setActive((a) => Math.min(a, Math.max(0, rows.length - 1)));
+  }, [rows.length]);
+
   const choose = (row: Row) => {
+    if (row.kind === 'engine') {
+      setAsking(query.trim()); // answer inline; don't close the bar
+      return;
+    }
     setOpen(false);
     if (row.kind === 'document') router.push(`/doc/${row.id}`);
     else if (row.kind === 'ledger') openLedger(row.ledger);
@@ -139,15 +175,23 @@ export function CommandBar() {
         <input
           ref={inputRef}
           type="text"
-          aria-label="Find anything"
-          placeholder="Find a document or a ledger…"
+          aria-label="Find anything, or ask the Engine"
+          placeholder="Find a document or a ledger — or ask the Engine…"
           className="w-full border-b border-[var(--color-pearl)] bg-transparent px-4 py-3 text-[14px] text-[var(--color-charcoal)] placeholder:text-[var(--text-muted)] focus:outline-none"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
             setActive(0);
+            if (asking) setAsking(null);
           }}
           onKeyDown={(e) => {
+            if (asking) {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                setAsking(query.trim() || null);
+              }
+              return;
+            }
             if (e.key === 'ArrowDown') {
               e.preventDefault();
               setActive((a) => Math.min(a + 1, rows.length - 1));
@@ -160,43 +204,64 @@ export function CommandBar() {
             }
           }}
         />
-        <ul className="max-h-[52vh] overflow-y-auto py-1">
-          {rows.length === 0 && (
-            <li className="px-4 py-3 text-[12px] italic text-[var(--text-muted)]">
-              Nothing by that name.
-            </li>
-          )}
-          {rows.map((row, i) => (
-            <li key={`${row.kind}-${row.label}-${i}`}>
+
+        {asking ? (
+          <div className="max-h-[60vh] overflow-y-auto px-4 pb-3 pt-2">
+            <div className="mb-1 flex items-center justify-between gap-3">
+              <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-clay)]">
+                The Engine · “{asking}”
+              </span>
               <button
                 type="button"
-                onMouseEnter={() => setActive(i)}
-                onClick={() => choose(row)}
-                className={`flex w-full items-center gap-3 px-4 py-2 text-left ${
-                  i === active ? 'bg-[rgba(196,165,123,0.12)]' : ''
-                }`}
+                onClick={() => setAsking(null)}
+                className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-charcoal)]"
               >
-                {row.kind === 'document' ? (
-                  <StrataMark size="sm" fill={row.fill} />
-                ) : (
-                  <span
-                    aria-hidden
-                    className="inline-block h-[14px] w-[3px] rounded-[1px]"
-                    style={{ background: row.kind === 'ledger' ? 'var(--color-clay)' : 'var(--color-aged-oak)' }}
-                  />
-                )}
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-medium text-[var(--color-charcoal)]">
-                    {row.label}
-                  </span>
-                  <span className="block truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                    {row.sub}
-                  </span>
-                </span>
+                ← results
               </button>
-            </li>
-          ))}
-        </ul>
+            </div>
+            <EngineResults query={asking} inDocument={inDocument} />
+          </div>
+        ) : (
+          <ul className="max-h-[52vh] overflow-y-auto py-1">
+            {rows.length === 0 && (
+              <li className="px-4 py-3 text-[12px] italic text-[var(--text-muted)]">
+                Nothing by that name.
+              </li>
+            )}
+            {rows.map((row, i) => (
+              <li key={`${row.kind}-${row.label}-${i}`}>
+                <button
+                  type="button"
+                  onMouseEnter={() => setActive(i)}
+                  onClick={() => choose(row)}
+                  className={`flex w-full items-center gap-3 px-4 py-2 text-left ${
+                    i === active ? 'bg-[rgba(196,165,123,0.12)]' : ''
+                  }`}
+                >
+                  {row.kind === 'document' ? (
+                    <StrataMark size="sm" fill={row.fill} />
+                  ) : row.kind === 'engine' ? (
+                    <StrataMark size="sm" state="active" />
+                  ) : (
+                    <span
+                      aria-hidden
+                      className="inline-block h-[14px] w-[3px] rounded-[1px]"
+                      style={{ background: row.kind === 'ledger' ? 'var(--color-clay)' : 'var(--color-aged-oak)' }}
+                    />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-medium text-[var(--color-charcoal)]">
+                      {row.label}
+                    </span>
+                    <span className="block truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                      {row.sub}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
