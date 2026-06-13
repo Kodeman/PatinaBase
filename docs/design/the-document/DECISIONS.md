@@ -1260,4 +1260,68 @@ second FK).
 
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I25 · R1–R32 · L1–L3 · THE GO · FLIP CONFIRMED · last id = I25*
+## Rulings — design session, 2026-06-12 (Track 1 review)
+
+### R33 · Track 1 review — blessed, with six fixes — 2026-06-12
+
+**Blessed as built:** the project_tasks/project_documents pre-emptions
+(audit-first working as designed — the package proposes, the codebase
+disposes) · gates-as-decisions with the explicit `approves` option flag
+and SERVER-SIDE one-transaction settlement advancing the project's real
+vocabulary (spine, Desk, and old zones reading one truth is the whole
+model in one trigger) · the settled bar wearing "Approved · date" · TASK
+DUE ranked below awaiting-inspection, above send-weave nudges · the folio
+backfill (pre-folio rows → client_visible=true; D7 honored — no live
+engagement loses anything) with RLS narrowed on table AND storage ·
+rooms rendered with zero migration off 00066 · variance as room rows
+with a muted per-room category line (the full matrix stays deferred
+until a real schedule demands it) · the mirror as a projection component
+with the twofold contract test · the colophon carrying §14.6's RLS
+widening (00205) · Brief-a-vendor pre-addressing a pane that doesn't
+exist yet · the Account band's placement above the FF&E schedule through
+project/install/care — blessed as built.
+
+**The fixes (F1–F6, designer-visible):**
+**F1 — Own-authored messages settle.** A comms post authored by a studio
+member must NEVER render as a needs-attention margin message (the
+designer's own Pulse mirror currently surfaces as MESSAGE · unread-ish).
+Studio-authored posts render pre-settled (the Settled fold), excluded
+from needs-action and unread derivation. The margin asks for her hand;
+her own voice never qualifies.
+**F2 — Mirror attribution.** The client mirror groups the CLIENT's own
+message under "From the studio." Split attribution: studio-authored
+under "From the studio," client-authored rendered as their own ("You
+asked," or thread-style) — a mirror that misattributes the client's own
+words breaks the trust the instrument exists to build.
+**F3 — Pulse idempotency.** The mirror shows the same Pulse posted twice
+(Jun 12 ×2). Verify one-mirror-post-per-pulse (the status flip should
+guard it); if seed artifact, fix the seed; if real, guard the RPC.
+Assert it in the acceptance script either way.
+**F4 — "NO TRIGGER" → "MANUAL."** The signing milestone's trigger cell
+reads NO TRIGGER; the honest word for a designer-act milestone is
+MANUAL. Same cell, better word.
+**F5 — Room vocabulary.** Room meta reads "0 of 1 placed" while the
+section meta reads "underway" — one schedule, two vocabularies. Rooms
+adopt the section's word: "committed $X of $Y · N of M underway."
+"Placed" retires until it can truthfully mean installed.
+**F6 — Sender names.** "MESSAGE · DESIGNER USER" is the USER-bug's third
+cousin. Sender labels always render profile display names; the seed gets
+real names; a production guard falls back to the studio name, never a
+role noun (R16 extended to senders).
+**Sanity line (not a reopening):** §14.13 closed at flip — confirm in
+one log line that the two AP-012 desk folders reference two DISTINCT
+claims (seed coincidence), not one claim crossing engagements.
+
+### R34 · Milestone triggers — the flagged question resolved — 2026-06-12
+
+**on_date: WIRE IT** to `draft_invoice_from_milestone` — a date the
+designer deliberately configured arriving IS the drafting moment; drafts
+only, review-then-send unchanged, idempotent path already guards repeats.
+**on_signing: STAYS a designer act** — activation already seeds the
+signing milestone outstanding; an auto-draft would duplicate the
+existing flow's output and the moment is ceremonial anyway (she's in the
+document when it signs). Config stored, drafting manual, as built.
+
+---
+
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I25+ · R1–R34 · L1–L3 · THE GO · FLIP CONFIRMED · last id = R34*
