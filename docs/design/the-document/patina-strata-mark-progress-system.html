@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Strata Mark · Progress System · Spec &amp; Demonstration</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;
+  --sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--paper:#FCFAF6;--sheet2:#EFE9DD;--ink:rgba(44,41,38,0.18);
+  --fd:'Playfair Display',Georgia,serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace;
+  /* the three movement hues — each line its own color, fading back through time */
+  --line1:#5C4A3C; /* Mocha — Shaping, the foundation, fully present */
+  --line2:#C4A57B; /* Clay — Commitment, the middle layer */
+  --line3:#8B9CAD; /* Dusty Blue — Delivery, the newest layer reaching forward */
+}
+body{font-family:var(--fb);background:var(--ch);color:var(--mo);line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:4rem 2.5rem 6rem}
+.kicker{font-family:var(--fm);font-size:0.6rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--cl);font-weight:500}
+h1{font-family:var(--fd);font-weight:400;font-size:3rem;color:var(--ow);line-height:1.08;margin:0.6rem 0 0.5rem}
+h1 em{font-style:italic;color:var(--cl)}
+.lede{font-size:0.95rem;color:rgba(250,247,242,0.6);max-width:64ch;line-height:1.75}
+.bigstrata{display:flex;flex-direction:column;gap:9px;margin:2.4rem 0}
+.bigstrata span{height:4px;border-radius:2px;display:block}
+.bigstrata span:nth-child(1){width:130px;background:var(--line1)}
+.bigstrata span:nth-child(2){width:104px;background:var(--line2)}
+.bigstrata span:nth-child(3){width:78px;background:var(--line3);opacity:0.55}
+
+section{background:var(--paper);border-radius:8px;border:1px solid var(--ink);margin-top:2.6rem;overflow:hidden}
+.sec-in{padding:2.6rem 2.8rem}
+.sec-kick{font-family:var(--fm);font-size:0.56rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--cl);font-weight:600}
+h2{font-family:var(--fd);font-weight:500;font-size:1.7rem;color:var(--ch);margin:0.4rem 0 0.3rem}
+h2 em{font-style:italic;color:var(--ao)}
+h3{font-family:var(--fd);font-style:italic;font-weight:500;font-size:1.1rem;color:var(--ch);margin:1.8rem 0 0.5rem}
+p{font-size:0.86rem;color:var(--mo);max-width:70ch;margin:0.7rem 0}
+p strong{color:var(--ch);font-weight:600}
+.rule{display:flex;flex-direction:column;gap:3px;margin:1.6rem 0}
+.rule div{height:1.5px;border-radius:1px}
+.rule div:nth-child(1){width:44px;background:var(--cl)}
+.rule div:nth-child(2){width:30px;background:var(--cl);opacity:0.5}
+code{font-family:var(--fm);font-size:0.82em;background:rgba(229,226,221,0.5);padding:1px 5px;border-radius:3px;color:var(--ao)}
+
+/* ===== THE STRATA MARK — canonical component ===== */
+/*
+  Structure: .strata > i*3. Width ratios 100/80/60 (brand canon).
+  Progress is expressed by the --fill of each line (0..1):
+   - unfilled line: ghost track (low opacity, no color)
+   - filling line: its movement hue, clipped left-to-right
+   - the gradient fade lives in the *set*: line 3 carries reduced opacity
+*/
+.strata{display:inline-flex;flex-direction:column;gap:var(--gap,4px);vertical-align:middle;width:var(--mark-w,120px)}
+.strata i{display:block;align-self:flex-start;height:var(--h,3px);border-radius:999px;position:relative;background:var(--track,rgba(44,41,38,0.12))}
+.strata i::after{content:'';position:absolute;inset:0;border-radius:999px;transform-origin:left center;transform:scaleX(var(--f,0));transition:transform .6s cubic-bezier(.4,0,.2,1)}
+.strata i:nth-child(1){width:var(--w1,100%)}
+.strata i:nth-child(2){width:var(--w2,80%)}
+.strata i:nth-child(3){width:var(--w3,60%)}
+.strata i:nth-child(1)::after{background:var(--line1)}
+.strata i:nth-child(2)::after{background:var(--line2)}
+.strata i:nth-child(3)::after{background:var(--line3)}
+/* the canonical gradient fade: newest layer reads softer */
+.strata i:nth-child(3){opacity:var(--o3,0.6)}
+/* size variants set the mark's overall width + line metrics */
+.s-sm{--h:2px;--gap:2.5px;--mark-w:48px}
+.s-md{--h:3px;--gap:4px;--mark-w:88px}
+.s-lg{--h:4px;--gap:6px;--mark-w:120px}
+.s-xl{--h:6px;--gap:9px;--mark-w:150px}
+
+/* ===== loading behaviors ===== */
+/* the breath — the one ambient motion (R15): slow opacity swell, active marker only */
+@keyframes breath{0%,100%{opacity:0.35}50%{opacity:1}}
+.breathing i::after{transform:scaleX(1)}
+.breathing i:nth-child(1)::after{animation:breath 3s ease-in-out infinite}
+.breathing i:nth-child(2)::after{animation:breath 3s ease-in-out infinite .25s}
+.breathing i:nth-child(3)::after{animation:breath 3s ease-in-out infinite .5s}
+/* the sweep — determinate-unknown loading: a fill that rises line by line and resets */
+@keyframes sweep1{0%,8%{transform:scaleX(0)}25%,100%{transform:scaleX(1)}}
+@keyframes sweep2{0%,25%{transform:scaleX(0)}45%,100%{transform:scaleX(1)}}
+@keyframes sweep3{0%,45%{transform:scaleX(0)}65%,92%{transform:scaleX(1)}100%{transform:scaleX(1)}}
+.sweeping{--cycle:2.2s}
+.sweeping i::after{animation-duration:var(--cycle);animation-iteration-count:infinite;animation-timing-function:cubic-bezier(.4,0,.2,1)}
+.sweeping i:nth-child(1)::after{animation-name:sweep1}
+.sweeping i:nth-child(2)::after{animation-name:sweep2}
+.sweeping i:nth-child(3)::after{animation-name:sweep3}
+@keyframes fadecycle{0%,70%{opacity:1}85%,100%{opacity:0}}
+.sweeping{animation:fadecycle var(--cycle) ease-in-out infinite}
+
+@media(prefers-reduced-motion:reduce){
+  .breathing i::after{animation:none;transform:scaleX(1)}
+  .breathing{opacity:0.7}
+  .sweeping,.sweeping i::after{animation:none}
+  .sweeping i::after{transform:scaleX(0.6)}
+}
+
+/* ===== demo scaffolding ===== */
+.demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.4rem;margin:1.5rem 0}
+.tile{border:1px solid var(--pe);border-radius:6px;padding:1.3rem 1.4rem;background:rgba(252,250,246,0.6)}
+.tile.dark{background:var(--ch);border-color:rgba(250,247,242,0.16)}
+.tile-label{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--ao);font-weight:600;margin-bottom:0.9rem;display:block}
+.tile.dark .tile-label{color:rgba(250,247,242,0.45)}
+.tile-cap{font-size:0.7rem;color:var(--ao);margin-top:0.9rem;line-height:1.5}
+.tile.dark .tile-cap{color:rgba(250,247,242,0.5)}
+.swatch-row{display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap}
+
+/* movement legend */
+.legend{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin:1.4rem 0}
+.leg{border:1px solid var(--pe);border-radius:6px;padding:1rem 1.1rem;background:#fff}
+.leg-line{height:5px;border-radius:3px;width:60%;margin-bottom:0.7rem}
+.leg-name{font-family:var(--fd);font-weight:500;font-size:0.95rem;color:var(--ch)}
+.leg-name em{font-style:italic;color:var(--ao);font-weight:400;font-size:0.78rem}
+.leg-meta{font-family:var(--fm);font-size:0.46rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao);margin-top:0.3rem}
+.leg-desc{font-size:0.72rem;color:var(--mo);margin-top:0.5rem;line-height:1.5}
+
+/* interactive scrubber */
+.scrubber{background:var(--ch);border-radius:8px;padding:2rem 2.2rem;margin:1.6rem 0}
+.scrub-top{display:flex;align-items:center;gap:1.5rem;margin-bottom:1.6rem;flex-wrap:wrap}
+.scrub-mark{display:flex;align-items:center;gap:1.1rem}
+.scrub-stage-name{font-family:var(--fd);font-style:italic;font-size:1.25rem;color:var(--ow)}
+.scrub-stage-sub{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--cl);display:block;font-style:normal;margin-top:2px}
+.stage-track{display:flex;gap:4px;margin:1.2rem 0 0.6rem}
+.stage-dot{flex:1;height:34px;border:1px solid rgba(250,247,242,0.15);border-radius:5px;background:rgba(250,247,242,0.04);cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:var(--fm);font-size:0.46rem;letter-spacing:0.05em;text-transform:uppercase;color:rgba(250,247,242,0.4);transition:all .25s;text-align:center;line-height:1.2;padding:0 2px}
+.stage-dot:hover{border-color:rgba(196,165,123,0.5);color:rgba(250,247,242,0.7)}
+.stage-dot.active{background:rgba(196,165,123,0.14);border-color:var(--cl);color:var(--ow)}
+.stage-dot.past{border-color:rgba(168,181,160,0.4);color:rgba(168,181,160,0.7)}
+.scrub-readout{font-family:var(--fm);font-size:0.56rem;letter-spacing:0.06em;color:rgba(250,247,242,0.5);margin-top:1rem;line-height:1.7}
+.scrub-readout b{color:var(--cl);font-weight:500}
+
+/* in-context: folder tab */
+.folder-demo{position:relative;margin:18px 0 0.5rem;width:300px}
+.folder-demo::before{content:'';position:absolute;left:4px;right:-4px;top:4px;bottom:-4px;background:#E2DACA;border-radius:4px 7px 7px 7px;border:1px solid var(--ink)}
+.folder-demo::after{content:'';position:absolute;left:2px;right:-2px;top:2px;bottom:-2px;background:var(--sheet2);border-radius:4px 7px 7px 7px;border:1px solid var(--ink)}
+.fd-tab{position:absolute;top:-14px;left:14px;display:flex;align-items:center;gap:7px;padding:3px 11px 3px 9px;background:var(--paper);border:1px solid var(--ink);border-bottom:none;border-radius:5px 5px 0 0;z-index:3}
+.fd-tab .t{font-family:var(--fm);font-size:0.48rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao);font-weight:600}
+.fd-doc{position:relative;z-index:1;background:var(--paper);border:1px solid var(--ink);border-radius:3px 6px 6px 6px;padding:1rem 1.1rem}
+.fd-name{font-family:var(--fd);font-weight:500;font-size:1.02rem;color:var(--ch)}
+.fd-stage{font-size:0.66rem;color:var(--ao);margin-top:0.1rem}
+
+/* in-context: letterhead */
+.lh-demo{background:var(--paper);border:1px solid var(--ink);border-radius:6px;padding:1.4rem 1.6rem;background-image:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(139,115,85,0.012) 3px,rgba(139,115,85,0.012) 4px)}
+.lh-title{font-family:var(--fd);font-weight:500;font-size:1.35rem;color:var(--ch);margin-top:0.5rem}
+.lh-sub{font-size:0.66rem;color:var(--ao);margin-top:0.15rem}
+
+/* in-context: command bar rows */
+.cmd-demo{background:var(--paper);border:1px solid var(--ink);border-radius:6px;overflow:hidden}
+.cmd-search{padding:0.7rem 1rem;border-bottom:1px solid var(--pe);font-size:0.78rem;color:var(--ao)}
+.cmd-row{display:flex;align-items:center;gap:0.8rem;padding:0.6rem 1rem;border-bottom:1px solid rgba(229,226,221,0.6)}
+.cmd-row:last-child{border-bottom:none}
+.cmd-name{font-size:0.78rem;color:var(--ch);font-weight:500}
+.cmd-meta{margin-left:auto;font-family:var(--fm);font-size:0.46rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao)}
+
+/* in-context: dark spine */
+.spine-demo{background:var(--ch);border-radius:6px;padding:1.4rem 1.6rem;display:flex;flex-direction:column;gap:1rem}
+.spine-item{display:flex;align-items:center;gap:0.8rem}
+.spine-label{font-size:0.78rem;color:rgba(250,247,242,0.5)}
+.spine-item.active .spine-label{color:var(--ow);font-weight:600}
+.spine-sub{font-family:var(--fm);font-size:0.42rem;letter-spacing:0.06em;text-transform:uppercase;color:rgba(250,247,242,0.4);display:block}
+
+/* spec tables */
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:0.76rem}
+th{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);font-weight:600;text-align:left;padding:0.5rem 0.6rem;border-bottom:1.5px solid var(--pe)}
+td{padding:0.5rem 0.6rem;border-bottom:1px solid rgba(229,226,221,0.6);color:var(--mo);vertical-align:top}
+td code{font-size:0.72rem}
+.chip{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:middle;margin-right:5px;border:1px solid var(--ink)}
+.dont{color:#b5654f}.do{color:#7e8f76}
+pre{background:var(--ch);color:rgba(250,247,242,0.85);border-radius:6px;padding:1.2rem 1.4rem;overflow-x:auto;font-family:var(--fm);font-size:0.72rem;line-height:1.7;margin:1.2rem 0}
+pre .c{color:var(--cl)};pre .g{color:var(--sa)};pre .m{color:rgba(250,247,242,0.4)}
+
+footer{margin-top:3.5rem}
+.f-note{font-size:0.78rem;color:rgba(250,247,242,0.5);max-width:66ch;line-height:1.8}
+.f-note strong{color:var(--cl);font-weight:500}
+@media(max-width:780px){.wrap{padding:2.5rem 1.2rem}.sec-in{padding:1.6rem 1.3rem}.demo-grid,.legend{grid-template-columns:1fr}.stage-dot{font-size:0.4rem}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="kicker">Patina · Brand System · R15 + the gradient fade</div>
+<h1>The Strata Mark,<br><em>as a measure of time</em></h1>
+<div class="bigstrata"><span></span><span></span><span></span></div>
+<p class="lede">The mark was always three layers of accumulated time. This spec gives those layers a job: each line is a <em>movement</em> of an engagement, each its own color fading back through history, and the mark fills as the work moves from first conversation to final care. One device now answers, everywhere it appears, the quietest question a designer carries — <em>how far along is this?</em></p>
+
+<!-- ============ THE MAPPING ============ -->
+<section><div class="sec-in">
+<div class="sec-kick">The concept</div>
+<h2>Three lines, three movements</h2>
+<p>An engagement moves through seven sections (Brief → Care), but it lives in <strong>three movements</strong> — and the mark has exactly three lines. Line one is the oldest layer, fully present; line three is the newest, reaching forward, rendered softer in the canonical gradient fade. A line <strong>fills</strong> as its movement completes; the active line breathes.</p>
+
+<div class="legend">
+  <div class="leg">
+    <div class="leg-line" style="background:var(--line1)"></div>
+    <div class="leg-name">Shaping <em>· the foundation</em></div>
+    <div class="leg-meta">Line 1 · Mocha · Brief → Direction</div>
+    <div class="leg-desc">Conversation, discovery, and direction. The deepest layer — where the relationship and the vision are laid down.</div>
+  </div>
+  <div class="leg">
+    <div class="leg-line" style="background:var(--line2)"></div>
+    <div class="leg-name">Commitment <em>· the middle</em></div>
+    <div class="leg-meta">Line 2 · Clay · the signing</div>
+    <div class="leg-desc">The proposal signed. A single decisive moment that fills the middle line — the engagement becomes real.</div>
+  </div>
+  <div class="leg">
+    <div class="leg-line" style="background:var(--line3);opacity:0.7"></div>
+    <div class="leg-name">Delivery <em>· the newest layer</em></div>
+    <div class="leg-meta">Line 3 · Dusty Blue · Project → Care</div>
+    <div class="leg-desc">Procurement, install, and care. The layer still being added — softest in the fade, reaching toward the present.</div>
+  </div>
+</div>
+
+<p>Why this mapping and not a seven-segment bar: the mark is a <strong>brand device first</strong>. It must read as Patina at a glance and reveal progress on a second look — never become a progress bar wearing a logo. Three movements keep it honest; the fractional fill within a movement (a half-filled active line) carries the finer grain.</p>
+</div></section>
+
+<!-- ============ INTERACTIVE SCRUBBER ============ -->
+<section><div class="sec-in">
+<div class="sec-kick">Watch it fill</div>
+<h2>An engagement, stage by stage</h2>
+<p>Tap through the lifecycle. The mark fills as the work moves; the active line breathes; settled movements hold their color.</p>
+
+<div class="scrubber">
+  <div class="scrub-top">
+    <div class="scrub-mark">
+      <span class="strata s-xl" id="scrubMark"><i></i><i></i><i></i></span>
+      <div><span class="scrub-stage-name" id="scrubName">Brief</span><span class="scrub-stage-sub" id="scrubMovement">Shaping · just begun</span></div>
+    </div>
+  </div>
+  <div class="stage-track" id="stageTrack"></div>
+  <div class="scrub-readout" id="scrubReadout"></div>
+</div>
+<p class="tile-cap" style="color:var(--ao)">The fill values driving this are the same ones the production component takes — see the spec table below. Nothing here is faked; each stage maps to real <code>--f</code> per line.</p>
+</div></section>
+
+<!-- ============ THE FOUR STATES ============ -->
+<section><div class="sec-in">
+<div class="sec-kick">The states</div>
+<h2>Static · Loading · Progress · Live</h2>
+
+<h3>1 · Static — the brand mark</h3>
+<p>At rest, with no engagement to measure, the mark is simply the logo: all three lines present at their canonical widths, the third faded. This is the wordmark's companion, the watermark, the section divider.</p>
+<div class="demo-grid">
+  <div class="tile"><span class="tile-label">Static · full presence</span>
+    <div class="swatch-row">
+      <span class="strata s-xl" style="--f:1;--o3:0.55"><i></i><i></i><i></i></span>
+      <span class="strata s-lg" style="--f:1;--o3:0.55"><i></i><i></i><i></i></span>
+      <span class="strata s-md" style="--f:1;--o3:0.55"><i></i><i></i><i></i></span>
+    </div>
+    <div class="tile-cap">Three sizes, one mark. The fade is structural: line 3 at ~55% opacity regardless of size.</div>
+  </div>
+  <div class="tile dark"><span class="tile-label">Static · on charcoal</span>
+    <div class="swatch-row">
+      <span class="strata s-xl" style="--f:1;--o3:0.45;--track:transparent"><i></i><i></i><i></i></span>
+      <span class="strata s-lg" style="--f:1;--o3:0.45;--track:transparent"><i></i><i></i><i></i></span>
+    </div>
+    <div class="tile-cap">On dark grounds the colored fills carry; the track disappears.</div>
+  </div>
+</div>
+
+<h3>2 · Loading — the breath and the sweep</h3>
+<p>Two distinct loading behaviors for two distinct moments. <strong>The breath</strong> (R15's single sanctioned ambient motion) is for an <em>active, present</em> thing — the spine marker of the document in hand. <strong>The sweep</strong> is for <em>indeterminate work</em> — a scan running, a save in flight, the Aesthete thinking — where the lines fill bottom-toward-top and reset, time accumulating and beginning again.</p>
+<div class="demo-grid">
+  <div class="tile"><span class="tile-label">The breath · active marker</span>
+    <div class="swatch-row">
+      <span class="strata s-xl breathing"><i></i><i></i><i></i></span>
+      <span class="strata s-lg breathing"><i></i><i></i><i></i></span>
+    </div>
+    <div class="tile-cap">~3s opacity swell, staggered per line. Used on exactly one element at a time. <code>prefers-reduced-motion</code> stills it to a steady glow.</div>
+  </div>
+  <div class="tile"><span class="tile-label">The sweep · indeterminate loading</span>
+    <div class="swatch-row">
+      <span class="strata s-xl sweeping"><i></i><i></i><i></i></span>
+      <span class="strata s-lg sweeping"><i></i><i></i><i></i></span>
+    </div>
+    <div class="tile-cap">Lines fill in sequence then fade and restart — the Whisper Bar's quiet cousin. Replaces spinners everywhere.</div>
+  </div>
+</div>
+
+<h3>3 · Progress — determinate fill</h3>
+<p>When progress is known, the mark holds a fixed fill. Below: the same mark at five points in an engagement, frozen. The colored portion is real completion; the ghost track is what's still to come.</p>
+<div class="tile" style="margin-top:1.2rem"><span class="tile-label">Determinate · five moments</span>
+  <div style="display:flex;gap:2.2rem;align-items:flex-end;flex-wrap:wrap;padding:0.5rem 0">
+    <div style="text-align:center"><span class="strata s-lg" style="--f:0"><i style="--f:0.3"></i><i style="--f:0"></i><i style="--f:0"></i></span><div class="tile-cap" style="margin-top:0.6rem">Brief<br><span style="font-family:var(--fm);font-size:0.6em">~10%</span></div></div>
+    <div style="text-align:center"><span class="strata s-lg"><i style="--f:1"></i><i style="--f:0"></i><i style="--f:0"></i></span><div class="tile-cap" style="margin-top:0.6rem">Direction<br><span style="font-family:var(--fm);font-size:0.6em">Shaping done</span></div></div>
+    <div style="text-align:center"><span class="strata s-lg"><i style="--f:1"></i><i style="--f:1"></i><i style="--f:0"></i></span><div class="tile-cap" style="margin-top:0.6rem">Signed<br><span style="font-family:var(--fm);font-size:0.6em">Commitment</span></div></div>
+    <div style="text-align:center"><span class="strata s-lg"><i style="--f:1"></i><i style="--f:1"></i><i style="--f:0.5"></i></span><div class="tile-cap" style="margin-top:0.6rem">In install<br><span style="font-family:var(--fm);font-size:0.6em">Delivery ½</span></div></div>
+    <div style="text-align:center"><span class="strata s-lg"><i style="--f:1"></i><i style="--f:1"></i><i style="--f:1"></i></span><div class="tile-cap" style="margin-top:0.6rem">Care<br><span style="font-family:var(--fm);font-size:0.6em">Complete</span></div></div>
+  </div>
+</div>
+
+<h3>4 · Live — the active marker breathing inside progress</h3>
+<p>The states compose. A document mid-flight shows <em>settled</em> movements filled and holding, the <em>active</em> movement's line breathing. This is the spine marker in the real product: progress and life at once.</p>
+<div class="tile dark" style="margin-top:1.2rem"><span class="tile-label">Live · signed, now in delivery</span>
+  <div class="swatch-row" style="gap:2.5rem">
+    <span class="strata s-xl" style="--track:transparent"><i style="--f:1"></i><i style="--f:1"></i><i class="livebreath"></i></span>
+    <div class="tile-cap" style="margin:0">Lines 1 &amp; 2 filled and still; line 3 — Delivery, the active movement — breathes as work continues. The composition the spine renders for an in-flight project.</div>
+  </div>
+</div>
+</div></section>
+
+<!-- ============ IN CONTEXT ============ -->
+<section><div class="sec-in">
+<div class="sec-kick">Where it appears</div>
+<h2>The mark in its homes</h2>
+<p>Everywhere the mark stands for a document, it now carries that document's progress. Four real surfaces:</p>
+
+<div class="demo-grid" style="grid-template-columns:1fr 1fr">
+  <div class="tile"><span class="tile-label">Folder tab · on the Desk</span>
+    <div class="folder-demo">
+      <div class="fd-tab"><span class="strata" style="--mark-w:28px;--gap:3px;--h:2.5px"><i style="--f:1;width:26px"></i><i style="--f:1;width:20px"></i><i style="--f:0.5;width:14px"></i></span><span class="t">Whitfield</span></div>
+      <div class="fd-doc"><div class="fd-name">Whitfield Living &amp; Dining</div><div class="fd-stage">Project · in delivery</div></div>
+    </div>
+    <div class="tile-cap">The tab's mark fills to the engagement's stage — a glance across the Desk reads how far each project has come.</div>
+  </div>
+
+  <div class="tile"><span class="tile-label">Letterhead · in the document</span>
+    <div class="lh-demo">
+      <span class="strata s-lg" style="--track:rgba(44,41,38,0.1)"><i style="--f:1"></i><i style="--f:1"></i><i style="--f:0.5"></i></span>
+      <div class="lh-title">Whitfield Living &amp; Dining</div>
+      <div class="lh-sub">Sarah Whitfield · Design · in delivery</div>
+    </div>
+    <div class="tile-cap">Above the title, the mark is both signature and status — the document states its own progress in its own letterhead.</div>
+  </div>
+
+  <div class="tile"><span class="tile-label">Command bar · ⌘K rows</span>
+    <div class="cmd-demo">
+      <div class="cmd-search">whit|</div>
+      <div class="cmd-row"><span class="strata" style="--mark-w:30px;--gap:3px;--h:2.5px"><i style="--f:1;width:28px"></i><i style="--f:1;width:22px"></i><i style="--f:0.5;width:15px"></i></span><span class="cmd-name">Whitfield Living &amp; Dining</span><span class="cmd-meta">delivery</span></div>
+      <div class="cmd-row"><span class="strata" style="--mark-w:30px;--gap:3px;--h:2.5px"><i style="--f:1;width:28px"></i><i style="--f:0.4;width:22px"></i><i style="--f:0;width:15px"></i></span><span class="cmd-name">Olsen Lake House</span><span class="cmd-meta">proposal</span></div>
+      <div class="cmd-row"><span class="strata" style="--mark-w:30px;--gap:3px;--h:2.5px"><i style="--f:0.6;width:28px"></i><i style="--f:0;width:22px"></i><i style="--f:0;width:15px"></i></span><span class="cmd-name">Morrison Residence</span><span class="cmd-meta">discovery</span></div>
+    </div>
+    <div class="tile-cap">Each result carries its fill — you see a project's stage before you even open it.</div>
+  </div>
+
+  <div class="tile dark"><span class="tile-label">Spine · the seven markers</span>
+    <div class="spine-demo">
+      <div class="spine-item"><span class="strata s-sm" style="--track:rgba(250,247,242,0.12)"><i style="--f:1"></i><i style="--f:0"></i><i style="--f:0"></i></span><span class="spine-label">Shaping<span class="spine-sub">settled</span></span></div>
+      <div class="spine-item"><span class="strata s-sm" style="--track:rgba(250,247,242,0.12)"><i style="--f:1"></i><i style="--f:1"></i><i style="--f:0"></i></span><span class="spine-label">Commitment<span class="spine-sub">signed · may 22</span></span></div>
+      <div class="spine-item active"><span class="strata s-sm" style="--track:rgba(250,247,242,0.12)"><i style="--f:1"></i><i style="--f:1"></i><i class="livebreath"></i></span><span class="spine-label">Delivery<span class="spine-sub">active · week 4</span></span></div>
+    </div>
+    <div class="tile-cap">The full mark beside each movement; the active one breathes. Per-marker fill answers "which movement," the breath answers "where the pen is."</div>
+  </div>
+</div>
+</div></section>
+
+<!-- ============ SPEC ============ -->
+<section><div class="sec-in">
+<div class="sec-kick">The specification</div>
+<h2>Build contract</h2>
+
+<h3>Geometry (brand canon, preserved)</h3>
+<table>
+<tr><th>Line</th><th>Width</th><th>Height</th><th>Opacity (track)</th><th>Movement</th><th>Fill color</th></tr>
+<tr><td>1 · top</td><td>100%</td><td>100%</td><td>full</td><td>Shaping</td><td><span class="chip" style="background:var(--line1)"></span>Mocha <code>#5C4A3C</code></td></tr>
+<tr><td>2 · middle</td><td>80%</td><td>85%*</td><td>full</td><td>Commitment</td><td><span class="chip" style="background:var(--line2)"></span>Clay <code>#C4A57B</code></td></tr>
+<tr><td>3 · bottom</td><td>60%</td><td>70%*</td><td>~55%</td><td>Delivery</td><td><span class="chip" style="background:var(--line3)"></span>Dusty Blue <code>#8B9CAD</code></td></tr>
+</table>
+<p style="font-size:0.72rem;color:var(--ao)">*In this implementation all lines share a height for crispness at small sizes; the brand's decreasing-height ratio is available via per-line height vars when the mark is rendered large (wordmark lockup, hero). Width ratios and the opacity fade are always honored.</p>
+
+<h3>The fill API</h3>
+<p>One CSS custom property per line, <code>--f</code> from 0 to 1, drives the colored portion. Unfilled = ghost track. The component reads engagement state and sets three values:</p>
+<pre><span class="m">/* per-line fill from engagement stage */</span>
+.strata i:nth-child(1) { <span class="c">--f</span>: var(--shaping-fill);    <span class="m">/* Brief→Direction */</span>
+.strata i:nth-child(2) { <span class="c">--f</span>: var(--commitment-fill); <span class="m">/* 0 or 1 — signed is binary */</span>
+.strata i:nth-child(3) { <span class="c">--f</span>: var(--delivery-fill);   <span class="m">/* Project→Care */</span>
+
+<span class="m">/* stage → fill triples (the scrubber's real values) */</span>
+Brief        → <span class="g">[0.15, 0, 0]</span>      Signed       → <span class="g">[1, 1, 0]</span>
+Discovery    → <span class="g">[0.5,  0, 0]</span>      Procurement  → <span class="g">[1, 1, 0.4]</span>
+Direction    → <span class="g">[1,    0, 0]</span>      Install      → <span class="g">[1, 1, 0.7]</span>
+Proposal     → <span class="g">[1,  0.5, 0]</span>      Care         → <span class="g">[1, 1, 1]</span></pre>
+
+<h3>The three behavior classes</h3>
+<table>
+<tr><th>Class</th><th>When</th><th>Motion</th></tr>
+<tr><td><code>(none)</code> + fill vars</td><td>Determinate progress; static brand mark (fill=1)</td><td>Fill transitions at .6s ease on value change; otherwise still</td></tr>
+<tr><td><code>.breathing</code></td><td>The single active element (spine marker of the held document)</td><td>~3s opacity swell, staggered; one at a time; reduced-motion → steady glow</td></tr>
+<tr><td><code>.sweeping</code></td><td>Indeterminate work (scan, save, Aesthete thinking)</td><td>Lines fill in sequence, set fades and restarts (~2.2s); reduced-motion → static partial</td></tr>
+</table>
+
+<h3>Rules of use</h3>
+<table>
+<tr><th></th><th>Do</th><th>Don't</th></tr>
+<tr><td>Count</td><td class="do">Always three lines</td><td class="dont">Never add or drop lines to mean more stages</td></tr>
+<tr><td>Motion</td><td class="do">One breathing mark per view</td><td class="dont">Never breathe a mark on the Desk — nothing on the Desk moves</td></tr>
+<tr><td>Fade</td><td class="do">Line 3 always softer (the gradient)</td><td class="dont">Never equalize the three — the fade is the brand</td></tr>
+<tr><td>Color</td><td class="do">Movement hues for fill; ghost track for unfilled</td><td class="dont">Never use stamp colors (sage/terracotta) in the mark</td></tr>
+<tr><td>Honesty</td><td class="do">Fill reflects real stage</td><td class="dont">Never animate fill as decoration on a static brand mark</td></tr>
+</table>
+</div></section>
+
+<footer>
+<div class="rule"><div></div><div></div></div>
+<p class="f-note"><strong>Lineage.</strong> This formalizes R15 (the Strata Mark as a progress device, line 1 = Shaping, line 2 = Commitment at signing, line 3 = Delivery) and the breath (R15's single sanctioned ambient motion). The per-line gradient coloring extends the brand's documented gradient-fade — each line now its own movement hue rather than a single color at decreasing opacity, while preserving the canonical 100/80/60 width ratios and the soft third line. <strong>For the log:</strong> if Kody blesses the three-hue treatment over the original single-hue fade, that's a one-line ruling extending R15; the fill API and the <code>.sweeping</code> indeterminate loader are new and would log as the component's build contract.</p>
+</footer>
+
+</div>
+
+<style>
+/* live breath used in composed states — same as .breathing but per-line so it can sit beside static fills */
+.livebreath{--f:1}
+.livebreath::after{transform:scaleX(1);animation:breath 3s ease-in-out infinite .5s}
+@media(prefers-reduced-motion:reduce){.livebreath::after{animation:none;opacity:0.7}}
+</style>
+
+<script>
+// ===== interactive scrubber =====
+const STAGES = [
+  {name:'Brief',      mv:'Shaping · just begun',     f:[0.15,0,0],  note:'The relationship begins. Line one — Shaping — starts to fill.'},
+  {name:'Discovery',  mv:'Shaping · listening',      f:[0.5,0,0],   note:'Needs and constraints gathered. The foundation deepens.'},
+  {name:'Direction',  mv:'Shaping · concluded',      f:[1,0,0],     note:'Vision set. <b>Line one is full</b> — the Shaping movement is complete.'},
+  {name:'Proposal',   mv:'Commitment · pending',     f:[1,0.5,0],   note:'The proposal is out. Line two begins to fill, awaiting signature.'},
+  {name:'Signed',     mv:'Commitment · sealed',      f:[1,1,0],     note:'Signed. <b>Line two fills</b> — the engagement is real. The client granted this.'},
+  {name:'Procurement',mv:'Delivery · underway',      f:[1,1,0.4],   note:'Orders placed, pieces in motion. Line three — the newest layer — begins.'},
+  {name:'Install',    mv:'Delivery · on site',       f:[1,1,0.7],   note:'Installation underway. The final layer nearly complete.'},
+  {name:'Care',       mv:'Delivery · complete',      f:[1,1,1],     note:'<b>All three lines full.</b> The engagement is whole — Where Time Added Value.'},
+];
+let cur = 0;
+const mark = document.getElementById('scrubMark');
+const nm = document.getElementById('scrubName');
+const mvEl = document.getElementById('scrubMovement');
+const ro = document.getElementById('scrubReadout');
+const track = document.getElementById('stageTrack');
+
+STAGES.forEach((s,i)=>{
+  const d = document.createElement('div');
+  d.className='stage-dot'; d.textContent=s.name; d.dataset.i=i;
+  d.onclick=()=>setStage(i);
+  track.appendChild(d);
+});
+
+function setStage(i){
+  cur=i; const s=STAGES[i];
+  const lines = mark.querySelectorAll('i');
+  lines.forEach((ln,k)=>ln.style.setProperty('--f', s.f[k]));
+  // the active movement's line breathes; settled hold
+  lines.forEach(ln=>{ln.classList.remove('livebreath'); ln.style.removeProperty('animation');});
+  let activeLine = s.f[2]>0&&s.f[2]<1 ? 2 : s.f[1]>0&&s.f[1]<1 ? 1 : s.f[0]>0&&s.f[0]<1 ? 0 : -1;
+  if(s.name==='Care') activeLine=-1;
+  if(activeLine>=0){ lines[activeLine].classList.add('livebreath'); }
+  nm.textContent=s.name; mvEl.textContent=s.mv; ro.innerHTML='Stage '+(i+1)+' of 8 — '+s.note;
+  document.querySelectorAll('.stage-dot').forEach((d,k)=>{
+    d.classList.toggle('active',k===i);
+    d.classList.toggle('past',k<i);
+  });
+}
+setStage(0);
+</script>
+</body>
+</html>

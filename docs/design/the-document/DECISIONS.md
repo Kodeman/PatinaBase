@@ -1429,6 +1429,96 @@ Engine (R31), §12 The Library Room + D14 Rooms physics (R32) — return with th
 Accounts/Aesthete design session. Any future audit must scope these as
 not-yet-built, never regressions.
 
+### R35 · Strata Mark progress system — extends R15 — 2026-06-13
+
+Ratifies the Strata Mark as a working progress device and adds two things R15
+left open: the per-line gradient coloring and the component build contract.
+Canonical reference: patina-strata-mark-progress-system.html.
+
+**The three-hue gradient (NEW — extends R15's single-hue fade).** Each line
+carries its own MOVEMENT color, fading back through time rather than one hue
+at decreasing opacity:
+  - Line 1 · Mocha #5C4A3C — Shaping (Brief→Direction), the deepest layer
+  - Line 2 · Clay #C4A57B — Commitment (the signing), the middle layer
+  - Line 3 · Dusty Blue #8B9CAD — Delivery (Project→Care), the newest layer,
+    rendered at ~55% opacity so the canonical gradient fade survives.
+The brand's 100/80/60 width ratios and the soft third line are preserved; the
+movement-to-line mapping is exactly R15's. Movement hues are for the mark
+ONLY — never the stamp palette (sage/terracotta) and never equalize the three.
+
+**The fill API (build contract).** One CSS custom property per line, `--f`
+(0..1), drives a left-clipped color fill over a ghost track; unfilled = track.
+The component reads engagement stage and sets three values. Stage→fill triples
+(canonical): Brief [0.15,0,0] · Discovery [0.5,0,0] · Direction [1,0,0] ·
+Proposal [1,0.5,0] · Signed [1,1,0] · Procurement [1,1,0.4] · Install
+[1,1,0.7] · Care [1,1,1]. Commitment (line 2) is binary — signed is 0 or 1.
+Fill transitions ~.6s ease on stage change; otherwise still.
+
+**Three behavior classes.** (none)+fill = determinate progress / static brand
+mark at fill=1. `.breathing` = R15's single sanctioned ambient motion (~3s
+opacity swell, staggered per line), used on EXACTLY the active element (the
+spine marker of the held document), never on the Desk, reduced-motion → steady
+glow. `.sweeping` (NEW) = indeterminate loader for scans / saves / Aesthete
+thinking: lines fill in sequence then the set fades and restarts (~2.2s),
+reduced-motion → static partial. The sweep replaces spinners portal-wide.
+
+**Surfaces (per R15, now with fill).** Folder tab, letterhead, ⌘K result rows,
+and the spine's seven markers each carry the engagement's fill — a glance reads
+how far along. Size variants set the mark's overall width (sm/md/lg/xl =
+48/88/120/150px) so the descending taper and per-line fill stay legible; the
+⌘K and tab marks render at the wider end so result-row progress is readable
+before opening. Decreasing line HEIGHT (brand canon for large lockups) is
+available via per-line height vars but equalized for crispness at small sizes;
+width ratios and the opacity fade are always honored.
+
+Build note for Claude Code: ships as the `Strata` component's progress mode —
+a presentation concern, no schema. Fill derives from the existing
+`document_state` stage; the breath already shipped (I19). The `.sweeping`
+loader and the three-hue fill are the new surface. Folds into spec §10 (visual
+system) at the next cut. If the single-hue fade is ever wanted back for a pure
+brand context (wordmark lockup), the component takes a `mono` flag — the
+progress system is the default in-product.
+
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I27 · R1–R34 · L1–L3 · THE GO · FLIP CONFIRMED · last id = I27*
+### I28 · Strata progress system built (R35) — 2026-06-13
+
+Built the Strata Mark's progress mode per R35 (presentation only, no schema);
+artifact `patina-strata-mark-progress-system.html` committed.
+
+**Three-hue gradient.** `StrataMark` fill mode now paints each line its
+movement hue — line 1 `--color-mocha` (Shaping), line 2 `--color-clay`
+(Commitment), line 3 `--color-dusty-blue` (Delivery) at 0.55 opacity (the
+canonical fade) — as a left-clipped `scaleX(--f)` over a ghost track, with a
+`mono` flag for pure-brand contexts. Four size variants sm/md/lg/xl =
+48/88/120/150 (lines at 100/80/60). The stage→fill mapping was already R15's
+(`fillStateForDesk`/`deriveFillState`); added `fillStateAtSection` so the
+spine's seven markers read as a filling staircase (active breathing). Verified
+on real data: Desk folder tabs, ⌘K rows, the spine, and the letterhead all
+fill (the letterhead mark shows Mocha-full · Clay-full · Dusty-Blue-partial).
+
+**The sweep.** New `StrataSweep` (`components/ui/strata-sweep.tsx`) + globals
+keyframes (`strata-sweep-1/2/3` + `-fade`, byte-faithful to the blessed HTML;
+reduced-motion → static partial). The lines fill in sequence then the set
+fades and restarts. Replaces spinners on the **permanent surfaces**: the
+canonical `Button` loading affordance (so every `loading`-prop button
+portal-wide now sweeps), the **live-scan LoadingOverlay** (the review surface
+— %/bar/stage dots preserved, blue rebranded to clay), auth (signin/callback),
+and the room-scan family (RoomScanViewer save, room-scan-detail,
+associated-room-scans ×3, lead-room-scans). Source-contract
+`strata-progress-contract.test.ts` holds the three-hue + sweep + spine +
+overlay + button grammar. 48 suites / 450 tests green.
+
+**Deferred spinner inventory (dissolving old zones — rebuild into the Library
+Room, R32; not churned now):** `catalog/image-uploader.tsx:154`,
+`catalog/search-autocomplete.tsx:174`, `catalog/duplicate-detection-panel.tsx:308`,
+`teaching/QuickTeachModal.tsx:110`, `vendors/vendor-form.tsx:267`,
+`vendors/vendor-slide-over.tsx:60`, `products/validation-issues-panel.tsx:172`,
+`portal/account-menu.tsx:160`. Their submit buttons already sweep via the
+canonical Button; the standalone spinners ride the zone's eventual rebuild.
+(`validation-issues-panel.tsx:203` is a RefreshCw affordance, not a loader —
+intentionally left.)
+
+---
+
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I28 · R1–R35 · L1–L3 · THE GO · FLIP CONFIRMED · last id = I28*
